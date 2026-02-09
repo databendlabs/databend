@@ -1167,6 +1167,8 @@ impl VirtualColumnBuilder {
         }
 
         // 0. Discard virtual columns that have any non-scalar values.
+        // TODO: persist per-block scalar-safe markers (based on non_scalar_paths) so readers
+        // can trust typed_value even when a block's typed_value column is all NULL.
         for (idx, virtual_paths) in virtual_paths.iter().enumerate() {
             let Some(non_scalar) = non_scalar_paths.get(idx) else {
                 continue;

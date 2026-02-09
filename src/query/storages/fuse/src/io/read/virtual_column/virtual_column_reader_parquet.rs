@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::ops::BitOr;
 use std::sync::Arc;
 
+use arrow_array::Array;
 use arrow_array::RecordBatch;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -46,7 +47,6 @@ use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::Compression;
 use jsonb::keypath::OwnedKeyPath as JsonbOwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths as JsonbOwnedKeyPaths;
-use log::debug;
 use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
@@ -183,8 +183,11 @@ impl VirtualColumnReader {
                 .ok()?;
 
         let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
-        let ignore_column_ids =
-            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
+        let ignore_column_ids = if virtual_block_meta.is_inline {
+            None
+        } else {
+            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids)
+        };
 
         Some(VirtualBlockReadResult::create(
             num_rows,
@@ -213,9 +216,6 @@ impl VirtualColumnReader {
             .as_ref()
             .map(|virtual_data| virtual_data.virtual_column_read_plan.clone())
             .unwrap_or_default();
-        let ignored_source_columns = virtual_data
-            .as_ref()
-            .and_then(|virtual_data| virtual_data.ignore_column_ids.as_ref());
         let record_batch = virtual_data
             .as_ref()
             .map(|virtual_data| {
@@ -351,44 +351,45 @@ impl VirtualColumnReader {
                             metrics_inc_variant_shredding_read_typed_value_hits(1);
                         } else {
                             metrics_inc_variant_shredding_read_typed_value_misses(1);
-                            let ignored = ignored_source_columns
-                                .map(|cols| cols.contains(&virtual_column_field.source_column_id))
-                                .unwrap_or(false);
-                            debug!(
-                                "variant shredding inline miss: source={}, key_paths={}, ignored_source={}, record_batch_schema={:?}",
-                                virtual_column_field.source_name,
-                                virtual_column_field.key_paths,
-                                ignored,
-                                record_batch.schema()
-                            );
                         }
                     }
 
                     if let Some(arrow_array) = inline_column {
-                        let Ok(orig_field) = orig_schema.field_with_name(&name) else {
+                        // Inline shredding fixes the typed_value schema for the writer.
+                        // A block (or a row selection) can therefore produce a typed_value
+                        // column that exists in the schema but is entirely NULL for the rows
+                        // we are reading. In that case the typed_value column is not
+                        // authoritative (the path may be absent or non-scalar in this block),
+                        // so we must fall back to get_by_keypath to preserve semantics.
+                        // TODO: persist per-block scalar-safe / value-all-null markers so we
+                        // can trust typed_value even when it is all NULL.
+                        if arrow_array.null_count() != arrow_array.len() {
+                            let Ok(orig_field) = orig_schema.field_with_name(&name) else {
+                                continue;
+                            };
+                            let orig_type: DataType = orig_field.data_type().into();
+                            let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
+                            let data_type: DataType =
+                                virtual_column_field.data_type.as_ref().into();
+                            if orig_type != data_type {
+                                let cast_func_name = format!(
+                                    "to_{}",
+                                    data_type.remove_nullable().to_string().to_lowercase()
+                                );
+                                let (cast_value, cast_data_type) = eval_function(
+                                    None,
+                                    &cast_func_name,
+                                    [(Value::Column(column), orig_type)],
+                                    &func_ctx,
+                                    data_block.num_rows(),
+                                    &BUILTIN_FUNCTIONS,
+                                )?;
+                                data_block.add_value(cast_value, cast_data_type);
+                            } else {
+                                data_block.add_column(column);
+                            };
                             continue;
-                        };
-                        let orig_type: DataType = orig_field.data_type().into();
-                        let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
-                        let data_type: DataType = virtual_column_field.data_type.as_ref().into();
-                        if orig_type != data_type {
-                            let cast_func_name = format!(
-                                "to_{}",
-                                data_type.remove_nullable().to_string().to_lowercase()
-                            );
-                            let (cast_value, cast_data_type) = eval_function(
-                                None,
-                                &cast_func_name,
-                                [(Value::Column(column), orig_type)],
-                                &func_ctx,
-                                data_block.num_rows(),
-                                &BUILTIN_FUNCTIONS,
-                            )?;
-                            data_block.add_value(cast_value, cast_data_type);
-                        } else {
-                            data_block.add_column(column);
-                        };
-                        continue;
+                        }
                     }
                 }
             }

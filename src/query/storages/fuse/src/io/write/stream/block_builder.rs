@@ -604,6 +604,10 @@ impl StreamBlockBuilder {
 
         if !had_existing_rows {
             if enable_inline && self.inline_shredded_columns.is_none() {
+                // Inline shredding selects a fixed typed_value schema once (based on the first
+                // block/sample) and reuses it for all subsequent blocks. This keeps the Parquet
+                // layout stable, but later blocks can legitimately have all-NULL typed_value
+                // columns when the keypath is absent in that block.
                 if let Some(ref virtual_column_builder) = self.virtual_column_builder {
                     let mut builder = virtual_column_builder.clone();
                     if let Some(inline) = builder.build_inline_virtual_columns()? {
