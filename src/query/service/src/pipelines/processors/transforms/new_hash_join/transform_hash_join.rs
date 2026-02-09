@@ -230,19 +230,15 @@ impl Processor for TransformHashJoin {
                 if wait_res.is_leader() {
                     let spilled = self.join.is_spill_happened();
                     let packet = self.join.build_runtime_filter()?;
-                    let (total, disabled_all) = match &packet.packets {
-                        None => (0, true),
-                        Some(packets) => {
-                            let disabled = packets.values().all(|p| {
-                                p.inlist.is_none() && p.min_max.is_none() && p.bloom.is_none()
-                            });
-                            (packets.len(), disabled)
-                        }
+                    if let Some(packets) = &packet.packets {
+                        info!(
+                            "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
+                            spilled,
+                            packets.len(),
+                            packet.disable_all_due_to_spill
+                        );
                     };
-                    info!(
-                        "spilled: {}, globalize runtime filter: total {}, disabled all: {}",
-                        spilled, total, disabled_all
-                    );
+
                     self.rf_desc.globalization(packet).await?;
                 }
 
