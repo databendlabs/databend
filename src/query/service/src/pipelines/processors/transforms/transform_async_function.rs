@@ -959,7 +959,7 @@ mod tests {
 
         let holder = {
             let counter = counter.clone();
-            tokio::spawn(async move {
+            databend_common_base::runtime::spawn(async move {
                 let _guard = counter.refill_lock.lock().await;
                 sleep(Duration::from_millis(200)).await;
             })
@@ -970,7 +970,7 @@ mod tests {
 
         let waiter = {
             let counter = counter.clone();
-            tokio::spawn(async move {
+            databend_common_base::runtime::spawn(async move {
                 let _guard = counter.refill_lock.lock().await;
             })
         };
