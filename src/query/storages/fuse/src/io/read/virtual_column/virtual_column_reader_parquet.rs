@@ -19,6 +19,7 @@ use std::ops::BitOr;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use log::debug;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
@@ -212,6 +213,9 @@ impl VirtualColumnReader {
             .as_ref()
             .map(|virtual_data| virtual_data.virtual_column_read_plan.clone())
             .unwrap_or_default();
+        let ignored_source_columns = virtual_data
+            .as_ref()
+            .and_then(|virtual_data| virtual_data.ignore_column_ids.as_ref());
         let record_batch = virtual_data
             .as_ref()
             .map(|virtual_data| {
@@ -347,6 +351,16 @@ impl VirtualColumnReader {
                             metrics_inc_variant_shredding_read_typed_value_hits(1);
                         } else {
                             metrics_inc_variant_shredding_read_typed_value_misses(1);
+                            let ignored = ignored_source_columns
+                                .map(|cols| cols.contains(&virtual_column_field.source_column_id))
+                                .unwrap_or(false);
+                            debug!(
+                                "variant shredding inline miss: source={}, key_paths={}, ignored_source={}, record_batch_schema={:?}",
+                                virtual_column_field.source_name,
+                                virtual_column_field.key_paths,
+                                ignored,
+                                record_batch.schema()
+                            );
                         }
                     }
 
