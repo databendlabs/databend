@@ -18605,7 +18605,7 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 [[package]]
 name = "xorfilter-rs"
 version = "0.5.2"
-source = "git+https://github.com/datafuse-extras/xorfilter?rev=2e434bc#2e434bc543d6005b4a0aa0b135d8a11474c41285"
+source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.4#3bd8eb6b5b5e134703cc3b2807dfe43a763aa886"
 dependencies = [
  "cbordata",
 ]
