@@ -6,7 +6,7 @@ by a older version databend-query.
 ## Usage
 
 ```shell
-tests/compat_fuse/test_compat_fuse.sh <old_ver>
+python3 tests/compat_fuse/test_compat_fuse.py --writer-version <old_ver> --reader-version current --meta-versions <meta_ver>
 tests/compat_fuse/test_compat_fuse_forward.sh <old_ver>
 ```
 
