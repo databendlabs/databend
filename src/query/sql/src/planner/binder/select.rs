@@ -406,12 +406,30 @@ impl Binder {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::new();
+        // Use a set to guarantee union output column indexes are unique.
+        //
+        // It's possible to have duplicated column indexes from the left child, e.g.
+        // `SELECT a AS x, a AS y ... UNION ALL SELECT ...`.
+        // For a union, output columns are aligned by ordinal, so we must create
+        // a distinct output column index for every position.
+        let mut used_output_indexes = HashSet::new();
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()
             .zip(right_bind_context.columns.iter())
             .enumerate()
         {
+            let mut output_index = left_col.index;
+            if used_output_indexes.contains(&output_index) {
+                // Create a derived column index for duplicated outputs.
+                output_index = self.metadata.write().add_derived_column(
+                    left_col.column_name.clone(),
+                    coercion_types[idx].clone(),
+                    None,
+                );
+            }
+            used_output_indexes.insert(output_index);
+
             if *left_col.data_type != coercion_types[idx] {
                 let left_coercion_expr = CastExpr {
                     span: left_span,
@@ -425,21 +443,31 @@ impl Binder {
                     ),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
-                left_outputs.push((
-                    left_col.index,
-                    Some(ScalarExpr::CastExpr(left_coercion_expr)),
-                ));
-                let column_binding = ColumnBindingBuilder::new(
-                    left_col.column_name.clone(),
-                    left_col.index,
-                    Box::new(coercion_types[idx].clone()),
-                    Visibility::Visible,
-                )
-                .build();
+                left_outputs.push((output_index, Some(ScalarExpr::CastExpr(left_coercion_expr))));
+                let mut column_binding = left_col.clone();
+                column_binding.index = output_index;
+                column_binding.data_type = Box::new(coercion_types[idx].clone());
                 new_bind_context.add_column_binding(column_binding);
             } else {
-                left_outputs.push((left_col.index, None));
-                new_bind_context.add_column_binding(left_col.clone());
+                if output_index == left_col.index {
+                    left_outputs.push((left_col.index, None));
+                    new_bind_context.add_column_binding(left_col.clone());
+                } else {
+                    // Duplicate output index: create a new output index and project the
+                    // original column.
+                    left_outputs.push((
+                        output_index,
+                        Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: left_span,
+                            column: left_col.clone(),
+                        })),
+                    ));
+
+                    let mut column_binding = left_col.clone();
+                    column_binding.index = output_index;
+                    column_binding.data_type = Box::new(coercion_types[idx].clone());
+                    new_bind_context.add_column_binding(column_binding);
+                }
             }
             if *right_col.data_type != coercion_types[idx] {
                 let right_coercion_expr = CastExpr {

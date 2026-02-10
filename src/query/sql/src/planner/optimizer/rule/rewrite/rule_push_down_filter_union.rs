@@ -73,8 +73,38 @@ impl Rule for RulePushDownFilterUnion {
         let union_s_expr = s_expr.child(0)?;
         let union: UnionAll = union_s_expr.plan().clone().try_into()?;
 
+        // Create a filter which matches union's left child.
+        //
+        // Note: union output columns are aligned by ordinal and may not share the same column
+        // binding as its children. E.g. `SELECT a AS x, a AS y ... UNION ALL ...`.
+        // The filter predicates should be rewritten using `left_outputs`.
+        let left_index_pairs: HashMap<IndexType, IndexType> = union
+            .left_outputs
+            .iter()
+            .map(|(idx, expr)| {
+                let input_index = match expr {
+                    None => *idx,
+                    Some(ScalarExpr::BoundColumnRef(col_ref)) => col_ref.column.index,
+                    Some(ScalarExpr::CastExpr(cast)) => match cast.argument.as_ref() {
+                        ScalarExpr::BoundColumnRef(col_ref) => col_ref.column.index,
+                        _ => *idx,
+                    },
+                    _ => *idx,
+                };
+                (*idx, input_index)
+            })
+            .collect();
+        let left_predicates = filter
+            .predicates
+            .iter()
+            .map(|predicate| replace_column_binding(&left_index_pairs, predicate.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        let left_filter = Filter {
+            predicates: left_predicates,
+        };
+
         // Create a filter which matches union's right child.
-        let index_pairs: HashMap<IndexType, IndexType> = union
+        let right_index_pairs: HashMap<IndexType, IndexType> = union
             .left_outputs
             .iter()
             .zip(union.right_outputs.iter())
@@ -83,7 +113,7 @@ impl Rule for RulePushDownFilterUnion {
         let new_predicates = filter
             .predicates
             .iter()
-            .map(|predicate| replace_column_binding(&index_pairs, predicate.clone()))
+            .map(|predicate| replace_column_binding(&right_index_pairs, predicate.clone()))
             .collect::<Result<Vec<_>>>()?;
         let right_filer = Filter {
             predicates: new_predicates,
@@ -93,7 +123,8 @@ impl Rule for RulePushDownFilterUnion {
         let mut union_right_child = union_s_expr.child(1)?.clone();
 
         // Add filter to union children
-        union_left_child = SExpr::create_unary(Arc::new(filter.into()), Arc::new(union_left_child));
+        union_left_child =
+            SExpr::create_unary(Arc::new(left_filter.into()), Arc::new(union_left_child));
         union_right_child =
             SExpr::create_unary(Arc::new(right_filer.into()), Arc::new(union_right_child));
 
