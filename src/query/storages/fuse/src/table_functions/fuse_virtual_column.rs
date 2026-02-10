@@ -125,6 +125,7 @@ impl FuseVirtualColumn {
         let source_column_names = build_source_column_name_map(schema.as_ref());
         let virtual_schema = tbl.get_table_info().meta.virtual_schema.clone();
         let virtual_field_map = build_virtual_field_map(&virtual_schema);
+        let virtual_field_reverse_map = build_virtual_field_reverse_map(&virtual_schema);
 
         let mut num_rows = 0;
         let chunk_size =
@@ -155,7 +156,11 @@ impl FuseVirtualColumn {
                         else {
                             continue;
                         };
-                        collect_virtual_column_entries(&virtual_meta, &source_column_names)
+                        collect_virtual_column_entries(
+                            &virtual_meta,
+                            &source_column_names,
+                            &virtual_field_reverse_map,
+                        )
                     };
 
                     for entry in entries {
@@ -210,6 +215,7 @@ struct VirtualColumnEntry {
 fn collect_virtual_column_entries(
     virtual_meta: &VirtualColumnFileMeta,
     source_column_names: &HashMap<u32, String>,
+    virtual_field_reverse_map: &HashMap<(u32, String), ColumnId>,
 ) -> Vec<VirtualColumnEntry> {
     let mut entries = Vec::new();
 
@@ -221,6 +227,8 @@ fn collect_virtual_column_entries(
         let mut segments = Vec::new();
         collect_virtual_column_leaves(
             virtual_meta,
+            *source_column_id,
+            virtual_field_reverse_map,
             &source_column_name,
             node,
             &mut segments,
@@ -277,6 +285,22 @@ fn build_virtual_field_map(
     map
 }
 
+fn build_virtual_field_reverse_map(
+    virtual_schema: &Option<VirtualDataSchema>,
+) -> HashMap<(u32, String), ColumnId> {
+    let mut map = HashMap::new();
+    let Some(virtual_schema) = virtual_schema else {
+        return map;
+    };
+    for field in virtual_schema.fields() {
+        map.insert(
+            (field.source_column_id, field.name.clone()),
+            field.column_id,
+        );
+    }
+    map
+}
+
 fn collect_inline_virtual_column_entries(
     virtual_column_metas: &HashMap<ColumnId, VirtualColumnMeta>,
     source_column_names: &HashMap<u32, String>,
@@ -313,6 +337,8 @@ fn collect_inline_virtual_column_entries(
 
 fn collect_virtual_column_leaves(
     virtual_meta: &VirtualColumnFileMeta,
+    source_column_id: u32,
+    virtual_field_reverse_map: &HashMap<(u32, String), ColumnId>,
     source_column_name: &str,
     node: &VirtualColumnNode,
     segments: &mut Vec<String>,
@@ -322,10 +348,14 @@ fn collect_virtual_column_leaves(
         if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
             let key_name = build_virtual_column_key_name(segments);
             let name = format!("{}{}", source_column_name, key_name);
+            let column_id = virtual_field_reverse_map
+                .get(&(source_column_id, key_name))
+                .copied()
+                .unwrap_or(meta.column_id);
             entries.push(VirtualColumnEntry {
                 column_name: name,
                 column_type: meta.data_type.to_string(),
-                column_id: meta.column_id,
+                column_id,
                 offset: meta.meta.offset,
                 len: meta.meta.len,
                 num_values: meta.meta.num_values,
@@ -346,6 +376,8 @@ fn collect_virtual_column_leaves(
         segments.push(segment.clone());
         collect_virtual_column_leaves(
             virtual_meta,
+            source_column_id,
+            virtual_field_reverse_map,
             source_column_name,
             child_node,
             segments,
