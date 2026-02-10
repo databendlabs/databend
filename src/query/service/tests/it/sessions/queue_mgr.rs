@@ -29,11 +29,10 @@ use databend_common_base::runtime::workload_group::WorkloadGroupResource;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_client::RpcClientConf;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
-use databend_common_version::BUILD_INFO;
+use databend_meta_client::RpcClientConf;
 use databend_meta_runtime::DatabendRuntime;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryEntry;
@@ -661,7 +660,7 @@ async fn test_watch_abort_notify_timeout_vs_abort() -> anyhow::Result<()> {
 }
 
 async fn create_meta_store() -> Result<MetaStore> {
-    let conf = RpcClientConf::empty(BUILD_INFO.semver());
+    let conf = RpcClientConf::empty();
     Ok(MetaStoreProvider::new(conf)
         .create_meta_store::<DatabendRuntime>()
         .await

@@ -75,6 +75,7 @@ pub fn register_decimal_to_uuid(registry: &mut FunctionRegistry) {
                     }
                     .upcast()
                 }),
+                derive_stat: None,
             },
         })
     });

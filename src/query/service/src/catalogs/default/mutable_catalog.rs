@@ -138,10 +138,10 @@ use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::MetaId;
+use databend_meta_types::SeqV;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -190,11 +190,9 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfoRef) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig, _version: BuildInfoRef) -> Result<Self> {
         let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta.to_meta_grpc_client_conf(version.semver()),
-            ));
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
             provider
                 .create_meta_store::<DatabendRuntime>()

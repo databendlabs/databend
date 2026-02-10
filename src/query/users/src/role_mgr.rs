@@ -26,7 +26,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
+use databend_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
 use crate::meta_service_error;
@@ -119,7 +119,7 @@ impl UserApiProvider {
         role_info: RoleInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
-        let can_replace = matches!(create_option, CreateOption::CreateOrReplace);
+        let can_replace = create_option.is_overriding();
         let client = self.role_api(tenant);
         let name = role_info.identity().to_string();
         if let Err(_e) = client
@@ -127,7 +127,7 @@ impl UserApiProvider {
             .await
             .map_err(meta_service_error)?
         {
-            return if matches!(create_option, CreateOption::CreateIfNotExists) {
+            return if create_option.if_not_exist() {
                 Ok(())
             } else {
                 Err(ErrorCode::RoleAlreadyExists(format!(

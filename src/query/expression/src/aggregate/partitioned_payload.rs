@@ -285,12 +285,10 @@ impl PartitionedPayload {
         self.payloads.len()
     }
 
-    #[allow(dead_code)]
     pub fn page_count(&self) -> usize {
         self.payloads.iter().map(|x| x.pages.len()).sum()
     }
 
-    #[allow(dead_code)]
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
     }

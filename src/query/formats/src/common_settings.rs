@@ -18,8 +18,6 @@ use databend_common_meta_app::principal::BinaryFormat;
 
 #[derive(Clone)]
 pub struct InputCommonSettings {
-    pub true_bytes: Vec<u8>,
-    pub false_bytes: Vec<u8>,
     pub null_if: Vec<Vec<u8>>,
     pub binary_format: BinaryFormat,
 

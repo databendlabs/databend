@@ -32,9 +32,6 @@ use databend_common_config::InnerConfig;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
@@ -42,7 +39,10 @@ use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::license::RealLicenseManager;
 use databend_meta::configs::MetaServiceConfig;
 use databend_meta_cli_config::MetaConfig;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::MetaGrpcClient;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::protobuf::ExportRequest;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::SessionManager;
 use futures::TryStream;
@@ -114,7 +114,7 @@ pub async fn verify_query_license(cfg: &InnerConfig, version: BuildInfoRef) -> R
     RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
     SessionManager::init(cfg)?;
     UserApiProvider::init(
-        cfg.meta.to_meta_grpc_client_conf(version.semver()),
+        cfg.meta.to_meta_grpc_client_conf(),
         &CacheConfig::default(),
         BuiltIn::default(),
         &cfg.query.tenant_id,
@@ -151,7 +151,7 @@ pub async fn load_databend_meta() -> Result<(
     impl TryStream<Ok = Bytes, Error = anyhow::Error>,
 )> {
     let cfg = GlobalConfig::instance();
-    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.semver());
+    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf();
     debug!("connect meta services on {:?}", grpc_client_conf.endpoints);
 
     let meta_client = MetaGrpcClient::try_new(&grpc_client_conf)?;

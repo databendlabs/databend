@@ -43,13 +43,13 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_cache::Cache;
-use databend_common_meta_client::RpcClientConf;
-use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
+use databend_meta_client::RpcClientConf;
+use databend_meta_kvapi::kvapi;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::MetaError;
 use log::debug;
 use tokio::sync::Mutex;
 

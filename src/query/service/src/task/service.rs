@@ -53,15 +53,15 @@ use databend_common_meta_app::principal::task::TaskMessage;
 use databend_common_meta_app::principal::task::TaskMessageType;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_sql::Planner;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
+use databend_meta_kvapi::kvapi::Key;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::protobuf::WatchRequest;
+use databend_meta_types::protobuf::WatchResponse;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use futures_util::stream::BoxStream;
@@ -156,13 +156,12 @@ impl TaskService {
 
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
-        let meta_store =
-            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.semver()))
-                .create_meta_store::<DatabendRuntime>()
-                .await
-                .map_err(|e| {
-                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-                })?;
+        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
+            .create_meta_store::<DatabendRuntime>()
+            .await
+            .map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?;
         let meta_client = meta_store.inner().clone();
         let meta_handle = TaskMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let runtime = Arc::new(Runtime::with_worker_threads(

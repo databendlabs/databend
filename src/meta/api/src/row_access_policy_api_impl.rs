@@ -28,12 +28,12 @@ use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::ListOptions;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnRequest;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::DirName;
+use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
+use databend_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 

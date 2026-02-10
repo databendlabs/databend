@@ -30,7 +30,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
+use databend_meta_types::MatchSeq;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -90,6 +90,15 @@ pub struct StreamSnapshot {
 }
 
 impl TxnBuffer {
+    fn parse_db_tbl_name(desc: &str) -> (String, String) {
+        let (db_raw, table_raw) = desc
+            .split_once('.')
+            .unwrap_or_else(|| panic!("Invalid temp table desc: {}", desc));
+        let db_name = db_raw[1..db_raw.len() - 1].to_string();
+        let table_name = table_raw[1..table_raw.len() - 1].to_string();
+        (db_name, table_name)
+    }
+
     fn clear(&mut self) {
         std::mem::take(self);
     }
@@ -121,12 +130,12 @@ impl TxnBuffer {
         self.deduplicated_labels.extend(req.deduplicated_labels);
 
         for req in req.update_temp_tables {
-            let (db_name, table_name) = req.desc.split_once('.').unwrap();
+            let (db_name, table_name) = Self::parse_db_tbl_name(&req.desc);
             self.temp_table_desc_to_id
                 .insert(req.desc.clone(), req.table_id);
             self.mutated_temp_tables.insert(req.table_id, TempTable {
-                db_name: db_name.to_string(),
-                table_name: table_name.to_string(),
+                db_name,
+                table_name,
                 meta: req.new_table_meta.clone(),
                 copied_files: req.copied_files.clone(),
             });
@@ -424,5 +433,17 @@ impl TxnManager {
 
     pub fn clear_temp_table_by_id(&mut self, table_id: u64) {
         self.txn_buffer.clear_temp_table_by_id(table_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TxnBuffer;
+
+    #[test]
+    fn test_normalize_temp_table_desc() {
+        let (db, table) = TxnBuffer::parse_db_tbl_name("'db'.'tbl'");
+        assert_eq!(db, "db");
+        assert_eq!(table, "tbl");
     }
 }

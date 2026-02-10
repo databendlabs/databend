@@ -12,44 +12,65 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_kvapi::kvapi::ListKVReply;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_app::principal::tenant_user_ident::Resource as UserIdentResource;
+use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
+use databend_meta_kvapi::kvapi::ListKVReply;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait UserApi: Sync + Send {
-    async fn add_user(&self, user_info: UserInfo, create_option: &CreateOption) -> Result<()>;
+    /// Create a user.
+    /// Returns `Ok(Ok(()))` on success.
+    /// Returns `Ok(Err(ExistError))` if the user already exists and `overriding` is false.
+    async fn create_user(
+        &self,
+        user_info: UserInfo,
+        overriding: bool,
+    ) -> Result<Result<(), ExistError<UserIdentResource, UserIdentity>>, MetaError>;
 
-    async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>>;
+    /// Get a user by identity.
+    /// Returns `Some(SeqV)` if the user exists, `None` otherwise.
+    async fn get_user(&self, user: &UserIdentity) -> Result<Option<SeqV<UserInfo>>, MetaError>;
 
-    async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
+    async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>, MetaError>;
 
     /// Just get user count in meta
-    async fn get_raw_users(&self) -> Result<ListKVReply>;
+    async fn get_raw_users(&self) -> Result<ListKVReply, MetaError>;
 
-    /// General user's grants update.
+    /// Update a user in place.
     ///
-    /// It fetches the user that matches the specified seq number, update it in place, then write it back with the seq it sees.
+    /// This method internally calls `get_user` to fetch the current user state,
+    /// applies the update function, then writes back with optimistic concurrency control.
+    /// The seq from the internal `get_user` is used for CAS (compare-and-swap).
     ///
-    /// Seq number ensures there is no other write happens between get and set.
-    /// Example:
-    /// ```ignore
-    /// self.update_user_with(user_ident, MatchSeq::GE(1), |ui: &mut UserInfo| ui.update_auth_option(foo())).await;
-    /// ```
+    /// Returns `Ok(Ok(new_seq))` on success.
+    /// Returns `Ok(Err(UnknownError))` if the user does not exist or seq mismatch.
     async fn update_user_with<F>(
         &self,
-        user: UserIdentity,
-        seq: MatchSeq,
+        user: &UserIdentity,
         f: F,
-    ) -> Result<Option<u64>>
+    ) -> Result<Result<u64, UnknownError<UserIdentResource, UserIdentity>>, MetaError>
     where
         F: FnOnce(&mut UserInfo) + Send;
 
-    async fn upsert_user_info(&self, user: &UserInfo, seq: MatchSeq) -> Result<u64>;
+    /// Upsert user info with exact seq matching.
+    /// Returns `Ok(Ok(new_seq))` on success.
+    /// Returns `Ok(Err(UnknownError))` if seq mismatch.
+    async fn upsert_user_info(
+        &self,
+        user: &UserInfo,
+        seq: u64,
+    ) -> Result<Result<u64, UnknownError<UserIdentResource, UserIdentity>>, MetaError>;
 
-    async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()>;
+    /// Drop a user.
+    /// Returns `Ok(Ok(()))` if the user was dropped.
+    /// Returns `Ok(Err(UnknownError))` if the user did not exist.
+    async fn drop_user(
+        &self,
+        user: &UserIdentity,
+    ) -> Result<Result<(), UnknownError<UserIdentResource, UserIdentity>>, MetaError>;
 }

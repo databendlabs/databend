@@ -40,9 +40,9 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_types::SeqV;
 use databend_common_storage::DataOperator;
 use databend_common_storage::init_operator;
+use databend_meta_types::SeqV;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
@@ -69,6 +69,10 @@ pub struct TempTable {
 }
 
 impl TempTblMgr {
+    fn temp_table_desc(db_name: &str, table_name: &str) -> String {
+        format!("'{}'.'{}'", db_name, table_name)
+    }
+
     pub fn init() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(TempTblMgr {
             name_to_id: HashMap::new(),
@@ -109,7 +113,7 @@ impl TempTblMgr {
         };
         let db_id = db_id.parse::<u64>()?;
 
-        let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
+        let desc = Self::temp_table_desc(&name_ident.db_name, &name_ident.table_name);
         let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
         let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
@@ -123,7 +127,7 @@ impl TempTblMgr {
             _ => {
                 let desc = orphan_table_name
                     .as_ref()
-                    .map(|o| format!("{}.{}", name_ident.db_name, o))
+                    .map(|o| Self::temp_table_desc(&name_ident.db_name, o))
                     .unwrap_or(desc);
                 let old_id = self.name_to_id.insert(desc.clone(), table_id);
                 if let Some(old_id) = old_id {
@@ -156,12 +160,11 @@ impl TempTblMgr {
     }
 
     pub fn commit_table_meta(&mut self, req: &CommitTableMetaReq) -> Result<CommitTableMetaReply> {
-        let orphan_desc = format!(
-            "{}.{}",
-            req.name_ident.db_name,
-            req.orphan_table_name.as_ref().unwrap()
+        let orphan_desc = Self::temp_table_desc(
+            &req.name_ident.db_name,
+            req.orphan_table_name.as_ref().unwrap(),
         );
-        let desc = format!("{}.{}", req.name_ident.db_name, req.name_ident.table_name);
+        let desc = Self::temp_table_desc(&req.name_ident.db_name, &req.name_ident.table_name);
         match self.name_to_id.remove(&orphan_desc) {
             Some(id) => {
                 if let Some(old_id) = self.name_to_id.insert(desc, id) {
@@ -187,10 +190,10 @@ impl TempTblMgr {
             new_db_name,
             new_table_name,
         } = req;
-        let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
+        let desc = Self::temp_table_desc(&name_ident.db_name, &name_ident.table_name);
         match self.name_to_id.remove(&desc) {
             Some(id) => {
-                let new_desc = format!("{}.{}", new_db_name, new_table_name);
+                let new_desc = Self::temp_table_desc(new_db_name, new_table_name);
                 if self.name_to_id.contains_key(&new_desc) {
                     return Err(ErrorCode::TableAlreadyExists(format!(
                         "Temporary table {} already exists",
@@ -223,12 +226,12 @@ impl TempTblMgr {
     }
 
     pub fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool {
-        let desc = format!("{}.{}", database_name, table_name);
+        let desc = Self::temp_table_desc(database_name, table_name);
         self.name_to_id.contains_key(&desc)
     }
 
     pub fn get_table(&self, database_name: &str, table_name: &str) -> Result<Option<TableInfo>> {
-        let desc = format!("{}.{}", database_name, table_name);
+        let desc = Self::temp_table_desc(database_name, table_name);
         let id = self.name_to_id.get(&desc);
         let Some(id) = id else {
             return Ok(None);
@@ -377,7 +380,7 @@ pub async fn drop_table_by_id(
                         let dir = parse_storage_prefix(&e.get().meta.options, *tb_id)?;
                         let table = e.remove();
                         let table_meta = table.meta.clone();
-                        let desc = format!("{}.{}", table.db_name, table.table_name);
+                        let desc = TempTblMgr::temp_table_desc(&table.db_name, &table.table_name);
                         guard.name_to_id.remove(&desc).ok_or_else(|| {
                             ErrorCode::Internal(format!(
                                 "Table not found in temp table manager {:?}, drop table request: {:?}",
@@ -400,7 +403,7 @@ pub async fn drop_table_by_id(
             match entry {
                 Entry::Occupied(e) => {
                     let table = e.remove();
-                    let desc = format!("{}.{}", table.db_name, table.table_name);
+                    let desc = TempTblMgr::temp_table_desc(&table.db_name, &table.table_name);
                     guard.name_to_id.remove(&desc).ok_or_else(|| {
                         ErrorCode::Internal(format!(
                             "Table not found in temp table manager {:?}, drop table request: {:?}",

@@ -15,9 +15,9 @@
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::app_error::AppErrorMessage;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
-use databend_common_meta_types::InvalidArgument;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::MetaNetworkError;
+use databend_meta_types::InvalidArgument;
+use databend_meta_types::MetaError;
+use databend_meta_types::MetaNetworkError;
 
 /// A non-business error occurs when executing a meta-service transaction.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]

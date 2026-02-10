@@ -20,8 +20,8 @@ use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::data_mask_name_ident;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 
 use crate::errors::MaskingPolicyError;
 use crate::meta_txn_error::MetaTxnError;

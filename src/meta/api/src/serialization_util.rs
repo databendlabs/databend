@@ -15,10 +15,10 @@
 //! Serialization utilities extracted from util.rs
 
 use databend_common_meta_app::primitive::Id;
-use databend_common_meta_types::InvalidArgument;
-use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_proto_conv::FromToProto;
+use databend_meta_types::InvalidArgument;
+use databend_meta_types::InvalidReply;
+use databend_meta_types::MetaNetworkError;
 
 pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaNetworkError> {
     let v = serde_json::to_vec(&*value.into()).map_err(|e| {

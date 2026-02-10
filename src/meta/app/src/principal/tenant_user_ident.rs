@@ -35,11 +35,14 @@ impl TenantUserIdent {
 }
 
 mod kvapi_impl {
-
-    use databend_common_meta_kvapi::kvapi;
+    use databend_common_exception::ErrorCode;
+    use databend_meta_kvapi::kvapi;
 
     use crate::principal::TenantUserIdent;
+    use crate::principal::UserIdentity;
     use crate::principal::UserInfo;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -50,21 +53,29 @@ mod kvapi_impl {
         type ValueType = UserInfo;
     }
 
+    impl From<ExistError<Resource, UserIdentity>> for ErrorCode {
+        fn from(err: ExistError<Resource, UserIdentity>) -> Self {
+            ErrorCode::UserAlreadyExists(format!("User {} already exists.", err.name().display()))
+        }
+    }
+
+    impl From<UnknownError<Resource, UserIdentity>> for ErrorCode {
+        fn from(err: UnknownError<Resource, UserIdentity>) -> Self {
+            ErrorCode::UnknownUser(format!("User {} does not exist.", err.name().display()))
+        }
+    }
+
     impl kvapi::Value for UserInfo {
         type KeyType = TenantUserIdent;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
-
-    // // Use these error types to replace usage of ErrorCode if possible.
-    // impl From<ExistError<Resource>> for ErrorCode {
-    // impl From<UnknownError<Resource>> for ErrorCode {
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::principal::TenantUserIdent;
     use crate::principal::UserIdentity;

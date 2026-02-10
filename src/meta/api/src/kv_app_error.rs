@@ -19,12 +19,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TenantIsEmpty;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
-use databend_common_meta_types::InvalidArgument;
-use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MetaAPIError;
-use databend_common_meta_types::MetaClientError;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::MetaNetworkError;
+use databend_meta_types::InvalidArgument;
+use databend_meta_types::InvalidReply;
+use databend_meta_types::MetaAPIError;
+use databend_meta_types::MetaClientError;
+use databend_meta_types::MetaError;
+use databend_meta_types::MetaNetworkError;
 use tonic::Status;
 
 use crate::meta_txn_error::MetaTxnError;

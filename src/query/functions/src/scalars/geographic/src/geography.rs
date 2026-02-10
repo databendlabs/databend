@@ -94,7 +94,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, VariantType, _>(
         "st_asgeojson",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, VariantType>(|ewkb, builder, ctx| {
@@ -126,7 +126,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, BinaryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, BinaryType, _>(
         "st_asewkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, BinaryType>(|ewkb, builder, ctx| {
@@ -154,7 +154,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, BinaryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, BinaryType, _>(
         "st_aswkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, BinaryType>(|ewkb, builder, ctx| {
@@ -182,7 +182,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _>(
         "st_asewkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, StringType>(|ewkb, builder, ctx| {
@@ -210,7 +210,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _>(
         "st_aswkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, StringType>(|ewkb, builder, ctx| {
@@ -275,7 +275,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             ),
         );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _>(
         "st_area",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -480,7 +480,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _>(
         "st_geogfromgeohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeographyType>(|geohash, builder, ctx| {
@@ -516,7 +516,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _>(
         "st_geogpointfromgeohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeographyType>(|geohash, builder, ctx| {
@@ -551,7 +551,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, GeographyType, _>(
         "st_makepolygon",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, GeographyType>(|ewkb, builder, ctx| {
@@ -666,7 +666,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _>(
         "st_geohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, StringType>(|ewkb, builder, ctx| {
@@ -719,7 +719,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _>(
         "st_geographyfromwkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeographyType>(|s, builder, ctx| {
@@ -747,7 +747,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<BinaryType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BinaryType, GeographyType, _>(
         "st_geographyfromwkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BinaryType, GeographyType>(|binary, builder, ctx| {
@@ -766,7 +766,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _>(
         "st_geographyfromwkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeographyType>(|wkt, builder, ctx| {
@@ -785,7 +785,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _>(
         "st_length",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -838,7 +838,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _>(
         "st_x",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -873,7 +873,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, NumberType<F64>, _>(
         "st_y",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -908,7 +908,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_1_arg::<GeographyType, Int32Type, _, _>(
+    registry.register_1_arg::<GeographyType, Int32Type, _>(
         "st_srid",
         |_, _| {
             FunctionDomain::Domain(SimpleDomain {
@@ -1022,7 +1022,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, UInt32Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, UInt32Type, _>(
         "st_npoints",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, UInt32Type>(|ewkb, builder, ctx| {
@@ -1045,7 +1045,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeographyType, StringType, _>(
         "to_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeographyType, StringType>(|ewkb, builder, ctx| {
@@ -1066,7 +1066,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, GeographyType, _>(
         "to_geography",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, GeographyType>(|val, builder, ctx| {
@@ -1086,7 +1086,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeographyType, _>(
         "to_geography",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeographyType>(|s, builder, ctx| {
@@ -1104,7 +1104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<BinaryType, GeographyType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BinaryType, GeographyType, _>(
         "to_geography",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BinaryType, GeographyType>(|binary, builder, ctx| {

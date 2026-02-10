@@ -31,12 +31,12 @@ use databend_common_meta_app::principal::task::TaskMessage;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::ListOptions;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::With;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::DirName;
+use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::MetaError;
+use databend_meta_types::With;
 use futures::TryStreamExt;
 
 use crate::task::errors::TaskApiError;

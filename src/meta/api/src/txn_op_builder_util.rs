@@ -16,10 +16,10 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_types::InvalidArgument;
-use databend_common_meta_types::TxnOp;
 use databend_common_proto_conv::FromToProto;
+use databend_meta_kvapi::kvapi;
+use databend_meta_types::InvalidArgument;
+use databend_meta_types::TxnOp;
 
 pub fn txn_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
 where

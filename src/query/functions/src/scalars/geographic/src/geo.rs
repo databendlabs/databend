@@ -179,19 +179,24 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry
-        .register_passthrough_nullable_1_arg::<StringType, KvPair<Float64Type, Float64Type>, _, _>(
-            "geohash_decode",
-            |_, _| FunctionDomain::Full,
-            vectorize_with_builder_1_arg::<StringType, KvPair<Float64Type, Float64Type>>(
-                |encoded, builder, ctx| match geohash::decode(encoded) {
-                    Ok((c, _, _)) => builder.push((c.x.into(), c.y.into())),
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push((F64::from(0.0), F64::from(0.0)))
-                    }
-                },
-            ),
-        );
+        .scalar_builder("geohash_decode")
+        .function()
+        .typed_1_arg::<StringType, KvPair<Float64Type, Float64Type>>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<
+            StringType,
+            KvPair<Float64Type, Float64Type>,
+        >(|encoded, builder, ctx| {
+            match geohash::decode(encoded) {
+                Ok((c, _, _)) => builder.push((c.x.into(), c.y.into())),
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                    builder.push((F64::from(0.0), F64::from(0.0)))
+                }
+            }
+        }))
+        .register();
 
     let point_in_ellipses = FunctionFactory::Closure(Box::new(|_, args_type| {
         // The input parameters must be 2+4*n, where n is the number of ellipses.
@@ -207,6 +212,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_ellipses_fn),
+                derive_stat: None,
             },
         }))
     }));
@@ -255,6 +261,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
+                derive_stat: None,
             },
         }))
     }));
@@ -303,6 +310,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
+                derive_stat: None,
             },
         }))
     }));
@@ -353,6 +361,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(point_in_polygon_fn),
+                derive_stat: None,
             },
         }))
     }));

@@ -51,7 +51,7 @@ pub async fn init_resources_management(cfg: &InnerConfig, version: BuildInfoRef)
                 "kubernetes_managed" => KubernetesResourcesManagement::create(),
                 "system_managed" => {
                     let meta_api_provider =
-                        MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.semver()));
+                        MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
                     match meta_api_provider
                         .create_meta_store::<DatabendRuntime>()
                         .await

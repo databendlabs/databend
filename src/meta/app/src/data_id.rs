@@ -16,10 +16,10 @@ use std::any::type_name;
 use std::fmt;
 use std::marker::PhantomData;
 
-use databend_common_meta_kvapi::kvapi::KeyBuilder;
-use databend_common_meta_kvapi::kvapi::KeyCodec;
-use databend_common_meta_kvapi::kvapi::KeyError;
-use databend_common_meta_kvapi::kvapi::KeyParser;
+use databend_meta_kvapi::kvapi::KeyBuilder;
+use databend_meta_kvapi::kvapi::KeyCodec;
+use databend_meta_kvapi::kvapi::KeyError;
+use databend_meta_kvapi::kvapi::KeyParser;
 use derive_more::Deref;
 use derive_more::DerefMut;
 
@@ -203,7 +203,7 @@ mod prost_message_impl {
     #[cfg(test)]
     mod tests {
 
-        use databend_common_meta_kvapi::kvapi;
+        use databend_meta_kvapi::kvapi;
 
         use crate::data_id::DataId;
         use crate::tenant_key::resource::TenantResource;

@@ -19,7 +19,7 @@ use databend_common_management::udf::UdfError;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
+use databend_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
 

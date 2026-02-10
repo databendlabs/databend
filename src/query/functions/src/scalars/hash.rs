@@ -103,59 +103,80 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
 
     // Could be used in exchange
-    registry.register_passthrough_nullable_1_arg::<GenericType<0>, NumberType<u64>, _, _>(
-        "siphash64",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<GenericType<0>, NumberType<u64>>(|val, output, _| {
+    registry
+        .scalar_builder("siphash64")
+        .function()
+        .typed_1_arg::<GenericType<0>, NumberType<u64>>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<
+            GenericType<0>,
+            NumberType<u64>,
+        >(|val, output, _| {
             let mut hasher = DefaultHasher::default();
             DFHash::hash(&val.to_owned(), &mut hasher);
             output.push(hasher.finish());
-        }),
-    );
+        }))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "md5",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, ctx| {
-            // TODO md5 lib doesn't allow encode into buffer...
-            output.row_buffer.resize(32, 0);
-            if let Err(err) = hex::encode_to_slice(Md5Hasher::digest(val), &mut output.row_buffer) {
-                ctx.set_error(output.len(), err.to_string());
-            }
-            output.commit_row();
-        }),
-    );
+    registry
+        .scalar_builder("md5")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, ctx| {
+                output.row_buffer.resize(32, 0);
+                if let Err(err) =
+                    hex::encode_to_slice(Md5Hasher::digest(val), &mut output.row_buffer)
+                {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+                output.commit_row();
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "sha",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, ctx| {
-            output.row_buffer.resize(40, 0);
-            // TODO sha1 lib doesn't allow encode into buffer...
-            let mut m = ::sha1::Sha1::new();
-            sha1::digest::Update::update(&mut m, val.as_bytes());
+    registry
+        .scalar_builder("sha")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, ctx| {
+                output.row_buffer.resize(40, 0);
+                let mut m = ::sha1::Sha1::new();
+                sha1::digest::Update::update(&mut m, val.as_bytes());
 
-            if let Err(err) = hex::encode_to_slice(m.finalize(), &mut output.row_buffer) {
-                ctx.set_error(output.len(), err.to_string());
-            }
-            output.commit_row();
-        }),
-    );
+                if let Err(err) = hex::encode_to_slice(m.finalize(), &mut output.row_buffer) {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+                output.commit_row();
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "blake3",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, ctx| {
-            output.row_buffer.resize(64, 0);
-            if let Err(err) = hex::encode_to_slice(
-                blake3::hash(val.as_bytes()).as_bytes(),
-                &mut output.row_buffer,
-            ) {
-                ctx.set_error(output.len(), err.to_string());
-            }
-            output.commit_row();
-        }),
-    );
+    registry
+        .scalar_builder("blake3")
+        .function()
+        .typed_1_arg::<StringType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .vectorized(vectorize_with_builder_1_arg::<StringType, StringType>(
+            |val, output, ctx| {
+                output.row_buffer.resize(64, 0);
+                if let Err(err) = hex::encode_to_slice(
+                    blake3::hash(val.as_bytes()).as_bytes(),
+                    &mut output.row_buffer,
+                ) {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+                output.commit_row();
+            },
+        ))
+        .register();
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "sha2",
@@ -203,35 +224,50 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 fn register_simple_domain_type_hash<T: ArgType>(registry: &mut FunctionRegistry)
 where for<'a> T::ScalarRef<'a>: DFHash {
-    registry.register_passthrough_nullable_1_arg::<T, NumberType<u64>, _, _>(
-        "siphash64",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<T, NumberType<u64>>(|val, output, _| {
-            let mut hasher = DefaultHasher::default();
-            DFHash::hash(&val, &mut hasher);
-            output.push(hasher.finish());
-        }),
-    );
+    registry
+        .scalar_builder("siphash64")
+        .function()
+        .typed_1_arg::<T, NumberType<u64>>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<T, NumberType<u64>>(
+            |val, output, _| {
+                let mut hasher = DefaultHasher::default();
+                DFHash::hash(&val, &mut hasher);
+                output.push(hasher.finish());
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<T, NumberType<u64>, _, _>(
-        "xxhash64",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<T, NumberType<u64>>(|val, output, _| {
-            let mut hasher = XxHash64::default();
-            DFHash::hash(&val, &mut hasher);
-            output.push(hasher.finish());
-        }),
-    );
+    registry
+        .scalar_builder("xxhash64")
+        .function()
+        .typed_1_arg::<T, NumberType<u64>>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<T, NumberType<u64>>(
+            |val, output, _| {
+                let mut hasher = XxHash64::default();
+                DFHash::hash(&val, &mut hasher);
+                output.push(hasher.finish());
+            },
+        ))
+        .register();
 
-    registry.register_passthrough_nullable_1_arg::<T, NumberType<u32>, _, _>(
-        "xxhash32",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<T, NumberType<u32>>(|val, output, _| {
-            let mut hasher = XxHash32::default();
-            DFHash::hash(&val, &mut hasher);
-            output.push(hasher.finish().try_into().unwrap());
-        }),
-    );
+    registry
+        .scalar_builder("xxhash32")
+        .function()
+        .typed_1_arg::<T, NumberType<u32>>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<T, NumberType<u32>>(
+            |val, output, _| {
+                let mut hasher = XxHash32::default();
+                DFHash::hash(&val, &mut hasher);
+                output.push(hasher.finish().try_into().unwrap());
+            },
+        ))
+        .register();
 
     #[allow(clippy::unnecessary_cast)]
     for num_type in ALL_INTEGER_TYPES {

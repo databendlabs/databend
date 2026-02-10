@@ -101,6 +101,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     })
                 }),
                 eval: Box::new(ImplByEvaluator("if")),
+                derive_stat: None,
             },
         }))
     }));

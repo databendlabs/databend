@@ -117,10 +117,7 @@ pub struct QueueManager<Data: QueueData> {
 impl<Data: QueueData> QueueManager<Data> {
     pub async fn init(permits: usize, conf: &InnerConfig) -> Result<()> {
         let metastore = {
-            let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta
-                    .to_meta_grpc_client_conf(databend_common_version::BUILD_INFO.semver()),
-            ));
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
             provider
                 .create_meta_store::<DatabendRuntime>()

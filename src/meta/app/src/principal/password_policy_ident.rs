@@ -22,7 +22,7 @@ pub use kvapi_impl::Resource;
 mod kvapi_impl {
 
     use databend_common_exception::ErrorCode;
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::principal::PasswordPolicy;
     use crate::principal::PasswordPolicyIdent;
@@ -67,7 +67,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::principal::password_policy_ident::PasswordPolicyIdent;
     use crate::tenant::Tenant;

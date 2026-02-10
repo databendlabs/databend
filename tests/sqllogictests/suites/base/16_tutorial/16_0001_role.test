@@ -530,7 +530,7 @@ GRANT SELECT ON risk_mart.* TO ROLE risk_ro
 statement ok
 GRANT READ, WRITE ON STAGE stage_risk_ingest TO ROLE risk_rw
 
-onlyif mysql
+
 statement ok
 SET ROLE commerce_owner
 
@@ -542,7 +542,7 @@ CREATE TABLE commerce_mart.orders (
   amount DECIMAL(18, 2)
 )
 
-onlyif mysql
+
 statement ok
 SET ROLE payment_owner
 
@@ -555,7 +555,7 @@ CREATE TABLE payment_mart.transactions (
   amount DECIMAL(18, 2)
 )
 
-onlyif mysql
+
 statement ok
 SET ROLE identity_owner
 

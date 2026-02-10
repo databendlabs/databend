@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi;
 
 pub(crate) const ID_GEN_GENERIC: &str = "generic";
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
@@ -166,7 +166,7 @@ impl kvapi::Value for IdGeneratorValue {
 
 #[cfg(test)]
 mod t {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::id_generator::IdGenerator;
 

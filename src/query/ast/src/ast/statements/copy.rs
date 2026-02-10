@@ -139,15 +139,17 @@ impl Display for CopyIntoTableStmt {
 )]
 pub struct CopyIntoTableOptions {
     pub on_error: OnErrorMode,
-    pub size_limit: usize,
     pub max_files: usize,
-    pub split_size: usize,
     pub force: bool,
     pub purge: bool,
     pub disable_variant_check: bool,
     pub return_failed_only: bool,
-    pub validation_mode: String,
     pub column_match_mode: Option<ColumnMatchMode>,
+
+    // not used for now
+    pub size_limit: usize,
+    pub split_size: usize,
+    pub validation_mode: String,
 }
 
 impl CopyIntoTableOptions {

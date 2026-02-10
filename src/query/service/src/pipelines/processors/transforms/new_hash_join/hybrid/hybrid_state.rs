@@ -40,6 +40,10 @@ pub struct HybridHashJoinState {
 
     // Flag indicating whether spill has been triggered (for multi-thread sync)
     pub spilled: AtomicBool,
+    // Flag indicating whether spill has ever happened for this join instance.
+    // Once set, it should never be cleared, so runtime filters stay disabled
+    // for the lifetime of this join.
+    pub ever_spilled: AtomicBool,
 
     pub transition_queue: ConcurrentQueue<DataBlock>,
 }
@@ -59,6 +63,7 @@ impl HybridHashJoinState {
             max_level,
             factory,
             spilled: AtomicBool::new(false),
+            ever_spilled: AtomicBool::new(false),
             transition_queue: ConcurrentQueue::unbounded(),
         }))
     }
@@ -68,11 +73,16 @@ impl HybridHashJoinState {
     }
 
     pub fn check_spilled(&self) -> bool {
-        self.spilled.load(Ordering::Relaxed)
+        self.spilled.load(Ordering::Acquire)
     }
 
     pub fn set_spilled(&self) -> bool {
+        self.ever_spilled.store(true, Ordering::Release);
         !self.spilled.swap(true, Ordering::AcqRel)
+    }
+
+    pub fn has_spilled_once(&self) -> bool {
+        self.ever_spilled.load(Ordering::Acquire)
     }
 
     pub fn create_grace_state(&self) -> Result<Arc<GraceHashJoinState>> {

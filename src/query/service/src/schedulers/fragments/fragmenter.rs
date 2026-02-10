@@ -21,8 +21,8 @@ use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_types::NodeInfo;
 use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_meta_types::NodeInfo;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::BroadcastSink;
