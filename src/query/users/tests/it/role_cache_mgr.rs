@@ -53,7 +53,7 @@ async fn test_role_cache_mgr() -> anyhow::Result<()> {
         UserPrivilegeSet::available_privileges_on_database(false),
     );
     user_manager
-        .add_role(&tenant, role1, &CreateOption::CreateOrReplace)
+        .create_role(&tenant, role1, &CreateOption::CreateOrReplace)
         .await?;
 
     let mut roles = role_cache_manager

@@ -33,6 +33,7 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 
+use crate::meta_service_error;
 use crate::sessions::SessionContext;
 
 /// SessionPrivilegeManager handles all the things related to privieges in a session. On validating a privilege,
@@ -395,41 +396,36 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                     Object::All => user_api
                         .role_api(&self.session_ctx.get_current_tenant())
                         .list_ownerships()
-                        .await?
+                        .await
+                        .map_err(meta_service_error)?
                         .into_iter()
                         .map(|item| item.data)
                         .collect(),
-                    Object::UDF => {
-                        user_api
-                            .role_api(&self.session_ctx.get_current_tenant())
-                            .list_udf_ownerships()
-                            .await?
-                    }
-                    Object::Stage => {
-                        user_api
-                            .role_api(&self.session_ctx.get_current_tenant())
-                            .list_stage_ownerships()
-                            .await?
-                    }
-                    Object::Sequence => {
-                        let res = user_api
-                            .role_api(&self.session_ctx.get_current_tenant())
-                            .list_seq_ownerships()
-                            .await?;
-                        res
-                    }
-                    Object::Connection => {
-                        user_api
-                            .role_api(&self.session_ctx.get_current_tenant())
-                            .list_connection_ownerships()
-                            .await?
-                    }
-                    Object::Warehouse => {
-                        user_api
-                            .role_api(&self.session_ctx.get_current_tenant())
-                            .list_warehouse_ownerships()
-                            .await?
-                    }
+                    Object::UDF => user_api
+                        .role_api(&self.session_ctx.get_current_tenant())
+                        .list_udf_ownerships()
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Stage => user_api
+                        .role_api(&self.session_ctx.get_current_tenant())
+                        .list_stage_ownerships()
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Sequence => user_api
+                        .role_api(&self.session_ctx.get_current_tenant())
+                        .list_seq_ownerships()
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Connection => user_api
+                        .role_api(&self.session_ctx.get_current_tenant())
+                        .list_connection_ownerships()
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Warehouse => user_api
+                        .role_api(&self.session_ctx.get_current_tenant())
+                        .list_warehouse_ownerships()
+                        .await
+                        .map_err(meta_service_error)?,
                 };
                 let mut ownership_infos = vec![];
                 for ownership in ownerships {
