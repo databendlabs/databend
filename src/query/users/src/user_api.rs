@@ -138,7 +138,7 @@ impl UserApiProvider {
         {
             let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC, None);
             user_mgr
-                .add_role(tenant, public, &CreateOption::CreateIfNotExists)
+                .create_role(tenant, public, &CreateOption::CreateIfNotExists)
                 .await?;
         }
 
