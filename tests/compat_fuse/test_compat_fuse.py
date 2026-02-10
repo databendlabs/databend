@@ -8,6 +8,7 @@ Tests write-then-read compatibility across query versions with meta upgrades.
 import argparse
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -16,6 +17,38 @@ import tarfile
 import time
 import urllib.request
 from pathlib import Path
+
+
+def load_test_cases(path: Path) -> list[dict]:
+    """Parse the minimal yaml subset used by test_cases.yaml.
+
+    Handles lines of the form:
+        - { key: val, key: "val", key: [v1, v2, v3] }
+    Skips blank lines and # comments.
+    """
+    cases = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # Strip leading "- {" and trailing "}"
+        m = re.match(r"^-\s*\{(.+)\}\s*$", line)
+        if not m:
+            raise ValueError(f"Cannot parse line: {line}")
+        body = m.group(1)
+        entry = {}
+        for pair in re.split(r",\s*(?=[a-z])", body):
+            k, v = pair.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            if v.startswith("["):
+                # list value: [a, b, c]
+                inner = v.strip("[] ")
+                entry[k] = [x.strip().strip('"') for x in inner.split(",")]
+            else:
+                entry[k] = v.strip('"')
+        cases.append(entry)
+    return cases
 
 
 def wait_tcp_port(port: int, timeout: int = 20) -> None:
@@ -377,23 +410,62 @@ def download_binary(version: str) -> None:
         binary.chmod(0o755)
 
 
+def setup_env() -> None:
+    """Common environment setup: cd to repo root, set env, chmod binaries."""
+    script_dir = Path(__file__).resolve().parent
+    os.chdir(script_dir / ".." / "..")
+
+    os.environ["RUST_BACKTRACE"] = "full"
+
+    current_bin_dir = Path("./bins/current/bin")
+    if current_bin_dir.exists():
+        for binary in current_bin_dir.iterdir():
+            if binary.is_file():
+                binary.chmod(0o755)
+
+    Path(".databend").mkdir(parents=True, exist_ok=True)
+
+
+def download_and_run_case(
+    writer: str, reader: str, meta: list[str], suite: str
+) -> None:
+    """Download binaries/configs and run one compatibility test case."""
+    download_query_config(writer)
+    download_query_config(reader)
+
+    for meta_ver in meta:
+        download_binary(meta_ver)
+
+    download_binary(writer)
+
+    ctx = TestContext(writer, reader, meta, suite)
+    ctx.run_test()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Assert that latest query is compatible with an old version query on fuse-table format"
     )
     parser.add_argument(
+        "--run-all",
+        action="store_true",
+        help="Run all test cases defined in test_cases.yaml",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print test cases without executing (use with --run-all)",
+    )
+    parser.add_argument(
         "--writer-version",
-        required=True,
         help="The version that writes data to test compatibility with",
     )
     parser.add_argument(
         "--reader-version",
-        required=True,
         help="The version that reads data from test compatibility with",
     )
     parser.add_argument(
         "--meta-versions",
-        required=True,
         nargs="+",
         help="The databend-meta version(s) to run; the first one will be used as the writer's meta, the last one will be used as the reader's meta. The others used to upgrade ondisk meta data",
     )
@@ -404,41 +476,46 @@ def main():
     )
 
     args = parser.parse_args()
-    print(f" === args: {args}")
 
-    # cd to repo root
-    script_dir = Path(__file__).resolve().parent
-    os.chdir(script_dir / ".." / "..")
+    if args.run_all:
+        setup_env()
 
-    os.environ["RUST_BACKTRACE"] = "full"
+        yaml_path = Path(__file__).resolve().parent / "test_cases.yaml"
+        cases = load_test_cases(yaml_path)
+        print(f" === Loaded {len(cases)} test cases from {yaml_path}")
 
-    # chmod current binaries
-    current_bin_dir = Path("./bins/current/bin")
-    if current_bin_dir.exists():
-        for binary in current_bin_dir.iterdir():
-            if binary.is_file():
-                binary.chmod(0o755)
+        for i, case in enumerate(cases):
+            writer = case["writer"]
+            reader = case["reader"]
+            meta = case["meta"]
+            suite = case["suite"]
+            print(f" === [{i+1}/{len(cases)}] writer={writer} reader={reader} meta={meta} suite={suite}")
 
-    # Ensure data dir exists
-    Path(".databend").mkdir(parents=True, exist_ok=True)
+            if args.dry_run:
+                continue
 
-    download_query_config(args.writer_version)
-    download_query_config(args.reader_version)
+            download_and_run_case(writer, reader, meta, suite)
 
-    for meta_ver in args.meta_versions:
-        download_binary(meta_ver)
+        if args.dry_run:
+            print(" === Dry run complete, no tests executed.")
+        else:
+            print(" === All tests completed successfully!")
+    else:
+        if not args.writer_version or not args.reader_version or not args.meta_versions:
+            parser.error(
+                "--writer-version, --reader-version, and --meta-versions are required "
+                "when not using --run-all"
+            )
 
-    download_binary(args.writer_version)
-
-    ctx = TestContext(
-        args.writer_version,
-        args.reader_version,
-        args.meta_versions,
-        args.logictest_path,
-    )
-    ctx.run_test()
-
-    print(" === All tests completed successfully!")
+        print(f" === args: {args}")
+        setup_env()
+        download_and_run_case(
+            args.writer_version,
+            args.reader_version,
+            args.meta_versions,
+            args.logictest_path,
+        )
+        print(" === All tests completed successfully!")
 
 
 if __name__ == "__main__":

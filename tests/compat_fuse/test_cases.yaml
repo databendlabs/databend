@@ -1,0 +1,22 @@
+# Fuse table compatibility test matrix.
+#
+# Each entry tests write-then-read across query versions:
+#   writer  — the query version that writes data
+#   reader  — the query version that reads data ("current" = latest build)
+#   meta    — meta-service versions to run in order; used to upgrade on-disk meta data
+#   suite   — sqllogictest sub-directory under tests/compat_fuse/compat-logictest/
+#
+# To add a new test case, append an entry to the appropriate section below.
+# To bump a version, edit the version string in place.
+
+# --- Backward compat: old writer -> current reader ---
+- { writer: "1.2.46",  reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: base   }
+- { writer: "1.2.241", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: revoke }
+- { writer: "1.2.311", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: rbac   }
+- { writer: "1.2.318", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: rbac   }
+- { writer: "1.2.680", reader: current, meta: [1.2.680, 1.2.833],          suite: udf    }
+
+# --- Forward compat: current writer -> old reader ---
+- { writer: current, reader: "1.2.311", meta: [1.2.770], suite: rbac }
+- { writer: current, reader: "1.2.318", meta: [1.2.770], suite: rbac }
+- { writer: current, reader: "1.2.680", meta: [1.2.770], suite: udf  }
