@@ -285,7 +285,7 @@ impl Drop for NetworkInboundReceiver {
 /// 3. Poll listener → if Pending, return Pending; if Ready, loop back to 1
 ///
 /// This future is `Unpin` because all fields are either `Arc` or `Option<Pin<Box<...>>>`.
-pub struct RecvFuture {
+struct RecvFuture {
     channel: Arc<NetworkInboundChannel>,
     listener: Option<Pin<Box<event_listener::EventListener>>>,
 }

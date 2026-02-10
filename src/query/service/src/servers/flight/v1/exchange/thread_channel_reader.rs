@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Source processor that reads from a NetworkInboundReceiver.
+//! Source processor that reads from an InboundChannel.
 //!
 //! Pure synchronous processor - no `async_process` needed.
-//! Uses FlaggedWaker to poll a `RecvFuture` (which encapsulates the
-//! try-listen-retry pattern from async_channel).
-//!
-//! The processor prioritizes consuming data from the network connection
-//! with the highest memory usage (via NetworkInboundChannel's priority pop).
+//! Uses FlaggedWaker to poll the BoxFuture from InboundChannel::recv().
 
 use std::any::Any;
 use std::sync::Arc;
