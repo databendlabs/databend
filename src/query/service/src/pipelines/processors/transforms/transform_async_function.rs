@@ -48,6 +48,9 @@ pub struct SequenceCounter {
     current: AtomicU64,
     // Maximum sequence number in the current batch
     max: AtomicU64,
+    // Version counter for seqlock-style reads of (current, max).
+    // Even = stable snapshot; odd = writer in progress.
+    version: AtomicU64,
     // Serialize slow-path meta fetch / refill.
     refill_lock: Mutex<()>,
     /// Test-only: force the next N `try_reserve()` to return `None` then go to slow path.
@@ -60,9 +63,31 @@ impl SequenceCounter {
         Self {
             current: AtomicU64::new(0),
             max: AtomicU64::new(0),
+            version: AtomicU64::new(0),
             refill_lock: Mutex::new(()),
             #[cfg(test)]
             fail_next_reserve: AtomicUsize::new(0),
+        }
+    }
+
+    fn load_bounds(&self) -> (u64, u64) {
+        loop {
+            let v1 = self.version.load(Ordering::Acquire);
+            if v1 & 1 == 1 {
+                std::hint::spin_loop();
+                continue;
+            }
+
+            let current = self.current.load(Ordering::Relaxed);
+            let max = self.max.load(Ordering::Relaxed);
+
+            // Ensure `current/max` are read before the second `version` check.
+            std::sync::atomic::fence(Ordering::AcqRel);
+
+            let v2 = self.version.load(Ordering::Acquire);
+            if v1 == v2 {
+                return (current, max);
+            }
         }
     }
 
@@ -84,16 +109,15 @@ impl SequenceCounter {
             return None;
         }
 
-        if self.current.load(Ordering::Relaxed) == 0 {
+        let (current, max) = self.load_bounds();
+
+        if current == 0 {
             return None;
         }
 
-        let current = self.current.load(Ordering::Relaxed);
-        let max = self.max.load(Ordering::Relaxed);
-
         // Check if we have enough sequence numbers in the current batch
-        if current + count <= max {
-            let new_current = current + count;
+        let new_current = current.checked_add(count)?;
+        if new_current <= max {
             if self
                 .current
                 .compare_exchange(current, new_current, Ordering::SeqCst, Ordering::Relaxed)
@@ -110,14 +134,16 @@ impl SequenceCounter {
 
     // Update the counter with a new batch of sequence numbers
     fn update_batch(&self, current: u64, max: u64) {
-        self.current.store(current, Ordering::SeqCst);
-        self.max.store(max, Ordering::SeqCst);
+        // Seqlock write: version odd => update => version even.
+        self.version.fetch_add(1, Ordering::AcqRel);
+        self.current.store(current, Ordering::Relaxed);
+        self.max.store(max, Ordering::Relaxed);
+        self.version.fetch_add(1, Ordering::Release);
     }
 
     fn claim_up_to(&self, count: u64) -> (u64, u64) {
         loop {
-            let current = self.current.load(Ordering::Relaxed);
-            let max = self.max.load(Ordering::Relaxed);
+            let (current, max) = self.load_bounds();
 
             if current == 0 || current >= max {
                 return (current, 0);
@@ -485,6 +511,38 @@ mod tests {
 
         holder.await.unwrap();
         waiter.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_load_bounds_waits_for_stable_snapshot() {
+        let counter = Arc::new(SequenceCounter::new());
+        counter.update_batch(1, 1000);
+
+        // Simulate a partial publish where `max` becomes visible before `current`.
+        counter.version.fetch_add(1, Ordering::AcqRel);
+        counter.max.store(20, Ordering::Relaxed);
+
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        let counter_for_read = counter.clone();
+        tokio::task::spawn_blocking(move || {
+            let _ = tx.send(counter_for_read.load_bounds());
+        });
+
+        // Verify we are in a mixed state: new max + old current.
+        assert_eq!(counter.current.load(Ordering::Relaxed), 1);
+        assert_eq!(counter.max.load(Ordering::Relaxed), 20);
+
+        assert!(timeout(Duration::from_millis(20), &mut rx).await.is_err());
+
+        counter.current.store(10, Ordering::Relaxed);
+        counter.version.fetch_add(1, Ordering::Release);
+
+        let (current, max) = timeout(Duration::from_secs(1), rx)
+            .await
+            .expect("load_bounds should complete after publish")
+            .unwrap();
+
+        assert_eq!((current, max), (10, 20));
     }
 
     struct TestFetcher {
