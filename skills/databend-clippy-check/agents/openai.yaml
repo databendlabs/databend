@@ -1,0 +1,4 @@
+interface:
+  display_name: "Databend Clippy Check"
+  short_description: "Check Databend changes with cargo clippy."
+  default_prompt: "Use -clippy-check to validate recent crate changes with cargo clippy."
