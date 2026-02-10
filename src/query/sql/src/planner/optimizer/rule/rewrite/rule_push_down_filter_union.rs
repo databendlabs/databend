@@ -17,7 +17,6 @@ use std::sync::Arc;
 use ahash::HashMap;
 use databend_common_exception::Result;
 
-use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
@@ -30,7 +29,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
 use crate::IndexType;
-use crate::Visibility;
 
 // For a union query, it's not allowed to add `filter` after union
 // Such as: `(select * from t1 union all select * from t2) where a > 1`, it's invalid.
@@ -153,17 +151,11 @@ fn replace_column_binding(
 
     impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {
         fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
-            let index = column.column.index;
-            if self.index_pairs.contains_key(&index) {
-                let new_column = ColumnBindingBuilder::new(
-                    column.column.column_name.clone(),
-                    *self.index_pairs.get(&index).unwrap(),
-                    column.column.data_type.clone(),
-                    Visibility::Visible,
-                )
-                .virtual_computed_expr(column.column.virtual_computed_expr.clone())
-                .build();
-                column.column = new_column;
+            if let Some(new_index) = self.index_pairs.get(&column.column.index) {
+                // Keep the original column binding attributes (table/database qualifiers, column
+                // position, visibility, etc.) to avoid breaking downstream optimizations (e.g.
+                // prewhere push down relies on `table_index`).
+                column.column.index = *new_index;
             }
             Ok(())
         }
@@ -173,4 +165,48 @@ fn replace_column_binding(
     visitor.visit(&mut scalar)?;
 
     Ok(scalar)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+    use crate::binder::ColumnBindingBuilder;
+    use crate::Visibility;
+
+    #[test]
+    fn test_replace_column_binding_preserves_qualifiers() -> Result<()> {
+        let mut index_pairs = HashMap::default();
+        index_pairs.insert(1, 2);
+
+        let column = ColumnBindingBuilder::new(
+            "c".to_string(),
+            1,
+            Box::new(DataType::Number(NumberDataType::Int32)),
+            Visibility::Visible,
+        )
+        .database_name(Some("db".to_string()))
+        .table_name(Some("t".to_string()))
+        .table_index(Some(42))
+        .column_position(Some(7))
+        .virtual_computed_expr(Some("vir".to_string()))
+        .build();
+
+        let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+        let scalar = replace_column_binding(&index_pairs, scalar)?;
+
+        let ScalarExpr::BoundColumnRef(col_ref) = scalar else {
+            unreachable!("expected bound column ref")
+        };
+
+        assert_eq!(col_ref.column.index, 2);
+        assert_eq!(col_ref.column.database_name.as_deref(), Some("db"));
+        assert_eq!(col_ref.column.table_name.as_deref(), Some("t"));
+        assert_eq!(col_ref.column.table_index, Some(42));
+        assert_eq!(col_ref.column.column_position, Some(7));
+        assert_eq!(col_ref.column.virtual_computed_expr.as_deref(), Some("vir"));
+        Ok(())
+    }
 }
