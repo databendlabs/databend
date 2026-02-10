@@ -124,6 +124,30 @@ FROM list_stage(location=>'@hello_partition')
 1 1 1 1
 
 statement ok
+remove @hello_partition
+
+statement ok
+COPY INTO @hello_partition/foo/data_
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+
+query I
+select count() from @hello_partition;
+----
+4
+
+query IIII
+SELECT
+    count_if(name LIKE 'foo/date=2020-01-28/hour=18/data_%'),
+    count_if(name LIKE 'foo/date=2020-01-28/hour=22/data_%'),
+    count_if(name LIKE 'foo/date=2020-01-29/hour=02/data_%'),
+    count_if(name LIKE 'foo/_NULL_/data_%')
+FROM list_stage(location=>'@hello_partition')
+----
+1 1 1 1
+
+statement ok
 DROP STAGE hello_partition
 
 statement ok
