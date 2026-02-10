@@ -15,8 +15,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::task::Poll;
-use std::task::Waker;
 
 use arrow_array::RecordBatch;
 use arrow_array::RecordBatchOptions;
@@ -28,6 +26,7 @@ use arrow_ipc::writer::IpcDataGenerator;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::Schema as ArrowSchema;
 use bytes::Bytes;
+use futures_util::future::BoxFuture;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
@@ -41,13 +40,7 @@ use super::outbound_buffer::ExchangeSinkBuffer;
 /// Exchange channel trait for sending data blocks.
 /// Supports both local (zero-copy) and remote (serialized) channels.
 pub trait ExchangeChannel: Send + Sync {
-    /// Poll to send a data block to this channel.
-    ///
-    /// Returns:
-    /// - `Poll::Ready(Ok(()))`: Data accepted.
-    /// - `Poll::Ready(Err(...))`: Channel error (closed, remote error, etc.)
-    /// - `Poll::Pending`: Backpressure triggered, waker registered.
-    fn poll_send(&self, waker: &Waker, block: DataBlock) -> Poll<Result<()>>;
+    fn add_block(&self, block: DataBlock) -> BoxFuture<'static, Result<()>>;
 }
 
 /// Remote exchange channel that serializes DataBlock to FlightData
@@ -182,39 +175,43 @@ impl RemoteChannel {
 }
 
 impl ExchangeChannel for RemoteChannel {
-    fn poll_send(&self, waker: &Waker, block: DataBlock) -> Poll<Result<()>> {
-        // Profile recording
+    fn add_block(&self, block: DataBlock) -> BoxFuture<'static, Result<()>> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
 
-        // Serialize the block
         let flight_data_list = match self.serialize_block(block) {
             Ok(list) => list,
-            Err(e) => return Poll::Ready(Err(e)),
+            Err(e) => return Box::pin(async move { Err(e) }),
         };
 
-        // Send each FlightData through the buffer
-        for flight_data in flight_data_list {
+        for flight_data in &flight_data_list {
             let bytes = flight_data.data_body.len()
                 + flight_data.data_header.len()
                 + flight_data.app_metadata.len();
             Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, bytes);
-
-            match self
-                .buffer
-                .poll_send(self.channel_id, self.dest_idx, flight_data, waker)
-            {
-                Poll::Ready(Ok(())) => {}
-                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-                Poll::Pending => return Poll::Pending,
-            }
         }
 
-        Poll::Ready(Ok(()))
+        let buffer = self.buffer.clone();
+        let channel_id = self.channel_id;
+        let dest_idx = self.dest_idx;
+
+        Box::pin(async move {
+            for flight_data in flight_data_list {
+                // poll_send always accepts data even when returning Pending
+                // (Pending = data accepted, but buffer full - stop sending more)
+                let mut data = Some(flight_data);
+                std::future::poll_fn(|cx| match data.take() {
+                    Some(d) => buffer.poll_send(channel_id, dest_idx, d, cx.waker()),
+                    None => std::task::Poll::Ready(Ok(())),
+                })
+                .await?;
+            }
+            Ok(())
+        })
     }
 }
 
 /// Broadcast channel that wraps multiple channels and sends blocks
-/// to them in round-robin fashion (one channel per poll_send call).
+/// to them in round-robin fashion (one channel per add_block call).
 pub struct BroadcastChannel {
     channels: Vec<Arc<dyn ExchangeChannel>>,
     next_idx: AtomicUsize,
@@ -230,13 +227,12 @@ impl BroadcastChannel {
 }
 
 impl ExchangeChannel for BroadcastChannel {
-    fn poll_send(&self, waker: &Waker, block: DataBlock) -> Poll<Result<()>> {
+    fn add_block(&self, block: DataBlock) -> BoxFuture<'static, Result<()>> {
         if self.channels.is_empty() {
-            return Poll::Ready(Ok(()));
+            return Box::pin(async { Ok(()) });
         }
 
-        // Round-robin: get current index and increment
         let idx = self.next_idx.fetch_add(1, Ordering::Relaxed) % self.channels.len();
-        self.channels[idx].poll_send(waker, block)
+        self.channels[idx].add_block(block)
     }
 }
