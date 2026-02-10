@@ -469,6 +469,8 @@ mod tests {
     use databend_common_expression::FromData;
     use databend_common_expression::types::AccessType;
     use databend_common_expression::types::UInt64Type;
+    use tokio::sync::Barrier;
+    use tokio::sync::oneshot;
     use tokio::time::Duration;
     use tokio::time::sleep;
     use tokio::time::timeout;
@@ -511,6 +513,81 @@ mod tests {
 
         holder.await.unwrap();
         waiter.await.unwrap();
+    }
+
+    /// Regression test for issue #19392 ("Test 3: High Concurrency Stress Test").
+    ///
+    /// The old `Arc<tokio::RwLock<SequenceCounter>>` design could stall under load:
+    /// a slow-path refill would enqueue a writer, and tokio's fairness would then
+    /// block new readers even if they only need the fast path.
+    ///
+    /// With the current design, the fast path (`try_reserve`) must keep making
+    /// progress even when the slow-path refill lock is held and a large number
+    /// of tasks are queued up waiting for it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_high_concurrency_fast_path_progress_during_refill_contention() {
+        let counter = Arc::new(SequenceCounter::new());
+        counter.update_batch(1, 1_000_000);
+
+        // Hold the slow-path refill lock long enough so a regression (fast-path
+        // blocked behind refill waiters) becomes visible.
+        let (held_tx, held_rx) = oneshot::channel();
+        let holder = {
+            let counter = counter.clone();
+            databend_common_base::runtime::spawn(async move {
+                let _guard = counter.refill_lock.lock().await;
+                let _ = held_tx.send(());
+                sleep(Duration::from_millis(800)).await;
+            })
+        };
+        held_rx.await.unwrap();
+
+        // Create a queue of slow-path waiters to emulate contention.
+        // In the old RwLock-based implementation, having a writer waiting is what
+        // triggered the fairness behavior that blocked unrelated readers.
+        let mut waiters = Vec::new();
+        for _ in 0..64 {
+            let counter = counter.clone();
+            waiters.push(databend_common_base::runtime::spawn(async move {
+                let _guard = counter.refill_lock.lock().await;
+            }));
+        }
+
+        // High-concurrency fast path: should complete well before the holder
+        // releases `refill_lock`.
+        let tasks = 200;
+        let barrier = Arc::new(Barrier::new(tasks + 1));
+        let mut handles = Vec::with_capacity(tasks);
+        for _ in 0..tasks {
+            let counter = counter.clone();
+            let barrier = barrier.clone();
+            handles.push(databend_common_base::runtime::spawn(async move {
+                barrier.wait().await;
+                for _ in 0..5 {
+                    while counter.try_reserve(1).is_none() {
+                        tokio::task::yield_now().await;
+                    }
+                }
+            }));
+        }
+
+        barrier.wait().await;
+
+        // If fast-path progress is blocked by slow-path contention, this will
+        // time out. The deadline is intentionally much shorter than the time
+        // the holder keeps `refill_lock`.
+        timeout(Duration::from_millis(500), async {
+            for h in handles {
+                h.await.unwrap();
+            }
+        })
+        .await
+        .expect("fast-path should not be blocked by refill contention");
+
+        holder.await.unwrap();
+        for w in waiters {
+            w.await.unwrap();
+        }
     }
 
     #[tokio::test]
