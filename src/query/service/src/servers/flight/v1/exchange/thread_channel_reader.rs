@@ -22,7 +22,6 @@
 //! with the highest memory usage (via NetworkInboundChannel's priority pop).
 
 use std::any::Any;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -38,9 +37,9 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use futures_util::future::BoxFuture;
 
-use crate::servers::flight::v1::network::NetworkInboundReceiver;
-use crate::servers::flight::v1::network::inbound_channel::RecvFuture;
+use crate::servers::flight::v1::network::InboundChannel;
 
 /// Wraps an executor waker to also set an AtomicBool flag when woken.
 /// This allows the processor's `event()` to detect that data has become available
@@ -62,32 +61,28 @@ impl Wake for FlaggedWaker {
     }
 }
 
-/// Source processor that reads DataBlocks from a NetworkInboundReceiver.
+/// Source processor that reads DataBlocks from an InboundChannel.
 ///
 /// Pure synchronous: uses `event()` + `process()` only, no `async_process()`.
 ///
-/// `process()` polls a `RecvFuture` with a FlaggedWaker. The future
+/// `event()` polls a BoxFuture with a FlaggedWaker. The future
 /// encapsulates the try-listen-retry pattern (same as async_channel's Recv).
 /// When data arrives, the FlaggedWaker fires, executor re-schedules this
-/// processor, and the next `process()` call completes the future.
-///
-/// Dictionaries are collected until a non-dictionary packet arrives,
-/// then all packets are output together as `ExchangeDeserializeMeta`
-/// (same pattern as `ExchangeSourceReader`).
+/// processor, and the next `event()` call completes the future.
 pub struct ThreadChannelReader {
     output: Arc<OutputPort>,
-    receiver: Arc<NetworkInboundReceiver>,
+    receiver: Arc<dyn InboundChannel>,
 
     waker: Waker,
 
-    /// In-flight recv future, stored across event()/process() cycles.
-    recv_future: Option<RecvFuture>,
+    /// In-flight recv future, stored across event() cycles.
+    recv_future: Option<BoxFuture<'static, Option<Result<DataBlock>>>>,
 }
 
 impl ThreadChannelReader {
     pub fn create(
         output: Arc<OutputPort>,
-        receiver: Arc<NetworkInboundReceiver>,
+        receiver: Arc<dyn InboundChannel>,
         executor_waker: Waker,
     ) -> ProcessorPtr {
         let woken = Arc::new(AtomicBool::new(false));
@@ -104,7 +99,7 @@ impl ThreadChannelReader {
         }))
     }
 
-    pub fn create_item(receiver: Arc<NetworkInboundReceiver>, executor_waker: Waker) -> PipeItem {
+    pub fn create_item(receiver: Arc<dyn InboundChannel>, executor_waker: Waker) -> PipeItem {
         let output = OutputPort::create();
         PipeItem::create(
             Self::create(output.clone(), receiver, executor_waker),
@@ -113,17 +108,14 @@ impl ThreadChannelReader {
         )
     }
 
-    fn recv_fut(&mut self) -> RecvFuture {
-        self.recv_future
-            .take()
-            .unwrap_or_else(|| self.receiver.recv())
-    }
-
     fn recv_data(&mut self) -> Poll<Option<Result<DataBlock>>> {
-        let mut future = self.recv_fut();
+        let mut future = self
+            .recv_future
+            .take()
+            .unwrap_or_else(|| self.receiver.recv());
 
         let mut cx = Context::from_waker(&self.waker);
-        match Pin::new(&mut future).poll(&mut cx) {
+        match future.as_mut().poll(&mut cx) {
             Poll::Ready(data) => Poll::Ready(data),
             Poll::Pending => {
                 self.recv_future = Some(future);

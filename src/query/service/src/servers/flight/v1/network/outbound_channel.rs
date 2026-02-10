@@ -26,7 +26,6 @@ use arrow_ipc::writer::IpcDataGenerator;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::Schema as ArrowSchema;
 use bytes::Bytes;
-use futures_util::future::BoxFuture;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
@@ -34,12 +33,13 @@ use databend_common_expression::DataBlock;
 use databend_common_io::prelude::BinaryWrite;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
+use futures_util::future::BoxFuture;
 
 use super::outbound_buffer::ExchangeSinkBuffer;
 
-/// Exchange channel trait for sending data blocks.
+/// Outbound channel trait for sending data blocks.
 /// Supports both local (zero-copy) and remote (serialized) channels.
-pub trait ExchangeChannel: Send + Sync {
+pub trait OutboundChannel: Send + Sync {
     fn add_block(&self, block: DataBlock) -> BoxFuture<'static, Result<()>>;
 }
 
@@ -174,7 +174,7 @@ impl RemoteChannel {
     }
 }
 
-impl ExchangeChannel for RemoteChannel {
+impl OutboundChannel for RemoteChannel {
     fn add_block(&self, block: DataBlock) -> BoxFuture<'static, Result<()>> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
 
@@ -213,12 +213,12 @@ impl ExchangeChannel for RemoteChannel {
 /// Broadcast channel that wraps multiple channels and sends blocks
 /// to them in round-robin fashion (one channel per add_block call).
 pub struct BroadcastChannel {
-    channels: Vec<Arc<dyn ExchangeChannel>>,
+    channels: Vec<Arc<dyn OutboundChannel>>,
     next_idx: AtomicUsize,
 }
 
 impl BroadcastChannel {
-    pub fn create(channels: Vec<Arc<dyn ExchangeChannel>>) -> Self {
+    pub fn create(channels: Vec<Arc<dyn OutboundChannel>>) -> Self {
         Self {
             channels,
             next_idx: AtomicUsize::new(0),
@@ -226,7 +226,7 @@ impl BroadcastChannel {
     }
 }
 
-impl ExchangeChannel for BroadcastChannel {
+impl OutboundChannel for BroadcastChannel {
     fn add_block(&self, block: DataBlock) -> BoxFuture<'static, Result<()>> {
         if self.channels.is_empty() {
             return Box::pin(async { Ok(()) });

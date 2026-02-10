@@ -18,15 +18,15 @@ pub mod outbound_buffer;
 pub mod outbound_channel;
 pub mod outbound_transport;
 
+pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;
 pub use inbound_channel::NetworkInboundSender;
-pub use inbound_channel::RecvFuture;
 pub use inbound_quota::ConnectionQuota;
 pub use outbound_buffer::ExchangeBufferConfig;
 pub use outbound_buffer::ExchangeSinkBuffer;
 pub use outbound_channel::BroadcastChannel;
-pub use outbound_channel::ExchangeChannel;
+pub use outbound_channel::OutboundChannel;
 pub use outbound_channel::RemoteChannel;
 pub use outbound_transport::PingPongCallback;
 pub use outbound_transport::PingPongExchange;

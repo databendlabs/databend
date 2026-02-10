@@ -44,6 +44,7 @@ use concurrent_queue::PopError;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use event_listener::Event;
+use futures_util::future::BoxFuture;
 use parking_lot::RwLock;
 
 use super::inbound_quota::ConnectionQuota;
@@ -238,6 +239,12 @@ impl Drop for NetworkInboundSender {
     }
 }
 
+/// Trait for receiving data blocks from the network.
+pub trait InboundChannel: Send + Sync {
+    fn recv(&self) -> BoxFuture<'static, Option<Result<DataBlock, ErrorCode>>>;
+    fn close(&self);
+}
+
 /// Processor-side handle, bound to a specific tid.
 ///
 /// When dropped, closes the channel from receiver side.
@@ -249,20 +256,17 @@ impl NetworkInboundReceiver {
     pub fn new(channel: Arc<NetworkInboundChannel>) -> Self {
         Self { channel }
     }
+}
 
-    /// Create a `RecvFuture` that encapsulates the try-listen-retry pattern.
-    ///
-    /// The returned future can be polled with any waker (e.g., FlaggedWaker).
-    /// Follows the same pattern as async_channel's `Recv`.
-    pub fn recv(self: &Arc<Self>) -> RecvFuture {
-        RecvFuture {
-            receiver: self.clone(),
+impl InboundChannel for NetworkInboundReceiver {
+    fn recv(&self) -> BoxFuture<'static, Option<Result<DataBlock, ErrorCode>>> {
+        Box::pin(RecvFuture {
+            channel: self.channel.clone(),
             listener: None,
-        }
+        })
     }
 
-    /// Close this tid's channel from receiver side.
-    pub fn close(&self) {
+    fn close(&self) {
         self.channel.close_by_receiver();
     }
 }
@@ -273,7 +277,7 @@ impl Drop for NetworkInboundReceiver {
     }
 }
 
-/// Future that receives one item from a `NetworkInboundReceiver`.
+/// Future that receives one item from a `NetworkInboundChannel`.
 ///
 /// Encapsulates the try-listen-retry pattern (same as async_channel's `Recv`):
 /// 1. Try pop → if data or finished, return Ready
@@ -282,7 +286,7 @@ impl Drop for NetworkInboundReceiver {
 ///
 /// This future is `Unpin` because all fields are either `Arc` or `Option<Pin<Box<...>>>`.
 pub struct RecvFuture {
-    receiver: Arc<NetworkInboundReceiver>,
+    channel: Arc<NetworkInboundChannel>,
     listener: Option<Pin<Box<event_listener::EventListener>>>,
 }
 
@@ -294,7 +298,7 @@ impl Future for RecvFuture {
 
         loop {
             // Try pop (handles both Data and Finished)
-            match this.receiver.channel.try_pop() {
+            match this.channel.try_pop() {
                 Err(PopError::Empty) => {}
                 Err(PopError::Closed) => {
                     return Poll::Ready(None);
@@ -307,7 +311,7 @@ impl Future for RecvFuture {
 
             // Create listener if we don't have one, then retry
             if this.listener.is_none() {
-                this.listener = Some(Box::pin(this.receiver.channel.recv_ops.listen()));
+                this.listener = Some(Box::pin(this.channel.recv_ops.listen()));
                 // Continue to retry (catches race between try_pop and listen)
                 continue;
             }
