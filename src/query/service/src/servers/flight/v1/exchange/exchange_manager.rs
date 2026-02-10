@@ -74,6 +74,7 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::NetworkInboundChannelSet;
 use crate::servers::flight::v1::network::NetworkInboundReceiver;
 use crate::servers::flight::v1::network::NetworkInboundSender;
@@ -492,7 +493,7 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<Vec<Arc<NetworkInboundReceiver>>> {
+    ) -> Result<Vec<Arc<dyn InboundChannel>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -509,7 +510,7 @@ impl DataExchangeManager {
                 Some(channel_set) => Ok(channel_set
                     .channels
                     .iter()
-                    .map(|ch| Arc::new(NetworkInboundReceiver::new(ch.clone())))
+                    .map(|ch| Arc::new(NetworkInboundReceiver::new(ch.clone())) as Arc<dyn InboundChannel>)
                     .collect()),
             },
         }
