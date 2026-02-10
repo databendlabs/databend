@@ -84,6 +84,16 @@ impl TransformRecursiveCteSource {
         union_plan: UnionAll,
     ) -> Result<ProcessorPtr> {
         let mut union_plan = union_plan;
+
+        // Recursive CTE uses internal MEMORY tables addressed by name in the current database.
+        // If we keep using the stable scan name (cte name/alias), concurrent queries can interfere
+        // by creating/dropping/recreating the same table name, leading to wrong or flaky results.
+        //
+        // Make the internal table names query-unique by prefixing them with the query id.
+        // This is purely internal and does not change user-visible semantics.
+        let rcte_prefix = make_rcte_prefix(&ctx.get_id());
+        rewrite_rcte_internal_table_names(&mut union_plan, &rcte_prefix);
+
         let mut exec_ids: HashMap<String, Vec<u64>> = HashMap::new();
         assign_exec_ids(&mut union_plan.left, &mut exec_ids);
         assign_exec_ids(&mut union_plan.right, &mut exec_ids);
@@ -134,6 +144,8 @@ impl TransformRecursiveCteSource {
         if ctx.get_settings().get_max_cte_recursive_depth()? < recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
+        #[cfg(test)]
+        crate::test_kits::rcte_hooks::maybe_pause_before_step(&ctx.get_id(), recursive_step).await;
         let mut cte_scan_tables = vec![];
         let plan = if recursive_step == 0 {
             // Find all cte scan in the union right child plan, then create memory table for them.
@@ -169,6 +181,42 @@ impl TransformRecursiveCteSource {
         });
         let data_blocks = join_handle.await??;
         Ok((data_blocks, cte_scan_tables))
+    }
+}
+
+fn make_rcte_prefix(query_id: &str) -> String {
+    // Keep it readable and safe as an identifier.
+    // Use enough entropy to be effectively unique for concurrent queries.
+    let mut short = String::with_capacity(32);
+    for ch in query_id.chars() {
+        if ch.is_ascii_alphanumeric() {
+            short.push(ch);
+        }
+        if short.len() >= 32 {
+            break;
+        }
+    }
+    if short.is_empty() {
+        short.push_str("unknown");
+    }
+    format!("__rcte_{short}_")
+}
+
+fn rewrite_rcte_internal_table_names(union_plan: &mut UnionAll, prefix: &str) {
+    rewrite_recursive_cte_scan_names(&mut union_plan.left, prefix);
+    rewrite_recursive_cte_scan_names(&mut union_plan.right, prefix);
+    for name in union_plan.cte_scan_names.iter_mut() {
+        *name = format!("{prefix}{name}");
+    }
+}
+
+fn rewrite_recursive_cte_scan_names(plan: &mut PhysicalPlan, prefix: &str) {
+    if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
+        recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
+    }
+
+    for child in plan.children_mut() {
+        rewrite_recursive_cte_scan_names(child, prefix);
     }
 }
 
@@ -311,7 +359,6 @@ async fn create_memory_table_for_cte_scan(
 
                 let mut options = BTreeMap::new();
                 options.insert(OPT_KEY_RECURSIVE_CTE.to_string(), "1".to_string());
-
                 self.plans.push(CreateTablePlan {
                     schema,
                     create_option: CreateOption::CreateIfNotExists,
