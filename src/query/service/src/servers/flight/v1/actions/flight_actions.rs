@@ -69,54 +69,72 @@ impl FlightActions {
         self.actions.insert(
             path.clone(),
             Box::new(move |request| {
-                let mut deserializer = serde_json::Deserializer::from_slice(request);
-                deserializer.disable_recursion_limit();
+                let request =
+                    match catch_unwind(|| -> std::result::Result<Req, serde_json::Error> {
+                        let mut deserializer = serde_json::Deserializer::from_slice(request);
+                        deserializer.disable_recursion_limit();
 
-                let deserializer = serde_stacker::Deserializer {
-                    de: &mut deserializer,
-                    red_zone: recursive::get_minimum_stack_size(),
-                    stack_size: recursive::get_stack_allocation_size(),
-                };
+                        let deserializer = serde_stacker::Deserializer {
+                            de: &mut deserializer,
+                            red_zone: recursive::get_minimum_stack_size(),
+                            stack_size: recursive::get_stack_allocation_size(),
+                        };
 
-                let request = Req::deserialize(deserializer).map_err(|cause| {
-                    ErrorCode::BadArguments(format!(
-                        "Cannot parse request for {}, cause: {:?}",
-                        path, cause
-                    ))
-                });
+                        Req::deserialize(deserializer)
+                    }) {
+                        Ok(Ok(request)) => Ok(request),
+                        Ok(Err(cause)) => Err(ErrorCode::BadArguments(format!(
+                            "Cannot parse request for {}, len: {}, cause: {:?}",
+                            path,
+                            request.len(),
+                            cause
+                        ))),
+                        Err(cause) => Err(cause.add_message_back(format!(
+                            "(while deserializing flight action request: action={}, len={})",
+                            path,
+                            request.len()
+                        ))),
+                    };
 
                 let path = path.clone();
                 let t = t.clone();
                 Box::pin(async move {
                     let request = request?;
 
-                    let future = catch_unwind(move || t(request))?;
+                    let future = catch_unwind(move || t(request)).map_err(|cause| {
+                        cause.add_message_back(format!(
+                            "(while creating flight action future: action={})",
+                            path
+                        ))
+                    })?;
 
                     let future = CatchUnwindFuture::create(future);
-                    match future
+                    let response = future
                         .await
-                        .with_context(|| "failed to do flight action")
-                        .flatten()
-                    {
-                        Ok(v) => {
-                            let mut out = Vec::with_capacity(512);
-                            let mut serializer = serde_json::Serializer::new(&mut out);
-                            let serializer = serde_stacker::Serializer {
-                                ser: &mut serializer,
-                                red_zone: recursive::get_minimum_stack_size(),
-                                stack_size: recursive::get_stack_allocation_size(),
-                            };
+                        .with_context(|| format!("failed to do flight action, action: {}", path))
+                        .flatten()?;
 
-                            v.serialize(serializer).map_err(|cause| {
-                                ErrorCode::BadBytes(format!(
-                                    "Cannot serialize response for {}, cause: {:?}",
-                                    path, cause
-                                ))
-                            })?;
+                    match catch_unwind(|| -> std::result::Result<Vec<u8>, serde_json::Error> {
+                        let mut out = Vec::with_capacity(512);
+                        let mut serializer = serde_json::Serializer::new(&mut out);
+                        let serializer = serde_stacker::Serializer {
+                            ser: &mut serializer,
+                            red_zone: recursive::get_minimum_stack_size(),
+                            stack_size: recursive::get_stack_allocation_size(),
+                        };
 
-                            Ok(out)
-                        }
-                        Err(err) => Err(err),
+                        response.serialize(serializer)?;
+                        Ok(out)
+                    }) {
+                        Ok(Ok(out)) => Ok(out),
+                        Ok(Err(cause)) => Err(ErrorCode::BadBytes(format!(
+                            "Cannot serialize response for {}, cause: {:?}",
+                            path, cause
+                        ))),
+                        Err(cause) => Err(cause.add_message_back(format!(
+                            "(while serializing flight action response: action={})",
+                            path
+                        ))),
                     }
                 })
             }),

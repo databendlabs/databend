@@ -34,6 +34,7 @@ use databend_common_exception::ErrorCode;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
+use log::error;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -172,7 +173,17 @@ impl FlightService for DatabendQueryFlightService {
             .in_span(root)
             .await
         {
-            Err(cause) => Err(cause.into()),
+            Err(cause) => {
+                error!(
+                    "flight do_action failed, node: {}, action: {}, body_len: {}, code: {}, error: {:?}",
+                    config.query.node_id,
+                    action.r#type,
+                    action.body.len(),
+                    cause.code(),
+                    cause
+                );
+                Err(cause.into())
+            }
             Ok(body) => Ok(RawResponse::new(
                 Box::pin(tokio_stream::once(Ok(FlightResult { body: body.into() })))
                     as FlightStream<FlightResult>,
