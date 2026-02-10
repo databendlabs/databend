@@ -51,14 +51,14 @@ async fn test_role_manager() -> anyhow::Result<()> {
     {
         let role_info = RoleInfo::new(&role_name, None);
         role_mgr
-            .add_role(&tenant, role_info, &CreateOrReplace)
+            .create_role(&tenant, role_info, &CreateOrReplace)
             .await?;
     }
 
     // add role again, error
     {
         let role_info = RoleInfo::new(&role_name, None);
-        let res = role_mgr.add_role(&tenant, role_info, &Create).await;
+        let res = role_mgr.create_role(&tenant, role_info, &Create).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::ROLE_ALREADY_EXISTS,);
     }
@@ -67,7 +67,7 @@ async fn test_role_manager() -> anyhow::Result<()> {
     {
         let role_info = RoleInfo::new(&role_name, None);
         role_mgr
-            .add_role(&tenant, role_info, &CreateIfNotExists)
+            .create_role(&tenant, role_info, &CreateIfNotExists)
             .await?;
     }
 
