@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::panic::AssertUnwindSafe;
-use std::panic::catch_unwind;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -23,6 +21,7 @@ use arrow_flight::Ticket;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use async_channel::Sender;
+use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,7 +30,6 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use futures::StreamExt;
 use futures_util::future::Either;
-use log::error;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::Duration;
@@ -73,15 +71,13 @@ impl FlightClient {
         Res: for<'a> Deserialize<'a>,
     {
         let message_type = std::any::type_name::<T>();
-        let body = match catch_unwind(AssertUnwindSafe(
-            || -> std::result::Result<Vec<u8>, serde_json::Error> {
-                let mut body = Vec::with_capacity(512);
-                let mut serializer = serde_json::Serializer::new(&mut body);
-                let serializer = serde_stacker::Serializer::new(&mut serializer);
-                message.serialize(serializer)?;
-                Ok(body)
-            },
-        )) {
+        let body = match catch_unwind(|| -> std::result::Result<Vec<u8>, serde_json::Error> {
+            let mut body = Vec::with_capacity(512);
+            let mut serializer = serde_json::Serializer::new(&mut body);
+            let serializer = serde_stacker::Serializer::new(&mut serializer);
+            message.serialize(serializer)?;
+            Ok(body)
+        }) {
             Ok(Ok(body)) => body,
             Ok(Err(cause)) => {
                 return Err(ErrorCode::BadArguments(format!(
@@ -90,21 +86,9 @@ impl FlightClient {
                 )));
             }
             Err(cause) => {
-                let panic_message = cause
-                    .downcast_ref::<&'static str>()
-                    .map(|s| s.to_string())
-                    .or_else(|| cause.downcast_ref::<String>().cloned())
-                    .unwrap_or_else(|| "Sorry, unknown panic message".to_string());
-                let backtrace = std::backtrace::Backtrace::force_capture();
-
-                error!(
-                    "Panic while serializing flight action request: action={}, request_type={}, panic={}, backtrace={:?}",
-                    path, message_type, panic_message, backtrace
-                );
-
-                return Err(ErrorCode::PanicError(format!(
-                    "Panic while serializing flight action request in {:?}, type: {}, message: {}",
-                    path, message_type, panic_message
+                return Err(cause.add_message_back(format!(
+                    "(while serializing flight action request: action={:?}, type={})",
+                    path, message_type
                 )));
             }
         };
@@ -129,37 +113,21 @@ impl FlightClient {
                 let response_type = std::any::type_name::<Res>();
                 let response_len = response.body.len();
 
-                match catch_unwind(AssertUnwindSafe(
-                    || -> std::result::Result<Res, serde_json::Error> {
-                        let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
-                        deserializer.disable_recursion_limit();
-                        let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
-                        Res::deserialize(deserializer)
-                    },
-                )) {
+                match catch_unwind(|| -> std::result::Result<Res, serde_json::Error> {
+                    let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
+                    deserializer.disable_recursion_limit();
+                    let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+                    Res::deserialize(deserializer)
+                }) {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(cause)) => Err(ErrorCode::BadBytes(format!(
                         "Response payload deserialize error while in {:?}, type: {}, len: {}, cause: {}",
                         path, response_type, response_len, cause
                     ))),
-                    Err(cause) => {
-                        let panic_message = cause
-                            .downcast_ref::<&'static str>()
-                            .map(|s| s.to_string())
-                            .or_else(|| cause.downcast_ref::<String>().cloned())
-                            .unwrap_or_else(|| "unknown panic message".to_string());
-                        let backtrace = std::backtrace::Backtrace::force_capture();
-
-                        error!(
-                            "Panic while deserializing flight action response: action={}, response_type={}, response_len={}, panic={}, backtrace={:?}",
-                            path, response_type, response_len, panic_message, backtrace
-                        );
-
-                        Err(ErrorCode::PanicError(format!(
-                            "Panic while deserializing flight action response in {:?}, type: {}, len: {}, message: {}",
-                            path, response_type, response_len, panic_message
-                        )))
-                    }
+                    Err(cause) => Err(cause.add_message_back(format!(
+                        "(while deserializing flight action response: action={:?}, type={}, len={})",
+                        path, response_type, response_len
+                    ))),
                 }
             }
             None => Err(ErrorCode::EmptyDataFromServer(format!(
