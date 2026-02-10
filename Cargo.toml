@@ -148,20 +148,20 @@ databend-functions-scalar-geo = { path = "src/query/functions/src/scalars/geogra
 databend-functions-scalar-integer-basic-arithmetic = { path = "src/query/functions/src/scalars/integer_arithmetic" }
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
-databend-meta = "260205.1.0"
+databend-meta = "260205.3.0"
 databend-meta-admin = { path = "src/meta/admin" }
 databend-meta-cli-config = { path = "src/meta/cli-config" }
-databend-meta-client = "260205.1.0"
-databend-meta-kvapi = "260205.1.0"
-databend-meta-kvapi-test-suite = "260205.1.0"
-databend-meta-raft-store = "260205.1.0"
+databend-meta-client = "260205.3.0"
+databend-meta-kvapi = "260205.3.0"
+databend-meta-kvapi-test-suite = "260205.3.0"
+databend-meta-raft-store = "260205.3.0"
 databend-meta-runtime = { path = "src/meta/runtime" }
-databend-meta-runtime-api = "260205.1.0"
-databend-meta-sled-store = "260205.1.0"
-databend-meta-test-harness = "260205.1.0"
-databend-meta-types = "260205.1.0"
+databend-meta-runtime-api = "260205.3.0"
+databend-meta-sled-store = "260205.3.0"
+databend-meta-test-harness = "260205.3.0"
+databend-meta-types = "260205.3.0"
 databend-meta-ver = { path = "src/meta/ver" }
-databend-meta-version = "260205.1.0"
+databend-meta-version = "260205.3.0"
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
@@ -398,7 +398,6 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
-raft-log = { version = "0.2.13" }
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
 rayon = "1.9.0"
@@ -616,16 +615,16 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.10" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-kvapi = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-kvapi-test-suite = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-raft-store = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-runtime-api = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-sled-store = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-types = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
-databend-meta-version = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.1.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-kvapi = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-kvapi-test-suite = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-raft-store = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-runtime-api = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-sled-store = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-types = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-version = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "fc84214" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }

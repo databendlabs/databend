@@ -322,8 +322,8 @@ return metrics, nil
     async fn dump_raft_log_wal(&self, args: &DumpRaftLogWalArgs) -> anyhow::Result<()> {
         use std::path::PathBuf;
 
-        use raft_log::Config;
-        use raft_log::DumpApi;
+        use databend_meta_raft_store::raft_log::Config;
+        use databend_meta_raft_store::raft_log::DumpApi;
 
         let mut wal_dir = PathBuf::from(&args.raft_dir);
         wal_dir.push("df_meta");
@@ -336,7 +336,7 @@ return metrics, nil
         });
 
         let dump =
-            raft_log::Dump::<databend_meta_raft_store::raft_log_v004::RaftLogTypes>::new(config)?;
+            databend_meta_raft_store::raft_log::Dump::<databend_meta_raft_store::raft_log_v004::RaftLogTypes>::new(config)?;
         dump.write_display(io::stdout())?;
         Ok(())
     }

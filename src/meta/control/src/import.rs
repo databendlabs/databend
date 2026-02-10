@@ -43,7 +43,7 @@ use databend_meta_types::raft_types::NodeId;
 use databend_meta_types::raft_types::StoredMembership;
 use databend_meta_types::raft_types::new_log_id;
 use display_more::display_option::DisplayOptionExt;
-use raft_log::api::raft_log_writer::RaftLogWriter;
+use databend_meta_raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
 use url::Url;
 
 use crate::args::ImportArgs;
