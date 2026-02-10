@@ -26,6 +26,7 @@ use std::str::FromStr;
 use databend_meta::store::RaftStore;
 use databend_meta_raft_store::config::RaftConfig;
 use databend_meta_raft_store::ondisk::DataVersion;
+use databend_meta_raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
 use databend_meta_raft_store::raft_log_v004;
 use databend_meta_runtime_api::SpawnApi;
 use databend_meta_sled_store::init_get_sled_db;
@@ -43,7 +44,6 @@ use databend_meta_types::raft_types::NodeId;
 use databend_meta_types::raft_types::StoredMembership;
 use databend_meta_types::raft_types::new_log_id;
 use display_more::display_option::DisplayOptionExt;
-use databend_meta_raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
 use url::Url;
 
 use crate::args::ImportArgs;

@@ -335,8 +335,9 @@ return metrics, nil
             ..Default::default()
         });
 
-        let dump =
-            databend_meta_raft_store::raft_log::Dump::<databend_meta_raft_store::raft_log_v004::RaftLogTypes>::new(config)?;
+        let dump = databend_meta_raft_store::raft_log::Dump::<
+            databend_meta_raft_store::raft_log_v004::RaftLogTypes,
+        >::new(config)?;
         dump.write_display(io::stdout())?;
         Ok(())
     }
