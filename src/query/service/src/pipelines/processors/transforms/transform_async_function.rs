@@ -1147,7 +1147,7 @@ mod tests {
 
         let (tx, mut rx) = tokio::sync::oneshot::channel();
         let counter_for_read = counter.clone();
-        tokio::task::spawn_blocking(move || {
+        databend_common_base::runtime::spawn_blocking(move || {
             let _ = tx.send(counter_for_read.load_bounds());
         });
 
