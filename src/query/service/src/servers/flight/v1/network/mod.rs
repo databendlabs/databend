@@ -14,9 +14,21 @@
 
 pub mod inbound_channel;
 pub mod inbound_quota;
+pub mod outbound_buffer;
+pub mod outbound_channel;
+pub mod ping_pong_exchange;
 
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;
 pub use inbound_channel::NetworkInboundSender;
 pub use inbound_channel::RecvFuture;
 pub use inbound_quota::ConnectionQuota;
+pub use outbound_buffer::ExchangeBufferConfig;
+pub use outbound_buffer::ExchangeSinkBuffer;
+pub use outbound_channel::BroadcastChannel;
+pub use outbound_channel::ExchangeChannel;
+pub use outbound_channel::RemoteChannel;
+pub use ping_pong_exchange::PingPongCallback;
+pub use ping_pong_exchange::PingPongExchange;
+pub use ping_pong_exchange::PingPongExchangeInner;
+pub use ping_pong_exchange::PingPongResponse;

@@ -36,7 +36,7 @@ use databend_common_io::prelude::BinaryWrite;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
 
-use super::ExchangeSinkBuffer;
+use super::outbound_buffer::ExchangeSinkBuffer;
 
 /// Exchange channel trait for sending data blocks.
 /// Supports both local (zero-copy) and remote (serialized) channels.
