@@ -25,9 +25,9 @@ use databend_common_exception::Result;
 use parking_lot::Mutex;
 use tonic::Status;
 
-use super::ping_pong_exchange::PingPongCallback;
-use super::ping_pong_exchange::PingPongExchange;
-use super::ping_pong_exchange::PingPongResponse;
+use super::outbound_transport::PingPongCallback;
+use super::outbound_transport::PingPongExchange;
+use super::outbound_transport::PingPongResponse;
 
 /// Configuration for ExchangeSinkBuffer.
 #[derive(Clone)]
