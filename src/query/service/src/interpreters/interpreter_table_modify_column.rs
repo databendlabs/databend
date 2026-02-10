@@ -381,67 +381,74 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
+        let schema_changed = schema != new_schema;
+        let is_empty_table = base_snapshot.is_none_or(|v| v.summary.row_count == 0);
+
         let mut need_rebuild = false;
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         let format_as_parquet = fuse_table.storage_format_as_parquet();
-        if schema != new_schema {
+        if schema_changed {
             for (field, _) in field_and_comments {
                 let old_field = schema.field_with_name(&field.name)?;
-                let is_alter_column_string_to_binary =
-                    is_string_to_binary(&old_field.data_type, &field.data_type);
                 let data_type_changed = old_field.data_type != field.data_type;
                 let default_expr_changed = old_field.default_expr != field.default_expr;
                 let computed_expr_changed = old_field.computed_expr != field.computed_expr;
 
                 // Validate the new default expression against the new column type
-                // to keep ALTER-time semantics consistent for invalid defaults.
+                // to catch invalid defaults at ALTER time rather than at query time.
                 if data_type_changed || default_expr_changed {
                     let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
                     let _ = default_expr_binder
                         .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
                 }
 
-                // Keep the existing parquet String -> Binary fast path.
+                // Already decided to rebuild from a previous field; keep
+                // iterating only to validate remaining default expressions.
+                if need_rebuild {
+                    continue;
+                }
+
+                // Parquet String -> Binary: no rebuild needed.
                 if format_as_parquet
-                    && is_alter_column_string_to_binary
+                    && is_string_to_binary(&old_field.data_type, &field.data_type)
                     && !default_expr_changed
                     && !computed_expr_changed
                 {
                     continue;
                 }
 
-                // Allow default-only changes to avoid rebuilding table data.
-                if !data_type_changed && default_expr_changed && !computed_expr_changed {
-                    if field.default_expr.is_some() {
-                        let data_field: DataField = field.into();
-                        let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
-                        let expr = scalar_expr
-                            .as_expr()?
-                            .project_column_ref(|col| Ok(col.index))?;
-
-                        // For non-deterministic default expressions, a metadata-only change may
-                        // cause missing column values in historical blocks to be re-evaluated on
-                        // every query (e.g. `rand()`), leading to unstable results.
-                        // Force rebuilding table data to materialize existing values.
-                        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                            need_rebuild = true;
-                        }
-                    }
-
-                    if !need_rebuild {
-                        continue;
-                    }
-                }
-
                 if data_type_changed || computed_expr_changed {
                     need_rebuild = true;
+                    continue;
+                }
+
+                // Default-only change: skip rebuild unless non-deterministic.
+                if default_expr_changed && field.default_expr.is_some() {
+                    let data_field: DataField = field.into();
+                    let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
+                    let expr = scalar_expr
+                        .as_expr()?
+                        .project_column_ref(|col| Ok(col.index))?;
+                    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        need_rebuild = true;
+                    }
                 }
             }
         }
 
+        // Metadata-only default changes on change-tracking tables can silently
+        // alter historical row values (filled from the snapshot schema default)
+        // without producing change records, breaking stream/CDC consistency.
+        if schema_changed && !is_empty_table && fuse_table.change_tracking_enabled() {
+            return Err(ErrorCode::AlterTableError(format!(
+                "table {} has change tracking enabled, modifying columns should be avoided",
+                table_info.desc
+            )));
+        }
+
         // if don't need to rebuild table, only update table meta.
-        if !need_rebuild || base_snapshot.is_none_or(|v| v.summary.row_count == 0) {
+        if !need_rebuild || is_empty_table {
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
@@ -459,16 +466,6 @@ impl ModifyTableColumnInterpreter {
             .await?;
 
             return Ok(PipelineBuildResult::create());
-        }
-
-        if fuse_table.change_tracking_enabled() {
-            // Modifying columns while change tracking is active may break
-            // the consistency between tracked changes and the current table schema,
-            // leading to incorrect or incomplete change records.
-            return Err(ErrorCode::AlterTableError(format!(
-                "table {} has change tracking enabled, modifying columns should be avoided",
-                table_info.desc
-            )));
         }
 
         // construct sql for selecting data from old table.

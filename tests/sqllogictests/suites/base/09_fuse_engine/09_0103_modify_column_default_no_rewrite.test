@@ -72,13 +72,13 @@ SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = '
 1
 
 ####################################################
-# change tracking: default-only modify is allowed (metadata-only) #
+# change tracking: reject schema changes on non-empty table  #
 ####################################################
 
 statement ok
 INSERT INTO t_ct(a) VALUES(1)
 
-statement ok
+statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 99
 
 statement ok
@@ -88,7 +88,7 @@ query II
 SELECT a,b FROM t_ct ORDER BY a
 ----
 1 10
-2 99
+2 10
 
 statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b STRING

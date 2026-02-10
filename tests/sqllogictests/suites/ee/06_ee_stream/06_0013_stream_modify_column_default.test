@@ -27,7 +27,7 @@ CREATE TABLE t(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
 statement ok
 INSERT INTO t(a) VALUES(1)
 
-statement ok
+statement error 1132
 ALTER TABLE t MODIFY COLUMN b INT DEFAULT 99
 
 # Explicit stream case: create a stream on this table.
@@ -37,12 +37,11 @@ CREATE STREAM s ON TABLE t APPEND_ONLY=false
 statement ok
 INSERT INTO t(a) VALUES(2)
 
-# The stream should include the new inserted row, and b should be filled by
-# the new default value (99).
+# The ALTER above was rejected, so b still uses the original default (10).
 query IITB
 SELECT a, b, change$action, change$is_update FROM s ORDER BY a
 ----
-2 99 INSERT 0
+2 10 INSERT 0
 
 statement ok
 DROP STREAM s
