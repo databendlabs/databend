@@ -213,7 +213,10 @@ impl ClusterHelper for Cluster {
                                 attempt += 1;
                                 sleep(Duration::from_secs(flight_params.retry_interval)).await;
                             }
-                            Err(e) => return Err(e),
+                            Err(e) => {
+                                error!("do_action failed: {:?}", e);
+                                return Err(e);
+                            }
                         }
                     }
                 }
