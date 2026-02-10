@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod flagged_waker;
 pub mod inbound_channel;
 pub mod inbound_quota;
 pub mod outbound_buffer;
 pub mod outbound_channel;
 pub mod outbound_transport;
 
+pub use flagged_waker::FlaggedWaker;
 pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;

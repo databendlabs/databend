@@ -22,11 +22,8 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
-use std::task::Wake;
 use std::task::Waker;
 
 use databend_common_exception::Result;
@@ -37,25 +34,8 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use futures_util::future::BoxFuture;
 
+use crate::servers::flight::v1::network::FlaggedWaker;
 use crate::servers::flight::v1::network::OutboundChannel;
-
-/// Wraps an executor waker to also set an AtomicBool flag when woken.
-struct FlaggedWaker {
-    inner: Waker,
-    flag: Arc<AtomicBool>,
-}
-
-impl Wake for FlaggedWaker {
-    fn wake(self: Arc<Self>) {
-        self.flag.store(true, Ordering::Release);
-        self.inner.wake_by_ref();
-    }
-
-    fn wake_by_ref(self: &Arc<Self>) {
-        self.flag.store(true, Ordering::Release);
-        self.inner.wake_by_ref();
-    }
-}
 
 /// Sink processor that sends DataBlocks through an OutboundChannel.
 ///
@@ -80,16 +60,10 @@ impl ThreadChannelWriter {
         channel: Arc<dyn OutboundChannel>,
         executor_waker: Waker,
     ) -> ProcessorPtr {
-        let woken = Arc::new(AtomicBool::new(false));
-        let flagged_waker = Waker::from(Arc::new(FlaggedWaker {
-            inner: executor_waker,
-            flag: woken.clone(),
-        }));
-
         ProcessorPtr::create(Box::new(Self {
             input,
             channel,
-            waker: flagged_waker,
+            waker: FlaggedWaker::create(executor_waker),
             send_future: None,
         }))
     }

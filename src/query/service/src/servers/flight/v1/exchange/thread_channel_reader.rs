@@ -23,11 +23,8 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
-use std::task::Wake;
 use std::task::Waker;
 
 use databend_common_exception::Result;
@@ -39,31 +36,12 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use futures_util::future::BoxFuture;
 
+use crate::servers::flight::v1::network::FlaggedWaker;
 use crate::servers::flight::v1::network::InboundChannel;
-
-/// Wraps an executor waker to also set an AtomicBool flag when woken.
-/// This allows the processor's `event()` to detect that data has become available
-/// without needing to poll the channel.
-struct FlaggedWaker {
-    inner: Waker,
-    flag: Arc<AtomicBool>,
-}
-
-impl Wake for FlaggedWaker {
-    fn wake(self: Arc<Self>) {
-        self.flag.store(true, Ordering::Release);
-        self.inner.wake_by_ref();
-    }
-
-    fn wake_by_ref(self: &Arc<Self>) {
-        self.flag.store(true, Ordering::Release);
-        self.inner.wake_by_ref();
-    }
-}
 
 /// Source processor that reads DataBlocks from an InboundChannel.
 ///
-/// Pure synchronous: uses `event()` + `process()` only, no `async_process()`.
+/// Pure synchronous: uses `event()` only, no `async_process()`.
 ///
 /// `event()` polls a BoxFuture with a FlaggedWaker. The future
 /// encapsulates the try-listen-retry pattern (same as async_channel's Recv).
@@ -85,16 +63,10 @@ impl ThreadChannelReader {
         receiver: Arc<dyn InboundChannel>,
         executor_waker: Waker,
     ) -> ProcessorPtr {
-        let woken = Arc::new(AtomicBool::new(false));
-        let flagged_waker = Waker::from(Arc::new(FlaggedWaker {
-            inner: executor_waker,
-            flag: woken.clone(),
-        }));
-
         ProcessorPtr::create(Box::new(Self {
             output,
             receiver,
-            waker: flagged_waker,
+            waker: FlaggedWaker::create(executor_waker),
             recv_future: None,
         }))
     }
