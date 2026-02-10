@@ -54,9 +54,6 @@ use super::exchange_sink::ExchangeSink;
 use super::exchange_transform::ExchangeTransform;
 use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
-use super::thread_channel::ThreadChannelReceiver;
-use super::thread_channel::ThreadChannelSender;
-use super::thread_channel::ThreadChannelSet;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::physical_plans::PhysicalPlan;
@@ -77,6 +74,9 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::NetworkInboundChannelSet;
+use crate::servers::flight::v1::network::NetworkInboundReceiver;
+use crate::servers::flight::v1::network::NetworkInboundSender;
 use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
@@ -464,35 +464,35 @@ impl DataExchangeManager {
 
     /// Handle a do_exchange request from a remote node.
     ///
-    /// Creates a `ThreadChannelSender` for this connection, bound to the
-    /// `ThreadChannelSet` for the given channel_id. The caller (flight_service)
+    /// Creates a `NetworkInboundSender` for this connection, bound to the
+    /// `NetworkInboundChannelSet` for the given channel_id. The caller (flight_service)
     /// uses the sender to push incoming FlightData into per-tid queues.
     #[fastrace::trace]
     pub fn handle_do_exchange(
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<ThreadChannelSender> {
+    ) -> Result<NetworkInboundSender> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query_id.to_string()) {
-            Entry::Occupied(mut v) => v.get_mut().create_thread_channel_sender(channel_id),
+            Entry::Occupied(mut v) => v.get_mut().create_inbound_sender(channel_id),
             Entry::Vacant(v) => v
                 .insert(QueryCoordinator::create())
-                .create_thread_channel_sender(channel_id),
+                .create_inbound_sender(channel_id),
         }
     }
 
-    /// Get the ThreadChannelReceivers for a given query and channel.
+    /// Get the NetworkInboundReceivers for a given query and channel.
     ///
-    /// Returns one `Arc<ThreadChannelReceiver>` per tid, for building
+    /// Returns one `Arc<NetworkInboundReceiver>` per tid, for building
     /// `ThreadChannelReader` processors in the pipeline.
     pub fn get_exchange_source_channel(
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<Vec<Arc<ThreadChannelReceiver>>> {
+    ) -> Result<Vec<Arc<NetworkInboundReceiver>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -501,15 +501,15 @@ impl DataExchangeManager {
                 "Query {} not found in cluster.",
                 query_id
             ))),
-            Some(coordinator) => match coordinator.thread_channel_sets.get(channel_id) {
+            Some(coordinator) => match coordinator.inbound_channel_sets.get(channel_id) {
                 None => Err(ErrorCode::Internal(format!(
-                    "ThreadChannelSet not found for channel {}",
+                    "NetworkInboundChannelSet not found for channel {}",
                     channel_id
                 ))),
                 Some(channel_set) => Ok(channel_set
                     .channels
                     .iter()
-                    .map(|ch| Arc::new(ThreadChannelReceiver::new(ch.clone())))
+                    .map(|ch| Arc::new(NetworkInboundReceiver::new(ch.clone())))
                     .collect()),
             },
         }
@@ -739,7 +739,7 @@ pub(crate) struct QueryCoordinator {
     statistics_exchanges: HashMap<String, FlightExchange>,
     flight_data_senders: HashMap<String, Vec<FlightSender>>,
     flight_data_receivers: HashMap<String, Vec<FlightReceiver>>,
-    thread_channel_sets: HashMap<String, Arc<ThreadChannelSet>>,
+    inbound_channel_sets: HashMap<String, Arc<NetworkInboundChannelSet>>,
 }
 
 impl QueryCoordinator {
@@ -750,7 +750,7 @@ impl QueryCoordinator {
             flight_data_receivers: HashMap::new(),
             statistics_exchanges: HashMap::new(),
             fragments_coordinator: HashMap::new(),
-            thread_channel_sets: HashMap::new(),
+            inbound_channel_sets: HashMap::new(),
         }
     }
 
@@ -830,13 +830,13 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    /// Create a ThreadChannelSender for a new do_exchange connection.
+    /// Create a NetworkInboundSender for a new do_exchange connection.
     ///
-    /// Lazily creates the ThreadChannelSet if it doesn't exist yet.
-    /// TODO: create ThreadChannelSet during query planning phase instead.
-    fn create_thread_channel_sender(&mut self, channel_id: &str) -> Result<ThreadChannelSender> {
+    /// Lazily creates the NetworkInboundChannelSet if it doesn't exist yet.
+    /// TODO: create NetworkInboundChannelSet during query planning phase instead.
+    fn create_inbound_sender(&mut self, channel_id: &str) -> Result<NetworkInboundSender> {
         let channel_set = self
-            .thread_channel_sets
+            .inbound_channel_sets
             .entry(channel_id.to_string())
             .or_insert_with(|| {
                 let num_threads = self
@@ -844,13 +844,13 @@ impl QueryCoordinator {
                     .as_ref()
                     .and_then(|info| info.query_ctx.get_settings().get_max_threads().ok())
                     .unwrap_or(8) as usize;
-                Arc::new(ThreadChannelSet::new(num_threads))
+                Arc::new(NetworkInboundChannelSet::new(num_threads))
             })
             .clone();
 
         // TODO: get max_bytes_per_connection from query settings
         let max_bytes_per_connection = 256 * 1024 * 1024; // 256MB
-        Ok(ThreadChannelSender::new(
+        Ok(NetworkInboundSender::new(
             &channel_set,
             max_bytes_per_connection,
         ))

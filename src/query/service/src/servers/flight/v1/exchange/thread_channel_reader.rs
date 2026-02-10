@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Source processor that reads from a ThreadChannelReceiver.
+//! Source processor that reads from a NetworkInboundReceiver.
 //!
 //! Pure synchronous processor - no `async_process` needed.
 //! Uses FlaggedWaker to poll a `RecvFuture` (which encapsulates the
 //! try-listen-retry pattern from async_channel).
 //!
 //! The processor prioritizes consuming data from the network connection
-//! with the highest memory usage (via ThreadChannel's priority pop).
+//! with the highest memory usage (via NetworkInboundChannel's priority pop).
 
 use std::any::Any;
 use std::pin::Pin;
@@ -39,8 +39,8 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
-use super::thread_channel::RecvFuture;
-use super::thread_channel::ThreadChannelReceiver;
+use crate::servers::flight::v1::network::NetworkInboundReceiver;
+use crate::servers::flight::v1::network::inbound_channel::RecvFuture;
 
 /// Wraps an executor waker to also set an AtomicBool flag when woken.
 /// This allows the processor's `event()` to detect that data has become available
@@ -62,7 +62,7 @@ impl Wake for FlaggedWaker {
     }
 }
 
-/// Source processor that reads DataBlocks from a ThreadChannelReceiver.
+/// Source processor that reads DataBlocks from a NetworkInboundReceiver.
 ///
 /// Pure synchronous: uses `event()` + `process()` only, no `async_process()`.
 ///
@@ -76,7 +76,7 @@ impl Wake for FlaggedWaker {
 /// (same pattern as `ExchangeSourceReader`).
 pub struct ThreadChannelReader {
     output: Arc<OutputPort>,
-    receiver: Arc<ThreadChannelReceiver>,
+    receiver: Arc<NetworkInboundReceiver>,
 
     waker: Waker,
 
@@ -87,7 +87,7 @@ pub struct ThreadChannelReader {
 impl ThreadChannelReader {
     pub fn create(
         output: Arc<OutputPort>,
-        receiver: Arc<ThreadChannelReceiver>,
+        receiver: Arc<NetworkInboundReceiver>,
         executor_waker: Waker,
     ) -> ProcessorPtr {
         let woken = Arc::new(AtomicBool::new(false));
@@ -104,7 +104,7 @@ impl ThreadChannelReader {
         }))
     }
 
-    pub fn create_item(receiver: Arc<ThreadChannelReceiver>, executor_waker: Waker) -> PipeItem {
+    pub fn create_item(receiver: Arc<NetworkInboundReceiver>, executor_waker: Waker) -> PipeItem {
         let output = OutputPort::create();
         PipeItem::create(
             Self::create(output.clone(), receiver, executor_waker),
@@ -133,7 +133,6 @@ impl ThreadChannelReader {
     }
 }
 
-#[async_trait::async_trait]
 impl Processor for ThreadChannelReader {
     fn name(&self) -> String {
         String::from("ThreadChannelReader")

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod actions;
-pub mod exchange;
-pub mod network;
-pub mod packets;
-pub mod scatter;
+pub mod inbound_channel;
+pub mod inbound_quota;
 
-mod flight_service;
-
-pub use flight_service::DatabendQueryFlightService;
+pub use inbound_channel::NetworkInboundChannelSet;
+pub use inbound_channel::NetworkInboundReceiver;
+pub use inbound_channel::NetworkInboundSender;
+pub use inbound_channel::RecvFuture;
+pub use inbound_quota::ConnectionQuota;

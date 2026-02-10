@@ -224,7 +224,7 @@ impl ExchangeSinkBuffer {
     /// - `Poll::Pending`: Backpressure, waker registered.
     pub fn poll_send(
         &self,
-        channel_id: usize,
+        tid: usize,
         dest_idx: usize,
         data: FlightData,
         waker: &Waker,
@@ -241,7 +241,7 @@ impl ExchangeSinkBuffer {
                 return Poll::Ready(Err(status.into()));
             }
 
-            state.channels[channel_id].pending_queue.push_back(data);
+            state.channels[tid].pending_queue.push_back(data);
 
             // Check backpressure
             if self.inner.queue_size.fetch_add(1, Ordering::SeqCst) >= self.inner.queue_capacity {

@@ -29,7 +29,6 @@ mod exchange_transform_shuffle;
 mod ping_pong_exchange;
 mod statistics_receiver;
 mod statistics_sender;
-pub mod thread_channel;
 mod thread_channel_reader;
 
 pub mod serde;
@@ -56,9 +55,4 @@ pub use ping_pong_exchange::PingPongCallback;
 pub use ping_pong_exchange::PingPongExchange;
 pub use ping_pong_exchange::PingPongExchangeInner;
 pub use ping_pong_exchange::PingPongResponse;
-pub use thread_channel::ConnectionQuota;
-pub use thread_channel::RecvFuture;
-pub use thread_channel::ThreadChannelReceiver;
-pub use thread_channel::ThreadChannelSender;
-pub use thread_channel::ThreadChannelSet;
 pub use thread_channel_reader::ThreadChannelReader;
