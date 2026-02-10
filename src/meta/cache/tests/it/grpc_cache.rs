@@ -17,13 +17,13 @@
 use std::time::Duration;
 
 use databend_common_meta_cache::Cache;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::make_grpc_client;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
+use databend_meta_types::SeqV;
+use databend_meta_types::UpsertKV;
+use databend_meta_types::normalize_meta::NormalizeMeta;
 use log::debug;
 use test_harness::test;
 use tokio::time::sleep;

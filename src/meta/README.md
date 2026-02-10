@@ -1,5 +1,10 @@
 # Databend Meta
 
+2026 Feb 01
+
+since v1.2.874, after v1.2.873, meta impl is moved to external repository.
+
+
 Databend Meta is a transactional metadata service.
 
 **Core components** (`core/`):

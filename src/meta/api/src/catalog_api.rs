@@ -23,11 +23,11 @@ use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
 use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::DirName;
+use databend_meta_kvapi::kvapi::Key;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 use fastrace::func_name;
 use log::debug;
 

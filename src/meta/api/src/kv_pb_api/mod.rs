@@ -24,17 +24,17 @@ use std::future::Future;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_kvapi::kvapi::ListOptions;
-use databend_common_meta_kvapi::kvapi::NonEmptyItem;
-use databend_common_meta_types::Change;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_proto_conv::FromToProto;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::DirName;
+use databend_meta_kvapi::kvapi::KVApi;
+use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_kvapi::kvapi::NonEmptyItem;
+use databend_meta_types::Change;
+use databend_meta_types::SeqV;
+use databend_meta_types::UpsertKV;
+use databend_meta_types::protobuf::StreamItem;
 use futures::TryStreamExt;
 use futures::future::FutureExt;
 use futures::future::TryFutureExt;
@@ -523,19 +523,19 @@ mod tests {
     use databend_common_meta_app::schema::HiveCatalogOption;
     use databend_common_meta_app::storage::StorageS3Config;
     use databend_common_meta_app::tenant::Tenant;
-    use databend_common_meta_kvapi::kvapi::DirName;
-    use databend_common_meta_kvapi::kvapi::KVApi;
-    use databend_common_meta_kvapi::kvapi::KVStream;
-    use databend_common_meta_kvapi::kvapi::ListOptions;
-    use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-    use databend_common_meta_kvapi::kvapi::limit_stream;
-    use databend_common_meta_types::MetaError;
-    use databend_common_meta_types::SeqV;
-    use databend_common_meta_types::TxnReply;
-    use databend_common_meta_types::TxnRequest;
-    use databend_common_meta_types::UpsertKV;
-    use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_proto_conv::FromToProto;
+    use databend_meta_kvapi::kvapi::DirName;
+    use databend_meta_kvapi::kvapi::KVApi;
+    use databend_meta_kvapi::kvapi::KVStream;
+    use databend_meta_kvapi::kvapi::ListOptions;
+    use databend_meta_kvapi::kvapi::UpsertKVReply;
+    use databend_meta_kvapi::kvapi::limit_stream;
+    use databend_meta_types::MetaError;
+    use databend_meta_types::SeqV;
+    use databend_meta_types::TxnReply;
+    use databend_meta_types::TxnRequest;
+    use databend_meta_types::UpsertKV;
+    use databend_meta_types::protobuf::StreamItem;
     use futures::StreamExt;
     use futures::TryStreamExt;
     use futures::stream::BoxStream;
@@ -563,7 +563,7 @@ mod tests {
             &self,
             keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            use databend_common_meta_kvapi::kvapi::fail_fast;
+            use databend_meta_kvapi::kvapi::fail_fast;
             use futures::TryStreamExt;
 
             let kvs = self.kvs.clone();

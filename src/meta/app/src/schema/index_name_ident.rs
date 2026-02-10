@@ -36,8 +36,8 @@ impl TIdentRaw<IndexName> {
 }
 
 mod kvapi_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::KeyWithTenant;
     use crate::schema::IndexNameIdent;
@@ -62,7 +62,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::IndexNameIdent;
     use crate::tenant::Tenant;

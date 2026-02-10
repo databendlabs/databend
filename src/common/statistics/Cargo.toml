@@ -1,0 +1,15 @@
+[package]
+name = "databend-common-statistics"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

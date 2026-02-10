@@ -70,7 +70,7 @@ macro_rules! register_bitwise_and {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _>(
             "bit_and",
             |_, _, _| FunctionDomain::Full,
             |a, b, _| (AsPrimitive::<i64>::as_(a)).bitand(AsPrimitive::<i64>::as_(b)),
@@ -82,7 +82,7 @@ macro_rules! register_bitwise_or {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _>(
             "bit_or",
             |_, _, _| FunctionDomain::Full,
             |a, b, _| (AsPrimitive::<i64>::as_(a)).bitor(AsPrimitive::<i64>::as_(b)),
@@ -94,7 +94,7 @@ macro_rules! register_bitwise_xor {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _>(
             "bit_xor",
             |_, _, _| FunctionDomain::Full,
             |a, b, _| (AsPrimitive::<i64>::as_(a)).bitxor(AsPrimitive::<i64>::as_(b)),
@@ -106,7 +106,7 @@ macro_rules! register_bitwise_shift_left {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _>(
             "bit_shift_left",
             |_, _, _| FunctionDomain::Full,
             |a, b, _| (AsPrimitive::<i64>::as_(a)) << (AsPrimitive::<u64>::as_(b)),
@@ -118,7 +118,7 @@ macro_rules! register_bitwise_shift_right {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
-        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
+        $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _>(
             "bit_shift_right",
             |_, _, _| FunctionDomain::Full,
             |a, b, _| (AsPrimitive::<i64>::as_(a)) >> (AsPrimitive::<u64>::as_(b)),
@@ -182,7 +182,7 @@ pub fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
 macro_rules! register_bitwise_not {
     ( $n:ty, $registry:expr) => {
         type N = $n;
-        $registry.register_1_arg::<NumberType<N>, NumberType<i64>, _, _>(
+        $registry.register_1_arg::<NumberType<N>, NumberType<i64>, _>(
             "bit_not",
             |_, _| FunctionDomain::Full,
             |a, _| !(AsPrimitive::<i64>::as_(a)),
@@ -212,7 +212,7 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
         with_number_mapped_type_without_64!(|NUM_TYPE| match num_ty {
             NumberClass::NUM_TYPE => {
                 type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
+                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _>(
                     "minus",
                     |_, val| {
                         FunctionDomain::Domain(SimpleDomain::<T> {
@@ -225,59 +225,55 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
             }
             NumberClass::UInt64 => {
                 registry
-                    .register_passthrough_nullable_1_arg::<NumberType<u64>, NumberType<i64>, _, _>(
-                        "minus",
-                        |_, val| {
-                            let min = (val.max as i128).wrapping_neg();
-                            let max = (val.min as i128).wrapping_neg();
+                    .scalar_builder("minus")
+                    .function()
+                    .typed_1_arg::<NumberType<u64>, NumberType<i64>>()
+                    .passthrough_nullable()
+                    .calc_domain(|_, val| {
+                        let min = (val.max as i128).wrapping_neg();
+                        let max = (val.min as i128).wrapping_neg();
 
-                            if min < i64::MIN as i128 || max > i64::MAX as i128 {
-                                return FunctionDomain::MayThrow;
-                            }
+                        if min < i64::MIN as i128 || max > i64::MAX as i128 {
+                            return FunctionDomain::MayThrow;
+                        }
 
-                            FunctionDomain::Domain(SimpleDomain::<i64> {
-                                min: min as i64,
-                                max: max as i64,
-                            })
-                        },
-                        vectorize_with_builder_1_arg::<NumberType<u64>, NumberType<i64>>(
-                            |a, output, ctx| {
-                                let val = (a as i128).wrapping_neg();
-                                if val < i64::MIN as i128 {
-                                    ctx.set_error(output.len(), "number overflowed");
-                                    output.push(0);
-                                } else {
-                                    output.push(val as i64);
-                                }
-                            },
-                        ),
-                    );
+                        FunctionDomain::Domain(SimpleDomain::<i64> {
+                            min: min as i64,
+                            max: max as i64,
+                        })
+                    })
+                    .each_row_throw(|a, _| {
+                        let val = (a as i128).wrapping_neg();
+                        if val < i64::MIN as i128 {
+                            Err("number overflowed")
+                        } else {
+                            Ok(val as i64)
+                        }
+                    })
+                    .register();
             }
             NumberClass::Int64 => {
                 registry
-                    .register_passthrough_nullable_1_arg::<NumberType<i64>, NumberType<i64>, _, _>(
-                        "minus",
-                        |_, val| {
-                            let min = val.max.checked_neg();
-                            let max = val.min.checked_neg();
-                            if min.is_none() || max.is_none() {
-                                return FunctionDomain::MayThrow;
-                            }
-                            FunctionDomain::Domain(SimpleDomain::<i64> {
-                                min: min.unwrap(),
-                                max: max.unwrap(),
-                            })
-                        },
-                        vectorize_with_builder_1_arg::<NumberType<i64>, NumberType<i64>>(
-                            |a, output, ctx| match a.checked_neg() {
-                                Some(a) => output.push(a),
-                                None => {
-                                    ctx.set_error(output.len(), "number overflowed");
-                                    output.push(0);
-                                }
-                            },
-                        ),
-                    );
+                    .scalar_builder("minus")
+                    .function()
+                    .typed_1_arg::<NumberType<i64>, NumberType<i64>>()
+                    .passthrough_nullable()
+                    .calc_domain(|_, val| {
+                        let min = val.max.checked_neg();
+                        let max = val.min.checked_neg();
+                        if min.is_none() || max.is_none() {
+                            return FunctionDomain::MayThrow;
+                        }
+                        FunctionDomain::Domain(SimpleDomain::<i64> {
+                            min: min.unwrap(),
+                            max: max.unwrap(),
+                        })
+                    })
+                    .each_row_throw(|a, _| match a.checked_neg() {
+                        Some(a) => Ok(a),
+                        None => Err("number overflowed"),
+                    })
+                    .register();
             }
             NumberClass::Decimal128 | NumberClass::Decimal256 => {}
         });
@@ -316,25 +312,25 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                 let name = format!("to_{dest_type}").to_lowercase();
                 let data_type = DEST_TYPE::data_type();
                 registry
-                    .register_passthrough_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
-                        &name,
-                        |_, _| FunctionDomain::MayThrow,
-                        vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
-                            move |val, output, ctx| {
-                                match parse_number::<DEST_TYPE>(
-                                    val,
-                                    &data_type,
-                                    ctx.func_ctx.rounding_mode,
-                                ) {
-                                    Ok(new_val) => output.push(new_val),
-                                    Err(e) => {
-                                        ctx.set_error(output.len(), e.to_string());
-                                        output.push(DEST_TYPE::default());
-                                    }
-                                };
-                            },
-                        ),
-                    );
+                    .scalar_builder(&name)
+                    .function()
+                    .typed_1_arg::<StringType, NumberType<DEST_TYPE>>()
+                    .passthrough_nullable()
+                    .calc_domain(|_, _| FunctionDomain::MayThrow)
+                    .vectorized(vectorize_with_builder_1_arg::<
+                        StringType,
+                        NumberType<DEST_TYPE>,
+                    >(move |val, output, ctx| {
+                        match parse_number::<DEST_TYPE>(val, &data_type, ctx.func_ctx.rounding_mode)
+                        {
+                            Ok(new_val) => output.push(new_val),
+                            Err(e) => {
+                                ctx.set_error(output.len(), e);
+                                output.push(DEST_TYPE::default());
+                            }
+                        };
+                    }))
+                    .register();
 
                 let name = format!("try_to_{dest_type}").to_lowercase();
                 let data_type = DEST_TYPE::data_type();
@@ -367,38 +363,40 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
         with_number_mapped_type!(|NUM_TYPE| match src_type {
             NumberClass::NUM_TYPE => {
                 registry
-                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
-                        "to_string",
-                        |_, _| FunctionDomain::Full,
-                        |from, _| match from {
-                            Value::Scalar(s) => Value::Scalar(s.to_string()),
-                            Value::Column(from) => {
-                                let options = NUM_TYPE::lexical_options();
-                                const FORMAT: u128 = lexical_core::format::STANDARD;
-                                type Native = <NUM_TYPE as Number>::Native;
-                                let mut builder = StringColumnBuilder::with_capacity(from.len());
+                    .scalar_builder("to_string")
+                    .function()
+                    .typed_1_arg::<NumberType<NUM_TYPE>, StringType>()
+                    .passthrough_nullable()
+                    .calc_domain(|_, _| FunctionDomain::Full)
+                    .vectorized(|from, _| match from {
+                        Value::Scalar(s) => Value::Scalar(s.to_string()),
+                        Value::Column(from) => {
+                            let options = NUM_TYPE::lexical_options();
+                            const FORMAT: u128 = lexical_core::format::STANDARD;
+                            type Native = <NUM_TYPE as Number>::Native;
+                            let mut builder = StringColumnBuilder::with_capacity(from.len());
 
-                                unsafe {
-                                    builder.row_buffer.resize(
-                                        <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
-                                        0,
-                                    );
-                                    for x in from.iter() {
-                                        let len = lexical_core::write_with_options::<_, FORMAT>(
-                                            Native::from(*x),
-                                            &mut builder.row_buffer[0..],
-                                            &options,
-                                        )
-                                        .len();
-                                        builder.data.push_value(std::str::from_utf8_unchecked(
-                                            &builder.row_buffer[0..len],
-                                        ));
-                                    }
+                            unsafe {
+                                builder.row_buffer.resize(
+                                    <NUM_TYPE as Number>::Native::FORMATTED_SIZE_DECIMAL,
+                                    0,
+                                );
+                                for x in from.iter() {
+                                    let len = lexical_core::write_with_options::<_, FORMAT>(
+                                        Native::from(*x),
+                                        &mut builder.row_buffer[0..],
+                                        &options,
+                                    )
+                                    .len();
+                                    builder.data.push_value(std::str::from_utf8_unchecked(
+                                        &builder.row_buffer[0..len],
+                                    ));
                                 }
-                                Value::Column(builder.build())
                             }
-                        },
-                    );
+                            Value::Column(builder.build())
+                        }
+                    })
+                    .register();
                 registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
                     "try_to_string",
                     |_, _| FunctionDomain::Full,
@@ -505,7 +503,7 @@ fn register_lossless_cast<
     registry: &mut FunctionRegistry,
     name: &str,
 ) {
-    registry.register_1_arg::<NumberType<SrcType>, NumberType<DestType>, _, _>(
+    registry.register_1_arg::<NumberType<SrcType>, NumberType<DestType>, _>(
         name,
         |_, domain| {
             let (domain, overflowing) = domain.overflow_cast();
@@ -524,43 +522,41 @@ fn register_round_cast<
     name: &str,
 ) {
     registry
-        .register_passthrough_nullable_1_arg::<NumberType<SrcType>, NumberType<DestType>, _, _>(
-            name,
-            |func_ctx, domain| {
-                let (domain, overflowing) = if func_ctx.rounding_mode {
-                    let min = AsPrimitive::<f64>::as_(domain.min);
-                    let max = AsPrimitive::<f64>::as_(domain.max);
-                    let round_domain = SimpleDomain::<F64> {
-                        min: min.round().into(),
-                        max: max.round().into(),
-                    };
-                    round_domain.overflow_cast()
-                } else {
-                    domain.overflow_cast()
+        .scalar_builder(name.to_string())
+        .function()
+        .typed_1_arg::<NumberType<SrcType>, NumberType<DestType>>()
+        .passthrough_nullable()
+        .calc_domain(|func_ctx, domain| {
+            let (domain, overflowing) = if func_ctx.rounding_mode {
+                let min = AsPrimitive::<f64>::as_(domain.min);
+                let max = AsPrimitive::<f64>::as_(domain.max);
+                let round_domain = SimpleDomain::<F64> {
+                    min: min.round().into(),
+                    max: max.round().into(),
                 };
-                if overflowing {
-                    FunctionDomain::MayThrow
-                } else {
-                    FunctionDomain::Domain(domain)
-                }
-            },
-            vectorize_with_builder_1_arg::<NumberType<SrcType>, NumberType<DestType>>(
-                move |val, output, ctx| {
-                    let val = if ctx.func_ctx.rounding_mode {
-                        let val = AsPrimitive::<f64>::as_(val);
-                        num_traits::cast::cast(val.round())
-                    } else {
-                        num_traits::cast::cast(val)
-                    };
-                    if let Some(new_val) = val {
-                        output.push(new_val);
-                    } else {
-                        ctx.set_error(output.len(), "number overflowed");
-                        output.push(DestType::default());
-                    }
-                },
-            ),
-        );
+                round_domain.overflow_cast()
+            } else {
+                domain.overflow_cast()
+            };
+            if overflowing {
+                FunctionDomain::MayThrow
+            } else {
+                FunctionDomain::Domain(domain)
+            }
+        })
+        .each_row_throw(|val, ctx| {
+            let val = if ctx.func_ctx.rounding_mode {
+                let val = AsPrimitive::<f64>::as_(val);
+                num_traits::cast::cast(val.round())
+            } else {
+                num_traits::cast::cast(val)
+            };
+            match val {
+                Some(new_val) => Ok(new_val),
+                None => Err("number overflowed"),
+            }
+        })
+        .register();
 }
 
 fn register_lossy_cast<
@@ -571,27 +567,30 @@ fn register_lossy_cast<
     name: &str,
 ) {
     registry
-        .register_passthrough_nullable_1_arg::<NumberType<SrcType>, NumberType<DestType>, _, _>(
-            name,
-            |_, domain| {
-                let (domain, overflowing) = domain.overflow_cast();
-                if overflowing {
-                    FunctionDomain::MayThrow
-                } else {
-                    FunctionDomain::Domain(domain)
-                }
-            },
-            vectorize_with_builder_1_arg::<NumberType<SrcType>, NumberType<DestType>>(
-                move |val, output, ctx| {
-                    if let Some(new_val) = num_traits::cast::cast(val) {
-                        output.push(new_val);
-                    } else {
-                        ctx.set_error(output.len(), "number overflowed");
-                        output.push(DestType::default());
-                    }
-                },
-            ),
-        );
+        .scalar_builder(name.to_string())
+        .function()
+        .typed_1_arg::<NumberType<SrcType>, NumberType<DestType>>()
+        .passthrough_nullable()
+        .calc_domain(|_, domain| {
+            let (domain, overflowing) = domain.overflow_cast();
+            if overflowing {
+                FunctionDomain::MayThrow
+            } else {
+                FunctionDomain::Domain(domain)
+            }
+        })
+        .vectorized(vectorize_with_builder_1_arg::<
+            NumberType<SrcType>,
+            NumberType<DestType>,
+        >(move |val, output, ctx| {
+            if let Some(new_val) = num_traits::cast::cast(val) {
+                output.push(new_val);
+            } else {
+                ctx.set_error(output.len(), "number overflowed");
+                output.push(DestType::default());
+            }
+        }))
+        .register();
 }
 
 fn register_try_lossless_cast<

@@ -14,15 +14,15 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::Change;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::KVApi;
+use databend_meta_types::Change;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
+use databend_meta_types::TxnRequest;
+use databend_meta_types::With;
 use fastrace::func_name;
 use log::debug;
 use seq_marked::SeqValue;

@@ -24,16 +24,16 @@ use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_client::ClientHandle;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::TxnCondition;
-use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_client::ClientHandle;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::Operation;
+use databend_meta_types::TxnCondition;
+use databend_meta_types::TxnOp;
+use databend_meta_types::TxnRequest;
+use databend_meta_types::UpsertKV;
 use futures::FutureExt;
 use log::debug;
 use log::warn;
@@ -378,8 +378,8 @@ mod tests {
     use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
     use databend_common_meta_store::MetaStore;
-    use databend_common_meta_types::UpsertKV;
     use databend_meta_runtime::DatabendRuntime;
+    use databend_meta_types::UpsertKV;
 
     use crate::history_tables::meta::HeartbeatMessage;
     use crate::history_tables::meta::HeartbeatTask;
@@ -387,10 +387,7 @@ mod tests {
     use crate::meta_service_error;
 
     pub async fn setup_meta_client() -> MetaStore {
-        MetaStore::new_local_testing::<DatabendRuntime>(
-            databend_common_version::BUILD_INFO.semver(),
-        )
-        .await
+        MetaStore::new_local_testing::<DatabendRuntime>().await
     }
 
     #[tokio::test(flavor = "multi_thread")]

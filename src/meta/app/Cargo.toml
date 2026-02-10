@@ -18,8 +18,8 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app-storage = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-types = { workspace = true }
+databend-meta-kvapi = { workspace = true }
+databend-meta-types = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
 enumflags2 = { workspace = true }

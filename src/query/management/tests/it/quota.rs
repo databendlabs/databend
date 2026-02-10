@@ -19,11 +19,10 @@ use databend_common_management::*;
 use databend_common_meta_api::deserialize_struct;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::MatchSeq;
-use databend_common_version::BUILD_INFO;
+use databend_meta_kvapi::kvapi::KvApiExt;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::MatchSeq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_update_quota_from_json_to_pb() -> anyhow::Result<()> {
@@ -86,7 +85,7 @@ async fn test_update_quota_from_json_to_pb() -> anyhow::Result<()> {
 }
 
 async fn new_quota_api() -> Result<(Arc<MetaStore>, QuotaMgr<false>, QuotaMgr<true>)> {
-    let test_api = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
+    let test_api = MetaStore::new_local_testing::<DatabendRuntime>().await;
     let test_api = Arc::new(test_api);
     let mgr_json = QuotaMgr::<false>::create(test_api.clone(), &Tenant::new_literal("admin"));
     let mgr_pb = QuotaMgr::<true>::create(test_api.clone(), &Tenant::new_literal("admin"));

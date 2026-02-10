@@ -47,8 +47,6 @@ use databend_common_management::WarehouseMgr;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
 use databend_common_settings::FlightKeepAliveParams;
 use databend_common_settings::Settings;
@@ -58,6 +56,8 @@ use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::NodeInfo;
+use databend_meta_types::SeqV;
 use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
@@ -228,9 +228,11 @@ impl ClusterHelper for Cluster {
 
 impl ClusterDiscovery {
     #[async_backtrace::framed]
-    pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
-        let meta_api_provider =
-            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.semver()));
+    pub async fn create_meta_client(
+        cfg: &InnerConfig,
+        _version: BuildInfoRef,
+    ) -> Result<MetaStore> {
+        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider
             .create_meta_store::<DatabendRuntime>()
             .await

@@ -17,16 +17,16 @@ use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_meta_runtime_api::RuntimeApi;
-use databend_common_meta_types::node::Node;
 use databend_common_version::BUILD_INFO;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_runtime_api::RuntimeApi;
 use databend_meta_test_harness::MetaSrvTestContext;
 use databend_meta_test_harness::meta_service_test_harness;
+use databend_meta_types::node::Node;
 use http::Method;
 use http::StatusCode;
 use http::Uri;

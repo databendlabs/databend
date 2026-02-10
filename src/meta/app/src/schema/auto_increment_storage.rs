@@ -23,7 +23,7 @@ pub type AutoIncrementStorageIdent = TIdent<AutoIncrementStorageRsc, AutoIncreme
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::primitive::Id;
     use crate::tenant_key::resource::TenantResource;
@@ -62,7 +62,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::principal::AutoIncrementKey;
     use crate::schema::auto_increment_storage::AutoIncrementStorageIdent;

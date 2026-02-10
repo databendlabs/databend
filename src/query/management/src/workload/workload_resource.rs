@@ -333,10 +333,7 @@ mod tests {
     use super::*;
 
     async fn create_workload_mgr() -> WorkloadMgr {
-        let test_api = MetaStore::new_local_testing::<DatabendRuntime>(
-            databend_common_version::BUILD_INFO.semver(),
-        )
-        .await;
+        let test_api = MetaStore::new_local_testing::<DatabendRuntime>().await;
         WorkloadMgr::create(test_api.clone(), "test-tenant-id").unwrap()
     }
 
