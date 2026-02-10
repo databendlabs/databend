@@ -87,7 +87,7 @@ ALTER TABLE t_rm MODIFY COLUMN b INT
 query II
 SELECT a, b FROM t_rm
 ----
-1 0
+1 NULL
 
 statement ok
 INSERT INTO t_rm(a) VALUES(2)
@@ -95,8 +95,8 @@ INSERT INTO t_rm(a) VALUES(2)
 query II
 SELECT a, b FROM t_rm ORDER BY a
 ----
-1 0
-2 0
+1 NULL
+2 NULL
 
 ####################################################
 # change tracking: reject schema changes on non-empty table  #
