@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_catalog::catalog::Catalog;
@@ -48,6 +50,9 @@ pub struct SequenceCounter {
     max: AtomicU64,
     // Serialize slow-path meta fetch / refill.
     refill_lock: Mutex<()>,
+    /// Test-only: force the next N `try_reserve()` to return `None` then go to slow path.
+    #[cfg(test)]
+    fail_next_reserve: AtomicUsize,
 }
 
 impl SequenceCounter {
@@ -56,11 +61,29 @@ impl SequenceCounter {
             current: AtomicU64::new(0),
             max: AtomicU64::new(0),
             refill_lock: Mutex::new(()),
+            #[cfg(test)]
+            fail_next_reserve: AtomicUsize::new(0),
         }
+    }
+
+    #[cfg(test)]
+    fn fail_next_reserve(&self, times: usize) {
+        self.fail_next_reserve.store(times, Ordering::SeqCst);
     }
 
     // Try to reserve a range of sequence numbers
     fn try_reserve(&self, count: u64) -> Option<(u64, u64)> {
+        #[cfg(test)]
+        if self
+            .fail_next_reserve
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+                if v > 0 { Some(v - 1) } else { None }
+            })
+            .is_ok()
+        {
+            return None;
+        }
+
         if self.current.load(Ordering::Relaxed) == 0 {
             return None;
         }
@@ -89,6 +112,29 @@ impl SequenceCounter {
     fn update_batch(&self, current: u64, max: u64) {
         self.current.store(current, Ordering::SeqCst);
         self.max.store(max, Ordering::SeqCst);
+    }
+
+    fn claim_up_to(&self, count: u64) -> (u64, u64) {
+        loop {
+            let current = self.current.load(Ordering::Relaxed);
+            let max = self.max.load(Ordering::Relaxed);
+
+            if current == 0 || current >= max {
+                return (current, 0);
+            }
+
+            let remaining = max.saturating_sub(current);
+            let take = remaining.min(count);
+            let next = current + take;
+
+            if self
+                .current
+                .compare_exchange(current, next, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+            {
+                return (current, take);
+            }
+        }
     }
 }
 
@@ -161,60 +207,49 @@ impl TransformAsyncFunction {
                     UInt64Type::from_data(fn_range_collect(start, start + count, step))
                 } else {
                     // Claim the remaining numbers in the current batch (if any).
-                    let (remaining_start, remaining) = loop {
-                        let current = counter.current.load(Ordering::Relaxed);
-                        let max = counter.max.load(Ordering::Relaxed);
+                    let (remaining_start, remaining_to_use) = counter.claim_up_to(count);
+                    let to_fetch = count.saturating_sub(remaining_to_use);
 
-                        if current == 0 {
-                            break (0, 0);
-                        }
-
-                        let remaining = max.saturating_sub(current);
-                        if remaining == 0 {
-                            break (current, 0);
-                        }
-
-                        if counter
-                            .current
-                            .compare_exchange(current, max, Ordering::SeqCst, Ordering::Relaxed)
-                            .is_ok()
-                        {
-                            break (current, remaining);
-                        }
-                    };
-
-                    let to_fetch = count.saturating_sub(remaining);
-                    let NextValFetchResult {
-                        start,
-                        batch_size,
-                        step,
-                    } = fetcher.fetch(&ctx, &catalog, to_fetch).await?;
-
-                    if remaining > 0 {
-                        let mut numbers = Vec::with_capacity(count as usize);
-                        let remaining_to_use = remaining.min(count);
-                        numbers.extend(fn_range_collect(
+                    if to_fetch == 0 {
+                        drop(_guard);
+                        let step = fetcher.step(&ctx, &catalog).await?;
+                        UInt64Type::from_data(fn_range_collect(
                             remaining_start,
-                            remaining_start + remaining_to_use,
+                            remaining_start + count,
                             step,
-                        ));
-
-                        if remaining_to_use < count {
-                            let new_needed = count - remaining_to_use;
-                            numbers.extend(fn_range_collect(start, start + new_needed, step));
-
-                            // Reserve the consumed part before publishing the new max.
-                            counter.update_batch(start + new_needed, start + batch_size);
-                        } else {
-                            // Unreachable due to the slow-path condition, keep it safe.
-                            counter.update_batch(start, start + batch_size);
-                        }
-
-                        UInt64Type::from_data(numbers)
+                        ))
                     } else {
-                        let numbers = fn_range_collect(start, start + count, step);
-                        counter.update_batch(start + count, start + batch_size);
-                        UInt64Type::from_data(numbers)
+                        let NextValFetchResult {
+                            start,
+                            batch_size,
+                            step,
+                        } = fetcher.fetch(&ctx, &catalog, to_fetch).await?;
+
+                        if remaining_to_use > 0 {
+                            let mut numbers = Vec::with_capacity(count as usize);
+                            numbers.extend(fn_range_collect(
+                                remaining_start,
+                                remaining_start + remaining_to_use,
+                                step,
+                            ));
+
+                            if remaining_to_use < count {
+                                let new_needed = count - remaining_to_use;
+                                numbers.extend(fn_range_collect(start, start + new_needed, step));
+
+                                // Reserve the consumed part before publishing the new max.
+                                counter.update_batch(start + new_needed, start + batch_size);
+                            } else {
+                                // Unreachable due to the slow-path condition, keep it safe.
+                                counter.update_batch(start, start + batch_size);
+                            }
+
+                            UInt64Type::from_data(numbers)
+                        } else {
+                            let numbers = fn_range_collect(start, start + count, step);
+                            counter.update_batch(start + count, start + batch_size);
+                            UInt64Type::from_data(numbers)
+                        }
                     }
                 }
             }
@@ -399,12 +434,21 @@ impl AsyncTransform for TransformAsyncFunction {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
 
+    use databend_common_exception::Result;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::AccessType;
+    use databend_common_expression::types::UInt64Type;
     use tokio::time::Duration;
     use tokio::time::sleep;
     use tokio::time::timeout;
 
     use super::SequenceCounter;
+    use super::TransformAsyncFunction;
 
     #[tokio::test]
     async fn test_no_stall_when_refill_lock_waiting() {
@@ -441,5 +485,69 @@ mod tests {
 
         holder.await.unwrap();
         waiter.await.unwrap();
+    }
+
+    struct TestFetcher {
+        step: i64,
+        fetch_called: Arc<AtomicBool>,
+        fetch_to_fetch: Arc<AtomicU64>,
+    }
+
+    impl super::NextValFetcher for TestFetcher {
+        async fn fetch(
+            self,
+            _ctx: &crate::sessions::QueryContext,
+            _catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
+            to_fetch: u64,
+        ) -> Result<super::NextValFetchResult> {
+            self.fetch_called.store(true, Ordering::SeqCst);
+            self.fetch_to_fetch.store(to_fetch, Ordering::SeqCst);
+            Ok(super::NextValFetchResult {
+                start: 1000,
+                batch_size: to_fetch.max(1),
+                step: self.step,
+            })
+        }
+
+        async fn step(
+            &self,
+            _ctx: &crate::sessions::QueryContext,
+            _catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
+        ) -> Result<i64> {
+            Ok(self.step)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_skip_fetch_when_to_fetch_is_zero() -> Result<()> {
+        let fixture = crate::test_kits::TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let counter = Arc::new(SequenceCounter::new());
+
+        // Provide enough cached values.
+        counter.update_batch(10, 10 + 64);
+
+        // Force the slow path to bypass both try_reserve() checks.
+        // This makes `claim_up_to()` take the whole range, leading to `to_fetch == 0`.
+        counter.fail_next_reserve(2);
+
+        let fetch_called = Arc::new(AtomicBool::new(false));
+        let fetch_to_fetch = Arc::new(AtomicU64::new(0));
+
+        let mut block = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0u64; 16])]);
+        TransformAsyncFunction::transform(ctx, &mut block, counter, TestFetcher {
+            step: 1,
+            fetch_called: fetch_called.clone(),
+            fetch_to_fetch: fetch_to_fetch.clone(),
+        })
+        .await?;
+
+        let seq_col = block.get_by_offset(1).as_column().unwrap();
+        let values = UInt64Type::try_downcast_column(seq_col).unwrap();
+        assert_eq!(values.as_ref(), (10..26).collect::<Vec<_>>().as_slice());
+
+        assert!(!fetch_called.load(Ordering::SeqCst));
+        assert_eq!(fetch_to_fetch.load(Ordering::SeqCst), 0);
+        Ok(())
     }
 }
