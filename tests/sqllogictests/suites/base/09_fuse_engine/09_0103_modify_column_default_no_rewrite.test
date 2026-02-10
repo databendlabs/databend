@@ -72,6 +72,33 @@ SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = '
 1
 
 ####################################################
+# remove default: metadata-only, column falls back to type default #
+####################################################
+
+statement ok
+CREATE TABLE t_rm(a INT NOT NULL, b INT DEFAULT 10)
+
+statement ok
+INSERT INTO t_rm(a) VALUES(1)
+
+statement ok
+ALTER TABLE t_rm MODIFY COLUMN b INT
+
+query II
+SELECT a, b FROM t_rm
+----
+1 0
+
+statement ok
+INSERT INTO t_rm(a) VALUES(2)
+
+query II
+SELECT a, b FROM t_rm ORDER BY a
+----
+1 0
+2 0
+
+####################################################
 # change tracking: reject schema changes on non-empty table  #
 ####################################################
 
@@ -93,14 +120,20 @@ SELECT a,b FROM t_ct ORDER BY a
 statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b STRING
 
-statement ok
-DROP TABLE t ALL
+####################################################
+# change tracking: allow schema changes on empty table         #
+####################################################
 
 statement ok
-DROP TABLE t_nd ALL
+CREATE TABLE t_ct_empty(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
 
 statement ok
-DROP TABLE t_ct ALL
+ALTER TABLE t_ct_empty MODIFY COLUMN b INT DEFAULT 99
+
+query T
+SELECT default_expression FROM system.columns WHERE database = 'db_09_0103' AND table = 't_ct_empty' AND name = 'b'
+----
+99
 
 statement ok
 DROP DATABASE db_09_0103
