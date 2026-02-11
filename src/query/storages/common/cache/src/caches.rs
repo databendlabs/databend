@@ -57,6 +57,9 @@ pub type InvertedIndexFileCache = HybridCache<InvertedIndexFile>;
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
 
+pub type SpatialIndexMetaCache = HybridCache<SpatialIndexMeta>;
+pub type SpatialIndexFileCache = HybridCache<SpatialIndexFile>;
+
 pub type VirtualColumnMetaCache = HybridCache<VirtualColumnFileMeta>;
 
 /// In memory object cache of parquet FileMetaData of external parquet rs files
@@ -176,6 +179,20 @@ impl CachedObject<VectorIndexMeta> for VectorIndexMeta {
     type Cache = VectorIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_vector_index_meta_cache()
+    }
+}
+
+impl CachedObject<SpatialIndexFile> for SpatialIndexFile {
+    type Cache = SpatialIndexFileCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_spatial_index_file_cache()
+    }
+}
+
+impl CachedObject<SpatialIndexMeta> for SpatialIndexMeta {
+    type Cache = SpatialIndexMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_spatial_index_meta_cache()
     }
 }
 
@@ -338,6 +355,24 @@ impl From<VectorIndexFile> for CacheValue<VectorIndexFile> {
     fn from(value: VectorIndexFile) -> Self {
         CacheValue {
             mem_bytes: std::mem::size_of::<VectorIndexFile>() + value.data.len(),
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<SpatialIndexMeta> for CacheValue<SpatialIndexMeta> {
+    fn from(value: SpatialIndexMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<SpatialIndexFile> for CacheValue<SpatialIndexFile> {
+    fn from(value: SpatialIndexFile) -> Self {
+        CacheValue {
+            mem_bytes: std::mem::size_of::<SpatialIndexFile>() + value.data.len(),
             inner: Arc::new(value),
         }
     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -247,6 +248,7 @@ impl FuseTable {
             vec![],
             BloomIndexColumns::None,
             vec![],
+            HashSet::new(),
             max_concurrency,
             bloom_index_builder,
         )?;

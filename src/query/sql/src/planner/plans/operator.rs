@@ -138,6 +138,7 @@ pub enum RelOp {
 }
 
 /// Relational operators
+#[allow(clippy::large_enum_variant)]
 #[derive(Educe, EnumAsInner)]
 #[educe(
     PartialEq(bound = false, attrs = "#[recursive::recursive]"),

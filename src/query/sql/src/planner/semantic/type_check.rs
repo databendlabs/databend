@@ -3301,7 +3301,6 @@ impl<'a> TypeChecker<'a> {
         {
             return rewritten_vector_expr;
         }
-
         self.resolve_scalar_function_call(span, func_name, params, args)
     }
 

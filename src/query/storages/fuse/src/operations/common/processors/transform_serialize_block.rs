@@ -42,6 +42,7 @@ use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::create_inverted_index_builders;
@@ -172,6 +173,11 @@ impl TransformSerializeBlock {
             source_schema.clone(),
             true,
         );
+        let spatial_index_builder = SpatialIndexBuilder::try_create(
+            &table.table_info.meta.indexes,
+            source_schema.clone(),
+            true,
+        );
         let serialize_hll = if matches!(
             kind,
             MutationKind::Insert
@@ -197,6 +203,7 @@ impl TransformSerializeBlock {
             inverted_index_builders,
             virtual_column_builder,
             vector_index_builder,
+            spatial_index_builder,
             table_meta_timestamps,
             serialize_hll,
         };

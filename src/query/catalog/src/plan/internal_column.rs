@@ -148,7 +148,7 @@ pub enum InternalColumnType {
     SearchMatched,
     SearchScore,
 
-    // vector columns
+    // vector column
     VectorScore,
 
     FileName,

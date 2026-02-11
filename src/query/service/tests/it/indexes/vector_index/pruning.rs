@@ -15,6 +15,7 @@
 #![allow(clippy::cloned_ref_to_slice_refs)]
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -76,9 +77,18 @@ async fn apply_block_pruning(
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
 
-    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols, vec![], None)?
-        .read_pruning(segment_locs)
-        .await
+    FusePruner::create(
+        &ctx,
+        dal,
+        schema,
+        push_down,
+        bloom_index_cols,
+        vec![],
+        HashSet::new(),
+        None,
+    )?
+    .read_pruning(segment_locs)
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]

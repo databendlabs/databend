@@ -141,6 +141,21 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
         .unwrap();
     }
 
+    // spatial index pruning status.
+    if info.pruning_stats.blocks_spatial_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description.push_str(", ");
+        }
+        write!(
+            blocks_pruning_description,
+            "spatial pruning: {} to {}{}",
+            info.pruning_stats.blocks_spatial_index_pruning_before,
+            info.pruning_stats.blocks_spatial_index_pruning_after,
+            format_pruning_cost_suffix(info.pruning_stats.blocks_spatial_index_pruning_cost)
+        )
+        .unwrap();
+    }
+
     // Combine segment pruning and blocks pruning descriptions if any
     if info.pruning_stats.segments_range_pruning_before > 0
         || !blocks_pruning_description.is_empty()

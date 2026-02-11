@@ -689,6 +689,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
             Compression::Lz4,
             None,
         );

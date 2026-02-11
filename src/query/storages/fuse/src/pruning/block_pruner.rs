@@ -56,6 +56,7 @@ impl BlockPruner {
         // Apply block pruning.
         if self.pruning_ctx.bloom_pruner.is_some()
             || self.pruning_ctx.inverted_index_pruner.is_some()
+            || self.pruning_ctx.spatial_index_pruner.is_some()
             || self.pruning_ctx.virtual_column_pruner.is_some()
         {
             // async pruning with bloom index, inverted index or virtual columns.
@@ -107,6 +108,7 @@ impl BlockPruner {
         let bloom_pruner = self.pruning_ctx.bloom_pruner.clone();
         let inverted_index_pruner = self.pruning_ctx.inverted_index_pruner.clone();
         let virtual_column_pruner = self.pruning_ctx.virtual_column_pruner.clone();
+        let spatial_index_pruner = self.pruning_ctx.spatial_index_pruner.clone();
 
         let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
@@ -152,9 +154,11 @@ impl BlockPruner {
                     let page_pruner = page_pruner.clone();
                     let inverted_index_pruner = inverted_index_pruner.clone();
                     let virtual_column_pruner = virtual_column_pruner.clone();
+                    let spatial_index_pruner = spatial_index_pruner.clone();
                     let block_location = block_meta.location.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
                     let index_size = block_meta.bloom_filter_index_size;
+                    let spatial_index_location = block_meta.spatial_index_location.clone();
                     let column_ids = block_meta.col_metas.keys().cloned().collect::<Vec<_>>();
 
                     let pruning_cost = pruning_cost.clone();
@@ -242,6 +246,42 @@ impl BlockPruner {
                                             );
                                             pruning_stats
                                                 .set_blocks_inverted_index_pruning_after(1);
+                                        }
+                                    }
+                                }
+                            }
+                            if prune_result.keep {
+                                if let (Some(spatial_index_pruner), Some(_)) =
+                                    (spatial_index_pruner, spatial_index_location.as_ref())
+                                {
+                                    // Perf.
+                                    {
+                                        metrics_inc_blocks_spatial_index_pruning_before(1);
+                                        metrics_inc_bytes_block_spatial_index_pruning_before(
+                                            block_meta.block_size,
+                                        );
+                                        pruning_stats.set_blocks_spatial_index_pruning_before(1);
+                                    }
+                                    let start = Instant::now();
+                                    let should_prune = pruning_cost
+                                        .measure_async(
+                                            PruningCostKind::BlocksSpatial,
+                                            spatial_index_pruner.should_prune(&block_meta),
+                                        )
+                                        .await?;
+                                    let elapsed = start.elapsed();
+                                    metrics_inc_block_spatial_index_pruning_milliseconds(
+                                        elapsed.as_millis() as u64,
+                                    );
+                                    prune_result.keep = !should_prune;
+                                    if prune_result.keep {
+                                        // Perf.
+                                        {
+                                            metrics_inc_blocks_spatial_index_pruning_after(1);
+                                            metrics_inc_bytes_block_spatial_index_pruning_after(
+                                                block_meta.block_size,
+                                            );
+                                            pruning_stats.set_blocks_spatial_index_pruning_after(1);
                                         }
                                     }
                                 }
