@@ -1,6 +1,5 @@
 # Databend Common
 
-- [`auth`](./auth/), a simple wrapper for authentication layer.
 - [`base`](./base/) contains runtime, pool, allocator and rangemap.
 - [`building`](./building/) sets up the environment for building components and internal use.
 - [`cache`](./cache/) contains cache traits designed for memory and disk, and provides a basic LRU implementation.
