@@ -44,7 +44,7 @@ use crate::BuiltInConfig;
 /// Inner config for query.
 ///
 /// All function should implement based on this Config.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq)]
 pub struct InnerConfig {
     // Query engine config.
     pub query: QueryConfig,
@@ -584,7 +584,7 @@ impl Default for LocalConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CacheConfig {
     /// The data in meta-service using key `TenantOwnershipObjectIdent`
     pub meta_service_ownership_cache: bool,
@@ -762,7 +762,7 @@ impl Display for DiskCacheKeyReloadPolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
     pub max_bytes: u64,
@@ -775,6 +775,9 @@ pub struct DiskCacheConfig {
     /// it's recommended to set this to true to prevent the container from
     /// being killed due to high dirty page memory usage.
     pub sync_data: bool,
+
+    /// Ratio weights used to derive per-cache disk capacities when explicit sizes are not specified.
+    pub ratios: DiskCacheRatioConfig,
 }
 
 impl Default for DiskCacheConfig {
@@ -783,6 +786,32 @@ impl Default for DiskCacheConfig {
             max_bytes: 21474836480,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
+            ratios: DiskCacheRatioConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DiskCacheRatioConfig {
+    pub column_data: f64,
+    pub bloom_index_filter: f64,
+    pub bloom_index_meta: f64,
+    pub inverted_index_filter: f64,
+    pub inverted_index_meta: f64,
+    pub vector_index_filter: f64,
+    pub vector_index_meta: f64,
+}
+
+impl Default for DiskCacheRatioConfig {
+    fn default() -> Self {
+        Self {
+            column_data: 1.0,
+            bloom_index_filter: 0.0,
+            bloom_index_meta: 0.0,
+            inverted_index_filter: 0.0,
+            inverted_index_meta: 0.0,
+            vector_index_filter: 0.0,
+            vector_index_meta: 0.0,
         }
     }
 }
