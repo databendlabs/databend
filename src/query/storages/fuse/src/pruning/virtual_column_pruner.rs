@@ -111,11 +111,11 @@ impl VirtualColumnPruner {
                 need_source_column_ids.insert(field.source_column_id);
             }
 
-            // The remaining source column can be ignored.
-            let mut ignored_source_column_ids = HashSet::new();
-            for column_id in self.source_column_ids.difference(&need_source_column_ids) {
-                ignored_source_column_ids.insert(*column_id);
-            }
+            // Inline shredding may need to fall back to get_by_keypath when typed_value is all
+            // NULL for a block. That fallback requires the source variant column to be present,
+            // so we must not ignore source columns for inline blocks.
+            // TODO: persist per-block scalar-safe markers to safely skip source columns.
+            let ignored_source_column_ids = HashSet::new();
 
             if !virtual_column_metas.is_empty() {
                 let virtual_block_meta = VirtualBlockMetaIndex {
