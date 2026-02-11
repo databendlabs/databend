@@ -56,8 +56,10 @@ async fn test_parse_non_custom_claim() -> anyhow::Result<()> {
         .mount(&server)
         .await;
     let first_url = format!("http://{}{}", server.address(), json_path);
-    let mut cfg = QueryConfig::default();
-    cfg.tenant_id = Tenant::new_literal("test-tenant");
+    let mut cfg = QueryConfig {
+        tenant_id: Tenant::new_literal("test-tenant"),
+        ..Default::default()
+    };
     cfg.common.cluster_id = "test-cluster".to_string();
     cfg.common.jwt_key_file = first_url;
     cfg.common.jwks_refresh_interval = 86400;
@@ -90,8 +92,10 @@ async fn test_parse_jwt_claims_with_ensure_user_scenarios() -> anyhow::Result<()
         .mount(&server)
         .await;
     let first_url = format!("http://{}{}", server.address(), json_path);
-    let mut cfg = QueryConfig::default();
-    cfg.tenant_id = Tenant::new_literal("test-tenant");
+    let mut cfg = QueryConfig {
+        tenant_id: Tenant::new_literal("test-tenant"),
+        ..Default::default()
+    };
     cfg.common.cluster_id = "test-cluster".to_string();
     cfg.common.jwt_key_file = first_url;
     cfg.common.jwks_refresh_interval = 86400;
