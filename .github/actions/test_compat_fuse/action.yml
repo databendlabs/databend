@@ -10,7 +10,9 @@ runs:
 
     - name: Test compatibility
       shell: bash
-      run: python3 ./tests/compat_fuse/test_compat_fuse.py --run-all
+      run: |
+        pip install pyyaml -q
+        python3 ./tests/compat_fuse/test_compat_fuse.py --run-all
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

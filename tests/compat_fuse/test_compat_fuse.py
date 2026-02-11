@@ -8,7 +8,6 @@ Tests write-then-read compatibility across query versions with meta upgrades.
 import argparse
 import os
 import platform
-import re
 import shutil
 import socket
 import subprocess
@@ -18,52 +17,22 @@ import time
 import urllib.request
 from pathlib import Path
 
+import yaml
+
 
 def load_test_cases(path: Path) -> list[dict]:
-    """Parse the minimal yaml subset used by test_cases.yaml.
-
-    Handles lines of the form:
-        - { key: val, key: "val", key: [v1, v2, v3] }
-    Skips blank lines and # comments.
-    """
-    cases = []
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        # Strip leading "- {" and trailing "}"
-        m = re.match(r"^-\s*\{(.+)\}\s*$", line)
-        if not m:
-            raise ValueError(f"Cannot parse line: {line}")
-        body = m.group(1)
-        entry = {}
-        # Split on commas followed by a key name, but only outside brackets
-        pairs = []
-        depth = 0
-        current = []
-        for ch in body + ",":
-            if ch == "[":
-                depth += 1
-            elif ch == "]":
-                depth -= 1
-            if ch == "," and depth == 0:
-                pairs.append("".join(current).strip())
-                current = []
-            else:
-                current.append(ch)
-        for pair in pairs:
-            if not pair:
-                continue
-            k, v = pair.split(":", 1)
-            k = k.strip()
-            v = v.strip()
-            if v.startswith("["):
-                # list value: [a, b, c]
-                inner = v.strip("[] ")
-                entry[k] = [x.strip().strip('"') for x in inner.split(",")]
-            else:
-                entry[k] = v.strip('"')
-        cases.append(entry)
+    """Load test cases from a YAML file."""
+    with open(path) as f:
+        cases = yaml.safe_load(f)
+    # Ensure all values in meta lists are strings (yaml may parse "1.2.527" as float)
+    for case in cases:
+        case["meta"] = [str(v) for v in case["meta"]]
+        if "writer" in case:
+            case["writer"] = str(case["writer"])
+        if "reader" in case:
+            case["reader"] = str(case["reader"])
+        if "suite" in case:
+            case["suite"] = str(case["suite"])
     return cases
 
 
