@@ -211,8 +211,8 @@ fn create_python_binding_telemetry_payload(config: &InnerConfig) -> serde_json::
             "disk_cache_max_bytes": config.cache.disk_cache_config.max_bytes
         },
         "memory_management": {
-            "max_server_memory_usage": config.query.max_server_memory_usage,
-            "max_memory_limit_enabled": config.query.max_memory_limit_enabled,
+            "max_server_memory_usage": config.query.common.max_server_memory_usage,
+            "max_memory_limit_enabled": config.query.common.max_memory_limit_enabled,
             "spill_enabled": config.spill.global_bytes_limit > 0,
             "spill_threshold_bytes": config.spill.global_bytes_limit,
             "spill_threshold_percent": 60.0,
