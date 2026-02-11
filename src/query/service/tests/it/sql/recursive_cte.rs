@@ -98,7 +98,7 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
         let gate = RcteHookRegistry::global().install_pause_before_step(&ctx.get_id(), 1);
 
         let ctx_q = ctx.clone();
-        let jh = runtime.inner().spawn(async move {
+        let jh = runtime.spawn(async move {
             // This query should normally return 1000.
             // If the internal MEMORY table is recreated between step=0 and step=1,
             // step=1 reads no prepared blocks and recursion stops early => count becomes 1.
