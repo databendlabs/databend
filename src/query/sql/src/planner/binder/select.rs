@@ -448,26 +448,24 @@ impl Binder {
                 column_binding.index = output_index;
                 column_binding.data_type = Box::new(coercion_types[idx].clone());
                 new_bind_context.add_column_binding(column_binding);
+            } else if output_index == left_col.index {
+                left_outputs.push((left_col.index, None));
+                new_bind_context.add_column_binding(left_col.clone());
             } else {
-                if output_index == left_col.index {
-                    left_outputs.push((left_col.index, None));
-                    new_bind_context.add_column_binding(left_col.clone());
-                } else {
-                    // Duplicate output index: create a new output index and project the
-                    // original column.
-                    left_outputs.push((
-                        output_index,
-                        Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: left_span,
-                            column: left_col.clone(),
-                        })),
-                    ));
+                // Duplicate output index: create a new output index and project the
+                // original column.
+                left_outputs.push((
+                    output_index,
+                    Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: left_span,
+                        column: left_col.clone(),
+                    })),
+                ));
 
-                    let mut column_binding = left_col.clone();
-                    column_binding.index = output_index;
-                    column_binding.data_type = Box::new(coercion_types[idx].clone());
-                    new_bind_context.add_column_binding(column_binding);
-                }
+                let mut column_binding = left_col.clone();
+                column_binding.index = output_index;
+                column_binding.data_type = Box::new(coercion_types[idx].clone());
+                new_bind_context.add_column_binding(column_binding);
             }
             if *right_col.data_type != coercion_types[idx] {
                 let right_coercion_expr = CastExpr {
