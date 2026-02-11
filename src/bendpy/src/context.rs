@@ -30,6 +30,31 @@ use crate::dataframe::default_box_size;
 use crate::utils::RUNTIME;
 use crate::utils::wait_for_future;
 
+fn resolve_file_path(path: &str) -> String {
+    if path.contains("://") {
+        return path.to_owned();
+    }
+    if path.starts_with('/') {
+        return format!("fs://{}", path);
+    }
+    format!(
+        "fs://{}/{}",
+        std::env::current_dir().unwrap().to_str().unwrap(),
+        path
+    )
+}
+
+fn extract_string_column(entry: &BlockEntry) -> Option<&databend_common_expression::types::StringColumn> {
+    match entry {
+        BlockEntry::Column(Column::String(col)) => Some(col),
+        BlockEntry::Column(Column::Nullable(n)) => match &n.column {
+            Column::String(col) => Some(col),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
@@ -173,104 +198,69 @@ impl PySessionContext {
         connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        // Resolve file path
-        let (file_path, connection_clause) = if let Some(connection_name) = connection {
-            (
-                path.to_owned(),
-                format!(", connection => '{}'", connection_name),
-            )
-        } else {
-            let mut p = path.to_owned();
-            if p.starts_with('/') {
-                p = format!("fs://{}", p);
-            }
-            if !p.contains("://") {
-                p = format!(
-                    "fs://{}/{}",
-                    std::env::current_dir().unwrap().to_str().unwrap(),
-                    p.as_str()
-                );
-            }
-            (p, String::new())
+        let file_path = match connection {
+            Some(_) => path.to_owned(),
+            None => resolve_file_path(path),
         };
-
+        let connection_clause = connection
+            .map(|c| format!(", connection => '{}'", c))
+            .unwrap_or_default();
         let pattern_clause = pattern
             .map(|p| format!(", pattern => '{}'", p))
             .unwrap_or_default();
 
-        // For CSV/TSV, use infer_schema to get column positions instead of SELECT *
-        let select_clause = if file_format == "csv" || file_format == "tsv" {
-            let col_names =
-                self.infer_column_names(&file_path, file_format, connection, py)?;
-            if col_names.is_empty() {
-                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    "Could not infer schema from CSV/TSV file: no columns found",
-                ));
-            }
-            col_names
-                .iter()
-                .enumerate()
-                .map(|(i, col_name)| format!("${} AS `{}`", i + 1, col_name))
-                .collect::<Vec<_>>()
-                .join(", ")
-        } else {
-            "*".to_string()
+        let select_clause = match file_format {
+            "csv" | "tsv" => self.build_column_select(&file_path, file_format, connection, py)?,
+            _ => "*".to_string(),
         };
 
         let sql = format!(
             "create view {} as select {} from '{}' (file_format => '{}'{}{})",
             name, select_clause, file_path, file_format, pattern_clause, connection_clause
         );
-
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
     }
 
-    fn infer_column_names(
+    /// Infer column names via `infer_schema` and build `$1 AS col1, $2 AS col2, ...`.
+    fn build_column_select(
         &mut self,
         file_path: &str,
         file_format: &str,
         connection: Option<&str>,
         py: Python,
-    ) -> PyResult<Vec<String>> {
-        let connection_clause = connection
+    ) -> PyResult<String> {
+        let conn_clause = connection
             .map(|c| format!(", connection_name => '{}'", c))
             .unwrap_or_default();
-
-        let infer_sql = format!(
+        let sql = format!(
             "SELECT column_name FROM infer_schema(location => '{}', file_format => '{}'{})",
             file_path,
             file_format.to_uppercase(),
-            connection_clause
+            conn_clause
         );
 
-        let df = self.sql(&infer_sql, py)?;
-        let blocks = df.collect(py)?;
+        let blocks = self.sql(&sql, py)?.collect(py)?;
+        let col_names: Vec<String> = blocks
+            .blocks
+            .iter()
+            .filter(|b| b.num_rows() > 0)
+            .filter_map(|b| extract_string_column(b.get_by_offset(0)))
+            .flat_map(|col| col.iter().map(|s| s.to_string()))
+            .collect();
 
-        let mut col_names = Vec::new();
-        for block in &blocks.blocks {
-            if block.num_rows() == 0 {
-                continue;
-            }
-            let entry = block.get_by_offset(0);
-            match entry {
-                BlockEntry::Column(Column::String(col)) => {
-                    for val in col.iter() {
-                        col_names.push(val.to_string());
-                    }
-                }
-                BlockEntry::Column(Column::Nullable(nullable_col)) => {
-                    if let Column::String(col) = &nullable_col.column {
-                        for val in col.iter() {
-                            col_names.push(val.to_string());
-                        }
-                    }
-                }
-                _ => {}
-            }
+        if col_names.is_empty() {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "Could not infer schema: no columns found",
+            ));
         }
 
-        Ok(col_names)
+        Ok(col_names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| format!("${} AS `{}`", i + 1, name))
+            .collect::<Vec<_>>()
+            .join(", "))
     }
 
     #[pyo3(signature = (name, access_key_id, secret_access_key, endpoint_url = None, region = None))]
