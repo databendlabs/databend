@@ -86,75 +86,76 @@ macro_rules! try_decode {
 /// Decode protobuf-encoded bytes to a human-readable string,
 /// using the key prefix to determine the protobuf message type.
 pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
+    // Match with trailing "/" to avoid prefix shadowing
+    // (e.g., "__fd_sequence/" vs "__fd_sequence_storage/").
     try_decode!(key, bytes, [
         // schema - database
-        "__fd_database_by_id"      => DatabaseMeta,
-        "__fd_db_id_list"          => DbIdList,
+        "__fd_database_by_id/"      => DatabaseMeta,
+        "__fd_db_id_list/"          => DbIdList,
 
         // schema - table
-        "__fd_table_by_id"         => TableMeta,
-        "__fd_table_id_to_name"    => DBIdTableName,
-        "__fd_table_id_list"       => TableIdList,
-        "__fd_table_copied_files"  => TableCopiedFileInfo,
+        "__fd_table_by_id/"         => TableMeta,
+        "__fd_table_id_to_name/"    => DBIdTableName,
+        "__fd_table_id_list/"       => TableIdList,
+        "__fd_table_copied_files/"  => TableCopiedFileInfo,
 
         // schema - catalog
-        "__fd_catalog_by_id"       => CatalogMeta,
+        "__fd_catalog_by_id/"       => CatalogMeta,
 
         // schema - index
-        "__fd_index_by_id"         => IndexMeta,
-        // longer prefix must precede shorter to avoid shadowing
-        "__fd_marked_deleted_table_index" => MarkedDeletedIndexMeta,
-        "__fd_marked_deleted_index" => MarkedDeletedIndexMeta,
+        "__fd_index_by_id/"         => IndexMeta,
+        "__fd_marked_deleted_table_index/" => MarkedDeletedIndexMeta,
+        "__fd_marked_deleted_index/" => MarkedDeletedIndexMeta,
 
         // schema - table auxiliary
-        "__fd_table_lvt"           => LeastVisibleTime,
-        "__fd_table_lock"          => LockMeta,
-        "__fd_vacuum_watermark_ts" => VacuumWatermark,
+        "__fd_table_lvt/"           => LeastVisibleTime,
+        "__fd_table_lock/"          => LockMeta,
+        "__fd_vacuum_watermark_ts/" => VacuumWatermark,
 
         // schema - sequence
-        "__fd_sequence"            => SequenceMeta,
+        "__fd_sequence/"            => SequenceMeta,
 
         // schema - dictionary
-        "__fd_dictionary_by_id"    => DictionaryMeta,
+        "__fd_dictionary_by_id/"    => DictionaryMeta,
 
         // schema - tag
-        "__fd_tag_by_id"           => TagMeta,
-        "__fd_object_tag_ref"      => ObjectTagIdRefValue,
-        "__fd_tag_object_ref"      => EmptyProto,
+        "__fd_tag_by_id/"           => TagMeta,
+        "__fd_object_tag_ref/"      => ObjectTagIdRefValue,
+        "__fd_tag_object_ref/"      => EmptyProto,
 
         // principal - identity / access
-        "__fd_users"               => UserInfo,
-        "__fd_roles"               => RoleInfo,
-        "__fd_stages"              => StageInfo,
-        "__fd_stage_files"         => StageFile,
-        "__fd_token"               => QueryTokenInfo,
-        "__fd_network_policies"    => NetworkPolicy,
-        "__fd_password_policies"   => PasswordPolicy,
-        "__fd_quotas"              => TenantQuota,
-        "__fd_object_owners"       => OwnershipInfo,
+        "__fd_users/"               => UserInfo,
+        "__fd_roles/"               => RoleInfo,
+        "__fd_stages/"              => StageInfo,
+        "__fd_stage_files/"         => StageFile,
+        "__fd_token/"               => QueryTokenInfo,
+        "__fd_network_policies/"    => NetworkPolicy,
+        "__fd_password_policies/"   => PasswordPolicy,
+        "__fd_quotas/"              => TenantQuota,
+        "__fd_object_owners/"       => OwnershipInfo,
 
         // principal - UDF / file format / connection
-        "__fd_udfs"                => UserDefinedFunction,
-        "__fd_file_formats"        => UserDefinedFileFormat,
-        "__fd_connection"          => UserDefinedConnection,
+        "__fd_udfs/"                => UserDefinedFunction,
+        "__fd_file_formats/"        => UserDefinedFileFormat,
+        "__fd_connection/"          => UserDefinedConnection,
 
         // principal - procedure
-        "__fd_procedure_by_id"     => ProcedureMeta,
-        "__fd_procedure_id_to_name" => ProcedureIdentity,
+        "__fd_procedure_by_id/"     => ProcedureMeta,
+        "__fd_procedure_id_to_name/" => ProcedureIdentity,
 
         // principal - task / session
-        "__fd_tasks"               => Task,
-        "__fd_task_messages"       => TaskMessage,
-        "__fd_session"             => ClientSession,
+        "__fd_tasks/"               => Task,
+        "__fd_task_messages/"       => TaskMessage,
+        "__fd_session/"             => ClientSession,
 
         // data mask
-        "__fd_datamask_by_id"      => DatamaskMeta,
-        "__fd_datamask_id_list"    => MaskpolicyTableIdList,
-        "__fd_mask_policy_apply_table_id" => MaskPolicyTableId,
+        "__fd_datamask_by_id/"      => DatamaskMeta,
+        "__fd_datamask_id_list/"    => MaskpolicyTableIdList,
+        "__fd_mask_policy_apply_table_id/" => MaskPolicyTableId,
 
         // row access policy
-        "__fd_row_access_policy_by_id" => RowAccessPolicyMeta,
-        "__fd_row_access_policy_apply_table_id" => RowAccessPolicyTableId,
+        "__fd_row_access_policy_by_id/" => RowAccessPolicyMeta,
+        "__fd_row_access_policy_apply_table_id/" => RowAccessPolicyTableId,
     ])
 }
 
@@ -273,7 +274,7 @@ mod tests {
     fn test_decode_pb_value_corrupted_bytes() {
         assert_eq!(
             decode_pb_value("__fd_database_by_id/123", &[0xff, 0xff]),
-            "decode-error(__fd_database_by_id): failed to decode Protobuf message: invalid varint"
+            "decode-error(__fd_database_by_id/): failed to decode Protobuf message: invalid varint"
         );
     }
 
@@ -356,7 +357,7 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert_eq!(
             lines[0],
-            "    value(__fd_database_by_id/bad): decode-error(__fd_database_by_id): failed to decode Protobuf message: invalid varint"
+            "    value(__fd_database_by_id/bad): decode-error(__fd_database_by_id/): failed to decode Protobuf message: invalid varint"
         );
     }
 
