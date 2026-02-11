@@ -37,6 +37,7 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi;
+use databend_common_meta_api::RefApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -60,6 +61,7 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+use databend_common_meta_app::schema::BranchIdHistoryIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -71,6 +73,7 @@ use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -86,6 +89,7 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DroppedId;
@@ -106,6 +110,7 @@ use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListTableReq;
@@ -123,6 +128,7 @@ use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdBranchName;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableIdToName;
@@ -196,6 +202,7 @@ impl SchemaApiTestSuite {
             + GarbageCollectionApi
             + IndexApi
             + LockApi
+            + RefApi
             + SecurityApi
             + DatamaskApi
             + SequenceApi
@@ -319,6 +326,7 @@ impl SchemaApiTestSuite {
             + GarbageCollectionApi
             + IndexApi
             + LockApi
+            + RefApi
             + TableApi
             + 'static,
     {
@@ -347,6 +355,10 @@ impl SchemaApiTestSuite {
         self.catalog_create_get_list_drop(&b.build().await).await?;
         self.table_least_visible_time(&b.build().await).await?;
         self.vacuum_retention_timestamp(&b.build().await).await?;
+        self.gc_dropped_table_with_branches(&b.build().await)
+            .await?;
+        self.list_history_table_branches_retention_boundary(&b.build().await)
+            .await?;
         self.drop_table_without_tableid_to_name(&b.build().await)
             .await?;
 
@@ -2987,87 +2999,87 @@ impl SchemaApiTestSuite {
                 let err = ErrorCode::from(err);
                 assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
             }
+        }
 
-            info!("--- update table meta, snapshot_ts must respect LVT");
-            {
-                let table = util.get_table().await.unwrap();
-                let table_id = table.ident.table_id;
-                let small_ts = DateTime::<Utc>::from_timestamp(1_000, 0).unwrap();
-                let lvt_time = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
-                let big_time = DateTime::<Utc>::from_timestamp(3_000, 0).unwrap();
+        info!("--- update table meta, snapshot_ts must respect LVT");
+        {
+            let table = util.get_table().await.unwrap();
+            let table_id = table.ident.table_id;
+            let small_ts = DateTime::<Utc>::from_timestamp(1_000, 0).unwrap();
+            let lvt_time = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
+            let big_time = DateTime::<Utc>::from_timestamp(3_000, 0).unwrap();
 
-                // LVT no set.
-                let mut new_table_meta = table.meta.clone();
-                new_table_meta.comment = "lvt no set".to_string();
-                let req = UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Exact(table.ident.seq),
-                    new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
-                    lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
-                        time: small_ts,
-                    }),
-                };
-                let result = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
-                        update_table_metas: vec![(req, table.as_ref().clone())],
-                        ..Default::default()
-                    })
-                    .await;
-                assert!(result.is_ok());
-                let table = util.get_table().await.unwrap();
-                assert_eq!(table.meta.comment, "lvt no set");
-
-                let lvt_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
-                mt.set_table_lvt(&lvt_ident, &LeastVisibleTime::new(lvt_time))
-                    .await?;
-
-                // LVT is smaller.
-                let mut new_table_meta = table.meta.clone();
-                new_table_meta.comment = "lvt guard should fail".to_string();
-                let req = UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Exact(table.ident.seq),
-                    new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
-                    lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
-                        time: small_ts,
-                    }),
-                };
-                let result = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
-                        update_table_metas: vec![(req, table.as_ref().clone())],
-                        ..Default::default()
-                    })
-                    .await;
-                assert!(result.is_err());
-
-                // LVT is large enough.
-                let table = util.get_table().await.unwrap();
-                let mut ok_table_meta = table.meta.clone();
-                ok_table_meta.comment = "lvt guard success".to_string();
-                let req = UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Exact(table.ident.seq),
-                    new_table_meta: ok_table_meta.clone(),
-                    base_snapshot_location: None,
-                    lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
-                        time: big_time,
-                    }),
-                };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+            // LVT no set.
+            let mut new_table_meta = table.meta.clone();
+            new_table_meta.comment = "lvt no set".to_string();
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table.ident.seq),
+                new_table_meta: new_table_meta.clone(),
+                base_snapshot_location: None,
+                lvt_check: Some(TableLvtCheck {
+                    tenant: tenant.clone(),
+                    time: small_ts,
+                }),
+            };
+            let result = mt
+                .update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
                     ..Default::default()
                 })
-                .await?
-                .unwrap();
+                .await;
+            assert!(result.is_ok());
+            let table = util.get_table().await.unwrap();
+            assert_eq!(table.meta.comment, "lvt no set");
 
-                let updated = util.get_table().await.unwrap();
-                assert_eq!(updated.meta.comment, "lvt guard success");
-            }
+            let lvt_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
+            mt.set_table_lvt(&lvt_ident, &LeastVisibleTime::new(lvt_time))
+                .await?;
+
+            // LVT is smaller.
+            let mut new_table_meta = table.meta.clone();
+            new_table_meta.comment = "lvt guard should fail".to_string();
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table.ident.seq),
+                new_table_meta: new_table_meta.clone(),
+                base_snapshot_location: None,
+                lvt_check: Some(TableLvtCheck {
+                    tenant: tenant.clone(),
+                    time: small_ts,
+                }),
+            };
+            let result = mt
+                .update_multi_table_meta(UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(req, table.as_ref().clone())],
+                    ..Default::default()
+                })
+                .await;
+            assert!(result.is_err());
+
+            // LVT is large enough.
+            let table = util.get_table().await.unwrap();
+            let mut ok_table_meta = table.meta.clone();
+            ok_table_meta.comment = "lvt guard success".to_string();
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table.ident.seq),
+                new_table_meta: ok_table_meta.clone(),
+                base_snapshot_location: None,
+                lvt_check: Some(TableLvtCheck {
+                    tenant: tenant.clone(),
+                    time: big_time,
+                }),
+            };
+            mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table.as_ref().clone())],
+                ..Default::default()
+            })
+            .await?
+            .unwrap();
+
+            let updated = util.get_table().await.unwrap();
+            assert_eq!(updated.meta.comment, "lvt guard success");
         }
         Ok(())
     }
@@ -4687,6 +4699,269 @@ impl SchemaApiTestSuite {
 
             let resp: Result<TableCopiedFileInfo, KVAppError> = get_kv_data(mt, &key).await;
             assert!(resp.is_err());
+        }
+
+        Ok(())
+    }
+
+    async fn list_history_table_branches_retention_boundary<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + RefApi,
+    >(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant_list_history_table_branches_retention_boundary";
+        let db_name = "db_list_history_table_branches_retention_boundary";
+        let tbl_name = "tb_list_history_table_branches_retention_boundary";
+
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "FUSE");
+        util.create_db().await?;
+        let tenant = util.tenant();
+        let (table_id, _) = util.create_table_with(|meta| meta, |req| req).await?;
+
+        let table_name_ident = TableNameIdent::new(&tenant, db_name, tbl_name);
+        let table = mt
+            .get_table(GetTableReq {
+                inner: table_name_ident.clone(),
+            })
+            .await?;
+        let table_seq = table.ident.seq;
+        let branch_meta = table.meta.clone();
+
+        let mk_branch_req = |branch_name: &str| CreateTableBranchReq {
+            name_ident: table_name_ident.clone(),
+            table_id,
+            source_table_id: table_id,
+            branch_name: branch_name.to_string(),
+            seq: MatchSeq::Exact(table_seq),
+            table_meta: branch_meta.clone(),
+            expire_at: None,
+            as_dropped: false,
+            lvt_check: None,
+        };
+
+        let _ = mt.create_table_branch(mk_branch_req("live")).await?;
+        let retained = mt.create_table_branch(mk_branch_req("retained")).await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id,
+            branch_name: "retained".to_string(),
+            branch_id: retained.branch_id,
+            catalog_name: Some("default".to_string()),
+        })
+        .await?;
+        let expired = mt.create_table_branch(mk_branch_req("expired")).await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id,
+            branch_name: "expired".to_string(),
+            branch_id: expired.branch_id,
+            catalog_name: Some("default".to_string()),
+        })
+        .await?;
+
+        let now = Utc::now();
+        let retained_key = TableId {
+            table_id: retained.branch_id,
+        };
+        let mut retained_meta = branch_meta.clone();
+        retained_meta.drop_on = Some(now - Duration::hours(1));
+        upsert_test_data(mt, &retained_key, serialize_struct(&retained_meta)?).await?;
+
+        let expired_key = TableId {
+            table_id: expired.branch_id,
+        };
+        let mut expired_meta = branch_meta.clone();
+        expired_meta.drop_on = Some(now - Duration::days(2));
+        upsert_test_data(mt, &expired_key, serialize_struct(&expired_meta)?).await?;
+
+        let all_history = mt
+            .list_history_table_branches(ListHistoryTableBranchesReq {
+                table_id,
+                retention_boundary: None,
+            })
+            .await?;
+        let all_names = all_history
+            .iter()
+            .map(|branch| branch.branch_name.as_str())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(all_names, BTreeSet::from(["expired", "live", "retained"]));
+
+        let filtered_history = mt
+            .list_history_table_branches(ListHistoryTableBranchesReq {
+                table_id,
+                retention_boundary: Some(now - Duration::days(1)),
+            })
+            .await?;
+        let filtered_names = filtered_history
+            .iter()
+            .map(|branch| branch.branch_name.as_str())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(filtered_names, BTreeSet::from(["live", "retained"]));
+
+        Ok(())
+    }
+
+    async fn gc_dropped_table_with_branches<
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + TableApi
+            + GarbageCollectionApi
+            + IndexApi
+            + RefApi,
+    >(
+        self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant_gc_dropped_table_with_branches";
+        let db_name = "db_gc_dropped_table_with_branches";
+        let tbl_name = "tb_gc_dropped_table_with_branches";
+
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "FUSE");
+        util.create_db().await?;
+        let tenant = util.tenant();
+        let (table_id, _) = util.create_table_with(|meta| meta, |req| req).await?;
+
+        let table_name_ident = TableNameIdent::new(&tenant, db_name, tbl_name);
+        let table = mt
+            .get_table(GetTableReq {
+                inner: table_name_ident.clone(),
+            })
+            .await?;
+        let table_seq = table.ident.seq;
+        let branch_meta = table.meta.clone();
+
+        let mk_branch_req = |branch_name: &str| CreateTableBranchReq {
+            name_ident: table_name_ident.clone(),
+            table_id,
+            source_table_id: table_id,
+            branch_name: branch_name.to_string(),
+            seq: MatchSeq::Exact(table_seq),
+            table_meta: branch_meta.clone(),
+            expire_at: None,
+            as_dropped: false,
+            lvt_check: None,
+        };
+
+        // Scenario mix:
+        // - live: active
+        // - mixed: one dropped generation + one active generation
+        // - drop_only: dropped only
+        let live = mt.create_table_branch(mk_branch_req("live")).await?;
+        let mixed_v1 = mt.create_table_branch(mk_branch_req("mixed")).await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id,
+            branch_name: "mixed".to_string(),
+            branch_id: mixed_v1.branch_id,
+            catalog_name: Some("default".to_string()),
+        })
+        .await?;
+        let mixed_v2 = mt.create_table_branch(mk_branch_req("mixed")).await?;
+        let drop_only = mt.create_table_branch(mk_branch_req("drop_only")).await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id,
+            branch_name: "drop_only".to_string(),
+            branch_id: drop_only.branch_id,
+            catalog_name: Some("default".to_string()),
+        })
+        .await?;
+
+        // Assert setup state before dropping base table.
+        let live_branch_key = TableIdBranchName::new(table_id, "live");
+        let mixed_branch_key = TableIdBranchName::new(table_id, "mixed");
+        let drop_only_branch_key = TableIdBranchName::new(table_id, "drop_only");
+        assert!(mt.get_kv(&live_branch_key.to_string_key()).await?.is_some());
+        assert!(
+            mt.get_kv(&mixed_branch_key.to_string_key())
+                .await?
+                .is_some()
+        );
+        assert!(
+            mt.get_kv(&drop_only_branch_key.to_string_key())
+                .await?
+                .is_none()
+        );
+
+        let live_history_key = BranchIdHistoryIdent {
+            table_id,
+            branch_name: "live".to_string(),
+        };
+        let mixed_history_key = BranchIdHistoryIdent {
+            table_id,
+            branch_name: "mixed".to_string(),
+        };
+        let drop_only_history_key = BranchIdHistoryIdent {
+            table_id,
+            branch_name: "drop_only".to_string(),
+        };
+        let live_history: TableIdList = get_kv_data(mt, &live_history_key).await?;
+        assert_eq!(live_history.id_list(), &[live.branch_id]);
+        let mixed_history: TableIdList = get_kv_data(mt, &mixed_history_key).await?;
+        assert_eq!(mixed_history.id_list(), &[
+            mixed_v1.branch_id,
+            mixed_v2.branch_id
+        ]);
+        let drop_only_history: TableIdList = get_kv_data(mt, &drop_only_history_key).await?;
+        assert_eq!(drop_only_history.id_list(), &[drop_only.branch_id]);
+
+        util.drop_table_by_id().await?;
+
+        let req = ListDroppedTableReq::new(&tenant);
+        let resp = mt.get_drop_table_infos(req).await?;
+        assert!(
+            resp.drop_ids
+                .iter()
+                .any(|id| matches!(id, DroppedId::Table { id, .. } if id.table_id == table_id))
+        );
+        mt.gc_drop_tables(GcDroppedTableReq {
+            tenant: tenant.clone(),
+            catalog: "default".to_string(),
+            drop_ids: resp.drop_ids.clone(),
+        })
+        .await?;
+
+        // Active branch mappings should be removed by gc.
+        assert!(mt.get_kv(&live_branch_key.to_string_key()).await?.is_none());
+        assert!(
+            mt.get_kv(&mixed_branch_key.to_string_key())
+                .await?
+                .is_none()
+        );
+
+        // Branch history should be fully removed by gc.
+        assert!(
+            mt.get_kv(&live_history_key.to_string_key())
+                .await?
+                .is_none()
+        );
+        assert!(
+            mt.get_kv(&mixed_history_key.to_string_key())
+                .await?
+                .is_none()
+        );
+        assert!(
+            mt.get_kv(&drop_only_history_key.to_string_key())
+                .await?
+                .is_none()
+        );
+
+        // Branch table meta generations should be removed by gc.
+        for branch_id in [
+            live.branch_id,
+            mixed_v1.branch_id,
+            mixed_v2.branch_id,
+            drop_only.branch_id,
+        ] {
+            let branch_table_key = TableId {
+                table_id: branch_id,
+            };
+            assert!(
+                mt.get_kv(&branch_table_key.to_string_key())
+                    .await?
+                    .is_none()
+            );
         }
 
         Ok(())

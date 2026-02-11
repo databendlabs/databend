@@ -73,6 +73,7 @@ impl Interpreter for VacuumVirtualColumnInterpreter {
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
+                None,
                 &LockTableOption::LockWithRetry,
             )
             .await?;

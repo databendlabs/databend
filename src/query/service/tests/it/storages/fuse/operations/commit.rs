@@ -292,6 +292,7 @@ async fn test_commit_to_meta_server() -> anyhow::Result<()> {
                 new_segments,
                 None,
                 None,
+                None,
                 TestFixture::default_table_meta_timestamps(),
             )
             .unwrap();
@@ -727,7 +728,13 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+    fn evict_table_from_cache(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<String>,
+    ) -> Result<()> {
         todo!()
     }
 
@@ -888,6 +895,7 @@ impl TableContext for CtxDelegation {
         _catalog_name: &str,
         _db_name: &str,
         _tbl_name: &str,
+        _branch: Option<&str>,
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()

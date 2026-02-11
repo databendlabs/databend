@@ -41,7 +41,6 @@ pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
 pub const FUSE_TBL_VECTOR_INDEX_PREFIX: &str = "_i_v";
 pub const FUSE_TBL_SPATIAL_INDEX_PREFIX: &str = "_i_s";
-pub const LEGACY_FUSE_TBL_REF_PREFIX: &str = "_ref";
 
 pub const DEFAULT_ROW_PER_PAGE: usize = 8192;
 pub const DEFAULT_ROW_PER_INDEX: usize = 100000;

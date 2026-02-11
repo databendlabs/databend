@@ -976,17 +976,15 @@ impl Table for FuseTable {
         num_snapshot_limit: Option<usize>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => {
-                table
-                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
-                    .await
-            }
+        match self
+            .do_ref_aware_purge(&ctx, instant, num_snapshot_limit, dry_run)
+            .await
+        {
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
                 if dry_run { Ok(Some(vec![])) } else { Ok(None) }
             }
-            Err(e) => Err(e),
+            res => res,
         }
     }
 

@@ -214,8 +214,12 @@ impl Interpreter for AddTableColumnInterpreter {
         // If the column is not deterministic and table is non-empty,
         // update to refresh the value with default expr.
         if need_update {
-            self.ctx
-                .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
+            self.ctx.evict_table_from_cache(
+                catalog_name,
+                db_name,
+                tbl_name,
+                self.plan.branch.clone(),
+            )?;
             let query = format!(
                 "UPDATE `{}`.`{}` SET `{}` = {};",
                 db_name,

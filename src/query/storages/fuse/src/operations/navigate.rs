@@ -17,15 +17,20 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -41,6 +46,116 @@ use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 
 impl FuseTable {
+    pub fn apply_snapshot_metadata_to_meta(
+        &self,
+        table_meta: &mut TableMeta,
+        snapshot: &TableSnapshot,
+    ) -> Result<()> {
+        let snapshot_cluster_key_meta = snapshot.cluster_key_meta.clone();
+        let cluster_type = if let Some(cluster_type) = snapshot.cluster_type {
+            Some(cluster_type)
+        } else if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_v2 {
+            // Historical snapshots written before cluster_type was persisted may still share the
+            // same cluster-key version as the current table. Reuse the current cluster_type only
+            // in that compatibility case.
+            self.cluster_type()
+        } else {
+            // Intentionally do not expose partial cluster metadata here. When the historical
+            // snapshot predates cluster_type persistence and its cluster-key version no longer
+            // matches the current table, we cannot reconstruct the exact historical clustering
+            // mode safely. Clearing the cluster metadata avoids fabricating a misleading mode for
+            // time-travel/branch planning on an upgraded table.
+            None
+        };
+
+        if let Some(cluster_type) = cluster_type {
+            table_meta.cluster_key_v2 = snapshot_cluster_key_meta;
+            table_meta.options.insert(
+                OPT_KEY_CLUSTER_TYPE.to_owned(),
+                cluster_type.to_string().to_lowercase(),
+            );
+        } else {
+            table_meta.cluster_key_v2 = None;
+            table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+        }
+
+        if table_meta.schema.as_ref() == &snapshot.schema {
+            return Ok(());
+        }
+
+        // Historical navigation/branching must adopt the snapshot schema. When it differs
+        // from the current base-table schema, keep only metadata that can be validated
+        // cheaply by historical column ids and drop the rest conservatively.
+        let snapshot_leaf_column_ids = snapshot.schema.to_leaf_column_id_set();
+        table_meta.fill_field_comments();
+        let comment_by_column_id = table_meta
+            .schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                (
+                    field.column_id(),
+                    table_meta
+                        .field_comments
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default(),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+
+        table_meta.schema = Arc::new(snapshot.schema.clone());
+        table_meta.field_comments = snapshot
+            .schema
+            .fields()
+            .iter()
+            .map(|field| {
+                comment_by_column_id
+                    .get(&field.column_id())
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .collect();
+        table_meta.virtual_schema = None;
+        table_meta.column_mask_policy = None;
+        table_meta.row_access_policy = None;
+        table_meta.constraints.clear();
+        table_meta.options.remove(OPT_KEY_APPROX_DISTINCT_COLUMNS);
+        table_meta.options.remove(OPT_KEY_BLOOM_INDEX_COLUMNS);
+
+        table_meta.indexes.retain(|_, index| {
+            index
+                .column_ids
+                .iter()
+                .all(|column_id| snapshot_leaf_column_ids.contains(column_id))
+        });
+        table_meta
+            .column_mask_policy_columns_ids
+            .retain(|column_id, policy_map| {
+                snapshot_leaf_column_ids.contains(column_id)
+                    && policy_map
+                        .columns_ids
+                        .iter()
+                        .all(|policy_column_id| snapshot_leaf_column_ids.contains(policy_column_id))
+            });
+        if table_meta
+            .row_access_policy_columns_ids
+            .as_ref()
+            .is_some_and(|policy_map| {
+                !policy_map
+                    .columns_ids
+                    .iter()
+                    .all(|column_id| snapshot_leaf_column_ids.contains(column_id))
+            })
+        {
+            table_meta.row_access_policy = None;
+            table_meta.row_access_policy_columns_ids = None;
+        }
+
+        Ok(())
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn navigate_to_point(
@@ -62,7 +177,16 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::StreamInfo(info) => self.navigate_to_stream(ctx, info).await,
-            NavigationPoint::TableTag(_) => Err(ErrorCode::Unimplemented("todo")),
+            NavigationPoint::TableTag(tag_name) => {
+                let snapshot_loc = self.table_tag_snapshot_location(ctx, tag_name).await?;
+                let (snapshot, format_version) =
+                    SnapshotsIO::read_snapshot(snapshot_loc, self.get_operator(), true).await?;
+                self.load_table_by_snapshot(
+                    snapshot.as_ref(),
+                    format_version,
+                    ctx.get_settings().get_s3_storage_class()?,
+                )
+            }
         }
     }
 
@@ -109,11 +233,7 @@ impl FuseTable {
         time_point: DateTime<Utc>,
     ) -> Result<Arc<FuseTable>> {
         self.find(ctx, location, |snapshot| {
-            if let Some(ts) = snapshot.timestamp {
-                ts <= time_point
-            } else {
-                false
-            }
+            Self::snapshot_visible_at(snapshot, &time_point)
         })
         .await
     }
@@ -145,12 +265,7 @@ impl FuseTable {
         };
 
         self.find(ctx, location, |snapshot| {
-            snapshot
-                .snapshot_id
-                .simple()
-                .to_string()
-                .as_str()
-                .starts_with(snapshot_id)
+            Self::snapshot_matches_id_prefix(snapshot, snapshot_id)
         })
         .await
     }
@@ -187,10 +302,6 @@ impl FuseTable {
         format_version: u64,
         s3_storage_class: S3StorageClass,
     ) -> Result<Arc<FuseTable>> {
-        // The `seq` of ident that we cloned here is JUST a place holder
-        // we should NOT use it other than a pure place holder.
-        let mut table_info = self.table_info.clone();
-
         // There are more to be kept in snapshot, like engine_options, ordering keys...
         // or we could just keep a clone of TableMeta in the snapshot.
         //
@@ -202,12 +313,10 @@ impl FuseTable {
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
-        // Cluster key will be restored from the snapshot.
-        // If the snapshot has no cluster key, means the table is currently unclustered.
-        // We do NOT fall back to table-level cluster key metadata here, even if
-        // the base table defines one. This is expected and by design.
-        table_info.meta.schema = Arc::new(snapshot.schema.clone());
-        table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
+        // The `seq` of ident that we cloned here is JUST a place holder
+        // we should NOT use it other than a pure place holder.
+        let mut table_info = self.table_info.clone();
+        self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot)?;
         table_info
             .meta
             .options
@@ -267,7 +376,10 @@ impl FuseTable {
                     Some(NavigationPoint::StreamInfo(info)) => {
                         self.list_by_stream(info, time_point).await
                     }
-                    Some(NavigationPoint::TableTag(_)) => unreachable!(),
+                    Some(NavigationPoint::TableTag(tag_name)) => {
+                        let snapshot_loc = self.table_tag_snapshot_location(ctx, &tag_name).await?;
+                        self.list_by_location(snapshot_loc, time_point).await
+                    }
                     None => self.list_by_time_point(time_point).await,
                 }?;
 
@@ -441,12 +553,7 @@ impl FuseTable {
                 };
                 let loc = self
                     .find_location(&ctx, location, |snapshot| {
-                        snapshot
-                            .snapshot_id
-                            .simple()
-                            .to_string()
-                            .as_str()
-                            .starts_with(snapshot_id)
+                        Self::snapshot_matches_id_prefix(snapshot, snapshot_id)
                     })
                     .await?;
                 Ok(Some(loc))
@@ -459,35 +566,85 @@ impl FuseTable {
                 };
                 let loc = self
                     .find_location(&ctx, location, |snapshot| {
-                        if let Some(ts) = snapshot.timestamp {
-                            ts <= *time_point
-                        } else {
-                            false
-                        }
+                        Self::snapshot_visible_at(snapshot, time_point)
                     })
                     .await
                     .ok();
                 Ok(loc)
             }
-            NavigationPoint::StreamInfo(stream_info) => {
-                let options = stream_info.options();
-                let stream_table_id = options
-                    .get(OPT_KEY_SOURCE_TABLE_ID)
-                    .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
-                    .parse::<u64>()?;
-                if stream_table_id != self.table_info.ident.table_id {
-                    return Err(ErrorCode::IllegalStream(format!(
-                        "The stream '{}' is not match the table '{}'",
-                        stream_info.desc, self.table_info.desc
-                    )));
-                }
-                Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
+            NavigationPoint::StreamInfo(stream_info) => self.stream_snapshot_location(stream_info),
+            NavigationPoint::TableTag(tag_name) => {
+                let snapshot_loc = self.table_tag_snapshot_location(&ctx, tag_name).await?;
+                Ok(Some(snapshot_loc))
             }
-            NavigationPoint::TableTag(_) => Err(ErrorCode::Unimplemented("todo")),
         }
     }
 
-    // Only used when the table branch is none.
+    fn snapshot_prefix(&self) -> String {
+        format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        )
+    }
+
+    fn snapshot_visible_at(snapshot: &TableSnapshot, time_point: &DateTime<Utc>) -> bool {
+        snapshot
+            .timestamp
+            .as_ref()
+            .is_some_and(|ts| ts <= time_point)
+    }
+
+    fn snapshot_matches_id_prefix(snapshot: &TableSnapshot, snapshot_id_prefix: &str) -> bool {
+        snapshot
+            .snapshot_id
+            .simple()
+            .to_string()
+            .starts_with(snapshot_id_prefix)
+    }
+
+    fn stream_snapshot_location(&self, stream_info: &TableInfo) -> Result<Option<String>> {
+        let options = stream_info.options();
+        let stream_table_id = options
+            .get(OPT_KEY_SOURCE_TABLE_ID)
+            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
+            .parse::<u64>()?;
+        if stream_table_id != self.table_info.ident.table_id {
+            return Err(ErrorCode::IllegalStream(format!(
+                "The stream '{}' is not match the table '{}'",
+                stream_info.desc, self.table_info.desc
+            )));
+        }
+        Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
+    }
+
+    async fn table_tag_snapshot_location(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        tag_name: &str,
+    ) -> Result<String> {
+        if !ctx
+            .get_settings()
+            .get_enable_experimental_table_ref()
+            .unwrap_or_default()
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+            ));
+        }
+        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
+        let table_tag = catalog
+            .get_table_tag(self.table_info.ident.table_id, tag_name)
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::UnknownReference(format!(
+                    "Unknown TAG '{}' in table {}",
+                    tag_name, self.table_info.desc
+                ))
+            })?;
+        Ok(table_tag.data.snapshot_loc)
+    }
+
     #[async_backtrace::framed]
     pub async fn find_location<P>(
         &self,
@@ -510,29 +667,6 @@ impl FuseTable {
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
         Ok(snapshot_location)
-    }
-
-    fn snapshot_prefix(&self) -> String {
-        format!(
-            "{}/{}/",
-            self.meta_location_generator().prefix(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-        )
-    }
-
-    fn stream_snapshot_location(&self, stream_info: &TableInfo) -> Result<Option<String>> {
-        let options = stream_info.options();
-        let stream_table_id = options
-            .get(OPT_KEY_SOURCE_TABLE_ID)
-            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
-            .parse::<u64>()?;
-        if stream_table_id != self.table_info.ident.table_id {
-            return Err(ErrorCode::IllegalStream(format!(
-                "The stream '{}' is not match the table '{}'",
-                stream_info.desc, self.table_info.desc
-            )));
-        }
-        Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
     }
 
     async fn find_snapshot_with_version<P>(

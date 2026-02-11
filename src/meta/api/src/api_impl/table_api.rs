@@ -1213,7 +1213,6 @@ where
             let tbid = TableId {
                 table_id: req.table_id,
             };
-
             let new_table_meta = req.new_table_meta.clone();
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);

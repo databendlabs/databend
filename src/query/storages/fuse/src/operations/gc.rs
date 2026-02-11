@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -64,6 +65,11 @@ impl FuseTable {
     ) -> Result<Option<Vec<String>>> {
         let mut counter = PurgeCounter::new();
 
+        // Step 1: Process snapshot refs (branches and tags) before main purge
+        let (ref_vacuum_info, refs_before_lvt) = self
+            .process_refs_for_purge(ctx, &mut counter, dry_run)
+            .await?;
+
         let res = self
             .execute_purge(
                 ctx,
@@ -71,6 +77,8 @@ impl FuseTable {
                 num_snapshot_limit,
                 &mut counter,
                 dry_run,
+                ref_vacuum_info,
+                refs_before_lvt,
             )
             .await;
         info!("purge counter {:?}", counter);
@@ -85,6 +93,8 @@ impl FuseTable {
         num_snapshot_limit: Option<usize>,
         counter: &mut PurgeCounter,
         dry_run: bool,
+        mut ref_vacuum_info: crate::operations::RefVacuumInfo,
+        refs_before_lvt: crate::operations::TableRefSnapshotState,
     ) -> Result<Option<Vec<String>>> {
         // 1. Read the root snapshot.
         let root_snapshot_location_op = self.snapshot_loc();
@@ -110,17 +120,39 @@ impl FuseTable {
                     &LeastVisibleTime::new(root_snapshot.timestamp.unwrap()),
                 )
                 .await?;
+
+            // After set_lvt, check for newly created refs to protect their segments
+            // This handles the race condition where a branch is created between initial scan and set_lvt
+            let additional_protected = self
+                .process_new_refs_after_lvt(ctx, &refs_before_lvt)
+                .await?;
+            if !additional_protected.is_empty() {
+                ref_vacuum_info.merge(additional_protected);
+            }
         }
 
-        let segment_refs: Vec<&Location> = root_snapshot.segments.iter().collect();
-        let referenced_locations = self
+        let mut segments = HashSet::with_capacity(
+            ref_vacuum_info.protected_segments.len() + root_snapshot.segments.len(),
+        );
+        segments.extend(ref_vacuum_info.protected_segments.iter().cloned());
+        segments.extend(root_snapshot.segments.iter().cloned());
+        let segment_refs: Vec<&Location> = segments.iter().collect();
+        let mut referenced_locations = self
             .get_block_locations(ctx.clone(), &segment_refs, true, false)
             .await?;
+        referenced_locations
+            .block_location
+            .extend(ref_vacuum_info.protected_blocks.iter().cloned());
+        referenced_locations
+            .bloom_location
+            .extend(ref_vacuum_info.protected_blocks.iter().map(|loc| {
+                TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc)
+            }));
         let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
             format_version: root_snapshot.format_version,
             snapshot_id: root_snapshot.snapshot_id,
             timestamp: root_snapshot.timestamp,
-            segments: HashSet::from_iter(root_snapshot.segments.clone()),
+            segments,
             table_statistics_location: root_snapshot.table_statistics_location(),
         });
 
@@ -181,6 +213,9 @@ impl FuseTable {
                 if let Ok(loc) =
                     location_gen.gen_snapshot_location(&s.snapshot_id, s.format_version)
                 {
+                    if ref_vacuum_info.protected_snapshots.contains(&loc) {
+                        continue;
+                    }
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }
@@ -255,6 +290,9 @@ impl FuseTable {
                 if let Ok(loc) =
                     location_gen.gen_snapshot_location(&s.snapshot_id, s.format_version)
                 {
+                    if ref_vacuum_info.protected_snapshots.contains(&loc) {
+                        continue;
+                    }
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }
@@ -704,6 +742,38 @@ impl FuseTable {
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
         SnapshotsIO::list_files(self.get_operator(), &prefix, None).await
+    }
+
+    /// Process newly created refs after set_lvt to protect their segments.
+    /// This handles the race condition where a branch is created between initial scan and set_lvt.
+    #[async_backtrace::framed]
+    async fn process_new_refs_after_lvt(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        refs_before_lvt: &crate::operations::TableRefSnapshotState,
+    ) -> Result<crate::operations::RefVacuumInfo> {
+        let refreshed_table = self.refresh(ctx.as_ref()).await?;
+        let refreshed_fuse_table = FuseTable::try_from_table(refreshed_table.as_ref())?;
+        let (new_ref_info, _refs_after_lvt) = refreshed_fuse_table
+            .process_snapshot_refs_for_vacuum(ctx, true, Some(refs_before_lvt))
+            .await?;
+        Ok(new_ref_info)
+    }
+
+    /// Process snapshot refs (branches and tags) for purge.
+    /// Return the protected refs and snapshots from ref gc roots (tags and branches).
+    #[async_backtrace::framed]
+    async fn process_refs_for_purge(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        _counter: &mut PurgeCounter,
+        dry_run: bool,
+    ) -> Result<(
+        crate::operations::RefVacuumInfo,
+        crate::operations::TableRefSnapshotState,
+    )> {
+        self.process_snapshot_refs_for_vacuum(ctx, dry_run, None)
+            .await
     }
 }
 

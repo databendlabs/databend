@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -38,16 +39,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 
 /// Create a variant table, insert data, and refresh virtual columns.
-async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<TestFixture> {
-    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
-    fixture.create_default_database().await?;
-    fixture.create_variant_table().await?;
-    append_variant_sample_data(num_blocks, &fixture).await?;
-
+async fn refresh_virtual_columns_for_latest_snapshot(fixture: &TestFixture) -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -74,6 +66,51 @@ async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<T
             executor.execute()?;
         }
     }
+
+    Ok(())
+}
+
+async fn snapshot_virtual_locations(
+    fuse_table: &FuseTable,
+    snapshot: &TableSnapshot,
+) -> anyhow::Result<HashSet<String>> {
+    let reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), fuse_table.schema());
+    let mut virtual_locations = HashSet::new();
+
+    for (location, ver) in &snapshot.segments {
+        let segment = reader
+            .read(&LoadParams {
+                location: location.to_string(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+
+        for block_meta in segment.block_metas()? {
+            if let Some(virtual_block_meta) = &block_meta.virtual_block_meta {
+                let virtual_location = virtual_block_meta.virtual_location.0.as_str();
+                if !virtual_location.is_empty() {
+                    virtual_locations.insert(virtual_location.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(virtual_locations)
+}
+
+/// Create a variant table, insert data, and refresh virtual columns.
+async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<TestFixture> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+    append_variant_sample_data(num_blocks, &fixture).await?;
+    refresh_virtual_columns_for_latest_snapshot(&fixture).await?;
     Ok(fixture)
 }
 
@@ -312,5 +349,55 @@ async fn test_fuse_do_vacuum_virtual_column_replaced_block_keeps_schema() -> any
     }
     assert!(none_count >= 1); // legacy block cleared
     assert!(some_count >= 1); // v2 blocks intact
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_do_vacuum_virtual_column_with_branch() -> anyhow::Result<()> {
+    let fixture = setup_table_with_virtual_columns(1).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture
+        .execute_command("set enable_experimental_table_ref=1")
+        .await?;
+
+    let db = fixture.default_db_name();
+    let table = fixture.default_table_name();
+    let table_obj = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table_obj.as_ref())?;
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let branch_virtual_locations =
+        snapshot_virtual_locations(fuse_table, snapshot.as_ref()).await?;
+    assert!(!branch_virtual_locations.is_empty());
+
+    fixture
+        .execute_command(format!("alter table {db}.{table} create branch old_branch").as_str())
+        .await?;
+    fixture
+        .execute_command(format!("truncate table {db}.{table}").as_str())
+        .await?;
+    append_variant_sample_data(1, &fixture).await?;
+    refresh_virtual_columns_for_latest_snapshot(&fixture).await?;
+    fixture
+        .execute_command(format!("optimize table {db}.{table} purge").as_str())
+        .await?;
+
+    let latest_table = fixture.latest_default_table().await?;
+    let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
+    let vacuum_ctx = fixture.new_query_ctx().await?;
+    let _ = do_vacuum_virtual_column(vacuum_ctx, latest_fuse_table).await?;
+
+    let latest_table = fixture.latest_default_table().await?;
+    let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
+    let operator = latest_fuse_table.get_operator_ref();
+    for location in &branch_virtual_locations {
+        assert!(
+            operator.exists(location).await?,
+            "virtual file referenced by branch was incorrectly removed: {location}"
+        );
+    }
+
     Ok(())
 }

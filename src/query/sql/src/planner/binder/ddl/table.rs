@@ -120,7 +120,6 @@ use crate::binder::Visibility;
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
-use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
@@ -133,14 +132,18 @@ use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableTagPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
+use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -1084,10 +1087,35 @@ impl Binder {
                 ));
             };
 
-        if let Some(branch_name) = branch.as_ref() {
-            return Err(legacy_table_ref_removed_error(format!(
-                "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
-            )));
+        if branch.is_some() {
+            if !self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_table_ref()
+                .unwrap_or_default()
+            {
+                return Err(ErrorCode::Unimplemented(
+                    "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+                ));
+            }
+
+            // Branch-scoped ALTER is intentionally limited to branch-local schema and cluster-key
+            // changes. Branch/tag create-drop stays on the base table so ref management remains
+            // single-rooted and cannot snapshot another branch head directly.
+            if !matches!(
+                action,
+                AlterTableAction::AddColumn { .. }
+                    | AlterTableAction::ModifyColumn { .. }
+                    | AlterTableAction::DropColumn { .. }
+                    | AlterTableAction::RenameColumn { .. }
+                    | AlterTableAction::AlterTableClusterKey { .. }
+                    | AlterTableAction::DropTableClusterKey
+                    | AlterTableAction::CreateTableBranch { .. }
+            ) {
+                return Err(ErrorCode::SemanticError(
+                    "ALTER TABLE <table>/<branch> only supports ADD/MODIFY/DROP/RENAME COLUMN, ALTER/DROP CLUSTER KEY, CREATE BRANCH",
+                ));
+            }
         }
 
         match action {
@@ -1274,6 +1302,7 @@ impl Binder {
                                 &catalog,
                                 &database,
                                 &table,
+                                branch.as_deref(),
                                 &LockTableOption::LockWithRetry,
                             )
                             .await?
@@ -1466,15 +1495,68 @@ impl Binder {
                     },
                 )))
             }
-            AlterTableAction::CreateTableBranch { .. }
-            | AlterTableAction::CreateTableTag { .. }
-            | AlterTableAction::DropTableBranch { .. }
-            | AlterTableAction::DropTableTag { .. } => {
-                // Keep the grammar reserved for the upcoming redesign, but do
-                // not generate legacy branch/tag DDL plans anymore.
-                Err(legacy_table_ref_removed_error(
-                    "ALTER TABLE ... CREATE/DROP BRANCH|TAG",
-                ))
+            AlterTableAction::CreateTableBranch {
+                branch_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::CreateTableBranch(Box::new(CreateTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch,
+                    branch_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
+            AlterTableAction::CreateTableTag {
+                tag_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let tag_name = self.normalize_identifier(tag_name).name;
+                Ok(Plan::CreateTableTag(Box::new(CreateTableTagPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    tag_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
+            AlterTableAction::DropTableBranch { branch_name } => {
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::DropTableBranch(Box::new(DropTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch_name,
+                })))
+            }
+            AlterTableAction::DropTableTag { tag_name } => {
+                let tag_name = self.normalize_identifier(tag_name).name;
+                Ok(Plan::DropTableTag(Box::new(DropTableTagPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    tag_name,
+                })))
             }
         }
     }

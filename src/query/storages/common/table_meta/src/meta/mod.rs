@@ -26,6 +26,7 @@ mod v2;
 mod v3;
 mod v4;
 mod versions;
+
 pub use compression::Compression;
 // table meta types of current version
 pub use current::*;
@@ -42,6 +43,7 @@ pub use utils::SnapshotTimestampValidationContext;
 pub use utils::TEMP_TABLE_STORAGE_PREFIX;
 pub use utils::TableMetaTimestamps;
 pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
+pub use utils::is_uuid_v7;
 pub(crate) use utils::monotonically_increased_timestamp;
 pub use utils::parse_storage_prefix;
 pub use utils::trim_object_prefix;

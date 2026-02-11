@@ -5112,7 +5112,6 @@ dependencies = [
  "serde",
  "tempfile",
  "tokio",
- "uuid",
  "walkdir",
 ]
 
@@ -6118,6 +6117,8 @@ dependencies = [
  "databend-common-storage",
  "enum-as-inner",
  "log",
+ "num-derive",
+ "num-traits",
  "parquet 56.2.0",
  "rmp-serde",
  "serde",

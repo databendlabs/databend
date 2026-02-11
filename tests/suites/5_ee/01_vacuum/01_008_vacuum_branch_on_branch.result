@@ -1,0 +1,16 @@
+>>>> create or replace database test_vacuum_branch_on_branch
+>>>> create or replace table test_vacuum_branch_on_branch.a(c int) 'fs:///tmp/test_vacuum_branch_on_branch/'
+>>>> insert into test_vacuum_branch_on_branch.a values (1),(2)
+2
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_branch_on_branch.a create branch b1
+>>>> insert into test_vacuum_branch_on_branch.a values (3)
+1
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_branch_on_branch.a/b1 create branch b2
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_branch_on_branch.a/b1 create tag t1
+<<<< expected failure happened
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_branch_on_branch.a/b1 order by c
+1
+2
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_branch_on_branch.a/b2 order by c
+1
+2

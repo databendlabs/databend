@@ -602,8 +602,9 @@ pub struct CreateTableBranchPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 
-    pub ref_name: String,
+    pub branch_name: String,
     pub navigation: Option<NavigationPoint>,
     pub retain: Option<Duration>,
 }
@@ -615,7 +616,7 @@ pub struct CreateTableTagPlan {
     pub database: String,
     pub table: String,
 
-    pub ref_name: String,
+    pub tag_name: String,
     pub navigation: Option<NavigationPoint>,
     pub retain: Option<Duration>,
 }

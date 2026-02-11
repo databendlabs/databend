@@ -174,6 +174,7 @@ use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
 use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::expression::UDFValidator;
 use crate::planner::metadata::optimize_remove_count_args;

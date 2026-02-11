@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod common;
 pub mod handler;
 pub mod vacuum_drop_tables;
 pub mod vacuum_table;
 pub mod vacuum_table_v2;
+pub mod vacuum_table_v2_branch_cleanup;
 pub mod vacuum_temporary_files;
 pub mod virtual_columns;
 pub use handler::RealVacuumHandler;

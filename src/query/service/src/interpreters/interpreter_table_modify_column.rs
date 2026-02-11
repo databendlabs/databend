@@ -337,7 +337,6 @@ impl ModifyTableColumnInterpreter {
                     }
                 }
 
-                // Ignore column comment modify for table branch.
                 if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
                     modify_comment = true;

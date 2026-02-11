@@ -145,7 +145,6 @@ impl Interpreter for DropTableColumnInterpreter {
                 }
             }
         }
-
         if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
             if let ApproxDistinctColumns::Specify(mut cols) =
                 value.parse::<ApproxDistinctColumns>()?

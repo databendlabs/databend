@@ -16,6 +16,8 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::LazyLock;
+
+use databend_common_frozen_api::FrozenAPI;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
@@ -94,10 +96,21 @@ pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy)]
+#[repr(u8)]
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Eq,
+    PartialEq,
+    Copy,
+    num_derive::FromPrimitive,
+    FrozenAPI,
+)]
 pub enum ClusterType {
-    Linear,
-    Hilbert,
+    Linear = 0,
+    Hilbert = 1,
 }
 
 impl Display for ClusterType {
