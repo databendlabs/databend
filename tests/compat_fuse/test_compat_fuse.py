@@ -37,7 +37,23 @@ def load_test_cases(path: Path) -> list[dict]:
             raise ValueError(f"Cannot parse line: {line}")
         body = m.group(1)
         entry = {}
-        for pair in re.split(r",\s*(?=[a-z])", body):
+        # Split on commas followed by a key name, but only outside brackets
+        pairs = []
+        depth = 0
+        current = []
+        for ch in body + ",":
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+            if ch == "," and depth == 0:
+                pairs.append("".join(current).strip())
+                current = []
+            else:
+                current.append(ch)
+        for pair in pairs:
+            if not pair:
+                continue
             k, v = pair.split(":", 1)
             k = k.strip()
             v = v.strip()

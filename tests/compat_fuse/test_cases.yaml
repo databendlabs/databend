@@ -17,8 +17,8 @@
 - { writer: "1.2.680", reader: current, meta: [1.2.680, 1.2.833], suite: udf }
 
 # --- Meta compression compat (with stateless flashback/compaction tests) ---
-- { writer: "1.0.56", reader: current, meta: [1.0.56, 1.2.527, 1.2.677, 1.2.833], suite: 01_meta_compression, stateless: "across_versions.sh 2 4" }
-- { writer: "1.1.30", reader: current, meta: [1.1.30, 1.2.527, 1.2.677, 1.2.833], suite: 02_meta_compression_v3_to_v4, stateless: "across_versions.sh 3 4" }
+- { writer: "1.0.56", reader: current, meta: ["1.0.56", current], suite: 01_meta_compression, stateless: "across_versions.sh 2 4" }
+- { writer: "1.1.30", reader: current, meta: ["1.1.30", current], suite: 02_meta_compression_v3_to_v4, stateless: "across_versions.sh 3 4" }
 
 # --- Forward compat: current writer -> old reader ---
 - { writer: current, reader: "1.2.311", meta: [1.2.770], suite: rbac }
