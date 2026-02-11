@@ -18,6 +18,7 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_api::reply::unpack_txn_reply;
+use databend_common_meta_api::serialize_struct;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -447,7 +448,7 @@ impl RoleApi for RoleMgr {
                     need_transfer = true;
                     let object = own.data.object;
                     let owner_key = self.ownership_object_ident(&object);
-                    let owner_value = databend_common_meta_api::serialize_struct(&OwnershipInfo {
+                    let owner_value = serialize_struct(&OwnershipInfo {
                         object,
                         role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
                     })?;
@@ -490,7 +491,7 @@ impl RoleApi for RoleMgr {
             let grant_object = convert_to_grant_obj(object);
 
             let owner_key = self.ownership_object_ident(object);
-            let owner_value = databend_common_meta_api::serialize_struct(&OwnershipInfo {
+            let owner_value = serialize_struct(&OwnershipInfo {
                 object: object.clone(),
                 role: new_role.to_string(),
             })?;
@@ -510,10 +511,7 @@ impl RoleApi for RoleMgr {
                     );
                     old_role_info.update_role_time();
                     condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                    if_then.push(txn_op_put(
-                        &old_key,
-                        databend_common_meta_api::serialize_struct(&old_role_info)?,
-                    ));
+                    if_then.push(txn_op_put(&old_key, serialize_struct(&old_role_info)?));
                 }
             }
 
@@ -624,10 +622,7 @@ impl RoleApi for RoleMgr {
                         );
                         old_role_info.update_role_time();
                         condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                        if_then.push(txn_op_put(
-                            &old_key,
-                            databend_common_meta_api::serialize_struct(&old_role_info)?,
-                        ));
+                        if_then.push(txn_op_put(&old_key, serialize_struct(&old_role_info)?));
                     }
                 }
             }
