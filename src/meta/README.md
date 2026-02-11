@@ -2,27 +2,15 @@
 
 2026 Feb 01
 
-since v1.2.874, after v1.2.873, meta impl is moved to external repository.
-
+Since v1.2.874, core meta-service implementation is moved to [databend-meta](https://github.com/databendlabs/databend-meta) repository.
 
 Databend Meta is a transactional metadata service.
-
-**Core components** (`core/`):
-- [`core/client`](./core/client/): gRPC client library for communicating with meta service.
-- [`core/raft-store`](./core/raft-store/): Raft state machine and storage layer implementation.
-- [`core/runtime-api`](./core/runtime-api/): Runtime API traits for async operations.
-- [`core/service`](./core/service/): `databend-meta`, the distributed meta service library.
-- [`core/sled-store`](./core/sled-store/): Sled store backend for raft state machine.
-- [`core/store`](./core/store/): MetaStore impl with either a local embedded store or a grpc-client.
-- [`core/test-harness`](./core/test-harness/): Test harness and utilities for meta-service tests.
-- [`core/types`](./core/types/): Rust types for metadata (Node, Endpoint, etc.).
 
 **Application layer**:
 - [`api`](./api/): User-level API interface exposed based on the KVApi implementation.
 - [`app`](./app/): Meta data types used by meta-client applications.
 - [`app-storage`](./app-storage/): Storage-related types split from app.
-- [`app-types`](./app-types/): Basic type definitions split from app.
-- [`kvapi`](./kvapi/): Key-value API interface definitions.
+- [`store`](./store/): MetaStore impl with either a local embedded store or a grpc-client.
 
 **Serialization**:
 - [`protos`](./protos/): Protobuf message definitions for client-server communication.
@@ -46,7 +34,7 @@ Databend Meta is a transactional metadata service.
 - `databend-metaverifier`: Data verification tool.
 
 **Test suites**:
-- [`kvapi-test-suite`](./kvapi-test-suite/): Test suite for KV API implementations.
+- [`kvapi-tests`](./kvapi-tests/): Test suite for KV API implementations.
 - [`schema-api-test-suite`](./schema-api-test-suite/): Test suite for schema API.
 
 **Enterprise**:
