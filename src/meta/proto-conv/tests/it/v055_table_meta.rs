@@ -90,7 +90,6 @@ fn test_decode_v55_table_meta() -> anyhow::Result<()> {
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,

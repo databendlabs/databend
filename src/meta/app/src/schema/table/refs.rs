@@ -18,7 +18,23 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
+
+use databend_meta_types::MatchSeq;
+
+use super::TableMeta;
+use super::TableNameIdent;
 use crate::tenant::Tenant;
+
+/// The option key for storing the base table id in a branch's TableMeta.
+pub const OPT_KEY_BASE_TABLE_ID: &str = "base_table_id";
+
+/// Information about a table branch, returned by get_table_branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchInfo {
+    pub branch_name: String,
+    pub branch_id: u64,
+    pub table_meta: TableMeta,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableBranch {
@@ -121,6 +137,58 @@ impl Display for BranchIdHistoryIdent {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}.'{}'", self.table_id, self.branch_name)
     }
+}
+
+// -- Req types for RefApi --
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTableTagReq {
+    pub table_id: u64,
+    pub seq: MatchSeq,
+    pub tag_name: String,
+    pub snapshot_loc: String,
+    pub expire_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropTableTagReq {
+    pub name_ident: TableNameIdent,
+    pub tag_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetTableTagReq {
+    pub name_ident: TableNameIdent,
+    pub tag_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTableBranchReq {
+    pub tenant: Tenant,
+    pub table_id: u64,
+    pub seq: MatchSeq,
+    pub branch_name: String,
+    pub table_meta: TableMeta,
+    pub expire_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropTableBranchReq {
+    pub name_ident: TableNameIdent,
+    pub branch_name: String,
+    pub catalog_name: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UndropTableBranchReq {
+    pub name_ident: TableNameIdent,
+    pub branch_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetTableBranchReq {
+    pub name_ident: TableNameIdent,
+    pub branch_name: String,
 }
 
 mod kvapi_key_impl {

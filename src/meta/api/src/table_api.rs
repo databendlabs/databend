@@ -1234,11 +1234,7 @@ where
             let tbid = TableId {
                 table_id: req.table_id,
             };
-            // `update_table_meta` MUST NOT modify `shared_by` field
-            let table_meta = table_meta.as_ref().unwrap();
-
-            let mut new_table_meta = req.new_table_meta.clone();
-            new_table_meta.shared_by = table_meta.shared_by.clone();
+            let new_table_meta = req.new_table_meta.clone();
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));

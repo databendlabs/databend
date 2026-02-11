@@ -124,7 +124,8 @@ message TableMeta {
 
   optional string part_prefix = 27;
 
-  repeated uint64 shared_by = 28;
+  // repeated uint64 shared_by = 28;
+  reserved 28;
 
   map<string, string> column_mask_policy = 29;
 
@@ -143,6 +144,7 @@ message TableMeta {
   map<uint32, RowAccessPolicyColumnMap> column_mask_policy_columns_ids = 36;
 
   // The refs store independently.
+  // map<string, SnapshotRef> refs = 37;
   reserved 37;
 
   // The main cluster key id.

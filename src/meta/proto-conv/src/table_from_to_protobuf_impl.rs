@@ -239,7 +239,6 @@ impl FromToProto for mt::TableMeta {
                 .map(mt::TableStatistics::from_pb)
                 .transpose()?
                 .unwrap_or_default(),
-            shared_by: BTreeSet::from_iter(p.shared_by),
             column_mask_policy: if p.column_mask_policy.is_empty() {
                 None
             } else {
@@ -302,7 +301,6 @@ impl FromToProto for mt::TableMeta {
             comment: self.comment.clone(),
             field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
-            shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             row_access_policy: self.row_access_policy.clone(),
             row_access_policy_columns_ids: match &self.row_access_policy_columns_ids {

@@ -179,8 +179,6 @@ pub struct TableMeta {
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
-    // shared by share_id
-    pub shared_by: BTreeSet<u64>,
     // should be discard
     pub column_mask_policy: Option<BTreeMap<String, String>>,
     // ColumnId always equals the first value in SecurityPolicyColumnMap::columns_ids
@@ -400,7 +398,6 @@ impl Default for TableMeta {
             virtual_schema: Default::default(),
             drop_on: None,
             statistics: Default::default(),
-            shared_by: BTreeSet::new(),
             column_mask_policy: None,
             column_mask_policy_columns_ids: BTreeMap::new(),
             row_access_policy: None,
