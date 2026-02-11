@@ -44,30 +44,22 @@ class MockSessionContext:
         self.sql(sql)
 
     def register_csv(self, name, path, pattern=None, connection=None):
-        if connection:
-            pattern_clause = f", pattern => '{pattern}'" if pattern else ""
-            connection_clause = f", connection => '{connection}'"
-            # Infer schema first for CSV
-            infer_conn = f", connection_name => '{connection}'"
-            self.sql(
-                f"SELECT column_name FROM infer_schema(location => '{path}', file_format => 'CSV'{infer_conn})"
-            )
-            # Use column positions from infer_schema (simulated as 3 columns)
-            select_clause = "$1 AS `col1`, $2 AS `col2`, $3 AS `col3`"
-            sql = f"create view {name} as select {select_clause} from '{path}' (file_format => 'csv'{pattern_clause}{connection_clause})"
-        else:
-            p = path
-            if p.startswith("/"):
-                p = f"fs://{p}"
-            pattern_clause = f", pattern => '{pattern}'" if pattern else ""
-            # Infer schema first for CSV
-            self.sql(
-                f"SELECT column_name FROM infer_schema(location => '{p}', file_format => 'CSV')"
-            )
-            # Use column positions from infer_schema (simulated as 3 columns)
-            select_clause = "$1 AS `col1`, $2 AS `col2`, $3 AS `col3`"
-            sql = f"create view {name} as select {select_clause} from '{p}' (file_format => 'csv'{pattern_clause})"
-        self.sql(sql)
+        self._register_delimited(name, path, "csv", pattern, connection)
+
+    def _register_delimited(self, name, path, fmt, pattern=None, connection=None):
+        """CSV/TSV: infer schema first, then create view with column positions."""
+        file_path = path if connection else (f"fs://{path}" if path.startswith("/") else path)
+        conn_infer = f", connection_name => '{connection}'" if connection else ""
+        self.sql(
+            f"SELECT column_name FROM infer_schema(location => '{file_path}', file_format => '{fmt.upper()}'{conn_infer})"
+        )
+        # Simulated: infer_schema returns 3 columns
+        select = "$1 AS `col1`, $2 AS `col2`, $3 AS `col3`"
+        pattern_clause = f", pattern => '{pattern}'" if pattern else ""
+        conn_clause = f", connection => '{connection}'" if connection else ""
+        self.sql(
+            f"create view {name} as select {select} from '{file_path}' (file_format => '{fmt}'{pattern_clause}{conn_clause})"
+        )
 
     def create_azblob_connection(self, name, endpoint_url, account_name, account_key):
         sql = f"CREATE OR REPLACE CONNECTION {name} STORAGE_TYPE = 'AZBLOB' endpoint_url = '{endpoint_url}' account_name = '{account_name}' account_key = '{account_key}'"
