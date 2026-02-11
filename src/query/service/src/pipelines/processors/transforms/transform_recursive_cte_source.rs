@@ -144,7 +144,7 @@ impl TransformRecursiveCteSource {
         if ctx.get_settings().get_max_cte_recursive_depth()? < recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
-        #[cfg(test)]
+        #[cfg(debug_assertions)]
         crate::test_kits::rcte_hooks::maybe_pause_before_step(&ctx.get_id(), recursive_step).await;
         let mut cte_scan_tables = vec![];
         let plan = if recursive_step == 0 {

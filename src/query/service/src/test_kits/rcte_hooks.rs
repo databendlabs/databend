@@ -105,10 +105,21 @@ impl PauseGate {
 
     pub async fn wait_arrived_at_least(&self, n: usize) {
         loop {
+            let notified = self.arrived_notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
             if self.arrived() >= n {
                 return;
             }
-            self.arrived_notify.notified().await;
+
+            // Re-check after registration to avoid missing a notify between
+            // condition check and awaiting.
+            if self.arrived() >= n {
+                return;
+            }
+
+            notified.await;
         }
     }
 
@@ -133,11 +144,23 @@ impl PauseGate {
         self.arrived_notify.notify_waiters();
 
         loop {
+            let notified = self.released_notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+
             let released = self.released.load(Ordering::Acquire);
             if released >= hit_no {
                 return;
             }
-            self.released_notify.notified().await;
+
+            // Re-check after registration to avoid missing a notify between
+            // condition check and awaiting.
+            let released = self.released.load(Ordering::Acquire);
+            if released >= hit_no {
+                return;
+            }
+
+            notified.await;
         }
     }
 }
