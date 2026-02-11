@@ -107,6 +107,14 @@ runs:
         strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
         pushd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }} && objcopy --add-gnu-debuglink databend-query.debug databend-query && popd
 
+    - name: Upload databend-query.debug (GitHub Artifact)
+      # Keep debug symbols in GitHub Artifacts for quick retrieval.
+      if: inputs.upload == 'true' && inputs.trim_debug == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: databend-query-debug-${{ inputs.target }}-${{ inputs.sha }}
+        path: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
+
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'
     #   uses: crazy-max/ghaction-upx@v2
