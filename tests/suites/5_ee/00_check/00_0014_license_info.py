@@ -49,7 +49,7 @@ if __name__ == "__main__":
         issue_at = license[0][3]
         expire_at = license[0][4]
         features = license[0][6]
-        now = datetime.utcnow()
+        now = datetime.now()
 
         if now < issue_at or now > expire_at:
             print(

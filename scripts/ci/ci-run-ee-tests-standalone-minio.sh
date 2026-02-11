@@ -19,7 +19,7 @@ export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 export STORAGE_ALLOW_INSECURE=true
 
 echo "Install dependence"
-python3 -m pip install --quiet mysql-connector-python
+PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --quiet mysql-connector-python
 
 echo "calling test suite"
 echo "Starting standalone DatabendQuery(debug)"
