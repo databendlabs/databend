@@ -146,7 +146,10 @@ impl FlightClient {
         );
 
         let mut response_stream = response.into_inner();
-        debug!("[{}]FlightClient::wait first response message: path={:?}", &uuid, &path);
+        debug!(
+            "[{}]FlightClient::wait first response message: path={:?}",
+            &uuid, &path
+        );
         match response_stream.message().await.map_err(|status| {
             error!(
                 "[{}]FlightClient::receive response failed: path={:?}, elapsed_ms={}, status={}",
