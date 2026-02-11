@@ -5684,6 +5684,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<(String, BTreeMap<String, String>)> {
         let Some(_) = &GlobalConfig::instance()
             .query
+            .common
             .cloud_control_grpc_server_address
         else {
             return Err(ErrorCode::Unimplemented(
@@ -5902,7 +5903,7 @@ impl<'a> TypeChecker<'a> {
 
         let language = language.parse()?;
         let use_cloud = matches!(language, UDFLanguage::Python)
-            && GlobalConfig::instance().query.enable_udf_sandbox;
+            && GlobalConfig::instance().query.common.enable_udf_sandbox;
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed(&language)?;
         } else {

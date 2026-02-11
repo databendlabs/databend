@@ -860,16 +860,17 @@ impl Binder {
 
             // we should persist the storage format and compression type instead of using the default value in fuse table
             if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
-                let default_storage_format = match config.query.default_storage_format.as_str() {
-                    "" | "auto" => {
-                        if is_blocking_fs {
-                            "native"
-                        } else {
-                            "parquet"
+                let default_storage_format =
+                    match config.query.common.default_storage_format.as_str() {
+                        "" | "auto" => {
+                            if is_blocking_fs {
+                                "native"
+                            } else {
+                                "parquet"
+                            }
                         }
-                    }
-                    _ => config.query.default_storage_format.as_str(),
-                };
+                        _ => config.query.common.default_storage_format.as_str(),
+                    };
                 options.insert(
                     OPT_KEY_STORAGE_FORMAT.to_owned(),
                     default_storage_format.to_owned(),
@@ -877,7 +878,7 @@ impl Binder {
             }
 
             if !options.contains_key(OPT_KEY_TABLE_COMPRESSION) {
-                let default_compression = match config.query.default_compression.as_str() {
+                let default_compression = match config.query.common.default_compression.as_str() {
                     "" | "auto" => {
                         if is_blocking_fs {
                             "lz4"
@@ -885,7 +886,7 @@ impl Binder {
                             "zstd"
                         }
                     }
-                    _ => config.query.default_compression.as_str(),
+                    _ => config.query.common.default_compression.as_str(),
                 };
                 options.insert(
                     OPT_KEY_TABLE_COMPRESSION.to_owned(),
