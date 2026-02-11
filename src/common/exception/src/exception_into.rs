@@ -392,7 +392,10 @@ impl From<tonic::Status> for ErrorCode {
                     .set_span(serialized_error.span),
                 }
             }
-            _ => ErrorCode::Unimplemented(status.to_string()),
+            _ => {
+                let debug = format!("{:?}", status);
+                ErrorCode::Unimplemented(debug)
+            }
         }
     }
 }

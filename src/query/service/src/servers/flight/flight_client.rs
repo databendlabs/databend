@@ -14,6 +14,7 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use arrow_flight::Action;
 use arrow_flight::FlightData;
@@ -115,16 +116,55 @@ impl FlightClient {
             AsciiMetadataKey::from_str("secret").unwrap(),
             AsciiMetadataValue::from_str(&secret).unwrap(),
         );
+        request.metadata_mut().insert(
+            AsciiMetadataKey::from_str("x-request-id").unwrap(),
+            AsciiMetadataValue::from_str(&uuid).unwrap(),
+        );
 
-        let response = self.inner.do_action(request).await?;
+        let start = Instant::now();
+        debug!(
+            "[{}]FlightClient::do_action rpc start: path={:?}, timeout={}s",
+            &uuid, &path, timeout
+        );
 
-        match response.into_inner().message().await? {
+        let response = self.inner.do_action(request).await.map_err(|status| {
+            error!(
+                "[{}]FlightClient::do_action rpc failed: path={:?}, elapsed_ms={}, status={}",
+                &uuid,
+                &path,
+                start.elapsed().as_millis(),
+                status
+            );
+            ErrorCode::from(status)
+        })?;
+
+        debug!(
+            "[{}]FlightClient::do_action rpc headers received: path={:?}, elapsed_ms={}",
+            &uuid,
+            &path,
+            start.elapsed().as_millis()
+        );
+
+        let mut response_stream = response.into_inner();
+        debug!("[{}]FlightClient::wait first response message: path={:?}", &uuid, &path);
+        match response_stream.message().await.map_err(|status| {
+            error!(
+                "[{}]FlightClient::receive response failed: path={:?}, elapsed_ms={}, status={}",
+                &uuid,
+                &path,
+                start.elapsed().as_millis(),
+                status
+            );
+            ErrorCode::from(status)
+        })? {
             Some(response) => {
                 let response_type = std::any::type_name::<Res>();
                 let response_len = response.body.len();
                 debug!(
-                    "[{}]FlightClient::receive response: path={:?}",
-                    &uuid, &path
+                    "[{}]FlightClient::receive response: path={:?}, elapsed_ms={}",
+                    &uuid,
+                    &path,
+                    start.elapsed().as_millis()
                 );
                 let after_deserd = match catch_unwind(
                     || -> std::result::Result<Res, serde_json::Error> {

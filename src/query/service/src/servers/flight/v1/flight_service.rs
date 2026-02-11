@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use std::time::Instant;
 
 use arrow_flight::Action;
 use arrow_flight::ActionType;
@@ -167,7 +168,17 @@ impl FlightService for DatabendQueryFlightService {
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
         let uuid = uuid::Uuid::new_v4().to_string();
-        debug!("[{}]FlightService::do_action", &uuid);
+        let request_id = request
+            .metadata()
+            .get("x-request-id")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown")
+            .to_string();
+        let start = Instant::now();
+        debug!(
+            "[{}]FlightService::do_action: request_id={}",
+            &uuid, &request_id
+        );
         let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
         let secret = request.get_metadata("secret")?;
@@ -189,18 +200,27 @@ impl FlightService for DatabendQueryFlightService {
         {
             Err(cause) => {
                 error!(
-                    "[{}]flight do_action failed, node: {}, action: {}, body_len: {}, code: {}, error: {:?}",
+                    "[{}]flight do_action failed, request_id: {}, node: {}, action: {}, body_len: {}, elapsed_ms: {}, code: {}, error: {:?}",
                     uuid,
+                    request_id,
                     config.query.node_id,
                     action.r#type,
                     action.body.len(),
+                    start.elapsed().as_millis(),
                     cause.code(),
                     cause
                 );
                 Err(cause.into())
             }
             Ok(body) => {
-                debug!("[{}]FlightService: finish", &uuid);
+                debug!(
+                    "[{}]FlightService: finish, request_id: {}, action: {}, body_len: {}, elapsed_ms={}",
+                    &uuid,
+                    &request_id,
+                    action.r#type,
+                    body.len(),
+                    start.elapsed().as_millis()
+                );
                 Ok(RawResponse::new(
                     Box::pin(tokio_stream::once(Ok(FlightResult { body: body.into() })))
                         as FlightStream<FlightResult>,
