@@ -790,7 +790,7 @@ impl Default for DiskCacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            meta_service_ownership_cache: false,
+            meta_service_ownership_cache: true,
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
