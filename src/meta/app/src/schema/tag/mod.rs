@@ -101,6 +101,8 @@ pub enum TaggableObject {
     Table { table_id: u64 },
     Stage { name: String },
     Connection { name: String },
+    UDF { name: String },
+    Procedure { name: String, args: String },
 }
 
 impl std::fmt::Display for TaggableObject {
@@ -110,6 +112,10 @@ impl std::fmt::Display for TaggableObject {
             TaggableObject::Table { table_id } => write!(f, "table(id={})", table_id),
             TaggableObject::Stage { name } => write!(f, "stage({})", name),
             TaggableObject::Connection { name } => write!(f, "connection({})", name),
+            TaggableObject::UDF { name } => write!(f, "udf({})", name),
+            TaggableObject::Procedure { name, args } => {
+                write!(f, "procedure({}({}))", name, args)
+            }
         }
     }
 }
@@ -121,6 +127,8 @@ impl TaggableObject {
             TaggableObject::Table { .. } => "table",
             TaggableObject::Stage { .. } => "stage",
             TaggableObject::Connection { .. } => "connection",
+            TaggableObject::UDF { .. } => "udf",
+            TaggableObject::Procedure { .. } => "procedure",
         }
     }
 
@@ -131,6 +139,8 @@ impl TaggableObject {
             TaggableObject::Table { table_id } => b.push_u64(*table_id),
             TaggableObject::Stage { name } => b.push_str(name),
             TaggableObject::Connection { name } => b.push_str(name),
+            TaggableObject::UDF { name } => b.push_str(name),
+            TaggableObject::Procedure { name, args } => b.push_str(name).push_str(args),
         }
     }
 
@@ -149,9 +159,16 @@ impl TaggableObject {
             "connection" => Ok(TaggableObject::Connection {
                 name: parser.next_str()?,
             }),
+            "udf" => Ok(TaggableObject::UDF {
+                name: parser.next_str()?,
+            }),
+            "procedure" => Ok(TaggableObject::Procedure {
+                name: parser.next_str()?,
+                args: parser.next_str()?,
+            }),
             _ => Err(KeyError::InvalidSegment {
                 i: parser.index(),
-                expect: "database|table|stage|connection".to_string(),
+                expect: "database|table|stage|connection|udf|procedure".to_string(),
                 got: type_str.to_string(),
             }),
         }

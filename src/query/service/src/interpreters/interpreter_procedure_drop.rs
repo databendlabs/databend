@@ -19,12 +19,14 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::DropProcedureReq;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropProcedurePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -64,7 +66,7 @@ impl Interpreter for DropProcedureInterpreter {
             .procedure_api(&tenant)
             .drop_procedure(&drop_procedure_req.name_ident)
             .await?;
-        match dropped {
+        let dropped_name_ident = match dropped {
             Some(d) => {
                 let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
                 let owner_object = OwnershipObject::Procedure {
@@ -72,6 +74,7 @@ impl Interpreter for DropProcedureInterpreter {
                 };
                 role_api.revoke_ownership(&owner_object).await?;
                 RoleCacheManager::instance().invalidate_cache(&tenant);
+                Some(drop_procedure_req.name_ident.clone())
             }
             None => {
                 if !self.plan.if_exists {
@@ -89,8 +92,20 @@ impl Interpreter for DropProcedureInterpreter {
                             drop_procedure_req.name_ident.procedure_name()
                         )));
                     }
+                    Some(old_drop_procedure_req.name_ident)
+                } else {
+                    None
                 }
             }
+        };
+
+        if let Some(name_ident) = dropped_name_ident {
+            let proc_identity = name_ident.procedure_name();
+            cleanup_object_tags(&tenant, TaggableObject::Procedure {
+                name: proc_identity.name.clone(),
+                args: proc_identity.args.clone(),
+            })
+            .await?;
         }
 
         Ok(PipelineBuildResult::create())
