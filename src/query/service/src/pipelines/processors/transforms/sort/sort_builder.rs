@@ -25,7 +25,6 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::sorts::Base;
 use databend_common_pipeline_transforms::sorts::BoundedMultiSortMergeProcessor;
 use databend_common_pipeline_transforms::sorts::BroadcastChannel;
@@ -46,7 +45,7 @@ use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
 use databend_common_pipeline_transforms::sorts::utils::ORDER_COL_NAME;
 use databend_common_pipeline_transforms::sorts::utils::add_order_field;
-use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_common_pipeline_transforms::traits::SortSpiller;
 
 use super::*;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
@@ -68,13 +67,12 @@ enum SortType {
     BoundedMergeSort(Vec<Arc<InputPort>>),
 }
 
-pub struct TransformSortBuilder<S: DataBlockSpill> {
+pub struct TransformSortBuilder<S: SortSpiller> {
     schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Arc<[SortColumnDescription]>,
     order_col_generated: bool,
     output_order_col: bool,
-    memory_settings: MemorySettings,
     spiller: Option<S>,
     enable_loser_tree: bool,
     limit: Option<usize>,
@@ -82,7 +80,7 @@ pub struct TransformSortBuilder<S: DataBlockSpill> {
     enable_restore_prefetch: bool,
 }
 
-impl<S: DataBlockSpill> TransformSortBuilder<S> {
+impl<S: SortSpiller> TransformSortBuilder<S> {
     pub fn new(
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
@@ -98,7 +96,6 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
             output_order_col: false,
             enable_loser_tree: false,
             limit: None,
-            memory_settings: MemorySettings::builder().build(),
             enable_fixed_rows,
             enable_restore_prefetch: false,
         }
@@ -117,11 +114,6 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
 
     pub fn with_limit(mut self, limit: Option<usize>) -> Self {
         self.limit = limit;
-        self
-    }
-
-    pub fn with_memory_settings(mut self, memory_settings: MemorySettings) -> Self {
-        self.memory_settings = memory_settings;
         self
     }
 
@@ -301,13 +293,13 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
     }
 }
 
-struct Build<'a, S: DataBlockSpill> {
+struct Build<'a, S: SortSpiller> {
     params: &'a TransformSortBuilder<S>,
     typ: Option<SortType>,
     output: Arc<OutputPort>,
 }
 
-impl<S: DataBlockSpill> Build<'_, S> {
+impl<S: SortSpiller> Build<'_, S> {
     fn build_sort<A, C>(
         &mut self,
         sort_limit: bool,
@@ -333,7 +325,6 @@ impl<S: DataBlockSpill> Build<'_, S> {
             self.params.output_order_col,
             self.params.order_col_generated,
             self.params.enable_restore_prefetch,
-            self.params.memory_settings.clone(),
         )?))
     }
 
@@ -357,7 +348,6 @@ impl<S: DataBlockSpill> Build<'_, S> {
             sort_limit,
             self.params.order_col_generated,
             self.params.enable_restore_prefetch,
-            self.params.memory_settings.clone(),
         )?))
     }
 
@@ -368,7 +358,6 @@ impl<S: DataBlockSpill> Build<'_, S> {
             self.output.clone(),
             self.params.new_base(),
             self.params.output_order_col,
-            self.params.memory_settings.clone(),
         )?))
     }
 
@@ -404,7 +393,7 @@ impl<S: DataBlockSpill> Build<'_, S> {
     }
 }
 
-impl<S: DataBlockSpill> RowsTypeVisitor for Build<'_, S> {
+impl<S: SortSpiller> RowsTypeVisitor for Build<'_, S> {
     type Result = Result<Box<dyn Processor>>;
     fn schema(&self) -> DataSchemaRef {
         self.params.schema.clone()

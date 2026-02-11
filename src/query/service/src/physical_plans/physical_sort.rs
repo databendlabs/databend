@@ -50,10 +50,10 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
-use crate::spillers::SortSpiller;
+use crate::spillers::SortSpillerImpl;
 
 type TransformSortBuilder =
-    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpiller>;
+    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpillerImpl>;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sort {

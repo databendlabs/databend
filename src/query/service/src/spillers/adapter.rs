@@ -28,7 +28,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_common_pipeline_transforms::traits::SortSpiller;
 use databend_common_storages_parquet::ReadSettings;
 use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempPath;
@@ -44,6 +46,7 @@ use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::row_group_encoder::*;
 use super::serialize::*;
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]
@@ -592,6 +595,7 @@ impl SpillAdapter for Arc<QueryContext> {
 pub struct SortAdapter {
     ctx: Arc<QueryContext>,
     local_files: Arc<RwLock<HashMap<TempPath, Layout>>>,
+    memory_settings: MemorySettings,
 }
 
 impl SpillAdapter for SortAdapter {
@@ -622,23 +626,32 @@ impl SpillAdapter for SortAdapter {
 }
 
 #[derive(Clone)]
-pub struct SortSpiller(Arc<SpillerInner<SortAdapter>>);
+pub struct SortSpillerImpl(Arc<SpillerInner<SortAdapter>>);
 
 #[async_trait::async_trait]
-impl DataBlockSpill for SortSpiller {
-    async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
-        self.0.spill(data_block).await
+impl SortSpiller for SortSpillerImpl {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+        self.0.spill(vec![data_block]).await
     }
 
     async fn restore(&self, location: &Location) -> Result<DataBlock> {
         self.0.read_spilled_file(location).await
     }
+
+    fn remove_local_file(&self, local: &TempPath) {
+        SortSpillerImpl::remove_local_file(self, local);
+    }
+
+    fn memory_settings(&self) -> &MemorySettings {
+        &self.0.adapter.memory_settings
+    }
 }
 
-impl SortSpiller {
+impl SortSpillerImpl {
     pub fn new(ctx: Arc<QueryContext>, operator: Operator, config: SpillerConfig) -> Result<Self> {
-        Ok(SortSpiller(Arc::new(SpillerInner::new(
+        Ok(SortSpillerImpl(Arc::new(SpillerInner::new(
             SortAdapter {
+                memory_settings: MemorySettings::from_sort_settings(&ctx)?,
                 ctx,
                 local_files: Default::default(),
             },
@@ -647,7 +660,6 @@ impl SortSpiller {
         )?)))
     }
 
-    // todo: We need to drop [TempPath] earlier
     pub fn remove_local_file(&self, local: &TempPath) -> Option<Layout> {
         self.0.adapter.local_files.write().unwrap().remove(local)
     }

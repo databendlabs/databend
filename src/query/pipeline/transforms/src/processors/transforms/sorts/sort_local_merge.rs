@@ -41,8 +41,7 @@ use super::core::RowConverter;
 use super::core::Rows;
 use super::core::algorithm::SortAlgorithm;
 use super::create_memory_merger;
-use crate::MemorySettings;
-use crate::traits::DataBlockSpill;
+use crate::traits::SortSpiller;
 
 #[derive(Debug)]
 enum State {
@@ -55,14 +54,14 @@ enum State {
 }
 
 #[allow(clippy::large_enum_variant)]
-enum Inner<A: SortAlgorithm, S: DataBlockSpill> {
+enum Inner<A: SortAlgorithm, S: SortSpiller> {
     Collect(Vec<DataBlock>),
     Limit(TransformSortMergeLimit<A::Rows>),
     Memory(MemoryMerger<A>),
     Spill(Vec<DataBlock>, SortSpill<A, S>),
 }
 
-pub struct TransformSort<A: SortAlgorithm, C, S: DataBlockSpill> {
+pub struct TransformSort<A: SortAlgorithm, C, S: SortSpiller> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -87,14 +86,13 @@ pub struct TransformSort<A: SortAlgorithm, C, S: DataBlockSpill> {
 
     max_block_size: usize,
     enable_restore_prefetch: bool,
-    memory_settings: MemorySettings,
 }
 
 impl<A, C, S> TransformSort<A, C, S>
 where
     A: SortAlgorithm,
     C: RowConverter<A::Rows>,
-    S: DataBlockSpill,
+    S: SortSpiller,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -108,7 +106,6 @@ where
         output_order_col: bool,
         order_col_generated: bool,
         enable_restore_prefetch: bool,
-        memory_settings: MemorySettings,
     ) -> Result<Self> {
         assert!(max_block_size > 0);
         let sort_row_offset = schema.fields().len() - 1;
@@ -142,7 +139,6 @@ where
             max_block_size,
             aborting: AtomicBool::new(false),
             enable_restore_prefetch,
-            memory_settings,
         })
     }
 
@@ -198,7 +194,7 @@ where
         SortSpillParams::determine(
             bytes,
             rows,
-            ByteSize(self.memory_settings.spill_unit_size as _),
+            ByteSize(self.base.spiller.memory_settings().spill_unit_size as _),
             self.max_block_size,
             self.enable_restore_prefetch,
         )
@@ -276,32 +272,25 @@ where
         self.output.push_data(Ok(block));
     }
 
-    fn input_rows(&self) -> (usize, usize) {
-        match &self.inner {
-            Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
-                (input_data.len(), input_data.in_memory_rows())
-            }
-            _ => (0, 0),
-        }
-    }
-
     fn check_spill(&self) -> bool {
+        let memory_settings = self.base.spiller.memory_settings();
         match &self.inner {
             Inner::Limit(limit_sort) => {
-                self.memory_settings.check_spill()
+                memory_settings.check_spill()
                     && limit_sort.num_bytes()
-                        >= ByteSize(self.memory_settings.spill_unit_size as _) * 2_u64
+                        >= ByteSize(memory_settings.spill_unit_size as _) * 2_u64
             }
             Inner::Collect(input_data) => {
-                self.memory_settings.check_spill()
+                memory_settings.check_spill()
                     && input_data.iter().map(|b| b.memory_size()).sum::<usize>()
-                        >= self.memory_settings.spill_unit_size * 2
+                        >= memory_settings.spill_unit_size * 2
             }
             Inner::Spill(input_data, sort_spill) => {
-                let rows = input_data.in_memory_rows();
                 let params = sort_spill.params();
-                self.memory_settings.check_spill() && rows >= params.batch_rows * 2
-                    || input_data.in_memory_rows() >= params.max_rows()
+                input_data.in_memory_rows() >= params.batch_rows * 2 && {
+                    let remain = memory_settings.check_spill_remain().unwrap();
+                    remain < memory_settings.spill_unit_size as isize * 2
+                }
             }
             _ => unreachable!(),
         }
@@ -314,7 +303,7 @@ where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
     C: RowConverter<A::Rows> + Send + 'static,
-    S: DataBlockSpill,
+    S: SortSpiller,
 {
     fn name(&self) -> String {
         self.name.to_string()
@@ -428,12 +417,12 @@ where
                 let finished = self.input.is_finished();
                 self.trans_to_spill()?;
 
-                let (incoming_block, incoming) = self.input_rows();
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
                     unreachable!()
                 };
-
+                let incoming = input_data.in_memory_rows();
                 if incoming > 0 {
+                    let incoming_block = input_data.len();
                     let total_rows = spill_sort.collect_total_rows();
                     log::debug!(incoming_block, incoming_rows = incoming, total_rows, finished; "sort_input_data");
                     spill_sort
@@ -450,8 +439,9 @@ where
                     unreachable!()
                 };
                 assert!(input_data.is_empty());
-                let OutputData { block, finish, .. } =
-                    spill_sort.on_restore(&self.memory_settings).await?;
+                let OutputData { block, finish, .. } = spill_sort
+                    .on_restore(self.base.spiller.memory_settings())
+                    .await?;
                 self.output_data.extend(block);
                 if finish {
                     self.state = State::Finish

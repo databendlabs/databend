@@ -25,7 +25,6 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
@@ -35,15 +34,14 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
-use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
-use crate::spillers::SortSpiller;
+use crate::spillers::SortSpillerImpl;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
 type TransformSortBuilder =
-    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpiller>;
+    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpillerImpl>;
 
 pub struct SortPipelineBuilder {
     ctx: Arc<QueryContext>,
@@ -121,7 +119,6 @@ impl SortPipelineBuilder {
             !order_col_generated || !output_order_col
         );
 
-        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let sort_merge_output_schema = match output_order_col {
             true => add_order_field(
                 self.output_schema.clone(),
@@ -151,7 +148,7 @@ impl SortPipelineBuilder {
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
-            SortSpiller::new(self.ctx.clone(), op, config)?
+            SortSpillerImpl::new(self.ctx.clone(), op, config)?
         };
 
         pipeline.add_transform(|input, output| {
@@ -164,7 +161,6 @@ impl SortPipelineBuilder {
             .with_spiller(spiller.clone())
             .with_limit(self.limit)
             .with_order_column(order_col_generated, output_order_col)
-            .with_memory_settings(memory_settings.clone())
             .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
             .with_enable_loser_tree(enable_loser_tree);
 
@@ -238,10 +234,9 @@ impl SortPipelineBuilder {
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
-            SortSpiller::new(self.ctx.clone(), op, config)?
+            SortSpillerImpl::new(self.ctx.clone(), op, config)?
         };
 
-        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
         let builder = TransformSortBuilder::new(
@@ -253,7 +248,6 @@ impl SortPipelineBuilder {
         .with_spiller(spiller)
         .with_limit(self.limit)
         .with_order_column(false, true)
-        .with_memory_settings(memory_settings)
         .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
         .with_enable_loser_tree(enable_loser_tree);
 

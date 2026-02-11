@@ -16,6 +16,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_storages_common_cache::TempPath;
 
+use crate::MemorySettings;
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Location {
     Remote(String),
@@ -30,6 +32,14 @@ impl Location {
     pub fn is_remote(&self) -> bool {
         matches!(self, Location::Remote(_))
     }
+}
+
+#[async_trait::async_trait]
+pub trait SortSpiller: Clone + Send + Sync + 'static {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location>;
+    async fn restore(&self, location: &Location) -> Result<DataBlock>;
+    fn remove_local_file(&self, local: &TempPath);
+    fn memory_settings(&self) -> &MemorySettings;
 }
 
 #[async_trait::async_trait]
