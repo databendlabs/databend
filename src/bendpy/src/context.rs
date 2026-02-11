@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_version::BUILD_INFO;
 use databend_query::sessions::BuildInfoRef;
@@ -171,39 +173,104 @@ impl PySessionContext {
         connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        let sql = if let Some(connection_name) = connection {
-            let pattern_clause = pattern
-                .map(|p| format!(", pattern => '{}'", p))
-                .unwrap_or_default();
-            format!(
-                "create view {} as select * from '{}' (file_format => '{}'{}, connection => '{}')",
-                name, path, file_format, pattern_clause, connection_name
+        // Resolve file path
+        let (file_path, connection_clause) = if let Some(connection_name) = connection {
+            (
+                path.to_owned(),
+                format!(", connection => '{}'", connection_name),
             )
         } else {
-            let mut path = path.to_owned();
-            if path.starts_with('/') {
-                path = format!("fs://{}", path);
+            let mut p = path.to_owned();
+            if p.starts_with('/') {
+                p = format!("fs://{}", p);
             }
-
-            if !path.contains("://") {
-                path = format!(
+            if !p.contains("://") {
+                p = format!(
                     "fs://{}/{}",
                     std::env::current_dir().unwrap().to_str().unwrap(),
-                    path.as_str()
+                    p.as_str()
                 );
             }
-
-            let pattern_clause = pattern
-                .map(|p| format!(", pattern => '{}'", p))
-                .unwrap_or_default();
-            format!(
-                "create view {} as select * from '{}' (file_format => '{}'{})",
-                name, path, file_format, pattern_clause
-            )
+            (p, String::new())
         };
+
+        let pattern_clause = pattern
+            .map(|p| format!(", pattern => '{}'", p))
+            .unwrap_or_default();
+
+        // For CSV/TSV, use infer_schema to get column positions instead of SELECT *
+        let select_clause = if file_format == "csv" || file_format == "tsv" {
+            let col_names =
+                self.infer_column_names(&file_path, file_format, connection, py)?;
+            if col_names.is_empty() {
+                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    "Could not infer schema from CSV/TSV file: no columns found",
+                ));
+            }
+            col_names
+                .iter()
+                .enumerate()
+                .map(|(i, col_name)| format!("${} AS `{}`", i + 1, col_name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        } else {
+            "*".to_string()
+        };
+
+        let sql = format!(
+            "create view {} as select {} from '{}' (file_format => '{}'{}{})",
+            name, select_clause, file_path, file_format, pattern_clause, connection_clause
+        );
 
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
+    }
+
+    fn infer_column_names(
+        &mut self,
+        file_path: &str,
+        file_format: &str,
+        connection: Option<&str>,
+        py: Python,
+    ) -> PyResult<Vec<String>> {
+        let connection_clause = connection
+            .map(|c| format!(", connection_name => '{}'", c))
+            .unwrap_or_default();
+
+        let infer_sql = format!(
+            "SELECT column_name FROM infer_schema(location => '{}', file_format => '{}'{})",
+            file_path,
+            file_format.to_uppercase(),
+            connection_clause
+        );
+
+        let df = self.sql(&infer_sql, py)?;
+        let blocks = df.collect(py)?;
+
+        let mut col_names = Vec::new();
+        for block in &blocks.blocks {
+            if block.num_rows() == 0 {
+                continue;
+            }
+            let entry = block.get_by_offset(0);
+            match entry {
+                BlockEntry::Column(Column::String(col)) => {
+                    for val in col.iter() {
+                        col_names.push(val.to_string());
+                    }
+                }
+                BlockEntry::Column(Column::Nullable(nullable_col)) => {
+                    if let Column::String(col) = &nullable_col.column {
+                        for val in col.iter() {
+                            col_names.push(val.to_string());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(col_names)
     }
 
     #[pyo3(signature = (name, access_key_id, secret_access_key, endpoint_url = None, region = None))]
