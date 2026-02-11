@@ -64,6 +64,7 @@ mod row_access_policy_api;
 mod row_access_policy_api_impl;
 mod sequence_api_impl;
 pub(crate) mod sequence_nextval_impl;
+mod ref_api;
 
 pub use auto_increment_api::AutoIncrementApi;
 pub use auto_increment_api_test_suite::AutoIncrementApiTestSuite;

@@ -142,25 +142,11 @@ message TableMeta {
   optional RowAccessPolicyColumnMap row_access_policy_columns_ids = 35;
   map<uint32, RowAccessPolicyColumnMap> column_mask_policy_columns_ids = 36;
 
-  map<string, SnapshotRef> refs = 37;
+  // The refs store independently.
+  reserved 37;
 
   // The main cluster key id.
   optional uint32 cluster_key_id = 38;
-}
-
-message SnapshotRef {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  enum RefType {
-    Branch = 0;
-    Tag = 1;
-  }
-
-  uint64 id = 1;
-  optional string expire_at = 2;
-  RefType typ = 3;
-  string loc = 4;
 }
 
 message RowAccessPolicyColumnMap {
