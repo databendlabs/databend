@@ -717,20 +717,27 @@ impl TableContext for CtxDelegation {
     async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
         todo!()
     }
-    async fn get_table(
+    async fn get_table_with_branch(
         &self,
         _catalog: &str,
         _database: &str,
         _table: &str,
+        _branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
 
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+    fn evict_table_from_cache(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<String>,
+    ) -> Result<()> {
         todo!()
     }
 
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         _catalog: &str,
         _database: &str,
@@ -887,6 +894,7 @@ impl TableContext for CtxDelegation {
         _catalog_name: &str,
         _db_name: &str,
         _tbl_name: &str,
+        _branch: Option<&str>,
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()

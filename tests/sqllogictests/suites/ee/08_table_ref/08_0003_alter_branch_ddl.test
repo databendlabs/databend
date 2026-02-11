@@ -95,7 +95,7 @@ alter table t1/dev modify column c binary;
 statement ok
 ALTER TABLE t1/dev DROP CLUSTER KEY;
 
-query error 1118.*Unclustered table 'test_branch_alter'\.'t1' on branch 'dev'
+query error 1118
 select cluster_key, type from clustering_information('test_branch_alter','t1/dev');
 
 statement ok
@@ -103,25 +103,6 @@ alter table t1/dev modify column c binary;
 
 query error 1081.*Unsupported data type 'Binary NULL' for cluster by expression `c`
 ALTER TABLE t1/dev CLUSTER BY(c);
-
-## Tag references remain read-only for ALTER
-statement ok
-ALTER TABLE t1 CREATE TAG tag1;
-
-statement error 3905.*READ ONLY
-ALTER TABLE t1/tag1 ADD COLUMN c INT;
-
-statement error 3905.*READ ONLY
-ALTER TABLE t1/tag1 DROP COLUMN b;
-
-statement error 3905.*READ ONLY
-ALTER TABLE t1/tag1 RENAME COLUMN b to c;
-
-statement error 3905.*READ ONLY
-ALTER TABLE t1/tag1 CLUSTER BY(b);
-
-statement error 3905.*READ ONLY
-ALTER TABLE t1/tag1 DROP CLUSTER KEY;
 
 statement ok
 DROP DATABASE test_branch_alter

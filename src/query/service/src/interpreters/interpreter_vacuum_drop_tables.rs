@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -32,10 +33,15 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_meta_types::SeqV;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -53,6 +59,72 @@ pub struct VacuumDropTablesInterpreter {
 impl VacuumDropTablesInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: VacuumDropTablePlan) -> Result<Self> {
         Ok(VacuumDropTablesInterpreter { ctx, plan })
+    }
+
+    fn build_branch_vacuum_target(
+        &self,
+        base_fuse_table: &FuseTable,
+        branch_name: &str,
+        branch_id: u64,
+        branch_meta: SeqV<TableMeta>,
+    ) -> Result<Arc<dyn Table>> {
+        let mut branch_table_info = base_fuse_table.get_table_info().clone();
+        branch_table_info.ident = TableIdent::new(branch_id, branch_meta.seq);
+        branch_table_info.meta = branch_meta.data;
+        branch_table_info.desc = format!("{} / '{}'", branch_table_info.desc, branch_name);
+
+        let branch_table = FuseTable::create_without_refresh_table_info(
+            branch_table_info,
+            self.ctx.get_settings().get_s3_storage_class()?,
+        )?;
+
+        let branch_table: Arc<FuseTable> = Arc::from(branch_table);
+        Ok(branch_table)
+    }
+
+    async fn collect_vacuum_drop_targets(
+        &self,
+        catalog: &Arc<dyn Catalog>,
+        base_tables: &[Arc<dyn Table>],
+    ) -> Result<(Vec<Arc<dyn Table>>, HashMap<u64, u64>)> {
+        let mut vacuum_targets = Vec::with_capacity(base_tables.len());
+        let mut target_to_base_table = HashMap::new();
+        let mut seen_target_ids = HashSet::new();
+
+        for table in base_tables {
+            let base_table_id = table.get_id();
+            vacuum_targets.push(table.clone());
+            target_to_base_table.insert(base_table_id, base_table_id);
+            seen_target_ids.insert(base_table_id);
+
+            let Ok(base_fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
+                continue;
+            };
+
+            let table_id = base_fuse_table.get_id();
+            let history_branches = catalog
+                .list_history_table_branches(ListHistoryTableBranchesReq {
+                    table_id,
+                    only_retainable: false,
+                })
+                .await?;
+
+            for branch in history_branches {
+                let branch_table_id = branch.branch_id.table_id;
+                if seen_target_ids.insert(branch_table_id) {
+                    let target = self.build_branch_vacuum_target(
+                        base_fuse_table,
+                        &branch.branch_name,
+                        branch_table_id,
+                        branch.branch_meta,
+                    )?;
+                    vacuum_targets.push(target);
+                }
+                target_to_base_table.insert(branch_table_id, base_table_id);
+            }
+        }
+
+        Ok((vacuum_targets, target_to_base_table))
     }
 
     /// Vacuum metadata of dropped tables and databases.
@@ -234,13 +306,20 @@ impl Interpreter for VacuumDropTablesInterpreter {
         );
 
         let tables_count = tables.len();
+        let (vacuum_targets, target_to_base_table) =
+            self.collect_vacuum_drop_targets(&catalog, &tables).await?;
+        info!(
+            "vacuum drop data targets expanded - base tables: {}, total namespace targets: {}",
+            tables_count,
+            vacuum_targets.len()
+        );
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-        let (files_opt, failed_tables) = handler
+        let (files_opt, failed_namespace_targets) = handler
             .do_vacuum_drop_tables(
                 threads_nums,
-                tables,
+                vacuum_targets,
                 if self.plan.option.dry_run.is_some() {
                     Some(DRY_RUN_LIMIT)
                 } else {
@@ -249,10 +328,19 @@ impl Interpreter for VacuumDropTablesInterpreter {
             )
             .await?;
 
+        let failed_tables = failed_namespace_targets
+            .into_iter()
+            .map(|target_id| {
+                target_to_base_table
+                    .get(&target_id)
+                    .copied()
+                    .unwrap_or(target_id)
+            })
+            .collect::<HashSet<_>>();
+
         let failed_db_ids = failed_tables
             .iter()
-            // Safe unwrap: the map is built from drop_ids
-            .map(|id| *containing_db.get(id).unwrap())
+            .filter_map(|id| containing_db.get(id).copied())
             .collect::<HashSet<_>>();
 
         let mut num_meta_keys_removed = 0;

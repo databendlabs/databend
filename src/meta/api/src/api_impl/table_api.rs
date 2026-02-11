@@ -32,7 +32,6 @@ use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
-use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
@@ -354,7 +353,6 @@ where
                                 table_id_seq: None,
                                 db_id: *seq_db_id.data,
                                 new_table: false,
-                                spec_vec: None,
                                 prev_table_id: None,
                                 orphan_table_name: None,
                             });
@@ -514,7 +512,6 @@ where
                         table_id_seq,
                         db_id: *seq_db_id.data,
                         new_table: dbid_tbname_seq == 0,
-                        spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
                     });
@@ -1211,45 +1208,14 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for ((req, _), (tb_meta_seq, table_meta)) in
-            update_table_metas.iter_mut().zip(tb_meta_vec.iter())
-        {
+        for ((req, _), (tb_meta_seq, _)) in update_table_metas.iter_mut().zip(tb_meta_vec.iter()) {
             let tbid = TableId {
                 table_id: req.table_id,
             };
-            // `update_table_meta` MUST NOT modify `shared_by` field
-            let table_meta = table_meta.as_ref().unwrap();
-
-            let mut new_table_meta = req.new_table_meta.clone();
-            new_table_meta.shared_by = table_meta.shared_by.clone();
+            let new_table_meta = req.new_table_meta.clone();
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
-
-            // Add LVT check if provided
-            if let Some(check) = req.lvt_check.as_ref() {
-                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
-                let res = self.get_pb(&lvt_ident).await?;
-                let (seq, current_lvt) = match res {
-                    Some(v) => (v.seq, Some(v.data)),
-                    None => (0, None),
-                };
-                if let Some(current_lvt) = current_lvt {
-                    if current_lvt.time > check.time {
-                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
-                            TableSnapshotExpired::new(
-                                req.table_id,
-                                format!(
-                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
-                                    check.time, current_lvt.time
-                                ),
-                            ),
-                        )));
-                    }
-                }
-                // no other one has updated LVT since we read it
-                txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
-            }
 
             txn.if_then.push(txn_put_pb(&tbid, &new_table_meta)?);
             txn.else_then.push(TxnOp {

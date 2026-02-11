@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
@@ -28,6 +30,7 @@ use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::TableInfo;
@@ -36,6 +39,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
@@ -46,6 +50,7 @@ use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_meta_kvapi::kvapi::KvApiExt;
 use databend_meta_kvapi::kvapi::ListOptions;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::MatchSeq;
 use databend_meta_types::TxnRequest;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
@@ -57,6 +62,7 @@ use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
 use opendal::raw::OpStat;
 use opendal::raw::RpStat;
+use uuid::Uuid;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
@@ -894,6 +900,86 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> anyho
             .execute_command("select * from db2.t1")
             .await
             .is_err()
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_snapshot_referenced_segments_branch_mode_excludes_table_refs()
+-> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+
+    append_sample_data(1, &fixture).await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let table_obj = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table_obj.as_ref())?;
+    let table_info = fuse_table.get_table_info();
+    let tagged_segments = generate_segments(
+        fuse_table,
+        1,
+        1,
+        false,
+        TestFixture::default_table_meta_timestamps(),
+    )
+    .await?;
+    let tagged_segment = tagged_segments[0].0.clone();
+    let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let mut detached_snapshot_obj =
+        databend_storages_common_table_meta::meta::TableSnapshot::try_from_previous(
+            current_snapshot,
+            Some(table_info.ident.seq),
+            TestFixture::default_table_meta_timestamps(),
+        )?;
+    detached_snapshot_obj.segments = vec![tagged_segment.clone()];
+    let table_prefix = fuse_table
+        .meta_location_generator()
+        .prefix()
+        .trim_start_matches('/')
+        .to_string();
+    let detached_snapshot_dir = format!("{table_prefix}/_custom_refs/");
+    let detached_snapshot_loc =
+        format!("{detached_snapshot_dir}/{}_v4.mpk", Uuid::new_v4().simple());
+    let operator = fuse_table.get_operator_ref();
+    operator.create_dir(&detached_snapshot_dir).await?;
+    operator
+        .write(&detached_snapshot_loc, detached_snapshot_obj.to_bytes()?)
+        .await?;
+
+    let catalog = ctx.get_catalog(table_info.catalog()).await?;
+    catalog
+        .create_table_tag(CreateTableTagReq {
+            table_id: table_info.ident.table_id,
+            seq: MatchSeq::Exact(table_info.ident.seq),
+            tag_name: "detached_tag".to_string(),
+            snapshot_loc: detached_snapshot_loc,
+            expire_at: None,
+            lvt_check: None,
+        })
+        .await?;
+
+    let table_obj = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table_obj.as_ref())?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let base_only = fuse_table
+        .get_snapshot_referenced_segments(ctx.clone(), |_| {}, true)
+        .await?
+        .expect("table has snapshot");
+    let with_table_refs = fuse_table
+        .get_snapshot_referenced_segments(ctx, |_| {}, false)
+        .await?
+        .expect("table has snapshot");
+
+    assert!(!base_only.contains(&tagged_segment));
+    assert!(with_table_refs.contains(&tagged_segment));
+    assert!(with_table_refs.is_superset(&base_only));
+    let refs_only: HashSet<_> = with_table_refs.difference(&base_only).collect();
+    assert!(
+        !refs_only.is_empty(),
+        "expected refs-only segments when include table refs"
     );
     Ok(())
 }

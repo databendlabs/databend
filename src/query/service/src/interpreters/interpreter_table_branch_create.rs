@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_sql::plans::DropTableRefPlan;
+use databend_common_sql::plans::CreateTableBranchPlan;
 use databend_common_storages_fuse::TableContext;
 use databend_enterprise_table_ref_handler::get_table_ref_handler;
 
@@ -25,21 +25,21 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-pub struct DropTableRefInterpreter {
+pub struct CreateTableBranchInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropTableRefPlan,
+    plan: CreateTableBranchPlan,
 }
 
-impl DropTableRefInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTableRefPlan) -> Result<Self> {
-        Ok(DropTableRefInterpreter { ctx, plan })
+impl CreateTableBranchInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTableBranchPlan) -> Result<Self> {
+        Ok(CreateTableBranchInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropTableRefInterpreter {
+impl Interpreter for CreateTableBranchInterpreter {
     fn name(&self) -> &str {
-        "DropTableRefInterpreter"
+        "CreateTableBranchInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -53,7 +53,7 @@ impl Interpreter for DropTableRefInterpreter {
 
         let handler = get_table_ref_handler();
         handler
-            .do_drop_table_ref(self.ctx.clone(), &self.plan)
+            .do_create_table_branch(self.ctx.clone(), &self.plan)
             .await?;
 
         Ok(PipelineBuildResult::create())

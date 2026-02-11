@@ -161,6 +161,7 @@ async fn compact_table(
         &compact_target.catalog,
         &compact_target.database,
         &compact_target.table,
+        None,
     )?;
 
     ctx.clear_table_meta_timestamps_cache();
@@ -226,6 +227,7 @@ async fn compact_table(
                     &compact_target.catalog,
                     &compact_target.database,
                     &compact_target.table,
+                    None,
                 )?;
                 ctx.set_enable_sort_spill(false);
                 let recluster = ReclusterPlan {

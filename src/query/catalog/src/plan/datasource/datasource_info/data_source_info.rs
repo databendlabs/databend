@@ -15,18 +15,18 @@
 use std::sync::Arc;
 
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 
 use crate::catalog::CATALOG_DEFAULT;
 use crate::plan::ParquetTableInfo;
 use crate::plan::ResultScanTableInfo;
 use crate::plan::StageTableInfo;
-use crate::plan::datasource::datasource_info::ExtendedTableInfo;
 use crate::plan::datasource::datasource_info::orc::OrcTableInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum DataSourceInfo {
     // Normal table source, `fuse/system`.
-    TableSource(ExtendedTableInfo),
+    TableSource(TableInfo),
     // Internal/External source, like `s3://` or `azblob://`.
     StageSource(StageTableInfo),
     // stage source with parquet format used for select.
@@ -54,14 +54,14 @@ impl DataSourceInfo {
     /// So we will return default as it's catalog.
     pub fn catalog_name(&self) -> &str {
         match self {
-            DataSourceInfo::TableSource(table_info) => table_info.catalog_name(),
+            DataSourceInfo::TableSource(table_info) => table_info.catalog(),
             _ => CATALOG_DEFAULT,
         }
     }
 
     pub fn desc(&self) -> String {
         match self {
-            DataSourceInfo::TableSource(table_info) => table_info.desc(),
+            DataSourceInfo::TableSource(table_info) => table_info.desc.clone(),
             DataSourceInfo::StageSource(table_info) => table_info.desc(),
             DataSourceInfo::ParquetSource(table_info) => table_info.desc(),
             DataSourceInfo::ResultScanSource(table_info) => table_info.desc(),

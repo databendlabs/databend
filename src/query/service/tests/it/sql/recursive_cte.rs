@@ -219,7 +219,7 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
         let _ = create_table_interpreter.execute(ctx_ddl.clone()).await?;
 
         // Evict in the *query* context so the resumed recursive step re-fetches the table.
-        ctx.evict_table_from_cache(&ctx.get_current_catalog(), &db, &legacy_shared_name)?;
+        ctx.evict_table_from_cache(&ctx.get_current_catalog(), &db, &legacy_shared_name, None)?;
         // Allow the query to continue step=1.
         gate.release(1);
 

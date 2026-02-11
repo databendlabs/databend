@@ -16,7 +16,6 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -203,11 +202,6 @@ impl FromToProto for mt::TableMeta {
             .into_iter()
             .map(|(name, constraint)| Ok((name, mt::Constraint::from_pb(constraint)?)))
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-        let refs = p
-            .refs
-            .into_iter()
-            .map(|(name, snapshot_ref)| Ok((name, mt::SnapshotRef::from_pb(snapshot_ref)?)))
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             engine: p.engine,
@@ -231,7 +225,6 @@ impl FromToProto for mt::TableMeta {
                 .map(FromToProto::from_pb)
                 .transpose()?
                 .unwrap_or_default(),
-            shared_by: BTreeSet::from_iter(p.shared_by),
             column_mask_policy: if p.column_mask_policy.is_empty() {
                 None
             } else {
@@ -250,7 +243,6 @@ impl FromToProto for mt::TableMeta {
             indexes,
             virtual_schema,
             constraints,
-            refs,
         };
         Ok(v)
     }
@@ -265,11 +257,6 @@ impl FromToProto for mt::TableMeta {
             .constraints
             .iter()
             .map(|(name, constraint)| Ok((name.clone(), constraint.to_pb()?)))
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
-        let refs = self
-            .refs
-            .iter()
-            .map(|(name, snapshot_ref)| Ok((name.clone(), snapshot_ref.to_pb()?)))
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         let (cluster_key_id, cluster_key) = self.cluster_key_meta().unzip();
         let p = pb::TableMeta {
@@ -296,7 +283,6 @@ impl FromToProto for mt::TableMeta {
             comment: self.comment.clone(),
             field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
-            shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             row_access_policy: self.row_access_policy.clone(),
             row_access_policy_columns_ids: self.row_access_policy_columns_ids.to_pb_opt()?,
@@ -308,7 +294,6 @@ impl FromToProto for mt::TableMeta {
             indexes,
             virtual_schema: self.virtual_schema.to_pb_opt()?,
             constraints,
-            refs,
         };
         Ok(p)
     }
@@ -471,36 +456,6 @@ impl FromToProto for mt::TableIndex {
             version: self.version.clone(),
             options: self.options.clone(),
             index_type: self.index_type.clone() as i32,
-        };
-        Ok(p)
-    }
-}
-
-impl FromToProto for mt::SnapshotRef {
-    type PB = pb::SnapshotRef;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::SnapshotRef) -> Result<Self, Incompatible> {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-        let v = Self {
-            id: p.id,
-            expire_at: p.expire_at.from_pb_opt()?,
-            typ: FromPrimitive::from_i32(p.typ)
-                .ok_or_else(|| Incompatible::new(format!("invalid RefType: {}", p.typ)))?,
-            loc: p.loc,
-        };
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<pb::SnapshotRef, Incompatible> {
-        let p = pb::SnapshotRef {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            id: self.id,
-            expire_at: self.expire_at.to_pb_opt()?,
-            typ: self.typ as i32,
-            loc: self.loc.clone(),
         };
         Ok(p)
     }

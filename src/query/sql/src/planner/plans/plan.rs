@@ -70,9 +70,10 @@ use crate::plans::CreateRolePlan;
 use crate::plans::CreateSequencePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
+use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
-use crate::plans::CreateTableRefPlan;
+use crate::plans::CreateTableTagPlan;
 use crate::plans::CreateTagPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
@@ -109,13 +110,14 @@ use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::DropSequencePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
+use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
-use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTableTagPlan;
 use crate::plans::DropTagPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
@@ -314,8 +316,10 @@ pub enum Plan {
     AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
     DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
     DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
-    CreateTableRef(Box<CreateTableRefPlan>),
-    DropTableRef(Box<DropTableRefPlan>),
+    CreateTableBranch(Box<CreateTableBranchPlan>),
+    CreateTableTag(Box<CreateTableTagPlan>),
+    DropTableBranch(Box<DropTableBranchPlan>),
+    DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),

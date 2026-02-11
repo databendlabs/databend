@@ -208,7 +208,7 @@ impl ReclusterTableInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog, database, table, &self.lock_opt)
+            .acquire_table_lock(catalog, database, table, None, &self.lock_opt)
             .await?;
 
         let tbl = self.ctx.get_table(catalog, database, table).await?;
@@ -245,7 +245,7 @@ impl ReclusterTableInterpreter {
                 move |info: &ExecutionInfo| {
                     ctx.clear_written_segment_locations()?;
                     ctx.clear_selected_segment_locations();
-                    ctx.evict_table_from_cache(&catalog, &database, &table)?;
+                    ctx.evict_table_from_cache(&catalog, &database, &table, None)?;
 
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;

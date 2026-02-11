@@ -90,7 +90,7 @@ impl Interpreter for DropTableColumnInterpreter {
             )));
         }
 
-        let table_schema = table.schema();
+        let table_schema = table_info.schema();
         let field = table_schema.field_with_name(self.plan.column.as_str())?;
 
         if let Some((_, cluster_key)) = table.cluster_key_meta() {
@@ -132,37 +132,31 @@ impl Interpreter for DropTableColumnInterpreter {
         }
 
         let mut new_table_meta = table_info.meta.clone();
-        let new_schema = if self.plan.branch.is_some() {
-            let mut new_schema = table_schema.as_ref().clone();
-            new_schema.drop_column(&self.plan.column)?;
-            new_schema
-        } else {
-            new_table_meta.drop_column(&self.plan.column)?;
-            // update table options
-            let opts = &mut new_table_meta.options;
-            if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
-                let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
-                if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
-                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
-                        // remove from the bloom index columns.
-                        cols.remove(pos);
-                        *value = cols.join(",");
-                    }
+        new_table_meta.drop_column(&self.plan.column)?;
+        // update table options
+        let opts = &mut new_table_meta.options;
+        if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
+            if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
+                if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
+                    // remove from the bloom index columns.
+                    cols.remove(pos);
+                    *value = cols.join(",");
                 }
             }
-            if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
-                if let ApproxDistinctColumns::Specify(mut cols) =
-                    value.parse::<ApproxDistinctColumns>()?
-                {
-                    if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
-                        // remove from the approx distinct columns.
-                        cols.remove(pos);
-                        *value = cols.join(",");
-                    }
+        }
+        if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+            if let ApproxDistinctColumns::Specify(mut cols) =
+                value.parse::<ApproxDistinctColumns>()?
+            {
+                if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
+                    // remove from the approx distinct columns.
+                    cols.remove(pos);
+                    *value = cols.join(",");
                 }
             }
-            new_table_meta.schema.as_ref().clone()
-        };
+        }
+        let new_schema = new_table_meta.schema.as_ref().clone();
 
         commit_table_meta(
             &self.ctx,

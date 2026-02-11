@@ -24,7 +24,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
-use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -122,15 +122,15 @@ impl SnapshotGenerator for AppendGenerator {
 
     fn do_generate_new_snapshot(
         &self,
-        table_ident: &TableIdent,
-        table_schema: &TableSchema,
+        table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
+        let table_schema = table_info.schema().as_ref().clone();
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
-        if is_column_type_modified(table_schema, expected_schema) {
+        if is_column_type_modified(&table_schema, expected_schema) {
             return Err(ErrorCode::UnresolvableConflict(format!(
                 "schema was changed during insert, expected:{:?}, actual:{:?}",
                 expected_schema, table_schema
@@ -212,7 +212,7 @@ impl SnapshotGenerator for AppendGenerator {
         }
         new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
         TableSnapshot::try_new(
-            Some(table_ident.seq),
+            Some(table_info.ident.seq),
             previous.clone(),
             table_schema.clone(),
             new_summary,

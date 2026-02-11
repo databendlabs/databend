@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
@@ -28,6 +30,7 @@ use databend_enterprise_query::storages::fuse::operations::virtual_columns::comm
 use databend_enterprise_query::storages::fuse::operations::virtual_columns::do_vacuum_virtual_column;
 use databend_enterprise_query::storages::fuse::operations::virtual_columns::prepare_refresh_virtual_column;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_meta_types::MatchSeq;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
@@ -36,6 +39,94 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use uuid::Uuid;
+
+async fn refresh_virtual_columns_for_latest_snapshot(
+    fixture: &TestFixture,
+) -> anyhow::Result<usize> {
+    let ctx = fixture.new_query_ctx().await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+    let results =
+        prepare_refresh_virtual_column(ctx.clone(), fuse_table, None, false, None).await?;
+    let refreshed = results.len();
+    if results.is_empty() {
+        return Ok(0);
+    }
+
+    let mut build_res = PipelineBuildResult::create();
+    commit_refresh_virtual_column(
+        ctx.clone(),
+        fuse_table,
+        &mut build_res.main_pipeline,
+        results,
+    )
+    .await?;
+    let settings = ctx.get_settings();
+    build_res.set_max_threads(settings.get_max_threads()? as usize);
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
+    if build_res.main_pipeline.is_complete_pipeline()? {
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(build_res.main_pipeline);
+        let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+        ctx.set_executor(executor.get_inner())?;
+        executor.execute()?;
+    }
+    Ok(refreshed)
+}
+
+async fn snapshot_virtual_locations(
+    fuse_table: &FuseTable,
+    snapshot: &TableSnapshot,
+) -> anyhow::Result<HashSet<String>> {
+    let segment_reader =
+        MetaReaders::segment_info_reader(fuse_table.get_operator(), fuse_table.schema());
+    let mut virtual_locations = HashSet::new();
+
+    for (location, ver) in &snapshot.segments {
+        let segment_info = segment_reader
+            .read(&LoadParams {
+                location: location.to_string(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+
+        for block_meta in segment_info.block_metas()? {
+            if let Some(virtual_block_meta) = &block_meta.virtual_block_meta {
+                let location = &virtual_block_meta.virtual_location.0;
+                if !location.is_empty() {
+                    virtual_locations.insert(location.clone());
+                }
+            }
+        }
+    }
+
+    Ok(virtual_locations)
+}
+
+async fn create_table_tag_for_snapshot(
+    ctx: Arc<dyn TableContext>,
+    fuse_table: &FuseTable,
+    tag_name: &str,
+    snapshot_loc: String,
+) -> anyhow::Result<()> {
+    let table_info = fuse_table.get_table_info();
+    let catalog = ctx.get_catalog(table_info.catalog()).await?;
+    catalog
+        .create_table_tag(CreateTableTagReq {
+            table_id: table_info.ident.table_id,
+            seq: MatchSeq::Exact(table_info.ident.seq),
+            tag_name: tag_name.to_string(),
+            snapshot_loc,
+            expire_at: None,
+            lvt_check: None,
+        })
+        .await?;
+    Ok(())
+}
 
 /// Create a variant table, insert data, and refresh virtual columns.
 async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<TestFixture> {
@@ -47,33 +138,7 @@ async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<T
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
     append_variant_sample_data(num_blocks, &fixture).await?;
-
-    let ctx = fixture.new_query_ctx().await?;
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-    let results =
-        prepare_refresh_virtual_column(ctx.clone(), fuse_table, None, false, None).await?;
-    if !results.is_empty() {
-        let mut build_res = PipelineBuildResult::create();
-        commit_refresh_virtual_column(
-            ctx.clone(),
-            fuse_table,
-            &mut build_res.main_pipeline,
-            results,
-        )
-        .await?;
-        let settings = ctx.get_settings();
-        build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(ctx.clone())?;
-        if build_res.main_pipeline.is_complete_pipeline()? {
-            let mut pipelines = build_res.sources_pipelines;
-            pipelines.push(build_res.main_pipeline);
-            let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-            ctx.set_executor(executor.get_inner())?;
-            executor.execute()?;
-        }
-    }
+    let _ = refresh_virtual_columns_for_latest_snapshot(&fixture).await?;
     Ok(fixture)
 }
 
@@ -312,5 +377,73 @@ async fn test_fuse_do_vacuum_virtual_column_replaced_block_keeps_schema() -> any
     }
     assert!(none_count >= 1); // legacy block cleared
     assert!(some_count >= 1); // v2 blocks intact
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_do_vacuum_virtual_column_keeps_base_refs_for_tag() -> anyhow::Result<()> {
+    let fixture = setup_table_with_virtual_columns(1).await?;
+    let db = fixture.default_db_name();
+    let table = fixture.default_table_name();
+
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let table_obj = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table_obj.as_ref())?;
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let tag_referenced_locations =
+        snapshot_virtual_locations(fuse_table, snapshot.as_ref()).await?;
+    assert!(!tag_referenced_locations.is_empty());
+    let mut detached_snapshot = TableSnapshot::try_from_previous(
+        snapshot.clone(),
+        Some(fuse_table.get_table_info().ident.seq),
+        TestFixture::default_table_meta_timestamps(),
+    )?;
+    detached_snapshot.segments = snapshot.segments.clone();
+    let table_prefix = fuse_table
+        .meta_location_generator()
+        .prefix()
+        .trim_start_matches('/')
+        .to_string();
+    let detached_snapshot_dir = format!("{table_prefix}/_custom_refs/");
+    let detached_snapshot_loc =
+        format!("{detached_snapshot_dir}/{}_v4.mpk", Uuid::new_v4().simple());
+    let operator = fuse_table.get_operator_ref();
+    operator.create_dir(&detached_snapshot_dir).await?;
+    operator
+        .write(&detached_snapshot_loc, detached_snapshot.to_bytes()?)
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    create_table_tag_for_snapshot(ctx, fuse_table, "old_snapshot", detached_snapshot_loc).await?;
+
+    fixture
+        .execute_command(format!("truncate table {db}.{table}").as_str())
+        .await?;
+    append_variant_sample_data(1, &fixture).await?;
+    let _ = refresh_virtual_columns_for_latest_snapshot(&fixture).await?;
+
+    fixture
+        .execute_command(format!("optimize table {db}.{table} purge").as_str())
+        .await?;
+
+    let latest_table = fixture.latest_default_table().await?;
+    let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
+    let vacuum_ctx = fixture.new_query_ctx().await?;
+    let _ = do_vacuum_virtual_column(vacuum_ctx, latest_fuse_table).await?;
+
+    let latest_table = fixture.latest_default_table().await?;
+    let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
+    let operator = latest_fuse_table.get_operator_ref();
+    for location in &tag_referenced_locations {
+        assert!(
+            operator.exists(location).await?,
+            "virtual file referenced by tag was incorrectly removed: {location}"
+        );
+    }
+
     Ok(())
 }

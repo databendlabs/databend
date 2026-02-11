@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableBranchMetaReq;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -39,9 +40,12 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReply;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -49,11 +53,14 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GcDroppedTableBranchReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
@@ -68,17 +75,22 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::HistoryTableBranchMetaItem;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
+use databend_common_meta_app::schema::ListTableBranchMetaItem;
+use databend_common_meta_app::schema::ListTableBranchesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -94,6 +106,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -366,9 +379,10 @@ impl Catalog for SessionCatalog {
         let (table_in_txn, is_active) = {
             let guard = self.txn_mgr.lock();
             if guard.is_active() {
+                let desc = format!("'{}'.'{}'", db_name, table_name);
                 (
                     guard
-                        .get_table_from_buffer(tenant, db_name, table_name)
+                        .get_table_from_buffer(&desc)
                         .map(|table_info| self.get_table_by_info(&table_info)),
                     true,
                 )
@@ -389,6 +403,92 @@ impl Catalog for SessionCatalog {
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
         Ok(table)
+    }
+
+    async fn create_table_branch(
+        &self,
+        req: CreateTableBranchReq,
+    ) -> Result<CreateTableBranchReply> {
+        self.inner.create_table_branch(req).await
+    }
+
+    async fn commit_table_branch_meta(&self, req: CommitTableBranchMetaReq) -> Result<()> {
+        self.inner.commit_table_branch_meta(req).await
+    }
+
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
+        self.inner.create_table_tag(req).await
+    }
+
+    async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<()> {
+        self.inner.drop_table_branch(req).await
+    }
+
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
+        self.inner.drop_table_tag(req).await
+    }
+
+    async fn get_table_branch_with_expire_ctl(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+        include_expired: bool,
+    ) -> Result<Arc<dyn Table>> {
+        {
+            let guard = self.txn_mgr.lock();
+            if guard.is_active() {
+                let branch_desc = format!("'{}'.'{}'/'{}'", db_name, table_name, branch_name);
+                if let Some(table) = guard
+                    .get_table_from_buffer(&branch_desc)
+                    .map(|table_info| self.get_table_by_info(&table_info))
+                {
+                    return table;
+                }
+            }
+        }
+        self.inner
+            .get_table_branch_with_expire_ctl(
+                tenant,
+                db_name,
+                table_name,
+                branch_name,
+                include_expired,
+            )
+            .await
+    }
+
+    async fn get_table_tag_with_expire_ctl(
+        &self,
+        table_id: u64,
+        tag_name: &str,
+        include_expired: bool,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        self.inner
+            .get_table_tag_with_expire_ctl(table_id, tag_name, include_expired)
+            .await
+    }
+
+    async fn list_table_tags(
+        &self,
+        req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>> {
+        self.inner.list_table_tags(req).await
+    }
+
+    async fn list_table_branches(
+        &self,
+        req: ListTableBranchesReq,
+    ) -> Result<Vec<ListTableBranchMetaItem>> {
+        self.inner.list_table_branches(req).await
+    }
+
+    async fn list_history_table_branches(
+        &self,
+        req: ListHistoryTableBranchesReq,
+    ) -> Result<Vec<HistoryTableBranchMetaItem>> {
+        self.inner.list_history_table_branches(req).await
     }
 
     async fn mget_tables(
@@ -476,6 +576,10 @@ impl Catalog for SessionCatalog {
 
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize> {
         self.inner.gc_drop_tables(req).await
+    }
+
+    async fn gc_drop_table_branch(&self, req: GcDroppedTableBranchReq) -> Result<usize> {
+        self.inner.gc_drop_table_branch(req).await
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {

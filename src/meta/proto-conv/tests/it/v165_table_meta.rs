@@ -20,7 +20,6 @@ use databend_common_expression as ce;
 use databend_common_meta_app::schema as mt;
 use fastrace::func_name;
 use maplit::btreemap;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -61,14 +60,12 @@ fn test_decode_v165_cluster_key_id() -> anyhow::Result<()> {
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: None,
         column_mask_policy_columns_ids: btreemap! {},
         row_access_policy: None,
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
-        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
 

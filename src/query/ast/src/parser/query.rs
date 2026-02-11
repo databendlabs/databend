@@ -566,21 +566,6 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     .parse(i)
 }
 
-pub fn at_table_ref(i: Input) -> IResult<TimeTravelPoint> {
-    map(
-        rule! { "(" ~ ( BRANCH | TAG ) ~ "=>" ~  #ident ~ ")" },
-        |(_, token, _, name, _)| {
-            let typ = match token.kind {
-                TokenKind::BRANCH => SnapshotRefType::Branch,
-                TokenKind::TAG => SnapshotRefType::Tag,
-                _ => unreachable!(),
-            };
-            TimeTravelPoint::TableRef { typ, name }
-        },
-    )
-    .parse(i)
-}
-
 pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
         rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
@@ -594,9 +579,13 @@ pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
         rule! { "(" ~ OFFSET ~ "=>" ~ #expr ~ ")" },
         |(_, _, _, e, _)| TimeTravelPoint::Offset(Box::new(e)),
     );
+    let at_tag = map(
+        rule! { "(" ~ TAG ~ "=>" ~  #ident ~ ")" },
+        |(_, _, _, name, _)| TimeTravelPoint::TableTag(name),
+    );
 
     rule!(
-        #at_snapshot | #at_timestamp | #at_offset
+        #at_snapshot | #at_timestamp | #at_offset | #at_tag
     )
     .parse(i)
 }
