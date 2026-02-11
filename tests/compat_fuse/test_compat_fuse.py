@@ -431,6 +431,7 @@ def download_and_run_case(
         download_binary(meta_ver)
 
     download_binary(writer)
+    download_binary(reader)
 
     ctx = TestContext(writer, reader, meta, suite, stateless_cmd=stateless)
     ctx.run_test()
