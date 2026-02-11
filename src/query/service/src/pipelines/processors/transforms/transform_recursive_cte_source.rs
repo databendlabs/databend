@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -92,11 +93,28 @@ impl TransformRecursiveCteSource {
         // Make the internal table names query-unique by prefixing them with the query id.
         // This is purely internal and does not change user-visible semantics.
         let rcte_prefix = make_rcte_prefix(&ctx.get_id());
-        rewrite_rcte_internal_table_names(&mut union_plan, &rcte_prefix);
+        let root_cte_scan_names: HashSet<&str> = union_plan
+            .cte_scan_names
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
 
         let mut exec_ids: HashMap<String, Vec<u64>> = HashMap::new();
-        assign_exec_ids(&mut union_plan.left, &mut exec_ids);
-        assign_exec_ids(&mut union_plan.right, &mut exec_ids);
+        rewrite_assign_and_strip_recursive_cte(
+            &mut union_plan.left,
+            &root_cte_scan_names,
+            &rcte_prefix,
+            &mut exec_ids,
+        );
+        rewrite_assign_and_strip_recursive_cte(
+            &mut union_plan.right,
+            &root_cte_scan_names,
+            &rcte_prefix,
+            &mut exec_ids,
+        );
+        for name in union_plan.cte_scan_names.iter_mut() {
+            *name = format!("{rcte_prefix}{name}");
+        }
 
         let left_outputs = union_plan
             .left_outputs
@@ -202,21 +220,39 @@ fn make_rcte_prefix(query_id: &str) -> String {
     format!("__rcte_{short}_")
 }
 
-fn rewrite_rcte_internal_table_names(union_plan: &mut UnionAll, prefix: &str) {
-    rewrite_recursive_cte_scan_names(&mut union_plan.left, prefix);
-    rewrite_recursive_cte_scan_names(&mut union_plan.right, prefix);
-    for name in union_plan.cte_scan_names.iter_mut() {
-        *name = format!("{prefix}{name}");
+fn rewrite_assign_and_strip_recursive_cte(
+    plan: &mut PhysicalPlan,
+    root_cte_scan_names: &HashSet<&str>,
+    prefix: &str,
+    exec_ids: &mut HashMap<String, Vec<u64>>,
+) {
+    // Only the outer recursive UNION should drive recursive-step execution.
+    // For recursive terms like `... UNION ALL ... UNION ALL ...`, inner UnionAll nodes
+    // may also carry cte_scan_names from binder; keep them as normal unions to avoid
+    // creating nested recursive sources.
+    if let Some(union_all) = UnionAll::from_mut_physical_plan(plan) {
+        if !union_all.cte_scan_names.is_empty()
+            && union_all
+                .cte_scan_names
+                .iter()
+                .all(|name| root_cte_scan_names.contains(name.as_str()))
+        {
+            union_all.cte_scan_names.clear();
+        }
     }
-}
 
-fn rewrite_recursive_cte_scan_names(plan: &mut PhysicalPlan, prefix: &str) {
     if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
         recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
+        let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
+        recursive_cte_scan.exec_id = Some(id);
+        exec_ids
+            .entry(recursive_cte_scan.table_name.clone())
+            .or_default()
+            .push(id);
     }
 
     for child in plan.children_mut() {
-        rewrite_recursive_cte_scan_names(child, prefix);
+        rewrite_assign_and_strip_recursive_cte(child, root_cte_scan_names, prefix, exec_ids);
     }
 }
 
@@ -281,21 +317,6 @@ impl AsyncSource for TransformRecursiveCteSource {
             let _ = drop_tables(ctx, table_names).await?;
         }
         Ok(res)
-    }
-}
-
-fn assign_exec_ids(plan: &mut PhysicalPlan, mapping: &mut HashMap<String, Vec<u64>>) {
-    if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
-        let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
-        recursive_cte_scan.exec_id = Some(id);
-        mapping
-            .entry(recursive_cte_scan.table_name.clone())
-            .or_default()
-            .push(id);
-    }
-
-    for child in plan.children_mut() {
-        assign_exec_ids(child, mapping);
     }
 }
 
