@@ -27,19 +27,27 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_schema;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
+use crate::util::get_owned_task_names;
 
 pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
@@ -118,8 +126,9 @@ impl AsyncSystemTable for TasksTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        let user_api = UserApiProvider::instance();
         let config = GlobalConfig::instance();
         if config.query.cloud_control_grpc_server_address.is_none() {
             return Err(ErrorCode::CloudControlNotEnabled(
@@ -130,16 +139,63 @@ impl AsyncSystemTable for TasksTable {
         let tenant = ctx.get_tenant();
         let query_id = ctx.get_id();
         let user = ctx.get_current_user()?.identity().display().to_string();
-        let available_roles = ctx.get_all_available_roles().await?;
-        let req = ShowTasksRequest {
-            tenant_id: tenant.tenant_name().to_string(),
-            name_like: "".to_string(),
-            result_limit: 10000, // TODO: use plan.limit pushdown
-            owners: available_roles
-                .into_iter()
-                .map(|x| x.identity().to_string())
-                .collect(),
-            task_ids: vec![],
+        let all_effective_roles: Vec<String> = ctx
+            .get_all_effective_roles()
+            .await?
+            .into_iter()
+            .map(|x| x.identity().to_string())
+            .collect();
+
+        let mut task_name = None;
+        if let Some(push_downs) = push_downs {
+            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "name" {
+                        if let Scalar::String(s) = scalar {
+                            task_name = Some(s.clone());
+                        }
+                    }
+                });
+            }
+        }
+        let has_admin_role = all_effective_roles
+            .iter()
+            .any(|role| role.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN);
+        let has_super_priv = ctx
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+            .await
+            .is_ok();
+        let req = if has_admin_role || has_super_priv {
+            ShowTasksRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                name_like: "".to_string(),
+                result_limit: 10000, // TODO: use plan.limit pushdown
+                owners: all_effective_roles.clone(),
+                task_ids: vec![],
+                task_names: vec![],
+            }
+        } else {
+            let owned_tasks_names =
+                get_owned_task_names(user_api, &tenant, &all_effective_roles, has_admin_role).await;
+            if owned_tasks_names.is_empty() {
+                return parse_tasks_to_datablock(vec![]);
+            }
+            if let Some(task_name) = &task_name {
+                // The user does not have admin role and not own the task_name
+                // Need directly return empty block
+                if !owned_tasks_names.contains(task_name) {
+                    return parse_tasks_to_datablock(vec![]);
+                }
+            }
+            ShowTasksRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                name_like: "".to_string(),
+                result_limit: 10000, // TODO: use plan.limit pushdown
+                owners: all_effective_roles.clone(),
+                task_ids: vec![],
+                task_names: owned_tasks_names.clone(),
+            }
         };
 
         let cloud_api = CloudControlApiProvider::instance();

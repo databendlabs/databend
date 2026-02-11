@@ -234,6 +234,7 @@ impl Binder {
                 let policy_id = self.resolve_row_access_policy_id(policy).await?;
                 Ok(GrantObject::RowAccessPolicy(policy_id))
             }
+            AccountMgrLevel::Task(task) => Ok(GrantObject::Task(task.clone())),
         }
     }
 
@@ -327,6 +328,7 @@ impl Binder {
                 let policy_id = self.resolve_row_access_policy_id(policy).await?;
                 Ok(vec![GrantObject::RowAccessPolicy(policy_id)])
             }
+            AccountMgrLevel::Task(task) => Ok(vec![GrantObject::Task(task.clone())]),
         }
     }
 

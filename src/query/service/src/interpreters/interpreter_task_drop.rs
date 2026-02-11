@@ -15,7 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropTaskPlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::task::TaskInterpreter;
@@ -51,6 +55,14 @@ impl Interpreter for DropTaskInterpreter {
         TaskInterpreterManager::build(&self.ctx)?
             .drop_task(&self.ctx, &self.plan)
             .await?;
+
+        let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+        let owner_object = OwnershipObject::Task {
+            name: self.plan.task_name.to_string(),
+        };
+
+        role_api.revoke_ownership(&owner_object).await?;
+        RoleCacheManager::instance().invalidate_cache(&self.plan.tenant);
 
         Ok(PipelineBuildResult::create())
     }

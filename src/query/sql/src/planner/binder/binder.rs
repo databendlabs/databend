@@ -717,7 +717,7 @@ impl Binder {
             Statement::DropTask(stmt) => self.bind_drop_task(stmt).await?,
             Statement::DescribeTask(stmt) => self.bind_describe_task(stmt).await?,
             Statement::ExecuteTask(stmt) => self.bind_execute_task(stmt).await?,
-            Statement::ShowTasks(stmt) => self.bind_show_tasks(stmt).await?,
+            Statement::ShowTasks(stmt) => self.bind_show_tasks(bind_context, stmt).await?,
 
             // Streams
             Statement::CreateStream(stmt) => self.bind_create_stream(bind_context, stmt).await?,

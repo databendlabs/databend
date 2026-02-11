@@ -120,6 +120,7 @@ message ShowTasksRequest {// every owner has a roles list like ["role1", "role2"
   int32 result_limit = 4;
   repeated string owners = 5;   // all available roles under current client
   repeated string task_ids = 6; // all task ids which permit to access for given user
+  repeated string task_names = 7; // all task names which permit to access for given user
 }
 
 message ShowTasksResponse {
@@ -136,6 +137,7 @@ message AlterTaskRequest {
     ModifyWhen = 4;
     AddAfter = 5;
     RemoveAfter = 6;
+    ChangeOwnerRole = 7;
   }
   string task_name = 1;
   string tenant_id = 2;

@@ -15,6 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_cloud_control::client_config::make_request;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::AlterTaskRequest;
+use databend_common_cloud_control::pb::DescribeTaskRequest;
+use databend_common_cloud_control::pb::alter_task_request::AlterTaskType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,8 +37,10 @@ use databend_enterprise_resources_management::ResourcesManagement;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::util::check_system_history;
 use crate::interpreters::util::check_system_history_stage;
@@ -138,6 +145,9 @@ impl GrantPrivilegeInterpreter {
             GrantObject::RowAccessPolicy(policy_id) => Ok(OwnershipObject::RowAccessPolicy {
                 policy_id: *policy_id,
             }),
+            GrantObject::Task(name) => Ok(OwnershipObject::Task {
+                name: name.to_string(),
+            }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),
@@ -191,11 +201,198 @@ impl GrantPrivilegeInterpreter {
         }
 
         info!("{}", log_msg);
-        user_mgr
-            .grant_ownership_to_role(tenant, owner_object, new_role)
-            .await?;
+
+        // For Task objects, sync ownership change to CloudControl first,
+        // then update Meta with rollback on failure
+        if let OwnershipObject::Task { name } = owner_object {
+            let old_owner = self
+                .change_task_owner_in_cloud_control(ctx, tenant, name, new_role)
+                .await?;
+
+            // Update Meta, rollback CloudControl if failed
+            if let Err(e) = user_mgr
+                .grant_ownership_to_role(tenant, owner_object, new_role)
+                .await
+            {
+                // Try to rollback CloudControl (best-effort), only if we actually changed it
+                if let Some(ref old_owner) = old_owner {
+                    self.rollback_task_owner_in_cloud_control(ctx, tenant, name, old_owner)
+                        .await;
+                }
+                return Err(e);
+            }
+        } else {
+            user_mgr
+                .grant_ownership_to_role(tenant, owner_object, new_role)
+                .await?;
+        }
 
         Ok(())
+    }
+
+    /// Change task owner in CloudControl.
+    /// Returns the old owner for potential rollback.
+    ///
+    /// Returns:
+    /// - `Ok(None)` if CloudControl sync was skipped (private mode or not configured)
+    /// - `Ok(Some(old_owner))` if CloudControl sync was performed
+    ///
+    /// Flow:
+    /// 1. DescribeTask from CloudControl to get current owner (for rollback)
+    /// 2. AlterTask(ChangeOwnerRole) to new owner role - fail directly if error
+    async fn change_task_owner_in_cloud_control(
+        &self,
+        ctx: &Arc<QueryContext>,
+        tenant: &Tenant,
+        task_name: &str,
+        new_owner: &str,
+    ) -> Result<Option<String>> {
+        let config = GlobalConfig::instance();
+
+        // Skip if private task mode is enabled (task data is stored locally, not in CloudControl)
+        if config.task.on {
+            return Ok(None);
+        }
+
+        // Skip if CloudControl is not configured
+        if config.query.cloud_control_grpc_server_address.is_none() {
+            return Ok(None);
+        }
+
+        let cloud_api = CloudControlApiProvider::instance();
+        let task_client = cloud_api.get_task_client();
+        let client_config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
+
+        // Step 1: Get current owner from CloudControl (for potential rollback)
+        let describe_req = DescribeTaskRequest {
+            task_name: task_name.to_string(),
+            tenant_id: tenant.tenant_name().to_string(),
+            if_exist: true,
+        };
+        let describe_req = make_request(describe_req, client_config.clone());
+        let describe_resp = task_client.describe_task(describe_req).await?;
+
+        let old_owner = describe_resp
+            .task
+            .as_ref()
+            .map(|t| t.owner.clone())
+            .unwrap_or_default();
+
+        // Skip if owner is already the same
+        if old_owner == new_owner {
+            info!(
+                "Task {} owner is already '{}', skip CloudControl update",
+                task_name, new_owner
+            );
+            return Ok(Some(old_owner));
+        }
+
+        // Step 2: Change owner in CloudControl
+        let alter_req = AlterTaskRequest {
+            task_name: task_name.to_string(),
+            tenant_id: tenant.tenant_name().to_string(),
+            alter_task_type: AlterTaskType::ChangeOwnerRole as i32,
+            owner: new_owner.to_string(),
+            if_exist: false,
+            query_text: None,
+            comment: None,
+            schedule_options: None,
+            warehouse_options: None,
+            suspend_task_after_num_failures: None,
+            when_condition: None,
+            add_after: vec![],
+            remove_after: vec![],
+            set_session_parameters: false,
+            session_parameters: Default::default(),
+            error_integration: None,
+            task_sql_type: 0,
+            script_sql: None,
+        };
+        let alter_req = make_request(alter_req, client_config);
+        task_client.alter_task(alter_req).await?;
+
+        info!(
+            "Task {} owner changed from '{}' to '{}' in CloudControl",
+            task_name, old_owner, new_owner
+        );
+
+        Ok(Some(old_owner))
+    }
+
+    /// Rollback task owner in CloudControl (best-effort).
+    /// Logs warning if rollback fails, does not return error.
+    ///
+    /// Note: Caller is responsible for checking if rollback is needed
+    /// (i.e., only call this when change_task_owner_in_cloud_control returned Some).
+    async fn rollback_task_owner_in_cloud_control(
+        &self,
+        ctx: &Arc<QueryContext>,
+        tenant: &Tenant,
+        task_name: &str,
+        old_owner: &str,
+    ) {
+        // Don't rollback if old_owner is empty (task had no owner before)
+        if old_owner.is_empty() {
+            warn!(
+                "Task {} has no previous owner in CloudControl, cannot rollback. \
+                 CloudControl and Meta may be inconsistent.",
+                task_name
+            );
+            return;
+        }
+
+        let cloud_api = CloudControlApiProvider::instance();
+        let task_client = cloud_api.get_task_client();
+
+        let client_config = match get_task_client_config(ctx.clone(), cloud_api.get_timeout()) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                warn!(
+                    "Failed to get task client config for rollback of task {}: {}. \
+                     CloudControl and Meta may be inconsistent.",
+                    task_name, e
+                );
+                return;
+            }
+        };
+
+        let alter_req = AlterTaskRequest {
+            task_name: task_name.to_string(),
+            tenant_id: tenant.tenant_name().to_string(),
+            alter_task_type: AlterTaskType::ChangeOwnerRole as i32,
+            owner: old_owner.to_string(),
+            if_exist: false,
+            query_text: None,
+            comment: None,
+            schedule_options: None,
+            warehouse_options: None,
+            suspend_task_after_num_failures: None,
+            when_condition: None,
+            add_after: vec![],
+            remove_after: vec![],
+            set_session_parameters: false,
+            session_parameters: Default::default(),
+            error_integration: None,
+            task_sql_type: 0,
+            script_sql: None,
+        };
+        let alter_req = make_request(alter_req, client_config);
+
+        match task_client.alter_task(alter_req).await {
+            Ok(_) => {
+                info!(
+                    "Task {} owner rolled back to '{}' in CloudControl",
+                    task_name, old_owner
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to rollback task {} owner to '{}' in CloudControl: {}. \
+                     CloudControl and Meta may be inconsistent. Manual intervention required.",
+                    task_name, old_owner, e
+                );
+            }
+        }
     }
 }
 
@@ -309,5 +506,6 @@ fn is_create_ownership_object_privilege(privilege: UserPrivilegeType) -> bool {
             | UserPrivilegeType::CreateProcedure
             | UserPrivilegeType::CreateMaskingPolicy
             | UserPrivilegeType::CreateRowAccessPolicy
+            | UserPrivilegeType::CreateTask
     )
 }

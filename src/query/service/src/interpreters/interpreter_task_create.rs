@@ -15,13 +15,18 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::CreateTaskPlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::task::TaskInterpreter;
 use crate::interpreters::task::TaskInterpreterManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[derive(Debug)]
 pub struct CreateTaskInterpreter {
@@ -51,6 +56,19 @@ impl Interpreter for CreateTaskInterpreter {
         TaskInterpreterManager::build(&self.ctx)?
             .create_task(&self.ctx, &self.plan)
             .await?;
+
+        if let Some(current_role) = self.ctx.get_current_role() {
+            let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+            role_api
+                .grant_ownership(
+                    &OwnershipObject::Task {
+                        name: self.plan.task_name.clone(),
+                    },
+                    &current_role.name,
+                )
+                .await?;
+            RoleCacheManager::instance().invalidate_cache(&self.plan.tenant);
+        }
 
         Ok(PipelineBuildResult::create())
     }

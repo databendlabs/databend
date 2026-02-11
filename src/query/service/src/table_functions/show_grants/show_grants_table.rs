@@ -526,6 +526,12 @@ async fn show_account_grants(
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
+                GrantObject::Task(task_name) => {
+                    object_name.push(task_name.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
                 GrantObject::Warehouse(id) => {
                     if let Some(sw) = warehouses
                         .iter()
@@ -665,6 +671,13 @@ async fn show_account_grants(
                             privileges.push("OWNERSHIP".to_string());
                             grant_list
                                 .push(format!("GRANT OWNERSHIP ON UDF {} TO {}", name, identity));
+                        }
+                        OwnershipObject::Task { name } => {
+                            object_name.push(name.to_string());
+                            object_id.push(None);
+                            privileges.push("OWNERSHIP".to_string());
+                            grant_list
+                                .push(format!("GRANT OWNERSHIP ON TASK {} TO {}", name, identity));
                         }
                         OwnershipObject::Warehouse { id } => {
                             if let Some(sw) = warehouses

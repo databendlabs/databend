@@ -25,7 +25,6 @@ use databend_common_cloud_control::pb::CreateTaskRequest;
 use databend_common_cloud_control::pb::DescribeTaskRequest;
 use databend_common_cloud_control::pb::DropTaskRequest;
 use databend_common_cloud_control::pb::ExecuteTaskRequest;
-use databend_common_cloud_control::pb::ShowTasksRequest;
 use databend_common_cloud_control::pb::WarehouseOptions;
 use databend_common_cloud_control::pb::alter_task_request::AlterTaskType;
 use databend_common_cloud_control::task_utils;
@@ -39,7 +38,6 @@ use databend_common_sql::plans::CreateTaskPlan;
 use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_sql::plans::DropTaskPlan;
 use databend_common_sql::plans::ExecuteTaskPlan;
-use databend_common_sql::plans::ShowTasksPlan;
 
 use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::common::make_schedule_options;
@@ -198,25 +196,6 @@ impl CloudTaskInterpreter {
         }
         req
     }
-
-    async fn build_show_tasks_request(
-        ctx: &Arc<QueryContext>,
-        plan: &ShowTasksPlan,
-    ) -> Result<ShowTasksRequest> {
-        let plan = plan.clone();
-        let available_roles = ctx.get_current_session().get_all_available_roles().await?;
-        let req = ShowTasksRequest {
-            tenant_id: plan.tenant.tenant_name().to_string(),
-            name_like: "".to_string(),
-            result_limit: 10000, // TODO: use plan.limit pushdown
-            owners: available_roles
-                .into_iter()
-                .map(|x| x.identity().to_string())
-                .collect(),
-            task_ids: vec![],
-        };
-        Ok(req)
-    }
 }
 
 impl TaskInterpreter for CloudTaskInterpreter {
@@ -333,26 +312,5 @@ impl TaskInterpreter for CloudTaskInterpreter {
         task_client.drop_task(req).await?;
 
         Ok(())
-    }
-
-    async fn show_tasks(
-        &self,
-        ctx: &Arc<QueryContext>,
-        plan: &ShowTasksPlan,
-    ) -> Result<Vec<task_utils::Task>> {
-        let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
-            return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot drop task without cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        }
-        let cloud_api = CloudControlApiProvider::instance();
-        let task_client = cloud_api.get_task_client();
-        let req = Self::build_show_tasks_request(ctx, plan).await?;
-        let config = get_task_client_config(ctx.clone(), cloud_api.get_timeout())?;
-        let req = make_request(req, config);
-
-        let resp = task_client.show_tasks(req).await?;
-        resp.tasks.into_iter().map(|t| t.try_into()).try_collect()
     }
 }

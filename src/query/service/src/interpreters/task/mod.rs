@@ -25,7 +25,6 @@ use databend_common_sql::plans::CreateTaskPlan;
 use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_sql::plans::DropTaskPlan;
 use databend_common_sql::plans::ExecuteTaskPlan;
-use databend_common_sql::plans::ShowTasksPlan;
 
 use crate::interpreters::task::cloud::CloudTaskInterpreter;
 use crate::interpreters::task::private::PrivateTaskInterpreter;
@@ -66,12 +65,6 @@ pub(crate) trait TaskInterpreter {
     ) -> Result<Option<task_utils::Task>>;
 
     async fn drop_task(&self, ctx: &Arc<QueryContext>, plan: &DropTaskPlan) -> Result<()>;
-
-    async fn show_tasks(
-        &self,
-        ctx: &Arc<QueryContext>,
-        plan: &ShowTasksPlan,
-    ) -> Result<Vec<task_utils::Task>>;
 }
 
 impl TaskInterpreter for TaskInterpreterImpl {
@@ -111,17 +104,6 @@ impl TaskInterpreter for TaskInterpreterImpl {
         match self {
             TaskInterpreterImpl::Cloud(interpreter) => interpreter.drop_task(ctx, plan).await,
             TaskInterpreterImpl::Private(interpreter) => interpreter.drop_task(ctx, plan).await,
-        }
-    }
-
-    async fn show_tasks(
-        &self,
-        ctx: &Arc<QueryContext>,
-        plan: &ShowTasksPlan,
-    ) -> Result<Vec<task_utils::Task>> {
-        match self {
-            TaskInterpreterImpl::Cloud(interpreter) => interpreter.show_tasks(ctx, plan).await,
-            TaskInterpreterImpl::Private(interpreter) => interpreter.show_tasks(ctx, plan).await,
         }
     }
 }
