@@ -56,14 +56,14 @@ async fn test_parse_non_custom_claim() -> anyhow::Result<()> {
         .mount(&server)
         .await;
     let first_url = format!("http://{}{}", server.address(), json_path);
-    let cfg = QueryConfig {
+    let mut cfg = QueryConfig {
         tenant_id: Tenant::new_literal("test-tenant"),
-        cluster_id: "test-cluster".to_string(),
-        jwt_key_file: first_url,
-        jwks_refresh_interval: 86400,
-        jwks_refresh_timeout: 10,
         ..Default::default()
     };
+    cfg.common.cluster_id = "test-cluster".to_string();
+    cfg.common.jwt_key_file = first_url;
+    cfg.common.jwks_refresh_interval = 86400;
+    cfg.common.jwks_refresh_timeout = 10;
     let auth = JwtAuthenticator::create(&cfg, &BUILD_INFO).unwrap();
     let user_name = "test-user2";
     let my_additional_data = MyAdditionalData {
@@ -92,14 +92,14 @@ async fn test_parse_jwt_claims_with_ensure_user_scenarios() -> anyhow::Result<()
         .mount(&server)
         .await;
     let first_url = format!("http://{}{}", server.address(), json_path);
-    let cfg = QueryConfig {
+    let mut cfg = QueryConfig {
         tenant_id: Tenant::new_literal("test-tenant"),
-        cluster_id: "test-cluster".to_string(),
-        jwt_key_file: first_url,
-        jwks_refresh_interval: 86400,
-        jwks_refresh_timeout: 10,
         ..Default::default()
     };
+    cfg.common.cluster_id = "test-cluster".to_string();
+    cfg.common.jwt_key_file = first_url;
+    cfg.common.jwks_refresh_interval = 86400;
+    cfg.common.jwks_refresh_timeout = 10;
     let auth = JwtAuthenticator::create(&cfg, &BUILD_INFO).unwrap();
     let user_name = "test-user";
 

@@ -113,9 +113,9 @@ impl ClientSessionManager {
         let mgr = Arc::new(Self {
             session_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
             refresh_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
-            max_idle_time: Duration::from_secs(cfg.query.http_session_timeout_secs),
+            max_idle_time: Duration::from_secs(cfg.query.common.http_session_timeout_secs),
             min_refresh_interval: Duration::from_secs(
-                (cfg.query.http_session_timeout_secs / 10).min(300),
+                (cfg.query.common.http_session_timeout_secs / 10).min(300),
             ),
             session_state: Default::default(),
         });

@@ -33,12 +33,12 @@ pub use resources_management_self_managed::SelfManagedResourcesManagement;
 pub use resources_management_system::SystemResourcesManagement;
 
 pub async fn init_resources_management(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
-    let service: Arc<dyn ResourcesManagement> = match &cfg.query.resources_management {
-        None => match cfg.query.cluster_id.is_empty() {
+    let service: Arc<dyn ResourcesManagement> = match &cfg.query.common.resources_management {
+        None => match cfg.query.common.cluster_id.is_empty() {
             true => Err(ErrorCode::InvalidConfig(
                 "cluster_id is empty without resources management.",
             )),
-            false => match cfg.query.warehouse_id.is_empty() {
+            false => match cfg.query.common.warehouse_id.is_empty() {
                 true => Err(ErrorCode::InvalidConfig(
                     "warehouse_id is empty without resources management.",
                 )),

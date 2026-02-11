@@ -21,6 +21,7 @@ use std::fmt::Formatter;
 
 use clap::ArgAction;
 use clap::Args;
+use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use databend_common_base::base::OrderedFloat;
@@ -104,13 +105,9 @@ impl TelemetryConfig {
 }
 
 use super::inner;
-use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::InnerConfig;
-use super::inner::LocalConfig as InnerLocalConfig;
-use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
-use super::inner::TaskConfig as InnerTaskConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
@@ -181,7 +178,7 @@ pub struct Config {
     ///
     /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
-    pub catalogs: HashMap<String, CatalogConfig>,
+    pub catalogs: HashMap<String, inner::CatalogConfig>,
 }
 
 #[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -655,34 +652,6 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CatalogConfig {
-    #[serde(rename = "type")]
-    pub ty: String,
-    #[serde(flatten)]
-    pub hive: CatalogsHiveConfig,
-}
-
-impl Default for CatalogConfig {
-    fn default() -> Self {
-        Self {
-            ty: "hive".to_string(),
-            hive: CatalogsHiveConfig::default(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CatalogsHiveConfig {
-    pub address: String,
-
-    /// Deprecated fields, used for catching error, will be removed later.
-    pub meta_store_address: Option<String>,
-
-    pub protocol: String,
-}
-
 /// this is the legacy version of external catalog configuration
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -702,78 +671,18 @@ pub struct HiveCatalogConfig {
     pub protocol: String,
 }
 
-impl TryInto<InnerCatalogConfig> for CatalogConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> std::result::Result<InnerCatalogConfig, Self::Error> {
-        match self.ty.as_str() {
-            "hive" => Ok(InnerCatalogConfig::Hive(self.hive.try_into()?)),
-            ty => Err(ErrorCode::CatalogNotSupported(format!(
-                "got unsupported catalog type in config: {}",
-                ty
-            ))),
-        }
-    }
-}
-
-impl From<InnerCatalogConfig> for CatalogConfig {
-    fn from(inner: InnerCatalogConfig) -> Self {
-        match inner {
-            InnerCatalogConfig::Hive(v) => Self {
-                ty: "hive".to_string(),
-                hive: v.into(),
-            },
-        }
-    }
-}
-
-impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
-    type Error = ErrorCode;
-    fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
-        if self.meta_store_address.is_some() {
-            return Err(ErrorCode::InvalidConfig(
-                "`meta_store_address` is deprecated, please use `address` instead",
-            ));
-        }
-
-        Ok(InnerCatalogHiveConfig {
-            metastore_address: self.address,
-            protocol: self.protocol.parse()?,
-        })
-    }
-}
-
-impl From<InnerCatalogHiveConfig> for CatalogsHiveConfig {
-    fn from(inner: InnerCatalogHiveConfig) -> Self {
-        Self {
-            address: inner.metastore_address,
-            protocol: inner.protocol.to_string(),
-
-            // Deprecated fields
-            meta_store_address: None,
-        }
-    }
-}
-
-impl Default for CatalogsHiveConfig {
-    fn default() -> Self {
-        InnerCatalogHiveConfig::default().into()
-    }
-}
-
 impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
     type Error = ErrorCode;
     fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
-        if self.meta_store_address.is_some() {
-            return Err(ErrorCode::InvalidConfig(
-                "`meta_store_address` is deprecated, please use `address` instead",
-            ));
-        }
-
-        Ok(InnerCatalogHiveConfig {
+        let cfg = InnerCatalogHiveConfig {
             metastore_address: self.address,
-            protocol: self.protocol.parse()?,
-        })
+            meta_store_address: self.meta_store_address,
+            protocol: self.protocol,
+        };
+
+        cfg.validate()?;
+
+        Ok(cfg)
     }
 }
 
@@ -781,7 +690,7 @@ impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
             address: inner.metastore_address,
-            protocol: inner.protocol.to_string(),
+            protocol: inner.protocol,
 
             // Deprecated fields
             meta_store_address: None,
@@ -1695,10 +1604,12 @@ pub struct QueryConfig {
     )]
     pub max_memory_limit_enabled: bool,
 
+    /// clickhouse tcp support is deprecated
     #[deprecated(note = "clickhouse tcp support is deprecated")]
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
     pub clickhouse_handler_host: String,
 
+    /// clickhouse tcp support is deprecated
     #[deprecated(note = "clickhouse tcp support is deprecated")]
     #[clap(long, value_name = "VALUE", default_value = "9000")]
     pub clickhouse_handler_port: u16,
@@ -1790,6 +1701,7 @@ pub struct QueryConfig {
     )]
     pub table_engine_memory_enabled: bool,
 
+    /// Graceful shutdown timeout
     #[clap(long, value_name = "VALUE", default_value = "5000")]
     pub shutdown_wait_timeout_ms: u64,
 
@@ -1798,9 +1710,11 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE")]
     pub databend_enterprise_license: Option<String>,
+
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
     pub management_mode: bool,
+
     #[clap(long)]
     pub embedded_mode: bool,
 
@@ -1828,18 +1742,19 @@ pub struct QueryConfig {
     #[clap(skip)]
     users: Vec<UserConfig>,
 
-    #[clap(skip)]
-    udfs: Vec<UDFConfig>,
-
-    #[clap(long, value_name = "VALUE", default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub share_endpoint_address: String,
 
-    #[clap(long, value_name = "VALUE", default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub share_endpoint_auth_token_file: String,
+
+    #[clap(skip)]
+    udfs: Vec<UDFConfig>,
 
     #[clap(skip)]
     quota: Option<TenantQuota>,
 
+    /// Only for testing. Enable `sandbox_tenant` injection for sessions.
     #[clap(long, value_name = "VALUE")]
     pub internal_enable_sandbox_tenant: bool,
 
@@ -1852,7 +1767,7 @@ pub struct QueryConfig {
 
     /// Max retention time in days for data, default is 90 days.
     #[clap(long, value_name = "VALUE", default_value = "90")]
-    pub(crate) data_retention_time_in_days_max: u64,
+    pub data_retention_time_in_days_max: u64,
 
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
@@ -1970,107 +1885,44 @@ pub struct QueryConfig {
 
 impl Default for QueryConfig {
     fn default() -> Self {
-        InnerQueryConfig::default().into()
+        #[derive(Parser)]
+        #[clap(name = "databend-query", about, author)]
+        struct Cmd {
+            #[clap(flatten)]
+            query: QueryConfig,
+        }
+
+        Cmd::parse_from(std::iter::once(std::ffi::OsString::from("databend-query"))).query
     }
 }
 
 impl TryInto<InnerQueryConfig> for QueryConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerQueryConfig> {
-        let mut warehouse_id = self.warehouse_id;
+    fn try_into(mut self) -> Result<InnerQueryConfig> {
+        let upgrade_to_pb = self.enable_meta_data_upgrade_json_to_pb_from_v307;
 
-        if warehouse_id.is_empty() {
-            warehouse_id = self.cluster_id.clone();
+        if self.warehouse_id.is_empty() {
+            self.warehouse_id = self.cluster_id.clone();
         }
 
+        let tenant_id = Tenant::new_or_err(&self.tenant_id, "")
+            .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?;
+
+        let users = std::mem::take(&mut self.users);
+        let udfs = std::mem::take(&mut self.udfs);
+        let quota = self.quota.take();
+        let settings = std::mem::take(&mut self.settings);
+
         Ok(InnerQueryConfig {
-            warehouse_id,
-            tenant_id: Tenant::new_or_err(self.tenant_id, "")
-                .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
-            cluster_id: self.cluster_id,
+            tenant_id,
+            common: self,
             node_id: "".to_string(),
             node_secret: "".to_string(),
-            num_cpus: self.num_cpus,
-            mysql_handler_host: self.mysql_handler_host,
-            mysql_handler_port: self.mysql_handler_port,
-            mysql_handler_tcp_keepalive_timeout_secs: self.mysql_handler_tcp_keepalive_timeout_secs,
-            mysql_tls_server_cert: self.mysql_tls_server_cert,
-            mysql_tls_server_key: self.mysql_tls_server_key,
-            max_active_sessions: self.max_active_sessions,
-            max_running_queries: self.max_running_queries,
-            global_statement_queue: self.global_statement_queue,
-            max_server_memory_usage: self.max_server_memory_usage,
-            max_memory_limit_enabled: self.max_memory_limit_enabled,
-            clickhouse_http_handler_host: self.clickhouse_http_handler_host,
-            clickhouse_http_handler_port: self.clickhouse_http_handler_port,
-            http_handler_host: self.http_handler_host,
-            http_handler_port: self.http_handler_port,
-            http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
-            http_session_timeout_secs: self.http_session_timeout_secs,
-            flight_api_address: self.flight_api_address,
-            discovery_address: self.discovery_address,
-            flight_sql_handler_host: self.flight_sql_handler_host,
-            flight_sql_handler_port: self.flight_sql_handler_port,
-            admin_api_address: self.admin_api_address,
-            metric_api_address: self.metric_api_address,
-            http_handler_tls_server_cert: self.http_handler_tls_server_cert,
-            http_handler_tls_server_key: self.http_handler_tls_server_key,
-            http_handler_tls_server_root_ca_cert: self.http_handler_tls_server_root_ca_cert,
-            api_tls_server_cert: self.api_tls_server_cert,
-            api_tls_server_key: self.api_tls_server_key,
-            api_tls_server_root_ca_cert: self.api_tls_server_root_ca_cert,
-            flight_sql_tls_server_cert: self.flight_sql_tls_server_cert,
-            flight_sql_tls_server_key: self.flight_sql_tls_server_key,
-            rpc_tls_server_cert: self.rpc_tls_server_cert,
-            rpc_tls_server_key: self.rpc_tls_server_key,
-            rpc_tls_query_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert,
-            rpc_tls_query_service_domain_name: self.rpc_tls_query_service_domain_name,
-            rpc_client_timeout_secs: self.rpc_client_timeout_secs,
-            table_engine_memory_enabled: self.table_engine_memory_enabled,
-            shutdown_wait_timeout_ms: self.shutdown_wait_timeout_ms,
-            max_query_log_size: self.max_query_log_size,
-            databend_enterprise_license: self.databend_enterprise_license,
-            management_mode: self.management_mode,
-            embedded_mode: self.embedded_mode,
-            parquet_fast_read_bytes: self.parquet_fast_read_bytes,
-            max_storage_io_requests: self.max_storage_io_requests,
-            jwt_key_file: self.jwt_key_file,
-            jwt_key_files: self.jwt_key_files,
-            jwks_refresh_interval: self.jwks_refresh_interval,
-            jwks_refresh_timeout: self.jwks_refresh_timeout,
-            default_storage_format: self.default_storage_format,
-            default_compression: self.default_compression,
-            builtin: BuiltInConfig {
-                users: self.users,
-                udfs: self.udfs,
-            },
-            share_endpoint_address: self.share_endpoint_address,
-            share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
-            tenant_quota: self.quota,
-            upgrade_to_pb: self.enable_meta_data_upgrade_json_to_pb_from_v307,
-            internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
-            internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
-            data_retention_time_in_days_max: self.data_retention_time_in_days_max,
-            disable_system_table_load: self.disable_system_table_load,
-            enable_udf_server: self.enable_udf_server,
-            enable_udf_python_script: self.enable_udf_python_script,
-            enable_udf_js_script: self.enable_udf_js_script,
-            enable_udf_wasm_script: self.enable_udf_wasm_script,
-            enable_udf_sandbox: self.enable_udf_sandbox,
-            udf_server_allow_list: self.udf_server_allow_list,
-            udf_server_allow_insecure: self.udf_server_allow_insecure,
-            cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
-            cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
-            max_cached_queries_profiles: self.max_cached_queries_profiles,
-            network_policy_whitelist: self.network_policy_whitelist,
-            settings: self
-                .settings
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-            resources_management: self.resources_management,
-            enable_queries_executor: self.enable_queries_executor,
+            builtin: BuiltInConfig { users, udfs },
+            tenant_quota: quota,
+            upgrade_to_pb,
+            settings: settings.into_iter().map(|(k, v)| (k, v.into())).collect(),
             check_connection_before_schedule: true,
         })
     }
@@ -2079,106 +1931,45 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
 #[allow(deprecated)]
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
-        Self {
-            tenant_id: inner.tenant_id.tenant_name().to_string(),
-            cluster_id: inner.cluster_id,
-            warehouse_id: inner.warehouse_id,
-            num_cpus: inner.num_cpus,
-            mysql_handler_host: inner.mysql_handler_host,
-            mysql_handler_port: inner.mysql_handler_port,
-            mysql_handler_tcp_keepalive_timeout_secs: inner
-                .mysql_handler_tcp_keepalive_timeout_secs,
-            mysql_tls_server_cert: inner.mysql_tls_server_cert,
-            mysql_tls_server_key: inner.mysql_tls_server_key,
-            max_active_sessions: inner.max_active_sessions,
-            max_running_queries: inner.max_running_queries,
-            global_statement_queue: inner.global_statement_queue,
-            max_server_memory_usage: inner.max_server_memory_usage,
-            max_memory_limit_enabled: inner.max_memory_limit_enabled,
+        let InnerQueryConfig {
+            tenant_id,
+            mut common,
+            builtin,
+            tenant_quota,
+            upgrade_to_pb,
+            ..
+        } = inner;
 
-            // clickhouse tcp is deprecated
-            clickhouse_handler_host: "127.0.0.1".to_string(),
-            clickhouse_handler_port: 9000,
+        common.tenant_id = tenant_id.tenant_name().to_string();
+        common.users = builtin.users;
+        common.udfs = builtin.udfs;
+        common.quota = tenant_quota;
+        common.enable_meta_data_upgrade_json_to_pb_from_v307 = upgrade_to_pb;
 
-            clickhouse_http_handler_host: inner.clickhouse_http_handler_host,
-            clickhouse_http_handler_port: inner.clickhouse_http_handler_port,
-            http_handler_host: inner.http_handler_host,
-            http_handler_port: inner.http_handler_port,
-            http_handler_result_timeout_secs: inner.http_handler_result_timeout_secs,
-            http_session_timeout_secs: inner.http_session_timeout_secs,
-            flight_api_address: inner.flight_api_address,
-            flight_sql_handler_host: inner.flight_sql_handler_host,
-            flight_sql_handler_port: inner.flight_sql_handler_port,
-            discovery_address: inner.discovery_address,
-            admin_api_address: inner.admin_api_address,
-            metric_api_address: inner.metric_api_address,
-            http_handler_tls_server_cert: inner.http_handler_tls_server_cert,
-            http_handler_tls_server_key: inner.http_handler_tls_server_key,
-            http_handler_tls_server_root_ca_cert: inner.http_handler_tls_server_root_ca_cert,
-            api_tls_server_cert: inner.api_tls_server_cert,
-            api_tls_server_key: inner.api_tls_server_key,
-            api_tls_server_root_ca_cert: inner.api_tls_server_root_ca_cert,
-            flight_sql_tls_server_cert: inner.flight_sql_tls_server_cert,
-            flight_sql_tls_server_key: inner.flight_sql_tls_server_key,
-            rpc_tls_server_cert: inner.rpc_tls_server_cert,
-            rpc_tls_server_key: inner.rpc_tls_server_key,
-            rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
-            rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
-            rpc_client_timeout_secs: inner.rpc_client_timeout_secs,
-            table_engine_memory_enabled: inner.table_engine_memory_enabled,
-            shutdown_wait_timeout_ms: inner.shutdown_wait_timeout_ms,
-            max_query_log_size: inner.max_query_log_size,
-            databend_enterprise_license: inner.databend_enterprise_license,
-            management_mode: inner.management_mode,
-            parquet_fast_read_bytes: inner.parquet_fast_read_bytes,
-            max_storage_io_requests: inner.max_storage_io_requests,
-            jwt_key_file: inner.jwt_key_file,
-            jwt_key_files: inner.jwt_key_files,
-            jwks_refresh_interval: inner.jwks_refresh_interval,
-            jwks_refresh_timeout: inner.jwks_refresh_timeout,
-            default_storage_format: inner.default_storage_format,
-            default_compression: inner.default_compression,
-            users: inner.builtin.users,
-            udfs: inner.builtin.udfs,
-            share_endpoint_address: inner.share_endpoint_address,
-            share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
-            quota: inner.tenant_quota,
-            enable_meta_data_upgrade_json_to_pb_from_v307: inner.upgrade_to_pb,
-            internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
-            internal_merge_on_read_mutation: false,
-            data_retention_time_in_days_max: 90,
+        // clickhouse tcp is deprecated
+        common.clickhouse_handler_host = "127.0.0.1".to_string();
+        common.clickhouse_handler_port = 9000;
 
-            // obsoleted config entries
-            table_disk_cache_mb_size: None,
-            table_meta_cache_enabled: None,
-            table_cache_block_meta_count: None,
-            table_memory_cache_mb_size: None,
-            table_disk_cache_root: None,
-            table_cache_snapshot_count: None,
-            table_cache_statistic_count: None,
-            table_cache_segment_count: None,
-            table_cache_bloom_index_meta_count: None,
-            table_cache_bloom_index_filter_count: None,
-            table_cache_bloom_index_data_bytes: None,
-            //
-            disable_system_table_load: inner.disable_system_table_load,
-            enable_udf_python_script: inner.enable_udf_python_script,
-            enable_udf_js_script: inner.enable_udf_js_script,
-            enable_udf_wasm_script: inner.enable_udf_wasm_script,
-            enable_udf_sandbox: inner.enable_udf_sandbox,
+        // obsoleted config entries
+        common.table_disk_cache_mb_size = None;
+        common.table_meta_cache_enabled = None;
+        common.table_cache_block_meta_count = None;
+        common.table_memory_cache_mb_size = None;
+        common.table_disk_cache_root = None;
+        common.table_cache_snapshot_count = None;
+        common.table_cache_statistic_count = None;
+        common.table_cache_segment_count = None;
+        common.table_cache_bloom_index_meta_count = None;
+        common.table_cache_bloom_index_filter_count = None;
+        common.table_cache_bloom_index_data_bytes = None;
 
-            enable_udf_server: inner.enable_udf_server,
-            udf_server_allow_list: inner.udf_server_allow_list,
-            udf_server_allow_insecure: inner.udf_server_allow_insecure,
-            cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
-            cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
-            max_cached_queries_profiles: inner.max_cached_queries_profiles,
-            network_policy_whitelist: inner.network_policy_whitelist,
-            settings: HashMap::new(),
-            resources_management: None,
-            enable_queries_executor: inner.enable_queries_executor,
-            embedded_mode: inner.embedded_mode,
-        }
+        // Keep the same behavior as before: these fields should not be visible in external config.
+        common.internal_merge_on_read_mutation = false;
+        common.data_retention_time_in_days_max = 90;
+        common.resources_management = None;
+        common.settings = HashMap::new();
+
+        common
     }
 }
 
@@ -2367,26 +2158,7 @@ pub struct TaskConfig {
     #[clap(
         long = "private-task-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
     )]
-    #[serde(rename = "on")]
-    pub private_task_on: bool,
-}
-
-impl TryInto<InnerTaskConfig> for TaskConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerTaskConfig> {
-        Ok(InnerTaskConfig {
-            on: self.private_task_on,
-        })
-    }
-}
-
-impl From<InnerTaskConfig> for TaskConfig {
-    fn from(inner: InnerTaskConfig) -> Self {
-        TaskConfig {
-            private_task_on: inner.on,
-        }
-    }
+    pub on: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
@@ -3085,14 +2857,31 @@ pub struct MetaConfig {
 
 impl Default for MetaConfig {
     fn default() -> Self {
-        InnerMetaConfig::default().into()
+        Self {
+            embedded_dir: "".to_string(),
+            meta_embedded_dir: None,
+
+            endpoints: vec![],
+            username: "root".to_string(),
+            meta_username: None,
+
+            password: "".to_string(),
+            meta_password: None,
+
+            client_timeout_in_second: 4,
+            meta_client_timeout_in_second: None,
+
+            auto_sync_interval: 0,
+            unhealth_endpoint_evict_time: 120,
+            rpc_tls_meta_server_root_ca_cert: "".to_string(),
+            rpc_tls_meta_service_domain_name: "localhost".to_string(),
+            grpc_max_message_size: None,
+        }
     }
 }
 
-impl TryInto<InnerMetaConfig> for MetaConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerMetaConfig> {
+impl MetaConfig {
+    pub fn check_deprecated(&self) -> Result<()> {
         if self.meta_embedded_dir.is_some() {
             return Err(ErrorCode::InvalidConfig(
                 "`meta_embedded_dir` is deprecated, use `embedded_dir` instead".to_string(),
@@ -3115,41 +2904,7 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             ));
         }
 
-        Ok(InnerMetaConfig {
-            embedded_dir: self.embedded_dir,
-            endpoints: self.endpoints,
-            username: self.username,
-            password: self.password,
-            client_timeout_in_second: self.client_timeout_in_second,
-            auto_sync_interval: self.auto_sync_interval,
-            unhealth_endpoint_evict_time: self.unhealth_endpoint_evict_time,
-            rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
-            rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
-            grpc_max_message_size: self.grpc_max_message_size,
-        })
-    }
-}
-
-impl From<InnerMetaConfig> for MetaConfig {
-    fn from(inner: InnerMetaConfig) -> Self {
-        Self {
-            embedded_dir: inner.embedded_dir,
-            endpoints: inner.endpoints,
-            username: inner.username,
-            password: inner.password,
-            client_timeout_in_second: inner.client_timeout_in_second,
-            auto_sync_interval: inner.auto_sync_interval,
-            unhealth_endpoint_evict_time: inner.unhealth_endpoint_evict_time,
-            rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
-            rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
-            grpc_max_message_size: inner.grpc_max_message_size,
-
-            // Deprecated fields
-            meta_embedded_dir: None,
-            meta_username: None,
-            meta_password: None,
-            meta_client_timeout_in_second: None,
-        }
+        Ok(())
     }
 }
 
@@ -3192,27 +2947,10 @@ pub struct LocalConfig {
 
 impl Default for LocalConfig {
     fn default() -> Self {
-        InnerLocalConfig::default().into()
-    }
-}
-
-impl From<InnerLocalConfig> for LocalConfig {
-    fn from(inner: InnerLocalConfig) -> Self {
         Self {
-            sql: inner.sql,
-            table: inner.table,
+            sql: "SELECT 1".to_string(),
+            table: "".to_string(),
         }
-    }
-}
-
-impl TryInto<InnerLocalConfig> for LocalConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerLocalConfig> {
-        Ok(InnerLocalConfig {
-            sql: self.sql,
-            table: self.table,
-        })
     }
 }
 
@@ -3284,8 +3022,8 @@ pub struct CacheConfig {
         value_name = "VALUE",
         default_value = "true"
     )]
-    #[serde(default = "bool_true")]
-    pub enable_table_bloom_index_cache: bool,
+    #[serde(rename = "enable_table_bloom_index_cache", default = "bool_true")]
+    pub enable_table_index_bloom: bool,
 
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
     #[clap(
@@ -3531,8 +3269,46 @@ pub struct CacheConfig {
 
 impl Default for CacheConfig {
     fn default() -> Self {
-        // Here we should (have to) convert self from the default value of  inner::CacheConfig :(
-        super::inner::CacheConfig::default().into()
+        Self {
+            meta_service_ownership_cache: false,
+            enable_table_meta_cache: true,
+            table_meta_snapshot_count: 256,
+            table_meta_segment_bytes: 1073741824,
+            block_meta_count: 0,
+            segment_block_metas_count: 0,
+            table_meta_statistic_count: 256,
+            segment_statistics_bytes: 1073741824,
+            enable_table_index_bloom: true,
+            table_bloom_index_meta_count: 3000,
+            disk_cache_table_bloom_index_meta_size: 0,
+            table_prune_partitions_count: 256,
+            table_bloom_index_filter_count: 0,
+            table_bloom_index_filter_size: 2147483648,
+            disk_cache_table_bloom_index_data_size: 0,
+            inverted_index_meta_count: 30000,
+            disk_cache_inverted_index_meta_size: 0,
+            inverted_index_filter_size: 64424509440,
+            disk_cache_inverted_index_data_size: 0,
+            inverted_index_filter_memory_ratio: 0,
+            vector_index_meta_count: 30000,
+            disk_cache_vector_index_meta_size: 0,
+            vector_index_filter_size: 64424509440,
+            disk_cache_vector_index_data_size: 0,
+            vector_index_filter_memory_ratio: 0,
+            virtual_column_meta_count: 30000,
+            disk_cache_virtual_column_meta_size: 0,
+            data_cache_storage: CacheStorageTypeConfig::None,
+            table_data_cache_population_queue_size: 0,
+            data_cache_in_memory_bytes: 0,
+            disk_cache_config: DiskCacheConfig::default(),
+            data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Reset,
+            table_data_deserialized_data_bytes: 0,
+            table_data_deserialized_memory_ratio: 0,
+            iceberg_table_meta_count: 1024,
+
+            // ----- the following options/args are all deprecated               ----
+            table_meta_segment_count: None,
+        }
     }
 }
 
@@ -3617,7 +3393,11 @@ pub struct DiskCacheConfig {
 
 impl Default for DiskCacheConfig {
     fn default() -> Self {
-        inner::DiskCacheConfig::default().into()
+        Self {
+            max_bytes: 21474836480,
+            path: "./.databend/_cache".to_owned(),
+            sync_data: true,
+        }
     }
 }
 
@@ -3677,7 +3457,7 @@ pub struct ResourcesManagementConfig {
     pub node_group: Option<String>,
 }
 
-mod cache_config_converters {
+mod config_converters {
     use log::warn;
 
     use super::*;
@@ -3687,17 +3467,13 @@ mod cache_config_converters {
             Self {
                 query: inner.query.into(),
                 log: inner.log.into(),
-                task: inner.task.into(),
-                meta: inner.meta.into(),
+                task: inner.task,
+                meta: inner.meta,
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
 
-                catalogs: inner
-                    .catalogs
-                    .into_iter()
-                    .map(|(k, v)| (k, v.into()))
-                    .collect(),
-                cache: inner.cache.into(),
+                catalogs: inner.catalogs,
+                cache: inner.cache,
                 spill: inner.spill.into(),
                 telemetry: inner.telemetry,
             }
@@ -3722,17 +3498,21 @@ mod cache_config_converters {
                 ..
             } = self;
 
-            let mut catalogs = HashMap::new();
-            for (k, v) in input_catalogs.into_iter() {
-                let catalog = v.try_into()?;
-                catalogs.insert(k, catalog);
+            meta.check_deprecated()?;
+
+            let mut catalogs = input_catalogs;
+            for catalog in catalogs.values() {
+                catalog.validate()?;
             }
             if !catalog.address.is_empty() || !catalog.protocol.is_empty() {
                 warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );
                 let hive = catalog.try_into()?;
-                let catalog = InnerCatalogConfig::Hive(hive);
+                let catalog = inner::CatalogConfig {
+                    ty: "hive".to_string(),
+                    hive,
+                };
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
@@ -3741,107 +3521,14 @@ mod cache_config_converters {
             Ok(InnerConfig {
                 query: query.try_into()?,
                 log: log.try_into()?,
-                task: task.try_into()?,
-                meta: meta.try_into()?,
+                task,
+                meta,
                 storage: storage.try_into()?,
                 catalogs,
-                cache: cache.try_into()?,
+                cache,
                 spill,
                 telemetry,
             })
-        }
-    }
-
-    impl TryFrom<CacheConfig> for inner::CacheConfig {
-        type Error = ErrorCode;
-
-        fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
-            Ok(Self {
-                meta_service_ownership_cache: value.meta_service_ownership_cache,
-                enable_table_meta_cache: value.enable_table_meta_cache,
-                table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_bytes: value.table_meta_segment_bytes,
-                block_meta_count: value.block_meta_count,
-                segment_block_metas_count: value.segment_block_metas_count,
-                table_meta_statistic_count: value.table_meta_statistic_count,
-                segment_statistics_bytes: value.segment_statistics_bytes,
-                enable_table_index_bloom: value.enable_table_bloom_index_cache,
-                table_bloom_index_meta_count: value.table_bloom_index_meta_count,
-                table_bloom_index_filter_count: value.table_bloom_index_filter_count,
-                table_bloom_index_filter_size: value.table_bloom_index_filter_size,
-                disk_cache_table_bloom_index_data_size: value
-                    .disk_cache_table_bloom_index_data_size,
-                inverted_index_meta_count: value.inverted_index_meta_count,
-                disk_cache_inverted_index_meta_size: value.disk_cache_inverted_index_meta_size,
-                inverted_index_filter_size: value.inverted_index_filter_size,
-                disk_cache_inverted_index_data_size: value.disk_cache_inverted_index_data_size,
-                inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
-                vector_index_meta_count: value.vector_index_meta_count,
-                disk_cache_vector_index_meta_size: value.disk_cache_vector_index_meta_size,
-                vector_index_filter_size: value.vector_index_filter_size,
-                disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
-                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
-                virtual_column_meta_count: value.virtual_column_meta_count,
-                disk_cache_virtual_column_meta_size: value.disk_cache_virtual_column_meta_size,
-                table_prune_partitions_count: value.table_prune_partitions_count,
-                data_cache_storage: value.data_cache_storage.try_into()?,
-                table_data_cache_population_queue_size: value
-                    .table_data_cache_population_queue_size,
-                data_cache_in_memory_bytes: value.data_cache_in_memory_bytes,
-                disk_cache_config: value.disk_cache_config.try_into()?,
-                data_cache_key_reload_policy: value.data_cache_key_reload_policy.try_into()?,
-                table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
-                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
-                iceberg_table_meta_count: value.iceberg_table_meta_count,
-                disk_cache_table_bloom_index_meta_size: value
-                    .disk_cache_table_bloom_index_meta_size,
-            })
-        }
-    }
-
-    impl From<inner::CacheConfig> for CacheConfig {
-        fn from(value: inner::CacheConfig) -> Self {
-            Self {
-                meta_service_ownership_cache: value.meta_service_ownership_cache,
-                enable_table_meta_cache: value.enable_table_meta_cache,
-                table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_bytes: value.table_meta_segment_bytes,
-                table_meta_statistic_count: value.table_meta_statistic_count,
-                segment_statistics_bytes: value.segment_statistics_bytes,
-                block_meta_count: value.block_meta_count,
-                enable_table_bloom_index_cache: value.enable_table_index_bloom,
-                table_bloom_index_meta_count: value.table_bloom_index_meta_count,
-                disk_cache_table_bloom_index_meta_size: value
-                    .disk_cache_table_bloom_index_meta_size,
-                table_bloom_index_filter_count: value.table_bloom_index_filter_count,
-                table_bloom_index_filter_size: value.table_bloom_index_filter_size,
-                disk_cache_table_bloom_index_data_size: value
-                    .disk_cache_table_bloom_index_data_size,
-                inverted_index_meta_count: value.inverted_index_meta_count,
-                disk_cache_inverted_index_meta_size: value.disk_cache_inverted_index_meta_size,
-                inverted_index_filter_size: value.inverted_index_filter_size,
-                disk_cache_inverted_index_data_size: value.disk_cache_inverted_index_data_size,
-                inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
-                vector_index_meta_count: value.vector_index_meta_count,
-                disk_cache_vector_index_meta_size: value.disk_cache_vector_index_meta_size,
-                vector_index_filter_size: value.vector_index_filter_size,
-                disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
-                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
-                virtual_column_meta_count: value.virtual_column_meta_count,
-                disk_cache_virtual_column_meta_size: value.disk_cache_virtual_column_meta_size,
-                table_prune_partitions_count: value.table_prune_partitions_count,
-                data_cache_storage: value.data_cache_storage.into(),
-                data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
-                table_data_cache_population_queue_size: value
-                    .table_data_cache_population_queue_size,
-                data_cache_in_memory_bytes: value.data_cache_in_memory_bytes,
-                disk_cache_config: value.disk_cache_config.into(),
-                table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
-                table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
-                iceberg_table_meta_count: value.iceberg_table_meta_count,
-                table_meta_segment_count: None,
-                segment_block_metas_count: value.segment_block_metas_count,
-            }
         }
     }
 
@@ -3889,65 +3576,6 @@ mod cache_config_converters {
             }
         }
     }
-
-    impl TryFrom<DiskCacheConfig> for inner::DiskCacheConfig {
-        type Error = ErrorCode;
-        fn try_from(value: DiskCacheConfig) -> std::result::Result<Self, Self::Error> {
-            Ok(Self {
-                max_bytes: value.max_bytes,
-                path: value.path,
-                sync_data: value.sync_data,
-            })
-        }
-    }
-
-    impl From<inner::DiskCacheConfig> for DiskCacheConfig {
-        fn from(value: inner::DiskCacheConfig) -> Self {
-            Self {
-                max_bytes: value.max_bytes,
-                path: value.path,
-                sync_data: value.sync_data,
-            }
-        }
-    }
-
-    impl TryFrom<CacheStorageTypeConfig> for inner::CacheStorageTypeConfig {
-        type Error = ErrorCode;
-        fn try_from(value: CacheStorageTypeConfig) -> std::result::Result<Self, Self::Error> {
-            Ok(match value {
-                CacheStorageTypeConfig::None => inner::CacheStorageTypeConfig::None,
-                CacheStorageTypeConfig::Disk => inner::CacheStorageTypeConfig::Disk,
-            })
-        }
-    }
-
-    impl From<inner::CacheStorageTypeConfig> for CacheStorageTypeConfig {
-        fn from(value: inner::CacheStorageTypeConfig) -> Self {
-            match value {
-                inner::CacheStorageTypeConfig::None => CacheStorageTypeConfig::None,
-                inner::CacheStorageTypeConfig::Disk => CacheStorageTypeConfig::Disk,
-            }
-        }
-    }
-
-    impl TryFrom<DiskCacheKeyReloadPolicy> for inner::DiskCacheKeyReloadPolicy {
-        type Error = ErrorCode;
-        fn try_from(value: DiskCacheKeyReloadPolicy) -> std::result::Result<Self, Self::Error> {
-            Ok(match value {
-                DiskCacheKeyReloadPolicy::Reset => inner::DiskCacheKeyReloadPolicy::Reset,
-                DiskCacheKeyReloadPolicy::Fuzzy => inner::DiskCacheKeyReloadPolicy::Fuzzy,
-            })
-        }
-    }
-
-    impl From<inner::DiskCacheKeyReloadPolicy> for DiskCacheKeyReloadPolicy {
-        fn from(value: inner::DiskCacheKeyReloadPolicy) -> Self {
-            match value {
-                inner::DiskCacheKeyReloadPolicy::Reset => DiskCacheKeyReloadPolicy::Reset,
-                inner::DiskCacheKeyReloadPolicy::Fuzzy => DiskCacheKeyReloadPolicy::Fuzzy,
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -3955,6 +3583,7 @@ mod test {
     use std::ffi::OsString;
 
     use clap::Parser;
+    use temp_env::with_vars;
 
     use super::*;
 
@@ -3982,16 +3611,34 @@ mod test {
 
     #[test]
     fn test_env() {
-        unsafe {
-            std::env::set_var("LOG_TRACING_OTLP_ENDPOINT", "http://127.0.2.1:1111");
-            std::env::set_var("LOG_TRACING_CAPTURE_LOG_LEVEL", "DebuG");
-        }
-
-        let cfg = Config::load_with_config_file("").unwrap();
-        assert_eq!(
-            cfg.log.tracing.tracing_otlp.endpoint,
-            "http://127.0.2.1:1111"
+        with_vars(
+            vec![
+                ("LOG_TRACING_OTLP_ENDPOINT", Some("http://127.0.2.1:1111")),
+                ("LOG_TRACING_CAPTURE_LOG_LEVEL", Some("DebuG")),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert_eq!(
+                    cfg.log.tracing.tracing_otlp.endpoint,
+                    "http://127.0.2.1:1111"
+                );
+                assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
+            },
         );
-        assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
+    }
+
+    #[test]
+    fn test_env_cache_enable_table_bloom_index_cache_compat() {
+        with_vars(
+            vec![
+                ("CACHE_ENABLE_TABLE_BLOOM_INDEX_CACHE", Some("false")),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert!(!cfg.cache.enable_table_index_bloom);
+            },
+        );
     }
 }
