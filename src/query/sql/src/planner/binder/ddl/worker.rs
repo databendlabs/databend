@@ -89,7 +89,7 @@ impl Binder {
                 set_options.extend(options.iter().map(|(k, v)| (k.to_lowercase(), v.clone())));
             }
             AlterWorkerAction::UnsetOptions { options } => {
-                unset_options.extend(options.iter().map(|opt| opt.to_string()));
+                unset_options.extend(options.iter().map(|opt| opt.to_string().to_lowercase()));
             }
             AlterWorkerAction::Suspend => {
                 suspend = true;
