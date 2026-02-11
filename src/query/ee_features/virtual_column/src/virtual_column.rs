@@ -20,18 +20,34 @@ use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::plans::RefreshSelection;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
+
+#[derive(Clone, Debug)]
+pub struct VirtualColumnRefreshResult {
+    pub block_location: String,
+    pub draft_virtual_block_meta: DraftVirtualBlockMeta,
+    pub column_hlls: Option<RawBlockHLL>,
+}
 
 #[async_trait::async_trait]
 pub trait VirtualColumnHandler: Sync + Send {
-    async fn do_refresh_virtual_column(
+    async fn prepare_refresh_virtual_column(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        fuse_table: &FuseTable,
+        limit: Option<u64>,
+        overwrite: bool,
+        selection: Option<RefreshSelection>,
+    ) -> Result<Vec<VirtualColumnRefreshResult>>;
+
+    async fn commit_refresh_virtual_column(
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
         pipeline: &mut Pipeline,
-        limit: Option<u64>,
-        overwrite: bool,
-        selection: Option<RefreshSelection>,
-    ) -> Result<()>;
+        results: Vec<VirtualColumnRefreshResult>,
+    ) -> Result<u64>;
 }
 
 pub struct VirtualColumnHandlerWrapper {
@@ -44,17 +60,28 @@ impl VirtualColumnHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn do_refresh_virtual_column(
+    pub async fn prepare_refresh_virtual_column(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        fuse_table: &FuseTable,
+        limit: Option<u64>,
+        overwrite: bool,
+        selection: Option<RefreshSelection>,
+    ) -> Result<Vec<VirtualColumnRefreshResult>> {
+        self.handler
+            .prepare_refresh_virtual_column(ctx, fuse_table, limit, overwrite, selection)
+            .await
+    }
+
+    pub async fn commit_refresh_virtual_column(
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
         pipeline: &mut Pipeline,
-        limit: Option<u64>,
-        overwrite: bool,
-        selection: Option<RefreshSelection>,
-    ) -> Result<()> {
+        results: Vec<VirtualColumnRefreshResult>,
+    ) -> Result<u64> {
         self.handler
-            .do_refresh_virtual_column(ctx, fuse_table, pipeline, limit, overwrite, selection)
+            .commit_refresh_virtual_column(ctx, fuse_table, pipeline, results)
             .await
     }
 }

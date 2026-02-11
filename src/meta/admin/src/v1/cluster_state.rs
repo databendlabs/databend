@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_runtime_api::SpawnApi;
 use databend_meta::meta_node::meta_handle::MetaHandle;
+use databend_meta_runtime_api::SpawnApi;
 use http::StatusCode;
 use poem::IntoResponse;
 use poem::Response;

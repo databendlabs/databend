@@ -15,12 +15,12 @@ databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
+databend-meta-kvapi = { workspace = true }
+databend-meta-types = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 opendal = { workspace = true }

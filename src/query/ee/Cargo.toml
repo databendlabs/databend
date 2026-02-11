@@ -24,7 +24,6 @@ databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
@@ -46,6 +45,7 @@ databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-meta-runtime = { workspace = true }
+databend-meta-types = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-io = { workspace = true }
@@ -57,12 +57,12 @@ log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
-typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
+databend-meta-kvapi = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
 jsonb = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }

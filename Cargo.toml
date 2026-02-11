@@ -18,7 +18,6 @@ members = [
     "src/meta/cache",
     "src/meta/cli-config",
     "src/meta/control",
-    "src/meta/core/*",
     "src/meta/ee",
     "src/meta/admin",
     "src/meta/kvapi-tests",
@@ -30,6 +29,7 @@ members = [
     "src/meta/schema-api-tests",
     "src/meta/semaphore",
     "src/meta/store",
+    "src/meta/ver",
     "src/query/codegen",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
@@ -44,7 +44,6 @@ default-members = [
     "src/meta/cache",
     "src/meta/cli-config",
     "src/meta/control",
-    "src/meta/core/*",
     "src/meta/ee",
     "src/meta/admin",
     "src/meta/kvapi-tests",
@@ -56,6 +55,7 @@ default-members = [
     "src/meta/schema-api-tests",
     "src/meta/semaphore",
     "src/meta/store",
+    "src/meta/ver",
     "src/query/codegen",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
@@ -65,7 +65,6 @@ default-members = [
 [workspace.dependencies]
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
-databend-common-auth = { path = "src/common/auth" }
 databend-common-base = { path = "src/common/base" }
 databend-common-binaries = { path = "src/binaries" }
 databend-common-building = { path = "src/common/building" }
@@ -92,20 +91,13 @@ databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
 databend-common-meta-app-storage = { path = "src/meta/app-storage" }
 databend-common-meta-cache = { path = "src/meta/cache" }
-databend-common-meta-client = { path = "src/meta/core/client" }
 databend-common-meta-control = { path = "src/meta/control" }
-databend-common-meta-kvapi = { path = "src/meta/core/kvapi" }
-databend-common-meta-kvapi-test-suite = { path = "src/meta/core/kvapi-test-suite" }
 databend-common-meta-kvapi-tests = { path = "src/meta/kvapi-tests" }
 databend-common-meta-process = { path = "src/meta/process" }
-databend-common-meta-raft-store = { path = "src/meta/core/raft-store" }
-databend-common-meta-runtime-api = { path = "src/meta/core/runtime-api" }
 databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
 databend-common-meta-schema-api-tests = { path = "src/meta/schema-api-tests" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }
-databend-common-meta-sled-store = { path = "src/meta/core/sled-store" }
 databend-common-meta-store = { path = "src/meta/store" }
-databend-common-meta-types = { path = "src/meta/core/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
 databend-common-pipeline = { path = "src/query/pipeline" }
@@ -116,6 +108,7 @@ databend-common-script = { path = "src/query/script" }
 databend-common-settings = { path = "src/query/settings" }
 databend-common-sql = { path = "src/query/sql" }
 databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
+databend-common-statistics = { path = "src/common/statistics" }
 databend-common-storage = { path = "src/common/storage" }
 databend-common-storages-basic = { path = "src/query/storages/basic" }
 databend-common-storages-delta = { path = "src/query/storages/delta" }
@@ -155,11 +148,20 @@ databend-functions-scalar-geo = { path = "src/query/functions/src/scalars/geogra
 databend-functions-scalar-integer-basic-arithmetic = { path = "src/query/functions/src/scalars/integer_arithmetic" }
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
-databend-meta = { path = "src/meta/core/service" }
+databend-meta = "260205.3.0"
 databend-meta-admin = { path = "src/meta/admin" }
 databend-meta-cli-config = { path = "src/meta/cli-config" }
+databend-meta-client = "260205.3.0"
+databend-meta-kvapi = "260205.3.0"
+databend-meta-kvapi-test-suite = "260205.3.0"
+databend-meta-raft-store = "260205.3.0"
 databend-meta-runtime = { path = "src/meta/runtime" }
-databend-meta-test-harness = { path = "src/meta/core/test-harness" }
+databend-meta-runtime-api = "260205.3.0"
+databend-meta-sled-store = "260205.3.0"
+databend-meta-test-harness = "260205.3.0"
+databend-meta-types = "260205.3.0"
+databend-meta-ver = { path = "src/meta/ver" }
+databend-meta-version = "260205.3.0"
 databend-query = { path = "src/query/service" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
@@ -241,7 +243,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.13"
 ctor = "0.2"
 dashmap = { version = "6.1.0", features = ["serde"] }
-databend-base = "0.2.9"
+databend-base = "0.2.10"
 deepsize = { version = "0.2.0" }
 defer = "0.2"
 deltalake = "0.26"
@@ -396,7 +398,6 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
-raft-log = { version = "0.2.12" }
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
 rayon = "1.9.0"
@@ -613,9 +614,19 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
-databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.9" }
+databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.10" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-kvapi = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-kvapi-test-suite = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-raft-store = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-runtime-api = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-sled-store = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-types = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
+databend-meta-version = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.3.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "1868abf" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "fc84214" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.13" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc812ad7010" }

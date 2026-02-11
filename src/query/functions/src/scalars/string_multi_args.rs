@@ -65,6 +65,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature,
             concat_domain,
             concat_fn,
+            None,
             has_null,
         )))
     }));
@@ -84,6 +85,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(PassthroughNullable(concat_fn)),
+                derive_stat: None,
             },
         }))
     }));
@@ -150,6 +152,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         _ => Value::Scalar(Scalar::String(builder.build_scalar())),
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -244,6 +247,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         _ => Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar())),
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -294,6 +298,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature,
             FunctionDomain::MayThrow,
             regexp_instr_fn,
+            None,
             has_null,
         )))
     }));
@@ -318,6 +323,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature,
             FunctionDomain::MayThrow,
             regexp_like_fn,
+            None,
             has_null,
         )))
     }));
@@ -463,6 +469,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature,
             FunctionDomain::MayThrow,
             regexp_replace_fn,
+            None,
             has_null,
         )))
     }));
@@ -504,6 +511,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature,
             FunctionDomain::MayThrow,
             regexp_substr_fn,
+            None,
             has_null,
         )))
     }));
@@ -525,6 +533,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             signature,
             FunctionDomain::Full,
             char_fn,
+            None,
             has_null,
         )))
     }));

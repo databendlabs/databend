@@ -23,7 +23,6 @@ aho-corasick = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bstr = { workspace = true }
-chrono-tz = { workspace = true }
 geozero = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }

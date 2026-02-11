@@ -18,10 +18,10 @@ use std::io::BufRead;
 use std::io::Lines;
 use std::iter::Peekable;
 
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_raft_store::ondisk::DataVersion;
-use databend_common_meta_raft_store::ondisk::TREE_HEADER;
+use databend_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_meta_raft_store::ondisk::DATA_VERSION;
+use databend_meta_raft_store::ondisk::DataVersion;
+use databend_meta_raft_store::ondisk::TREE_HEADER;
 
 /// Import from lines of exported data and Return the max log id that is found.
 pub fn validate_version<B: BufRead + 'static>(

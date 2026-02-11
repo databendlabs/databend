@@ -24,7 +24,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
@@ -33,6 +32,7 @@ use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::VERGEN_GIT_SHA;
+use databend_meta_ver::MIN_METASRV_VER_FOR_QUERY;
 use databend_query::GlobalServices;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::history_tables::GlobalHistoryLog;
@@ -59,7 +59,10 @@ pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
         None => return Ok(false),
         Some(Commands::Ver) => {
             println!("version: {}", *DATABEND_SEMVER);
-            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+            println!(
+                "min-compatible-metasrv-version: {}",
+                *MIN_METASRV_VER_FOR_QUERY
+            );
         }
     }
 

@@ -33,21 +33,20 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_kvapi::kvapi::ListOptions;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::TxnRequest;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
-use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
+use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_kvapi::kvapi::ListOptions;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::TxnRequest;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -900,9 +899,8 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> anyho
 }
 
 async fn new_local_meta() -> MetaStore {
-    let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
-    let config = meta_config.to_meta_grpc_client_conf(version.semver());
+    let config = meta_config.to_meta_grpc_client_conf();
     let provider = MetaStoreProvider::new(config);
     provider
         .create_meta_store::<DatabendRuntime>()

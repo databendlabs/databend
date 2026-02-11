@@ -18,12 +18,13 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
+use databend_common_management::meta_service_error;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserQuota;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateUserPlan;
 use databend_common_users::UserApiProvider;
+use databend_meta_types::MatchSeq;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -62,7 +63,12 @@ impl Interpreter for CreateUserInterpreter {
         let tenant = self.ctx.get_tenant();
 
         let user_mgr = UserApiProvider::instance();
-        let user_counts = user_mgr.user_api(&tenant).get_raw_users().await?.len();
+        let user_counts = user_mgr
+            .user_api(&tenant)
+            .get_raw_users()
+            .await
+            .map_err(meta_service_error)?
+            .len();
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(&tenant);
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
@@ -90,7 +96,7 @@ impl Interpreter for CreateUserInterpreter {
             update_on: now,
         };
         user_mgr
-            .add_user(&tenant, user_info, &plan.create_option)
+            .create_user(&tenant, user_info, &plan.create_option)
             .await?;
 
         Ok(PipelineBuildResult::create())

@@ -33,10 +33,10 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_types::MetaError;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::Key;
+use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_types::MetaError;
 use fastrace::func_name;
 use log::info;
 

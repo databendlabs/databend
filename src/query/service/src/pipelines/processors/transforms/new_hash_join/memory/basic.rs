@@ -24,8 +24,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
-use databend_common_hashtable::BinaryHashJoinHashMap;
-use databend_common_hashtable::HashJoinHashMap;
 use databend_common_settings::Settings;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
@@ -39,6 +37,8 @@ use crate::pipelines::processors::transforms::SingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::transforms::UniqueFixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::UniqueSerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::UniqueSingleBinaryHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
 
 pub struct BasicHashJoin {

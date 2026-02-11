@@ -21,8 +21,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseInfo;
-use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::NodeType;
+use databend_meta_types::NodeInfo;
+use databend_meta_types::NodeType;
 
 const ENTERPRISE_FEATURE_UNAVAILABLE_ERROR: &str = "The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/";
 

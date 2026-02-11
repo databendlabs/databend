@@ -19,17 +19,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_base::testutil::next_port;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::errors::CreationError;
-use databend_common_meta_runtime_api::RuntimeApi;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_node::meta_worker::MetaWorker;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::errors::CreationError;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_runtime_api::RuntimeApi;
 use log::info;
 use log::warn;
-use semver::Version;
 
 /// A container for a locally started meta service, mainly for testing purpose.
 ///
@@ -85,11 +85,8 @@ impl Drop for LocalMetaService {
 }
 
 impl LocalMetaService {
-    pub async fn new<RT: RuntimeApi>(
-        name: impl fmt::Display,
-        version: Version,
-    ) -> anyhow::Result<LocalMetaService> {
-        Self::new_with_fixed_dir::<RT>(None, name, version).await
+    pub async fn new<RT: RuntimeApi>(name: impl fmt::Display) -> anyhow::Result<LocalMetaService> {
+        Self::new_with_fixed_dir::<RT>(None, name).await
     }
 
     /// Create a new Config for test, with unique port assigned
@@ -100,7 +97,6 @@ impl LocalMetaService {
     pub async fn new_with_fixed_dir<RT: RuntimeApi>(
         dir: Option<String>,
         name: impl fmt::Display,
-        version: Version,
     ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
         let (temp_dir, dir_path) = if let Some(dir_path) = dir {
@@ -145,13 +141,13 @@ impl LocalMetaService {
         let meta_handle = MetaWorker::create_meta_worker(config.clone(), Arc::new(runtime)).await?;
         let meta_handle = Arc::new(meta_handle);
 
-        let mut grpc_server = GrpcServer::create(&config, version.clone(), meta_handle);
+        let mut grpc_server = GrpcServer::create(&config, meta_handle);
         grpc_server.do_start().await?;
 
         // Update config with the actual bound port
         config.grpc = grpc_server.grpc_config().clone();
 
-        let client = Self::grpc_client(&config, version).await?;
+        let client = Self::grpc_client(&config).await?;
 
         let local = LocalMetaService {
             _temp_dir: temp_dir,
@@ -181,17 +177,16 @@ impl LocalMetaService {
 
     async fn grpc_client(
         config: &configs::MetaServiceConfig,
-        version: Version,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         let addr = config.grpc.api_address().expect("gRPC port should be set");
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
-            version,
             "root",
             "xxx",
             None,
             Some(Duration::from_secs(10)),
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )?;
 
         Ok(client)

@@ -19,11 +19,8 @@ use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
 use databend_common_base::base::OrderedFloat;
-use databend_common_column::bitmap::Bitmap;
 use ethnum::U256;
 use ethnum::i256;
-
-use crate::RowPtr;
 
 /// # Safety
 ///
@@ -657,54 +654,4 @@ pub trait HashtableLike {
     fn iter(&self) -> Self::Iterator<'_>;
 
     fn clear(&mut self);
-}
-
-pub trait HashJoinHashtableLike {
-    type Key: ?Sized;
-
-    // Probe hash table, use `hashes` to probe hash table and convert it in-place to pointers for memory reuse.
-    fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
-
-    // Perform early filtering probe, store matched indexes in `matched_selection` and store unmatched indexes
-    // in `unmatched_selection`, return the number of matched and unmatched indexes.
-    fn early_filtering_probe(
-        &self,
-        hashes: &mut [u64],
-        valids: Option<Bitmap>,
-        matched_selection: &mut Vec<u32>,
-        unmatched_selection: &mut Vec<u32>,
-    ) -> (usize, usize);
-
-    // Perform early filtering probe and store matched indexes in `selection`, return the number of matched indexes.
-    fn early_filtering_matched_probe(
-        &self,
-        hashes: &mut [u64],
-        valids: Option<Bitmap>,
-        selection: &mut Vec<u32>,
-    ) -> usize;
-
-    // we use `next_contains` to see whether we can find a matched row in the link.
-    // the ptr is the link header.
-    fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
-
-    /// 1. `key` is the serialize probe key from one row
-    /// 2. `ptr` pointers to the *RawEntry for of the bucket correlated to key.So before this method,
-    ///    we will do a round probe firstly. If the ptr is zero, it means there is no correlated bucket
-    ///    for key
-    /// 3. `vec_ptr` is RowPtr Array, we use this one to record the matched row in chunks
-    /// 4. `occupied` is the length for vec_ptr
-    /// 5. `capacity` is the capacity of vec_ptr
-    /// 6. return matched rows count and next ptr which need to test in the future.
-    ///    if the capacity is enough, the next ptr is zero, otherwise next ptr is valid.
-    fn next_probe(
-        &self,
-        key: &Self::Key,
-        ptr: u64,
-        vec_ptr: *mut RowPtr,
-        occupied: usize,
-        capacity: usize,
-    ) -> (usize, u64);
-
-    // Find the next matched ptr.
-    fn next_matched_ptr(&self, key: &Self::Key, ptr: u64) -> u64;
 }

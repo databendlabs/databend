@@ -23,7 +23,7 @@ pub use kvapi_impl::IndexIdToName;
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::schema::IndexNameIdentRaw;
     use crate::schema::index_id_to_name_ident::IndexIdToNameIdent;
@@ -48,7 +48,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::IndexId;
     use super::IndexIdToNameIdent;

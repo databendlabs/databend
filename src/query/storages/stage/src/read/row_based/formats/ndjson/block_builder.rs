@@ -168,7 +168,7 @@ impl RowDecoder for NdJsonDecoder {
             let row = row.trim();
             let row_id = batch.start_pos.rows + row_id;
             if !row.is_empty() {
-                if let Err(e) = self.read_row(row, columns, &null_if, &state.file_full_path) {
+                if let Err(e) = self.read_row(row, columns, &null_if, &state.file_path) {
                     self.load_context.error_handler.on_error(
                         e.with_row(row_id),
                         Some((columns, state.num_rows)),

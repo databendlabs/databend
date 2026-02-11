@@ -123,7 +123,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, VariantType, _>(
         "st_asgeojson",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, VariantType>(|ewkb, builder, ctx| {
@@ -148,7 +148,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _>(
         "st_asewkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, BinaryType>(|ewkb, builder, ctx| {
@@ -171,7 +171,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _>(
         "st_aswkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, BinaryType>(|ewkb, builder, ctx| {
@@ -194,7 +194,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "st_asewkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -217,7 +217,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "st_aswkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -441,7 +441,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             ),
         );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_area",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -466,7 +466,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _>(
         "st_convexhull",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|ewkb, builder, ctx| {
@@ -651,7 +651,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geomfromgeohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|geohash, builder, ctx| {
@@ -687,7 +687,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geompointfromgeohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|geohash, builder, ctx| {
@@ -722,29 +722,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType, _, _>(
-        "st_makegeompoint",
-        |_,_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType>(|longitude, latitude, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
+    registry
+        .register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType, _, _>(
+            "st_makegeompoint",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType>(
+                |longitude, latitude, builder, ctx| {
+                    if let Some(validity) = &ctx.validity {
+                        if !validity.get_bit(builder.len()) {
+                            builder.commit_row();
+                            return;
+                        }
+                    }
+                    let geo = Geometry::from(Point::new(longitude.0, latitude.0));
+                    match geo_to_ewkb(geo, None) {
+                        Ok(binary) => builder.put_slice(binary.as_slice()),
+                        Err(e) => ctx.set_error(builder.len(), e.to_string()),
+                    }
                     builder.commit_row();
-                    return;
-                }
-            }
-            let geo = Geometry::from(Point::new(longitude.0, latitude.0));
-            match geo_to_ewkb(geo, None) {
-                Ok(binary) => builder.put_slice(binary.as_slice()),
-                Err(e) => ctx.set_error(
-                    builder.len(),
-                    e.to_string(),
-                ),
-            }
-            builder.commit_row();
-        })
-    );
+                },
+            ),
+        );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _>(
         "st_makepolygon",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|ewkb, builder, ctx| {
@@ -853,7 +853,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "st_geohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -906,7 +906,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geometryfromwkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|s, builder, ctx| {
@@ -936,7 +936,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _>(
         "st_geometryfromwkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BinaryType, GeometryType>(|binary, builder, ctx| {
@@ -1016,7 +1016,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geometryfromwkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|wkt, builder, ctx| {
@@ -1055,7 +1055,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_length",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -1104,7 +1104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_x",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -1133,7 +1133,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_y",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -1188,7 +1188,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, Int32Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, Int32Type, _>(
         "st_srid",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<GeometryType, Int32Type>(|ewkb, output, ctx| {
@@ -1306,7 +1306,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, UInt32Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, UInt32Type, _>(
         "st_npoints",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, UInt32Type>(|ewkb, builder, ctx| {
@@ -1330,7 +1330,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "to_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -1351,7 +1351,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "to_geometry",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|s, builder, ctx| {
@@ -1389,7 +1389,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _>(
         "to_geometry",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BinaryType, GeometryType>(|binary, builder, ctx| {
@@ -1435,7 +1435,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, GeometryType, _>(
         "to_geometry",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, GeometryType>(|json, builder, ctx| {
@@ -1642,30 +1642,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
-        "st_transform",
-        |_, _, _,_| FunctionDomain::MayThrow,
-        vectorize_with_builder_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType>(
-            |original, from_srid, to_srid, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
+    registry
+        .register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
+            "st_transform",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType>(
+                |original, from_srid, to_srid, builder, ctx| {
+                    if let Some(validity) = &ctx.validity {
+                        if !validity.get_bit(builder.len()) {
+                            builder.commit_row();
+                            return;
+                        }
                     }
-                }
 
-                match st_transform_impl(original, from_srid, to_srid) {
-                    Ok(data) => {
-                        builder.put_slice(data.as_slice());
+                    match st_transform_impl(original, from_srid, to_srid) {
+                        Ok(data) => {
+                            builder.put_slice(data.as_slice());
+                        }
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                        }
                     }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                    }
-                }
-                builder.commit_row();
-            },
-        ),
-    );
+                    builder.commit_row();
+                },
+            ),
+        );
 }
 
 fn st_transform_impl(

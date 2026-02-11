@@ -29,17 +29,22 @@ pub fn merge_join_runtime_filter_packets(
         packets
     );
     let total_build_rows: usize = packets.iter().map(|packet| packet.build_rows).sum();
-    // Skip packets that `JoinRuntimeFilterPacket::packets` is `None`
+
+    // If any packet is incomplete (disable_all_due_to_spill), the merged result is also incomplete
+    if packets.iter().any(|packet| packet.disable_all_due_to_spill) {
+        return Ok(JoinRuntimeFilterPacket::disable_all(total_build_rows));
+    }
+
     let packets = packets
         .into_iter()
         .filter_map(|packet| packet.packets)
         .collect::<Vec<_>>();
 
+    // Skip packets that `JoinRuntimeFilterPacket::packets` is `None`
     if packets.is_empty() {
-        return Ok(JoinRuntimeFilterPacket {
-            packets: None,
-            build_rows: total_build_rows,
-        });
+        return Ok(JoinRuntimeFilterPacket::complete_without_filters(
+            total_build_rows,
+        ));
     }
 
     let mut result = HashMap::new();
@@ -56,10 +61,14 @@ pub fn merge_join_runtime_filter_packets(
         "RUNTIME-FILTER: merge_join_runtime_filter_packets output: {:?}",
         result
     );
-    Ok(JoinRuntimeFilterPacket {
-        packets: Some(result),
-        build_rows: total_build_rows,
-    })
+
+    if result.is_empty() {
+        return Ok(JoinRuntimeFilterPacket::complete_without_filters(
+            total_build_rows,
+        ));
+    }
+
+    Ok(JoinRuntimeFilterPacket::complete(result, total_build_rows))
 }
 
 fn merge_inlist(

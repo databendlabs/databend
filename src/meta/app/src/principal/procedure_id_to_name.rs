@@ -36,7 +36,7 @@ impl ProcedureIdToNameIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::principal::ProcedureIdentity;
     use crate::principal::procedure_id_to_name::ProcedureIdToNameIdent;
@@ -65,7 +65,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::ProcedureIdToNameIdent;
     use crate::principal::procedure_id_ident::ProcedureId;

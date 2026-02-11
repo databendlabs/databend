@@ -552,15 +552,14 @@ impl IPhysicalPlan for ChunkFillAndReorder {
                             TransformAsyncFunction::create_sequence_counters(async_funcs.len());
                         let ctx = builder.ctx.clone();
                         plan.async_builder = Some(Box::new(move |input, output| {
+                            let transform = TransformAsyncFunction::new(
+                                ctx.clone(),
+                                async_funcs.clone(),
+                                BTreeMap::new(),
+                                counters.clone(),
+                            )?;
                             Ok(ProcessorPtr::create(AsyncTransformer::create(
-                                input,
-                                output,
-                                TransformAsyncFunction::new(
-                                    ctx.clone(),
-                                    async_funcs.clone(),
-                                    BTreeMap::new(),
-                                    counters.clone(),
-                                ),
+                                input, output, transform,
                             )))
                         }));
 

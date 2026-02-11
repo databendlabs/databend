@@ -35,6 +35,7 @@ use async_channel::Receiver;
 use async_channel::Sender;
 use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::Progress;
@@ -2014,7 +2015,12 @@ impl TableContext for QueryContext {
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
         case_sensitive: bool,
+        on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
+        let copy_options = CopyIntoTableOptions {
+            on_error: on_error_mode.unwrap_or_default(),
+            ..Default::default()
+        };
         let operator = init_stage_operator(&stage_info)?;
         let info = operator.info();
         let stage_root = format!("{}{}", info.name(), info.root());
@@ -2069,7 +2075,7 @@ impl TableContext for QueryContext {
                         duplicated_files_detected: vec![],
                         is_select: true,
                         default_exprs: None,
-                        copy_into_table_options: Default::default(),
+                        copy_into_table_options: copy_options.clone(),
                         stage_root,
                         is_variant: true,
                         parquet_metas: None,
@@ -2096,6 +2102,7 @@ impl TableContext for QueryContext {
                     stage_root,
                     is_variant,
                     is_select: true,
+                    copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
                 OrcTable::try_create(self, info).await
@@ -2113,6 +2120,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     is_variant: true,
                     stage_root,
+                    copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
                 StageTable::try_create(info)
@@ -2147,6 +2155,7 @@ impl TableContext for QueryContext {
                     files_to_copy,
                     is_select: true,
                     stage_root,
+                    copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
                 StageTable::try_create(info)

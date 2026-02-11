@@ -13,12 +13,13 @@ serde = { workspace = true }
 serfig = { workspace = true }
 
 databend-common-config = { workspace = true }
-databend-common-meta-raft-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
+databend-meta-raft-store = { workspace = true }
+databend-meta-types = { workspace = true }
+databend-meta-ver = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

@@ -35,7 +35,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::AutoIncrementKey;
-use databend_common_meta_types::MetaId;
+use databend_meta_types::MetaId;
 use parking_lot::RwLock;
 
 use crate::Metadata;
@@ -283,6 +283,9 @@ impl DefaultExprBinder {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
                     AsyncFunctionArgument::DictGetFunction(_) => {
+                        unreachable!("expect AsyncFunctionArgument::SequenceFunction")
+                    }
+                    AsyncFunctionArgument::ReadFile(_) => {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
                 };

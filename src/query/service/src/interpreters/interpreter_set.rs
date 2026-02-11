@@ -108,9 +108,7 @@ impl SetInterpreter {
                     let tenant = scalar.clone();
                     if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
                         UserApiProvider::try_create_simple(
-                            config.meta.to_meta_grpc_client_conf(
-                                databend_common_version::BUILD_INFO.semver(),
-                            ),
+                            config.meta.to_meta_grpc_client_conf(),
                             &Tenant::new_or_err(tenant, func_name!())?,
                         )
                         .await?;

@@ -1207,6 +1207,16 @@ pub enum AsyncFunctionArgument {
     // The dictionary argument is connection URL of remote source, like Redis, MySQL ...
     // Used by `dict_get` function to connect source and read data.
     DictGetFunction(DictGetFunctionArgument),
+    // Used by `read_file` function to read stage files.
+    ReadFile(ReadFileFunctionArgument),
+}
+
+#[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct ReadFileFunctionArgument {
+    pub stage_name: Option<String>,
+    #[educe(Hash(ignore), PartialEq(ignore))]
+    pub stage_info: Option<Box<StageInfo>>,
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
@@ -1313,6 +1323,9 @@ impl AsyncFunctionCall {
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal("Cannot generate dict_get function"))
+            }
+            AsyncFunctionArgument::ReadFile(_) => {
+                Err(ErrorCode::Internal("Cannot generate read_file function"))
             }
         }
     }

@@ -25,7 +25,7 @@ use databend_common_http::home::debug_home_handler;
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
 use databend_common_http::stack::debug_dump_stack;
-use databend_common_meta_types::anyerror::AnyError;
+use databend_meta_types::anyerror::AnyError;
 use log::info;
 use log::warn;
 use poem::Endpoint;
@@ -110,6 +110,18 @@ impl AdminService {
                 .at(
                     "/v1/tenants/:tenant/user_functions",
                     get(super::v1::user_functions::user_functions),
+                )
+                .at(
+                    "/v1/tenants/:tenant/procedures",
+                    get(super::v1::procedures::list_procedures),
+                )
+                .at(
+                    "/v1/tenants/:tenant/procedures/:procedure_id",
+                    get(super::v1::procedures::get_procedure_by_id),
+                )
+                .at(
+                    "/v1/tenants/:tenant/procedures/:name",
+                    get(super::v1::procedures::get_procedure_by_name),
                 )
                 .at(
                     "/v1/tenants/:tenant/databases/:database/tables/:table/stats",

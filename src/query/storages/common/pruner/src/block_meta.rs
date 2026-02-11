@@ -54,11 +54,36 @@ pub struct BlockMetaIndex {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct VirtualBlockMetaIndex {
     pub virtual_block_location: String,
-    // Key is virtual column id, value is the column meta.
+    // Key is parquet column id used for reading, value is the column meta.
     pub virtual_column_metas: BTreeMap<ColumnId, VirtualColumnMeta>,
+    // Key is source column id, value is the base column id for shared map data.
+    pub shared_virtual_column_ids: BTreeMap<ColumnId, ColumnId>,
     // If all the virtual columns are generated,
     // we can reduce IO by ignoring the source column.
     pub ignored_source_column_ids: HashSet<ColumnId>,
+    // Key is virtual column id, value is the read plan.
+    pub virtual_column_read_plan: BTreeMap<ColumnId, Vec<VirtualColumnReadPlan>>,
+}
+
+/// Read plan for materializing a virtual column from parquet virtual data.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum VirtualColumnReadPlan {
+    /// Directly read the materialized virtual column by name.
+    Direct { name: String },
+    /// Read from a parent plan (usually a variant column) and extract by keypath suffix.
+    FromParent {
+        parent: Box<VirtualColumnReadPlan>,
+        suffix_path: String,
+    },
+    /// Read from the shared map column using the key index for this source column.
+    Shared {
+        source_column_id: ColumnId,
+        index: u32,
+    },
+    /// Reconstruct an object from child plans keyed by field name.
+    Object {
+        entries: Vec<(String, VirtualColumnReadPlan)>,
+    },
 }
 
 #[typetag::serde(name = "block_meta_index")]

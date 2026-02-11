@@ -72,6 +72,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -163,7 +164,9 @@ use crate::binder::Binder;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
+use crate::binder::VirtualColumnName;
 use crate::binder::bind_values;
+use crate::binder::parse_stage_name;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
@@ -190,6 +193,7 @@ use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
+use crate::plans::ReadFileFunctionArgument;
 use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -4940,8 +4944,8 @@ impl<'a> TypeChecker<'a> {
         if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
             if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
                 span,
-                &column.database_name,
-                &column.table_name,
+                base_column.table_index,
+                base_column.column_id,
                 &base_column.column_name,
                 &keypaths,
             ) {
@@ -6189,6 +6193,7 @@ impl<'a> TypeChecker<'a> {
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
             "dict_get" => self.resolve_dict_get_async_function(span, func_name, arguments)?,
+            "read_file" => self.resolve_read_file_async_function(span, func_name, arguments)?,
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -6451,6 +6456,115 @@ impl<'a> TypeChecker<'a> {
             }),
             attr_type,
         )))
+    }
+
+    fn resolve_read_file_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if args.len() != 1 && args.len() != 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "read_file function need one or two arguments but got {}",
+                args.len()
+            ))
+            .set_span(span));
+        }
+
+        let mut resolved_args = Vec::with_capacity(args.len());
+        let mut arg_types = Vec::with_capacity(args.len());
+        for arg in args {
+            let box (arg_scalar, arg_type) = self.resolve(arg)?;
+            let arg_scalar = if arg_type.remove_nullable() != DataType::String {
+                wrap_cast(&arg_scalar, &DataType::String)
+            } else {
+                arg_scalar
+            };
+            resolved_args.push(arg_scalar);
+            arg_types.push(arg_type);
+        }
+
+        let mut read_file_arg = ReadFileFunctionArgument {
+            stage_name: None,
+            stage_info: None,
+        };
+
+        if args.len() == 1 {
+            if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
+                if let Some(location) = constant.value.as_string() {
+                    if !location.starts_with('@') {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "stage path must start with @, but got {}",
+                            location
+                        ))
+                        .set_span(span));
+                    }
+                }
+            }
+        } else if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
+            if let Some(stage) = constant.value.as_string() {
+                let stage_name = parse_stage_name(stage).map_err(|err| {
+                    ErrorCode::SemanticError(err.message().to_string()).set_span(span)
+                })?;
+                let stage_info =
+                    Self::resolve_stage_info_for_read_file(self.ctx.as_ref(), span, &stage_name)?;
+                read_file_arg.stage_name = Some(stage_name);
+                read_file_arg.stage_info = Some(Box::new(stage_info));
+            }
+        }
+
+        let return_type = if arg_types
+            .iter()
+            .any(|arg_type| arg_type.is_nullable_or_null())
+        {
+            DataType::Nullable(Box::new(DataType::Binary))
+        } else {
+            DataType::Binary
+        };
+
+        let display_name = if args.len() == 1 {
+            format!("{}({})", func_name, args[0])
+        } else {
+            format!("{}({}, {})", func_name, args[0], args[1])
+        };
+        Ok(Box::new((
+            ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+                span,
+                func_name: func_name.to_string(),
+                display_name,
+                return_type: Box::new(return_type.clone()),
+                arguments: resolved_args,
+                func_arg: AsyncFunctionArgument::ReadFile(read_file_arg),
+            }),
+            return_type,
+        )))
+    }
+
+    fn resolve_stage_info_for_read_file(
+        ctx: &dyn TableContext,
+        span: Span,
+        stage_name: &str,
+    ) -> Result<StageInfo> {
+        databend_common_base::runtime::block_on(async move {
+            let (stage_info, _) = resolve_stage_location(ctx, stage_name).await?;
+            if ctx.get_settings().get_enable_experimental_rbac_check()? {
+                let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+                if !(stage_info.is_temporary
+                    || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                    || stage_info.stage_type == StageType::User
+                        && stage_info.stage_name == ctx.get_current_user()?.name)
+                {
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege READ is required on stage {} for user {}",
+                        stage_info.stage_name.clone(),
+                        &ctx.get_current_user()?.identity().display(),
+                    ))
+                    .set_span(span));
+                }
+            }
+            Ok(stage_info)
+        })
     }
 
     fn resolve_cast_to_variant(
@@ -6812,28 +6926,35 @@ impl<'a> TypeChecker<'a> {
     fn try_rewrite_virtual_column(
         &mut self,
         span: Span,
-        database_name: &Option<String>,
-        table_name: &Option<String>,
+        table_index: IndexType,
+        column_id: ColumnId,
         column_name: &str,
         keypaths: &KeyPaths,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if !self.bind_context.allow_virtual_column {
             return None;
         }
-        let name = Self::keypaths_to_name(column_name, keypaths);
-        self.resolve(&Expr::ColumnRef {
-            span,
-            column: ColumnRef {
-                database: database_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                table: table_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                column: ColumnID::Name(Identifier::from_name(span, name)),
-            },
-        })
-        .ok()
+        let owned_keypaths = keypaths.to_owned();
+        let key_name = Self::keypaths_to_name(column_name, keypaths);
+        let virtual_column_name = VirtualColumnName {
+            table_index,
+            source_column_id: column_id,
+            key_name,
+        };
+
+        // add virtual column binding into `BindContext`
+        let column = self.bind_context.add_virtual_column_binding(
+            self.metadata.clone(),
+            column_name,
+            virtual_column_name,
+            owned_keypaths,
+        )?;
+
+        let data_type = *column.data_type.clone();
+        Some(Box::new((
+            BoundColumnRef { span, column }.into(),
+            data_type,
+        )))
     }
 
     fn keypaths_to_name(column_name: &str, keypaths: &KeyPaths) -> String {
@@ -6892,8 +7013,8 @@ impl<'a> TypeChecker<'a> {
                 if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
                     if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
                         span,
-                        &column.database_name,
-                        &column.table_name,
+                        base_column.table_index,
+                        base_column.column_id,
                         &base_column.column_name,
                         &keypaths,
                     ) {

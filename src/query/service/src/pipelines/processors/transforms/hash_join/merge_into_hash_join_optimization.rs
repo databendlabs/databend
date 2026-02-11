@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_hashtable::MergeIntoBlockInfoIndex;
-use databend_common_hashtable::RowPtr;
 use databend_common_sql::plans::JoinType;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
 use log::info;
@@ -34,6 +33,7 @@ use super::HashJoinState;
 use super::TransformHashJoinProbe;
 use super::build_state::BuildState;
 use super::hash_join_probe_state::MergeIntoChunkPartialUnmodified;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 pub struct MatchedPtr(pub *mut AtomicU8);
 
 unsafe impl Send for MatchedPtr {}

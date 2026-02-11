@@ -18,7 +18,7 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use databend_common_meta_types::NodeInfo;
+use databend_meta_types::NodeInfo;
 use http::StatusCode;
 use poem::web::IntoResponse;
 use poem::web::Json;

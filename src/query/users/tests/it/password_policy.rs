@@ -26,9 +26,9 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_client::RpcClientConf;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
+use databend_meta_client::RpcClientConf;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_password_policy() -> anyhow::Result<()> {
@@ -40,7 +40,7 @@ async fn test_password_policy() -> anyhow::Result<()> {
     {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::empty(BUILD_INFO.semver());
+    let conf = RpcClientConf::empty();
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 
@@ -377,7 +377,7 @@ async fn test_password_policy() -> anyhow::Result<()> {
 
     // add user
     user_mgr
-        .add_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
+        .create_user(&tenant, user_info, &CreateOption::CreateIfNotExists)
         .await?;
 
     // drop password policy

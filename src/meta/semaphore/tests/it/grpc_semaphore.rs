@@ -16,13 +16,13 @@
 
 use std::time::Duration;
 
-use databend_common_meta_runtime_api::SpawnApi;
 use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_types::UpsertKV;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_runtime_api::SpawnApi;
 use databend_meta_test_harness::make_grpc_client;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
+use databend_meta_types::UpsertKV;
 use log::info;
 use test_harness::test;
 use tokio::sync::oneshot;

@@ -36,8 +36,8 @@ impl TagNameIdentRaw {
 }
 
 mod kvapi_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::super::id_ident::TagId;
     use crate::key_with_tenant::KeyWithTenant;
@@ -63,7 +63,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::TagNameIdent;
     use crate::tenant::Tenant;

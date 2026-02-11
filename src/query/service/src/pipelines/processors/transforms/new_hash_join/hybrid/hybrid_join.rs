@@ -199,10 +199,11 @@ impl Join for HybridHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        // Only the state needs to be transitioned, as all data migration must have been completed in the previous stage.
+        // A processor can reach final_build while still in Memory mode even if another processor
+        // has already triggered spill. In that case we must still perform full transition work
+        // to avoid leaving late-arrived chunks in memory state.
         if self.state.check_spilled() && matches!(self.mode, HybridJoinMode::Memory(_)) {
-            let grace_join = self.create_grace_join()?;
-            self.mode = HybridJoinMode::Grace(Box::new(grace_join));
+            self.switch_to_grace_mode(true)?;
         }
 
         match &mut self.mode {
@@ -223,6 +224,10 @@ impl Join for HybridHashJoin {
             HybridJoinMode::Memory(join) => join.build_runtime_filter(),
             HybridJoinMode::Grace(join) => join.build_runtime_filter(),
         }
+    }
+
+    fn is_spill_happened(&self) -> bool {
+        self.state.has_spilled_once()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

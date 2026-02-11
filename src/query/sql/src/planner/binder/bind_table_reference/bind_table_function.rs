@@ -308,7 +308,6 @@ impl Binder {
             false,
             false,
             None,
-            false,
         );
         let (s_expr, mut bind_context) =
             self.bind_base_table(bind_context, "system", table_index, None, sample)?;
@@ -370,7 +369,6 @@ impl Binder {
                 false,
                 false,
                 None,
-                false,
             );
 
             let (s_expr, mut bind_context) =

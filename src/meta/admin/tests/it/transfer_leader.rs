@@ -14,10 +14,10 @@
 
 use std::time::Duration;
 
-use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
 use log::info;

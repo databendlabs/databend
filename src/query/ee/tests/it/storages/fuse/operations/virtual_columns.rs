@@ -16,7 +16,8 @@ use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
+use databend_enterprise_query::storages::fuse::operations::virtual_columns::commit_refresh_virtual_column;
+use databend_enterprise_query::storages::fuse::operations::virtual_columns::prepare_refresh_virtual_column;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -35,31 +36,34 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
     fixture
         .default_session()
         .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
+        .set_enable_experimental_virtual_column(0)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
     let number_of_block = 2;
     append_variant_sample_data(number_of_block, &fixture).await?;
 
-    let table = fixture.latest_default_table().await?;
-    let table_schema = table.schema();
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let dal = fuse_table.get_operator_ref();
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
 
     let table_ctx = fixture.new_query_ctx().await?;
 
-    let snapshot_opt = fuse_table.read_table_snapshot().await?;
-    let snapshot = snapshot_opt.unwrap();
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+    let results =
+        prepare_refresh_virtual_column(table_ctx.clone(), fuse_table, None, false, None).await?;
+
+    assert!(!results.is_empty());
 
     let mut build_res = PipelineBuildResult::create();
-    do_refresh_virtual_column(
+    let _ = commit_refresh_virtual_column(
         table_ctx.clone(),
         fuse_table,
         &mut build_res.main_pipeline,
-        None,
-        false,
-        None,
+        results,
     )
     .await?;
 
@@ -75,6 +79,13 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         table_ctx.set_executor(complete_executor.get_inner())?;
         complete_executor.execute()?;
     }
+
+    let table = fixture.latest_default_table().await?;
+    let table_schema = table.schema();
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let dal = fuse_table.get_operator_ref();
+    let snapshot_opt = fuse_table.read_table_snapshot().await?;
+    let snapshot = snapshot_opt.unwrap();
 
     let segment_reader =
         MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
@@ -93,7 +104,6 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         for block_meta in block_metas {
             assert!(block_meta.virtual_block_meta.is_some());
             let virtual_block_meta = block_meta.virtual_block_meta.clone().unwrap();
-            assert_eq!(virtual_block_meta.virtual_column_metas.len(), 2);
 
             let virtual_loc = virtual_block_meta.virtual_location.0;
             assert!(dal.exists(&virtual_loc).await?);

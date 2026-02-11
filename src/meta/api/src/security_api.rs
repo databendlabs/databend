@@ -29,11 +29,11 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_types::ConditionResult::Eq;
-use databend_common_meta_types::MatchSeqExt;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::TxnRequest;
+use databend_meta_kvapi::kvapi;
+use databend_meta_types::ConditionResult::Eq;
+use databend_meta_types::MatchSeqExt;
+use databend_meta_types::MetaError;
+use databend_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
