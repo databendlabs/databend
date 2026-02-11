@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::ThreadTracker;
@@ -57,7 +59,7 @@ use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::LevelFilter;
 use opendal::Operator;
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
@@ -71,6 +73,14 @@ pub struct SequenceCounter {
     current: AtomicU64,
     // Maximum sequence number in the current batch
     max: AtomicU64,
+    // Version counter for seqlock-style reads of (current, max).
+    // Even = stable snapshot; odd = writer in progress.
+    version: AtomicU64,
+    // Serialize slow-path meta fetch / refill.
+    refill_lock: Mutex<()>,
+    /// Test-only: force the next N `try_reserve()` to return `None` then go to slow path.
+    #[cfg(test)]
+    fail_next_reserve: AtomicUsize,
 }
 
 impl SequenceCounter {
@@ -78,21 +88,61 @@ impl SequenceCounter {
         Self {
             current: AtomicU64::new(0),
             max: AtomicU64::new(0),
+            version: AtomicU64::new(0),
+            refill_lock: Mutex::new(()),
+            #[cfg(test)]
+            fail_next_reserve: AtomicUsize::new(0),
         }
+    }
+
+    fn load_bounds(&self) -> (u64, u64) {
+        loop {
+            let v1 = self.version.load(Ordering::Acquire);
+            if v1 & 1 == 1 {
+                std::hint::spin_loop();
+                continue;
+            }
+
+            let current = self.current.load(Ordering::Relaxed);
+            let max = self.max.load(Ordering::Relaxed);
+
+            // Ensure `current/max` are read before the second `version` check.
+            std::sync::atomic::fence(Ordering::AcqRel);
+
+            let v2 = self.version.load(Ordering::Acquire);
+            if v1 == v2 {
+                return (current, max);
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn fail_next_reserve(&self, times: usize) {
+        self.fail_next_reserve.store(times, Ordering::SeqCst);
     }
 
     // Try to reserve a range of sequence numbers
     fn try_reserve(&self, count: u64) -> Option<(u64, u64)> {
-        if self.current.load(Ordering::Relaxed) == 0 {
+        #[cfg(test)]
+        if self
+            .fail_next_reserve
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+                if v > 0 { Some(v - 1) } else { None }
+            })
+            .is_ok()
+        {
             return None;
         }
 
-        let current = self.current.load(Ordering::Relaxed);
-        let max = self.max.load(Ordering::Relaxed);
+        let (current, max) = self.load_bounds();
+
+        if current == 0 {
+            return None;
+        }
 
         // Check if we have enough sequence numbers in the current batch
-        if current + count <= max {
-            let new_current = current + count;
+        let new_current = current.checked_add(count)?;
+        if new_current <= max {
             if self
                 .current
                 .compare_exchange(current, new_current, Ordering::SeqCst, Ordering::Relaxed)
@@ -108,14 +158,39 @@ impl SequenceCounter {
     }
 
     // Update the counter with a new batch of sequence numbers
-    fn update_batch(&self, start: u64, count: u64) {
-        self.current.store(start, Ordering::SeqCst);
-        self.max.store(start + count, Ordering::SeqCst);
+    fn update_batch(&self, current: u64, max: u64) {
+        // Seqlock write: version odd => update => version even.
+        self.version.fetch_add(1, Ordering::AcqRel);
+        self.current.store(current, Ordering::Relaxed);
+        self.max.store(max, Ordering::Relaxed);
+        self.version.fetch_add(1, Ordering::Release);
+    }
+
+    fn claim_up_to(&self, count: u64) -> (u64, u64) {
+        loop {
+            let (current, max) = self.load_bounds();
+
+            if current == 0 || current >= max {
+                return (current, 0);
+            }
+
+            let remaining = max.saturating_sub(current);
+            let take = remaining.min(count);
+            let next = current + take;
+
+            if self
+                .current
+                .compare_exchange(current, next, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+            {
+                return (current, take);
+            }
+        }
     }
 }
 
 // Shared sequence counters type
-pub type SequenceCounters = Vec<Arc<RwLock<SequenceCounter>>>;
+pub type SequenceCounters = Vec<Arc<SequenceCounter>>;
 
 enum VisibilityCheckerState {
     Disabled,
@@ -651,7 +726,7 @@ impl TransformAsyncFunction {
     // Create a new shared sequence counters map
     pub(crate) fn create_sequence_counters(size: usize) -> SequenceCounters {
         (0..size)
-            .map(|_| Arc::new(RwLock::new(SequenceCounter::new())))
+            .map(|_| Arc::new(SequenceCounter::new()))
             .collect()
     }
 
@@ -659,83 +734,78 @@ impl TransformAsyncFunction {
     pub async fn transform<T: NextValFetcher>(
         ctx: Arc<QueryContext>,
         data_block: &mut DataBlock,
-        counter_lock: Arc<RwLock<SequenceCounter>>,
+        counter: Arc<SequenceCounter>,
         fetcher: T,
     ) -> Result<()> {
         let count = data_block.num_rows() as u64;
         let column = if count == 0 {
             UInt64Type::from_data(vec![])
         } else {
-            // Get or create the sequence counter
-            let counter = counter_lock.read().await;
             let fn_range_collect = |start: u64, end: u64, step: i64| {
                 (0..end - start)
                     .map(|num| start + num * step as u64)
                     .collect::<Vec<_>>()
             };
-            // We need to fetch more sequence numbers
+
             let catalog = ctx.get_default_catalog()?;
 
             // Try to reserve sequence numbers from the counter
             if let Some((start, _end)) = counter.try_reserve(count) {
                 let step = fetcher.step(&ctx, &catalog).await?;
-                // We have enough sequence numbers in the current batch
                 UInt64Type::from_data(fn_range_collect(start, start + count, step))
             } else {
-                // drop the read lock and get the write lock
-                drop(counter);
-                let counter = counter_lock.write().await;
-                {
-                    // try reserve again
-                    if let Some((start, _end)) = counter.try_reserve(count) {
-                        let step = fetcher.step(&ctx, &catalog).await?;
-                        // We have enough sequence numbers in the current batch
-                        UInt64Type::from_data(fn_range_collect(start, count, step))
-                    } else {
-                        // Get current state of the counter
-                        let current = counter.current.load(Ordering::Relaxed);
-                        let max = counter.max.load(Ordering::Relaxed);
-                        // Calculate how many sequence numbers we need to fetch
-                        // If there are remaining numbers, we'll use them first
-                        let remaining = max.saturating_sub(current);
-                        let to_fetch = count.saturating_sub(remaining);
+                // Slow path: serialize refill, but do not hold a RW lock while awaiting.
+                let _guard = counter.refill_lock.lock().await;
 
+                // try reserve again
+                if let Some((start, _end)) = counter.try_reserve(count) {
+                    drop(_guard);
+                    let step = fetcher.step(&ctx, &catalog).await?;
+                    UInt64Type::from_data(fn_range_collect(start, start + count, step))
+                } else {
+                    // Claim the remaining numbers in the current batch (if any).
+                    let (remaining_start, remaining_to_use) = counter.claim_up_to(count);
+                    let to_fetch = count.saturating_sub(remaining_to_use);
+
+                    if to_fetch == 0 {
+                        drop(_guard);
+                        let step = fetcher.step(&ctx, &catalog).await?;
+                        UInt64Type::from_data(fn_range_collect(
+                            remaining_start,
+                            remaining_start + count,
+                            step,
+                        ))
+                    } else {
                         let NextValFetchResult {
                             start,
                             batch_size,
                             step,
                         } = fetcher.fetch(&ctx, &catalog, to_fetch).await?;
 
-                        // If we have remaining numbers, use them first
-                        if remaining > 0 {
-                            // Then add the new batch after the remaining numbers
-                            counter.update_batch(start, batch_size);
-
-                            // Return a combined range: first the remaining numbers, then the new ones
+                        if remaining_to_use > 0 {
                             let mut numbers = Vec::with_capacity(count as usize);
-
-                            // Add the remaining numbers
-                            let remaining_to_use = remaining.min(count);
                             numbers.extend(fn_range_collect(
-                                current,
-                                current + remaining_to_use,
+                                remaining_start,
+                                remaining_start + remaining_to_use,
                                 step,
                             ));
 
-                            // Add numbers from the new batch if needed
                             if remaining_to_use < count {
                                 let new_needed = count - remaining_to_use;
                                 numbers.extend(fn_range_collect(start, start + new_needed, step));
-                                // Update the counter to reflect that we've used some of the new batch
-                                counter.current.store(start + new_needed, Ordering::SeqCst);
+
+                                // Reserve the consumed part before publishing the new max.
+                                counter.update_batch(start + new_needed, start + batch_size);
+                            } else {
+                                // Unreachable due to the slow-path condition, keep it safe.
+                                counter.update_batch(start, start + batch_size);
                             }
 
                             UInt64Type::from_data(numbers)
                         } else {
-                            // No remaining numbers, just use the new batch
-                            counter.update_batch(start + count, batch_size - count);
-                            // Return the sequence numbers needed for this request
-                            UInt64Type::from_data(fn_range_collect(start, start + count, step))
+                            let numbers = fn_range_collect(start, start + count, step);
+                            counter.update_batch(start + count, start + batch_size);
+                            UInt64Type::from_data(numbers)
                         }
                     }
                 }
@@ -929,5 +999,235 @@ impl AsyncTransform for TransformAsyncFunction {
             }
         }
         Ok(data_block)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_exception::Result;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::AccessType;
+    use databend_common_expression::types::UInt64Type;
+    use tokio::sync::Barrier;
+    use tokio::sync::oneshot;
+    use tokio::time::Duration;
+    use tokio::time::sleep;
+    use tokio::time::timeout;
+
+    use super::SequenceCounter;
+    use super::TransformAsyncFunction;
+
+    #[tokio::test]
+    async fn test_no_stall_when_refill_lock_waiting() {
+        let counter = Arc::new(SequenceCounter::new());
+        counter.update_batch(1, 1000);
+
+        let holder = {
+            let counter = counter.clone();
+            databend_common_base::runtime::spawn(async move {
+                let _guard = counter.refill_lock.lock().await;
+                sleep(Duration::from_millis(200)).await;
+            })
+        };
+
+        // Ensure the lock is held.
+        sleep(Duration::from_millis(20)).await;
+
+        let waiter = {
+            let counter = counter.clone();
+            databend_common_base::runtime::spawn(async move {
+                let _guard = counter.refill_lock.lock().await;
+            })
+        };
+
+        // While a slow-path refill is holding the lock and another task is
+        // waiting for it, the fast-path reservation should still make progress.
+        timeout(Duration::from_millis(50), async {
+            for _ in 0..10 {
+                assert!(counter.try_reserve(1).is_some());
+            }
+        })
+        .await
+        .expect("fast-path reservation should not be stalled");
+
+        holder.await.unwrap();
+        waiter.await.unwrap();
+    }
+
+    /// Regression test for issue #19392 ("Test 3: High Concurrency Stress Test").
+    ///
+    /// The old `Arc<tokio::RwLock<SequenceCounter>>` design could stall under load:
+    /// a slow-path refill would enqueue a writer, and tokio's fairness would then
+    /// block new readers even if they only need the fast path.
+    ///
+    /// With the current design, the fast path (`try_reserve`) must keep making
+    /// progress even when the slow-path refill lock is held and a large number
+    /// of tasks are queued up waiting for it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_high_concurrency_fast_path_progress_during_refill_contention() {
+        let counter = Arc::new(SequenceCounter::new());
+        counter.update_batch(1, 1_000_000);
+
+        // Hold the slow-path refill lock long enough so a regression (fast-path
+        // blocked behind refill waiters) becomes visible.
+        let (held_tx, held_rx) = oneshot::channel();
+        let holder = {
+            let counter = counter.clone();
+            databend_common_base::runtime::spawn(async move {
+                let _guard = counter.refill_lock.lock().await;
+                let _ = held_tx.send(());
+                sleep(Duration::from_millis(800)).await;
+            })
+        };
+        held_rx.await.unwrap();
+
+        // Create a queue of slow-path waiters to emulate contention.
+        // In the old RwLock-based implementation, having a writer waiting is what
+        // triggered the fairness behavior that blocked unrelated readers.
+        let mut waiters = Vec::new();
+        for _ in 0..64 {
+            let counter = counter.clone();
+            waiters.push(databend_common_base::runtime::spawn(async move {
+                let _guard = counter.refill_lock.lock().await;
+            }));
+        }
+
+        // High-concurrency fast path: should complete well before the holder
+        // releases `refill_lock`.
+        let tasks = 200;
+        let barrier = Arc::new(Barrier::new(tasks + 1));
+        let mut handles = Vec::with_capacity(tasks);
+        for _ in 0..tasks {
+            let counter = counter.clone();
+            let barrier = barrier.clone();
+            handles.push(databend_common_base::runtime::spawn(async move {
+                barrier.wait().await;
+                for _ in 0..5 {
+                    while counter.try_reserve(1).is_none() {
+                        tokio::task::yield_now().await;
+                    }
+                }
+            }));
+        }
+
+        barrier.wait().await;
+
+        // If fast-path progress is blocked by slow-path contention, this will
+        // time out. The deadline is intentionally much shorter than the time
+        // the holder keeps `refill_lock`.
+        timeout(Duration::from_millis(500), async {
+            for h in handles {
+                h.await.unwrap();
+            }
+        })
+        .await
+        .expect("fast-path should not be blocked by refill contention");
+
+        holder.await.unwrap();
+        for w in waiters {
+            w.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_load_bounds_waits_for_stable_snapshot() {
+        let counter = Arc::new(SequenceCounter::new());
+        counter.update_batch(1, 1000);
+
+        // Simulate a partial publish where `max` becomes visible before `current`.
+        counter.version.fetch_add(1, Ordering::AcqRel);
+        counter.max.store(20, Ordering::Relaxed);
+
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        let counter_for_read = counter.clone();
+        databend_common_base::runtime::spawn_blocking(move || {
+            let _ = tx.send(counter_for_read.load_bounds());
+        });
+
+        // Verify we are in a mixed state: new max + old current.
+        assert_eq!(counter.current.load(Ordering::Relaxed), 1);
+        assert_eq!(counter.max.load(Ordering::Relaxed), 20);
+
+        assert!(timeout(Duration::from_millis(20), &mut rx).await.is_err());
+
+        counter.current.store(10, Ordering::Relaxed);
+        counter.version.fetch_add(1, Ordering::Release);
+
+        let (current, max) = timeout(Duration::from_secs(1), rx)
+            .await
+            .expect("load_bounds should complete after publish")
+            .unwrap();
+
+        assert_eq!((current, max), (10, 20));
+    }
+
+    struct TestFetcher {
+        step: i64,
+        fetch_called: Arc<AtomicBool>,
+        fetch_to_fetch: Arc<AtomicU64>,
+    }
+
+    impl super::NextValFetcher for TestFetcher {
+        async fn fetch(
+            self,
+            _ctx: &crate::sessions::QueryContext,
+            _catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
+            to_fetch: u64,
+        ) -> Result<super::NextValFetchResult> {
+            self.fetch_called.store(true, Ordering::SeqCst);
+            self.fetch_to_fetch.store(to_fetch, Ordering::SeqCst);
+            Ok(super::NextValFetchResult {
+                start: 1000,
+                batch_size: to_fetch.max(1),
+                step: self.step,
+            })
+        }
+
+        async fn step(
+            &self,
+            _ctx: &crate::sessions::QueryContext,
+            _catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
+        ) -> Result<i64> {
+            Ok(self.step)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_skip_fetch_when_to_fetch_is_zero() -> Result<()> {
+        let fixture = crate::test_kits::TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let counter = Arc::new(SequenceCounter::new());
+
+        // Provide enough cached values.
+        counter.update_batch(10, 10 + 64);
+
+        // Force the slow path to bypass both try_reserve() checks.
+        // This makes `claim_up_to()` take the whole range, leading to `to_fetch == 0`.
+        counter.fail_next_reserve(2);
+
+        let fetch_called = Arc::new(AtomicBool::new(false));
+        let fetch_to_fetch = Arc::new(AtomicU64::new(0));
+
+        let mut block = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0u64; 16])]);
+        TransformAsyncFunction::transform(ctx, &mut block, counter, TestFetcher {
+            step: 1,
+            fetch_called: fetch_called.clone(),
+            fetch_to_fetch: fetch_to_fetch.clone(),
+        })
+        .await?;
+
+        let seq_col = block.get_by_offset(1).as_column().unwrap();
+        let values = UInt64Type::try_downcast_column(seq_col).unwrap();
+        assert_eq!(values.as_ref(), (10..26).collect::<Vec<_>>().as_slice());
+
+        assert!(!fetch_called.load(Ordering::SeqCst));
+        assert_eq!(fetch_to_fetch.load(Ordering::SeqCst), 0);
+        Ok(())
     }
 }
