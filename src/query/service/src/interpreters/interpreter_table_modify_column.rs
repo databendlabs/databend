@@ -385,6 +385,7 @@ impl ModifyTableColumnInterpreter {
         let is_empty_table = base_snapshot.is_none_or(|v| v.summary.row_count == 0);
 
         let mut need_rebuild = false;
+        let mut has_column_change = false;
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         let format_as_parquet = fuse_table.storage_format_as_parquet();
@@ -403,18 +404,21 @@ impl ModifyTableColumnInterpreter {
                         .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
                 }
 
-                // Already decided to rebuild from a previous field; keep
-                // iterating only to validate remaining default expressions.
-                if need_rebuild {
-                    continue;
-                }
-
-                // Parquet String -> Binary: no rebuild needed.
+                // Parquet String -> Binary: safe metadata-only conversion,
+                // physical data is identical so no rebuild or CDC concern.
                 if format_as_parquet
                     && is_string_to_binary(&old_field.data_type, &field.data_type)
                     && !default_expr_changed
                     && !computed_expr_changed
                 {
+                    continue;
+                }
+
+                has_column_change = true;
+
+                // Already decided to rebuild from a previous field; keep
+                // iterating only to validate remaining default expressions.
+                if need_rebuild {
                     continue;
                 }
 
@@ -437,10 +441,10 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
-        // Metadata-only default changes on change-tracking tables can silently
-        // alter historical row values (filled from the snapshot schema default)
+        // Block non-fastpath schema changes on non-empty change-tracking tables.
+        // Metadata-only default changes can silently alter historical row values
         // without producing change records, breaking stream/CDC consistency.
-        if schema_changed && !is_empty_table && fuse_table.change_tracking_enabled() {
+        if has_column_change && !is_empty_table && fuse_table.change_tracking_enabled() {
             return Err(ErrorCode::AlterTableError(format!(
                 "table {} has change tracking enabled, modifying columns should be avoided",
                 table_info.desc
