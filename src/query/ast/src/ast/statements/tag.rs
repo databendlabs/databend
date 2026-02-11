@@ -21,6 +21,7 @@ use derive_visitor::DriveMut;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Literal;
+use crate::ast::TypeName;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
@@ -146,6 +147,21 @@ pub enum AlterObjectTagTarget {
         if_exists: bool,
         connection_name: Identifier,
     },
+    View {
+        if_exists: bool,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        view: Identifier,
+    },
+    Function {
+        if_exists: bool,
+        udf_name: Identifier,
+    },
+    Procedure {
+        if_exists: bool,
+        name: Identifier,
+        arg_types: Vec<TypeName>,
+    },
 }
 
 impl Display for AlterObjectTagTarget {
@@ -196,6 +212,44 @@ impl Display for AlterObjectTagTarget {
                     write!(f, "IF EXISTS ")?;
                 }
                 write!(f, "{connection_name}")?;
+            }
+            AlterObjectTagTarget::View {
+                if_exists,
+                catalog,
+                database,
+                view,
+            } => {
+                write!(f, "VIEW ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(view)),
+                )?;
+            }
+            AlterObjectTagTarget::Function {
+                if_exists,
+                udf_name,
+            } => {
+                write!(f, "FUNCTION ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{udf_name}")?;
+            }
+            AlterObjectTagTarget::Procedure {
+                if_exists,
+                name,
+                arg_types,
+            } => {
+                write!(f, "PROCEDURE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{name}(")?;
+                write_comma_separated_list(f, arg_types)?;
+                write!(f, ")")?;
             }
         }
         Ok(())

@@ -25,6 +25,7 @@ use crate::ast::ExplainKind;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
+use crate::ast::ProcedureIdentity;
 use crate::ast::SelectTarget;
 use crate::ast::Statement;
 use crate::ast::StatementWithFormat;
@@ -44,6 +45,7 @@ use crate::parser::input::Dialect;
 use crate::parser::input::Input;
 use crate::parser::input::ParseMode;
 use crate::parser::statement::insert_stmt;
+use crate::parser::statement::procedure_type_name;
 use crate::parser::statement::replace_stmt;
 use crate::parser::statement::statement;
 use crate::parser::token::Token;
@@ -82,6 +84,29 @@ pub fn parse_table_ref(sql: &str, dialect: Dialect) -> Result<TableRef> {
 pub fn parse_database_ref(sql: &str, dialect: Dialect) -> Result<DatabaseRef> {
     let tokens = tokenize_sql(sql)?;
     run_parser(&tokens, dialect, ParseMode::Default, false, database_ref)
+}
+
+/// Parse a procedure reference string like "my_proc(INT, STRING)" or "my_proc()".
+/// Returns a `ProcedureIdentity` with the procedure name and argument types.
+pub fn parse_procedure_ref(sql: &str, dialect: Dialect) -> Result<ProcedureIdentity> {
+    let tokens = tokenize_sql(sql)?;
+    run_parser(&tokens, dialect, ParseMode::Default, false, |i| {
+        nom::combinator::map(
+            nom::sequence::pair(ident, procedure_type_name),
+            |(name, args_type): (Identifier, _)| ProcedureIdentity {
+                name: name.to_string(),
+                args_type,
+            },
+        )
+        .parse(i)
+    })
+}
+
+/// Parse a UDF name string (a single identifier).
+/// Rejects trailing tokens to avoid silently ignoring malformed input.
+pub fn parse_udf_ref(sql: &str, dialect: Dialect) -> Result<Identifier> {
+    let tokens = tokenize_sql(sql)?;
+    run_parser(&tokens, dialect, ParseMode::Default, false, ident)
 }
 
 pub fn parse_comma_separated_exprs(tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
