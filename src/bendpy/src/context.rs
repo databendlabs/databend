@@ -44,7 +44,9 @@ fn resolve_file_path(path: &str) -> String {
     )
 }
 
-fn extract_string_column(entry: &BlockEntry) -> Option<&databend_common_expression::types::StringColumn> {
+fn extract_string_column(
+    entry: &BlockEntry,
+) -> Option<&databend_common_expression::types::StringColumn> {
     match entry {
         BlockEntry::Column(Column::String(col)) => Some(col),
         BlockEntry::Column(Column::Nullable(n)) => match &n.column {
