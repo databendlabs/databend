@@ -61,7 +61,6 @@ use log::LevelFilter;
 use opendal::Operator;
 use tokio::sync::Mutex;
 
-
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
 use crate::sql::IndexType;
