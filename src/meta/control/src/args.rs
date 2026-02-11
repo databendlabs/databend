@@ -301,4 +301,8 @@ pub struct DumpRaftLogWalArgs {
     /// The dir to store persisted meta state, e.g., `.databend/meta1`
     #[clap(long)]
     pub raft_dir: String,
+
+    /// Decode protobuf-encoded values in UpsertKV and Transaction operations
+    #[clap(short = 'V', long, default_value_t = false)]
+    pub decode_values: bool,
 }
