@@ -19,6 +19,8 @@ use databend_common_catalog::database::is_system_database;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
+use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::schema::SetObjectTagsReq;
 use databend_common_meta_app::schema::TagNameIdent;
 use databend_common_meta_app::schema::TaggableObject;
@@ -26,6 +28,7 @@ use databend_common_meta_app::schema::UnsetObjectTagsReq;
 use databend_common_sql::plans::SetObjectTagsPlan;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_sql::plans::UnsetObjectTagsPlan;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use log::info;
 
@@ -120,6 +123,9 @@ async fn resolve_taggable_object(
         TagSetObject::Table(target) => resolve_table_object(ctx, tenant, target).await,
         TagSetObject::Stage(target) => resolve_stage_object(tenant, target).await,
         TagSetObject::Connection(target) => resolve_connection_object(tenant, target).await,
+        TagSetObject::View(target) => resolve_view_object(ctx, tenant, target).await,
+        TagSetObject::UDF(target) => resolve_udf_object(tenant, target).await,
+        TagSetObject::Procedure(target) => resolve_procedure_object(tenant, target).await,
     }
 }
 
@@ -225,6 +231,102 @@ async fn resolve_connection_object(
         })),
         Err(e) if e.code() == ErrorCode::UNKNOWN_CONNECTION && target.if_exists => Ok(None),
         Err(e) => Err(e),
+    }
+}
+
+async fn resolve_view_object(
+    ctx: &Arc<QueryContext>,
+    tenant: &databend_common_meta_app::tenant::Tenant,
+    target: &databend_common_sql::plans::ViewTagSetTarget,
+) -> Result<Option<TaggableObject>> {
+    let catalog = ctx.get_catalog(&target.catalog).await?;
+
+    if catalog.is_external() {
+        return Err(ErrorCode::Unimplemented(
+            "Tags are not supported for external catalog views",
+        ));
+    }
+
+    if is_system_database(&target.database) {
+        return Err(ErrorCode::Unimplemented(format!(
+            "Tags are not supported for views in system database '{}'",
+            target.database
+        )));
+    }
+
+    match catalog
+        .get_table(tenant, &target.database, &target.view)
+        .await
+    {
+        Ok(table) => {
+            if table.engine() != VIEW_ENGINE {
+                return Err(ErrorCode::UnknownView(format!(
+                    "'{}' is not a view",
+                    target.view
+                )));
+            }
+            Ok(Some(TaggableObject::Table {
+                table_id: table.get_table_info().ident.table_id,
+            }))
+        }
+        Err(e) if e.code() == ErrorCode::UNKNOWN_TABLE && target.if_exists => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+async fn resolve_udf_object(
+    tenant: &databend_common_meta_app::tenant::Tenant,
+    target: &databend_common_sql::plans::UDFTagSetTarget,
+) -> Result<Option<TaggableObject>> {
+    match UserApiProvider::instance()
+        .get_udf(tenant, &target.udf_name)
+        .await
+    {
+        Ok(Some(_)) => Ok(Some(TaggableObject::UDF {
+            name: target.udf_name.clone(),
+        })),
+        Ok(None) => {
+            if target.if_exists {
+                Ok(None)
+            } else {
+                Err(ErrorCode::UnknownFunction(format!(
+                    "Unknown UDF '{}'",
+                    target.udf_name
+                )))
+            }
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+async fn resolve_procedure_object(
+    tenant: &databend_common_meta_app::tenant::Tenant,
+    target: &databend_common_sql::plans::ProcedureTagSetTarget,
+) -> Result<Option<TaggableObject>> {
+    let req = GetProcedureReq::new(
+        tenant.clone(),
+        ProcedureIdentity::new(&target.name, &target.args),
+    );
+    match UserApiProvider::instance()
+        .procedure_api(tenant)
+        .get_procedure(&req)
+        .await
+    {
+        Ok(Some(_)) => Ok(Some(TaggableObject::Procedure {
+            name: target.name.clone(),
+            args: target.args.clone(),
+        })),
+        Ok(None) => {
+            if target.if_exists {
+                Ok(None)
+            } else {
+                Err(ErrorCode::UnknownProcedure(format!(
+                    "Unknown procedure '{}'",
+                    target.name
+                )))
+            }
+        }
+        Err(e) => Err(ErrorCode::from_std_error(e)),
     }
 }
 
