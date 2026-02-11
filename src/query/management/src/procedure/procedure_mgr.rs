@@ -38,13 +38,13 @@ use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
 use databend_common_meta_app::principal::procedure_name_ident::ProcedureName;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnRequest;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::DirName;
+use databend_meta_kvapi::kvapi::Key;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
+use databend_meta_types::TxnOp;
+use databend_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
@@ -62,6 +62,7 @@ impl ProcedureMgr {
     }
 
     /// Add a PROCEDURE to /tenant/procedure-name.
+    /// Returns `ExistError` if the procedure already exists and `overriding` is false.
     #[async_backtrace::framed]
     pub async fn create_procedure(
         &self,

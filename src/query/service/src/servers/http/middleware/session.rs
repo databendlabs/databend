@@ -34,8 +34,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::NodeInfo;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_types::NodeInfo;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -129,7 +129,7 @@ impl EndpointKind {
             | EndpointKind::UploadToStage
             | EndpointKind::Metadata
             | EndpointKind::Catalog => {
-                if GlobalConfig::instance().query.management_mode {
+                if GlobalConfig::instance().query.common.management_mode {
                     Ok(None)
                 } else {
                     Ok(Some(TokenType::Session))
@@ -530,8 +530,8 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
 ) -> PoemResult<Response> {
     let addr = node.http_address.clone();
     let config = GlobalConfig::instance();
-    let scheme = if config.query.http_handler_tls_server_key.is_empty()
-        || config.query.http_handler_tls_server_cert.is_empty()
+    let scheme = if config.query.common.http_handler_tls_server_key.is_empty()
+        || config.query.common.http_handler_tls_server_cert.is_empty()
     {
         "http"
     } else {

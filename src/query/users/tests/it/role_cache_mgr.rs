@@ -22,12 +22,12 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_client::RpcClientConf;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_version::BUILD_INFO;
+use databend_meta_client::RpcClientConf;
 
 pub const CATALOG_DEFAULT: &str = "default";
 
@@ -41,7 +41,7 @@ async fn test_role_cache_mgr() -> anyhow::Result<()> {
     {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::empty(BUILD_INFO.semver());
+    let conf = RpcClientConf::empty();
     let tenant = Tenant::new_literal("tenant1");
 
     let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;

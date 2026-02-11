@@ -19,7 +19,6 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
 use databend_common_storages_information_schema::CharacterSetsTable;
 use databend_common_storages_information_schema::ColumnsTable;
 use databend_common_storages_information_schema::KeyColumnUsageTable;
@@ -29,6 +28,7 @@ use databend_common_storages_information_schema::SchemataTable;
 use databend_common_storages_information_schema::StatisticsTable;
 use databend_common_storages_information_schema::TablesTable;
 use databend_common_storages_information_schema::ViewsTable;
+use databend_meta_types::SeqV;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;

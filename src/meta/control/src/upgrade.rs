@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_runtime_api::SpawnApi;
+use databend_meta_raft_store::config::RaftConfig;
+use databend_meta_raft_store::ondisk::OnDisk;
+use databend_meta_runtime_api::SpawnApi;
 
 /// Upgrade the data in raft_dir to the latest version.
 pub async fn upgrade<SP: SpawnApi>(raft_config: &RaftConfig) -> anyhow::Result<()> {

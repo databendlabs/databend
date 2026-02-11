@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-databend_common_tracing::register_module_tag!("[META_CLIENT]", "databend_common_meta_client");
+databend_common_tracing::register_module_tag!("[META_CLIENT]", "databend_meta_client");
 
 pub(crate) mod local;
 
@@ -23,36 +23,35 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MGetKVReq;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::RpcClientConf;
-use databend_common_meta_client::Streamed;
-use databend_common_meta_client::errors::CreationError;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::KVStream;
-use databend_common_meta_kvapi::kvapi::ListOptions;
-use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::fail_fast;
-use databend_common_meta_kvapi::kvapi::limit_stream;
-use databend_common_meta_runtime_api::RuntimeApi;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::errors::AcquireError;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::protobuf::WatchResponse;
+use databend_meta_client::ClientHandle;
+use databend_meta_client::MGetKVReq;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::RpcClientConf;
+use databend_meta_client::Streamed;
+use databend_meta_client::errors::CreationError;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::KVStream;
+use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_kvapi::kvapi::UpsertKVReply;
+use databend_meta_kvapi::kvapi::fail_fast;
+use databend_meta_kvapi::kvapi::limit_stream;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_runtime_api::RuntimeApi;
+use databend_meta_types::MetaError;
+use databend_meta_types::TxnReply;
+use databend_meta_types::TxnRequest;
+use databend_meta_types::UpsertKV;
+use databend_meta_types::protobuf::WatchRequest;
+use databend_meta_types::protobuf::WatchResponse;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 pub use local::LocalMetaService;
 use log::info;
 use log::warn;
-use semver::Version;
 use tokio::time::Instant;
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
@@ -92,9 +91,9 @@ impl MetaStore {
     /// Create a local meta service for testing.
     ///
     /// It is required to assign a base port as the port number range.
-    pub async fn new_local_testing<RT: RuntimeApi>(version: Version) -> Self {
+    pub async fn new_local_testing<RT: RuntimeApi>() -> Self {
         MetaStore::L(Arc::new(
-            LocalMetaService::new::<RT>("MetaStore-new-local-testing", version)
+            LocalMetaService::new::<RT>("MetaStore-new-local-testing")
                 .await
                 .unwrap(),
         ))
@@ -228,7 +227,6 @@ impl MetaStoreProvider {
                 LocalMetaService::new_with_fixed_dir::<RT>(
                     self.rpc_conf.embedded_dir.clone(),
                     "MetaStoreProvider-created",
-                    self.rpc_conf.version.clone(),
                 )
                 .await
                 .unwrap(),

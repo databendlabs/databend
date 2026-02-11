@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::InvalidArgument;
-use databend_common_meta_types::MetaError;
 use databend_common_proto_conv::Incompatible;
+use databend_meta_types::InvalidArgument;
+use databend_meta_types::MetaError;
 
 /// An error occurred when encoding with FromToProto.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

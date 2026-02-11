@@ -20,9 +20,9 @@ use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseApi;
 use databend_common_management::WarehouseInfo;
-use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::NodeType;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_types::NodeInfo;
+use databend_meta_types::NodeType;
 
 pub struct SystemResourcesManagement {
     pub warehouse_manager: Arc<dyn WarehouseApi>,
@@ -44,11 +44,11 @@ impl ResourcesManagement for SystemResourcesManagement {
 
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
-        assert!(config.query.cluster_id.is_empty());
-        assert!(config.query.warehouse_id.is_empty());
-        assert!(config.query.resources_management.is_some());
+        assert!(config.query.common.cluster_id.is_empty());
+        assert!(config.query.common.warehouse_id.is_empty());
+        assert!(config.query.common.resources_management.is_some());
 
-        if let Some(resources_management) = &config.query.resources_management {
+        if let Some(resources_management) = &config.query.common.resources_management {
             assert_eq!(
                 &resources_management.typ.to_ascii_lowercase(),
                 "system_managed"

@@ -20,8 +20,8 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 
 use crate::errors::RowAccessPolicyError;
 use crate::meta_txn_error::MetaTxnError;

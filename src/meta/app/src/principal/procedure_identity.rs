@@ -15,10 +15,10 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_kvapi::kvapi::KeyBuilder;
-use databend_common_meta_kvapi::kvapi::KeyCodec;
-use databend_common_meta_kvapi::kvapi::KeyError;
-use databend_common_meta_kvapi::kvapi::KeyParser;
+use databend_meta_kvapi::kvapi::KeyBuilder;
+use databend_meta_kvapi::kvapi::KeyCodec;
+use databend_meta_kvapi::kvapi::KeyError;
+use databend_meta_kvapi::kvapi::KeyParser;
 
 /// Uniquely identifies a procedure with a name and a args vec(string).
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Default)]

@@ -223,17 +223,11 @@ impl RuntimeFilterLocalBuilder {
         let total_rows = self.total_rows;
 
         if spill_happened {
-            return Ok(JoinRuntimeFilterPacket::disable_all(
-                &self.runtime_filters,
-                total_rows,
-            ));
+            return Ok(JoinRuntimeFilterPacket::disable_all(total_rows));
         }
 
         if total_rows == 0 {
-            return Ok(JoinRuntimeFilterPacket {
-                packets: None,
-                build_rows: 0,
-            });
+            return Ok(JoinRuntimeFilterPacket::complete_without_filters(0));
         }
 
         let packets: Vec<_> = self
@@ -245,10 +239,10 @@ impl RuntimeFilterLocalBuilder {
             })
             .collect::<Result<_>>()?;
 
-        Ok(JoinRuntimeFilterPacket {
-            packets: Some(packets.into_iter().collect()),
-            build_rows: total_rows,
-        })
+        Ok(JoinRuntimeFilterPacket::complete(
+            packets.into_iter().collect(),
+            total_rows,
+        ))
     }
 }
 

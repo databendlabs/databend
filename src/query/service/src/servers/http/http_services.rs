@@ -20,7 +20,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
-use databend_common_meta_types::anyerror::AnyError;
+use databend_meta_types::anyerror::AnyError;
 use http::StatusCode;
 use log::info;
 use poem::Endpoint;
@@ -127,8 +127,8 @@ impl HttpHandler {
 
     fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
         let cfg = OpensslTlsConfig::new()
-            .cert_from_file(config.query.http_handler_tls_server_cert.as_str())
-            .key_from_file(config.query.http_handler_tls_server_key.as_str());
+            .cert_from_file(config.query.common.http_handler_tls_server_cert.as_str())
+            .key_from_file(config.query.common.http_handler_tls_server_key.as_str());
 
         // if Path::new(&config.query.http_handler_tls_server_root_ca_cert).exists() {
         //     cfg = cfg.client_auth_required(std::fs::read(
@@ -178,8 +178,8 @@ impl Server for HttpHandler {
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
         let config = GlobalConfig::instance();
 
-        let res = match config.query.http_handler_tls_server_key.is_empty()
-            || config.query.http_handler_tls_server_cert.is_empty()
+        let res = match config.query.common.http_handler_tls_server_key.is_empty()
+            || config.query.common.http_handler_tls_server_cert.is_empty()
         {
             true => self.start_without_tls(listening).await,
             false => self.start_with_tls(listening).await,

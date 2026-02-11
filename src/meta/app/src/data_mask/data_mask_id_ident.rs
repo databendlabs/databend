@@ -43,7 +43,7 @@ impl DataMaskIdIdentRaw {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::data_mask::DataMaskIdIdent;
     use crate::data_mask::DatamaskMeta;
@@ -71,7 +71,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::DataMaskIdIdent;
     use crate::data_mask::DataMaskId;

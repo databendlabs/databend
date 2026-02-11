@@ -57,12 +57,12 @@ impl PipelineBuilder {
                     TransformAsyncFunction::create_sequence_counters(async_funcs.len());
 
                 pipeline.try_add_async_transformer(|| {
-                    Ok(TransformAsyncFunction::new(
+                    TransformAsyncFunction::new(
                         ctx.clone(),
                         async_funcs.clone(),
                         BTreeMap::new(),
                         sequence_counters.clone(),
-                    ))
+                    )
                 })?;
                 if new_default_schema != new_default_schema_no_cast {
                     pipeline.try_add_transformer(|| {

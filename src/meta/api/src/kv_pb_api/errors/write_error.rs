@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::MetaError;
+use databend_meta_types::MetaError;
 
 use crate::kv_pb_api::errors::PbDecodeError;
 use crate::kv_pb_api::errors::PbEncodeError;

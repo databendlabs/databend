@@ -69,22 +69,22 @@ impl UnSetInterpreter {
                     let default_val = match setting_key {
                         "max_memory_usage" => {
                             let conf = GlobalConfig::instance();
-                            if conf.query.max_server_memory_usage == 0 {
+                            if conf.query.common.max_server_memory_usage == 0 {
                                 settings
                                     .get_default_value(setting_key)?
                                     .map(|v| v.to_string())
                             } else {
-                                Some(conf.query.max_server_memory_usage.to_string())
+                                Some(conf.query.common.max_server_memory_usage.to_string())
                             }
                         }
                         "max_threads" => {
                             let conf = GlobalConfig::instance();
-                            if conf.query.num_cpus == 0 {
+                            if conf.query.common.num_cpus == 0 {
                                 settings
                                     .get_default_value(setting_key)?
                                     .map(|v| v.to_string())
                             } else {
-                                Some(conf.query.num_cpus.to_string())
+                                Some(conf.query.common.num_cpus.to_string())
                             }
                         }
                         _ => settings

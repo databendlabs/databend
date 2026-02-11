@@ -47,8 +47,6 @@ use databend_common_management::WarehouseMgr;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
 use databend_common_settings::FlightKeepAliveParams;
 use databend_common_settings::Settings;
@@ -58,6 +56,8 @@ use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::NodeInfo;
+use databend_meta_types::SeqV;
 use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
@@ -228,9 +228,11 @@ impl ClusterHelper for Cluster {
 
 impl ClusterDiscovery {
     #[async_backtrace::framed]
-    pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
-        let meta_api_provider =
-            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.semver()));
+    pub async fn create_meta_client(
+        cfg: &InnerConfig,
+        _version: BuildInfoRef,
+    ) -> Result<MetaStore> {
+        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
         match meta_api_provider
             .create_meta_store::<DatabendRuntime>()
             .await
@@ -267,12 +269,12 @@ impl ClusterDiscovery {
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
                 provider,
-                cfg.query.cluster_id.clone(),
+                cfg.query.common.cluster_id.clone(),
                 cfg.query.tenant_id.tenant_name().to_string(),
             )),
-            cluster_id: cfg.query.cluster_id.clone(),
+            cluster_id: cfg.query.common.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
-            flight_address: cfg.query.flight_api_address.clone(),
+            flight_address: cfg.query.common.flight_api_address.clone(),
             lru_cache: parking_lot::Mutex::new(LruCache::with_items_capacity(100)),
         }))
     }
@@ -349,10 +351,11 @@ impl ClusterDiscovery {
                         config.query.node_secret.clone(),
                         format!(
                             "{}:{}",
-                            config.query.http_handler_host, config.query.http_handler_port
+                            config.query.common.http_handler_host,
+                            config.query.common.http_handler_port
                         ),
-                        config.query.flight_api_address.clone(),
-                        config.query.discovery_address.clone(),
+                        config.query.common.flight_api_address.clone(),
+                        config.query.common.discovery_address.clone(),
                         String::new(),
                         String::new(),
                     );
@@ -371,22 +374,23 @@ impl ClusterDiscovery {
                 );
 
                 // compatibility, for self-managed nodes, we allow queries to continue executing even when the heartbeat fails.
-                if cluster_nodes.is_empty() && !config.query.cluster_id.is_empty() {
+                if cluster_nodes.is_empty() && !config.query.common.cluster_id.is_empty() {
                     let mut node_info = NodeInfo::create(
                         config.query.node_id.clone(),
                         config.query.node_secret.clone(),
                         format!(
                             "{}:{}",
-                            config.query.http_handler_host, config.query.http_handler_port
+                            config.query.common.http_handler_host,
+                            config.query.common.http_handler_port
                         ),
-                        config.query.flight_api_address.clone(),
-                        config.query.discovery_address.clone(),
+                        config.query.common.flight_api_address.clone(),
+                        config.query.common.discovery_address.clone(),
                         String::new(),
                         String::new(),
                     );
 
-                    node_info.cluster_id = config.query.cluster_id.clone();
-                    node_info.warehouse_id = config.query.warehouse_id.clone();
+                    node_info.cluster_id = config.query.common.cluster_id.clone();
+                    node_info.warehouse_id = config.query.common.warehouse_id.clone();
                     return Ok(Cluster::empty(node_info));
                 }
 
@@ -396,7 +400,7 @@ impl ClusterDiscovery {
     }
 
     pub async fn discover_warehouse_nodes(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        let nodes = match config.query.warehouse_id.is_empty() {
+        let nodes = match config.query.common.warehouse_id.is_empty() {
             true => {
                 self.warehouse_manager
                     .discover_warehouse_nodes(&config.query.node_id)
@@ -404,7 +408,7 @@ impl ClusterDiscovery {
             }
             false => {
                 self.warehouse_manager
-                    .list_warehouse_nodes(config.query.warehouse_id.clone())
+                    .list_warehouse_nodes(config.query.common.warehouse_id.clone())
                     .await
             }
         };
@@ -414,13 +418,13 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        let nodes = match config.query.cluster_id.is_empty() {
+        let nodes = match config.query.common.cluster_id.is_empty() {
             true => self.warehouse_manager.discover(&config.query.node_id).await,
             false => {
                 self.warehouse_manager
                     .list_warehouse_cluster_nodes(
-                        &config.query.warehouse_id,
-                        &config.query.cluster_id,
+                        &config.query.common.warehouse_id,
+                        &config.query.common.cluster_id,
                     )
                     .await
             }
@@ -448,10 +452,11 @@ impl ClusterDiscovery {
                     config.query.node_secret.clone(),
                     format!(
                         "{}:{}",
-                        config.query.http_handler_host, config.query.http_handler_port
+                        config.query.common.http_handler_host,
+                        config.query.common.http_handler_port
                     ),
-                    config.query.flight_api_address.clone(),
-                    config.query.discovery_address.clone(),
+                    config.query.common.flight_api_address.clone(),
+                    config.query.common.discovery_address.clone(),
                     String::new(),
                     String::new(),
                 );
@@ -461,8 +466,8 @@ impl ClusterDiscovery {
                     node_info.cluster_id = "embedded_cluster".to_string();
                     node_info.warehouse_id = "embedded_warehouse".to_string();
                 } else {
-                    node_info.cluster_id = config.query.cluster_id.clone();
-                    node_info.warehouse_id = config.query.warehouse_id.clone();
+                    node_info.cluster_id = config.query.common.cluster_id.clone();
+                    node_info.warehouse_id = config.query.common.warehouse_id.clone();
                 }
                 Ok(Cluster::empty(node_info))
             }
@@ -605,17 +610,17 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
-        let mut address = cfg.query.flight_api_address.clone();
+        let mut address = cfg.query.common.flight_api_address.clone();
         let mut http_address = format!(
             "{}:{}",
-            cfg.query.http_handler_host, cfg.query.http_handler_port
+            cfg.query.common.http_handler_host, cfg.query.common.http_handler_port
         );
-        let mut discovery_address = match cfg.query.discovery_address.is_empty() {
+        let mut discovery_address = match cfg.query.common.discovery_address.is_empty() {
             true => format!(
                 "{}:{}",
-                cfg.query.http_handler_host, cfg.query.http_handler_port
+                cfg.query.common.http_handler_host, cfg.query.common.http_handler_port
             ),
-            false => cfg.query.discovery_address.clone(),
+            false => cfg.query.common.discovery_address.clone(),
         };
 
         for (lookup_ip, typ) in [
@@ -822,24 +827,24 @@ impl ClusterDiscovery {
                 "disk_cache_sync_data": cfg.cache.disk_cache_config.sync_data
             },
             "memory_management": {
-                "max_server_memory_usage": cfg.query.max_server_memory_usage,
-                "max_memory_limit_enabled": cfg.query.max_memory_limit_enabled,
+                "max_server_memory_usage": cfg.query.common.max_server_memory_usage,
+                "max_memory_limit_enabled": cfg.query.common.max_memory_limit_enabled,
                 "spill_enabled": cfg.spill.global_bytes_limit > 0,
                 "reserved_disk_ratio": cfg.spill.reserved_disk_ratio
             },
             "query_execution": {
-                "max_running_queries": cfg.query.max_running_queries,
-                "global_statement_queue": cfg.query.global_statement_queue,
+                "max_running_queries": cfg.query.common.max_running_queries,
+                "global_statement_queue": cfg.query.common.global_statement_queue,
             },
             "storage_engine": {
-                "table_engine_memory_enabled": cfg.query.table_engine_memory_enabled,
+                "table_engine_memory_enabled": cfg.query.common.table_engine_memory_enabled,
                 "storage_type": cfg.storage.params.to_string(),
                 "storage_allow_insecure": cfg.storage.allow_insecure
             },
             "meta_config": {
                 "meta_embedded": cfg.meta.embedded_dir.is_empty(),
                 "meta_client_timeout": cfg.meta.client_timeout_in_second,
-                "rpc_client_timeout_secs": cfg.query.rpc_client_timeout_secs,
+                "rpc_client_timeout_secs": cfg.query.common.rpc_client_timeout_secs,
                 "endpoints": cfg.meta.endpoints,
             },
             "license": license_info,
@@ -984,8 +989,10 @@ pub async fn create_client(
     address: &str,
     keep_alive: FlightKeepAliveParams,
 ) -> Result<FlightClient> {
-    let timeout = if config.query.rpc_client_timeout_secs > 0 {
-        Some(Duration::from_secs(config.query.rpc_client_timeout_secs))
+    let timeout = if config.query.common.rpc_client_timeout_secs > 0 {
+        Some(Duration::from_secs(
+            config.query.common.rpc_client_timeout_secs,
+        ))
     } else {
         None
     };

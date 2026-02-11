@@ -21,15 +21,15 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseInfo;
-use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::NodeType;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_types::NodeInfo;
+use databend_meta_types::NodeType;
 
 pub struct SelfManagedResourcesManagement {}
 
 impl SelfManagedResourcesManagement {
     pub fn create(cfg: &InnerConfig) -> Result<Arc<dyn ResourcesManagement>> {
-        if cfg.query.cluster_id.is_empty() || cfg.query.warehouse_id.is_empty() {
+        if cfg.query.common.cluster_id.is_empty() || cfg.query.common.warehouse_id.is_empty() {
             return Err(ErrorCode::InvalidConfig(
                 "cluster_id or warehouse_id is empty with self-managed resources management",
             ));
@@ -47,8 +47,8 @@ impl ResourcesManagement for SelfManagedResourcesManagement {
 
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
-        node.cluster_id = config.query.cluster_id.clone();
-        node.warehouse_id = config.query.warehouse_id.clone();
+        node.cluster_id = config.query.common.cluster_id.clone();
+        node.warehouse_id = config.query.common.warehouse_id.clone();
         node.node_type = NodeType::SelfManaged;
         Ok(())
     }

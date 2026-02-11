@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi;
 
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
@@ -61,7 +61,7 @@ impl TableLockIdent {
 
 mod kvapi_impl {
 
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::schema::LockMeta;
     use crate::schema::TableLockIdent;
@@ -89,7 +89,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::TableLockIdent;
     use crate::tenant::Tenant;

@@ -22,8 +22,8 @@ use databend_common_base::runtime::metrics::Gauge;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
-use databend_common_meta_runtime_api::ClientMetricsApi;
 use databend_common_metrics::VecLabels;
+use databend_meta_runtime_api::ClientMetricsApi;
 
 static META_GRPC_CLIENT_REQUEST_DURATION_MS: LazyLock<FamilyHistogram<VecLabels>> =
     LazyLock::new(|| {

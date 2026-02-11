@@ -48,10 +48,8 @@ use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
-use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
@@ -85,8 +83,6 @@ impl FastFieldDecoderValues {
     pub fn create_for_insert(settings: InputFormatSettings) -> Self {
         FastFieldDecoderValues {
             common_settings: InputCommonSettings {
-                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NAN_BYTES_LOWER.as_bytes().to_vec(),
@@ -168,19 +164,16 @@ impl FastFieldDecoderValues {
         column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        if self.match_bytes(reader, &self.common_settings.true_bytes) {
+        if self.match_bytes(reader, b"true") {
             column.push(true);
             Ok(())
-        } else if self.match_bytes(reader, &self.common_settings.false_bytes) {
+        } else if self.match_bytes(reader, b"false") {
             column.push(false);
             Ok(())
         } else {
-            let err_msg = format!(
-                "Incorrect boolean value, expect {} or {}",
-                self.common_settings.true_bytes.to_str().unwrap(),
-                self.common_settings.false_bytes.to_str().unwrap()
-            );
-            Err(ErrorCode::BadBytes(err_msg))
+            Err(ErrorCode::BadBytes(
+                "Incorrect boolean value, expect true or false",
+            ))
         }
     }
 

@@ -16,7 +16,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::sync::Arc;
 
-use databend_common_meta_client::ClientHandle;
+use databend_meta_client::ClientHandle;
 use databend_meta_runtime::DatabendRuntime;
 
 use crate::meta_cache_types::MetaCacheTypes;

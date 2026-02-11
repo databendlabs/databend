@@ -39,7 +39,6 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
-use databend_common_version::BUILD_INFO;
 use databend_enterprise_resources_management::DummyResourcesManagement;
 use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
@@ -80,7 +79,7 @@ impl GlobalServices {
         StackTrace::pre_load_symbol();
 
         // app name format: node_id[0..7]@cluster_id
-        let app_name_shuffle = format!("databend-query-{}", config.query.cluster_id);
+        let app_name_shuffle = format!("databend-query-{}", config.query.common.cluster_id);
 
         // The order of initialization is very important
         // 1. global config init.
@@ -95,9 +94,12 @@ impl GlobalServices {
         );
         log_labels.insert(
             "warehouse_id".to_string(),
-            config.query.warehouse_id.clone(),
+            config.query.common.warehouse_id.clone(),
         );
-        log_labels.insert("cluster_id".to_string(), config.query.cluster_id.clone());
+        log_labels.insert(
+            "cluster_id".to_string(),
+            config.query.common.cluster_id.clone(),
+        );
         log_labels.insert("node_id".to_string(), config.query.node_id.clone());
         GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);
 
@@ -129,7 +131,7 @@ impl GlobalServices {
                 .await?;
         }
 
-        QueriesQueueManager::init(config.query.max_running_queries as usize, config).await?;
+        QueriesQueueManager::init(config.query.common.max_running_queries as usize, config).await?;
         HttpQueryManager::init(config).await?;
         ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
@@ -149,7 +151,7 @@ impl GlobalServices {
                 udfs: built_in_udfs.to_udfs(),
             };
             UserApiProvider::init(
-                config.meta.to_meta_grpc_client_conf(version.semver()),
+                config.meta.to_meta_grpc_client_conf(),
                 &config.cache,
                 builtin,
                 &config.query.tenant_id,
@@ -161,27 +163,33 @@ impl GlobalServices {
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(
-            &config.query.share_endpoint_address,
-            &config.query.share_endpoint_auth_token_file,
+            &config.query.common.share_endpoint_address,
+            &config.query.common.share_endpoint_auth_token_file,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
         CacheManager::init(
             &config.cache,
-            &config.query.max_server_memory_usage,
+            &config.query.common.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
-        if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
-            CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
+        if let Some(addr) = config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .clone()
+        {
+            CloudControlApiProvider::init(addr, config.query.common.cloud_control_grpc_timeout)
+                .await?;
         }
 
         if !ee_mode {
             DummyResourcesManagement::init()?;
         }
 
-        if config.query.enable_queries_executor {
+        if config.query.common.enable_queries_executor {
             GlobalQueriesExecutor::init()?;
         }
 
@@ -191,7 +199,12 @@ impl GlobalServices {
             GlobalHistoryLog::init(config, version).await?;
         }
         if config.task.on {
-            if config.query.cloud_control_grpc_server_address.is_some() {
+            if config
+                .query
+                .common
+                .cloud_control_grpc_server_address
+                .is_some()
+            {
                 return Err(ErrorCode::InvalidConfig(
                     "Private Task is enabled but `cloud_control_grpc_server_address` is not empty",
                 ));
@@ -205,8 +218,7 @@ impl GlobalServices {
     }
 
     async fn init_workload_mgr(config: &InnerConfig) -> Result<()> {
-        let meta_api_provider =
-            MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf(BUILD_INFO.semver()));
+        let meta_api_provider = MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf());
         let meta_store = match meta_api_provider
             .create_meta_store::<DatabendRuntime>()
             .await

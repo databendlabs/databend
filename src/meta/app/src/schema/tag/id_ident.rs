@@ -37,7 +37,7 @@ pub type TagIdIdentRaw = TIdentRaw<Resource, TagId>;
 pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::schema::TagIdIdent;
     use crate::schema::TagMeta;
@@ -62,7 +62,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::Key;
 
     use super::TagId;
     use super::TagIdIdent;

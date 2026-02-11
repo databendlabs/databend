@@ -20,7 +20,7 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::SeqV;
 
 use super::CreateOption;
 use crate::KeyWithTenant;
@@ -349,7 +349,7 @@ impl ListDatabaseReq {
 }
 
 mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi;
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;

@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::KeyCodec;
+use databend_meta_kvapi::kvapi;
+use databend_meta_kvapi::kvapi::KeyCodec;
 
 /// [`OwnershipObject`] is used to maintain the grant object that support rename by id. Using ID over name
 /// have many benefits, it can avoid lost privileges after the object get renamed.

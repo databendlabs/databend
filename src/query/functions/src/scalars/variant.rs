@@ -71,7 +71,6 @@ use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
-use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
@@ -109,7 +108,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     ]);
     registry.register_aliases("is_float", &["is_double", "is_real"]);
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "parse_json",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|s, output, ctx| {
@@ -130,7 +129,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _>(
         "parse_json",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, VariantType>(|s, output, ctx| {
@@ -227,33 +226,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
-        "length",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>(|val, ctx| {
-            val.and_then(|v| match RawJsonb::new(v).array_length() {
-                Ok(len) => len.map(|len| len as u32),
-                Err(err) => {
-                    ctx.set_error(0, err.to_string());
-                    None
-                }
-            })
-        }),
-    );
+    registry
+        .scalar_builder("length")
+        .function()
+        .typed_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .each_row_throw(|val, _| {
+            let Some(v) = val else {
+                return Ok::<_, jsonb::Error>(None);
+            };
+            Ok(RawJsonb::new(v).array_length()?.map(|len| len as u32))
+        })
+        .register();
 
-    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
-        "object_keys",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, ctx| {
-            val.and_then(|v| match RawJsonb::new(v).object_keys() {
-                Ok(obj_keys) => obj_keys.map(|v| v.to_vec()),
-                Err(err) => {
-                    ctx.set_error(0, err.to_string());
-                    None
-                }
-            })
-        }),
-    );
+    registry
+        .scalar_builder("object_keys")
+        .function()
+        .typed_1_arg::<NullableType<VariantType>, NullableType<VariantType>>()
+        .calc_domain(|_, _| FunctionDomain::MayThrow)
+        .each_row_throw(|val, _| {
+            let Some(v) = val else {
+                return Ok::<_, jsonb::Error>(None);
+            };
+            Ok(RawJsonb::new(v).object_keys()?.map(|v| v.to_vec()))
+        })
+        .register();
 
     let get_by_keypath = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 2 {
@@ -274,6 +271,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: scalar_evaluator(|args, ctx| get_by_keypath_fn(args, ctx, false)),
+                derive_stat: None,
             },
         }))
     }));
@@ -298,6 +296,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: scalar_evaluator(|args, ctx| get_by_keypath_fn(args, ctx, true)),
+                derive_stat: None,
             },
         }))
     }));
@@ -548,6 +547,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: scalar_evaluator(|args, ctx| path_predicate_fn(args, ctx, true)),
+                derive_stat: None,
             },
         }))
     }));
@@ -572,6 +572,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: scalar_evaluator(|args, ctx| path_predicate_fn(args, ctx, false)),
+                derive_stat: None,
             },
         }))
     }));
@@ -754,7 +755,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_binary",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -795,7 +796,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_date",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -836,7 +837,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_timestamp",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -856,7 +857,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_timestamp_tz",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -924,7 +925,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_interval",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1011,7 +1012,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_null_value",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1031,7 +1032,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_boolean",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1051,7 +1052,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_integer",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1071,7 +1072,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_float",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1091,7 +1092,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_decimal",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1115,7 +1116,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1135,7 +1136,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_array",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1155,7 +1156,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _>(
         "is_object",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1234,6 +1235,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -1681,7 +1683,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, StringType, _>(
         "json_pretty",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, StringType>(|val, output, ctx| {
@@ -1793,31 +1795,33 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_3_arg::<VariantType, Int32Type, VariantType, VariantType, _, _>(
-        "array_insert",
-        |_, _, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_3_arg::<VariantType, Int32Type, VariantType, VariantType>(
-            |val, pos, new_val, output, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(output.len()) {
+    registry
+        .register_passthrough_nullable_3_arg::<VariantType, Int32Type, VariantType, VariantType, _, _>(
+            "array_insert",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<VariantType, Int32Type, VariantType, VariantType>(
+                |val, pos, new_val, output, ctx| {
+                    if let Some(validity) = &ctx.validity
+                        && !validity.get_bit(output.len())
+                    {
                         output.commit_row();
                         return;
                     }
-                let new_value = RawJsonb::new(new_val);
-                match RawJsonb::new(val).array_insert(pos, &new_value) {
-                    Ok(owned_jsonb) => {
-                        output.put_slice(owned_jsonb.as_ref());
+                    let new_value = RawJsonb::new(new_val);
+                    match RawJsonb::new(val).array_insert(pos, &new_value) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
                     }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
-                }
-                output.commit_row();
-            },
-        ),
-    );
+                    output.commit_row();
+                },
+            ),
+        );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "array_distinct",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
@@ -2001,68 +2005,62 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_3_arg::<VariantType, Int64Type, Int64Type, VariantType, _, _>(
-        "slice",
-        |_, _, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_3_arg::<VariantType, Int64Type, Int64Type, VariantType>(
-            |val, start, end, output, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(output.len()) {
+    registry
+        .register_passthrough_nullable_3_arg::<VariantType, Int64Type, Int64Type, VariantType, _, _>(
+            "slice",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<VariantType, Int64Type, Int64Type, VariantType>(
+                |val, start, end, output, ctx| {
+                    if let Some(validity) = &ctx.validity
+                        && !validity.get_bit(output.len())
+                    {
                         output.commit_row();
                         return;
                     }
-                let array_val = RawJsonb::new(val);
-                let vals = match array_val.array_values() {
-                    Ok(Some(vals)) => {
-                        let start = if start >= 0 {
-                            start as usize
-                        } else {
-                            let start = vals.len() as i64 + start;
-                            if start >= 0 {
+                    let array_val = RawJsonb::new(val);
+                    let vals = match array_val.array_values() {
+                        Ok(Some(vals)) => {
+                            let start = if start >= 0 {
                                 start as usize
                             } else {
-                                0
-                            }
-                        };
-                        let end = if end >= 0 {
-                            end as usize
-                        } else {
-                            let end = vals.len() as i64 + end;
-                            if end >= 0 {
+                                let start = vals.len() as i64 + start;
+                                if start >= 0 { start as usize } else { 0 }
+                            };
+                            let end = if end >= 0 {
                                 end as usize
                             } else {
-                                0
+                                let end = vals.len() as i64 + end;
+                                if end >= 0 { end as usize } else { 0 }
+                            };
+                            let mut new_vals = vec![];
+                            for (i, val) in vals.into_iter().enumerate() {
+                                if i >= start && i < end {
+                                    new_vals.push(val);
+                                }
                             }
-                        };
-                        let mut new_vals = vec![];
-                        for (i, val) in vals.into_iter().enumerate() {
-                            if i >= start && i < end {
-                                new_vals.push(val);
-                            }
+                            new_vals
                         }
-                        new_vals
+                        Ok(None) => {
+                            vec![]
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.commit_row();
+                            return;
+                        }
+                    };
+                    match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
                     }
-                    Ok(None) => {
-                        vec![]
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.commit_row();
-                        return;
-                    }
-                };
-                match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
-                    Ok(owned_jsonb) => {
-                        output.put_slice(owned_jsonb.as_ref());
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
-                }
-                output.commit_row();
-            },
-        ),
-    );
+                    output.commit_row();
+                },
+            ),
+        );
 
     registry.register_2_arg_core::<NullType, GenericType<0>, NullType, _, _>(
         "array_indexof",
@@ -2146,7 +2144,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "array_remove_first",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
@@ -2177,7 +2175,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "array_remove_last",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
@@ -2289,7 +2287,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "array_compact",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
@@ -2333,7 +2331,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, UInt64Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, UInt64Type, _>(
         "array_unique",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, UInt64Type>(|val, output, ctx| {
@@ -2363,7 +2361,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "array_flatten",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
@@ -2420,7 +2418,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "array_reverse",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
@@ -2470,6 +2468,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(delete_by_keypath_fn),
+                derive_stat: None,
             },
         }))
     }));
@@ -2525,6 +2524,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(object_construct_fn),
+                derive_stat: None,
             },
         }))
     }));
@@ -2540,6 +2540,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(object_construct_fn),
+                derive_stat: None,
             },
         };
         Some(Arc::new(f.error_to_null()))
@@ -2556,6 +2557,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(object_construct_keep_null_fn),
+                derive_stat: None,
             },
         }))
     }));
@@ -2571,6 +2573,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::Full),
                 eval: Box::new(object_construct_keep_null_fn),
+                derive_stat: None,
             },
         };
         Some(Arc::new(f.error_to_null()))
@@ -2590,6 +2593,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: Box::new(array_construct_fn),
+                derive_stat: None,
             },
         }))
     }));
@@ -2737,6 +2741,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(FunctionDomain::MayThrow),
                 eval: scalar_evaluator(move |args, ctx| object_insert_fn(args, ctx, is_nullable)),
+                derive_stat: None,
             },
         }))
     }));
@@ -2771,6 +2776,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, ctx| {
                     object_pick_or_delete_fn(args, ctx, true, is_nullable)
                 }),
+                derive_stat: None,
             },
         }))
     }));
@@ -2805,23 +2811,25 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, ctx| {
                     object_pick_or_delete_fn(args, ctx, false, is_nullable)
                 }),
+                derive_stat: None,
             },
         }))
     }));
     registry.register_function_factory("object_delete", object_delete);
 
-    registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
-        "strip_null_value",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
-            val.and_then(|v| {
-                if matches!(RawJsonb::new(v).is_null(), Ok(true)) {
-                    return None;
-                }
-                Some(v.to_vec())
-            })
-        }),
-    );
+    registry
+        .scalar_builder("strip_null_value")
+        .function()
+        .typed_1_arg::<NullableType<VariantType>, NullableType<VariantType>>()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .each_row(|val, _| {
+            let v = val?;
+            match RawJsonb::new(v).is_null() {
+                Ok(true) => None,
+                _ => Some(v.to_vec()),
+            }
+        })
+        .register();
 }
 
 fn array_construct_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
