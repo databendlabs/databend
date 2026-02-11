@@ -46,11 +46,17 @@ pub struct UnionAll {
 impl UnionAll {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for (idx, _) in &self.left_outputs {
+        for (idx, expr) in &self.left_outputs {
             used_columns.insert(*idx);
+            if let Some(expr) = expr {
+                used_columns.extend(expr.used_columns());
+            }
         }
-        for (idx, _) in &self.right_outputs {
+        for (idx, expr) in &self.right_outputs {
             used_columns.insert(*idx);
+            if let Some(expr) = expr {
+                used_columns.extend(expr.used_columns());
+            }
         }
         Ok(used_columns)
     }
@@ -70,11 +76,11 @@ impl Operator for UnionAll {
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
         // Derive output columns
-        let mut output_columns = left_prop.output_columns.clone();
-        output_columns = output_columns
-            .union(&right_prop.output_columns)
-            .cloned()
-            .collect();
+        // Union output columns are determined by the left outputs.
+        //
+        // Note: left and right children may not have the same column indexes, and
+        // `left_outputs`/`right_outputs` are used to align them by ordinal.
+        let output_columns = self.left_outputs.iter().map(|(idx, _)| *idx).collect();
 
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();

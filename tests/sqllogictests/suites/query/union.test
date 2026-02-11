@@ -55,6 +55,52 @@ ORDER BY val ASC
 1000 Alice
 2000 Alice
 
+# ensure union output columns have unique bindings
+statement ok
+DROP TABLE IF EXISTS u_info
+
+statement ok
+DROP TABLE IF EXISTS sub_u
+
+statement ok
+CREATE TABLE u_info (u_id INT)
+
+statement ok
+CREATE TABLE sub_u (p_u_id INT, sub_u_id INT, is_del BOOLEAN)
+
+statement ok
+INSERT INTO u_info VALUES (1)
+
+statement ok
+INSERT INTO sub_u VALUES (1, 100, false), (2, 100, true)
+
+
+query III
+SELECT *
+FROM (
+    SELECT u_id AS p_u_id,
+            u_id AS sub_u_id,
+            2 AS tag
+        FROM u_info
+        WHERE u_id IN (1)
+        UNION ALL
+        SELECT p_u_id,
+                sub_u_id,
+                1 AS tag
+    FROM sub_u
+    WHERE p_u_id IN (1, 2)
+    AND is_del = FALSE
+)
+WHERE sub_u_id = 100
+----
+1 100 1
+
+statement ok
+DROP TABLE u_info
+
+statement ok
+DROP TABLE sub_u
+
 query TI
 select * from data2013 union all select * from data2015 order by value
 ----
