@@ -22,6 +22,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use futures_util::future::BoxFuture;
+use log::debug;
+use log::error;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -69,6 +71,7 @@ impl FlightActions {
         self.actions.insert(
             path.clone(),
             Box::new(move |request| {
+                debug!("[flight] handle action: {}", &path);
                 let request =
                     match catch_unwind(|| -> std::result::Result<Req, serde_json::Error> {
                         let mut deserializer = serde_json::Deserializer::from_slice(request);
@@ -83,17 +86,23 @@ impl FlightActions {
                         Req::deserialize(deserializer)
                     }) {
                         Ok(Ok(request)) => Ok(request),
-                        Ok(Err(cause)) => Err(ErrorCode::BadArguments(format!(
-                            "Cannot parse request for {}, len: {}, cause: {:?}",
-                            path,
-                            request.len(),
-                            cause
-                        ))),
-                        Err(cause) => Err(cause.add_message_back(format!(
-                            "(while deserializing flight action request: action={}, len={})",
-                            path,
-                            request.len()
-                        ))),
+                        Ok(Err(cause)) => {
+                            error!("{:?}", &cause);
+                            Err(ErrorCode::BadArguments(format!(
+                                "Cannot parse request for {}, len: {}, cause: {:?}",
+                                path,
+                                request.len(),
+                                cause
+                            )))
+                        }
+                        Err(cause) => {
+                            error!("{:?}", &cause);
+                            Err(cause.add_message_back(format!(
+                                "(while deserializing flight action request: action={}, len={})",
+                                path,
+                                request.len()
+                            )))
+                        }
                     };
 
                 let path = path.clone();
@@ -101,12 +110,15 @@ impl FlightActions {
                 Box::pin(async move {
                     let request = request?;
 
+                    debug!("[flight]  finish deser: {}", &path);
                     let future = catch_unwind(move || t(request)).map_err(|cause| {
                         cause.add_message_back(format!(
                             "(while creating flight action future: action={})",
                             path
                         ))
                     })?;
+
+                    debug!("[flight] finish action: {}", &path);
 
                     let future = CatchUnwindFuture::create(future);
                     let response = future
@@ -126,15 +138,24 @@ impl FlightActions {
                         response.serialize(serializer)?;
                         Ok(out)
                     }) {
-                        Ok(Ok(out)) => Ok(out),
-                        Ok(Err(cause)) => Err(ErrorCode::BadBytes(format!(
-                            "Cannot serialize response for {}, cause: {:?}",
-                            path, cause
-                        ))),
-                        Err(cause) => Err(cause.add_message_back(format!(
-                            "(while serializing flight action response: action={})",
-                            path
-                        ))),
+                        Ok(Ok(out)) => {
+                            debug!("[flight]  finish serde response: {}", &path);
+                            Ok(out)
+                        }
+                        Ok(Err(cause)) => {
+                            error!("{:?}", &cause);
+                            Err(ErrorCode::BadBytes(format!(
+                                "Cannot serialize response for {}, cause: {:?}",
+                                path, cause
+                            )))
+                        }
+                        Err(cause) => {
+                            error!("{:?}", &cause);
+                            Err(cause.add_message_back(format!(
+                                "(while serializing flight action response: action={})",
+                                path
+                            )))
+                        }
                     }
                 })
             }),

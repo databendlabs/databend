@@ -30,6 +30,8 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use futures::StreamExt;
 use futures_util::future::Either;
+use log::debug;
+use log::error;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::Duration;
@@ -70,6 +72,8 @@ impl FlightClient {
         T: Serialize,
         Res: for<'a> Deserialize<'a>,
     {
+        let uuid = uuid::Uuid::new_v4().to_string();
+        debug!("[{}]FlightClient::do_action: path={:?}", &uuid, &path);
         let message_type = std::any::type_name::<T>();
         let body = match catch_unwind(|| -> std::result::Result<Vec<u8>, serde_json::Error> {
             let mut body = Vec::with_capacity(512);
@@ -80,18 +84,22 @@ impl FlightClient {
         }) {
             Ok(Ok(body)) => body,
             Ok(Err(cause)) => {
+                error!("{:?}", &cause);
                 return Err(ErrorCode::BadArguments(format!(
                     "Request payload serialize error while in {:?}, type: {}, cause: {}",
                     path, message_type, cause
                 )));
             }
             Err(cause) => {
+                error!("{:?}", &cause);
                 return Err(cause.add_message_back(format!(
                     "(while serializing flight action request: action={:?}, type={})",
                     path, message_type
                 )));
             }
         };
+
+        debug!("[{}]FlightClient::serd finish: path={:?}", &uuid, &path);
 
         drop(message);
         let mut request =
@@ -112,23 +120,36 @@ impl FlightClient {
             Some(response) => {
                 let response_type = std::any::type_name::<Res>();
                 let response_len = response.body.len();
-
-                match catch_unwind(|| -> std::result::Result<Res, serde_json::Error> {
-                    let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
-                    deserializer.disable_recursion_limit();
-                    let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
-                    Res::deserialize(deserializer)
-                }) {
+                debug!(
+                    "[{}]FlightClient::receive response: path={:?}",
+                    &uuid, &path
+                );
+                let after_deserd = match catch_unwind(
+                    || -> std::result::Result<Res, serde_json::Error> {
+                        let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
+                        deserializer.disable_recursion_limit();
+                        let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+                        Res::deserialize(deserializer)
+                    },
+                ) {
                     Ok(Ok(res)) => Ok(res),
-                    Ok(Err(cause)) => Err(ErrorCode::BadBytes(format!(
-                        "Response payload deserialize error while in {:?}, type: {}, len: {}, cause: {}",
-                        path, response_type, response_len, cause
-                    ))),
-                    Err(cause) => Err(cause.add_message_back(format!(
+                    Ok(Err(cause)) => {
+                        error!("{:?}", &cause);
+                        Err(ErrorCode::BadBytes(format!(
+                            "Response payload deserialize error while in {:?}, type: {}, len: {}, cause: {}",
+                            path, response_type, response_len, cause
+                        )))
+                    }
+                    Err(cause) => {
+                        error!("{:?}", &cause);
+                        Err(cause.add_message_back(format!(
                         "(while deserializing flight action response: action={:?}, type={}, len={})",
                         path, response_type, response_len
-                    ))),
-                }
+                    )))
+                    }
+                };
+                debug!("[{}]FlightClient::deserd finish: path={:?}", &uuid, &path);
+                after_deserd
             }
             None => Err(ErrorCode::EmptyDataFromServer(format!(
                 "Can not receive data from flight server, action: {:?}",

@@ -34,6 +34,7 @@ use databend_common_exception::ErrorCode;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
+use log::debug;
 use log::error;
 use tokio_stream::Stream;
 use tonic::Request;
@@ -154,6 +155,8 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
+        let uuid = uuid::Uuid::new_v4().to_string();
+        debug!("[{}]FlightService::do_action", &uuid);
         let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
         let secret = request.get_metadata("secret")?;
@@ -175,7 +178,8 @@ impl FlightService for DatabendQueryFlightService {
         {
             Err(cause) => {
                 error!(
-                    "flight do_action failed, node: {}, action: {}, body_len: {}, code: {}, error: {:?}",
+                    "[{}]flight do_action failed, node: {}, action: {}, body_len: {}, code: {}, error: {:?}",
+                    uuid,
                     config.query.node_id,
                     action.r#type,
                     action.body.len(),
@@ -184,10 +188,13 @@ impl FlightService for DatabendQueryFlightService {
                 );
                 Err(cause.into())
             }
-            Ok(body) => Ok(RawResponse::new(
-                Box::pin(tokio_stream::once(Ok(FlightResult { body: body.into() })))
-                    as FlightStream<FlightResult>,
-            )),
+            Ok(body) => {
+                debug!("[{}]FlightService: finish", &uuid);
+                Ok(RawResponse::new(
+                    Box::pin(tokio_stream::once(Ok(FlightResult { body: body.into() })))
+                        as FlightStream<FlightResult>,
+                ))
+            }
         }
     }
 
