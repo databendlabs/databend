@@ -75,8 +75,11 @@ pub fn dump_wal(wal_dir: &Path, decode_values: bool, mut w: impl Write) -> anyho
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::sync::Arc;
 
+    use chrono::TimeZone;
+    use chrono::Utc;
     use databend_common_meta_app::schema::DatabaseMeta;
     use databend_common_proto_conv::FromToProto;
     use databend_meta_raft_store::raft_log::Config;
@@ -92,11 +95,6 @@ mod tests {
     use prost::Message;
 
     use super::*;
-
-    fn normalize_timestamps(s: &str) -> String {
-        let re = regex::Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z").unwrap();
-        re.replace_all(s, "<TS>").to_string()
-    }
 
     #[tokio::test]
     async fn test_dump_wal_without_decode() -> anyhow::Result<()> {
@@ -142,7 +140,20 @@ mod tests {
             ..Default::default()
         });
 
-        let meta = DatabaseMeta::default();
+        // Use a fixed timestamp to ensure deterministic protobuf encoding size
+        // across platforms. `Utc::now()` in `DatabaseMeta::default()` produces
+        // different varint sizes depending on the timestamp value.
+        let ts = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let meta = DatabaseMeta {
+            engine: "".to_string(),
+            engine_options: BTreeMap::new(),
+            options: BTreeMap::new(),
+            created_on: ts,
+            updated_on: ts,
+            comment: "".to_string(),
+            drop_on: None,
+            gc_in_progress: false,
+        };
         let pb = meta.to_pb()?;
         let mut pb_buf = vec![];
         pb.encode(&mut pb_buf)?;
@@ -158,7 +169,7 @@ mod tests {
 
         let mut buf = Vec::new();
         dump_wal(&wal_dir, true, &mut buf)?;
-        let output = normalize_timestamps(&String::from_utf8(buf)?);
+        let output = String::from_utf8(buf)?;
 
         assert_eq!(
             output,
@@ -166,9 +177,9 @@ mod tests {
                 "RaftLog:\n",
                 "ChunkId(00_000_000_000_000_000_000)\n",
                 "  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))\n",
-                r#"  R-00001: [000_000_018, 000_000_232) Size(214): Append(log_id: T1-N0.0, payload: normal: cmd: upsert_kv:__fd_database_by_id/123(GE(0)) = Update("[binary]") (None))"#,
+                r#"  R-00001: [000_000_018, 000_000_218) Size(200): Append(log_id: T1-N0.0, payload: normal: cmd: upsert_kv:__fd_database_by_id/123(GE(0)) = Update("[binary]") (None))"#,
                 "\n",
-                r#"    value(__fd_database_by_id/123): DatabaseMeta { engine: "", engine_options: {}, options: {}, created_on: <TS>, updated_on: <TS>, comment: "", drop_on: None, gc_in_progress: false }"#,
+                r#"    value(__fd_database_by_id/123): DatabaseMeta { engine: "", engine_options: {}, options: {}, created_on: 2024-01-01T00:00:00Z, updated_on: 2024-01-01T00:00:00Z, comment: "", drop_on: None, gc_in_progress: false }"#,
                 "\n",
             )
         );

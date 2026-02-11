@@ -35,10 +35,10 @@ url = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 prost = { workspace = true }
-regex = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 

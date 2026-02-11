@@ -4069,6 +4069,7 @@ name = "databend-common-meta-control"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "databend-common-building",
  "databend-common-meta-app",
@@ -4087,7 +4088,6 @@ dependencies = [
  "futures",
  "mlua",
  "prost",
- "regex",
  "reqwest",
  "serde",
  "serde_json",
