@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_ast::parser::parse_database_ref;
+use databend_common_ast::parser::parse_procedure_ref;
 use databend_common_ast::parser::parse_table_ref;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -40,6 +41,8 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::tag_api::TagApi;
+use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -338,9 +341,90 @@ async fn collect_tag_references(
                 conn_name.to_string(),
             )
         }
+        "VIEW" => {
+            let (catalog_name, db_name, view_name) = parse_table_name(&ctx, &object_name)?;
+            let catalog = ctx.get_catalog(&catalog_name).await?;
+            let table = catalog.get_table(&tenant, &db_name, &view_name).await?;
+            if table.engine() != "VIEW" {
+                return Err(ErrorCode::UnknownView(format!(
+                    "'{}' is not a view",
+                    view_name
+                )));
+            }
+            let table_id = table.get_table_info().ident.table_id;
+            (
+                TaggableObject::Table { table_id },
+                Some(db_name),
+                Some(table_id),
+                view_name,
+            )
+        }
+        "UDF" => {
+            let udf_name = object_name.trim();
+            let udf = UserApiProvider::instance()
+                .get_udf(&tenant, udf_name)
+                .await
+                .map_err(|e| ErrorCode::from_std_error(e))?
+                .ok_or_else(|| ErrorCode::UnknownFunction(format!("Unknown UDF '{}'", udf_name)))?;
+            let _ = udf;
+            (
+                TaggableObject::UDF {
+                    name: udf_name.to_string(),
+                },
+                None,
+                None,
+                udf_name.to_string(),
+            )
+        }
+        "PROCEDURE" => {
+            let proc_input = object_name.trim();
+            let settings = ctx.get_settings();
+            let dialect = settings.get_sql_dialect().unwrap_or_default();
+            let ast_identity = parse_procedure_ref(proc_input, dialect).map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid procedure reference '{}': {}",
+                    proc_input, e.1
+                ))
+            })?;
+            // Resolve type names to normalized DataType strings (e.g. INT -> Int32)
+            let args_str = if ast_identity.args_type.is_empty() {
+                String::new()
+            } else {
+                ast_identity
+                    .args_type
+                    .iter()
+                    .map(|t| {
+                        databend_common_sql::resolve_type_name(t, true).map(|dt| {
+                            databend_common_expression::types::DataType::from(&dt).to_string()
+                        })
+                    })
+                    .collect::<databend_common_exception::Result<Vec<_>>>()?
+                    .join(",")
+            };
+            let name = ast_identity.name;
+            let req =
+                GetProcedureReq::new(tenant.clone(), ProcedureIdentity::new(&name, &args_str));
+            UserApiProvider::instance()
+                .procedure_api(&tenant)
+                .get_procedure(&req)
+                .await
+                .map_err(|e| ErrorCode::from_std_error(e))?
+                .ok_or_else(|| {
+                    ErrorCode::UnknownProcedure(format!("Unknown procedure '{}'", proc_input))
+                })?;
+            (
+                TaggableObject::Procedure {
+                    name,
+                    args: args_str,
+                },
+                None,
+                None,
+                proc_input.to_string(),
+            )
+        }
         _ => {
             return Err(ErrorCode::BadArguments(format!(
-                "Invalid object_domain '{}'. Supported values: DATABASE, TABLE, STAGE, CONNECTION",
+                "Invalid object_domain '{}'. Supported values: DATABASE, TABLE, STAGE, CONNECTION, VIEW, UDF, PROCEDURE",
                 object_domain
             )));
         }

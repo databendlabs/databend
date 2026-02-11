@@ -631,6 +631,22 @@ impl PrivilegeAccess {
                 )
                 .await
             }
+            TagSetObject::View(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.view,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::UDF(_) | TagSetObject::Procedure(_) => {
+                // UDF and Procedure tag operations require account admin,
+                // which is already checked at the statement level.
+                Ok(())
+            }
         }
     }
 
