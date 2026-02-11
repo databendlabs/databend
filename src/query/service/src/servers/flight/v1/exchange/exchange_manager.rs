@@ -39,6 +39,7 @@ use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::basic_callback;
 use databend_common_settings::FlightKeepAliveParams;
 use fastrace::prelude::*;
+use log::debug;
 use log::warn;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -194,6 +195,14 @@ impl DataExchangeManager {
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
 
+        debug!(
+            "[flight] init_query_env start, query_id: {}, node: {}, with_cur_rt: {}, dataflow_nodes: {}",
+            env.query_id,
+            config.query.node_id,
+            with_cur_rt,
+            env.dataflow_diagram.node_count()
+        );
+
         for index in env.dataflow_diagram.node_indices() {
             if env.dataflow_diagram[index].id == config.query.node_id {
                 let edges = env
@@ -208,28 +217,77 @@ impl DataExchangeManager {
 
                     let query_id = env.query_id.clone();
                     let address = source.flight_address.clone();
+                    let source_id = source.id.clone();
+                    let target_id = target.id.clone();
 
                     let keep_alive_params = keep_alive;
                     flight_exchanges.push(async move {
+                        debug!(
+                            "[flight] init_query_env edge start, query_id: {}, source: {}, target: {}, edge: {:?}, addr: {}",
+                            query_id,
+                            source_id,
+                            target_id,
+                            edge,
+                            address
+                        );
+
                         let mut flight_client =
                             Self::create_client(&address, with_cur_rt, keep_alive_params).await?;
 
                         Ok::<QueryExchange, ErrorCode>(match edge {
-                            Edge::Fragment(channel) => QueryExchange::Fragment {
-                                channel: channel.clone(),
-                                exchange: flight_client.do_get(&query_id, &channel).await?,
-                            },
-                            Edge::Statistics => QueryExchange::Statistics {
-                                source: source.id.clone(),
-                                exchange: flight_client
+                            Edge::Fragment(channel) => {
+                                debug!(
+                                    "[flight] init_query_env do_get start, query_id: {}, source: {}, target: {}, channel: {}",
+                                    query_id,
+                                    source_id,
+                                    target_id,
+                                    channel
+                                );
+                                let exchange = flight_client.do_get(&query_id, &channel).await?;
+                                debug!(
+                                    "[flight] init_query_env do_get finish, query_id: {}, source: {}, target: {}, channel: {}",
+                                    query_id,
+                                    source_id,
+                                    target_id,
+                                    channel
+                                );
+                                QueryExchange::Fragment {
+                                    channel: channel.clone(),
+                                    exchange,
+                                }
+                            }
+                            Edge::Statistics => {
+                                debug!(
+                                    "[flight] init_query_env request_server_exchange start, query_id: {}, source: {}, target: {}",
+                                    query_id,
+                                    source_id,
+                                    target_id
+                                );
+                                let exchange = flight_client
                                     .request_server_exchange(&query_id, &target.id)
-                                    .await?,
-                            },
+                                    .await?;
+                                debug!(
+                                    "[flight] init_query_env request_server_exchange finish, query_id: {}, source: {}, target: {}",
+                                    query_id,
+                                    source_id,
+                                    target_id
+                                );
+                                QueryExchange::Statistics {
+                                    source: source.id.clone(),
+                                    exchange,
+                                }
+                            }
                         })
                     });
                 }
 
                 let flight_exchanges = futures::future::try_join_all(flight_exchanges).await?;
+                debug!(
+                    "[flight] init_query_env all edges finished, query_id: {}, node: {}, edge_count: {}",
+                    env.query_id,
+                    config.query.node_id,
+                    flight_exchanges.len()
+                );
                 for flight_exchange in flight_exchanges {
                     match flight_exchange {
                         QueryExchange::Fragment { channel, exchange } => {
@@ -280,6 +338,10 @@ impl DataExchangeManager {
         }
 
         // do nothing
+        debug!(
+            "[flight] init_query_env no-op, query_id: {}, node: {}",
+            env.query_id, config.query.node_id
+        );
         Ok(())
     }
 

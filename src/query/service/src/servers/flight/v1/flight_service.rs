@@ -110,13 +110,20 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        let uuid = uuid::Uuid::new_v4().to_string();
         let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
         let _guard = root.set_local_parent();
+
+        debug!("[{}]FlightService::do_get", &uuid);
 
         match request.get_metadata("x-type")?.as_str() {
             "request_server_exchange" => {
                 let target = request.get_metadata("x-target")?;
                 let query_id = request.get_metadata("x-query-id")?;
+                debug!(
+                    "[{}]FlightService::do_get request_server_exchange, query_id: {}, target: {}",
+                    &uuid, query_id, target
+                );
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance().handle_statistics_exchange(query_id, target)?,
                 )))
@@ -124,6 +131,10 @@ impl FlightService for DatabendQueryFlightService {
             "exchange_fragment" => {
                 let query_id = request.get_metadata("x-query-id")?;
                 let channel_id = request.get_metadata("x-channel-id")?;
+                debug!(
+                    "[{}]FlightService::do_get exchange_fragment, query_id: {}, channel_id: {}",
+                    &uuid, query_id, channel_id
+                );
 
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance()

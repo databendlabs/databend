@@ -50,6 +50,8 @@ pub struct FlightClient {
     inner: FlightServiceClient<Channel>,
 }
 
+const DO_GET_TIMEOUT_SECS: u64 = 60;
+
 // TODO: Integration testing required
 impl FlightClient {
     pub fn new(mut inner: FlightServiceClient<Channel>) -> FlightClient {
@@ -241,10 +243,38 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    async fn get_streaming(&mut self, request: Request<Ticket>) -> Result<Streaming<FlightData>> {
+    async fn get_streaming(
+        &mut self,
+        mut request: Request<Ticket>,
+    ) -> Result<Streaming<FlightData>> {
+        let request_type = request
+            .metadata()
+            .get("x-type")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown")
+            .to_string();
+
+        request.set_timeout(Duration::from_secs(DO_GET_TIMEOUT_SECS));
+        debug!(
+            "[flight] FlightClient::do_get start, x-type: {}, timeout_secs: {}",
+            request_type, DO_GET_TIMEOUT_SECS
+        );
+
         match self.inner.do_get(request).await {
-            Ok(res) => Ok(res.into_inner()),
-            Err(status) => Err(ErrorCode::from(status).add_message_back("(while in query flight)")),
+            Ok(res) => {
+                debug!(
+                    "[flight] FlightClient::do_get finish, x-type: {}",
+                    request_type
+                );
+                Ok(res.into_inner())
+            }
+            Err(status) => {
+                error!(
+                    "[flight] FlightClient::do_get failed, x-type: {}, status: {:?}",
+                    request_type, status
+                );
+                Err(ErrorCode::from(status).add_message_back("(while in query flight)"))
+            }
         }
     }
 }
