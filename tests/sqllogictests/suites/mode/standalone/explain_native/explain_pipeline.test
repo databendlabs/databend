@@ -17,8 +17,8 @@ explain pipeline select a from t1 ignore_result
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "AsyncReadParquetDataTransform" ]
-    3 [ label = "DeserializeDataTransform" ]
+    2 [ label = "AsyncReadNativeDataTransform" ]
+    3 [ label = "NativeDeserializeDataTransform" ]
     4 [ label = "EmptySink" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
