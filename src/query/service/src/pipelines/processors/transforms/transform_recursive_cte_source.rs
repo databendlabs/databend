@@ -237,7 +237,7 @@ fn rewrite_assign_and_strip_recursive_cte(
     prefix: &str,
     exec_ids: &mut HashMap<String, Vec<u64>>,
 ) {
-    // Only nested recursive UNIONs that reference the current recursive CTE should be
+    // Only nested recursive UNION nodes that reference the current recursive CTE should be
     // downgraded to normal unions to avoid nested recursive sources for the same table.
     if let Some(union_all) = UnionAll::from_mut_physical_plan(plan) {
         if !union_all.cte_scan_names.is_empty()
