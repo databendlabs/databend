@@ -145,13 +145,11 @@ class TestContext:
         reader_ver: str,
         meta_versions: list[str],
         logictest_path: str,
-        stateless_cmd: str | None = None,
     ):
         self.writer_ver = writer_ver
         self.reader_ver = reader_ver
         self.meta_versions = meta_versions
         self.logictest_path = logictest_path
-        self.stateless_cmd = stateless_cmd
         self.processes: list[subprocess.Popen] = []
 
         self.root_dir = Path.cwd()
@@ -323,13 +321,6 @@ class TestContext:
             self.start_metasrv(self.meta_versions[-1])
             self.start_query(self.reader_ver)
             self.run_sqllogictests("fuse_compat_read")
-
-            # Phase 4: Stateless tests (optional)
-            if self.stateless_cmd:
-                print(f" === Phase 4: Run stateless test: {self.stateless_cmd}")
-                parts = self.stateless_cmd.split()
-                script = str(Path("tests/compat_fuse/compat-stateless") / parts[0])
-                subprocess.run(["bash", script] + parts[1:], check=True)
         finally:
             self.cleanup()
 
@@ -421,7 +412,7 @@ def setup_env() -> None:
 
 
 def download_and_run_case(
-    writer: str, reader: str, meta: list[str], suite: str, stateless: str | None = None
+    writer: str, reader: str, meta: list[str], suite: str,
 ) -> None:
     """Download binaries/configs and run one compatibility test case."""
     download_query_config(writer)
@@ -433,7 +424,7 @@ def download_and_run_case(
     download_binary(writer)
     download_binary(reader)
 
-    ctx = TestContext(writer, reader, meta, suite, stateless_cmd=stateless)
+    ctx = TestContext(writer, reader, meta, suite)
     ctx.run_test()
 
 
@@ -484,13 +475,12 @@ def main():
             reader = case["reader"]
             meta = case["meta"]
             suite = case["suite"]
-            stateless = case.get("stateless")
-            print(f" === [{i+1}/{len(cases)}] writer={writer} reader={reader} meta={meta} suite={suite} stateless={stateless}")
+            print(f" === [{i+1}/{len(cases)}] writer={writer} reader={reader} meta={meta} suite={suite}")
 
             if args.dry_run:
                 continue
 
-            download_and_run_case(writer, reader, meta, suite, stateless=stateless)
+            download_and_run_case(writer, reader, meta, suite)
 
         if args.dry_run:
             print(" === Dry run complete, no tests executed.")

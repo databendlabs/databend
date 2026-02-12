@@ -15,7 +15,6 @@ All test cases are defined in `test_cases.yaml`. Each entry specifies:
 | `reader`   | Query version that reads data (`"current"` = latest build)        |
 | `meta`     | Meta-service versions to run in order (upgrades on-disk meta data) |
 | `suite`    | sqllogictest sub-directory under `compat-logictest/`               |
-| `stateless`| *(optional)* Shell script to run after the read phase (e.g. flashback/compaction tests) |
 
 To add a test case, append an entry to `test_cases.yaml`.
 
@@ -60,7 +59,6 @@ For each case, the script runs three phases:
 1. **Write** — start meta (first version) + query (writer version), run `fuse_compat_write`
 2. **Meta upgrade** — cycle through all meta versions to upgrade on-disk data
 3. **Read** — start meta (last version) + query (reader version), run `fuse_compat_read`
-4. **Stateless** *(optional)* — run shell script from `compat-stateless/` if `stateless` field is set
 
 ## Testing data
 
