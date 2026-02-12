@@ -305,4 +305,8 @@ pub struct DumpRaftLogWalArgs {
     /// Decode protobuf-encoded values in UpsertKV and Transaction operations
     #[clap(short = 'V', long, default_value_t = false)]
     pub decode_values: bool,
+
+    /// Show raw protobuf bytes for values in UpsertKV and Transaction operations
+    #[clap(short = 'R', long, default_value_t = false)]
+    pub raw: bool,
 }

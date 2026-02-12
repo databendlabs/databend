@@ -198,6 +198,77 @@ fn decode_txn_op(prefix: &str, idx: usize, op: &databend_meta_types::TxnOp) -> O
     }
 }
 
+fn format_raw_bytes(bytes: &[u8]) -> String {
+    format!(
+        "[{}]",
+        bytes
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// Extract raw protobuf byte arrays from a Cmd, returning formatted lines.
+pub fn raw_cmd_values(cmd: &Cmd) -> Vec<String> {
+    match cmd {
+        Cmd::UpsertKV(upsert) => match &upsert.value {
+            Operation::Update(bytes) => {
+                vec![format!(
+                    "    raw({}): {}",
+                    upsert.key,
+                    format_raw_bytes(bytes)
+                )]
+            }
+            _ => vec![],
+        },
+        Cmd::Transaction(txn) => {
+            let mut lines = vec![];
+
+            for (branch_idx, branch) in txn.operations.iter().enumerate() {
+                for (op_idx, op) in branch.operations.iter().enumerate() {
+                    let prefix = format!("txn.operations[{}].ops", branch_idx);
+                    if let Some(line) = raw_txn_op(&prefix, op_idx, op) {
+                        lines.push(line);
+                    }
+                }
+            }
+
+            for (i, op) in txn.if_then.iter().enumerate() {
+                if let Some(line) = raw_txn_op("txn.if_then", i, op) {
+                    lines.push(line);
+                }
+            }
+
+            for (i, op) in txn.else_then.iter().enumerate() {
+                if let Some(line) = raw_txn_op("txn.else_then", i, op) {
+                    lines.push(line);
+                }
+            }
+
+            lines
+        }
+        _ => vec![],
+    }
+}
+
+/// Extract raw bytes from a single TxnOp, returning a formatted line if it contains a value.
+fn raw_txn_op(prefix: &str, idx: usize, op: &databend_meta_types::TxnOp) -> Option<String> {
+    match &op.request {
+        Some(Request::Put(put)) => Some(format!(
+            "    {prefix}[{idx}].put {key} raw:\n      {}",
+            format_raw_bytes(&put.value),
+            key = put.key,
+        )),
+        Some(Request::PutSequential(ps)) => Some(format!(
+            "    {prefix}[{idx}].put_sequential {key} raw:\n      {}",
+            format_raw_bytes(&ps.value),
+            key = ps.prefix,
+        )),
+        _ => None,
+    }
+}
+
 /// Decode all protobuf values found in a Cmd, returning formatted lines.
 pub fn decode_cmd_values(cmd: &Cmd) -> Vec<String> {
     match cmd {
@@ -775,5 +846,74 @@ mod tests {
             overriding: false,
         };
         assert_eq!(decode_cmd_values(&cmd), Vec::<String>::new());
+    }
+
+    // -- raw_cmd_values tests --
+
+    #[test]
+    fn test_raw_cmd_upsert_kv_update() {
+        let bytes = vec![10, 0, 26, 12];
+        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::update(
+            "__fd_database_by_id/123",
+            &bytes,
+        ));
+        let lines = raw_cmd_values(&cmd);
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            lines[0],
+            "    raw(__fd_database_by_id/123): [10, 0, 26, 12]"
+        );
+    }
+
+    #[test]
+    fn test_raw_cmd_upsert_kv_delete() {
+        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::delete(
+            "__fd_database_by_id/1",
+        ));
+        assert_eq!(raw_cmd_values(&cmd), Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_raw_cmd_txn_put() {
+        let bytes = vec![1, 2, 3, 4, 5];
+        let txn = TxnRequest::new(vec![], vec![TxnOp::put("__fd_database_by_id/1", bytes)]);
+        let lines = raw_cmd_values(&Cmd::Transaction(txn));
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            lines[0],
+            "    txn.if_then[0].put __fd_database_by_id/1 raw:\n      [1, 2, 3, 4, 5]"
+        );
+    }
+
+    #[test]
+    fn test_raw_cmd_txn_else_then_put() {
+        let bytes = vec![7, 8];
+        let txn =
+            TxnRequest::new(vec![], vec![]).with_else(vec![TxnOp::put("__fd_db_id_list/2", bytes)]);
+        let lines = raw_cmd_values(&Cmd::Transaction(txn));
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            lines[0],
+            "    txn.else_then[0].put __fd_db_id_list/2 raw:\n      [7, 8]"
+        );
+    }
+
+    #[test]
+    fn test_raw_cmd_txn_non_put_ops_skipped() {
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::get("__fd_database_by_id/1"),
+            TxnOp::delete("__fd_database_by_id/2"),
+        ]);
+        assert_eq!(raw_cmd_values(&Cmd::Transaction(txn)), Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_raw_cmd_other_variants() {
+        let cmd = Cmd::AddNode {
+            node_id: 1,
+            node: Default::default(),
+            overriding: false,
+        };
+        assert_eq!(raw_cmd_values(&cmd), Vec::<String>::new());
     }
 }
