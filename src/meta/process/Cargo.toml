@@ -23,5 +23,8 @@ prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+[dev-dependencies]
+regex = { workspace = true }
+
 [lints]
 workspace = true

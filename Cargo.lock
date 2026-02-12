@@ -4069,8 +4069,12 @@ name = "databend-common-meta-control"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "databend-common-building",
+ "databend-common-meta-app",
+ "databend-common-meta-process",
+ "databend-common-proto-conv",
  "databend-common-tracing",
  "databend-meta",
  "databend-meta-admin",
@@ -4083,9 +4087,11 @@ dependencies = [
  "display-more 0.2.2",
  "futures",
  "mlua",
+ "prost",
  "reqwest",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "url",
@@ -4124,6 +4130,7 @@ dependencies = [
  "databend-meta-types",
  "openraft",
  "prost",
+ "regex",
  "serde",
  "serde_json",
 ]
