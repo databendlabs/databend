@@ -93,7 +93,7 @@ SELECT count() FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = 'b'
 0
 
 statement ok
-ALTER TABLE t_nv MODIFY COLUMN b INT DEFAULT nextval('seq_09_0103')
+ALTER TABLE t_nv MODIFY COLUMN b INT DEFAULT nextval(seq_09_0103)
 
 # nextval is non-deterministic (AsyncFunctionCall); must trigger rewrite.
 query B
