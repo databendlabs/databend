@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -83,7 +84,7 @@ impl FromToProto for mt::LockMeta {
             node: p.node,
             query_id: p.query_id,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            acquired_on: p.acquired_on.map(FromToProto::from_pb).transpose()?,
+            acquired_on: p.acquired_on.from_pb_opt()?,
             lock_type: FromPrimitive::from_i32(p.lock_type)
                 .ok_or_else(|| Incompatible::new(format!("invalid LockType: {}", p.lock_type)))?,
             extra_info: p.extra_info,

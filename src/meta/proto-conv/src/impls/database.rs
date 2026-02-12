@@ -20,6 +20,7 @@ use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -41,7 +42,7 @@ impl FromToProto for mt::DatabaseMeta {
             options: p.options,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
-            drop_on: p.drop_on.map(FromToProto::from_pb).transpose()?,
+            drop_on: p.drop_on.from_pb_opt()?,
             gc_in_progress: p.gc_in_progress,
             comment: p.comment,
         };

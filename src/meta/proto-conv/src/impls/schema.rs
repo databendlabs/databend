@@ -25,6 +25,7 @@ use databend_common_protos::pb::data_type::Dt24;
 use databend_common_protos::pb::number::Num;
 use databend_common_protos::pb::variant_data_type;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::FromToProtoEnum;
 use crate::Incompatible;
@@ -74,7 +75,7 @@ impl FromToProto for ex::TableField {
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let computed_expr = p.computed_expr.map(FromToProto::from_pb).transpose()?;
+        let computed_expr = p.computed_expr.from_pb_opt()?;
         let auto_increment_expr = p
             .auto_increment_expr
             .map(FromToProto::from_pb)

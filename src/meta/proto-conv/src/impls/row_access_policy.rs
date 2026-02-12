@@ -22,6 +22,7 @@ use chrono::Utc;
 use databend_common_meta_app::row_access_policy as mt;
 use databend_common_protos::pb;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -54,7 +55,7 @@ impl FromToProto for mt::RowAccessPolicyMeta {
             body: p.body,
             comment: p.comment.clone(),
             create_on: DateTime::<Utc>::from_pb(p.create_on)?,
-            update_on: p.update_on.map(FromToProto::from_pb).transpose()?,
+            update_on: p.update_on.from_pb_opt()?,
         };
         Ok(v)
     }

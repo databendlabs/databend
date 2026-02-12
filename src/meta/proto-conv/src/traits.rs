@@ -93,3 +93,14 @@ impl<T: FromToProto> ToProtoOptionExt for Option<T> {
         self.as_ref().map(FromToProto::to_pb).transpose()
     }
 }
+
+#[allow(clippy::wrong_self_convention)]
+pub trait FromProtoOptionExt<T: FromToProto> {
+    fn from_pb_opt(self) -> Result<Option<T>, Incompatible>;
+}
+
+impl<T: FromToProto> FromProtoOptionExt<T> for Option<T::PB> {
+    fn from_pb_opt(self) -> Result<Option<T>, Incompatible> {
+        self.map(FromToProto::from_pb).transpose()
+    }
+}

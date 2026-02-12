@@ -21,6 +21,7 @@ use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -44,8 +45,8 @@ impl FromToProto for mt::IndexMeta {
             index_type: FromPrimitive::from_i32(p.index_type)
                 .ok_or_else(|| Incompatible::new(format!("invalid IndexType: {}", p.index_type)))?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            dropped_on: p.dropped_on.map(FromToProto::from_pb).transpose()?,
-            updated_on: p.updated_on.map(FromToProto::from_pb).transpose()?,
+            dropped_on: p.dropped_on.from_pb_opt()?,
+            updated_on: p.updated_on.from_pb_opt()?,
             original_query: p.original_query,
             query: p.query,
             sync_creation: p.sync_creation,

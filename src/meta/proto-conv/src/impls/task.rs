@@ -20,6 +20,7 @@ use databend_common_protos::pb;
 use databend_common_protos::pb::task_message::DeleteTask;
 use databend_common_protos::pb::task_message::Message;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -79,13 +80,13 @@ impl FromToProto for mt::Task {
             owner_user: p.owner_user,
             schedule_options: schedule,
             warehouse_options: warehouse,
-            next_scheduled_at: p.next_scheduled_at.map(FromToProto::from_pb).transpose()?,
+            next_scheduled_at: p.next_scheduled_at.from_pb_opt()?,
             suspend_task_after_num_failures: p.suspend_task_after_num_failures.map(|v| v as u64),
             error_integration: p.error_integration.clone(),
             status,
             created_at: DateTime::<Utc>::from_pb(p.created_at)?,
             updated_at: DateTime::<Utc>::from_pb(p.updated_at)?,
-            last_suspended_at: p.last_suspended_at.map(FromToProto::from_pb).transpose()?,
+            last_suspended_at: p.last_suspended_at.from_pb_opt()?,
             session_params: p.session_parameters,
         })
     }

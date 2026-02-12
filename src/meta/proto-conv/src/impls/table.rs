@@ -29,6 +29,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -47,7 +48,7 @@ impl FromToProto for mt::TableCopiedFileInfo {
         let v = Self {
             etag: p.etag,
             content_length: p.content_length,
-            last_modified: p.last_modified.map(FromToProto::from_pb).transpose()?,
+            last_modified: p.last_modified.from_pb_opt()?,
         };
         Ok(v)
     }
@@ -182,7 +183,7 @@ impl FromToProto for mt::TableMeta {
         let schema = p
             .schema
             .ok_or_else(|| Incompatible::new("TableMeta.schema can not be None".to_string()))?;
-        let virtual_schema = p.virtual_schema.map(FromToProto::from_pb).transpose()?;
+        let virtual_schema = p.virtual_schema.from_pb_opt()?;
 
         let mut indexes = BTreeMap::new();
         for (name, index) in p.indexes {
@@ -208,7 +209,7 @@ impl FromToProto for mt::TableMeta {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             engine: p.engine,
             engine_options: p.engine_options,
-            storage_params: p.storage_params.map(FromToProto::from_pb).transpose()?,
+            storage_params: p.storage_params.from_pb_opt()?,
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
             cluster_key: None,
@@ -219,7 +220,7 @@ impl FromToProto for mt::TableMeta {
             cluster_key_seq,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
-            drop_on: p.drop_on.map(FromToProto::from_pb).transpose()?,
+            drop_on: p.drop_on.from_pb_opt()?,
             comment: p.comment,
             field_comments: p.field_comments,
             statistics: p
@@ -478,7 +479,7 @@ impl FromToProto for mt::SnapshotRef {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let v = Self {
             id: p.id,
-            expire_at: p.expire_at.map(FromToProto::from_pb).transpose()?,
+            expire_at: p.expire_at.from_pb_opt()?,
             typ: FromPrimitive::from_i32(p.typ)
                 .ok_or_else(|| Incompatible::new(format!("invalid RefType: {}", p.typ)))?,
             loc: p.loc,

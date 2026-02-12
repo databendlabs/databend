@@ -24,6 +24,7 @@ use databend_common_protos::pb;
 use mt::principal::FileFormatOptionsReader;
 use num::FromPrimitive;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::FromToProtoEnum;
 use crate::Incompatible;
@@ -225,7 +226,7 @@ impl FromToProto for mt::principal::StageInfo {
             )?)?,
             comment: p.comment,
             number_of_files: p.number_of_files,
-            creator: p.creator.map(FromToProto::from_pb).transpose()?,
+            creator: p.creator.from_pb_opt()?,
             created_on: p
                 .created_on
                 .map(FromToProto::from_pb)
@@ -267,7 +268,7 @@ impl FromToProto for mt::principal::StageFile {
             size: p.size,
             md5: p.md5.clone(),
             last_modified: DateTime::<Utc>::from_pb(p.last_modified)?,
-            creator: p.creator.map(FromToProto::from_pb).transpose()?,
+            creator: p.creator.from_pb_opt()?,
             etag: p.etag.clone(),
         })
     }

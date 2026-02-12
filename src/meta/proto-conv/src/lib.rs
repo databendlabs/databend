@@ -65,6 +65,7 @@ mod traits;
 mod util;
 
 pub use error::Incompatible;
+pub use traits::FromProtoOptionExt;
 pub use traits::FromToProto;
 pub use traits::FromToProtoEnum;
 pub use traits::ToProtoOptionExt;

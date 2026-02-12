@@ -17,6 +17,7 @@ use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -39,8 +40,8 @@ impl FromToProto for mt::TagMeta {
             allowed_values: p.allowed_values.map(|vals| vals.values),
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            updated_on: p.updated_on.map(FromToProto::from_pb).transpose()?,
-            drop_on: p.drop_on.map(FromToProto::from_pb).transpose()?,
+            updated_on: p.updated_on.from_pb_opt()?,
+            drop_on: p.drop_on.from_pb_opt()?,
         })
     }
 

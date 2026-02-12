@@ -24,6 +24,7 @@ use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_protos::pb;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -136,7 +137,7 @@ impl FromToProto for StorageS3Config {
             enable_virtual_host_style: p.enable_virtual_host_style,
             role_arn: p.role_arn,
             external_id: p.external_id,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
             // For the time being, s3 storage class info is not present in meta store,
             // storage class specifications at table/connection level is not supported yet.
             storage_class: S3StorageClass::default(),
@@ -180,7 +181,7 @@ impl FromToProto for StorageGcsConfig {
             endpoint_url: p.endpoint_url,
             bucket: p.bucket,
             root: p.root,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -239,7 +240,7 @@ impl FromToProto for StorageOssConfig {
             access_key_secret: p.access_key_secret,
             server_side_encryption: p.server_side_encryption,
             server_side_encryption_key_id: p.server_side_encryption_key_id,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -275,7 +276,7 @@ impl FromToProto for StorageWebhdfsConfig {
             delegation: p.delegation,
             disable_list_batch: p.disable_list_batch,
             user_name: p.user_name,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -311,7 +312,7 @@ impl FromToProto for StorageObsConfig {
 
             access_key_id: p.access_key_id,
             secret_access_key: p.secret_access_key,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -346,7 +347,7 @@ impl FromToProto for StorageCosConfig {
 
             secret_id: p.secret_id,
             secret_key: p.secret_key,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -377,7 +378,7 @@ impl FromToProto for StorageHdfsConfig {
         Ok(StorageHdfsConfig {
             root: p.root,
             name_node: p.name_node,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -408,7 +409,7 @@ impl FromToProto for mt::storage::StorageHuggingfaceConfig {
             revision: p.revision,
             token: p.token,
             root: p.root,
-            network_config: p.network_config.map(FromToProto::from_pb).transpose()?,
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 

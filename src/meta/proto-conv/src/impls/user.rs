@@ -25,6 +25,7 @@ use databend_common_protos::pb;
 use enumflags2::BitFlags;
 use num::FromPrimitive;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
@@ -413,8 +414,8 @@ impl FromToProto for mt::principal::UserInfo {
                 .iter()
                 .map(|t| DateTime::<Utc>::from_pb(t.clone()))
                 .collect::<Result<Vec<DateTime<Utc>>, Incompatible>>()?,
-            password_update_on: p.password_update_on.map(FromToProto::from_pb).transpose()?,
-            lockout_time: p.lockout_time.map(FromToProto::from_pb).transpose()?,
+            password_update_on: p.password_update_on.from_pb_opt()?,
+            lockout_time: p.lockout_time.from_pb_opt()?,
             created_on: p
                 .created_on
                 .map(FromToProto::from_pb)
@@ -495,7 +496,7 @@ impl FromToProto for mt::principal::NetworkPolicy {
             blocked_ip_list: p.blocked_ip_list.clone(),
             comment: p.comment,
             create_on: DateTime::<Utc>::from_pb(p.create_on)?,
-            update_on: p.update_on.map(FromToProto::from_pb).transpose()?,
+            update_on: p.update_on.from_pb_opt()?,
         })
     }
 
@@ -536,7 +537,7 @@ impl FromToProto for mt::principal::PasswordPolicy {
             history: p.history,
             comment: p.comment,
             create_on: DateTime::<Utc>::from_pb(p.create_on)?,
-            update_on: p.update_on.map(FromToProto::from_pb).transpose()?,
+            update_on: p.update_on.from_pb_opt()?,
         })
     }
 
