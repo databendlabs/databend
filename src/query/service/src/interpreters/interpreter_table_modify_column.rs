@@ -47,6 +47,7 @@ use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
+use databend_common_sql::ScalarExpr;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
@@ -431,10 +432,17 @@ impl ModifyTableColumnInterpreter {
                 if default_expr_changed && field.default_expr.is_some() {
                     let data_field: DataField = field.into();
                     let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
-                    let expr = scalar_expr
+                    // AsyncFunctionCall (e.g. nextval) is lowered to a dummy
+                    // ColumnRef by as_expr(), hiding its non-determinism from
+                    // is_deterministic(). Treat it as non-deterministic directly.
+                    let is_deterministic = !matches!(
+                        &scalar_expr,
+                        ScalarExpr::AsyncFunctionCall(_)
+                    ) && scalar_expr
                         .as_expr()?
-                        .project_column_ref(|col| Ok(col.index))?;
-                    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        .project_column_ref(|col| Ok(col.index))?
+                        .is_deterministic(&BUILTIN_FUNCTIONS);
+                    if !is_deterministic {
                         need_rebuild = true;
                     }
                 }
