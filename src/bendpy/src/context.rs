@@ -212,7 +212,9 @@ impl PySessionContext {
             .unwrap_or_default();
 
         let select_clause = match file_format {
-            "csv" | "tsv" => self.build_column_select(&file_path, file_format, pattern, connection, py)?,
+            "csv" | "tsv" => {
+                self.build_column_select(&file_path, file_format, pattern, connection, py)?
+            }
             _ => "*".to_string(),
         };
 
