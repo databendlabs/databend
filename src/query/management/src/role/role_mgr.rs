@@ -300,102 +300,18 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn list_udf_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError> {
-        let obj = OwnershipObject::UDF {
-            name: "foo".to_string(),
-        };
-
+    async fn list_ownerships_by_type(
+        &self,
+        obj: OwnershipObject,
+    ) -> Result<Vec<OwnershipInfo>, MetaError> {
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
         let values = self
             .kv_api
             .list_pb_values(ListOptions::unlimited(&dir_name))
             .await?;
-        let udfs = values.try_collect().await?;
-        Ok(udfs)
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn list_stage_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError> {
-        let obj = OwnershipObject::Stage {
-            name: "s1".to_string(),
-        };
-
-        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
-        let dir_name = DirName::new(ident);
-        let values = self
-            .kv_api
-            .list_pb_values(ListOptions::unlimited(&dir_name))
-            .await?;
-        let stages = values.try_collect().await?;
-        Ok(stages)
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn list_seq_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError> {
-        let obj = OwnershipObject::Sequence {
-            name: "seq1".to_string(),
-        };
-
-        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
-        let dir_name = DirName::new(ident);
-        let values = self
-            .kv_api
-            .list_pb_values(ListOptions::unlimited(&dir_name))
-            .await?;
-        let seqs = values.try_collect().await?;
-        Ok(seqs)
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn list_procedure_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError> {
-        let obj = OwnershipObject::Procedure { procedure_id: 1 };
-
-        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
-        let dir_name = DirName::new(ident);
-        let values = self
-            .kv_api
-            .list_pb_values(ListOptions::unlimited(&dir_name))
-            .await?;
-        let seqs = values.try_collect().await?;
-        Ok(seqs)
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn list_connection_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError> {
-        let obj = OwnershipObject::Connection {
-            name: "con".to_string(),
-        };
-
-        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
-        let dir_name = DirName::new(ident);
-        let values = self
-            .kv_api
-            .list_pb_values(ListOptions::unlimited(&dir_name))
-            .await?;
-        let conns = values.try_collect().await?;
-        Ok(conns)
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    async fn list_warehouse_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError> {
-        let obj = OwnershipObject::Warehouse {
-            id: "w".to_string(),
-        };
-
-        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
-        let dir_name = DirName::new(ident);
-        let values = self
-            .kv_api
-            .list_pb_values(ListOptions::unlimited(&dir_name))
-            .await?;
-        let ws = values.try_collect().await?;
-        Ok(ws)
+        let items = values.try_collect().await?;
+        Ok(items)
     }
 
     /// General role update.

@@ -392,39 +392,47 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                 vec![]
             } else {
                 let user_api = UserApiProvider::instance();
+                let role_api = user_api.role_api(&self.session_ctx.get_current_tenant());
                 let ownerships = match object {
-                    Object::All => user_api
-                        .role_api(&self.session_ctx.get_current_tenant())
+                    Object::All => role_api
                         .list_ownerships()
                         .await
                         .map_err(meta_service_error)?
                         .into_iter()
                         .map(|item| item.data)
                         .collect(),
-                    Object::UDF => user_api
-                        .role_api(&self.session_ctx.get_current_tenant())
-                        .list_udf_ownerships()
-                        .await?,
-                    Object::Stage => user_api
-                        .role_api(&self.session_ctx.get_current_tenant())
-                        .list_stage_ownerships()
-                        .await?,
-                    Object::Sequence => user_api
-                        .role_api(&self.session_ctx.get_current_tenant())
-                        .list_seq_ownerships()
-                        .await?,
-                    Object::Connection => user_api
-                        .role_api(&self.session_ctx.get_current_tenant())
-                        .list_connection_ownerships()
-                        .await?,
-                    Object::Warehouse => user_api
-                        .role_api(&self.session_ctx.get_current_tenant())
-                        .list_warehouse_ownerships()
-                        .await?,
-                    Object::Procedure => user_api
-                        .role_api(&self.session_ctx.get_current_tenant())
-                        .list_procedure_ownerships()
-                        .await?,
+                    Object::UDF => role_api
+                        .list_ownerships_by_type(OwnershipObject::UDF {
+                            name: String::new(),
+                        })
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Stage => role_api
+                        .list_ownerships_by_type(OwnershipObject::Stage {
+                            name: String::new(),
+                        })
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Sequence => role_api
+                        .list_ownerships_by_type(OwnershipObject::Sequence {
+                            name: String::new(),
+                        })
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Connection => role_api
+                        .list_ownerships_by_type(OwnershipObject::Connection {
+                            name: String::new(),
+                        })
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Warehouse => role_api
+                        .list_ownerships_by_type(OwnershipObject::Warehouse { id: String::new() })
+                        .await
+                        .map_err(meta_service_error)?,
+                    Object::Procedure => role_api
+                        .list_ownerships_by_type(OwnershipObject::Procedure { procedure_id: 0 })
+                        .await
+                        .map_err(meta_service_error)?,
                 };
                 let mut ownership_infos = vec![];
                 for ownership in ownerships {

@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -108,10 +107,14 @@ impl UserApiProvider {
 
     #[async_backtrace::framed]
     pub async fn exists_role(&self, tenant: &Tenant, role: String) -> Result<bool> {
+        if self.builtin_roles().contains_key(&role) {
+            return Ok(true);
+        }
         Ok(self
-            .get_role(tenant, role)
+            .role_api(tenant)
+            .get_role(&role)
             .await
-            .or_unknown_role()?
+            .map_err(meta_service_error)?
             .is_some())
     }
 
@@ -230,9 +233,9 @@ impl UserApiProvider {
         role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let client = self.role_api(tenant);
-        let res = client
+        client
             .update_role_with(role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.grant_privileges(&object, privileges)
@@ -240,7 +243,7 @@ impl UserApiProvider {
             .await
             .map_err(meta_service_error)?
             .map_err(|e| ErrorCode::from(e).add_message_back("(while set role privileges)"))?;
-        Ok(Some(res))
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -250,9 +253,9 @@ impl UserApiProvider {
         role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let client = self.role_api(tenant);
-        let res = client
+        client
             .update_role_with(role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.revoke_privileges(&object, privileges)
@@ -260,7 +263,7 @@ impl UserApiProvider {
             .await
             .map_err(meta_service_error)?
             .map_err(|e| ErrorCode::from(e).add_message_back("(while revoke role privileges)"))?;
-        Ok(Some(res))
+        Ok(())
     }
 
     // the grant_role can not have cycle with target_role.
@@ -270,7 +273,7 @@ impl UserApiProvider {
         tenant: &Tenant,
         target_role: &String,
         grant_role: String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let related_roles = self
             .find_related_roles(tenant, &[grant_role.clone()])
             .await?;
@@ -283,7 +286,7 @@ impl UserApiProvider {
         }
 
         let client = self.role_api(tenant);
-        let res = client
+        client
             .update_role_with(target_role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.grant_role(grant_role)
@@ -291,7 +294,7 @@ impl UserApiProvider {
             .await
             .map_err(meta_service_error)?
             .map_err(|e| ErrorCode::from(e).add_message_back("(while grant role to role)"))?;
-        Ok(Some(res))
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -300,9 +303,9 @@ impl UserApiProvider {
         tenant: &Tenant,
         role: &str,
         revoke_role: &String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let client = self.role_api(tenant);
-        let res = client
+        client
             .update_role_with(role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.revoke_role(revoke_role)
@@ -310,7 +313,7 @@ impl UserApiProvider {
             .await
             .map_err(meta_service_error)?
             .map_err(|e| ErrorCode::from(e).add_message_back("(while revoke role from role)"))?;
-        Ok(Some(res))
+        Ok(())
     }
 
     // Drop a role by name

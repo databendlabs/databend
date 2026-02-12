@@ -40,12 +40,13 @@ pub trait RoleApi: Sync + Send {
 
     async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, MetaError>;
 
-    async fn list_udf_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError>;
-    async fn list_stage_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError>;
-    async fn list_seq_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError>;
-    async fn list_procedure_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError>;
-    async fn list_connection_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError>;
-    async fn list_warehouse_ownerships(&self) -> Result<Vec<OwnershipInfo>, MetaError>;
+    /// List ownerships filtered by type.
+    ///
+    /// The `obj` parameter is used as a dummy to determine the ownership type prefix.
+    async fn list_ownerships_by_type(
+        &self,
+        obj: OwnershipObject,
+    ) -> Result<Vec<OwnershipInfo>, MetaError>;
 
     /// General role update.
     ///
