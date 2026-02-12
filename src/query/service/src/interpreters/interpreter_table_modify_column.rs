@@ -432,9 +432,9 @@ impl ModifyTableColumnInterpreter {
                 if default_expr_changed && field.default_expr.is_some() {
                     let data_field: DataField = field.into();
                     let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
-                    // AsyncFunctionCall (e.g. nextval) is lowered to a dummy
-                    // ColumnRef by as_expr(), hiding its non-determinism from
-                    // is_deterministic(). Treat it as non-deterministic directly.
+                    // TODO: ScalarExpr should have its own is_deterministic() that
+                    // handles AsyncFunctionCall natively, instead of relying on the
+                    // lossy as_expr() lowering. See: https://github.com/databendlabs/databend/issues/19451
                     let is_deterministic = !matches!(
                         &scalar_expr,
                         ScalarExpr::AsyncFunctionCall(_)
