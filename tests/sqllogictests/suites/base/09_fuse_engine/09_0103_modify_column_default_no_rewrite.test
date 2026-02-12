@@ -71,6 +71,36 @@ SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = '
 ----
 1
 
+#############################################################
+# nextval default: default-only modify triggers rewrite            #
+#############################################################
+
+statement ok
+CREATE SEQUENCE seq_09_0103
+
+statement ok
+CREATE TABLE t_nv(a INT NOT NULL) row_per_block=1
+
+statement ok
+INSERT INTO t_nv VALUES(1)
+
+statement ok
+ALTER TABLE t_nv ADD COLUMN b INT DEFAULT 1
+
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_nv MODIFY COLUMN b INT DEFAULT nextval('seq_09_0103')
+
+# nextval is non-deterministic (AsyncFunctionCall); must trigger rewrite.
+query B
+SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = 'b'
+----
+1
+
 ####################################################
 # remove default: metadata-only, column falls back to type default #
 ####################################################
