@@ -121,6 +121,15 @@ statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b STRING
 
 ####################################################
+# change tracking: no-op column spec should not trigger guard      #
+####################################################
+
+# Re-specifying column b with its current type and default is a no-op;
+# it must not be rejected on a change-tracking table.
+statement ok
+ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 10
+
+####################################################
 # change tracking: allow schema changes on empty table         #
 ####################################################
 

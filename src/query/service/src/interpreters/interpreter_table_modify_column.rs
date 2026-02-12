@@ -415,6 +415,11 @@ impl ModifyTableColumnInterpreter {
                     continue;
                 }
 
+                // No-op: nothing changed for this field, skip it.
+                if !data_type_changed && !default_expr_changed && !computed_expr_changed {
+                    continue;
+                }
+
                 has_column_change = true;
 
                 // Already decided to rebuild from a previous field; keep
