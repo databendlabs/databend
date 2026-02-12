@@ -165,20 +165,36 @@ echo "CALL procedure greet();" | $USER_DEV_USER_CONNECT
 echo "30. test_user calls greet (should fail)..."
 echo "CALL procedure greet();" | $USER_TEST_USER_CONNECT
 
+# Test system.procedures visibility
+echo "=== Testing system.procedures visibility ==="
+echo "SET GLOBAL enable_experimental_rbac_check = 1;" | $BENDSQL_CLIENT_CONNECT
+
+echo "31. admin_user queries system.procedures (should see add_numbers, get_current_time via ownership)..."
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_ADMIN_USER_CONNECT
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $BENDSQL_CLIENT_CONNECT
+
+echo "32. dev_user queries system.procedures (should see add_numbers and greet via grant)..."
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_DEV_USER_CONNECT
+
+echo "33. test_user queries system.procedures (should see get_current_time via grant, multiply_numbers via ownership)..."
+echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_TEST_USER_CONNECT
+
+echo "SET GLOBAL enable_experimental_rbac_check = 0;" | $BENDSQL_CLIENT_CONNECT
+
 # Cleanup
 echo "=== Cleaning up test environment ==="
-echo "31. Dropping users..."
+echo "34. Dropping users..."
 echo "DROP USER IF EXISTS admin_user;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP USER IF EXISTS dev_user;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP USER IF EXISTS test_user;" | $BENDSQL_CLIENT_CONNECT
 
-echo "32. Dropping roles..."
+echo "35. Dropping roles..."
 echo "DROP ROLE IF EXISTS admin_role;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS dev_role;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS test_role;" | $BENDSQL_CLIENT_CONNECT
 echo "DROP ROLE IF EXISTS test_with_access;" | $BENDSQL_CLIENT_CONNECT
 
-echo "33. Dropping procedures..."
+echo "36. Dropping procedures..."
 echo "DROP PROCEDURE IF EXISTS add_numbers(int, int);" | $BENDSQL_CLIENT_CONNECT
 echo "DROP PROCEDURE IF EXISTS get_current_time();" | $BENDSQL_CLIENT_CONNECT
 echo "DROP PROCEDURE IF EXISTS multiply_numbers(int, int);" | $BENDSQL_CLIENT_CONNECT

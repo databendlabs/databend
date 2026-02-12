@@ -131,7 +131,7 @@ impl<Data: QueueData> QueueManager<Data> {
         GlobalInstance::set(Self::create(
             permits,
             metastore,
-            conf.query.global_statement_queue,
+            conf.query.common.global_statement_queue,
         ));
         Ok(())
     }

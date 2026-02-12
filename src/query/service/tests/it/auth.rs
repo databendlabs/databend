@@ -77,8 +77,8 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> anyhow::Result<()> {
     let mut conf = ConfigBuilder::create().config();
     let first_url = format!("http://{}{}", server.address(), json_path);
     let second_url = format!("http://{}{}", server.address(), second_path);
-    conf.query.jwt_key_file = first_url.clone();
-    conf.query.jwt_key_files = vec![second_url];
+    conf.query.common.jwt_key_file = first_url.clone();
+    conf.query.common.jwt_key_files = vec![second_url];
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
@@ -235,7 +235,7 @@ async fn test_auth_mgr_with_jwt() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
@@ -475,7 +475,7 @@ async fn test_auth_mgr_with_jwt_es256() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
@@ -711,7 +711,7 @@ async fn test_jwt_auth_mgr_with_management() -> anyhow::Result<()> {
         .await;
 
     let mut conf = ConfigBuilder::create().with_management_mode().config();
-    conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
+    conf.query.common.jwt_key_file = format!("http://{}{}", server.address(), json_path);
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
@@ -769,7 +769,7 @@ async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
@@ -862,7 +862,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 

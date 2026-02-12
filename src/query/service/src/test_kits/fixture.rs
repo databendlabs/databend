@@ -155,8 +155,11 @@ impl TestFixture {
         let conf = OSSSetup { config }.setup().await?;
 
         use crate::history_tables::session::create_session;
-        let default_session =
-            create_session(conf.query.tenant_id.tenant_name(), &conf.query.cluster_id).await?;
+        let default_session = create_session(
+            conf.query.tenant_id.tenant_name(),
+            &conf.query.common.cluster_id,
+        )
+        .await?;
         let default_ctx = default_session.create_query_context(&BUILD_INFO).await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
@@ -282,7 +285,9 @@ impl TestFixture {
                 .await?;
             info!(
                 "Databend query unit test setup registered:{:?}/{:?} to metasrv:{:?}.",
-                config.query.warehouse_id, config.query.cluster_id, config.meta.endpoints
+                config.query.common.warehouse_id,
+                config.query.common.cluster_id,
+                config.meta.endpoints
             );
         }
 

@@ -91,8 +91,8 @@ impl ResourcesManagement for DummyResourcesManagement {
 
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
-        node.cluster_id = config.query.cluster_id.clone();
-        node.warehouse_id = config.query.warehouse_id.clone();
+        node.cluster_id = config.query.common.cluster_id.clone();
+        node.warehouse_id = config.query.common.warehouse_id.clone();
         node.node_type = NodeType::SelfManaged;
         Ok(())
     }

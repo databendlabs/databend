@@ -123,7 +123,7 @@ impl StorageFactory {
         let mut creators: HashMap<String, Storage> = Default::default();
 
         // Register memory table engine.
-        if conf.query.table_engine_memory_enabled {
+        if conf.query.common.table_engine_memory_enabled {
             creators.insert("MEMORY".to_string(), Storage {
                 creator: Arc::new(MemoryStorageCreator),
                 descriptor: Arc::new(MemoryTable::description),
