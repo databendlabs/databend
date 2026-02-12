@@ -20,6 +20,7 @@ use databend_common_protos::pb;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -38,14 +39,8 @@ impl FromToProto for mt::TagMeta {
             allowed_values: p.allowed_values.map(|vals| vals.values),
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            updated_on: match p.updated_on {
-                Some(v) => Some(DateTime::<Utc>::from_pb(v)?),
-                None => None,
-            },
-            drop_on: match p.drop_on {
-                Some(v) => Some(DateTime::<Utc>::from_pb(v)?),
-                None => None,
-            },
+            updated_on: p.updated_on.map(FromToProto::from_pb).transpose()?,
+            drop_on: p.drop_on.map(FromToProto::from_pb).transpose()?,
         })
     }
 
@@ -60,14 +55,8 @@ impl FromToProto for mt::TagMeta {
             }),
             comment: self.comment.clone(),
             created_on: self.created_on.to_pb()?,
-            updated_on: match self.updated_on {
-                Some(v) => Some(v.to_pb()?),
-                None => None,
-            },
-            drop_on: match self.drop_on {
-                Some(v) => Some(v.to_pb()?),
-                None => None,
-            },
+            updated_on: self.updated_on.to_pb_opt()?,
+            drop_on: self.drop_on.to_pb_opt()?,
         })
     }
 }

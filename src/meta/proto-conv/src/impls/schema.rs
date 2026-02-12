@@ -74,14 +74,11 @@ impl FromToProto for ex::TableField {
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let computed_expr = match p.computed_expr {
-            Some(computed_expr) => Some(ex::ComputedExpr::from_pb(computed_expr)?),
-            None => None,
-        };
-        let auto_increment_expr = match p.auto_increment_expr {
-            Some(auto_increment_expr) => Some(ex::AutoIncrementExpr::from_pb(auto_increment_expr)?),
-            None => None,
-        };
+        let computed_expr = p.computed_expr.map(FromToProto::from_pb).transpose()?;
+        let auto_increment_expr = p
+            .auto_increment_expr
+            .map(FromToProto::from_pb)
+            .transpose()?;
 
         let v = ex::TableField::new_from_column_id(
             &p.name,
@@ -97,14 +94,11 @@ impl FromToProto for ex::TableField {
     }
 
     fn to_pb(&self) -> Result<pb::DataField, Incompatible> {
-        let computed_expr = match self.computed_expr() {
-            Some(computed_expr) => Some(computed_expr.to_pb()?),
-            None => None,
-        };
-        let auto_increment_expr = match self.auto_increment_expr() {
-            Some(auto_increment_expr) => Some(auto_increment_expr.to_pb()?),
-            None => None,
-        };
+        let computed_expr = self.computed_expr().map(FromToProto::to_pb).transpose()?;
+        let auto_increment_expr = self
+            .auto_increment_expr()
+            .map(FromToProto::to_pb)
+            .transpose()?;
         let p = pb::DataField {
             ver: VER,
             min_reader_ver: MIN_READER_VER,

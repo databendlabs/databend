@@ -28,6 +28,7 @@ use num::FromPrimitive;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -412,22 +413,18 @@ impl FromToProto for mt::principal::UserInfo {
                 .iter()
                 .map(|t| DateTime::<Utc>::from_pb(t.clone()))
                 .collect::<Result<Vec<DateTime<Utc>>, Incompatible>>()?,
-            password_update_on: match p.password_update_on {
-                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
-                None => None,
-            },
-            lockout_time: match p.lockout_time {
-                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
-                None => None,
-            },
-            created_on: match p.created_on {
-                Some(c) => DateTime::<Utc>::from_pb(c)?,
-                None => DateTime::<Utc>::default(),
-            },
-            update_on: match p.update_on {
-                Some(c) => DateTime::<Utc>::from_pb(c)?,
-                None => DateTime::<Utc>::default(),
-            },
+            password_update_on: p.password_update_on.map(FromToProto::from_pb).transpose()?,
+            lockout_time: p.lockout_time.map(FromToProto::from_pb).transpose()?,
+            created_on: p
+                .created_on
+                .map(FromToProto::from_pb)
+                .transpose()?
+                .unwrap_or_default(),
+            update_on: p
+                .update_on
+                .map(FromToProto::from_pb)
+                .transpose()?
+                .unwrap_or_default(),
         })
     }
 
@@ -444,21 +441,15 @@ impl FromToProto for mt::principal::UserInfo {
             history_auth_infos: self
                 .history_auth_infos
                 .iter()
-                .map(mt::principal::AuthInfo::to_pb)
+                .map(FromToProto::to_pb)
                 .collect::<Result<Vec<pb::AuthInfo>, Incompatible>>()?,
             password_fails: self
                 .password_fails
                 .iter()
-                .map(|t| t.to_pb())
+                .map(FromToProto::to_pb)
                 .collect::<Result<Vec<String>, Incompatible>>()?,
-            password_update_on: match self.password_update_on {
-                Some(t) => Some(t.to_pb()?),
-                None => None,
-            },
-            lockout_time: match self.lockout_time {
-                Some(t) => Some(t.to_pb()?),
-                None => None,
-            },
+            password_update_on: self.password_update_on.to_pb_opt()?,
+            lockout_time: self.lockout_time.to_pb_opt()?,
             created_on: Some(self.created_on.to_pb()?),
             update_on: Some(self.update_on.to_pb()?),
         })
@@ -504,10 +495,7 @@ impl FromToProto for mt::principal::NetworkPolicy {
             blocked_ip_list: p.blocked_ip_list.clone(),
             comment: p.comment,
             create_on: DateTime::<Utc>::from_pb(p.create_on)?,
-            update_on: match p.update_on {
-                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
-                None => None,
-            },
+            update_on: p.update_on.map(FromToProto::from_pb).transpose()?,
         })
     }
 
@@ -520,10 +508,7 @@ impl FromToProto for mt::principal::NetworkPolicy {
             blocked_ip_list: self.blocked_ip_list.clone(),
             comment: self.comment.clone(),
             create_on: self.create_on.to_pb()?,
-            update_on: match &self.update_on {
-                Some(t) => Some(t.to_pb()?),
-                None => None,
-            },
+            update_on: self.update_on.to_pb_opt()?,
         })
     }
 }
@@ -551,10 +536,7 @@ impl FromToProto for mt::principal::PasswordPolicy {
             history: p.history,
             comment: p.comment,
             create_on: DateTime::<Utc>::from_pb(p.create_on)?,
-            update_on: match p.update_on {
-                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
-                None => None,
-            },
+            update_on: p.update_on.map(FromToProto::from_pb).transpose()?,
         })
     }
 
@@ -576,10 +558,7 @@ impl FromToProto for mt::principal::PasswordPolicy {
             history: self.history,
             comment: self.comment.clone(),
             create_on: self.create_on.to_pb()?,
-            update_on: match &self.update_on {
-                Some(t) => Some(t.to_pb()?),
-                None => None,
-            },
+            update_on: self.update_on.to_pb_opt()?,
         })
     }
 }

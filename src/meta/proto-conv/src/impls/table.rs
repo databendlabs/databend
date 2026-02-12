@@ -23,10 +23,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_base::non_empty::NonEmptyString;
 use databend_common_expression as ex;
-use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_protos::pb;
 use num::FromPrimitive;
@@ -34,6 +32,7 @@ use num::FromPrimitive;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -48,10 +47,7 @@ impl FromToProto for mt::TableCopiedFileInfo {
         let v = Self {
             etag: p.etag,
             content_length: p.content_length,
-            last_modified: match p.last_modified {
-                None => None,
-                Some(last_modified) => Some(DateTime::<Utc>::from_pb(last_modified)?),
-            },
+            last_modified: p.last_modified.map(FromToProto::from_pb).transpose()?,
         };
         Ok(v)
     }
@@ -62,10 +58,7 @@ impl FromToProto for mt::TableCopiedFileInfo {
             min_reader_ver: MIN_READER_VER,
             etag: self.etag.clone(),
             content_length: self.content_length,
-            last_modified: match self.last_modified {
-                None => None,
-                Some(last_modified) => Some(last_modified.to_pb()?),
-            },
+            last_modified: self.last_modified.to_pb_opt()?,
         };
         Ok(p)
     }
@@ -189,10 +182,7 @@ impl FromToProto for mt::TableMeta {
         let schema = p
             .schema
             .ok_or_else(|| Incompatible::new("TableMeta.schema can not be None".to_string()))?;
-        let virtual_schema = p
-            .virtual_schema
-            .map(VirtualDataSchema::from_pb)
-            .transpose()?;
+        let virtual_schema = p.virtual_schema.map(FromToProto::from_pb).transpose()?;
 
         let mut indexes = BTreeMap::new();
         for (name, index) in p.indexes {
@@ -218,10 +208,7 @@ impl FromToProto for mt::TableMeta {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             engine: p.engine,
             engine_options: p.engine_options,
-            storage_params: match p.storage_params {
-                Some(sp) => Some(StorageParams::from_pb(sp)?),
-                None => None,
-            },
+            storage_params: p.storage_params.map(FromToProto::from_pb).transpose()?,
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
             cluster_key: None,
@@ -232,15 +219,12 @@ impl FromToProto for mt::TableMeta {
             cluster_key_seq,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
-            drop_on: match p.drop_on {
-                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
-                None => None,
-            },
+            drop_on: p.drop_on.map(FromToProto::from_pb).transpose()?,
             comment: p.comment,
             field_comments: p.field_comments,
             statistics: p
                 .statistics
-                .map(mt::TableStatistics::from_pb)
+                .map(FromToProto::from_pb)
                 .transpose()?
                 .unwrap_or_default(),
             shared_by: BTreeSet::from_iter(p.shared_by),
@@ -250,10 +234,10 @@ impl FromToProto for mt::TableMeta {
                 Some(p.column_mask_policy)
             },
             row_access_policy: p.row_access_policy,
-            row_access_policy_columns_ids: match p.row_access_policy_columns_ids {
-                Some(r) => Some(SecurityPolicyColumnMap::from_pb(r)?),
-                None => None,
-            },
+            row_access_policy_columns_ids: p
+                .row_access_policy_columns_ids
+                .map(FromToProto::from_pb)
+                .transpose()?,
             column_mask_policy_columns_ids: p
                 .column_mask_policy_columns_ids
                 .into_iter()
@@ -287,10 +271,7 @@ impl FromToProto for mt::TableMeta {
             schema: Some(self.schema.to_pb()?),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
-            storage_params: match self.storage_params.clone() {
-                Some(sp) => Some(sp.to_pb()?),
-                None => None,
-            },
+            storage_params: self.storage_params.to_pb_opt()?,
             part_prefix: if self.part_prefix.is_empty() {
                 None
             } else {
@@ -304,31 +285,21 @@ impl FromToProto for mt::TableMeta {
             cluster_key_seq: Some(self.cluster_key_seq),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
-            drop_on: match self.drop_on {
-                Some(drop_on) => Some(drop_on.to_pb()?),
-                None => None,
-            },
+            drop_on: self.drop_on.to_pb_opt()?,
             comment: self.comment.clone(),
             field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             row_access_policy: self.row_access_policy.clone(),
-            row_access_policy_columns_ids: match &self.row_access_policy_columns_ids {
-                Some(r) => Some(r.to_pb()?),
-                None => None,
-            },
+            row_access_policy_columns_ids: self.row_access_policy_columns_ids.to_pb_opt()?,
             column_mask_policy_columns_ids: self
                 .column_mask_policy_columns_ids
                 .iter()
                 .map(|(k, v)| Ok((*k, v.to_pb()?)))
                 .collect::<Result<BTreeMap<_, _>, _>>()?,
             indexes,
-            virtual_schema: self
-                .virtual_schema
-                .as_ref()
-                .map(VirtualDataSchema::to_pb)
-                .transpose()?,
+            virtual_schema: self.virtual_schema.to_pb_opt()?,
             constraints,
             refs,
         };
@@ -507,7 +478,7 @@ impl FromToProto for mt::SnapshotRef {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let v = Self {
             id: p.id,
-            expire_at: p.expire_at.map(DateTime::<Utc>::from_pb).transpose()?,
+            expire_at: p.expire_at.map(FromToProto::from_pb).transpose()?,
             typ: FromPrimitive::from_i32(p.typ)
                 .ok_or_else(|| Incompatible::new(format!("invalid RefType: {}", p.typ)))?,
             loc: p.loc,
@@ -520,7 +491,7 @@ impl FromToProto for mt::SnapshotRef {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             id: self.id,
-            expire_at: self.expire_at.map(|x| x.to_pb()).transpose()?,
+            expire_at: self.expire_at.to_pb_opt()?,
             typ: self.typ.clone() as i32,
             loc: self.loc.clone(),
         };

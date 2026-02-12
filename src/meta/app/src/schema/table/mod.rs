@@ -115,7 +115,10 @@ impl TableInfo {
         raw.strip_prefix('\'')
             .and_then(|s| s.strip_suffix('\''))
             .ok_or_else(|| {
-                ErrorCode::Internal(format!("unexpected desc format: {} in table {}", raw, self.name))
+                ErrorCode::Internal(format!(
+                    "unexpected desc format: {} in table {}",
+                    raw, self.name
+                ))
             })
     }
 }

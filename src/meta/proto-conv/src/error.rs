@@ -13,36 +13,6 @@
 // limitations under the License.
 
 use std::fmt;
-use std::sync::Arc;
-
-/// Defines API to convert from/to protobuf meta type.
-pub trait FromToProto {
-    /// The corresponding protobuf defined type.
-    type PB: prost::Message + Default;
-
-    /// Get the version encoded in a protobuf message.
-    fn get_pb_ver(p: &Self::PB) -> u64;
-
-    /// Convert to rust type from protobuf type.
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized;
-
-    /// Convert from rust type to protobuf type.
-    fn to_pb(&self) -> Result<Self::PB, Incompatible>;
-}
-
-/// Defines API to convert from/to protobuf Enumeration.
-pub trait FromToProtoEnum {
-    /// The corresponding protobuf defined type.
-    type PBEnum;
-
-    /// Convert to rust type from protobuf enum type.
-    fn from_pb_enum(p: Self::PBEnum) -> Result<Self, Incompatible>
-    where Self: Sized;
-
-    /// Convert from rust type to protobuf type.
-    fn to_pb_enum(&self) -> Result<Self::PBEnum, Incompatible>;
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub struct Incompatible {
@@ -73,24 +43,5 @@ impl Incompatible {
     pub fn with_context(mut self, context: impl Into<String>) -> Self {
         self.context = context.into();
         self
-    }
-}
-
-impl<T> FromToProto for Arc<T>
-where T: FromToProto
-{
-    type PB = T::PB;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        T::get_pb_ver(p)
-    }
-
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized {
-        Ok(Arc::new(T::from_pb(p)?))
-    }
-
-    fn to_pb(&self) -> Result<T::PB, Incompatible> {
-        let s = self.as_ref();
-        s.to_pb()
     }
 }

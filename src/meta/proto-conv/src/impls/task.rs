@@ -23,6 +23,7 @@ use databend_common_protos::pb::task_message::Message;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -78,19 +79,13 @@ impl FromToProto for mt::Task {
             owner_user: p.owner_user,
             schedule_options: schedule,
             warehouse_options: warehouse,
-            next_scheduled_at: match p.next_scheduled_at {
-                Some(c) => Some(DateTime::<Utc>::from_pb(c)?),
-                None => None,
-            },
+            next_scheduled_at: p.next_scheduled_at.map(FromToProto::from_pb).transpose()?,
             suspend_task_after_num_failures: p.suspend_task_after_num_failures.map(|v| v as u64),
             error_integration: p.error_integration.clone(),
             status,
             created_at: DateTime::<Utc>::from_pb(p.created_at)?,
             updated_at: DateTime::<Utc>::from_pb(p.updated_at)?,
-            last_suspended_at: match p.last_suspended_at {
-                Some(c) => Some(DateTime::<Utc>::from_pb(c)?),
-                None => None,
-            },
+            last_suspended_at: p.last_suspended_at.map(FromToProto::from_pb).transpose()?,
             session_params: p.session_parameters,
         })
     }
@@ -118,18 +113,12 @@ impl FromToProto for mt::Task {
                     warehouse: w.warehouse.clone(),
                     using_warehouse_size: w.using_warehouse_size.clone(),
                 }),
-            next_scheduled_at: match &self.next_scheduled_at {
-                None => None,
-                Some(d) => Some(d.to_pb()?),
-            },
+            next_scheduled_at: self.next_scheduled_at.to_pb_opt()?,
             suspend_task_after_num_failures: self.suspend_task_after_num_failures.map(|v| v as i32),
             status: self.status as i32,
             created_at: self.created_at.to_pb()?,
             updated_at: self.updated_at.to_pb()?,
-            last_suspended_at: match &self.last_suspended_at {
-                None => None,
-                Some(d) => Some(d.to_pb()?),
-            },
+            last_suspended_at: self.last_suspended_at.to_pb_opt()?,
             after: self.after.clone(),
             when_condition: self.when_condition.clone(),
             session_parameters: self.session_params.clone(),
