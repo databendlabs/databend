@@ -24,10 +24,12 @@ use databend_common_protos::pb;
 use mt::principal::FileFormatOptionsReader;
 use num::FromPrimitive;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -224,14 +226,12 @@ impl FromToProto for mt::principal::StageInfo {
             )?)?,
             comment: p.comment,
             number_of_files: p.number_of_files,
-            creator: match p.creator {
-                Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
-                None => None,
-            },
-            created_on: match p.created_on {
-                Some(c) => DateTime::<Utc>::from_pb(c)?,
-                None => DateTime::<Utc>::default(),
-            },
+            creator: p.creator.from_pb_opt()?,
+            created_on: p
+                .created_on
+                .map(FromToProto::from_pb)
+                .transpose()?
+                .unwrap_or_default(),
         })
     }
 
@@ -249,10 +249,7 @@ impl FromToProto for mt::principal::StageInfo {
             copy_options: Some(mt::principal::CopyOptions::to_pb(&self.copy_options)?),
             comment: self.comment.clone(),
             number_of_files: self.number_of_files,
-            creator: match &self.creator {
-                Some(c) => Some(mt::principal::UserIdentity::to_pb(c)?),
-                None => None,
-            },
+            creator: self.creator.to_pb_opt()?,
             created_on: Some(self.created_on.to_pb()?),
         })
     }
@@ -271,10 +268,7 @@ impl FromToProto for mt::principal::StageFile {
             size: p.size,
             md5: p.md5.clone(),
             last_modified: DateTime::<Utc>::from_pb(p.last_modified)?,
-            creator: match p.creator {
-                Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
-                None => None,
-            },
+            creator: p.creator.from_pb_opt()?,
             etag: p.etag.clone(),
         })
     }
@@ -287,10 +281,7 @@ impl FromToProto for mt::principal::StageFile {
             size: self.size,
             md5: self.md5.clone(),
             last_modified: self.last_modified.to_pb()?,
-            creator: match &self.creator {
-                Some(c) => Some(mt::principal::UserIdentity::to_pb(c)?),
-                None => None,
-            },
+            creator: self.creator.to_pb_opt()?,
             etag: self.etag.clone(),
         })
     }

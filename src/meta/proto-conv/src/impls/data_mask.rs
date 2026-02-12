@@ -22,9 +22,11 @@ use chrono::Utc;
 use databend_common_meta_app::data_mask as mt;
 use databend_common_protos::pb;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -54,10 +56,7 @@ impl FromToProto for mt::DatamaskMeta {
             body: p.body,
             comment: p.comment.clone(),
             create_on: DateTime::<Utc>::from_pb(p.create_on)?,
-            update_on: match p.update_on {
-                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
-                None => None,
-            },
+            update_on: p.update_on.from_pb_opt()?,
         };
         Ok(v)
     }
@@ -82,10 +81,7 @@ impl FromToProto for mt::DatamaskMeta {
             body: self.body.clone(),
             comment: self.comment.clone(),
             create_on: self.create_on.to_pb()?,
-            update_on: match &self.update_on {
-                Some(t) => Some(t.to_pb()?),
-                None => None,
-            },
+            update_on: self.update_on.to_pb_opt()?,
         };
         Ok(p)
     }

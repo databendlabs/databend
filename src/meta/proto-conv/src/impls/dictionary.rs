@@ -20,9 +20,11 @@ use databend_common_expression as ex;
 use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -44,10 +46,7 @@ impl FromToProto for mt::DictionaryMeta {
             primary_column_ids: p.primary_column_ids,
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            updated_on: match p.updated_on {
-                Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
-                None => None,
-            },
+            updated_on: p.updated_on.from_pb_opt()?,
             field_comments: p.field_comments,
         };
         Ok(v)
@@ -60,10 +59,7 @@ impl FromToProto for mt::DictionaryMeta {
             options: self.options.clone(),
             primary_column_ids: self.primary_column_ids.clone(),
             created_on: self.created_on.to_pb()?,
-            updated_on: match self.updated_on {
-                Some(updated_on) => Some(updated_on.to_pb()?),
-                None => None,
-            },
+            updated_on: self.updated_on.to_pb_opt()?,
             comment: self.comment.clone(),
             schema: Some(self.schema.to_pb()?),
             field_comments: self.field_comments.clone(),

@@ -21,9 +21,11 @@ use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -43,14 +45,8 @@ impl FromToProto for mt::IndexMeta {
             index_type: FromPrimitive::from_i32(p.index_type)
                 .ok_or_else(|| Incompatible::new(format!("invalid IndexType: {}", p.index_type)))?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            dropped_on: match p.dropped_on {
-                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
-                None => None,
-            },
-            updated_on: match p.updated_on {
-                Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
-                None => None,
-            },
+            dropped_on: p.dropped_on.from_pb_opt()?,
+            updated_on: p.updated_on.from_pb_opt()?,
             original_query: p.original_query,
             query: p.query,
             sync_creation: p.sync_creation,
@@ -65,14 +61,8 @@ impl FromToProto for mt::IndexMeta {
             table_id: self.table_id,
             index_type: self.index_type.clone() as i32,
             created_on: self.created_on.to_pb()?,
-            dropped_on: match self.dropped_on {
-                Some(drop_on) => Some(drop_on.to_pb()?),
-                None => None,
-            },
-            updated_on: match self.updated_on {
-                Some(update_on) => Some(update_on.to_pb()?),
-                None => None,
-            },
+            dropped_on: self.dropped_on.to_pb_opt()?,
+            updated_on: self.updated_on.to_pb_opt()?,
             original_query: self.original_query.clone(),
             query: self.query.clone(),
             sync_creation: self.sync_creation,

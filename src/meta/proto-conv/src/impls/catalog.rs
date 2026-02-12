@@ -24,6 +24,7 @@ use databend_common_protos::pb;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -322,11 +323,7 @@ impl FromToProto for mt::HiveCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
-            storage_params: self
-                .storage_params
-                .as_ref()
-                .map(|v| v.to_pb())
-                .transpose()?,
+            storage_params: self.storage_params.to_pb_opt()?,
         })
     }
 }

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::infer_schema_type;
@@ -546,14 +544,16 @@ impl FromToProto for mt::UserDefinedFunction {
             }
         };
 
-        let created_on = match p.created_on {
-            Some(c) => DateTime::<Utc>::from_pb(c)?,
-            None => DateTime::<Utc>::default(),
-        };
-        let update_on = match p.update_on {
-            Some(u) => DateTime::<Utc>::from_pb(u)?,
-            None => created_on,
-        };
+        let created_on = p
+            .created_on
+            .map(FromToProto::from_pb)
+            .transpose()?
+            .unwrap_or_default();
+        let update_on = p
+            .update_on
+            .map(FromToProto::from_pb)
+            .transpose()?
+            .unwrap_or(created_on);
 
         Ok(mt::UserDefinedFunction {
             name: p.name,

@@ -18,16 +18,17 @@ use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig;
-use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_protos::pb;
 
+use crate::FromProtoOptionExt;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
+use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
@@ -136,10 +137,7 @@ impl FromToProto for StorageS3Config {
             enable_virtual_host_style: p.enable_virtual_host_style,
             role_arn: p.role_arn,
             external_id: p.external_id,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
             // For the time being, s3 storage class info is not present in meta store,
             // storage class specifications at table/connection level is not supported yet.
             storage_class: S3StorageClass::default(),
@@ -162,10 +160,7 @@ impl FromToProto for StorageS3Config {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.role_arn.clone(),
             external_id: self.external_id.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }
@@ -186,10 +181,7 @@ impl FromToProto for StorageGcsConfig {
             endpoint_url: p.endpoint_url,
             bucket: p.bucket,
             root: p.root,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -201,10 +193,7 @@ impl FromToProto for StorageGcsConfig {
             endpoint_url: self.endpoint_url.clone(),
             bucket: self.bucket.clone(),
             root: self.root.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }
@@ -251,10 +240,7 @@ impl FromToProto for StorageOssConfig {
             access_key_secret: p.access_key_secret,
             server_side_encryption: p.server_side_encryption,
             server_side_encryption_key_id: p.server_side_encryption_key_id,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -269,10 +255,7 @@ impl FromToProto for StorageOssConfig {
             access_key_secret: self.access_key_secret.clone(),
             server_side_encryption: self.server_side_encryption.clone(),
             server_side_encryption_key_id: self.server_side_encryption_key_id.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }
@@ -293,10 +276,7 @@ impl FromToProto for StorageWebhdfsConfig {
             delegation: p.delegation,
             disable_list_batch: p.disable_list_batch,
             user_name: p.user_name,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -310,10 +290,7 @@ impl FromToProto for StorageWebhdfsConfig {
             disable_list_batch: self.disable_list_batch,
 
             user_name: self.user_name.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }
@@ -335,10 +312,7 @@ impl FromToProto for StorageObsConfig {
 
             access_key_id: p.access_key_id,
             secret_access_key: p.secret_access_key,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -351,10 +325,7 @@ impl FromToProto for StorageObsConfig {
             root: self.root.clone(),
             access_key_id: self.access_key_id.clone(),
             secret_access_key: self.secret_access_key.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }
@@ -376,10 +347,7 @@ impl FromToProto for StorageCosConfig {
 
             secret_id: p.secret_id,
             secret_key: p.secret_key,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -392,10 +360,7 @@ impl FromToProto for StorageCosConfig {
             root: self.root.clone(),
             secret_id: self.secret_id.clone(),
             secret_key: self.secret_key.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }
@@ -413,10 +378,7 @@ impl FromToProto for StorageHdfsConfig {
         Ok(StorageHdfsConfig {
             root: p.root,
             name_node: p.name_node,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -426,10 +388,7 @@ impl FromToProto for StorageHdfsConfig {
             min_reader_ver: MIN_READER_VER,
             root: self.root.clone(),
             name_node: self.name_node.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }
@@ -450,10 +409,7 @@ impl FromToProto for mt::storage::StorageHuggingfaceConfig {
             revision: p.revision,
             token: p.token,
             root: p.root,
-            network_config: match &p.network_config {
-                None => None,
-                Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
-            },
+            network_config: p.network_config.from_pb_opt()?,
         })
     }
 
@@ -466,10 +422,7 @@ impl FromToProto for mt::storage::StorageHuggingfaceConfig {
             revision: self.revision.clone(),
             token: self.token.clone(),
             root: self.root.clone(),
-            network_config: match &self.network_config {
-                None => None,
-                Some(x) => Some(StorageNetworkParams::to_pb(x)?),
-            },
+            network_config: self.network_config.to_pb_opt()?,
         })
     }
 }

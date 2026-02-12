@@ -106,9 +106,20 @@ impl TableInfo {
                 self.engine()
             )));
         }
-        let database_name = self.desc.split('.').next().unwrap();
-        let database_name = &database_name[1..database_name.len() - 1];
-        Ok(database_name)
+        // desc format is "'db_name'.'table_name'"
+        let raw = self
+            .desc
+            .split('.')
+            .next()
+            .ok_or_else(|| ErrorCode::Internal(format!("empty desc in table {}", self.name)))?;
+        raw.strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "unexpected desc format: {} in table {}",
+                    raw, self.name
+                ))
+            })
     }
 }
 

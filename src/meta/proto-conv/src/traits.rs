@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
 use std::sync::Arc;
+
+use crate::Incompatible;
 
 /// Defines API to convert from/to protobuf meta type.
 pub trait FromToProto {
@@ -44,38 +45,6 @@ pub trait FromToProtoEnum {
     fn to_pb_enum(&self) -> Result<Self::PBEnum, Incompatible>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub struct Incompatible {
-    pub context: String,
-    pub reason: String,
-}
-
-impl fmt::Display for Incompatible {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.reason)?;
-
-        if !self.context.is_empty() {
-            write!(f, "; when:({})", self.context)?;
-        }
-        Ok(())
-    }
-}
-
-impl Incompatible {
-    pub fn new(reason: impl Into<String>) -> Self {
-        Self {
-            context: "".into(),
-            reason: reason.into(),
-        }
-    }
-
-    /// Set the context of the error.
-    pub fn with_context(mut self, context: impl Into<String>) -> Self {
-        self.context = context.into();
-        self
-    }
-}
-
 impl<T> FromToProto for Arc<T>
 where T: FromToProto
 {
@@ -92,5 +61,46 @@ where T: FromToProto
     fn to_pb(&self) -> Result<T::PB, Incompatible> {
         let s = self.as_ref();
         s.to_pb()
+    }
+}
+
+impl<T> FromToProto for Box<T>
+where T: FromToProto
+{
+    type PB = T::PB;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        T::get_pb_ver(p)
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Box::new(T::from_pb(p)?))
+    }
+
+    fn to_pb(&self) -> Result<T::PB, Incompatible> {
+        self.as_ref().to_pb()
+    }
+}
+
+pub trait ToProtoOptionExt {
+    type PB;
+    fn to_pb_opt(&self) -> Result<Option<Self::PB>, Incompatible>;
+}
+
+impl<T: FromToProto> ToProtoOptionExt for Option<T> {
+    type PB = T::PB;
+    fn to_pb_opt(&self) -> Result<Option<T::PB>, Incompatible> {
+        self.as_ref().map(FromToProto::to_pb).transpose()
+    }
+}
+
+#[allow(clippy::wrong_self_convention)]
+pub trait FromProtoOptionExt<T: FromToProto> {
+    fn from_pb_opt(self) -> Result<Option<T>, Incompatible>;
+}
+
+impl<T: FromToProto> FromProtoOptionExt<T> for Option<T::PB> {
+    fn from_pb_opt(self) -> Result<Option<T>, Incompatible> {
+        self.map(FromToProto::from_pb).transpose()
     }
 }

@@ -156,13 +156,11 @@ impl App {
     async fn bench_client_num_conn(&self, args: &BenchArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
         println!(
-            "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection",
-            addr
+            "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection, num={}",
+            addr, args.num
         );
         let mut clients = vec![];
-        let mut i = 0;
-        loop {
-            i += 1;
+        for i in 1..=args.num {
             let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                 vec![addr.clone()],
                 "root",
@@ -176,6 +174,8 @@ impl App {
             println!("{}-th: get_kv(foo): {:?}", i, res);
             clients.push(client);
         }
+        println!("bench completed: {} connections created", args.num);
+        Ok(())
     }
 
     async fn transfer_leader(&self, args: &TransferLeaderArgs) -> anyhow::Result<()> {
