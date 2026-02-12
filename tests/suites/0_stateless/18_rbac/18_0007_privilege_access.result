@@ -1,12 +1,5 @@
->>>> drop database if exists db01;
->>>> create database db01;
->>>> drop database if exists dbnotexists;
->>>> GRANT SELECT ON db01.tbnotexists TO 'test-user'
 Error: APIError: QueryFailed: [1025]Unknown table 'tbnotexists'
-<<<<
->>>> GRANT SELECT ON dbnotexists.* TO 'test-user'
 Error: APIError: QueryFailed: [1003]Unknown database 'dbnotexists'
-<<<<
 === check list user's local stage ===
 === no err ===
 information_schema
