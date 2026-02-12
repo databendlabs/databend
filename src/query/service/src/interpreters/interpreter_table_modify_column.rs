@@ -435,13 +435,12 @@ impl ModifyTableColumnInterpreter {
                     // TODO: ScalarExpr should have its own is_deterministic() that
                     // handles AsyncFunctionCall natively, instead of relying on the
                     // lossy as_expr() lowering. See: https://github.com/databendlabs/databend/issues/19451
-                    let is_deterministic = !matches!(
-                        &scalar_expr,
-                        ScalarExpr::AsyncFunctionCall(_)
-                    ) && scalar_expr
-                        .as_expr()?
-                        .project_column_ref(|col| Ok(col.index))?
-                        .is_deterministic(&BUILTIN_FUNCTIONS);
+                    let is_deterministic =
+                        !matches!(&scalar_expr, ScalarExpr::AsyncFunctionCall(_))
+                            && scalar_expr
+                                .as_expr()?
+                                .project_column_ref(|col| Ok(col.index))?
+                                .is_deterministic(&BUILTIN_FUNCTIONS);
                     if !is_deterministic {
                         need_rebuild = true;
                     }
