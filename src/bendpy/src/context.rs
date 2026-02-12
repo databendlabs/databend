@@ -212,7 +212,7 @@ impl PySessionContext {
             .unwrap_or_default();
 
         let select_clause = match file_format {
-            "csv" | "tsv" => self.build_column_select(&file_path, file_format, connection, py)?,
+            "csv" | "tsv" => self.build_column_select(&file_path, file_format, pattern, connection, py)?,
             _ => "*".to_string(),
         };
 
@@ -229,16 +229,21 @@ impl PySessionContext {
         &mut self,
         file_path: &str,
         file_format: &str,
+        pattern: Option<&str>,
         connection: Option<&str>,
         py: Python,
     ) -> PyResult<String> {
         let conn_clause = connection
             .map(|c| format!(", connection_name => '{}'", c))
             .unwrap_or_default();
+        let pattern_clause = pattern
+            .map(|p| format!(", pattern => '{}'", p))
+            .unwrap_or_default();
         let sql = format!(
-            "SELECT column_name FROM infer_schema(location => '{}', file_format => '{}'{})",
+            "SELECT column_name FROM infer_schema(location => '{}', file_format => '{}'{}{})",
             file_path,
             file_format.to_uppercase(),
+            pattern_clause,
             conn_clause
         );
 
