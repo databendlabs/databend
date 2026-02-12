@@ -306,7 +306,7 @@ class TestContext:
             print(" === Phase 1: Write data with writer version")
             self.start_metasrv(self.meta_versions[0])
             self.start_query(self.writer_ver)
-            self.run_sqllogictests("fuse_compat_write")
+            self.run_sqllogictests("fuse_compat_write.test")
             self.cleanup()
 
             # Phase 2: Meta upgrade
@@ -320,7 +320,7 @@ class TestContext:
             print(" === Phase 3: Read data with reader version")
             self.start_metasrv(self.meta_versions[-1])
             self.start_query(self.reader_ver)
-            self.run_sqllogictests("fuse_compat_read")
+            self.run_sqllogictests("fuse_compat_read.test")
         finally:
             self.cleanup()
 
