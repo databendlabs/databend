@@ -42,10 +42,10 @@ AggregateFinal
         ├── scan id: 0
         ├── output columns: []
         ├── read rows: 1000
-        ├── read size: 3.92 KiB
+        ├── read size: 1.41 KiB
         ├── partitions total: 2
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
         ├── push downs: [filters: [t.number (#0) > 10], limit: NONE]
         └── estimated rows: 989.88
 
