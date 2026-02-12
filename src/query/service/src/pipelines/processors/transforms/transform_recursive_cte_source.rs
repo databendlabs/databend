@@ -93,22 +93,33 @@ impl TransformRecursiveCteSource {
         // Make the internal table names query-unique by prefixing them with the query id.
         // This is purely internal and does not change user-visible semantics.
         let rcte_prefix = make_rcte_prefix(&ctx.get_id());
-        let root_cte_scan_names: HashSet<&str> = union_plan
+        let local_cte_scan_names = {
+            let names = collect_local_recursive_scan_names(&union_plan.right);
+            if names.is_empty() {
+                union_plan.cte_scan_names.clone()
+            } else {
+                names
+            }
+        };
+        if union_plan.cte_scan_names != local_cte_scan_names {
+            union_plan.cte_scan_names = local_cte_scan_names;
+        }
+        let local_cte_scan_name_set: HashSet<&str> = union_plan
             .cte_scan_names
             .iter()
-            .map(|name| name.as_str())
+            .map(String::as_str)
             .collect();
 
         let mut exec_ids: HashMap<String, Vec<u64>> = HashMap::new();
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.left,
-            &root_cte_scan_names,
+            &local_cte_scan_name_set,
             &rcte_prefix,
             &mut exec_ids,
         );
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.right,
-            &root_cte_scan_names,
+            &local_cte_scan_name_set,
             &rcte_prefix,
             &mut exec_ids,
         );
@@ -222,38 +233,66 @@ fn make_rcte_prefix(query_id: &str) -> String {
 
 fn rewrite_assign_and_strip_recursive_cte(
     plan: &mut PhysicalPlan,
-    root_cte_scan_names: &HashSet<&str>,
+    local_cte_scan_name_set: &HashSet<&str>,
     prefix: &str,
     exec_ids: &mut HashMap<String, Vec<u64>>,
 ) {
-    // Only the outer recursive UNION should drive recursive-step execution.
-    // For recursive terms like `... UNION ALL ... UNION ALL ...`, inner UnionAll nodes
-    // may also carry cte_scan_names from binder; keep them as normal unions to avoid
-    // creating nested recursive sources.
+    // Only nested recursive UNIONs that reference the current recursive CTE should be
+    // downgraded to normal unions to avoid nested recursive sources for the same table.
     if let Some(union_all) = UnionAll::from_mut_physical_plan(plan) {
         if !union_all.cte_scan_names.is_empty()
             && union_all
                 .cte_scan_names
                 .iter()
-                .all(|name| root_cte_scan_names.contains(name.as_str()))
+                .all(|name| local_cte_scan_name_set.contains(name.as_str()))
         {
             union_all.cte_scan_names.clear();
         }
     }
 
     if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
-        recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
-        let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
-        recursive_cte_scan.exec_id = Some(id);
-        exec_ids
-            .entry(recursive_cte_scan.table_name.clone())
-            .or_default()
-            .push(id);
+        if local_cte_scan_name_set.contains(recursive_cte_scan.table_name.as_str()) {
+            recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
+            let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
+            recursive_cte_scan.exec_id = Some(id);
+            exec_ids
+                .entry(recursive_cte_scan.table_name.clone())
+                .or_default()
+                .push(id);
+        }
     }
 
     for child in plan.children_mut() {
-        rewrite_assign_and_strip_recursive_cte(child, root_cte_scan_names, prefix, exec_ids);
+        rewrite_assign_and_strip_recursive_cte(child, local_cte_scan_name_set, prefix, exec_ids);
     }
+}
+
+fn collect_local_recursive_scan_names(plan: &PhysicalPlan) -> Vec<String> {
+    fn walk(plan: &PhysicalPlan, names: &mut Vec<String>, seen: &mut HashSet<String>) {
+        // Nested recursive unions belong to other recursive CTEs. Leave them to their own
+        // TransformRecursiveCteSource instance.
+        if let Some(union_all) = UnionAll::from_physical_plan(plan) {
+            if !union_all.cte_scan_names.is_empty() {
+                return;
+            }
+        }
+
+        if let Some(recursive_cte_scan) = RecursiveCteScan::from_physical_plan(plan) {
+            if seen.insert(recursive_cte_scan.table_name.clone()) {
+                names.push(recursive_cte_scan.table_name.clone());
+            }
+            return;
+        }
+
+        for child in plan.children() {
+            walk(child, names, seen);
+        }
+    }
+
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    walk(plan, &mut names, &mut seen);
+    names
 }
 
 #[async_trait::async_trait]
