@@ -47,7 +47,6 @@ use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
-use databend_common_sql::ScalarExpr;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
@@ -437,15 +436,16 @@ impl ModifyTableColumnInterpreter {
                 if default_expr_changed && field.default_expr.is_some() {
                     let data_field: DataField = field.into();
                     let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
-                    // TODO: ScalarExpr should have its own is_deterministic() that
-                    // handles AsyncFunctionCall natively, instead of relying on the
-                    // lossy as_expr() lowering. See: https://github.com/databendlabs/databend/issues/19451
-                    let is_deterministic =
-                        !matches!(&scalar_expr, ScalarExpr::AsyncFunctionCall(_))
-                            && scalar_expr
-                                .as_expr()?
-                                .project_column_ref(|col| Ok(col.index))?
-                                .is_deterministic(&BUILTIN_FUNCTIONS);
+                    // Use default_value_evaluable() to detect nextval (AsyncFunctionCall)
+                    // because parse_and_bind may wrap the result in CastExpr, hiding
+                    // the AsyncFunctionCall from a top-level matches! check.
+                    // See: https://github.com/databendlabs/databend/issues/19451
+                    let (_, has_nextval) = scalar_expr.default_value_evaluable();
+                    let is_deterministic = !has_nextval
+                        && scalar_expr
+                            .as_expr()?
+                            .project_column_ref(|col| Ok(col.index))?
+                            .is_deterministic(&BUILTIN_FUNCTIONS);
                     if !is_deterministic {
                         need_rebuild = true;
                     }
