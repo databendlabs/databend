@@ -222,6 +222,10 @@ pub struct ListFeatures {
 pub struct BenchArgs {
     #[clap(long, default_value = "127.0.0.1:9191")]
     pub grpc_api_address: String,
+
+    /// Maximum number of connections to create (default: 10000)
+    #[clap(long, default_value = "10000")]
+    pub num: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]

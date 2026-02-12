@@ -63,10 +63,6 @@ impl Tenant {
         &self.tenant
     }
 
-    pub fn to_nonempty(&self) -> NonEmptyString {
-        NonEmptyString::new(self.tenant.clone()).unwrap()
-    }
-
     pub fn display(&self) -> impl Display {
         format!("Tenant{}", self.tenant)
     }

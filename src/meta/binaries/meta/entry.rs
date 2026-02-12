@@ -300,7 +300,8 @@ async fn register_node<RT: RuntimeApi>(
 
         if meta_handle.handle_get_node(leader_id).await?.is_none() {
             warn!("Leader node is not replicated to local store, wait and try again");
-            sleep(Duration::from_millis(500)).await
+            sleep(Duration::from_millis(500)).await;
+            continue;
         }
 
         info!("Registering node with grpc-advertise-addr...");
