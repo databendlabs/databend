@@ -102,18 +102,15 @@ impl OwnedKeyPaths {
         true
     }
 
-    pub(crate) fn has_index(&self) -> bool {
-        self.paths
-            .iter()
-            .any(|path| matches!(path, OwnedKeyPath::Index(_)))
-    }
-
-    fn object_segments(&self) -> Option<Vec<&str>> {
+    fn object_segments(&self) -> Option<Vec<String>> {
+        if self.paths.is_empty() {
+            return None;
+        }
         let mut segments = Vec::with_capacity(self.paths.len());
         for path in &self.paths {
             match path {
-                OwnedKeyPath::Name(name) => segments.push(name.as_str()),
-                OwnedKeyPath::Index(_) => return None,
+                OwnedKeyPath::Name(name) => segments.push(name.clone()),
+                OwnedKeyPath::Index(idx) => segments.push(idx.to_string()),
             }
         }
         Some(segments)
@@ -492,16 +489,16 @@ fn should_omit_variant_value(
     parsed: &JsonbValue<'_>,
     typed_value_is_scalar: bool,
 ) -> bool {
-    let Some(typed_value) = typed_value else {
-        return false;
-    };
-    if !typed_value_is_scalar {
-        return false;
-    }
-    if typed_value.is_null(row) {
-        return false;
-    }
-    is_jsonb_scalar(parsed)
+    // NOTE: We intentionally keep `value` even when typed_value is present.
+    // Inline shredding stores typed_value columns in the same Parquet file, but the
+    // base block reader currently reconstructs VARIANT from the `metadata` + `value`
+    // fields only (typed_value is not loaded there). If we omit `value` for scalar
+    // rows, full-variant reads and get_by_keypath fallbacks would return NULL.
+    // TODO: Load typed_value into the base variant reader so we can safely omit `value`
+    //       for fully shredded scalar rows (per Parquet VARIANT guidance) without
+    //       breaking correctness.
+    let _ = (typed_value, row, parsed, typed_value_is_scalar);
+    false
 }
 
 fn is_scalar_typed_value(data_type: &ArrowDataType) -> bool {
@@ -543,10 +540,6 @@ fn collect_jsonb_field_names(value: &JsonbValue<'_>, field_names: &mut BTreeSet<
         }
         _ => {}
     }
-}
-
-fn is_jsonb_scalar(value: &JsonbValue<'_>) -> bool {
-    !matches!(value, JsonbValue::Array(_) | JsonbValue::Object(_))
 }
 
 fn adjust_nested_array(array: ArrayRef, arrow_field: &Field) -> ArrayRef {
@@ -635,7 +628,7 @@ fn build_typed_value_trees(
 
 fn insert_typed_value_path(
     node: &mut TypedValueNode,
-    segments: &[&str],
+    segments: &[String],
     column_id: ColumnId,
     data_type: &ArrowDataType,
 ) {
@@ -644,7 +637,7 @@ fn insert_typed_value_path(
         node.data_type = Some(data_type.clone());
         return;
     }
-    let key = segments[0].to_string();
+    let key = segments[0].clone();
     let child = node.children.entry(key).or_default();
     insert_typed_value_path(child, &segments[1..], column_id, data_type);
 }
@@ -792,7 +785,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_inline_shredding_omits_scalar_value_column() -> Result<()> {
+    fn test_inline_shredding_keeps_scalar_value_column() -> Result<()> {
         let value1 = jsonb::parse_value(b"11")
             .map_err(|e| ErrorCode::Internal(e.to_string()))?
             .to_vec();
@@ -817,8 +810,8 @@ mod tests {
             .downcast_ref::<arrow_array::LargeBinaryArray>()
             .ok_or_else(|| ErrorCode::Internal("value column is not LargeBinary".to_string()))?;
 
-        assert!(value_array.is_null(0));
-        assert!(value_array.is_null(1));
+        assert!(!value_array.is_null(0));
+        assert!(!value_array.is_null(1));
 
         let decoded = Column::from_arrow_rs(Arc::new(struct_array), &DataType::Variant)?;
         let Column::Variant(decoded) = decoded else {

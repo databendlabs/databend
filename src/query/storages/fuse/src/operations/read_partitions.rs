@@ -82,6 +82,7 @@ use sha2::Sha256;
 
 use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexRebuilder;
@@ -118,9 +119,43 @@ impl FuseTable {
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        mut push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        // Inline variant shredding may fall back to get_by_keypath for a block when typed_value
+        // is missing or all NULL. Ensure source variant columns are included in the projection
+        // so block parts carry their column metas.
+        if ctx
+            .get_settings()
+            .get_enable_experimental_variant_shredding()
+            .unwrap_or_default()
+            && matches!(self.storage_format, FuseStorageFormat::Parquet)
+        {
+            if let Some(push_downs) = &mut push_downs {
+                if let Some(virtual_column) = &push_downs.virtual_column {
+                    let schema = self.schema_with_stream();
+                    let mut extra_indices = Vec::new();
+                    for source_id in &virtual_column.source_column_ids {
+                        if let Some((idx, _)) = schema
+                            .fields()
+                            .iter()
+                            .enumerate()
+                            .find(|(_, field)| field.column_id() == *source_id)
+                        {
+                            extra_indices.push(idx);
+                        }
+                    }
+                    if !extra_indices.is_empty() {
+                        let extra_projection = Projection::Columns(extra_indices);
+                        if let Some(projection) = &mut push_downs.projection {
+                            projection.merge(&extra_projection);
+                        } else {
+                            push_downs.projection = Some(extra_projection);
+                        }
+                    }
+                }
+            }
+        }
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".

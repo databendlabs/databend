@@ -739,8 +739,16 @@ impl BindContext {
                 let virtual_schema = table_info.meta.virtual_schema.as_ref()?;
                 let mut column_id = None;
                 for virtual_field in &virtual_schema.fields {
-                    if virtual_field.source_column_id == virtual_column_name.source_column_id
-                        && virtual_field.name == virtual_column_name.key_name
+                    if virtual_field.source_column_id != virtual_column_name.source_column_id {
+                        continue;
+                    }
+                    if virtual_field.name == virtual_column_name.key_name {
+                        column_id = Some(virtual_field.column_id);
+                        break;
+                    }
+                    let prefixed_name = format!("{source_column_name}{}", virtual_field.name);
+                    if prefixed_name == virtual_column_name.key_name
+                        || virtual_field.name == virtual_column_name.key_name
                     {
                         column_id = Some(virtual_field.column_id);
                         break;
@@ -775,7 +783,6 @@ impl BindContext {
 
                 let source_column_id = virtual_column_name.source_column_id;
                 let column_name = virtual_column_name.key_name.clone();
-                // todo
                 let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
                 let is_try = true;
 

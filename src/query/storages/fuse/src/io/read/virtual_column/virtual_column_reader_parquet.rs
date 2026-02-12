@@ -120,9 +120,6 @@ impl VirtualColumnReader {
                 let Some(key_paths) = to_parquet_key_paths(&field.key_paths) else {
                     continue;
                 };
-                if key_paths.has_index() {
-                    continue;
-                }
                 let Some(data_type) = virtual_meta_to_arrow(meta.data_type()) else {
                     continue;
                 };
@@ -336,9 +333,6 @@ impl VirtualColumnReader {
                     let mut should_track_hit = false;
                     let inline_column = to_parquet_key_paths(&virtual_column_field.key_paths)
                         .and_then(|key_paths| {
-                            if key_paths.has_index() {
-                                return None;
-                            }
                             should_track_hit = true;
                             extract_typed_value_array(
                                 record_batch,
@@ -595,8 +589,13 @@ fn extract_typed_value_array(
     let mut typed_value = struct_array.column_by_name("typed_value")?.clone();
 
     for path in &key_paths.paths {
-        let OwnedKeyPath::Name(name) = path else {
-            return None;
+        let name_owned;
+        let name = match path {
+            OwnedKeyPath::Name(name) => name.as_str(),
+            OwnedKeyPath::Index(idx) => {
+                name_owned = idx.to_string();
+                name_owned.as_str()
+            }
         };
         let typed_struct = typed_value
             .as_any()

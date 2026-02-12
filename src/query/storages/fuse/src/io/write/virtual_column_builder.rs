@@ -1076,9 +1076,6 @@ impl VirtualColumnBuilder {
             if matches!(column.data_type, VariantDataType::Jsonb) {
                 continue;
             }
-            if column.key_paths.has_index() {
-                continue;
-            }
             keep_indices.push(idx);
             kept_columns.push(column.clone());
         }
