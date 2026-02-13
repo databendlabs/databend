@@ -15,9 +15,7 @@
 // Logs from this module will show up as "[INTERPRETER] ...".
 databend_common_tracing::register_module_tag!("[INTERPRETER]");
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
@@ -27,9 +25,6 @@ use databend_common_ast::ast::OptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::short_sql;
-use databend_common_base::runtime::profile::ProfileDesc;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -39,7 +34,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_pipeline::core::ExecutionInfo;
-use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::SourcePipeBuilder;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::PlanExtras;
@@ -48,16 +42,14 @@ use databend_common_sql::plans::Plan;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
-use log::error;
-use log::info;
 use md5::Digest;
 use md5::Md5;
 
-use super::InterpreterMetrics;
-use super::InterpreterQueryLog;
 use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
+use crate::interpreters::common::log_query_finished;
+use crate::interpreters::common::log_query_start;
 use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -68,7 +60,6 @@ use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
-use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
@@ -94,8 +85,7 @@ pub trait Interpreter: Sync + Send {
         match self.execute_inner(ctx.clone()).await {
             Ok(stream) => Ok(stream),
             Err(err) => {
-                let has_profiles = !ctx.get_query_profiles().is_empty();
-                log_query_finished(&ctx, Some(err.clone()), has_profiles);
+                log_query_finished(&ctx, Some(err.clone()));
                 Err(err)
             }
         }
@@ -149,8 +139,7 @@ pub trait Interpreter: Sync + Send {
         };
 
         if build_res.main_pipeline.is_empty() {
-            let has_profiles = !ctx.get_query_profiles().is_empty();
-            log_query_finished(&ctx, None, has_profiles);
+            log_query_finished(&ctx, None);
             return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
@@ -204,63 +193,6 @@ pub trait Interpreter: Sync + Send {
 
 pub type InterpreterPtr = Arc<dyn Interpreter>;
 
-fn log_query_start(ctx: &QueryContext) {
-    // Nested execution paths may invoke this multiple times for one query context.
-    if !ctx.on_query_execution_start() {
-        return;
-    }
-
-    InterpreterMetrics::record_query_start(ctx);
-    let now = SystemTime::now();
-    let session = ctx.get_current_session();
-    let typ = session.get_type();
-    if typ.is_user_session() {
-        SessionManager::instance().status.write().query_start(now);
-    }
-
-    if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("Failed to log query start: {:?}", error)
-    }
-}
-
-fn emit_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
-    InterpreterMetrics::record_query_finished(ctx, error.clone());
-
-    let now = SystemTime::now();
-    let session = ctx.get_current_session();
-
-    session.get_status().write().query_finish();
-    let typ = session.get_type();
-    if typ.is_user_session() {
-        SessionManager::instance().status.write().query_finish(now);
-        SessionManager::instance()
-            .metrics_collector
-            .track_finished_query(
-                ctx.get_scan_progress_value(),
-                ctx.get_write_progress_value(),
-                ctx.get_join_spill_progress_value(),
-                ctx.get_aggregate_spill_progress_value(),
-                ctx.get_group_by_spill_progress_value(),
-                ctx.get_window_partition_spill_progress_value(),
-            );
-    }
-
-    log::info!(memory:? = ctx.get_node_peek_memory_usage(); "total memory usage");
-
-    if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("Failed to log query finish: {:?}", error)
-    }
-}
-
-fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
-    // Emit finish immediately on error, otherwise only on terminal leave.
-    if !ctx.on_query_execution_finish(error.is_some()) {
-        return;
-    }
-
-    emit_query_finished(ctx, error, has_profiles);
-}
-
 /// There are two steps to execute a query:
 /// 1. Plan the SQL
 /// 2. Execute the plan -- interpreter
@@ -282,7 +214,7 @@ pub async fn interpreter_plan_sql(
         // Only log if there's an error
         ctx.attach_query_str(QueryKind::Unknown, short_sql.to_string());
         log_query_start(&ctx);
-        log_query_finished(&ctx, result.as_ref().err().cloned(), false);
+        log_query_finished(&ctx, result.as_ref().err().cloned());
         None
     };
 
@@ -374,57 +306,21 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
 }
 
+fn run_hooks(query_ctx: Arc<QueryContext>) -> Result<()> {
+    hook_clear_m_cte_temp_table(&query_ctx)?;
+    hook_vacuum_temp_files(&query_ctx)?;
+    hook_disk_temp_dir(&query_ctx)
+}
+
 #[fastrace::trace]
 pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
     query_ctx.add_query_profiles(&info.profiling);
-    let query_profiles = query_ctx.get_query_profiles();
 
-    // Cleanup failures should not skip final query/profile logs.
-    let cleanup_err = hook_clear_m_cte_temp_table(&query_ctx)
-        .and_then(|_| hook_vacuum_temp_files(&query_ctx))
-        .and_then(|_| hook_disk_temp_dir(&query_ctx))
-        .err();
+    let hooks_res = run_hooks(query_ctx.clone());
 
-    let execution_err = info.res.as_ref().err().cloned();
-    // Hook failures should not be emitted into query/profile logs.
-    let err_opt = execution_err.clone();
+    log_query_finished(&query_ctx, info.res.clone().err());
 
-    if query_ctx.on_query_execution_finish(err_opt.is_some()) {
-        let has_profiles = !query_profiles.is_empty();
-        if has_profiles {
-            #[derive(serde::Serialize)]
-            struct QueryProfiles {
-                query_id: String,
-                profiles: Vec<PlanProfile>,
-                statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
-            }
-
-            match serde_json::to_string(&QueryProfiles {
-                query_id: query_ctx.get_id(),
-                profiles: query_profiles.clone(),
-                statistics_desc: get_statistics_desc(),
-            }) {
-                Ok(profile_json) => {
-                    info!(target: "databend::log::profile", "{}", profile_json);
-                }
-                Err(err) => {
-                    error!("Failed to serialize query profiles: {:?}", err);
-                }
-            }
-        }
-
-        emit_query_finished(&query_ctx, err_opt, has_profiles);
-    }
-
-    if let Some(error) = execution_err {
-        return Err(error);
-    }
-
-    if let Some(error) = cleanup_err {
-        return Err(error);
-    }
-
-    Ok(())
+    info.res.clone().and(hooks_res)
 }
 
 /// Check if the statement need acquire a table lock.
