@@ -55,7 +55,7 @@ mod add {
                 ))
                 .await?;
 
-            let get = role_api.get_role(role_name, MatchSeq::GE(1)).await?.data;
+            let get = role_api.get_role(role_name).await?.unwrap().data;
             assert_eq!("role1".to_string(), get.name);
         }
 
@@ -75,7 +75,7 @@ mod add {
                     None,
                 ))
                 .await?;
-            let get = role_api.get_role(role_name, MatchSeq::GE(1)).await?.data;
+            let get = role_api.get_role(role_name).await?.unwrap().data;
             assert_eq!("role1".to_string(), get.name);
         }
 

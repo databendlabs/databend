@@ -36,10 +36,13 @@ impl RoleIdentRaw {
 
 mod kvapi_impl {
 
+    use databend_common_exception::ErrorCode;
     use databend_meta_kvapi::kvapi;
 
     use crate::principal::RoleIdent;
     use crate::principal::RoleInfo;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -58,9 +61,17 @@ mod kvapi_impl {
         }
     }
 
-    // // Use these error types to replace usage of ErrorCode if possible.
-    // impl From<ExistError<Resource>> for ErrorCode {
-    // impl From<UnknownError<Resource>> for ErrorCode {
+    impl From<ExistError<Resource>> for ErrorCode {
+        fn from(err: ExistError<Resource>) -> Self {
+            ErrorCode::RoleAlreadyExists(err.to_string())
+        }
+    }
+
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            ErrorCode::UnknownRole(err.to_string())
+        }
+    }
 }
 
 #[cfg(test)]

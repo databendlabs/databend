@@ -308,7 +308,11 @@ async fn show_role_grantees(ctx: Arc<dyn TableContext>, name: &str) -> Result<Op
     });
     collected_grantees.extend(user_grantees);
 
-    let roles = user_api.role_api(&tenant).get_meta_roles().await?;
+    let roles = user_api
+        .role_api(&tenant)
+        .get_meta_roles()
+        .await
+        .map_err(meta_service_error)?;
     let role_grantees = roles.into_iter().filter_map(|role_item| {
         f(
             role_item.grants.roles(),
@@ -620,7 +624,11 @@ async fn show_account_grants(
         // 2. not expand roles
         // So no need to get ownerships.
         if !roles.is_empty() {
-            let ownerships = user_api.role_api(&tenant).list_ownerships().await?;
+            let ownerships = user_api
+                .role_api(&tenant)
+                .list_ownerships()
+                .await
+                .map_err(meta_service_error)?;
             for ownership in ownerships {
                 if roles.contains(&ownership.data.role) {
                     match ownership.data.object {
@@ -1120,7 +1128,8 @@ async fn show_object_grant(
     if let Some(ownership) = user_api
         .role_api(&tenant)
         .get_ownership(&owner_object)
-        .await?
+        .await
+        .map_err(meta_service_error)?
     {
         privileges.push("OWNERSHIP".to_string());
         names.push(ownership.role);

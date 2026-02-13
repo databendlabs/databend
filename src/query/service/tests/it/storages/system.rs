@@ -406,7 +406,7 @@ async fn test_roles_table() -> anyhow::Result<()> {
     {
         let role_info = RoleInfo::new("test", None);
         UserApiProvider::instance()
-            .add_role(&tenant, role_info, &CreateOrReplace)
+            .create_role(&tenant, role_info, &CreateOrReplace)
             .await?;
     }
 
@@ -414,7 +414,7 @@ async fn test_roles_table() -> anyhow::Result<()> {
         let mut role_info = RoleInfo::new("test1", None);
         role_info.grants.grant_role("test".to_string());
         UserApiProvider::instance()
-            .add_role(&tenant, role_info, &Create)
+            .create_role(&tenant, role_info, &Create)
             .await?;
     }
 
@@ -422,7 +422,7 @@ async fn test_roles_table() -> anyhow::Result<()> {
         let mut role_info = RoleInfo::new("test1", None);
         role_info.grants.grant_role("t2".to_string());
         UserApiProvider::instance()
-            .add_role(&tenant, role_info, &CreateIfNotExists)
+            .create_role(&tenant, role_info, &CreateIfNotExists)
             .await?;
     }
 
