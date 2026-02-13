@@ -57,6 +57,7 @@ use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::read::read_segment_stats;
+use crate::operations::VirtualSchemaMode;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
@@ -88,6 +89,7 @@ pub struct TableMutationAggregator {
     extended_mutations: HashMap<SegmentIndex, ExtendedBlockMutations>,
     appended_segments: Vec<Location>,
     virtual_schema: Option<VirtualDataSchema>,
+    virtual_schema_mode: VirtualSchemaMode,
     appended_statistics: Statistics,
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
@@ -166,6 +168,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             new_segment_locs,
             self.table_id,
             std::mem::take(&mut self.virtual_schema),
+            self.virtual_schema_mode,
             std::mem::take(&mut self.hll),
         );
         debug!("mutations {:?}", meta);
@@ -214,6 +217,7 @@ impl TableMutationAggregator {
             extended_mutations: HashMap::new(),
             appended_segments: vec![],
             virtual_schema,
+            virtual_schema_mode: VirtualSchemaMode::Merge,
             base_segments,
             merged_blocks,
             appended_statistics: Statistics::default(),
@@ -294,8 +298,12 @@ impl TableMutationAggregator {
                 self.appended_segments
                     .push((segment_location, format_version));
             }
-            MutationLogEntry::AppendVirtualSchema { virtual_schema } => {
-                self.virtual_schema = Some(virtual_schema.clone());
+            MutationLogEntry::AppendVirtualSchema {
+                virtual_schema,
+                mode,
+            } => {
+                self.virtual_schema = virtual_schema.clone();
+                self.virtual_schema_mode = mode;
             }
             MutationLogEntry::CompactExtras { extras } => {
                 match self.mutations.entry(extras.segment_index) {

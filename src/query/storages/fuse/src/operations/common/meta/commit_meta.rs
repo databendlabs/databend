@@ -25,12 +25,20 @@ use databend_storages_common_table_meta::meta::Location;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotChanges;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VirtualSchemaMode {
+    #[default]
+    Merge,
+    Replace,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
     pub conflict_resolve_context: ConflictResolveContext,
     pub new_segment_locs: Vec<Location>,
     pub table_id: u64,
     pub virtual_schema: Option<VirtualDataSchema>,
+    pub virtual_schema_mode: VirtualSchemaMode,
     pub hll: BlockHLL,
 }
 
@@ -43,6 +51,7 @@ impl CommitMeta {
             new_segment_locs: vec![],
             table_id,
             virtual_schema: None,
+            virtual_schema_mode: VirtualSchemaMode::Merge,
             hll: HashMap::new(),
         }
     }
@@ -52,6 +61,7 @@ impl CommitMeta {
         new_segment_locs: Vec<Location>,
         table_id: u64,
         virtual_schema: Option<VirtualDataSchema>,
+        virtual_schema_mode: VirtualSchemaMode,
         hll: BlockHLL,
     ) -> Self {
         CommitMeta {
@@ -59,6 +69,7 @@ impl CommitMeta {
             new_segment_locs,
             table_id,
             virtual_schema,
+            virtual_schema_mode,
             hll,
         }
     }

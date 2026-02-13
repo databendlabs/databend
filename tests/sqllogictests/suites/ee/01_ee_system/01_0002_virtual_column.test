@@ -503,9 +503,6 @@ SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
 27
 
-statement error
-REFRESH VIRTUAL COLUMN FOR tweets;
-
 statement ok
 set enable_experimental_virtual_column = 1;
 

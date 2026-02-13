@@ -190,6 +190,7 @@ use crate::plans::UseWarehousePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
+use crate::plans::VacuumVirtualColumnPlan;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 use crate::plans::worker_schema;
@@ -357,6 +358,7 @@ pub enum Plan {
 
     // Virtual Columns
     RefreshVirtualColumn(Box<RefreshVirtualColumnPlan>),
+    VacuumVirtualColumn(Box<VacuumVirtualColumnPlan>),
 
     // Account
     AlterUser(Box<AlterUserPlan>),
@@ -589,6 +591,7 @@ impl Plan {
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::RefreshVirtualColumn(plan) => plan.schema(),
+            Plan::VacuumVirtualColumn(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
             Plan::DescRowAccessPolicy(plan) => plan.schema(),
