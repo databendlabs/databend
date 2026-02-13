@@ -72,6 +72,10 @@ impl AsyncSystemTable for UsersTable {
             .iter()
             .map(|x| x.option.default_role().cloned().unwrap_or_default())
             .collect();
+        let mut default_warehouses: Vec<String> = users
+            .iter()
+            .map(|x| x.option.default_warehouse().cloned().unwrap_or_default())
+            .collect();
         let mut is_configureds: Vec<String> = vec!["NO".to_string(); users.len()];
         let mut disableds: Vec<bool> = users
             .iter()
@@ -121,6 +125,7 @@ impl AsyncSystemTable for UsersTable {
             hostnames.push("%".to_string());
             auth_types.push(auth_info.get_type().to_str().to_string());
             default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+            default_warehouses.push(String::new());
             is_configureds.push("YES".to_string());
             disableds.push(false);
             roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
@@ -139,6 +144,7 @@ impl AsyncSystemTable for UsersTable {
             StringType::from_data(hostnames),
             StringType::from_data(auth_types),
             StringType::from_data(default_roles),
+            StringType::from_data(default_warehouses),
             StringType::from_data(is_configureds),
             BooleanType::from_data(disableds),
             StringType::from_data(roles),
@@ -161,6 +167,7 @@ impl UsersTable {
             TableField::new("hostname", TableDataType::String),
             TableField::new("auth_type", TableDataType::String),
             TableField::new("default_role", TableDataType::String),
+            TableField::new("default_warehouse", TableDataType::String),
             TableField::new("is_configured", TableDataType::String),
             TableField::new("disabled", TableDataType::Boolean),
             TableField::new("roles", TableDataType::String),

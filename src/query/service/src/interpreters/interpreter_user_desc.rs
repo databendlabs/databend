@@ -64,6 +64,7 @@ impl Interpreter for DescUserInterpreter {
         let hostnames = vec![user.hostname.clone()];
         let auth_types = vec![user.auth_info.get_type().to_str().to_string()];
         let default_roles = vec![user.option.default_role().cloned().unwrap_or_default()];
+        let default_warehouses = vec![user.option.default_warehouse().cloned().unwrap_or_default()];
         let roles = vec![user.grants.roles().iter().sorted().join(", ").to_string()];
         let disableds = vec![user.option.disabled().cloned().unwrap_or_default()];
         let network_policies = vec![user.option.network_policy().cloned()];
@@ -86,6 +87,7 @@ impl Interpreter for DescUserInterpreter {
             StringType::from_data(hostnames),
             StringType::from_data(auth_types),
             StringType::from_data(default_roles),
+            StringType::from_data(default_warehouses),
             StringType::from_data(roles),
             BooleanType::from_data(disableds),
             StringType::from_opt_data(network_policies),

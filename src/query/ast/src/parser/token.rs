@@ -919,6 +919,8 @@ pub enum TokenKind {
     NOTENANTSETTING,
     #[token("DEFAULT_ROLE", ignore(ascii_case))]
     DEFAULT_ROLE,
+    #[token("DEFAULT_WAREHOUSE", ignore(ascii_case))]
+    DEFAULT_WAREHOUSE,
     #[token("NULL", ignore(ascii_case))]
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]

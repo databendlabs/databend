@@ -317,6 +317,7 @@ pub enum SecondaryRolesOption {
 pub enum UserOptionItem {
     TenantSetting(bool),
     DefaultRole(String),
+    DefaultWarehouse(String),
     Disabled(bool),
     SetNetworkPolicy(String),
     UnsetNetworkPolicy,
@@ -333,6 +334,7 @@ impl Display for UserOptionItem {
             UserOptionItem::TenantSetting(true) => write!(f, "TENANTSETTING"),
             UserOptionItem::TenantSetting(false) => write!(f, "NOTENANTSETTING"),
             UserOptionItem::DefaultRole(v) => write!(f, "DEFAULT_ROLE = '{}'", v),
+            UserOptionItem::DefaultWarehouse(v) => write!(f, "DEFAULT_WAREHOUSE = '{}'", v),
             UserOptionItem::SetNetworkPolicy(v) => write!(f, "SET NETWORK POLICY = '{}'", v),
             UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
             UserOptionItem::SetPasswordPolicy(v) => write!(f, "SET PASSWORD POLICY = '{}'", v),
