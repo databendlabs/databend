@@ -45,6 +45,7 @@ use databend_common_pipeline::core::always_callback;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
+use databend_common_tracing::QueryLogEmitPoint;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
@@ -203,6 +204,11 @@ pub trait Interpreter: Sync + Send {
 pub type InterpreterPtr = Arc<dyn Interpreter>;
 
 fn log_query_start(ctx: &QueryContext) {
+    // Nested execution paths may invoke this multiple times for one query context.
+    if !ctx.try_log_query(QueryLogEmitPoint::Start) {
+        return;
+    }
+
     InterpreterMetrics::record_query_start(ctx);
     let now = SystemTime::now();
     let session = ctx.get_current_session();
@@ -217,6 +223,11 @@ fn log_query_start(ctx: &QueryContext) {
 }
 
 fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
+    // Multiple on_finished callbacks may exist; only the first one should emit finish logs.
+    if !ctx.try_log_query(QueryLogEmitPoint::Finish) {
+        return;
+    }
+
     InterpreterMetrics::record_query_finished(ctx, error.clone());
 
     let now = SystemTime::now();
