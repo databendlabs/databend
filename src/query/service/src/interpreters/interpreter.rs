@@ -386,7 +386,8 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
         .err();
 
     let execution_err = info.res.as_ref().err().cloned();
-    let err_opt = execution_err.clone().or_else(|| cleanup_err.clone());
+    // Hook failures should not be emitted into query/profile logs.
+    let err_opt = execution_err.clone();
 
     if query_ctx.on_query_execution_finish(err_opt.is_some()) {
         let has_profiles = !query_profiles.is_empty();
