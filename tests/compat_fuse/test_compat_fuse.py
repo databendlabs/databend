@@ -111,6 +111,7 @@ def git_partial_clone(
     subprocess.run(
         [
             "git",
+            "-c", "advice.detachedHead=false",
             "clone",
             "-b",
             branch,
@@ -260,6 +261,19 @@ class TestContext:
             check=True,
         )
 
+    def _print_bin_version(self, bin_path: str, args: list[str]) -> None:
+        """Try to print binary version info; suppress noise from old binaries."""
+        result = subprocess.run(
+            [bin_path] + args,
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            if output:
+                print(output)
+        else:
+            print(f" === (--cmd ver not supported by this build)")
+
     def clean_data_dir(self) -> None:
         """Remove and recreate the .databend data directory."""
         print(" === Clean data dir")
@@ -273,34 +287,16 @@ class TestContext:
         self.clean_data_dir()
 
         try:
-            # Print version info
+            # Print version info (capture output to suppress backtrace from old binaries)
             for ver in self.meta_versions:
                 print(f" === metasrv version: {ver}")
-                try:
-                    subprocess.run(
-                        [self.bin_path(ver, "meta"), "--single", "--cmd", "ver"],
-                        check=True,
-                    )
-                except subprocess.CalledProcessError:
-                    print(" === no version yet")
+                self._print_bin_version(self.bin_path(ver, "meta"), ["--single", "--cmd", "ver"])
 
             print(f" === writer query version: {self.writer_ver}")
-            try:
-                subprocess.run(
-                    [self.bin_path(self.writer_ver, "query"), "--cmd", "ver"],
-                    check=True,
-                )
-            except subprocess.CalledProcessError:
-                print(" === no version yet")
+            self._print_bin_version(self.bin_path(self.writer_ver, "query"), ["--cmd", "ver"])
 
             print(f" === reader query version: {self.reader_ver}")
-            try:
-                subprocess.run(
-                    [self.bin_path(self.reader_ver, "query"), "--cmd", "ver"],
-                    check=True,
-                )
-            except subprocess.CalledProcessError:
-                print(" === no version yet")
+            self._print_bin_version(self.bin_path(self.reader_ver, "query"), ["--cmd", "ver"])
 
             # Phase 1: Write
             print(" === Phase 1: Write data with writer version")
