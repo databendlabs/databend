@@ -1338,6 +1338,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("auto_block_shuffle_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(5),
+                    desc: "Threshold for automatic block-level shuffle. When segment_count < cluster_nodes * threshold, uses block-level distribution (hash(segment_location, block_idx) % num_executors) instead of segment-level. Set to 0 to disable.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
                 ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable pruning pipeline",
