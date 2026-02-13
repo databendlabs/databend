@@ -56,13 +56,13 @@ This is handled by the CI setup action. Old version binaries are downloaded auto
 
 For each case, the script runs three phases:
 
-1. **Write** — start meta (first version) + query (writer version), run `fuse_compat_write`
+1. **Write** — start meta (first version) + query (writer version), run `fuse_compat_write.test`
 2. **Meta upgrade** — cycle through all meta versions to upgrade on-disk data
-3. **Read** — start meta (last version) + query (reader version), run `fuse_compat_read`
+3. **Read** — start meta (last version) + query (reader version), run `fuse_compat_read.test`
 
 ## Testing data
 
 Each suite under `compat-logictest/` contains two sqllogictest files:
 
-- `fuse_compat_write` — creates tables and writes data
-- `fuse_compat_read` — reads and verifies the data
+- `fuse_compat_write.test` — creates tables and writes data
+- `fuse_compat_read.test` — reads and verifies the data
