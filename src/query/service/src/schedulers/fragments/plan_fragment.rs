@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -163,6 +164,10 @@ impl PlanFragment {
 
         let executors = Fragmenter::get_executors_nodes(ctx);
 
+        // Sort executors by cache_id for deterministic ordering (same as reshuffle)
+        let mut executors_sorted = executors.clone();
+        executors_sorted.sort_by(|a, b| a.cache_id.cmp(&b.cache_id));
+
         let mut executor_partitions: HashMap<String, HashMap<u32, DataSource>> = HashMap::new();
 
         for (plan_id, data_source) in data_sources.iter() {
@@ -170,12 +175,27 @@ impl PlanFragment {
                 DataSource::Table(data_source_plan) => {
                     // Redistribute partitions of ReadDataSourcePlan.
                     let partitions = &data_source_plan.parts;
+                    let use_block_mod =
+                        matches!(partitions.kind, PartitionsShuffleKind::BlockMod(_));
                     let partition_reshuffle = partitions.reshuffle(executors.clone())?;
-                    for (executor, parts) in partition_reshuffle {
+
+                    for (executor_id, parts) in partition_reshuffle {
                         let mut source = data_source_plan.clone();
                         source.parts = parts;
+
+                        // For BlockMod shuffle, set the slot info in the shuffle kind
+                        if use_block_mod {
+                            let num_slots = executors_sorted.len();
+                            let slot = executors_sorted
+                                .iter()
+                                .position(|e| e.id == executor_id)
+                                .unwrap_or(0) as u32;
+                            let block_slot = BlockSlotDescription { num_slots, slot };
+                            source.parts.kind = PartitionsShuffleKind::BlockMod(Some(block_slot));
+                        }
+
                         executor_partitions
-                            .entry(executor)
+                            .entry(executor_id)
                             .or_default()
                             .insert(*plan_id, DataSource::Table(source));
                     }

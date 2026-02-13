@@ -53,24 +53,71 @@ pub struct PruningStatistics {
 }
 
 impl PruningStatistics {
-    pub fn merge(&mut self, other: &Self) {
-        self.segments_range_pruning_before += other.segments_range_pruning_before;
-        self.segments_range_pruning_after += other.segments_range_pruning_after;
+    pub fn merge(&mut self, other: &Self, use_max_for_segments: bool, use_max_for_blocks: bool) {
+        if use_max_for_segments {
+            // Broadcast (and BlockMod segment stage): all nodes see the same segments
+            self.segments_range_pruning_before = self
+                .segments_range_pruning_before
+                .max(other.segments_range_pruning_before);
+            self.segments_range_pruning_after = self
+                .segments_range_pruning_after
+                .max(other.segments_range_pruning_after);
+        } else {
+            self.segments_range_pruning_before += other.segments_range_pruning_before;
+            self.segments_range_pruning_after += other.segments_range_pruning_after;
+        }
+
+        if use_max_for_blocks {
+            // Broadcast: all nodes see the same blocks
+            self.blocks_range_pruning_before = self
+                .blocks_range_pruning_before
+                .max(other.blocks_range_pruning_before);
+            self.blocks_range_pruning_after = self
+                .blocks_range_pruning_after
+                .max(other.blocks_range_pruning_after);
+            self.blocks_bloom_pruning_before = self
+                .blocks_bloom_pruning_before
+                .max(other.blocks_bloom_pruning_before);
+            self.blocks_bloom_pruning_after = self
+                .blocks_bloom_pruning_after
+                .max(other.blocks_bloom_pruning_after);
+            self.blocks_inverted_index_pruning_before = self
+                .blocks_inverted_index_pruning_before
+                .max(other.blocks_inverted_index_pruning_before);
+            self.blocks_inverted_index_pruning_after = self
+                .blocks_inverted_index_pruning_after
+                .max(other.blocks_inverted_index_pruning_after);
+            self.blocks_vector_index_pruning_before = self
+                .blocks_vector_index_pruning_before
+                .max(other.blocks_vector_index_pruning_before);
+            self.blocks_vector_index_pruning_after = self
+                .blocks_vector_index_pruning_after
+                .max(other.blocks_vector_index_pruning_after);
+            self.blocks_topn_pruning_before = self
+                .blocks_topn_pruning_before
+                .max(other.blocks_topn_pruning_before);
+            self.blocks_topn_pruning_after = self
+                .blocks_topn_pruning_after
+                .max(other.blocks_topn_pruning_after);
+        } else {
+            self.blocks_range_pruning_before += other.blocks_range_pruning_before;
+            self.blocks_range_pruning_after += other.blocks_range_pruning_after;
+            self.blocks_bloom_pruning_before += other.blocks_bloom_pruning_before;
+            self.blocks_bloom_pruning_after += other.blocks_bloom_pruning_after;
+            self.blocks_inverted_index_pruning_before += other.blocks_inverted_index_pruning_before;
+            self.blocks_inverted_index_pruning_after += other.blocks_inverted_index_pruning_after;
+            self.blocks_vector_index_pruning_before += other.blocks_vector_index_pruning_before;
+            self.blocks_vector_index_pruning_after += other.blocks_vector_index_pruning_after;
+            self.blocks_topn_pruning_before += other.blocks_topn_pruning_before;
+            self.blocks_topn_pruning_after += other.blocks_topn_pruning_after;
+        }
+
+        // Costs are always summed (represent total work across all nodes)
         self.segments_range_pruning_cost += other.segments_range_pruning_cost;
-        self.blocks_range_pruning_before += other.blocks_range_pruning_before;
-        self.blocks_range_pruning_after += other.blocks_range_pruning_after;
         self.blocks_range_pruning_cost += other.blocks_range_pruning_cost;
-        self.blocks_bloom_pruning_before += other.blocks_bloom_pruning_before;
-        self.blocks_bloom_pruning_after += other.blocks_bloom_pruning_after;
         self.blocks_bloom_pruning_cost += other.blocks_bloom_pruning_cost;
-        self.blocks_inverted_index_pruning_before += other.blocks_inverted_index_pruning_before;
-        self.blocks_inverted_index_pruning_after += other.blocks_inverted_index_pruning_after;
         self.blocks_inverted_index_pruning_cost += other.blocks_inverted_index_pruning_cost;
-        self.blocks_vector_index_pruning_before += other.blocks_vector_index_pruning_before;
-        self.blocks_vector_index_pruning_after += other.blocks_vector_index_pruning_after;
         self.blocks_vector_index_pruning_cost += other.blocks_vector_index_pruning_cost;
-        self.blocks_topn_pruning_before += other.blocks_topn_pruning_before;
-        self.blocks_topn_pruning_after += other.blocks_topn_pruning_after;
         self.blocks_topn_pruning_cost += other.blocks_topn_pruning_cost;
     }
 }

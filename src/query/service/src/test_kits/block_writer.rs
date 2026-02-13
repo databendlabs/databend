@@ -26,6 +26,7 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::io::build_column_hlls;
 use databend_common_storages_fuse::io::serialize_block;
+use databend_storages_common_blocks::ParquetWriteOptions;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -152,14 +153,9 @@ impl<'a> BlockWriter<'a> {
             let filter_schema = bloom_index.filter_schema;
             let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
             let index_block_schema = &filter_schema;
-            let meta = blocks_to_parquet(
-                index_block_schema,
-                vec![index_block],
-                &mut data,
-                TableCompression::None,
-                false,
-                None,
-            )?;
+            let options = ParquetWriteOptions::builder(TableCompression::None).build();
+            let meta =
+                blocks_to_parquet(index_block_schema, vec![index_block], &mut data, &options)?;
             let size = data.len() as u64;
             data_accessor.write(&location.0, data).await?;
             Ok((size, Some(location), Some(meta)))

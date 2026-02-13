@@ -81,12 +81,40 @@ query TTTTIIITT
 select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet') order by column_name;
 ----
 t_parquet Parquet c1 INT NULL (INT32) NULL 57 48 plain,rle,rle_dictionary zstd
-t_parquet Parquet c2 INT NULL (INT32) NULL 202 429 plain,rle zstd
+t_parquet Parquet c2 INT NULL (INT32) NULL 37 37 rle,delta_binary_packed zstd
 
 query TTTTIIITT
 select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet', 'c2');
 ----
-t_parquet Parquet c2 INT NULL (INT32) NULL 202 429 plain,rle zstd
+t_parquet Parquet c2 INT NULL (INT32) NULL 37 37 rle,delta_binary_packed zstd
+
+statement ok
+set enable_parquet_delta_binary_packed_heuristic_rule = 1;
+
+statement ok
+create or replace table t_delta(c int) storage_format='parquet' compression = 'zstd';
+
+statement ok
+insert into t_delta select number from numbers(4096);
+
+query I
+select count(*) from fuse_encoding('db_09_0027', 't_delta', 'c') where level_one like '%delta_binary_packed%';
+----
+1
+
+statement ok
+set enable_parquet_delta_binary_packed_heuristic_rule = 0;
+
+statement ok
+create or replace table t_delta_plain(c int) storage_format='parquet' compression = 'zstd';
+
+statement ok
+insert into t_delta_plain select number from numbers(4096);
+
+query I
+select count(*) from fuse_encoding('db_09_0027', 't_delta_plain', 'c') where level_one like '%delta_binary_packed%';
+----
+0
 
 statement ok
 DROP DATABASE db_09_0027

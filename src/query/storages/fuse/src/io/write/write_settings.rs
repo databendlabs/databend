@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
+use databend_storages_common_blocks::ParquetWriteOptions;
 use databend_storages_common_table_meta::table::TableCompression;
 
 use crate::DEFAULT_ROW_PER_PAGE;
@@ -29,6 +30,7 @@ pub struct WriteSettings {
 
     pub block_per_seg: usize,
     pub enable_parquet_dictionary: bool,
+    pub enable_parquet_delta_binary_packed_heuristic_rule: bool,
 }
 
 impl Default for WriteSettings {
@@ -39,6 +41,18 @@ impl Default for WriteSettings {
             max_page_size: DEFAULT_ROW_PER_PAGE,
             block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
             enable_parquet_dictionary: false,
+            enable_parquet_delta_binary_packed_heuristic_rule: true,
         }
+    }
+}
+
+impl WriteSettings {
+    pub fn parquet_options(&self) -> ParquetWriteOptions {
+        ParquetWriteOptions::builder(self.table_compression)
+            .enable_dictionary(self.enable_parquet_dictionary)
+            .enable_delta_binary_packed_heuristic_rule(
+                self.enable_parquet_delta_binary_packed_heuristic_rule,
+            )
+            .build()
     }
 }
