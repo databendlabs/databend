@@ -376,22 +376,24 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
     let query_profiles = query_ctx.get_query_profiles();
     if !query_profiles.is_empty() {
         has_profiles = true;
-        #[derive(serde::Serialize)]
-        struct QueryProfiles {
-            query_id: String,
-            profiles: Vec<PlanProfile>,
-            statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
-        }
+        if query_ctx.try_log_query(QueryLogEmitPoint::Profile) {
+            #[derive(serde::Serialize)]
+            struct QueryProfiles {
+                query_id: String,
+                profiles: Vec<PlanProfile>,
+                statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
+            }
 
-        info!(
-            target: "databend::log::profile",
-            "{}",
-            serde_json::to_string(&QueryProfiles {
-                query_id: query_ctx.get_id(),
-                profiles: query_profiles.clone(),
-                statistics_desc: get_statistics_desc(),
-            })?
-        );
+            info!(
+                target: "databend::log::profile",
+                "{}",
+                serde_json::to_string(&QueryProfiles {
+                    query_id: query_ctx.get_id(),
+                    profiles: query_profiles.clone(),
+                    statistics_desc: get_statistics_desc(),
+                })?
+            );
+        }
     }
 
     hook_clear_m_cte_temp_table(&query_ctx)?;

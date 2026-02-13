@@ -21,12 +21,15 @@ pub struct QueryLogDeduplicator {
     started: AtomicBool,
     // Guards "finish" query log emission for a shared query context.
     finished: AtomicBool,
+    // Guards profile log emission for a shared query context.
+    profile: AtomicBool,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum QueryLogEmitPoint {
     Start,
     Finish,
+    Profile,
 }
 
 impl QueryLogDeduplicator {
@@ -35,6 +38,7 @@ impl QueryLogDeduplicator {
         let gate = match emit_point {
             QueryLogEmitPoint::Start => &self.started,
             QueryLogEmitPoint::Finish => &self.finished,
+            QueryLogEmitPoint::Profile => &self.profile,
         };
 
         gate.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
