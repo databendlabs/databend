@@ -217,8 +217,10 @@ impl QueryContext {
         self.shared.query_log_deduplicator.on_execution_start()
     }
 
-    pub(crate) fn on_query_execution_finish(&self) -> bool {
-        self.shared.query_log_deduplicator.on_execution_finish()
+    pub(crate) fn on_query_execution_finish(&self, has_error: bool) -> bool {
+        self.shared
+            .query_log_deduplicator
+            .on_execution_finish(has_error)
     }
 
     /// Build fuse/system normal table by table info.

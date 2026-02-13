@@ -4976,6 +4976,7 @@ dependencies = [
  "opentelemetry 0.29.1",
  "opentelemetry-otlp 0.29.0",
  "opentelemetry_sdk 0.29.0",
+ "parking_lot 0.12.3",
  "parquet 56.2.0",
  "serde",
  "serde_json",

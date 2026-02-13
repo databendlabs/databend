@@ -253,8 +253,8 @@ fn emit_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profile
 }
 
 fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
-    // Emit finish only when the last execution leaves.
-    if !ctx.on_query_execution_finish() {
+    // Emit finish immediately on error, otherwise only on terminal leave.
+    if !ctx.on_query_execution_finish(error.is_some()) {
         return;
     }
 
@@ -388,7 +388,7 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
         Err(e) => Some(e.clone()),
     };
 
-    if query_ctx.on_query_execution_finish() {
+    if query_ctx.on_query_execution_finish(err_opt.is_some()) {
         let has_profiles = !query_profiles.is_empty();
         if has_profiles {
             #[derive(serde::Serialize)]

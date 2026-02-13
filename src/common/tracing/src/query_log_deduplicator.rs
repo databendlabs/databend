@@ -12,55 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use parking_lot::Mutex;
 
 #[derive(Default)]
 pub struct QueryLogDeduplicator {
-    // Number of in-flight executions for one query context.
-    active_executions: AtomicUsize,
-    // Guards "start" query log emission.
-    start_logged: AtomicBool,
-    // Guards terminal ("final") log emission.
-    terminal_logged: AtomicBool,
+    // Serialized query log emission state for one shared query context.
+    inner: Mutex<QueryLogDeduplicatorInner>,
+}
+
+#[derive(Default)]
+struct QueryLogDeduplicatorInner {
+    active_executions: usize,
+    start_logged: bool,
+    terminal_logged: bool,
 }
 
 impl QueryLogDeduplicator {
     /// Marks one execution enter.
     /// Returns true only for the first start log.
     pub fn on_execution_start(&self) -> bool {
-        self.active_executions.fetch_add(1, Ordering::AcqRel);
-        self.start_logged
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
+        let mut inner = self.inner.lock();
+
+        inner.active_executions += 1;
+        if inner.start_logged {
+            false
+        } else {
+            inner.start_logged = true;
+            true
+        }
     }
 
     /// Marks one execution leave.
-    /// Returns true only when this leave reaches terminal state.
-    pub fn on_execution_finish(&self) -> bool {
-        loop {
-            let current = self.active_executions.load(Ordering::Acquire);
-            if current == 0 {
-                return false;
-            }
+    /// Returns true only when logs should be emitted.
+    /// Error leave always enters terminal state immediately.
+    pub fn on_execution_finish(&self, has_error: bool) -> bool {
+        let mut inner = self.inner.lock();
 
-            let next = current - 1;
-            if self
-                .active_executions
-                .compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok()
-            {
-                if next != 0 {
-                    return false;
-                }
-
-                return self
-                    .terminal_logged
-                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                    .is_ok();
-            }
+        if inner.terminal_logged {
+            return false;
         }
+
+        if has_error {
+            inner.active_executions = 0;
+            inner.terminal_logged = true;
+            return true;
+        }
+
+        if inner.active_executions == 0 {
+            return false;
+        }
+
+        inner.active_executions -= 1;
+        if inner.active_executions != 0 {
+            return false;
+        }
+
+        inner.terminal_logged = true;
+        true
     }
 }
 
@@ -81,8 +89,19 @@ mod tests {
         assert!(deduplicator.on_execution_start());
         assert!(!deduplicator.on_execution_start());
 
-        assert!(!deduplicator.on_execution_finish());
-        assert!(deduplicator.on_execution_finish());
-        assert!(!deduplicator.on_execution_finish());
+        assert!(!deduplicator.on_execution_finish(false));
+        assert!(deduplicator.on_execution_finish(false));
+        assert!(!deduplicator.on_execution_finish(false));
+    }
+
+    #[test]
+    fn test_error_finish_is_emitted_immediately() {
+        let deduplicator = QueryLogDeduplicator::default();
+        assert!(deduplicator.on_execution_start());
+        assert!(!deduplicator.on_execution_start());
+
+        assert!(deduplicator.on_execution_finish(true));
+        assert!(!deduplicator.on_execution_finish(false));
+        assert!(!deduplicator.on_execution_finish(true));
     }
 }
