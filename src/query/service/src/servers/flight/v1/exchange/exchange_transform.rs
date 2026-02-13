@@ -21,13 +21,21 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 
+use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
+use super::exchange_sink::build_broadcast_outbound_channels;
 use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
+use super::thread_channel_reader::ThreadChannelReader;
+use super::thread_channel_writer::ThreadChannelWriter;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::network::create_local_channels;
+use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
+use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;
@@ -43,7 +51,9 @@ impl ExchangeTransform {
             ExchangeParams::MergeExchange(params) => {
                 via_exchange_source(ctx.clone(), params, injector, pipeline)
             }
-            ExchangeParams::BroadcastExchange(_params) => Ok(()),
+            ExchangeParams::BroadcastExchange(params) => {
+                Self::broadcast_exchange(ctx, pipeline, params)
+            }
             ExchangeParams::NodeShuffleExchange(params) => {
                 Self::node_shuffle(ctx, pipeline, injector, params)
             }
@@ -103,5 +113,65 @@ impl ExchangeTransform {
         }
 
         injector.apply_shuffle_deserializer(params, pipeline)
+    }
+
+    fn broadcast_exchange(
+        ctx: &Arc<QueryContext>,
+        pipeline: &mut Pipeline,
+        params: &BroadcastExchangeParams,
+    ) -> Result<()> {
+        let num_destinations = params.destination_channels.len();
+        let mut local_pos = 0;
+        let mut local_threads = 0;
+
+        for (idx, (dest, threads)) in params.destination_channels.iter().enumerate() {
+            if dest == &params.executor_id {
+                local_pos = idx;
+                local_threads = threads.len();
+            }
+        }
+
+        let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(
+            BroadcastFlightScatter::try_create(num_destinations)?,
+        ));
+
+        let compression = ctx.get_settings().get_query_flight_compression()?;
+
+        let max_bytes = 20 * 1024 * 1024;
+        let (local_outbound, local_inbound) = create_local_channels(local_threads, max_bytes);
+        let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
+
+        let output_len = pipeline.output_len();
+        let mut output_items = Vec::with_capacity(output_len);
+
+        for _idx in 0..output_len {
+            output_items.push(ThreadChannelWriter::create_item(
+                channels.clone(),
+                local_pos,
+                scatter.clone(),
+                4096,
+                4 * 1024 * 1024,
+            ));
+        }
+
+        pipeline.add_pipe(Pipe::create(output_len, output_len, output_items));
+
+        let query_id = &params.query_id;
+        let exchange_id = &params.exchange_id;
+        let exchange_manager = DataExchangeManager::instance();
+        let channels = exchange_manager.get_exchange_source_channel(query_id, exchange_id)?;
+
+        let local_threads = local_inbound.len();
+
+        assert_eq!(channels.len(), output_len);
+        assert_eq!(local_threads, output_len);
+
+        let mut items = Vec::with_capacity(output_len);
+        for (remote, local) in channels.into_iter().zip(local_inbound.into_iter()) {
+            items.push(ThreadChannelReader::create_item(vec![remote, local]));
+        }
+
+        pipeline.add_pipe(Pipe::create(output_len, output_len, items));
+        Ok(())
     }
 }

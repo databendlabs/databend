@@ -50,6 +50,7 @@ use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
+use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
@@ -172,7 +173,7 @@ impl QueryPipelineExecutor {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = QueryExecutorTasksQueue::create(threads_num);
 
-        Ok(Arc::new(QueryPipelineExecutor {
+        let executor = Arc::new(QueryPipelineExecutor {
             graph,
             threads_num,
             workers_condvar,
@@ -184,7 +185,37 @@ impl QueryPipelineExecutor {
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
             lock_guards,
-        }))
+        });
+
+        // Bind waker
+        executor.bind_waker();
+
+        Ok(executor)
+    }
+
+    fn bind_waker(self: &Arc<Self>) {
+        let executor_weak = Arc::downgrade(self);
+
+        self.graph
+            .get_waker()
+            .bind(Box::new(move |processor_id, worker_id| {
+                let executor = executor_weak
+                    .upgrade()
+                    .ok_or_else(|| ErrorCode::Internal("Executor has been dropped"))?;
+
+                let task = CompletedAsyncTask {
+                    id: processor_id,
+                    worker_id,
+                    res: Ok(()),
+                    graph: executor.graph.clone(),
+                };
+
+                executor
+                    .global_tasks_queue
+                    .completed_async_task(executor.workers_condvar.clone(), task);
+
+                Ok(())
+            }));
     }
 
     #[fastrace::trace(name = "QueryPipelineExecutor::on_finished")]

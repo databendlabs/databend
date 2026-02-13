@@ -228,6 +228,7 @@ impl FragmentDeriveHandle {
                 }
 
                 Some(DataExchange::NodeToNodeExchange(NodeToNodeExchange {
+                    id: GlobalUniq::unique(),
                     destination_ids,
                     destination_channels,
                     shuffle_keys: exchange_sink.keys.clone(),

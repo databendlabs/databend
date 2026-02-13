@@ -23,6 +23,14 @@ pub enum DataExchange {
 }
 
 impl DataExchange {
+    pub fn get_id(&self) -> &str {
+        match self {
+            DataExchange::Merge(exchange) => &exchange.id,
+            DataExchange::Broadcast(exchange) => &exchange.id,
+            DataExchange::NodeToNodeExchange(exchange) => &exchange.id,
+        }
+    }
+
     pub fn get_destinations(&self) -> Vec<String> {
         match self {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
@@ -55,6 +63,11 @@ impl DataExchange {
         }
     }
 
+    /// Whether this exchange type uses do_exchange (ping-pong) instead of do_get.
+    pub fn use_do_exchange(&self) -> bool {
+        matches!(self, DataExchange::Broadcast(_))
+    }
+
     pub fn get_parallel(&self) -> usize {
         1
     }
@@ -62,6 +75,7 @@ impl DataExchange {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodeToNodeExchange {
+    pub id: String,
     pub destination_ids: Vec<String>,
     pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
@@ -70,6 +84,7 @@ pub struct NodeToNodeExchange {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MergeExchange {
+    pub id: String,
     pub destination_id: String,
     pub ignore_exchange: bool,
     pub channel_id: String,
@@ -83,6 +98,7 @@ impl MergeExchange {
         allow_adjust_parallelism: bool,
     ) -> DataExchange {
         DataExchange::Merge(MergeExchange {
+            id: GlobalUniq::unique(),
             destination_id,
             ignore_exchange,
             allow_adjust_parallelism,
@@ -93,6 +109,7 @@ impl MergeExchange {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastExchange {
+    pub id: String,
     pub destination_ids: Vec<String>,
     pub destination_channels: Vec<(String, Vec<String>)>,
 }
@@ -106,6 +123,7 @@ impl BroadcastExchange {
         }
 
         DataExchange::Broadcast(BroadcastExchange {
+            id: GlobalUniq::unique(),
             destination_ids,
             destination_channels,
         })

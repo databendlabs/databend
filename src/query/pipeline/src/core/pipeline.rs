@@ -38,6 +38,7 @@ use crate::basic::shuffle_processor::MergePartitionProcessor;
 use crate::basic::shuffle_processor::PartitionProcessor;
 use crate::core::Callback;
 use crate::core::ExecutionInfo;
+use crate::core::ExecutorWaker;
 use crate::core::FinishedCallbackChain;
 use crate::core::InputPort;
 use crate::core::LockGuard;
@@ -107,6 +108,8 @@ pub struct Pipeline {
     lock_guards: Vec<Arc<LockGuard>>,
 
     on_finished_chain: FinishedCallbackChain,
+
+    waker: Arc<ExecutorWaker>,
 }
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
@@ -122,6 +125,7 @@ impl Pipeline {
             on_init: None,
             lock_guards: vec![],
             on_finished_chain: FinishedCallbackChain::create(),
+            waker: ExecutorWaker::create(),
         }
     }
 
@@ -255,6 +259,18 @@ impl Pipeline {
 
     pub fn get_max_threads(&self) -> usize {
         self.max_threads
+    }
+
+    /// Get the executor waker
+    ///
+    /// Processor can hold this waker and use it to wake itself up after the executor is created.
+    ///
+    /// # Warning
+    /// The waker directly affects the executor's scheduling behavior. Using it incorrectly
+    /// may cause unexpected scheduling issues or deadlocks. Do not use this unless you
+    /// clearly understand how the executor scheduling works.
+    pub fn get_waker(&self) -> Arc<ExecutorWaker> {
+        self.waker.clone()
     }
 
     pub fn add_transform<F>(&mut self, f: F) -> Result<()>

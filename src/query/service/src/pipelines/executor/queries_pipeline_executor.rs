@@ -36,6 +36,7 @@ use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
 
 pub struct QueriesPipelineExecutor {
     threads_num: usize,
@@ -90,6 +91,9 @@ impl QueriesPipelineExecutor {
     }
 
     pub fn send_graph(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
+        // Bind waker
+        self.bind_waker_for_graph(&graph);
+
         unsafe {
             let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
 
@@ -102,6 +106,36 @@ impl QueriesPipelineExecutor {
                 .init_sync_tasks(sync_queue, self.workers_condvar.clone());
             Ok(())
         }
+    }
+
+    fn bind_waker_for_graph(self: &Arc<Self>, graph: &Arc<RunningGraph>) {
+        let executor_weak = Arc::downgrade(self);
+        let graph_weak = Arc::downgrade(graph);
+
+        graph
+            .get_waker()
+            .bind(Box::new(move |processor_id, worker_id| {
+                let executor = executor_weak
+                    .upgrade()
+                    .ok_or_else(|| ErrorCode::Internal("Executor has been dropped"))?;
+
+                let graph = graph_weak
+                    .upgrade()
+                    .ok_or_else(|| ErrorCode::Internal("Graph has been dropped"))?;
+
+                let task = CompletedAsyncTask {
+                    id: processor_id,
+                    worker_id,
+                    res: Ok(()),
+                    graph,
+                };
+
+                executor
+                    .global_tasks_queue
+                    .completed_async_task(executor.workers_condvar.clone(), task);
+
+                Ok(())
+            }));
     }
 
     fn execute_threads(self: &Arc<Self>, threads: usize) -> Vec<ThreadJoinHandle<Result<()>>> {
