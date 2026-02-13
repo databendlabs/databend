@@ -32,6 +32,7 @@ use databend_common_native::read::reader::NativeReader;
 use databend_common_native::read::reader::read_meta_async;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use opendal::Operator;
 
 use crate::fuse_part::FuseBlockPartInfo;
@@ -68,6 +69,7 @@ impl BlockReader {
                 &part.location,
                 &part.columns_meta,
                 ignore_column_ids,
+                VariantEncoding::Jsonb,
             )
             .await?;
 

@@ -33,6 +33,7 @@ use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use futures::TryStreamExt;
 
 #[test]
@@ -106,6 +107,7 @@ fn test_to_partitions() -> anyhow::Result<()> {
         None,
         None,
         meta::Compression::Lz4Raw,
+        VariantEncoding::default(),
         Some(Utc::now()),
     ));
 

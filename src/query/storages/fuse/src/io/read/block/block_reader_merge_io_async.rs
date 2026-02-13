@@ -19,6 +19,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
@@ -27,9 +28,11 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 
 use crate::BlockReadResult;
 use crate::io::BlockReader;
+use crate::io::variant_value_column_id;
 
 impl BlockReader {
     #[async_backtrace::framed]
@@ -39,6 +42,7 @@ impl BlockReader {
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
+        variant_encoding: VariantEncoding,
     ) -> Result<BlockReadResult> {
         // Perf
         {
@@ -54,7 +58,7 @@ impl BlockReader {
 
         let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
 
-        for (_index, (column_id, ..)) in self.project_indices.iter() {
+        for (_index, (column_id, _field, data_type)) in self.project_indices.iter() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if ignore_column_ids.contains(column_id) {
                     continue;
@@ -100,6 +104,44 @@ impl BlockReader {
                     ProfileStatisticsName::ScanBytesFromRemote,
                     len as usize,
                 );
+            }
+
+            if variant_encoding == VariantEncoding::ParquetVariant
+                && data_type.remove_nullable() == DataType::Variant
+            {
+                let derived_column_id = variant_value_column_id(*column_id);
+                if let Some(column_meta) = columns_meta.get(&derived_column_id) {
+                    let (offset, len) = column_meta.offset_length();
+
+                    let column_cache_key =
+                        column_cache_key_builder.cache_key(&derived_column_id, column_meta);
+
+                    if let Some(cache_array) = column_array_cache.get_sized(&column_cache_key, len)
+                    {
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::ScanBytesFromMemory,
+                            len as usize,
+                        );
+                        cached_column_array.push((derived_column_id, cache_array));
+                        continue;
+                    }
+
+                    if let Some(cached_column_raw_data) =
+                        column_data_cache.get_sized(&column_cache_key, len)
+                    {
+                        cached_column_data.push((derived_column_id, cached_column_raw_data));
+                        continue;
+                    }
+
+                    ranges.push((derived_column_id, offset..(offset + len)));
+
+                    metrics_inc_remote_io_seeks(1);
+                    metrics_inc_remote_io_read_bytes(len);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytesFromRemote,
+                        len as usize,
+                    );
+                }
             }
         }
 

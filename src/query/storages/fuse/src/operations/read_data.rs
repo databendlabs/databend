@@ -65,12 +65,46 @@ impl FuseTable {
         plan: &DataSourcePlan,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
+        let mut projection = PushDownInfo::projection_of_push_downs(
+            &self.schema_with_stream(),
+            plan.push_downs.as_ref(),
+        );
+
+        // Inline variant shredding may fall back to get_by_keypath for a block when typed_value
+        // is missing or all NULL. That fallback needs the source variant column available in the
+        // projected schema, otherwise results become NULL. Keep source columns readable here;
+        // TODO: refine this once per-block scalar-safe/value-all-null markers are persisted.
+        if ctx
+            .get_settings()
+            .get_enable_experimental_variant_shredding()
+            .unwrap_or_default()
+            && matches!(self.storage_format, FuseStorageFormat::Parquet)
+        {
+            if let Some(push_downs) = &plan.push_downs {
+                if let Some(virtual_column) = &push_downs.virtual_column {
+                    let schema = self.schema_with_stream();
+                    let mut extra_indices = Vec::new();
+                    for source_id in &virtual_column.source_column_ids {
+                        if let Some((idx, _)) = schema
+                            .fields()
+                            .iter()
+                            .enumerate()
+                            .find(|(_, field)| field.column_id() == *source_id)
+                        {
+                            extra_indices.push(idx);
+                        }
+                    }
+                    if !extra_indices.is_empty() {
+                        let extra_projection = Projection::Columns(extra_indices);
+                        projection.merge(&extra_projection);
+                    }
+                }
+            }
+        }
+
         self.create_block_reader(
             ctx,
-            PushDownInfo::projection_of_push_downs(
-                &self.schema_with_stream(),
-                plan.push_downs.as_ref(),
-            ),
+            projection,
             plan.internal_columns.is_some(),
             plan.update_stream_columns,
             put_cache,

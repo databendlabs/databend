@@ -43,6 +43,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::Versioned;
 use rand::Rng;
 use rand::thread_rng;
@@ -80,6 +81,7 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
             None,
             None,
             meta::Compression::Lz4Raw,
+            VariantEncoding::default(),
             Some(Utc::now()),
         ));
 

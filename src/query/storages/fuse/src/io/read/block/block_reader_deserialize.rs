@@ -25,6 +25,7 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 
 use super::BlockReader;
@@ -61,6 +62,7 @@ impl BlockReader {
             &part.columns_meta,
             chunks,
             storage_format,
+            part.variant_encoding,
         )
     }
 
@@ -72,6 +74,7 @@ impl BlockReader {
         column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
         storage_format: &FuseStorageFormat,
+        variant_encoding: VariantEncoding,
     ) -> Result<DataBlock> {
         match storage_format {
             FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
@@ -81,6 +84,7 @@ impl BlockReader {
                 compression,
                 block_path,
                 None,
+                variant_encoding,
             ),
             FuseStorageFormat::Native => {
                 self.deserialize_native_chunks(block_path, num_rows, column_metas, column_chunks)
@@ -98,7 +102,13 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         // Get the merged IO read result.
         let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
+            .read_columns_data_by_merge_io(
+                settings,
+                &meta.location.0,
+                &meta.col_metas,
+                &None,
+                meta.variant_encoding,
+            )
             .await?;
 
         self.deserialize_chunks_with_meta(&meta.into(), storage_format, merge_io_read_result)
@@ -123,6 +133,7 @@ impl BlockReader {
                 &meta.compression,
                 &meta.location,
                 None,
+                meta.variant_encoding,
             ),
             FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
                 &meta.location,

@@ -71,6 +71,7 @@ use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
+use databend_common_expression::types::variant_parquet::parquet_variant_bytes_to_jsonb;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
@@ -3078,28 +3079,71 @@ fn get_by_keypath_fn(
                     };
                     match json_row {
                         ScalarRef::Variant(v) => {
-                            match RawJsonb::new(v).get_by_keypath(path.paths.iter()) {
-                                Ok(Some(res)) => match &mut builder {
-                                    ColumnBuilder::String(builder) => {
-                                        let raw_jsonb = res.as_raw();
-                                        if raw_jsonb.is_null().unwrap_or_default() {
-                                            validity.push(false);
-                                        } else if let Ok(Some(s)) = raw_jsonb.as_str() {
-                                            builder.put_str(&s);
-                                            validity.push(true);
-                                        } else {
-                                            let json_str = raw_jsonb.to_string();
-                                            builder.put_str(&json_str);
-                                            validity.push(true);
-                                        }
-                                    }
-                                    ColumnBuilder::Variant(builder) => {
-                                        builder.put_slice(res.as_ref());
+                            let try_get = |bytes: &[u8]| {
+                                RawJsonb::new(bytes).get_by_keypath(path.paths.iter())
+                            };
+                            let mut emit = |res: &OwnedJsonb| match &mut builder {
+                                ColumnBuilder::String(builder) => {
+                                    let raw_jsonb = res.as_raw();
+                                    if raw_jsonb.is_null().unwrap_or_default() {
+                                        validity.push(false);
+                                    } else if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                        builder.put_str(&s);
+                                        validity.push(true);
+                                    } else {
+                                        let json_str = raw_jsonb.to_string();
+                                        builder.put_str(&json_str);
                                         validity.push(true);
                                     }
-                                    _ => unreachable!(),
-                                },
-                                _ => validity.push(false),
+                                }
+                                ColumnBuilder::Variant(builder) => {
+                                    builder.put_slice(res.as_ref());
+                                    validity.push(true);
+                                }
+                                _ => unreachable!(),
+                            };
+                            let mut handled = false;
+                            let mut needs_decode = false;
+                            match try_get(v) {
+                                Ok(Some(res)) => {
+                                    if res.as_raw().is_null().unwrap_or_default() {
+                                        if jsonb::from_slice(v).is_ok() {
+                                            emit(&res);
+                                            handled = true;
+                                        } else {
+                                            needs_decode = true;
+                                        }
+                                    } else {
+                                        emit(&res);
+                                        handled = true;
+                                    }
+                                }
+                                Ok(None) => {
+                                    needs_decode = true;
+                                }
+                                Err(_) => {
+                                    needs_decode = true;
+                                }
+                            }
+                            if !handled {
+                                if needs_decode
+                                    && let Ok(decoded) = parquet_variant_bytes_to_jsonb(v)
+                                {
+                                    match try_get(&decoded) {
+                                        Ok(Some(res)) => {
+                                            emit(&res);
+                                            handled = true;
+                                        }
+                                        Ok(None) => {
+                                            validity.push(false);
+                                            handled = true;
+                                        }
+                                        Err(_) => {}
+                                    }
+                                }
+                                if !handled {
+                                    validity.push(false);
+                                }
                             }
                         }
                         _ => validity.push(false),
