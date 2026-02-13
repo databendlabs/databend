@@ -63,7 +63,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::ApplyResourceRequest;
+use databend_common_cloud_control::pb::CreateWorkerRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
@@ -5681,6 +5681,7 @@ impl<'a> TypeChecker<'a> {
 
     fn apply_udf_cloud_resource(
         &self,
+        resource_name: &str,
         resource_type: &str,
         script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
@@ -5709,17 +5710,22 @@ impl<'a> TypeChecker<'a> {
             query_id,
             provider.get_timeout(),
         );
-        cfg.add_resource_version_info();
+        cfg.add_worker_version_info();
 
-        let req = ApplyResourceRequest {
+        let req = CreateWorkerRequest {
+            tenant_id: tenant.tenant_name().to_string(),
+            name: resource_name.to_string(),
+            if_not_exists: true,
+            tags: Default::default(),
+            options: Default::default(),
             r#type: resource_type.to_string(),
             script,
         };
 
         let resp = databend_common_base::runtime::block_on(
             provider
-                .get_resource_client()
-                .apply_resource(make_request(req, cfg)),
+                .get_worker_client()
+                .create_worker(make_request(req, cfg)),
         )?;
 
         let endpoint = resp.endpoint;
@@ -5942,7 +5948,7 @@ impl<'a> TypeChecker<'a> {
                 &arg_types,
                 &return_type,
             )?;
-            let (endpoint, headers) = self.apply_udf_cloud_resource("udf", script)?;
+            let (endpoint, headers) = self.apply_udf_cloud_resource(&name, "udf", script)?;
             let udf_definition = UDFServer {
                 address: endpoint,
                 handler,
