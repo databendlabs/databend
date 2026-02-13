@@ -42,6 +42,32 @@ pub enum Object {
     All,
 }
 
+impl Object {
+    /// Convert to an `OwnershipObject` for prefix-based listing.
+    ///
+    /// Only the enum variant is used to derive the key prefix;
+    /// field values are placeholders. Returns `None` for `All`.
+    pub fn to_ownership_object(&self) -> Option<OwnershipObject> {
+        match self {
+            Object::Stage => Some(OwnershipObject::Stage {
+                name: String::new(),
+            }),
+            Object::UDF => Some(OwnershipObject::UDF {
+                name: String::new(),
+            }),
+            Object::Warehouse => Some(OwnershipObject::Warehouse { id: String::new() }),
+            Object::Connection => Some(OwnershipObject::Connection {
+                name: String::new(),
+            }),
+            Object::Sequence => Some(OwnershipObject::Sequence {
+                name: String::new(),
+            }),
+            Object::Procedure => Some(OwnershipObject::Procedure { procedure_id: 0 }),
+            Object::All => None,
+        }
+    }
+}
+
 struct CatalogIdPool {
     name_to_id: FxHashMap<Arc<str>, u32>,
     id_to_name: Vec<Arc<str>>,
