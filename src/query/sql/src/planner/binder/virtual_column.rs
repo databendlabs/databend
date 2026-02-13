@@ -20,6 +20,7 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::RefreshVirtualColumnStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowVirtualColumnsStmt;
+use databend_common_ast::ast::VacuumVirtualColumnStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
@@ -32,6 +33,7 @@ use crate::plans::Plan;
 use crate::plans::RefreshSelection;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RewriteKind;
+use crate::plans::VacuumVirtualColumnPlan;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -132,6 +134,29 @@ impl Binder {
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowVirtualColumns)
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_virtual_column(
+        &mut self,
+        stmt: &VacuumVirtualColumnStmt,
+    ) -> Result<Plan> {
+        let VacuumVirtualColumnStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        Ok(Plan::VacuumVirtualColumn(Box::new(
+            VacuumVirtualColumnPlan {
+                catalog,
+                database,
+                table,
+            },
+        )))
     }
 
     fn parse_refresh_virtual_column_selection(&self, expr: &Expr) -> Result<RefreshSelection> {

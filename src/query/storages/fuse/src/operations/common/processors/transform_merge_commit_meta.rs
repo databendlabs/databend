@@ -25,6 +25,7 @@ use databend_storages_common_table_meta::meta::merge_column_hll;
 use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
 use crate::operations::SnapshotChanges;
+use crate::operations::VirtualSchemaMode;
 use crate::statistics::merge_statistics;
 
 pub struct TransformMergeCommitMeta {
@@ -165,12 +166,41 @@ impl TransformMergeCommitMeta {
         }
     }
 
+    pub(crate) fn apply_virtual_schema(
+        old_virtual_schema: Option<VirtualDataSchema>,
+        new_virtual_schema: Option<VirtualDataSchema>,
+        mode: VirtualSchemaMode,
+    ) -> Option<VirtualDataSchema> {
+        match mode {
+            VirtualSchemaMode::Merge => {
+                Self::merge_virtual_schema(old_virtual_schema, new_virtual_schema)
+            }
+            VirtualSchemaMode::Replace => new_virtual_schema,
+        }
+    }
+
     pub fn merge_commit_meta(
         l: CommitMeta,
         r: CommitMeta,
         default_cluster_key_id: Option<u32>,
     ) -> CommitMeta {
         assert_eq!(l.table_id, r.table_id, "table id mismatch");
+        let (virtual_schema, virtual_schema_mode) =
+            match (l.virtual_schema_mode, r.virtual_schema_mode) {
+                (_, VirtualSchemaMode::Replace) => (
+                    r.virtual_schema.or(l.virtual_schema),
+                    VirtualSchemaMode::Replace,
+                ),
+                (VirtualSchemaMode::Replace, _) => (
+                    l.virtual_schema.or(r.virtual_schema),
+                    VirtualSchemaMode::Replace,
+                ),
+                (VirtualSchemaMode::Merge, VirtualSchemaMode::Merge) => (
+                    Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
+                    VirtualSchemaMode::Merge,
+                ),
+            };
+
         CommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
@@ -183,7 +213,8 @@ impl TransformMergeCommitMeta {
                 .chain(r.new_segment_locs)
                 .collect(),
             table_id: l.table_id,
-            virtual_schema: Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
+            virtual_schema,
+            virtual_schema_mode,
             hll: merge_column_hll(l.hll, r.hll),
         }
     }

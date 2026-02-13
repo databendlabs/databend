@@ -44,3 +44,19 @@ impl RefreshVirtualColumnPlan {
         )]))
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumVirtualColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl VacuumVirtualColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![DataField::new(
+            "removed_files",
+            DataType::Number(NumberDataType::UInt64),
+        )]))
+    }
+}

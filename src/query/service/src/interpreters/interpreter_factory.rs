@@ -514,6 +514,9 @@ impl InterpreterFactory {
             Plan::RefreshVirtualColumn(refresh_virtual_column) => Ok(Arc::new(
                 RefreshVirtualColumnInterpreter::try_create(ctx, *refresh_virtual_column.clone())?,
             )),
+            Plan::VacuumVirtualColumn(vacuum_virtual_column) => Ok(Arc::new(
+                VacuumVirtualColumnInterpreter::try_create(ctx, *vacuum_virtual_column.clone())?,
+            )),
             // Users
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,

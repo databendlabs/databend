@@ -115,15 +115,6 @@ impl VirtualColumnBuilder {
     ) -> Result<VirtualColumnBuilder> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)?;
-        if !ctx
-            .get_settings()
-            .get_enable_experimental_virtual_column()
-            .unwrap_or_default()
-        {
-            return Err(ErrorCode::VirtualColumnError(
-                "Virtual column is an experimental feature, `set enable_experimental_virtual_column=1` to use this feature.",
-            ));
-        }
 
         let mut variant_fields = Vec::new();
         let mut variant_offsets = Vec::new();

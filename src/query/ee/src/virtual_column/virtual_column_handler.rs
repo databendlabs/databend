@@ -25,6 +25,7 @@ use databend_enterprise_virtual_column::VirtualColumnHandlerWrapper;
 use databend_enterprise_virtual_column::VirtualColumnRefreshResult;
 
 use crate::storages::fuse::operations::virtual_columns::commit_refresh_virtual_column;
+use crate::storages::fuse::operations::virtual_columns::do_vacuum_virtual_column;
 use crate::storages::fuse::operations::virtual_columns::prepare_refresh_virtual_column;
 
 pub struct RealVirtualColumnHandler {}
@@ -50,6 +51,14 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         results: Vec<VirtualColumnRefreshResult>,
     ) -> Result<u64> {
         commit_refresh_virtual_column(ctx, fuse_table, pipeline, results).await
+    }
+
+    async fn do_vacuum_virtual_column(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        fuse_table: &FuseTable,
+    ) -> Result<u64> {
+        do_vacuum_virtual_column(ctx, fuse_table).await
     }
 }
 
