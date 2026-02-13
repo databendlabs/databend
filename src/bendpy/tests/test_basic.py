@@ -16,6 +16,8 @@ import databend
 from databend import SessionContext
 import pandas as pd
 import polars
+import tempfile
+import os
 
 
 class TestBasic:
@@ -60,3 +62,32 @@ class TestBasic:
             "select sum(a) x, max(b) y, max(d) z from aa where c"
         ).to_polars()
         assert df.to_pandas().values.tolist() == [[90.0, "9", 9.0]]
+
+    def test_register_csv(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write("name,age,city\n")
+            f.write("Alice,30,NYC\n")
+            f.write("Bob,25,LA\n")
+            f.write("Charlie,35,Chicago\n")
+            csv_path = f.name
+
+        try:
+            self.ctx.register_csv("people", csv_path)
+            df = self.ctx.sql("SELECT name, age, city FROM people ORDER BY age").to_pandas()
+            assert df.values.tolist() == [["Bob", "25", "LA"], ["Alice", "30", "NYC"], ["Charlie", "35", "Chicago"]]
+        finally:
+            os.unlink(csv_path)
+
+    def test_register_tsv(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
+            f.write("id\tvalue\n")
+            f.write("1\thello\n")
+            f.write("2\tworld\n")
+            tsv_path = f.name
+
+        try:
+            self.ctx.register_tsv("items", tsv_path)
+            df = self.ctx.sql("SELECT id, value FROM items ORDER BY id").to_pandas()
+            assert df.values.tolist() == [["1", "hello"], ["2", "world"]]
+        finally:
+            os.unlink(tsv_path)
