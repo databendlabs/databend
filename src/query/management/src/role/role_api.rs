@@ -40,9 +40,10 @@ pub trait RoleApi: Sync + Send {
 
     async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, MetaError>;
 
-    /// List ownerships filtered by type.
+    /// List ownerships filtered by the variant of `obj`.
     ///
-    /// The `obj` parameter is used as a dummy to determine the ownership type prefix.
+    /// Only the enum variant is used to determine the key prefix;
+    /// field values inside `obj` are ignored.
     async fn list_ownerships_by_type(
         &self,
         obj: OwnershipObject,

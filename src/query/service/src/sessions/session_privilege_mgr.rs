@@ -393,54 +393,23 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             } else {
                 let user_api = UserApiProvider::instance();
                 let role_api = user_api.role_api(&self.session_ctx.get_current_tenant());
-                let ownerships = match object {
-                    Object::All => role_api
+                let ownerships = match object.to_ownership_object() {
+                    Some(obj) => role_api
+                        .list_ownerships_by_type(obj)
+                        .await
+                        .map_err(meta_service_error)?,
+                    None => role_api
                         .list_ownerships()
                         .await
                         .map_err(meta_service_error)?
                         .into_iter()
                         .map(|item| item.data)
                         .collect(),
-                    Object::UDF => role_api
-                        .list_ownerships_by_type(OwnershipObject::UDF {
-                            name: String::new(),
-                        })
-                        .await
-                        .map_err(meta_service_error)?,
-                    Object::Stage => role_api
-                        .list_ownerships_by_type(OwnershipObject::Stage {
-                            name: String::new(),
-                        })
-                        .await
-                        .map_err(meta_service_error)?,
-                    Object::Sequence => role_api
-                        .list_ownerships_by_type(OwnershipObject::Sequence {
-                            name: String::new(),
-                        })
-                        .await
-                        .map_err(meta_service_error)?,
-                    Object::Connection => role_api
-                        .list_ownerships_by_type(OwnershipObject::Connection {
-                            name: String::new(),
-                        })
-                        .await
-                        .map_err(meta_service_error)?,
-                    Object::Warehouse => role_api
-                        .list_ownerships_by_type(OwnershipObject::Warehouse { id: String::new() })
-                        .await
-                        .map_err(meta_service_error)?,
-                    Object::Procedure => role_api
-                        .list_ownerships_by_type(OwnershipObject::Procedure { procedure_id: 0 })
-                        .await
-                        .map_err(meta_service_error)?,
                 };
-                let mut ownership_infos = vec![];
-                for ownership in ownerships {
-                    if roles_name.contains(&ownership.role) {
-                        ownership_infos.push(ownership);
-                    }
-                }
-                ownership_infos
+                ownerships
+                    .into_iter()
+                    .filter(|o| roles_name.contains(&o.role))
+                    .collect()
             };
 
         Ok(GrantObjectVisibilityChecker::new(

@@ -119,10 +119,10 @@ impl RoleMgr {
     async fn upsert_role_info(
         &self,
         role_info: &RoleInfo,
-        seq: u64,
+        seq: MatchSeq,
     ) -> Result<Result<u64, UnknownError<role_ident::Resource>>, MetaError> {
         let ident = self.role_ident(role_info.identity());
-        let req = UpsertPB::update(ident.clone(), role_info.clone()).with(MatchSeq::Exact(seq));
+        let req = UpsertPB::update(ident.clone(), role_info.clone()).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
         match res.result {
             Some(SeqV { seq, .. }) => Ok(Ok(seq)),
@@ -177,20 +177,19 @@ impl RoleApi for RoleMgr {
         info: RoleInfo,
         can_replace: bool,
     ) -> Result<Result<(), ExistError<role_ident::Resource>>, MetaError> {
+        let ident = RoleIdent::new(&self.tenant, &info.name);
+
         let seq = if can_replace {
             MatchSeq::GE(0)
         } else {
             MatchSeq::Exact(0)
         };
 
-        let key = RoleIdent::new(&self.tenant, &info.name);
-        let req = UpsertPB::insert(key, info.clone()).with(seq);
+        let req = UpsertPB::insert(ident.clone(), info).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if !can_replace && res.prev.is_some() {
-            return Ok(Err(
-                RoleIdent::new(&self.tenant, &info.name).exist_error(func_name!())
-            ));
+            return Ok(Err(ident.exist_error(func_name!())));
         }
 
         Ok(Ok(()))
@@ -333,10 +332,10 @@ impl RoleApi for RoleMgr {
         let Some(seqv) = self.get_role(role).await? else {
             return Ok(Err(ident.unknown_error(func_name!())));
         };
-        let seq = seqv.seq;
         let mut role_info = seqv.data;
         f(&mut role_info);
-        self.upsert_role_info(&role_info, seq).await
+        self.upsert_role_info(&role_info, MatchSeq::Exact(seqv.seq))
+            .await
     }
 
     /// Only drop role will call transfer.
