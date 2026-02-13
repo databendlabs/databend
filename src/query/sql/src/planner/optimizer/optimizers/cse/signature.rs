@@ -19,11 +19,13 @@ use crate::ColumnEntry;
 use crate::IndexType;
 use crate::optimizer::ir::SExpr;
 use crate::planner::metadata::Metadata;
+use crate::plans::AggregateMode;
 use crate::plans::RelOperator;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SExprSignature {
     pub tables: BTreeSet<IndexType>,
+    pub has_aggregate: bool,
 }
 
 pub fn compute_s_expr_signatures(
@@ -51,7 +53,14 @@ fn compute_s_expr_signature_rec(
         child_signatures.push(child_signature);
     }
 
-    let signature = match expr.plan.as_ref() {
+    if child_signatures
+        .iter()
+        .any(|sig| sig.as_ref().is_none_or(|sig| sig.has_aggregate))
+    {
+        return None;
+    }
+
+    match expr.plan.as_ref() {
         RelOperator::Scan(scan) => {
             let has_internal_column = scan.columns.iter().any(|column_index| {
                 let column = metadata.column(*column_index);
@@ -78,7 +87,35 @@ fn compute_s_expr_signature_rec(
 
             let mut tables = BTreeSet::new();
             tables.insert(table.get_id() as IndexType);
-            Some(SExprSignature { tables })
+            let signature = SExprSignature {
+                tables,
+                has_aggregate: false,
+            };
+            signature_to_exprs
+                .entry(signature.clone())
+                .or_default()
+                .push((path.clone(), expr.clone()));
+            Some(signature)
+        }
+        RelOperator::Aggregate(aggregate) => {
+            let child_signature = child_signatures.first()?.as_ref()?;
+
+            let has_aggregate = match aggregate.mode {
+                AggregateMode::Partial => false,
+                AggregateMode::Final | AggregateMode::Initial => true,
+            };
+
+            let signature = SExprSignature {
+                tables: child_signature.tables.clone(),
+                has_aggregate,
+            };
+            if !matches!(aggregate.mode, AggregateMode::Partial) {
+                signature_to_exprs
+                    .entry(signature.clone())
+                    .or_default()
+                    .push((path.clone(), expr.clone()));
+            }
+            Some(signature)
         }
         RelOperator::Join(join) => {
             if join.from_correlated_subquery || join.is_lateral {
@@ -99,17 +136,16 @@ fn compute_s_expr_signature_rec(
 
             let mut tables = left_signature.tables.clone();
             tables.extend(right_signature.tables.iter().copied());
-            Some(SExprSignature { tables })
+            let signature = SExprSignature {
+                tables,
+                has_aggregate: false,
+            };
+            signature_to_exprs
+                .entry(signature.clone())
+                .or_default()
+                .push((path.clone(), expr.clone()));
+            Some(signature)
         }
         _ => None,
-    };
-
-    if let Some(signature) = &signature {
-        signature_to_exprs
-            .entry(signature.clone())
-            .or_default()
-            .push((path.clone(), expr.clone()));
     }
-
-    signature
 }

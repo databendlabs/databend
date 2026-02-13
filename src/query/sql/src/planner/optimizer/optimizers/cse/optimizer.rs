@@ -22,6 +22,8 @@ use super::rewrite::rewrite_sexpr;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use crate::optimizer::optimizers::rule::RuleID;
 
 pub struct CommonSubexpressionOptimizer {
     pub(crate) opt_ctx: Arc<OptimizerContext>,
@@ -30,11 +32,17 @@ pub struct CommonSubexpressionOptimizer {
 #[async_trait]
 impl Optimizer for CommonSubexpressionOptimizer {
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+        let s_expr = RecursiveRuleOptimizer::new(
+            self.opt_ctx.clone(),
+            [RuleID::EliminateEvalScalar].as_slice(),
+        )
+        .optimize_sync(s_expr)?;
+
         let metadata = self.opt_ctx.get_metadata();
         let mut metadata = metadata.write();
         let (replacements, materialized_ctes) =
-            analyze_common_subexpression(s_expr, &mut metadata)?;
-        rewrite_sexpr(s_expr, replacements, materialized_ctes)
+            analyze_common_subexpression(&s_expr, &mut metadata)?;
+        rewrite_sexpr(&s_expr, replacements, materialized_ctes)
     }
 
     fn name(&self) -> String {
