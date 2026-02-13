@@ -139,6 +139,7 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
             DataPacket::DataCacheMetrics(_) => unreachable!(),
             DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
             DataPacket::QueryPerf(_) => unreachable!(),
+            DataPacket::QueryTrace(_) => unreachable!(),
             DataPacket::PartStatistics(_) => unreachable!(),
         }
     }

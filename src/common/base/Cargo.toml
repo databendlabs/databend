@@ -29,6 +29,7 @@ chrono = { workspace = true }
 concurrent-queue = { workspace = true }
 crc32fast = { workspace = true }
 enquote = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 hickory-resolver = { workspace = true }
 libc = { workspace = true }

@@ -27,6 +27,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::TraceFilterOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -482,6 +483,36 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
     fn set_nodes_perf(&self, _node: String, _perf: String) {
+        unimplemented!()
+    }
+    fn get_trace_flag(&self) -> bool {
+        unimplemented!()
+    }
+    fn set_trace_flag(&self, _flag: bool) {
+        unimplemented!()
+    }
+    fn get_nodes_trace(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        unimplemented!()
+    }
+    fn set_nodes_trace(&self, _node: String, _trace: String) {
+        unimplemented!()
+    }
+    fn set_trace_parent(&self, _trace_parent: Option<String>) {
+        unimplemented!()
+    }
+    fn get_trace_parent(&self) -> Option<String> {
+        unimplemented!()
+    }
+    fn set_explain_trace_reporter_set(&self, _flag: bool) {
+        unimplemented!()
+    }
+    fn get_explain_trace_reporter_set(&self) -> bool {
+        unimplemented!()
+    }
+    fn set_trace_filter_options(&self, _options: TraceFilterOptions) {
+        unimplemented!()
+    }
+    fn get_trace_filter_options(&self) -> TraceFilterOptions {
         unimplemented!()
     }
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
