@@ -375,7 +375,7 @@ impl Binder {
             Statement::ShowUsers { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
+                    "SELECT name, hostname, auth_type, is_configured, default_role, default_warehouse, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
                     show_limit, limit_str
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowUsers)

@@ -25,23 +25,23 @@ grant role role2 to showuser1;
 statement ok
 alter user showuser1 with default_role=role2;
 
-query TTTTTTBTTB
+query TTTTTTTBTTB
 SHOW USERS
 ----
-default % no_password YES account_admin account_admin 0 NULL NULL NULL
-root % no_password YES account_admin account_admin 0 NULL NULL NULL
-showuser1 % double_sha1_password NO role2 role1, role2 0 NULL NULL NULL
-showuser2 % double_sha1_password NO (empty) (empty) 1 NULL NULL NULL
+default % no_password YES account_admin (empty) account_admin 0 NULL NULL NULL
+root % no_password YES account_admin (empty) account_admin 0 NULL NULL NULL
+showuser1 % double_sha1_password NO role2 (empty) role1, role2 0 NULL NULL NULL
+showuser2 % double_sha1_password NO (empty) (empty) (empty) 1 NULL NULL NULL
 
-query TTTTTTBTTB
+query TTTTTTTBTTB
 SHOW USERS where name ='default'
 ----
-default % no_password YES account_admin account_admin 0 NULL NULL NULL
+default % no_password YES account_admin (empty) account_admin 0 NULL NULL NULL
 
-query TTTTTBTTBT
+query TTTTTTBTTBT
 DESC USER 'showuser2'
 ----
-showuser2 % double_sha1_password (empty) (empty) 1 NULL NULL NULL NULL
+showuser2 % double_sha1_password (empty) (empty) (empty) 1 NULL NULL NULL NULL
 
 statement ok
 DROP USER IF EXISTS 'showuser1'
