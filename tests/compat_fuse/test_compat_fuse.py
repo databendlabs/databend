@@ -17,11 +17,11 @@ import time
 import urllib.request
 from pathlib import Path
 
-import yaml
-
 
 def load_test_cases(path: Path) -> list[dict]:
     """Load test cases from a YAML file."""
+    import yaml
+
     with open(path) as f:
         cases = yaml.safe_load(f)
     # Ensure all values in meta lists are strings (yaml may parse "1.2.527" as float)
