@@ -270,6 +270,11 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(SingleToInnerOptimizer::new())
         // Deduplicate join conditions.
         .add(DeduplicateJoinConditionOptimizer::new())
+        // Push down left semi/anti join after join condition cleanup.
+        .add(RecursiveRuleOptimizer::new(
+            opt_ctx.clone(),
+            [RuleID::PushDownSemiAntiJoin].as_slice(),
+        ))
         // Apply join commutativity to further optimize join ordering
         .add_if(
             opt_ctx.get_enable_join_reorder(),
