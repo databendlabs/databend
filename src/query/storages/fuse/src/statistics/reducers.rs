@@ -26,6 +26,7 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use log::warn;
 
 const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
 
@@ -52,26 +53,56 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     col_to_stats_lit
         .iter()
         .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
+            let col_stats = reduce_column_statistics(stats, Some(*id));
             acc.insert(*id, col_stats);
             acc
         })
 }
 
-pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
+pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(
+    stats: &[T],
+    column_id: Option<ColumnId>,
+) -> ColumnStatistics {
     let mut min_stats = Vec::with_capacity(stats.len());
     let mut max_stats = Vec::with_capacity(stats.len());
     let mut ndvs = Vec::with_capacity(stats.len());
     let mut null_count = 0;
     let mut in_memory_size = 0;
+    let mut type_set = HashSet::new();
 
     for col_stats in stats.iter() {
         let col_stats = col_stats.borrow();
-        min_stats.push(col_stats.min().clone());
-        max_stats.push(col_stats.max().clone());
+        let min = col_stats.min().clone();
+        let max = col_stats.max().clone();
+        let min_type = min.as_ref().infer_data_type();
+        if !matches!(min_type, DataType::Null) {
+            type_set.insert(min_type);
+        }
+        let max_type = max.as_ref().infer_data_type();
+        if !matches!(max_type, DataType::Null) {
+            type_set.insert(max_type);
+        }
+        min_stats.push(min);
+        max_stats.push(max);
         ndvs.push(col_stats.distinct_of_values);
         null_count += col_stats.null_count;
         in_memory_size += col_stats.in_memory_size;
+    }
+
+    if type_set.len() > 1 {
+        if let Some(column_id) = column_id {
+            warn!(
+                "column stats type mismatch for column id {} ({} types), dropping min/max",
+                column_id,
+                type_set.len()
+            );
+        } else {
+            warn!(
+                "column stats type mismatch ({} types), dropping min/max",
+                type_set.len()
+            );
+        }
+        return ColumnStatistics::new(Scalar::Null, Scalar::Null, null_count, in_memory_size, None);
     }
 
     let min = min_stats
@@ -133,7 +164,7 @@ pub fn generate_virtual_column_statistics<T: Borrow<HashMap<ColumnId, VirtualCol
                     .iter()
                     .map(|(_, stat)| stat.clone())
                     .collect::<Vec<_>>();
-                let col_stats = reduce_column_statistics(&stats);
+                let col_stats = reduce_column_statistics(&stats, None);
                 acc.insert(*id, col_stats);
             }
             acc
@@ -188,7 +219,7 @@ pub fn reduce_virtual_column_statistics<T: Borrow<Option<StatisticsOfColumns>>>(
                 }
 
                 if type_set.len() <= 1 {
-                    let col_stats = reduce_column_statistics(stats);
+                    let col_stats = reduce_column_statistics(stats, None);
                     acc.insert(*id, col_stats);
                 }
                 acc
@@ -209,6 +240,7 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
     let mut min_stats = Vec::with_capacity(len);
     let mut max_stats = Vec::with_capacity(len);
     let mut levels = Vec::with_capacity(len);
+    let mut type_set = HashSet::new();
 
     for cluster_stats in blocks_cluster_stats.iter() {
         if let Some(stat) = cluster_stats.borrow() {
@@ -216,12 +248,29 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
                 return None;
             }
 
-            min_stats.push(stat.min());
-            max_stats.push(stat.max());
+            let min = stat.min();
+            let max = stat.max();
+            for scalar in min.iter().chain(max.iter()) {
+                let ty = scalar.as_ref().infer_data_type();
+                if !matches!(ty, DataType::Null) {
+                    type_set.insert(ty);
+                }
+            }
+            min_stats.push(min);
+            max_stats.push(max);
             levels.push(stat.level);
         } else {
             return None;
         }
+    }
+
+    if type_set.len() > 1 {
+        warn!(
+            "cluster stats type mismatch for cluster key {} ({} types), dropping cluster stats",
+            cluster_key_id,
+            type_set.len()
+        );
+        return None;
     }
 
     let min = min_stats
@@ -455,5 +504,37 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         cluster_stats: merged_cluster_stats,
         virtual_block_count: merged_virtual_block_count,
         additional_stats_meta: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::number::NumberScalar;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+    use super::reduce_column_statistics;
+
+    #[test]
+    fn test_reduce_column_statistics_mixed_types_drop_min_max() {
+        let stats = vec![
+            ColumnStatistics::new(
+                Scalar::Number(NumberScalar::Int32(1)),
+                Scalar::Number(NumberScalar::Int32(2)),
+                0,
+                0,
+                None,
+            ),
+            ColumnStatistics::new(
+                Scalar::Number(NumberScalar::Int64(3)),
+                Scalar::Number(NumberScalar::Int64(4)),
+                0,
+                0,
+                None,
+            ),
+        ];
+        let reduced = reduce_column_statistics(&stats, Some(1));
+        assert!(reduced.min().is_null());
+        assert!(reduced.max().is_null());
     }
 }

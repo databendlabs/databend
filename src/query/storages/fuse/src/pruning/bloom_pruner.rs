@@ -17,24 +17,31 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::cast_scalar;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::BloomIndexResult;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
+use databend_storages_common_table_meta::meta::supported_stat_type;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -62,14 +69,26 @@ pub struct BloomPrunerCreator {
     /// indices that should be loaded from filter block
     index_fields: Vec<TableField>,
 
+    /// columns used by bloom filter expressions
+    bloom_fields: Vec<TableField>,
+    /// columns used by ngram filter expressions
+    ngram_fields: Vec<TableField>,
+
     /// the expression that would be evaluate
     filter_expression: Expr<String>,
 
-    /// pre calculated digest for constant Scalar for eq conditions
-    eq_scalar_map: HashMap<Scalar, u64>,
+    /// Pre-calculated digest for constant Scalar per column for eq conditions.
+    /// Use column id as part of the key to avoid cross-column reuse when stats types differ.
+    eq_scalar_map: HashMap<(ColumnId, Scalar), u64>,
 
-    /// pre calculated digest for constant Scalar for like conditions
-    like_scalar_map: HashMap<Scalar, Vec<u64>>,
+    /// Pre-calculated digest for constant Scalar per column for like conditions.
+    /// Use column id as part of the key to avoid cross-column reuse when stats types differ.
+    like_scalar_map: HashMap<(ColumnId, Scalar), Vec<u64>>,
+
+    /// scalars bound to bloom fields (field, scalar, data_type)
+    bloom_scalars: Vec<(TableField, Scalar, DataType)>,
+    /// scalars bound to ngram fields (field, scalar)
+    ngram_scalars: Vec<(TableField, Scalar)>,
 
     /// Ngram args aligned with BloomColumn using Ngram
     ngram_args: Vec<NgramArgs>,
@@ -102,44 +121,81 @@ impl BloomPrunerCreator {
         let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
         let ngram_column_fields: Vec<TableField> =
             ngram_args.iter().map(|arg| arg.field().clone()).collect();
-        let mut result =
-            BloomIndex::filter_index_field(expr, bloom_column_fields, ngram_column_fields)?;
+        let result = BloomIndex::filter_index_field(
+            expr,
+            bloom_column_fields.clone(),
+            ngram_column_fields.clone(),
+        )?;
 
         if result.bloom_fields.is_empty() && result.ngram_fields.is_empty() {
             return Ok(None);
         }
 
+        let BloomIndexResult {
+            bloom_fields,
+            ngram_fields,
+            bloom_scalars,
+            ngram_scalars,
+        } = result;
+
         // convert to filter column names
-        let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
-        for (_, scalar, ty) in result.bloom_scalars.into_iter() {
-            if let Entry::Vacant(e) = eq_scalar_map.entry(scalar) {
-                let digest = BloomIndex::calculate_scalar_digest(&func_ctx, e.key(), &ty)?;
+        let bloom_scalars = bloom_scalars
+            .iter()
+            .filter_map(|(idx, scalar, ty)| {
+                bloom_column_fields
+                    .get(*idx)
+                    .map(|field| (field.clone(), scalar.clone(), ty.clone()))
+            })
+            .collect::<Vec<_>>();
+        let ngram_scalars = ngram_scalars
+            .iter()
+            .filter_map(|(idx, scalar)| {
+                ngram_column_fields
+                    .get(*idx)
+                    .map(|field| (field.clone(), scalar.clone()))
+            })
+            .collect::<Vec<_>>();
+
+        let mut eq_scalar_map = HashMap::<(ColumnId, Scalar), u64>::new();
+        for (field, scalar, ty) in bloom_scalars.iter() {
+            let key = (field.column_id(), scalar.clone());
+            if let Entry::Vacant(e) = eq_scalar_map.entry(key) {
+                let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty)?;
                 e.insert(digest);
             }
         }
-        let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
-        for (i, scalar) in result.ngram_scalars.into_iter() {
+        let mut like_scalar_map = HashMap::<(ColumnId, Scalar), Vec<u64>>::new();
+        for (field, scalar) in ngram_scalars.iter() {
+            let Some(ngram_arg) = ngram_args.iter().find(|arg| arg.field() == field) else {
+                continue;
+            };
             let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
                 Value::Scalar(scalar.clone()),
-                ngram_args[i].gram_size(),
+                ngram_arg.gram_size(),
                 BloomIndex::ngram_hash,
             )
             .next() else {
                 continue;
             };
-            if let Entry::Vacant(e) = like_scalar_map.entry(scalar) {
+            let key = (field.column_id(), scalar.clone());
+            if let Entry::Vacant(e) = like_scalar_map.entry(key) {
                 e.insert(digests);
             }
         }
-        let mut index_fields = result.bloom_fields;
-        index_fields.append(&mut result.ngram_fields);
+
+        let mut index_fields = bloom_fields.clone();
+        index_fields.extend(ngram_fields.clone());
 
         Ok(Some(Arc::new(Self {
             func_ctx,
             index_fields,
+            bloom_fields,
+            ngram_fields,
             filter_expression: expr.clone(),
             eq_scalar_map,
             like_scalar_map,
+            bloom_scalars,
+            ngram_scalars,
             ngram_args,
             dal,
             data_schema: schema.clone(),
@@ -176,6 +232,123 @@ impl BloomPrunerCreator {
                 Ok::<_, ErrorCode>(acc)
             },
         )?;
+
+        let mut stats_type_by_id = HashMap::<ColumnId, DataType>::new();
+        for field in self.bloom_fields.iter().chain(self.ngram_fields.iter()) {
+            if !column_ids_of_indexed_block.contains(&field.column_id()) {
+                continue;
+            }
+            let stats_column_id = map_value_leaf_id(field).unwrap_or_else(|| field.column_id());
+            let digest_type = bloom_digest_type(field);
+            let Some(stat) = column_stats.get(&stats_column_id) else {
+                if !supported_stat_type(&bloom_source_type(field)) {
+                    stats_type_by_id.insert(field.column_id(), digest_type);
+                    continue;
+                }
+                return Ok(true);
+            };
+            let stat_type = if !stat.max().is_null() {
+                stat.max().as_ref().infer_data_type()
+            } else if !stat.min().is_null() {
+                stat.min().as_ref().infer_data_type()
+            } else if !supported_stat_type(&bloom_source_type(field)) {
+                digest_type
+            } else {
+                return Ok(true);
+            };
+            stats_type_by_id.insert(field.column_id(), stat_type);
+        }
+
+        let mut use_fast_path = true;
+        for field in self.bloom_fields.iter().chain(self.ngram_fields.iter()) {
+            if !column_ids_of_indexed_block.contains(&field.column_id()) {
+                continue;
+            }
+            let Some(stat_type) = stats_type_by_id.get(&field.column_id()) else {
+                use_fast_path = false;
+                break;
+            };
+            let expected_type = bloom_digest_type(field);
+            if stat_type.remove_nullable() != expected_type.remove_nullable() {
+                use_fast_path = false;
+                break;
+            }
+        }
+
+        // Cache per column to avoid reusing digests across columns with different stats types.
+        let mut local_eq_scalar_map = HashMap::<(ColumnId, Scalar), u64>::new();
+        let mut local_like_scalar_map = HashMap::<(ColumnId, Scalar), Vec<u64>>::new();
+        if !use_fast_path {
+            for (field, scalar, _ty) in self.bloom_scalars.iter() {
+                if !column_ids_of_indexed_block.contains(&field.column_id()) {
+                    continue;
+                }
+                let Some(stat_type) = stats_type_by_id.get(&field.column_id()) else {
+                    return Ok(true);
+                };
+                let casted =
+                    match cast_scalar(Span::None, scalar.clone(), stat_type, &BUILTIN_FUNCTIONS) {
+                        Ok(s) => s,
+                        Err(_) => return Ok(true),
+                    };
+                if casted.is_null() {
+                    return Ok(true);
+                }
+                let key = (field.column_id(), scalar.clone());
+                if let Entry::Vacant(e) = local_eq_scalar_map.entry(key) {
+                    let digest =
+                        BloomIndex::calculate_scalar_digest(&self.func_ctx, &casted, stat_type)?;
+                    e.insert(digest);
+                }
+            }
+
+            for (field, scalar) in self.ngram_scalars.iter() {
+                if !column_ids_of_indexed_block.contains(&field.column_id()) {
+                    continue;
+                }
+                let Some(stat_type) = stats_type_by_id.get(&field.column_id()) else {
+                    return Ok(true);
+                };
+                if stat_type.remove_nullable() != DataType::String {
+                    return Ok(true);
+                }
+                let casted =
+                    match cast_scalar(Span::None, scalar.clone(), stat_type, &BUILTIN_FUNCTIONS) {
+                        Ok(s) => s,
+                        Err(_) => return Ok(true),
+                    };
+                if casted.is_null() {
+                    return Ok(true);
+                }
+                let Some(ngram_arg) = self.ngram_args.iter().find(|arg| arg.field() == field)
+                else {
+                    return Ok(true);
+                };
+                let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+                    Value::Scalar(casted),
+                    ngram_arg.gram_size(),
+                    BloomIndex::ngram_hash,
+                )
+                .next() else {
+                    continue;
+                };
+                let key = (field.column_id(), scalar.clone());
+                if let Entry::Vacant(e) = local_like_scalar_map.entry(key) {
+                    e.insert(digests);
+                }
+            }
+        }
+
+        let eq_scalar_map = if use_fast_path {
+            &self.eq_scalar_map
+        } else {
+            &local_eq_scalar_map
+        };
+        let like_scalar_map = if use_fast_path {
+            &self.like_scalar_map
+        } else {
+            &local_like_scalar_map
+        };
 
         // load the relevant index columns
         let maybe_filter = index_location
@@ -223,8 +396,8 @@ impl BloomPrunerCreator {
             )?
             .apply(
                 self.filter_expression.clone(),
-                &self.eq_scalar_map,
-                &self.like_scalar_map,
+                eq_scalar_map,
+                like_scalar_map,
                 &self.ngram_args,
                 column_stats,
                 self.data_schema.clone(),
@@ -288,6 +461,51 @@ impl BloomPrunerCreator {
             Ok(None)
         }
     }
+}
+
+fn map_value_leaf_id(field: &TableField) -> Option<ColumnId> {
+    let data_type = field.data_type().remove_nullable();
+    let TableDataType::Map(inner) = data_type else {
+        return None;
+    };
+    let TableDataType::Tuple { fields_type, .. } = inner.as_ref() else {
+        return None;
+    };
+    if fields_type.len() < 2 {
+        return None;
+    }
+    let key_leaf_count = fields_type[0].num_leaf_columns();
+    let leaf_ids = field.leaf_column_ids();
+    leaf_ids.get(key_leaf_count).copied()
+}
+
+fn map_value_data_type(field: &TableField) -> Option<DataType> {
+    let data_type = field.data_type().remove_nullable();
+    let TableDataType::Map(inner) = data_type else {
+        return None;
+    };
+    let TableDataType::Tuple { fields_type, .. } = inner.as_ref() else {
+        return None;
+    };
+    if fields_type.len() < 2 {
+        return None;
+    }
+    Some(DataType::from(&fields_type[1]))
+}
+
+fn bloom_source_type(field: &TableField) -> DataType {
+    if let Some(map_value) = map_value_data_type(field) {
+        return map_value;
+    }
+    DataType::from(field.data_type())
+}
+
+fn bloom_digest_type(field: &TableField) -> DataType {
+    let source_type = bloom_source_type(field);
+    if source_type.remove_nullable() == DataType::Variant {
+        return DataType::String;
+    }
+    source_type
 }
 
 #[async_trait::async_trait]
