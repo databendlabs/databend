@@ -268,11 +268,13 @@ class TestContext:
             capture_output=True, text=True,
         )
         if result.returncode == 0:
-            output = result.stdout.strip()
-            if output:
-                print(output)
+            for line in result.stdout.strip().splitlines():
+                if line.startswith("version:"):
+                    print(f"        {line}")
+                    return
+            print(f"        (no version line in output)")
         else:
-            print(f" === (--cmd ver not supported by this build)")
+            print(f"        (--cmd ver not supported by this build)")
 
     def clean_data_dir(self) -> None:
         """Remove and recreate the .databend data directory."""
@@ -287,16 +289,20 @@ class TestContext:
         self.clean_data_dir()
 
         try:
-            # Print version info (capture output to suppress backtrace from old binaries)
+            # Verify downloaded binaries by printing their versions
+            print(" === Checking binary versions before test ...")
+
             for ver in self.meta_versions:
-                print(f" === metasrv version: {ver}")
+                print(f" === checking metasrv {ver}")
                 self._print_bin_version(self.bin_path(ver, "meta"), ["--single", "--cmd", "ver"])
 
-            print(f" === writer query version: {self.writer_ver}")
+            print(f" === checking writer query {self.writer_ver}")
             self._print_bin_version(self.bin_path(self.writer_ver, "query"), ["--cmd", "ver"])
 
-            print(f" === reader query version: {self.reader_ver}")
+            print(f" === checking reader query {self.reader_ver}")
             self._print_bin_version(self.bin_path(self.reader_ver, "query"), ["--cmd", "ver"])
+
+            print(" === All binaries OK")
 
             # Phase 1: Write
             print(" === Phase 1: Write data with writer version")
