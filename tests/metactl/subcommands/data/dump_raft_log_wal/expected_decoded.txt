@@ -1,0 +1,1200 @@
+RaftLog:
+ChunkId(00_000_000_000_000_000_000)
+  R-00000: [000_000_000, 000_000_018) Size(18): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: None))
+  R-00001: [000_000_018, 000_000_046) Size(28): RaftLogState(RaftLogState(vote: None, last: None, committed: None, purged: None, user_data: LogStoreMeta{ node_id: Some(1) }))
+  R-00002: [000_000_046, 000_000_125) Size(79): Append(log_id: T0-N1.0, payload: membership:{voters:[{1:EmptyNode}], learners:[]})
+  R-00003: [000_000_125, 000_000_175) Size(50): SaveVote(<T1-N1:->)
+  R-00004: [000_000_175, 000_000_225) Size(50): SaveVote(<T1-N1:Q>)
+  R-00005: [000_000_225, 000_000_277) Size(52): Append(log_id: T1-N1.1, payload: blank)
+  R-00006: [000_000_277, 000_000_472) Size(195): Append(log_id: T1-N1.2, payload: normal:time: <TIME> cmd: add_node(no-override):1=id=1 raft=localhost:28103 grpc=127.0.0.1:9191)
+  R-00007: [000_000_472, 000_000_518) Size(46): Commit(T1-N1.1)
+  R-00008: [000_000_518, 000_000_564) Size(46): Commit(T1-N1.2)
+  R-00009: [000_000_564, 000_000_643) Size(79): Append(log_id: T1-N1.3, payload: membership:{voters:[{1:EmptyNode}], learners:[]})
+  R-00010: [000_000_643, 000_000_689) Size(46): Commit(T1-N1.3)
+  R-00011: [000_000_689, 000_000_884) Size(195): Append(log_id: T1-N1.4, payload: normal:time: <TIME> cmd: add_node(override):1=id=1 raft=localhost:28103 grpc=127.0.0.1:9191)
+  R-00012: [000_000_884, 000_000_930) Size(46): Commit(T1-N1.4)
+  R-00013: [000_000_930, 000_001_219) Size(289): Append(log_id: T1-N1.5, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00014: [000_001_219, 000_001_265) Size(46): Commit(T1-N1.5)
+  R-00015: [000_001_265, 000_002_014) Size(749): Append(log_id: T1-N1.6, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/test_tenant/default == seq(0),__fd_database_id_to_name/1 == seq(0),__fd_db_id_list/test_tenant/default == seq(0)] then:[Put(Put key=__fd_database/test_tenant/default),Put(Put key=__fd_database_by_id/1),Put(Put key=__fd_db_id_list/test_tenant/default),Put(Put key=__fd_database_id_to_name/1)] else:[]})
+    txn.if_then[0].put __fd_database/test_tenant/default:
+      unknown-prefix(1 bytes)
+    txn.if_then[1].put __fd_database_by_id/1:
+      DatabaseMeta { engine: "", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:32.110027Z, updated_on: 2026-02-11T14:35:32.110028Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/test_tenant/default:
+      DbIdList { id_list: [1] }
+    txn.if_then[3].put __fd_database_id_to_name/1:
+      unknown-prefix(29 bytes)
+  R-00016: [000_002_014, 000_002_060) Size(46): Commit(T1-N1.6)
+  R-00017: [000_002_060, 000_002_463) Size(403): Append(log_id: T1-N1.7, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/test_tenant/public == seq(0)] then:[Put(Put key=__fd_roles/test_tenant/public)] else:[Get(Get key=__fd_roles/test_tenant/public)]})
+    txn.if_then[0].put __fd_roles/test_tenant/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:32.209353Z, update_on: 2026-02-11T14:35:32.209353Z, comment: None }
+  R-00018: [000_002_463, 000_002_509) Size(46): Commit(T1-N1.7)
+  R-00019: [000_002_509, 000_004_257) Size(1748): Append(log_id: T1-N1.8, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO == seq(0),__fd_warehouses/v1/test_tenant/test_warehouse == seq(0)] then:[Put(Put key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO  ttl: 60s),Put(Put key=__fd_clusters_v6/test_tenant/online_clusters/test_warehouse/test_cluster/GEpfnEDRTyoVk9KF9wfgO  ttl: 60s),Put(Put key=__fd_warehouses/v1/test_tenant/test_warehouse  ttl: 60s),Get(Get key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO)] else:[Get(Get key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO),Get(Get key=__fd_warehouses/v1/test_tenant/test_warehouse)]})
+    txn.if_then[0].put __fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO (ttl_ms=60000):
+      unknown-prefix(431 bytes)
+    txn.if_then[1].put __fd_clusters_v6/test_tenant/online_clusters/test_warehouse/test_cluster/GEpfnEDRTyoVk9KF9wfgO (ttl_ms=60000):
+      unknown-prefix(371 bytes)
+    txn.if_then[2].put __fd_warehouses/v1/test_tenant/test_warehouse (ttl_ms=60000):
+      unknown-prefix(32 bytes)
+  R-00020: [000_004_257, 000_004_303) Size(46): Commit(T1-N1.8)
+  R-00021: [000_004_303, 000_004_770) Size(467): Append(log_id: T1-N1.9, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/6f0dedc5%2d28a0%2d45d6%2db5e0%2da0627e6df4f3/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/6f0dedc5%2d28a0%2d45d6%2db5e0%2da0627e6df4f3/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/6f0dedc5%2d28a0%2d45d6%2db5e0%2da0627e6df4f3/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/6f0dedc5%2d28a0%2d45d6%2db5e0%2da0627e6df4f3/root (ttl_ms=4200000):
+      ClientSession
+  R-00022: [000_004_770, 000_004_816) Size(46): Commit(T1-N1.9)
+  R-00023: [000_004_816, 000_005_283) Size(467): Append(log_id: T1-N1.10, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/b6be38ec%2d54dc%2d40b8%2d9cc7%2dc5db0a7a0bac/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/b6be38ec%2d54dc%2d40b8%2d9cc7%2dc5db0a7a0bac/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/b6be38ec%2d54dc%2d40b8%2d9cc7%2dc5db0a7a0bac/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/b6be38ec%2d54dc%2d40b8%2d9cc7%2dc5db0a7a0bac/root (ttl_ms=4200000):
+      ClientSession
+  R-00024: [000_005_283, 000_005_329) Size(46): Commit(T1-N1.10)
+  R-00025: [000_005_329, 000_005_796) Size(467): Append(log_id: T1-N1.11, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/936b1c1f%2d0424%2d47c2%2d8bab%2d19aa9714e529/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/936b1c1f%2d0424%2d47c2%2d8bab%2d19aa9714e529/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/936b1c1f%2d0424%2d47c2%2d8bab%2d19aa9714e529/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/936b1c1f%2d0424%2d47c2%2d8bab%2d19aa9714e529/root (ttl_ms=4200000):
+      ClientSession
+  R-00026: [000_005_796, 000_005_842) Size(46): Commit(T1-N1.11)
+  R-00027: [000_005_842, 000_006_309) Size(467): Append(log_id: T1-N1.12, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/f55a0627%2d7f3a%2d4891%2dad51%2de9701e95f753/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/f55a0627%2d7f3a%2d4891%2dad51%2de9701e95f753/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/f55a0627%2d7f3a%2d4891%2dad51%2de9701e95f753/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/f55a0627%2d7f3a%2d4891%2dad51%2de9701e95f753/root (ttl_ms=4200000):
+      ClientSession
+  R-00028: [000_006_309, 000_006_355) Size(46): Commit(T1-N1.12)
+  R-00029: [000_006_355, 000_006_822) Size(467): Append(log_id: T1-N1.13, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/05a86b2d%2dbc07%2d4525%2db1e6%2da54db754d9dc/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/05a86b2d%2dbc07%2d4525%2db1e6%2da54db754d9dc/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/05a86b2d%2dbc07%2d4525%2db1e6%2da54db754d9dc/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/05a86b2d%2dbc07%2d4525%2db1e6%2da54db754d9dc/root (ttl_ms=4200000):
+      ClientSession
+  R-00030: [000_006_822, 000_006_868) Size(46): Commit(T1-N1.13)
+  R-00031: [000_006_868, 000_007_335) Size(467): Append(log_id: T1-N1.14, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/22f3282c%2d6299%2d4e12%2d988f%2d4a27f28954e7/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/22f3282c%2d6299%2d4e12%2d988f%2d4a27f28954e7/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/22f3282c%2d6299%2d4e12%2d988f%2d4a27f28954e7/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/22f3282c%2d6299%2d4e12%2d988f%2d4a27f28954e7/root (ttl_ms=4200000):
+      ClientSession
+  R-00032: [000_007_335, 000_007_381) Size(46): Commit(T1-N1.14)
+  R-00033: [000_007_381, 000_007_848) Size(467): Append(log_id: T1-N1.15, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/ef67952f%2dd4e7%2d4d83%2dab5d%2d5ba25a1f557f/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/ef67952f%2dd4e7%2d4d83%2dab5d%2d5ba25a1f557f/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/ef67952f%2dd4e7%2d4d83%2dab5d%2d5ba25a1f557f/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/ef67952f%2dd4e7%2d4d83%2dab5d%2d5ba25a1f557f/root (ttl_ms=4200000):
+      ClientSession
+  R-00034: [000_007_848, 000_007_894) Size(46): Commit(T1-N1.15)
+  R-00035: [000_007_894, 000_008_361) Size(467): Append(log_id: T1-N1.16, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/66fc656f%2d2c11%2d4b95%2d9b96%2d0e2de34e1717/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/66fc656f%2d2c11%2d4b95%2d9b96%2d0e2de34e1717/root  ttl: 4200s)] else:[Get(Get key=__fd_session/test_tenant/66fc656f%2d2c11%2d4b95%2d9b96%2d0e2de34e1717/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/66fc656f%2d2c11%2d4b95%2d9b96%2d0e2de34e1717/root (ttl_ms=4200000):
+      ClientSession
+  R-00036: [000_008_361, 000_008_407) Size(46): Commit(T1-N1.16)
+  R-00037: [000_008_407, 000_008_798) Size(391): Append(log_id: T1-N1.17, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/XgRCYZx/public == seq(0)] then:[Put(Put key=__fd_roles/XgRCYZx/public)] else:[Get(Get key=__fd_roles/XgRCYZx/public)]})
+    txn.if_then[0].put __fd_roles/XgRCYZx/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.938397Z, update_on: 2026-02-11T14:35:33.938397Z, comment: None }
+  R-00038: [000_008_798, 000_008_844) Size(46): Commit(T1-N1.17)
+  R-00039: [000_008_844, 000_009_235) Size(391): Append(log_id: T1-N1.18, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/BoCuukX/public == seq(0)] then:[Put(Put key=__fd_roles/BoCuukX/public)] else:[Get(Get key=__fd_roles/BoCuukX/public)]})
+    txn.if_then[0].put __fd_roles/BoCuukX/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.958609Z, update_on: 2026-02-11T14:35:33.958609Z, comment: None }
+  R-00040: [000_009_235, 000_009_281) Size(46): Commit(T1-N1.18)
+  R-00041: [000_009_281, 000_009_672) Size(391): Append(log_id: T1-N1.19, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/PgNN5gN/public == seq(0)] then:[Put(Put key=__fd_roles/PgNN5gN/public)] else:[Get(Get key=__fd_roles/PgNN5gN/public)]})
+    txn.if_then[0].put __fd_roles/PgNN5gN/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.958653Z, update_on: 2026-02-11T14:35:33.958653Z, comment: None }
+  R-00042: [000_009_672, 000_009_718) Size(46): Commit(T1-N1.19)
+  R-00043: [000_009_718, 000_010_109) Size(391): Append(log_id: T1-N1.20, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/M5jcEq0/public == seq(0)] then:[Put(Put key=__fd_roles/M5jcEq0/public)] else:[Get(Get key=__fd_roles/M5jcEq0/public)]})
+    txn.if_then[0].put __fd_roles/M5jcEq0/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.958591Z, update_on: 2026-02-11T14:35:33.958591Z, comment: None }
+  R-00044: [000_010_109, 000_010_155) Size(46): Commit(T1-N1.20)
+  R-00045: [000_010_155, 000_010_546) Size(391): Append(log_id: T1-N1.21, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/0VbvoII/public == seq(0)] then:[Put(Put key=__fd_roles/0VbvoII/public)] else:[Get(Get key=__fd_roles/0VbvoII/public)]})
+    txn.if_then[0].put __fd_roles/0VbvoII/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.958632Z, update_on: 2026-02-11T14:35:33.958632Z, comment: None }
+  R-00046: [000_010_546, 000_010_592) Size(46): Commit(T1-N1.21)
+  R-00047: [000_010_592, 000_010_983) Size(391): Append(log_id: T1-N1.22, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/aXX619n/public == seq(0)] then:[Put(Put key=__fd_roles/aXX619n/public)] else:[Get(Get key=__fd_roles/aXX619n/public)]})
+    txn.if_then[0].put __fd_roles/aXX619n/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.958622Z, update_on: 2026-02-11T14:35:33.958622Z, comment: None }
+  R-00048: [000_010_983, 000_011_029) Size(46): Commit(T1-N1.22)
+  R-00049: [000_011_029, 000_011_420) Size(391): Append(log_id: T1-N1.23, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/67m7nsp/public == seq(0)] then:[Put(Put key=__fd_roles/67m7nsp/public)] else:[Get(Get key=__fd_roles/67m7nsp/public)]})
+    txn.if_then[0].put __fd_roles/67m7nsp/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.958690Z, update_on: 2026-02-11T14:35:33.958690Z, comment: None }
+  R-00050: [000_011_420, 000_011_466) Size(46): Commit(T1-N1.23)
+  R-00051: [000_011_466, 000_011_857) Size(391): Append(log_id: T1-N1.24, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/cM9bwCG/public == seq(0)] then:[Put(Put key=__fd_roles/cM9bwCG/public)] else:[Get(Get key=__fd_roles/cM9bwCG/public)]})
+    txn.if_then[0].put __fd_roles/cM9bwCG/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:33.958603Z, update_on: 2026-02-11T14:35:33.958603Z, comment: None }
+  R-00052: [000_011_857, 000_011_903) Size(46): Commit(T1-N1.24)
+  R-00053: [000_011_903, 000_012_192) Size(289): Append(log_id: T1-N1.25, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00054: [000_012_192, 000_012_238) Size(46): Commit(T1-N1.25)
+  R-00055: [000_012_238, 000_012_527) Size(289): Append(log_id: T1-N1.26, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00056: [000_012_527, 000_012_573) Size(46): Commit(T1-N1.26)
+  R-00057: [000_012_573, 000_012_862) Size(289): Append(log_id: T1-N1.27, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00058: [000_012_862, 000_012_908) Size(46): Commit(T1-N1.27)
+  R-00059: [000_012_908, 000_013_197) Size(289): Append(log_id: T1-N1.28, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00060: [000_013_197, 000_013_243) Size(46): Commit(T1-N1.28)
+  R-00061: [000_013_243, 000_013_532) Size(289): Append(log_id: T1-N1.29, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00062: [000_013_532, 000_013_578) Size(46): Commit(T1-N1.29)
+  R-00063: [000_013_578, 000_013_867) Size(289): Append(log_id: T1-N1.30, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00064: [000_013_867, 000_013_913) Size(46): Commit(T1-N1.30)
+  R-00065: [000_013_913, 000_014_651) Size(738): Append(log_id: T1-N1.31, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/XgRCYZx/default == seq(0),__fd_database_id_to_name/26 == seq(0),__fd_db_id_list/XgRCYZx/default == seq(0)] then:[Put(Put key=__fd_database/XgRCYZx/default),Put(Put key=__fd_database_by_id/26),Put(Put key=__fd_db_id_list/XgRCYZx/default),Put(Put key=__fd_database_id_to_name/26)] else:[]})
+    txn.if_then[0].put __fd_database/XgRCYZx/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/26:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037832Z, updated_on: 2026-02-11T14:35:34.037833Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/XgRCYZx/default:
+      DbIdList { id_list: [26] }
+    txn.if_then[3].put __fd_database_id_to_name/26:
+      unknown-prefix(25 bytes)
+  R-00066: [000_014_651, 000_014_697) Size(46): Commit(T1-N1.31)
+  R-00067: [000_014_697, 000_014_986) Size(289): Append(log_id: T1-N1.32, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00068: [000_014_986, 000_015_032) Size(46): Commit(T1-N1.32)
+  R-00069: [000_015_032, 000_015_321) Size(289): Append(log_id: T1-N1.33, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00070: [000_015_321, 000_015_367) Size(46): Commit(T1-N1.33)
+  R-00071: [000_015_367, 000_016_105) Size(738): Append(log_id: T1-N1.34, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/PgNN5gN/default == seq(0),__fd_database_id_to_name/27 == seq(0),__fd_db_id_list/PgNN5gN/default == seq(0)] then:[Put(Put key=__fd_database/PgNN5gN/default),Put(Put key=__fd_database_by_id/27),Put(Put key=__fd_db_id_list/PgNN5gN/default),Put(Put key=__fd_database_id_to_name/27)] else:[]})
+    txn.if_then[0].put __fd_database/PgNN5gN/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/27:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037842Z, updated_on: 2026-02-11T14:35:34.037843Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/PgNN5gN/default:
+      DbIdList { id_list: [27] }
+    txn.if_then[3].put __fd_database_id_to_name/27:
+      unknown-prefix(25 bytes)
+  R-00072: [000_016_105, 000_016_151) Size(46): Commit(T1-N1.34)
+  R-00073: [000_016_151, 000_016_889) Size(738): Append(log_id: T1-N1.35, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/M5jcEq0/default == seq(0),__fd_database_id_to_name/28 == seq(0),__fd_db_id_list/M5jcEq0/default == seq(0)] then:[Put(Put key=__fd_database/M5jcEq0/default),Put(Put key=__fd_database_by_id/28),Put(Put key=__fd_db_id_list/M5jcEq0/default),Put(Put key=__fd_database_id_to_name/28)] else:[]})
+    txn.if_then[0].put __fd_database/M5jcEq0/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/28:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037832Z, updated_on: 2026-02-11T14:35:34.037833Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/M5jcEq0/default:
+      DbIdList { id_list: [28] }
+    txn.if_then[3].put __fd_database_id_to_name/28:
+      unknown-prefix(25 bytes)
+  R-00074: [000_016_889, 000_016_935) Size(46): Commit(T1-N1.35)
+  R-00075: [000_016_935, 000_017_673) Size(738): Append(log_id: T1-N1.36, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/BoCuukX/default == seq(0),__fd_database_id_to_name/29 == seq(0),__fd_db_id_list/BoCuukX/default == seq(0)] then:[Put(Put key=__fd_database/BoCuukX/default),Put(Put key=__fd_database_by_id/29),Put(Put key=__fd_db_id_list/BoCuukX/default),Put(Put key=__fd_database_id_to_name/29)] else:[]})
+    txn.if_then[0].put __fd_database/BoCuukX/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/29:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037860Z, updated_on: 2026-02-11T14:35:34.037861Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/BoCuukX/default:
+      DbIdList { id_list: [29] }
+    txn.if_then[3].put __fd_database_id_to_name/29:
+      unknown-prefix(25 bytes)
+  R-00076: [000_017_673, 000_017_719) Size(46): Commit(T1-N1.36)
+  R-00077: [000_017_719, 000_018_457) Size(738): Append(log_id: T1-N1.37, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/cM9bwCG/default == seq(0),__fd_database_id_to_name/30 == seq(0),__fd_db_id_list/cM9bwCG/default == seq(0)] then:[Put(Put key=__fd_database/cM9bwCG/default),Put(Put key=__fd_database_by_id/30),Put(Put key=__fd_db_id_list/cM9bwCG/default),Put(Put key=__fd_database_id_to_name/30)] else:[]})
+    txn.if_then[0].put __fd_database/cM9bwCG/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/30:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037944Z, updated_on: 2026-02-11T14:35:34.037944Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/cM9bwCG/default:
+      DbIdList { id_list: [30] }
+    txn.if_then[3].put __fd_database_id_to_name/30:
+      unknown-prefix(25 bytes)
+  R-00078: [000_018_457, 000_018_503) Size(46): Commit(T1-N1.37)
+  R-00079: [000_018_503, 000_019_241) Size(738): Append(log_id: T1-N1.38, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/0VbvoII/default == seq(0),__fd_database_id_to_name/31 == seq(0),__fd_db_id_list/0VbvoII/default == seq(0)] then:[Put(Put key=__fd_database/0VbvoII/default),Put(Put key=__fd_database_by_id/31),Put(Put key=__fd_db_id_list/0VbvoII/default),Put(Put key=__fd_database_id_to_name/31)] else:[]})
+    txn.if_then[0].put __fd_database/0VbvoII/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/31:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037861Z, updated_on: 2026-02-11T14:35:34.037861Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/0VbvoII/default:
+      DbIdList { id_list: [31] }
+    txn.if_then[3].put __fd_database_id_to_name/31:
+      unknown-prefix(25 bytes)
+  R-00080: [000_019_241, 000_019_287) Size(46): Commit(T1-N1.38)
+  R-00081: [000_019_287, 000_020_025) Size(738): Append(log_id: T1-N1.39, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/67m7nsp/default == seq(0),__fd_database_id_to_name/36 == seq(0),__fd_db_id_list/67m7nsp/default == seq(0)] then:[Put(Put key=__fd_database/67m7nsp/default),Put(Put key=__fd_database_by_id/36),Put(Put key=__fd_db_id_list/67m7nsp/default),Put(Put key=__fd_database_id_to_name/36)] else:[]})
+    txn.if_then[0].put __fd_database/67m7nsp/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/36:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037862Z, updated_on: 2026-02-11T14:35:34.037862Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/67m7nsp/default:
+      DbIdList { id_list: [36] }
+    txn.if_then[3].put __fd_database_id_to_name/36:
+      unknown-prefix(25 bytes)
+  R-00082: [000_020_025, 000_020_071) Size(46): Commit(T1-N1.39)
+  R-00083: [000_020_071, 000_020_809) Size(738): Append(log_id: T1-N1.40, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/aXX619n/default == seq(0),__fd_database_id_to_name/37 == seq(0),__fd_db_id_list/aXX619n/default == seq(0)] then:[Put(Put key=__fd_database/aXX619n/default),Put(Put key=__fd_database_by_id/37),Put(Put key=__fd_db_id_list/aXX619n/default),Put(Put key=__fd_database_id_to_name/37)] else:[]})
+    txn.if_then[0].put __fd_database/aXX619n/default:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/37:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.037861Z, updated_on: 2026-02-11T14:35:34.037861Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/aXX619n/default:
+      DbIdList { id_list: [37] }
+    txn.if_then[3].put __fd_database_id_to_name/37:
+      unknown-prefix(25 bytes)
+  R-00084: [000_020_809, 000_020_855) Size(46): Commit(T1-N1.40)
+  R-00085: [000_020_855, 000_021_123) Size(268): Append(log_id: T1-N1.41, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/XgRCYZx/database-by-id/26)] else:[]})
+    txn.if_then[0].put __fd_object_owners/XgRCYZx/database-by-id/26:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 26 }, role: "account_admin" }
+  R-00086: [000_021_123, 000_021_169) Size(46): Commit(T1-N1.41)
+  R-00087: [000_021_169, 000_021_437) Size(268): Append(log_id: T1-N1.42, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/PgNN5gN/database-by-id/27)] else:[]})
+    txn.if_then[0].put __fd_object_owners/PgNN5gN/database-by-id/27:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 27 }, role: "account_admin" }
+  R-00088: [000_021_437, 000_021_483) Size(46): Commit(T1-N1.42)
+  R-00089: [000_021_483, 000_021_751) Size(268): Append(log_id: T1-N1.43, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/cM9bwCG/database-by-id/30)] else:[]})
+    txn.if_then[0].put __fd_object_owners/cM9bwCG/database-by-id/30:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 30 }, role: "account_admin" }
+  R-00090: [000_021_751, 000_021_797) Size(46): Commit(T1-N1.43)
+  R-00091: [000_021_797, 000_022_065) Size(268): Append(log_id: T1-N1.44, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/BoCuukX/database-by-id/29)] else:[]})
+    txn.if_then[0].put __fd_object_owners/BoCuukX/database-by-id/29:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 29 }, role: "account_admin" }
+  R-00092: [000_022_065, 000_022_111) Size(46): Commit(T1-N1.44)
+  R-00093: [000_022_111, 000_022_379) Size(268): Append(log_id: T1-N1.45, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/0VbvoII/database-by-id/31)] else:[]})
+    txn.if_then[0].put __fd_object_owners/0VbvoII/database-by-id/31:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 31 }, role: "account_admin" }
+  R-00094: [000_022_379, 000_022_425) Size(46): Commit(T1-N1.45)
+  R-00095: [000_022_425, 000_022_693) Size(268): Append(log_id: T1-N1.46, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/M5jcEq0/database-by-id/28)] else:[]})
+    txn.if_then[0].put __fd_object_owners/M5jcEq0/database-by-id/28:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 28 }, role: "account_admin" }
+  R-00096: [000_022_693, 000_022_739) Size(46): Commit(T1-N1.46)
+  R-00097: [000_022_739, 000_023_007) Size(268): Append(log_id: T1-N1.47, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/aXX619n/database-by-id/37)] else:[]})
+    txn.if_then[0].put __fd_object_owners/aXX619n/database-by-id/37:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 37 }, role: "account_admin" }
+  R-00098: [000_023_007, 000_023_053) Size(46): Commit(T1-N1.47)
+  R-00099: [000_023_053, 000_023_321) Size(268): Append(log_id: T1-N1.48, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/67m7nsp/database-by-id/36)] else:[]})
+    txn.if_then[0].put __fd_object_owners/67m7nsp/database-by-id/36:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 36 }, role: "account_admin" }
+  R-00100: [000_023_321, 000_023_367) Size(46): Commit(T1-N1.48)
+  R-00101: [000_023_367, 000_023_656) Size(289): Append(log_id: T1-N1.49, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00102: [000_023_656, 000_023_702) Size(46): Commit(T1-N1.49)
+  R-00103: [000_023_702, 000_024_415) Size(713): Append(log_id: T1-N1.50, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/BoCuukX/d1 == seq(0),__fd_database_id_to_name/74 == seq(0),__fd_db_id_list/BoCuukX/d1 == seq(0)] then:[Put(Put key=__fd_database/BoCuukX/d1),Put(Put key=__fd_database_by_id/74),Put(Put key=__fd_db_id_list/BoCuukX/d1),Put(Put key=__fd_database_id_to_name/74)] else:[]})
+    txn.if_then[0].put __fd_database/BoCuukX/d1:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/74:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.323707Z, updated_on: 2026-02-11T14:35:34.323708Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/BoCuukX/d1:
+      DbIdList { id_list: [74] }
+    txn.if_then[3].put __fd_database_id_to_name/74:
+      unknown-prefix(20 bytes)
+  R-00104: [000_024_415, 000_024_461) Size(46): Commit(T1-N1.50)
+  R-00105: [000_024_461, 000_024_729) Size(268): Append(log_id: T1-N1.51, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/BoCuukX/database-by-id/74)] else:[]})
+    txn.if_then[0].put __fd_object_owners/BoCuukX/database-by-id/74:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 74 }, role: "account_admin" }
+  R-00106: [000_024_729, 000_024_775) Size(46): Commit(T1-N1.51)
+  R-00107: [000_024_775, 000_025_064) Size(289): Append(log_id: T1-N1.52, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00108: [000_025_064, 000_025_110) Size(46): Commit(T1-N1.52)
+  R-00109: [000_025_110, 000_025_823) Size(713): Append(log_id: T1-N1.53, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/BoCuukX/d2 == seq(0),__fd_database_id_to_name/80 == seq(0),__fd_db_id_list/BoCuukX/d2 == seq(0)] then:[Put(Put key=__fd_database/BoCuukX/d2),Put(Put key=__fd_database_by_id/80),Put(Put key=__fd_db_id_list/BoCuukX/d2),Put(Put key=__fd_database_id_to_name/80)] else:[]})
+    txn.if_then[0].put __fd_database/BoCuukX/d2:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/80:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.389416Z, updated_on: 2026-02-11T14:35:34.389416Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/BoCuukX/d2:
+      DbIdList { id_list: [80] }
+    txn.if_then[3].put __fd_database_id_to_name/80:
+      unknown-prefix(20 bytes)
+  R-00110: [000_025_823, 000_025_869) Size(46): Commit(T1-N1.53)
+  R-00111: [000_025_869, 000_026_137) Size(268): Append(log_id: T1-N1.54, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/BoCuukX/database-by-id/80)] else:[]})
+    txn.if_then[0].put __fd_object_owners/BoCuukX/database-by-id/80:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 80 }, role: "account_admin" }
+  R-00112: [000_026_137, 000_026_183) Size(46): Commit(T1-N1.54)
+  R-00113: [000_026_183, 000_026_612) Size(429): Append(log_id: T1-N1.55, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/M5jcEq0/6f0dedc5%2d28a0%2d45d6%2db5e0%2da0627e6df4f3/root >= seq(0)] then:[Delete(Delete key=__fd_session/M5jcEq0/6f0dedc5%2d28a0%2d45d6%2db5e0%2da0627e6df4f3/root)] else:[Get(Get key=__fd_session/M5jcEq0/6f0dedc5%2d28a0%2d45d6%2db5e0%2da0627e6df4f3/root)]})
+  R-00114: [000_026_612, 000_026_658) Size(46): Commit(T1-N1.55)
+  R-00115: [000_026_658, 000_027_087) Size(429): Append(log_id: T1-N1.56, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/cM9bwCG/22f3282c%2d6299%2d4e12%2d988f%2d4a27f28954e7/root >= seq(0)] then:[Delete(Delete key=__fd_session/cM9bwCG/22f3282c%2d6299%2d4e12%2d988f%2d4a27f28954e7/root)] else:[Get(Get key=__fd_session/cM9bwCG/22f3282c%2d6299%2d4e12%2d988f%2d4a27f28954e7/root)]})
+  R-00116: [000_027_087, 000_027_133) Size(46): Commit(T1-N1.56)
+  R-00117: [000_027_133, 000_027_254) Size(121): Append(log_id: T1-N1.57, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00118: [000_027_254, 000_027_300) Size(46): Commit(T1-N1.57)
+  R-00119: [000_027_300, 000_027_511) Size(211): Append(log_id: T1-N1.58, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/aXX619n/database-by-id/0)] else:[]})
+  R-00120: [000_027_511, 000_027_557) Size(46): Commit(T1-N1.58)
+  R-00121: [000_027_557, 000_027_678) Size(121): Append(log_id: T1-N1.59, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00122: [000_027_678, 000_027_724) Size(46): Commit(T1-N1.59)
+  R-00123: [000_027_724, 000_027_935) Size(211): Append(log_id: T1-N1.60, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/aXX619n/database-by-id/0)] else:[]})
+  R-00124: [000_027_935, 000_027_981) Size(46): Commit(T1-N1.60)
+  R-00125: [000_027_981, 000_028_270) Size(289): Append(log_id: T1-N1.61, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00126: [000_028_270, 000_028_316) Size(46): Commit(T1-N1.61)
+  R-00127: [000_028_316, 000_029_034) Size(718): Append(log_id: T1-N1.62, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/aXX619n/db1 == seq(0),__fd_database_id_to_name/86 == seq(0),__fd_db_id_list/aXX619n/db1 == seq(0)] then:[Put(Put key=__fd_database/aXX619n/db1),Put(Put key=__fd_database_by_id/86),Put(Put key=__fd_db_id_list/aXX619n/db1),Put(Put key=__fd_database_id_to_name/86)] else:[]})
+    txn.if_then[0].put __fd_database/aXX619n/db1:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/86:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.682128Z, updated_on: 2026-02-11T14:35:34.682128Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/aXX619n/db1:
+      DbIdList { id_list: [86] }
+    txn.if_then[3].put __fd_database_id_to_name/86:
+      unknown-prefix(21 bytes)
+  R-00128: [000_029_034, 000_029_080) Size(46): Commit(T1-N1.62)
+  R-00129: [000_029_080, 000_029_348) Size(268): Append(log_id: T1-N1.63, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/aXX619n/database-by-id/86)] else:[]})
+    txn.if_then[0].put __fd_object_owners/aXX619n/database-by-id/86:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 86 }, role: "account_admin" }
+  R-00130: [000_029_348, 000_029_394) Size(46): Commit(T1-N1.63)
+  R-00131: [000_029_394, 000_029_683) Size(289): Append(log_id: T1-N1.64, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00132: [000_029_683, 000_029_729) Size(46): Commit(T1-N1.64)
+  R-00133: [000_029_729, 000_030_447) Size(718): Append(log_id: T1-N1.65, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/aXX619n/db2 == seq(0),__fd_database_id_to_name/92 == seq(0),__fd_db_id_list/aXX619n/db2 == seq(0)] then:[Put(Put key=__fd_database/aXX619n/db2),Put(Put key=__fd_database_by_id/92),Put(Put key=__fd_db_id_list/aXX619n/db2),Put(Put key=__fd_database_id_to_name/92)] else:[]})
+    txn.if_then[0].put __fd_database/aXX619n/db2:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/92:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.750469Z, updated_on: 2026-02-11T14:35:34.750469Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/aXX619n/db2:
+      DbIdList { id_list: [92] }
+    txn.if_then[3].put __fd_database_id_to_name/92:
+      unknown-prefix(21 bytes)
+  R-00134: [000_030_447, 000_030_493) Size(46): Commit(T1-N1.65)
+  R-00135: [000_030_493, 000_030_922) Size(429): Append(log_id: T1-N1.66, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/XgRCYZx/ef67952f%2dd4e7%2d4d83%2dab5d%2d5ba25a1f557f/root >= seq(0)] then:[Delete(Delete key=__fd_session/XgRCYZx/ef67952f%2dd4e7%2d4d83%2dab5d%2d5ba25a1f557f/root)] else:[Get(Get key=__fd_session/XgRCYZx/ef67952f%2dd4e7%2d4d83%2dab5d%2d5ba25a1f557f/root)]})
+  R-00136: [000_030_922, 000_030_968) Size(46): Commit(T1-N1.66)
+  R-00137: [000_030_968, 000_031_089) Size(121): Append(log_id: T1-N1.67, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00138: [000_031_089, 000_031_135) Size(46): Commit(T1-N1.67)
+  R-00139: [000_031_135, 000_031_403) Size(268): Append(log_id: T1-N1.68, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/aXX619n/database-by-id/92)] else:[]})
+    txn.if_then[0].put __fd_object_owners/aXX619n/database-by-id/92:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 92 }, role: "account_admin" }
+  R-00140: [000_031_403, 000_031_449) Size(46): Commit(T1-N1.68)
+  R-00141: [000_031_449, 000_031_660) Size(211): Append(log_id: T1-N1.69, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/67m7nsp/database-by-id/0)] else:[]})
+  R-00142: [000_031_660, 000_031_706) Size(46): Commit(T1-N1.69)
+  R-00143: [000_031_706, 000_031_827) Size(121): Append(log_id: T1-N1.70, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00144: [000_031_827, 000_031_873) Size(46): Commit(T1-N1.70)
+  R-00145: [000_031_873, 000_032_084) Size(211): Append(log_id: T1-N1.71, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/67m7nsp/database-by-id/0)] else:[]})
+  R-00146: [000_032_084, 000_032_130) Size(46): Commit(T1-N1.71)
+  R-00147: [000_032_130, 000_032_419) Size(289): Append(log_id: T1-N1.72, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00148: [000_032_419, 000_032_465) Size(46): Commit(T1-N1.72)
+  R-00149: [000_032_465, 000_033_183) Size(718): Append(log_id: T1-N1.73, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/67m7nsp/db1 == seq(0),__fd_database_id_to_name/98 == seq(0),__fd_db_id_list/67m7nsp/db1 == seq(0)] then:[Put(Put key=__fd_database/67m7nsp/db1),Put(Put key=__fd_database_by_id/98),Put(Put key=__fd_db_id_list/67m7nsp/db1),Put(Put key=__fd_database_id_to_name/98)] else:[]})
+    txn.if_then[0].put __fd_database/67m7nsp/db1:
+      unknown-prefix(2 bytes)
+    txn.if_then[1].put __fd_database_by_id/98:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.925013Z, updated_on: 2026-02-11T14:35:34.925013Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/67m7nsp/db1:
+      DbIdList { id_list: [98] }
+    txn.if_then[3].put __fd_database_id_to_name/98:
+      unknown-prefix(21 bytes)
+  R-00150: [000_033_183, 000_033_229) Size(46): Commit(T1-N1.73)
+  R-00151: [000_033_229, 000_033_497) Size(268): Append(log_id: T1-N1.74, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/67m7nsp/database-by-id/98)] else:[]})
+    txn.if_then[0].put __fd_object_owners/67m7nsp/database-by-id/98:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 98 }, role: "account_admin" }
+  R-00152: [000_033_497, 000_033_543) Size(46): Commit(T1-N1.74)
+  R-00153: [000_033_543, 000_033_832) Size(289): Append(log_id: T1-N1.75, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00154: [000_033_832, 000_033_878) Size(46): Commit(T1-N1.75)
+  R-00155: [000_033_878, 000_034_600) Size(722): Append(log_id: T1-N1.76, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/67m7nsp/db2 == seq(0),__fd_database_id_to_name/104 == seq(0),__fd_db_id_list/67m7nsp/db2 == seq(0)] then:[Put(Put key=__fd_database/67m7nsp/db2),Put(Put key=__fd_database_by_id/104),Put(Put key=__fd_db_id_list/67m7nsp/db2),Put(Put key=__fd_database_id_to_name/104)] else:[]})
+    txn.if_then[0].put __fd_database/67m7nsp/db2:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/104:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.997173Z, updated_on: 2026-02-11T14:35:34.997173Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/67m7nsp/db2:
+      DbIdList { id_list: [104] }
+    txn.if_then[3].put __fd_database_id_to_name/104:
+      unknown-prefix(21 bytes)
+  R-00156: [000_034_600, 000_034_646) Size(46): Commit(T1-N1.76)
+  R-00157: [000_034_646, 000_034_915) Size(269): Append(log_id: T1-N1.77, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/67m7nsp/database-by-id/104)] else:[]})
+    txn.if_then[0].put __fd_object_owners/67m7nsp/database-by-id/104:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 104 }, role: "account_admin" }
+  R-00158: [000_034_915, 000_034_961) Size(46): Commit(T1-N1.77)
+  R-00159: [000_034_961, 000_035_390) Size(429): Append(log_id: T1-N1.78, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/BoCuukX/f55a0627%2d7f3a%2d4891%2dad51%2de9701e95f753/root >= seq(0)] then:[Delete(Delete key=__fd_session/BoCuukX/f55a0627%2d7f3a%2d4891%2dad51%2de9701e95f753/root)] else:[Get(Get key=__fd_session/BoCuukX/f55a0627%2d7f3a%2d4891%2dad51%2de9701e95f753/root)]})
+  R-00160: [000_035_390, 000_035_436) Size(46): Commit(T1-N1.78)
+  R-00161: [000_035_436, 000_035_716) Size(280): Append(log_id: T1-N1.79, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/table_id >= seq(0)] then:[Put(Put key=__fd_id_gen/table_id)] else:[Get(Get key=__fd_id_gen/table_id)]})
+    txn.if_then[0].put __fd_id_gen/table_id:
+      unknown-prefix(0 bytes)
+  R-00162: [000_035_716, 000_035_762) Size(46): Commit(T1-N1.79)
+  R-00163: [000_035_762, 000_037_939) Size(2177): Append(log_id: T1-N1.80, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database_by_id/92 == seq(94),__fd_table/92/test8 == seq(0),__fd_table_id_list/92/test8 == seq(0)] then:[Put(Put key=__fd_database_by_id/92),Put(Put key=__fd_table_by_id/110),Put(Put key=__fd_table_id_list/92/test8),Put(Put key=__fd_table_id_to_name/110),Put(Put key=__fd_table/92/test8)] else:[]})
+    txn.if_then[0].put __fd_database_by_id/92:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.750469Z, updated_on: 2026-02-11T14:35:34.750469Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[1].put __fd_table_by_id/110:
+      TableMeta { schema: TableSchema { fields: [TableField { name: "tiny", default_expr: None, data_type: Number(Int8), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "tiny_unsigned", default_expr: None, data_type: Number(UInt8), column_id: 1, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint", default_expr: None, data_type: Number(Int16), column_id: 2, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint_unsigned", default_expr: None, data_type: Number(UInt16), column_id: 3, computed_expr: None, auto_increment_expr: None }, TableField { name: "int", default_expr: None, data_type: Number(Int32), column_id: 4, computed_expr: None, auto_increment_expr: None }, TableField { name: "int_unsigned", default_expr: None, data_type: Number(UInt32), column_id: 5, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint", default_expr: None, data_type: Number(Int64), column_id: 6, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint_unsigned", default_expr: None, data_type: Number(UInt64), column_id: 7, computed_expr: None, auto_increment_expr: None }, TableField { name: "float", default_expr: None, data_type: Number(Float32), column_id: 8, computed_expr: None, auto_increment_expr: None }, TableField { name: "double", default_expr: None, data_type: Number(Float64), column_id: 9, computed_expr: None, auto_increment_expr: None }, TableField { name: "date", default_expr: None, data_type: Date, column_id: 10, computed_expr: None, auto_increment_expr: None }, TableField { name: "datetime", default_expr: None, data_type: Timestamp, column_id: 11, computed_expr: None, auto_increment_expr: None }, TableField { name: "ts", default_expr: None, data_type: Timestamp, column_id: 12, computed_expr: None, auto_increment_expr: None }, TableField { name: "str", default_expr: Some("'3'"), data_type: String, column_id: 13, computed_expr: None, auto_increment_expr: None }, TableField { name: "bool", default_expr: None, data_type: Boolean, column_id: 14, computed_expr: None, auto_increment_expr: None }, TableField { name: "arr", default_expr: None, data_type: Array(Nullable(String)), column_id: 15, computed_expr: None, auto_increment_expr: None }, TableField { name: "tup", default_expr: None, data_type: Tuple { fields_name: ["1", "2"], fields_type: [Nullable(Number(Float64)), Nullable(Number(Int32))] }, column_id: 16, computed_expr: None, auto_increment_expr: None }, TableField { name: "map", default_expr: None, data_type: Map(Tuple { fields_name: ["key", "value"], fields_type: [String, Nullable(Date)] }), column_id: 18, computed_expr: None, auto_increment_expr: None }, TableField { name: "bitmap", default_expr: None, data_type: Bitmap, column_id: 20, computed_expr: None, auto_increment_expr: None }, TableField { name: "variant", default_expr: None, data_type: Variant, column_id: 21, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 22 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {"TRANSIENT": "T", "compression": "zstd", "database_id": "92", "enable_auto_analyze": "1", "storage_format": "parquet"}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: 2026-02-11T14:35:35.295810Z, updated_on: 2026-02-11T14:35:35.295811Z, comment: "", field_comments: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, shared_by: {}, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {}, refs: {} }
+    txn.if_then[2].put __fd_table_id_list/92/test8:
+      TableIdList { id_list: [110] }
+    txn.if_then[3].put __fd_table_id_to_name/110:
+      DBIdTableName { db_id: 92, table_name: "test8" }
+    txn.if_then[4].put __fd_table/92/test8:
+      unknown-prefix(3 bytes)
+  R-00164: [000_037_939, 000_037_985) Size(46): Commit(T1-N1.80)
+  R-00165: [000_037_985, 000_038_253) Size(268): Append(log_id: T1-N1.81, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/aXX619n/table-by-id/110)] else:[]})
+    txn.if_then[0].put __fd_object_owners/aXX619n/table-by-id/110:
+      OwnershipInfo { object: Table { catalog_name: "default", db_id: 92, table_id: 110 }, role: "account_admin" }
+  R-00166: [000_038_253, 000_038_299) Size(46): Commit(T1-N1.81)
+  R-00167: [000_038_299, 000_038_728) Size(429): Append(log_id: T1-N1.82, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/PgNN5gN/05a86b2d%2dbc07%2d4525%2db1e6%2da54db754d9dc/root >= seq(0)] then:[Delete(Delete key=__fd_session/PgNN5gN/05a86b2d%2dbc07%2d4525%2db1e6%2da54db754d9dc/root)] else:[Get(Get key=__fd_session/PgNN5gN/05a86b2d%2dbc07%2d4525%2db1e6%2da54db754d9dc/root)]})
+  R-00168: [000_038_728, 000_038_774) Size(46): Commit(T1-N1.82)
+  R-00169: [000_038_774, 000_039_266) Size(492): Append(log_id: T1-N1.83, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/aXX619n/db1 == seq(87),__fd_database_by_id/86 == seq(88)] then:[Delete(Delete key=__fd_database/aXX619n/db1),Put(Put key=__fd_database_by_id/86)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/86:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.682128Z, updated_on: 2026-02-11T14:35:34.682128Z, comment: "", drop_on: Some(2026-02-11T14:35:35.464150Z), gc_in_progress: false }
+  R-00170: [000_039_266, 000_039_312) Size(46): Commit(T1-N1.83)
+  R-00171: [000_039_312, 000_039_524) Size(212): Append(log_id: T1-N1.84, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/aXX619n/database-by-id/86)] else:[]})
+  R-00172: [000_039_524, 000_039_570) Size(46): Commit(T1-N1.84)
+  R-00173: [000_039_570, 000_040_062) Size(492): Append(log_id: T1-N1.85, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/aXX619n/db2 == seq(93),__fd_database_by_id/92 == seq(111)] then:[Delete(Delete key=__fd_database/aXX619n/db2),Put(Put key=__fd_database_by_id/92)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/92:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.750469Z, updated_on: 2026-02-11T14:35:34.750469Z, comment: "", drop_on: Some(2026-02-11T14:35:35.501970Z), gc_in_progress: false }
+  R-00174: [000_040_062, 000_040_108) Size(46): Commit(T1-N1.85)
+  R-00175: [000_040_108, 000_040_320) Size(212): Append(log_id: T1-N1.86, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/aXX619n/database-by-id/92)] else:[]})
+  R-00176: [000_040_320, 000_040_366) Size(46): Commit(T1-N1.86)
+  R-00177: [000_040_366, 000_040_795) Size(429): Append(log_id: T1-N1.87, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/aXX619n/66fc656f%2d2c11%2d4b95%2d9b96%2d0e2de34e1717/root >= seq(0)] then:[Delete(Delete key=__fd_session/aXX619n/66fc656f%2d2c11%2d4b95%2d9b96%2d0e2de34e1717/root)] else:[Get(Get key=__fd_session/aXX619n/66fc656f%2d2c11%2d4b95%2d9b96%2d0e2de34e1717/root)]})
+  R-00178: [000_040_795, 000_040_841) Size(46): Commit(T1-N1.87)
+  R-00179: [000_040_841, 000_041_121) Size(280): Append(log_id: T1-N1.88, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/table_id >= seq(0)] then:[Put(Put key=__fd_id_gen/table_id)] else:[Get(Get key=__fd_id_gen/table_id)]})
+    txn.if_then[0].put __fd_id_gen/table_id:
+      unknown-prefix(0 bytes)
+  R-00180: [000_041_121, 000_041_167) Size(46): Commit(T1-N1.88)
+  R-00181: [000_041_167, 000_043_351) Size(2184): Append(log_id: T1-N1.89, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database_by_id/104 == seq(106),__fd_table/104/test8 == seq(0),__fd_table_id_list/104/test8 == seq(0)] then:[Put(Put key=__fd_database_by_id/104),Put(Put key=__fd_table_by_id/119),Put(Put key=__fd_table_id_list/104/test8),Put(Put key=__fd_table_id_to_name/119),Put(Put key=__fd_table/104/test8)] else:[]})
+    txn.if_then[0].put __fd_database_by_id/104:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.997173Z, updated_on: 2026-02-11T14:35:34.997173Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[1].put __fd_table_by_id/119:
+      TableMeta { schema: TableSchema { fields: [TableField { name: "tiny", default_expr: None, data_type: Number(Int8), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "tiny_unsigned", default_expr: None, data_type: Number(UInt8), column_id: 1, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint", default_expr: None, data_type: Number(Int16), column_id: 2, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint_unsigned", default_expr: None, data_type: Number(UInt16), column_id: 3, computed_expr: None, auto_increment_expr: None }, TableField { name: "int", default_expr: None, data_type: Number(Int32), column_id: 4, computed_expr: None, auto_increment_expr: None }, TableField { name: "int_unsigned", default_expr: None, data_type: Number(UInt32), column_id: 5, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint", default_expr: None, data_type: Number(Int64), column_id: 6, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint_unsigned", default_expr: None, data_type: Number(UInt64), column_id: 7, computed_expr: None, auto_increment_expr: None }, TableField { name: "float", default_expr: None, data_type: Number(Float32), column_id: 8, computed_expr: None, auto_increment_expr: None }, TableField { name: "double", default_expr: None, data_type: Number(Float64), column_id: 9, computed_expr: None, auto_increment_expr: None }, TableField { name: "date", default_expr: None, data_type: Date, column_id: 10, computed_expr: None, auto_increment_expr: None }, TableField { name: "datetime", default_expr: None, data_type: Timestamp, column_id: 11, computed_expr: None, auto_increment_expr: None }, TableField { name: "ts", default_expr: None, data_type: Timestamp, column_id: 12, computed_expr: None, auto_increment_expr: None }, TableField { name: "str", default_expr: Some("'3'"), data_type: String, column_id: 13, computed_expr: None, auto_increment_expr: None }, TableField { name: "bool", default_expr: None, data_type: Boolean, column_id: 14, computed_expr: None, auto_increment_expr: None }, TableField { name: "arr", default_expr: None, data_type: Array(Nullable(String)), column_id: 15, computed_expr: None, auto_increment_expr: None }, TableField { name: "tup", default_expr: None, data_type: Tuple { fields_name: ["1", "2"], fields_type: [Nullable(Number(Float64)), Nullable(Number(Int32))] }, column_id: 16, computed_expr: None, auto_increment_expr: None }, TableField { name: "map", default_expr: None, data_type: Map(Tuple { fields_name: ["key", "value"], fields_type: [String, Nullable(Date)] }), column_id: 18, computed_expr: None, auto_increment_expr: None }, TableField { name: "bitmap", default_expr: None, data_type: Bitmap, column_id: 20, computed_expr: None, auto_increment_expr: None }, TableField { name: "variant", default_expr: None, data_type: Variant, column_id: 21, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 22 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {"TRANSIENT": "T", "compression": "zstd", "database_id": "104", "enable_auto_analyze": "1", "storage_format": "parquet"}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: 2026-02-11T14:35:36.031373Z, updated_on: 2026-02-11T14:35:36.031373Z, comment: "", field_comments: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, shared_by: {}, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {}, refs: {} }
+    txn.if_then[2].put __fd_table_id_list/104/test8:
+      TableIdList { id_list: [119] }
+    txn.if_then[3].put __fd_table_id_to_name/119:
+      DBIdTableName { db_id: 104, table_name: "test8" }
+    txn.if_then[4].put __fd_table/104/test8:
+      unknown-prefix(3 bytes)
+  R-00182: [000_043_351, 000_043_397) Size(46): Commit(T1-N1.89)
+  R-00183: [000_043_397, 000_043_665) Size(268): Append(log_id: T1-N1.90, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/67m7nsp/table-by-id/119)] else:[]})
+    txn.if_then[0].put __fd_object_owners/67m7nsp/table-by-id/119:
+      OwnershipInfo { object: Table { catalog_name: "default", db_id: 104, table_id: 119 }, role: "account_admin" }
+  R-00184: [000_043_665, 000_043_711) Size(46): Commit(T1-N1.90)
+  R-00185: [000_043_711, 000_044_140) Size(429): Append(log_id: T1-N1.91, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/0VbvoII/b6be38ec%2d54dc%2d40b8%2d9cc7%2dc5db0a7a0bac/root >= seq(0)] then:[Delete(Delete key=__fd_session/0VbvoII/b6be38ec%2d54dc%2d40b8%2d9cc7%2dc5db0a7a0bac/root)] else:[Get(Get key=__fd_session/0VbvoII/b6be38ec%2d54dc%2d40b8%2d9cc7%2dc5db0a7a0bac/root)]})
+  R-00186: [000_044_140, 000_044_186) Size(46): Commit(T1-N1.91)
+  R-00187: [000_044_186, 000_044_678) Size(492): Append(log_id: T1-N1.92, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/67m7nsp/db1 == seq(99),__fd_database_by_id/98 == seq(100)] then:[Delete(Delete key=__fd_database/67m7nsp/db1),Put(Put key=__fd_database_by_id/98)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/98:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.925013Z, updated_on: 2026-02-11T14:35:34.925013Z, comment: "", drop_on: Some(2026-02-11T14:35:36.234750Z), gc_in_progress: false }
+  R-00188: [000_044_678, 000_044_724) Size(46): Commit(T1-N1.92)
+  R-00189: [000_044_724, 000_044_936) Size(212): Append(log_id: T1-N1.93, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/67m7nsp/database-by-id/98)] else:[]})
+  R-00190: [000_044_936, 000_044_982) Size(46): Commit(T1-N1.93)
+  R-00191: [000_044_982, 000_045_476) Size(494): Append(log_id: T1-N1.94, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/67m7nsp/db2 == seq(105),__fd_database_by_id/104 == seq(120)] then:[Delete(Delete key=__fd_database/67m7nsp/db2),Put(Put key=__fd_database_by_id/104)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/104:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:34.997173Z, updated_on: 2026-02-11T14:35:34.997173Z, comment: "", drop_on: Some(2026-02-11T14:35:36.272937Z), gc_in_progress: false }
+  R-00192: [000_045_476, 000_045_522) Size(46): Commit(T1-N1.94)
+  R-00193: [000_045_522, 000_045_735) Size(213): Append(log_id: T1-N1.95, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/67m7nsp/database-by-id/104)] else:[]})
+  R-00194: [000_045_735, 000_045_781) Size(46): Commit(T1-N1.95)
+  R-00195: [000_045_781, 000_046_210) Size(429): Append(log_id: T1-N1.96, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/67m7nsp/936b1c1f%2d0424%2d47c2%2d8bab%2d19aa9714e529/root >= seq(0)] then:[Delete(Delete key=__fd_session/67m7nsp/936b1c1f%2d0424%2d47c2%2d8bab%2d19aa9714e529/root)] else:[Get(Get key=__fd_session/67m7nsp/936b1c1f%2d0424%2d47c2%2d8bab%2d19aa9714e529/root)]})
+  R-00196: [000_046_210, 000_046_256) Size(46): Commit(T1-N1.96)
+  R-00197: [000_046_256, 000_046_764) Size(508): Append(log_id: T1-N1.97, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/A42819F9AB19B37B4091B365F0EE11C4A72717B6B01FDEB5A7C00D56271A5127 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/A42819F9AB19B37B4091B365F0EE11C4A72717B6B01FDEB5A7C00D56271A5127  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/A42819F9AB19B37B4091B365F0EE11C4A72717B6B01FDEB5A7C00D56271A5127)]})
+    txn.if_then[0].put __fd_token/test_tenant/A42819F9AB19B37B4091B365F0EE11C4A72717B6B01FDEB5A7C00D56271A5127 (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00198: [000_046_764, 000_046_810) Size(46): Commit(T1-N1.97)
+  R-00199: [000_046_810, 000_047_318) Size(508): Append(log_id: T1-N1.98, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/6582F6EB799D9C8B00DCBC70961B184D5213078288EA5EC85676D3DAD12C5C89 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/6582F6EB799D9C8B00DCBC70961B184D5213078288EA5EC85676D3DAD12C5C89  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/6582F6EB799D9C8B00DCBC70961B184D5213078288EA5EC85676D3DAD12C5C89)]})
+    txn.if_then[0].put __fd_token/test_tenant/6582F6EB799D9C8B00DCBC70961B184D5213078288EA5EC85676D3DAD12C5C89 (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00200: [000_047_318, 000_047_364) Size(46): Commit(T1-N1.98)
+  R-00201: [000_047_364, 000_047_872) Size(508): Append(log_id: T1-N1.99, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/33B6E033B896873604D68C9A5CDDA3CCBFB068FF802116741787726839C0546D >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/33B6E033B896873604D68C9A5CDDA3CCBFB068FF802116741787726839C0546D  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/33B6E033B896873604D68C9A5CDDA3CCBFB068FF802116741787726839C0546D)]})
+    txn.if_then[0].put __fd_token/test_tenant/33B6E033B896873604D68C9A5CDDA3CCBFB068FF802116741787726839C0546D (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00202: [000_047_872, 000_047_918) Size(46): Commit(T1-N1.99)
+  R-00203: [000_047_918, 000_048_426) Size(508): Append(log_id: T1-N1.100, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/31D03F747465A792AB3C56FE03479BE637C348DDC3F82FF1869A0F38768C0092 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/31D03F747465A792AB3C56FE03479BE637C348DDC3F82FF1869A0F38768C0092  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/31D03F747465A792AB3C56FE03479BE637C348DDC3F82FF1869A0F38768C0092)]})
+    txn.if_then[0].put __fd_token/test_tenant/31D03F747465A792AB3C56FE03479BE637C348DDC3F82FF1869A0F38768C0092 (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00204: [000_048_426, 000_048_472) Size(46): Commit(T1-N1.100)
+  R-00205: [000_048_472, 000_048_980) Size(508): Append(log_id: T1-N1.101, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/57F10AA35A4B9D6544EA788EA1ABC92FBDC6B012611BDC21E928CF08F86908CE >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/57F10AA35A4B9D6544EA788EA1ABC92FBDC6B012611BDC21E928CF08F86908CE  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/57F10AA35A4B9D6544EA788EA1ABC92FBDC6B012611BDC21E928CF08F86908CE)]})
+    txn.if_then[0].put __fd_token/test_tenant/57F10AA35A4B9D6544EA788EA1ABC92FBDC6B012611BDC21E928CF08F86908CE (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00206: [000_048_980, 000_049_026) Size(46): Commit(T1-N1.101)
+  R-00207: [000_049_026, 000_049_534) Size(508): Append(log_id: T1-N1.102, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/DD20FD678B105D7F10AF468D513AE21269A7315372E260D712AB402E3F8CAFC9 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/DD20FD678B105D7F10AF468D513AE21269A7315372E260D712AB402E3F8CAFC9  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/DD20FD678B105D7F10AF468D513AE21269A7315372E260D712AB402E3F8CAFC9)]})
+    txn.if_then[0].put __fd_token/test_tenant/DD20FD678B105D7F10AF468D513AE21269A7315372E260D712AB402E3F8CAFC9 (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00208: [000_049_534, 000_049_580) Size(46): Commit(T1-N1.102)
+  R-00209: [000_049_580, 000_050_088) Size(508): Append(log_id: T1-N1.103, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/BF331ECEF8B3FE63B35E7852B641A847E4E11422BCF3B20E9ADAAC3DF6924AEC >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/BF331ECEF8B3FE63B35E7852B641A847E4E11422BCF3B20E9ADAAC3DF6924AEC  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/BF331ECEF8B3FE63B35E7852B641A847E4E11422BCF3B20E9ADAAC3DF6924AEC)]})
+    txn.if_then[0].put __fd_token/test_tenant/BF331ECEF8B3FE63B35E7852B641A847E4E11422BCF3B20E9ADAAC3DF6924AEC (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00210: [000_050_088, 000_050_134) Size(46): Commit(T1-N1.103)
+  R-00211: [000_050_134, 000_050_642) Size(508): Append(log_id: T1-N1.104, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/ACCEBCEF4520C5BB73B54600976C24A3C3975228B5611400C00CCCA9C8034F4F >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/ACCEBCEF4520C5BB73B54600976C24A3C3975228B5611400C00CCCA9C8034F4F  ttl: 14700s)] else:[Get(Get key=__fd_token/test_tenant/ACCEBCEF4520C5BB73B54600976C24A3C3975228B5611400C00CCCA9C8034F4F)]})
+    txn.if_then[0].put __fd_token/test_tenant/ACCEBCEF4520C5BB73B54600976C24A3C3975228B5611400C00CCCA9C8034F4F (ttl_ms=14700000):
+      QueryTokenInfo { token_type: Refresh, parent: None }
+  R-00212: [000_050_642, 000_050_688) Size(46): Commit(T1-N1.104)
+  R-00213: [000_050_688, 000_051_264) Size(576): Append(log_id: T1-N1.105, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/5402564481F1828337A111DBE54B6BD4A242EC2031F9B5D2AB0479FA30D8E7DA >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/5402564481F1828337A111DBE54B6BD4A242EC2031F9B5D2AB0479FA30D8E7DA  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/5402564481F1828337A111DBE54B6BD4A242EC2031F9B5D2AB0479FA30D8E7DA)]})
+    txn.if_then[0].put __fd_token/test_tenant/5402564481F1828337A111DBE54B6BD4A242EC2031F9B5D2AB0479FA30D8E7DA (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("A42819F9AB19B37B4091B365F0EE11C4A72717B6B01FDEB5A7C00D56271A5127") }
+  R-00214: [000_051_264, 000_051_310) Size(46): Commit(T1-N1.105)
+  R-00215: [000_051_310, 000_051_886) Size(576): Append(log_id: T1-N1.106, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/7F491CE65BFF46DD430C377E10FD849AAAD0A2F6A02158D78772D428B294FDAC >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/7F491CE65BFF46DD430C377E10FD849AAAD0A2F6A02158D78772D428B294FDAC  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/7F491CE65BFF46DD430C377E10FD849AAAD0A2F6A02158D78772D428B294FDAC)]})
+    txn.if_then[0].put __fd_token/test_tenant/7F491CE65BFF46DD430C377E10FD849AAAD0A2F6A02158D78772D428B294FDAC (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("6582F6EB799D9C8B00DCBC70961B184D5213078288EA5EC85676D3DAD12C5C89") }
+  R-00216: [000_051_886, 000_051_932) Size(46): Commit(T1-N1.106)
+  R-00217: [000_051_932, 000_052_508) Size(576): Append(log_id: T1-N1.107, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/92EADC2EC0B9B1E8841322E74FAC0E8CF50206132344123385B830237DBBCA75 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/92EADC2EC0B9B1E8841322E74FAC0E8CF50206132344123385B830237DBBCA75  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/92EADC2EC0B9B1E8841322E74FAC0E8CF50206132344123385B830237DBBCA75)]})
+    txn.if_then[0].put __fd_token/test_tenant/92EADC2EC0B9B1E8841322E74FAC0E8CF50206132344123385B830237DBBCA75 (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("33B6E033B896873604D68C9A5CDDA3CCBFB068FF802116741787726839C0546D") }
+  R-00218: [000_052_508, 000_052_554) Size(46): Commit(T1-N1.107)
+  R-00219: [000_052_554, 000_053_130) Size(576): Append(log_id: T1-N1.108, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/9DA44B2032F2D87AA9AC64524775B400363EE22BA6F2463253C9AFAEB4403C1C >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/9DA44B2032F2D87AA9AC64524775B400363EE22BA6F2463253C9AFAEB4403C1C  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/9DA44B2032F2D87AA9AC64524775B400363EE22BA6F2463253C9AFAEB4403C1C)]})
+    txn.if_then[0].put __fd_token/test_tenant/9DA44B2032F2D87AA9AC64524775B400363EE22BA6F2463253C9AFAEB4403C1C (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("31D03F747465A792AB3C56FE03479BE637C348DDC3F82FF1869A0F38768C0092") }
+  R-00220: [000_053_130, 000_053_176) Size(46): Commit(T1-N1.108)
+  R-00221: [000_053_176, 000_053_752) Size(576): Append(log_id: T1-N1.109, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/093C327D2F9FB701B760A01B8BEBEE56C91B18C7E05BD7F1167379C865F3489F >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/093C327D2F9FB701B760A01B8BEBEE56C91B18C7E05BD7F1167379C865F3489F  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/093C327D2F9FB701B760A01B8BEBEE56C91B18C7E05BD7F1167379C865F3489F)]})
+    txn.if_then[0].put __fd_token/test_tenant/093C327D2F9FB701B760A01B8BEBEE56C91B18C7E05BD7F1167379C865F3489F (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("57F10AA35A4B9D6544EA788EA1ABC92FBDC6B012611BDC21E928CF08F86908CE") }
+  R-00222: [000_053_752, 000_053_798) Size(46): Commit(T1-N1.109)
+  R-00223: [000_053_798, 000_054_374) Size(576): Append(log_id: T1-N1.110, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/2CD54AF983285975F3FB2A7358B96B85C8853FDCC62906B783A571E78CD13365 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/2CD54AF983285975F3FB2A7358B96B85C8853FDCC62906B783A571E78CD13365  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/2CD54AF983285975F3FB2A7358B96B85C8853FDCC62906B783A571E78CD13365)]})
+    txn.if_then[0].put __fd_token/test_tenant/2CD54AF983285975F3FB2A7358B96B85C8853FDCC62906B783A571E78CD13365 (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("DD20FD678B105D7F10AF468D513AE21269A7315372E260D712AB402E3F8CAFC9") }
+  R-00224: [000_054_374, 000_054_420) Size(46): Commit(T1-N1.110)
+  R-00225: [000_054_420, 000_054_996) Size(576): Append(log_id: T1-N1.111, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/A7F92825EABCE86A9A4E9ADA75FE2B8643609B7BEF2EEFC0A81DB31B65995EA3 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/A7F92825EABCE86A9A4E9ADA75FE2B8643609B7BEF2EEFC0A81DB31B65995EA3  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/A7F92825EABCE86A9A4E9ADA75FE2B8643609B7BEF2EEFC0A81DB31B65995EA3)]})
+    txn.if_then[0].put __fd_token/test_tenant/A7F92825EABCE86A9A4E9ADA75FE2B8643609B7BEF2EEFC0A81DB31B65995EA3 (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("BF331ECEF8B3FE63B35E7852B641A847E4E11422BCF3B20E9ADAAC3DF6924AEC") }
+  R-00226: [000_054_996, 000_055_042) Size(46): Commit(T1-N1.111)
+  R-00227: [000_055_042, 000_055_618) Size(576): Append(log_id: T1-N1.112, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_token/test_tenant/44E49AB3D7FC4D266C31E9DC21A756EB6BD011211957C81C2534310B1921A142 >= seq(0)] then:[Put(Put key=__fd_token/test_tenant/44E49AB3D7FC4D266C31E9DC21A756EB6BD011211957C81C2534310B1921A142  ttl: 3900s)] else:[Get(Get key=__fd_token/test_tenant/44E49AB3D7FC4D266C31E9DC21A756EB6BD011211957C81C2534310B1921A142)]})
+    txn.if_then[0].put __fd_token/test_tenant/44E49AB3D7FC4D266C31E9DC21A756EB6BD011211957C81C2534310B1921A142 (ttl_ms=3900000):
+      QueryTokenInfo { token_type: Session, parent: Some("ACCEBCEF4520C5BB73B54600976C24A3C3975228B5611400C00CCCA9C8034F4F") }
+  R-00228: [000_055_618, 000_055_664) Size(46): Commit(T1-N1.112)
+  R-00229: [000_055_664, 000_056_131) Size(467): Append(log_id: T1-N1.113, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00230: [000_056_131, 000_056_177) Size(46): Commit(T1-N1.113)
+  R-00231: [000_056_177, 000_056_644) Size(467): Append(log_id: T1-N1.114, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00232: [000_056_644, 000_056_690) Size(46): Commit(T1-N1.114)
+  R-00233: [000_056_690, 000_057_157) Size(467): Append(log_id: T1-N1.115, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root (ttl_ms=15000000):
+      ClientSession
+  R-00234: [000_057_157, 000_057_203) Size(46): Commit(T1-N1.115)
+  R-00235: [000_057_203, 000_057_670) Size(467): Append(log_id: T1-N1.116, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root (ttl_ms=15000000):
+      ClientSession
+  R-00236: [000_057_670, 000_057_716) Size(46): Commit(T1-N1.116)
+  R-00237: [000_057_716, 000_058_183) Size(467): Append(log_id: T1-N1.117, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root (ttl_ms=15000000):
+      ClientSession
+  R-00238: [000_058_183, 000_058_229) Size(46): Commit(T1-N1.117)
+  R-00239: [000_058_229, 000_058_696) Size(467): Append(log_id: T1-N1.118, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root (ttl_ms=15000000):
+      ClientSession
+  R-00240: [000_058_696, 000_058_742) Size(46): Commit(T1-N1.118)
+  R-00241: [000_058_742, 000_059_209) Size(467): Append(log_id: T1-N1.119, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root (ttl_ms=15000000):
+      ClientSession
+  R-00242: [000_059_209, 000_059_255) Size(46): Commit(T1-N1.119)
+  R-00243: [000_059_255, 000_059_722) Size(467): Append(log_id: T1-N1.120, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/test_tenant/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00244: [000_059_722, 000_059_768) Size(46): Commit(T1-N1.120)
+  R-00245: [000_059_768, 000_060_159) Size(391): Append(log_id: T1-N1.121, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/5IpxoVy/public == seq(0)] then:[Put(Put key=__fd_roles/5IpxoVy/public)] else:[Get(Get key=__fd_roles/5IpxoVy/public)]})
+    txn.if_then[0].put __fd_roles/5IpxoVy/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.179709Z, update_on: 2026-02-11T14:35:38.179709Z, comment: None }
+  R-00246: [000_060_159, 000_060_205) Size(46): Commit(T1-N1.121)
+  R-00247: [000_060_205, 000_060_596) Size(391): Append(log_id: T1-N1.122, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/xisc4D2/public == seq(0)] then:[Put(Put key=__fd_roles/xisc4D2/public)] else:[Get(Get key=__fd_roles/xisc4D2/public)]})
+    txn.if_then[0].put __fd_roles/xisc4D2/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.179771Z, update_on: 2026-02-11T14:35:38.179771Z, comment: None }
+  R-00248: [000_060_596, 000_060_642) Size(46): Commit(T1-N1.122)
+  R-00249: [000_060_642, 000_061_033) Size(391): Append(log_id: T1-N1.123, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/hmLpxb8/public == seq(0)] then:[Put(Put key=__fd_roles/hmLpxb8/public)] else:[Get(Get key=__fd_roles/hmLpxb8/public)]})
+    txn.if_then[0].put __fd_roles/hmLpxb8/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.179748Z, update_on: 2026-02-11T14:35:38.179748Z, comment: None }
+  R-00250: [000_061_033, 000_061_079) Size(46): Commit(T1-N1.123)
+  R-00251: [000_061_079, 000_061_470) Size(391): Append(log_id: T1-N1.124, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/D43gYDL/public == seq(0)] then:[Put(Put key=__fd_roles/D43gYDL/public)] else:[Get(Get key=__fd_roles/D43gYDL/public)]})
+    txn.if_then[0].put __fd_roles/D43gYDL/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.180641Z, update_on: 2026-02-11T14:35:38.180641Z, comment: None }
+  R-00252: [000_061_470, 000_061_516) Size(46): Commit(T1-N1.124)
+  R-00253: [000_061_516, 000_061_907) Size(391): Append(log_id: T1-N1.125, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/cfniURJ/public == seq(0)] then:[Put(Put key=__fd_roles/cfniURJ/public)] else:[Get(Get key=__fd_roles/cfniURJ/public)]})
+    txn.if_then[0].put __fd_roles/cfniURJ/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.179676Z, update_on: 2026-02-11T14:35:38.179676Z, comment: None }
+  R-00254: [000_061_907, 000_061_953) Size(46): Commit(T1-N1.125)
+  R-00255: [000_061_953, 000_062_344) Size(391): Append(log_id: T1-N1.126, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/ahBFJuQ/public == seq(0)] then:[Put(Put key=__fd_roles/ahBFJuQ/public)] else:[Get(Get key=__fd_roles/ahBFJuQ/public)]})
+    txn.if_then[0].put __fd_roles/ahBFJuQ/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.180272Z, update_on: 2026-02-11T14:35:38.180272Z, comment: None }
+  R-00256: [000_062_344, 000_062_390) Size(46): Commit(T1-N1.126)
+  R-00257: [000_062_390, 000_062_781) Size(391): Append(log_id: T1-N1.127, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/CvgWxbN/public == seq(0)] then:[Put(Put key=__fd_roles/CvgWxbN/public)] else:[Get(Get key=__fd_roles/CvgWxbN/public)]})
+    txn.if_then[0].put __fd_roles/CvgWxbN/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.180005Z, update_on: 2026-02-11T14:35:38.180005Z, comment: None }
+  R-00258: [000_062_781, 000_062_827) Size(46): Commit(T1-N1.127)
+  R-00259: [000_062_827, 000_063_219) Size(392): Append(log_id: T1-N1.128, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_roles/AvjQwvs/public == seq(0)] then:[Put(Put key=__fd_roles/AvjQwvs/public)] else:[Get(Get key=__fd_roles/AvjQwvs/public)]})
+    txn.if_then[0].put __fd_roles/AvjQwvs/public:
+      RoleInfo { name: "public", grants: UserGrantSet { entries: [], roles: {} }, created_on: 2026-02-11T14:35:38.179824Z, update_on: 2026-02-11T14:35:38.179824Z, comment: None }
+  R-00260: [000_063_219, 000_063_266) Size(47): Commit(T1-N1.128)
+  R-00261: [000_063_266, 000_063_556) Size(290): Append(log_id: T1-N1.129, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00262: [000_063_556, 000_063_603) Size(47): Commit(T1-N1.129)
+  R-00263: [000_063_603, 000_063_893) Size(290): Append(log_id: T1-N1.130, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00264: [000_063_893, 000_063_940) Size(47): Commit(T1-N1.130)
+  R-00265: [000_063_940, 000_064_230) Size(290): Append(log_id: T1-N1.131, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00266: [000_064_230, 000_064_277) Size(47): Commit(T1-N1.131)
+  R-00267: [000_064_277, 000_064_567) Size(290): Append(log_id: T1-N1.132, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00268: [000_064_567, 000_064_614) Size(47): Commit(T1-N1.132)
+  R-00269: [000_064_614, 000_064_904) Size(290): Append(log_id: T1-N1.133, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00270: [000_064_904, 000_064_951) Size(47): Commit(T1-N1.133)
+  R-00271: [000_064_951, 000_065_696) Size(745): Append(log_id: T1-N1.134, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/5IpxoVy/default == seq(0),__fd_database_id_to_name/160 == seq(0),__fd_db_id_list/5IpxoVy/default == seq(0)] then:[Put(Put key=__fd_database/5IpxoVy/default),Put(Put key=__fd_database_by_id/160),Put(Put key=__fd_db_id_list/5IpxoVy/default),Put(Put key=__fd_database_id_to_name/160)] else:[]})
+    txn.if_then[0].put __fd_database/5IpxoVy/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/160:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.298159Z, updated_on: 2026-02-11T14:35:38.298160Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/5IpxoVy/default:
+      DbIdList { id_list: [160] }
+    txn.if_then[3].put __fd_database_id_to_name/160:
+      unknown-prefix(25 bytes)
+  R-00272: [000_065_696, 000_065_743) Size(47): Commit(T1-N1.134)
+  R-00273: [000_065_743, 000_066_033) Size(290): Append(log_id: T1-N1.135, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00274: [000_066_033, 000_066_080) Size(47): Commit(T1-N1.135)
+  R-00275: [000_066_080, 000_066_370) Size(290): Append(log_id: T1-N1.136, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00276: [000_066_370, 000_066_417) Size(47): Commit(T1-N1.136)
+  R-00277: [000_066_417, 000_067_162) Size(745): Append(log_id: T1-N1.137, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/D43gYDL/default == seq(0),__fd_database_id_to_name/161 == seq(0),__fd_db_id_list/D43gYDL/default == seq(0)] then:[Put(Put key=__fd_database/D43gYDL/default),Put(Put key=__fd_database_by_id/161),Put(Put key=__fd_db_id_list/D43gYDL/default),Put(Put key=__fd_database_id_to_name/161)] else:[]})
+    txn.if_then[0].put __fd_database/D43gYDL/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/161:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.298801Z, updated_on: 2026-02-11T14:35:38.298802Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/D43gYDL/default:
+      DbIdList { id_list: [161] }
+    txn.if_then[3].put __fd_database_id_to_name/161:
+      unknown-prefix(25 bytes)
+  R-00278: [000_067_162, 000_067_209) Size(47): Commit(T1-N1.137)
+  R-00279: [000_067_209, 000_067_954) Size(745): Append(log_id: T1-N1.138, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/cfniURJ/default == seq(0),__fd_database_id_to_name/162 == seq(0),__fd_db_id_list/cfniURJ/default == seq(0)] then:[Put(Put key=__fd_database/cfniURJ/default),Put(Put key=__fd_database_by_id/162),Put(Put key=__fd_db_id_list/cfniURJ/default),Put(Put key=__fd_database_id_to_name/162)] else:[]})
+    txn.if_then[0].put __fd_database/cfniURJ/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/162:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.298159Z, updated_on: 2026-02-11T14:35:38.298160Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/cfniURJ/default:
+      DbIdList { id_list: [162] }
+    txn.if_then[3].put __fd_database_id_to_name/162:
+      unknown-prefix(25 bytes)
+  R-00280: [000_067_954, 000_068_001) Size(47): Commit(T1-N1.138)
+  R-00281: [000_068_001, 000_068_746) Size(745): Append(log_id: T1-N1.139, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/hmLpxb8/default == seq(0),__fd_database_id_to_name/163 == seq(0),__fd_db_id_list/hmLpxb8/default == seq(0)] then:[Put(Put key=__fd_database/hmLpxb8/default),Put(Put key=__fd_database_by_id/163),Put(Put key=__fd_db_id_list/hmLpxb8/default),Put(Put key=__fd_database_id_to_name/163)] else:[]})
+    txn.if_then[0].put __fd_database/hmLpxb8/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/163:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.298224Z, updated_on: 2026-02-11T14:35:38.298225Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/hmLpxb8/default:
+      DbIdList { id_list: [163] }
+    txn.if_then[3].put __fd_database_id_to_name/163:
+      unknown-prefix(25 bytes)
+  R-00282: [000_068_746, 000_068_793) Size(47): Commit(T1-N1.139)
+  R-00283: [000_068_793, 000_069_083) Size(290): Append(log_id: T1-N1.140, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00284: [000_069_083, 000_069_130) Size(47): Commit(T1-N1.140)
+  R-00285: [000_069_130, 000_069_875) Size(745): Append(log_id: T1-N1.141, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/xisc4D2/default == seq(0),__fd_database_id_to_name/164 == seq(0),__fd_db_id_list/xisc4D2/default == seq(0)] then:[Put(Put key=__fd_database/xisc4D2/default),Put(Put key=__fd_database_by_id/164),Put(Put key=__fd_db_id_list/xisc4D2/default),Put(Put key=__fd_database_id_to_name/164)] else:[]})
+    txn.if_then[0].put __fd_database/xisc4D2/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/164:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.298526Z, updated_on: 2026-02-11T14:35:38.298526Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/xisc4D2/default:
+      DbIdList { id_list: [164] }
+    txn.if_then[3].put __fd_database_id_to_name/164:
+      unknown-prefix(25 bytes)
+  R-00286: [000_069_875, 000_069_922) Size(47): Commit(T1-N1.141)
+  R-00287: [000_069_922, 000_070_667) Size(745): Append(log_id: T1-N1.142, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/CvgWxbN/default == seq(0),__fd_database_id_to_name/169 == seq(0),__fd_db_id_list/CvgWxbN/default == seq(0)] then:[Put(Put key=__fd_database/CvgWxbN/default),Put(Put key=__fd_database_by_id/169),Put(Put key=__fd_db_id_list/CvgWxbN/default),Put(Put key=__fd_database_id_to_name/169)] else:[]})
+    txn.if_then[0].put __fd_database/CvgWxbN/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/169:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.298399Z, updated_on: 2026-02-11T14:35:38.298400Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/CvgWxbN/default:
+      DbIdList { id_list: [169] }
+    txn.if_then[3].put __fd_database_id_to_name/169:
+      unknown-prefix(25 bytes)
+  R-00288: [000_070_667, 000_070_714) Size(47): Commit(T1-N1.142)
+  R-00289: [000_070_714, 000_071_459) Size(745): Append(log_id: T1-N1.143, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/AvjQwvs/default == seq(0),__fd_database_id_to_name/170 == seq(0),__fd_db_id_list/AvjQwvs/default == seq(0)] then:[Put(Put key=__fd_database/AvjQwvs/default),Put(Put key=__fd_database_by_id/170),Put(Put key=__fd_db_id_list/AvjQwvs/default),Put(Put key=__fd_database_id_to_name/170)] else:[]})
+    txn.if_then[0].put __fd_database/AvjQwvs/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/170:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.299604Z, updated_on: 2026-02-11T14:35:38.299604Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/AvjQwvs/default:
+      DbIdList { id_list: [170] }
+    txn.if_then[3].put __fd_database_id_to_name/170:
+      unknown-prefix(25 bytes)
+  R-00290: [000_071_459, 000_071_506) Size(47): Commit(T1-N1.143)
+  R-00291: [000_071_506, 000_072_251) Size(745): Append(log_id: T1-N1.144, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/ahBFJuQ/default == seq(0),__fd_database_id_to_name/183 == seq(0),__fd_db_id_list/ahBFJuQ/default == seq(0)] then:[Put(Put key=__fd_database/ahBFJuQ/default),Put(Put key=__fd_database_by_id/183),Put(Put key=__fd_db_id_list/ahBFJuQ/default),Put(Put key=__fd_database_id_to_name/183)] else:[]})
+    txn.if_then[0].put __fd_database/ahBFJuQ/default:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/183:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.298159Z, updated_on: 2026-02-11T14:35:38.298160Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/ahBFJuQ/default:
+      DbIdList { id_list: [183] }
+    txn.if_then[3].put __fd_database_id_to_name/183:
+      unknown-prefix(25 bytes)
+  R-00292: [000_072_251, 000_072_298) Size(47): Commit(T1-N1.144)
+  R-00293: [000_072_298, 000_072_570) Size(272): Append(log_id: T1-N1.145, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/5IpxoVy/database-by-id/160)] else:[]})
+    txn.if_then[0].put __fd_object_owners/5IpxoVy/database-by-id/160:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 160 }, role: "account_admin" }
+  R-00294: [000_072_570, 000_072_617) Size(47): Commit(T1-N1.145)
+  R-00295: [000_072_617, 000_072_889) Size(272): Append(log_id: T1-N1.146, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/cfniURJ/database-by-id/162)] else:[]})
+    txn.if_then[0].put __fd_object_owners/cfniURJ/database-by-id/162:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 162 }, role: "account_admin" }
+  R-00296: [000_072_889, 000_072_936) Size(47): Commit(T1-N1.146)
+  R-00297: [000_072_936, 000_073_208) Size(272): Append(log_id: T1-N1.147, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/hmLpxb8/database-by-id/163)] else:[]})
+    txn.if_then[0].put __fd_object_owners/hmLpxb8/database-by-id/163:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 163 }, role: "account_admin" }
+  R-00298: [000_073_208, 000_073_255) Size(47): Commit(T1-N1.147)
+  R-00299: [000_073_255, 000_073_527) Size(272): Append(log_id: T1-N1.148, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/D43gYDL/database-by-id/161)] else:[]})
+    txn.if_then[0].put __fd_object_owners/D43gYDL/database-by-id/161:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 161 }, role: "account_admin" }
+  R-00300: [000_073_527, 000_073_574) Size(47): Commit(T1-N1.148)
+  R-00301: [000_073_574, 000_073_846) Size(272): Append(log_id: T1-N1.149, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/xisc4D2/database-by-id/164)] else:[]})
+    txn.if_then[0].put __fd_object_owners/xisc4D2/database-by-id/164:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 164 }, role: "account_admin" }
+  R-00302: [000_073_846, 000_073_893) Size(47): Commit(T1-N1.149)
+  R-00303: [000_073_893, 000_074_165) Size(272): Append(log_id: T1-N1.150, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/AvjQwvs/database-by-id/170)] else:[]})
+    txn.if_then[0].put __fd_object_owners/AvjQwvs/database-by-id/170:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 170 }, role: "account_admin" }
+  R-00304: [000_074_165, 000_074_212) Size(47): Commit(T1-N1.150)
+  R-00305: [000_074_212, 000_074_484) Size(272): Append(log_id: T1-N1.151, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/CvgWxbN/database-by-id/169)] else:[]})
+    txn.if_then[0].put __fd_object_owners/CvgWxbN/database-by-id/169:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 169 }, role: "account_admin" }
+  R-00306: [000_074_484, 000_074_531) Size(47): Commit(T1-N1.151)
+  R-00307: [000_074_531, 000_074_803) Size(272): Append(log_id: T1-N1.152, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/ahBFJuQ/database-by-id/183)] else:[]})
+    txn.if_then[0].put __fd_object_owners/ahBFJuQ/database-by-id/183:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 183 }, role: "account_admin" }
+  R-00308: [000_074_803, 000_074_850) Size(47): Commit(T1-N1.152)
+  R-00309: [000_074_850, 000_075_306) Size(456): Append(log_id: T1-N1.153, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root >= seq(0)] then:[Put(Put key=__fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root  ttl: 15000s)] else:[Get(Get key=__fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root)]})
+    txn.if_then[0].put __fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root (ttl_ms=15000000):
+      ClientSession
+  R-00310: [000_075_306, 000_075_353) Size(47): Commit(T1-N1.153)
+  R-00311: [000_075_353, 000_075_809) Size(456): Append(log_id: T1-N1.154, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/cfniURJ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root >= seq(0)] then:[Put(Put key=__fd_session/cfniURJ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root  ttl: 15000s)] else:[Get(Get key=__fd_session/cfniURJ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root)]})
+    txn.if_then[0].put __fd_session/cfniURJ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a6a00df22e7/root (ttl_ms=15000000):
+      ClientSession
+  R-00312: [000_075_809, 000_075_856) Size(47): Commit(T1-N1.154)
+  R-00313: [000_075_856, 000_076_312) Size(456): Append(log_id: T1-N1.155, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00314: [000_076_312, 000_076_359) Size(47): Commit(T1-N1.155)
+  R-00315: [000_076_359, 000_076_815) Size(456): Append(log_id: T1-N1.156, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00316: [000_076_815, 000_076_862) Size(47): Commit(T1-N1.156)
+  R-00317: [000_076_862, 000_077_318) Size(456): Append(log_id: T1-N1.157, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root >= seq(0)] then:[Put(Put key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root)]})
+    txn.if_then[0].put __fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root (ttl_ms=15000000):
+      ClientSession
+  R-00318: [000_077_318, 000_077_365) Size(47): Commit(T1-N1.157)
+  R-00319: [000_077_365, 000_077_821) Size(456): Append(log_id: T1-N1.158, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00320: [000_077_821, 000_077_868) Size(47): Commit(T1-N1.158)
+  R-00321: [000_077_868, 000_078_324) Size(456): Append(log_id: T1-N1.159, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/xisc4D2/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root >= seq(0)] then:[Put(Put key=__fd_session/xisc4D2/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root  ttl: 15000s)] else:[Get(Get key=__fd_session/xisc4D2/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root)]})
+    txn.if_then[0].put __fd_session/xisc4D2/019c4d21%2d0e3c%2d7b41%2d824c%2d96c0d55cd4c8/root (ttl_ms=15000000):
+      ClientSession
+  R-00322: [000_078_324, 000_078_371) Size(47): Commit(T1-N1.159)
+  R-00323: [000_078_371, 000_078_827) Size(456): Append(log_id: T1-N1.160, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00324: [000_078_827, 000_078_874) Size(47): Commit(T1-N1.160)
+  R-00325: [000_078_874, 000_079_164) Size(290): Append(log_id: T1-N1.161, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00326: [000_079_164, 000_079_211) Size(47): Commit(T1-N1.161)
+  R-00327: [000_079_211, 000_079_667) Size(456): Append(log_id: T1-N1.162, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root >= seq(0)] then:[Put(Put key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root  ttl: 15000s)] else:[Get(Get key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root)]})
+    txn.if_then[0].put __fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root (ttl_ms=15000000):
+      ClientSession
+  R-00328: [000_079_667, 000_079_714) Size(47): Commit(T1-N1.162)
+  R-00329: [000_079_714, 000_080_434) Size(720): Append(log_id: T1-N1.163, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/AvjQwvs/d1 == seq(0),__fd_database_id_to_name/216 == seq(0),__fd_db_id_list/AvjQwvs/d1 == seq(0)] then:[Put(Put key=__fd_database/AvjQwvs/d1),Put(Put key=__fd_database_by_id/216),Put(Put key=__fd_db_id_list/AvjQwvs/d1),Put(Put key=__fd_database_id_to_name/216)] else:[]})
+    txn.if_then[0].put __fd_database/AvjQwvs/d1:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/216:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.691706Z, updated_on: 2026-02-11T14:35:38.691707Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/AvjQwvs/d1:
+      DbIdList { id_list: [216] }
+    txn.if_then[3].put __fd_database_id_to_name/216:
+      unknown-prefix(20 bytes)
+  R-00330: [000_080_434, 000_080_481) Size(47): Commit(T1-N1.163)
+  R-00331: [000_080_481, 000_080_937) Size(456): Append(log_id: T1-N1.164, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00332: [000_080_937, 000_080_984) Size(47): Commit(T1-N1.164)
+  R-00333: [000_080_984, 000_081_256) Size(272): Append(log_id: T1-N1.165, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/AvjQwvs/database-by-id/216)] else:[]})
+    txn.if_then[0].put __fd_object_owners/AvjQwvs/database-by-id/216:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 216 }, role: "account_admin" }
+  R-00334: [000_081_256, 000_081_303) Size(47): Commit(T1-N1.165)
+  R-00335: [000_081_303, 000_081_759) Size(456): Append(log_id: T1-N1.166, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00336: [000_081_759, 000_081_806) Size(47): Commit(T1-N1.166)
+  R-00337: [000_081_806, 000_082_262) Size(456): Append(log_id: T1-N1.167, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00338: [000_082_262, 000_082_309) Size(47): Commit(T1-N1.167)
+  R-00339: [000_082_309, 000_082_765) Size(456): Append(log_id: T1-N1.168, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00340: [000_082_765, 000_082_812) Size(47): Commit(T1-N1.168)
+  R-00341: [000_082_812, 000_083_102) Size(290): Append(log_id: T1-N1.169, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00342: [000_083_102, 000_083_149) Size(47): Commit(T1-N1.169)
+  R-00343: [000_083_149, 000_083_869) Size(720): Append(log_id: T1-N1.170, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/AvjQwvs/d2 == seq(0),__fd_database_id_to_name/227 == seq(0),__fd_db_id_list/AvjQwvs/d2 == seq(0)] then:[Put(Put key=__fd_database/AvjQwvs/d2),Put(Put key=__fd_database_by_id/227),Put(Put key=__fd_db_id_list/AvjQwvs/d2),Put(Put key=__fd_database_id_to_name/227)] else:[]})
+    txn.if_then[0].put __fd_database/AvjQwvs/d2:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/227:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:38.893033Z, updated_on: 2026-02-11T14:35:38.893035Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/AvjQwvs/d2:
+      DbIdList { id_list: [227] }
+    txn.if_then[3].put __fd_database_id_to_name/227:
+      unknown-prefix(20 bytes)
+  R-00344: [000_083_869, 000_083_916) Size(47): Commit(T1-N1.170)
+  R-00345: [000_083_916, 000_084_188) Size(272): Append(log_id: T1-N1.171, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/AvjQwvs/database-by-id/227)] else:[]})
+    txn.if_then[0].put __fd_object_owners/AvjQwvs/database-by-id/227:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 227 }, role: "account_admin" }
+  R-00346: [000_084_188, 000_084_235) Size(47): Commit(T1-N1.171)
+  R-00347: [000_084_235, 000_084_691) Size(456): Append(log_id: T1-N1.172, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00348: [000_084_691, 000_084_738) Size(47): Commit(T1-N1.172)
+  R-00349: [000_084_738, 000_085_194) Size(456): Append(log_id: T1-N1.173, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root >= seq(0)] then:[Put(Put key=__fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root  ttl: 15000s)] else:[Get(Get key=__fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root)]})
+    txn.if_then[0].put __fd_session/5IpxoVy/019c4d21%2d0e3c%2d7b41%2d824c%2d96f414f0ad59/root (ttl_ms=15000000):
+      ClientSession
+  R-00350: [000_085_194, 000_085_241) Size(47): Commit(T1-N1.173)
+  R-00351: [000_085_241, 000_085_697) Size(456): Append(log_id: T1-N1.174, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00352: [000_085_697, 000_085_744) Size(47): Commit(T1-N1.174)
+  R-00353: [000_085_744, 000_086_200) Size(456): Append(log_id: T1-N1.175, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00354: [000_086_200, 000_086_247) Size(47): Commit(T1-N1.175)
+  R-00355: [000_086_247, 000_086_703) Size(456): Append(log_id: T1-N1.176, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00356: [000_086_703, 000_086_750) Size(47): Commit(T1-N1.176)
+  R-00357: [000_086_750, 000_087_206) Size(456): Append(log_id: T1-N1.177, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00358: [000_087_206, 000_087_253) Size(47): Commit(T1-N1.177)
+  R-00359: [000_087_253, 000_087_709) Size(456): Append(log_id: T1-N1.178, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root >= seq(0)] then:[Put(Put key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root)]})
+    txn.if_then[0].put __fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root (ttl_ms=15000000):
+      ClientSession
+  R-00360: [000_087_709, 000_087_756) Size(47): Commit(T1-N1.178)
+  R-00361: [000_087_756, 000_088_212) Size(456): Append(log_id: T1-N1.179, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00362: [000_088_212, 000_088_259) Size(47): Commit(T1-N1.179)
+  R-00363: [000_088_259, 000_088_715) Size(456): Append(log_id: T1-N1.180, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00364: [000_088_715, 000_088_762) Size(47): Commit(T1-N1.180)
+  R-00365: [000_088_762, 000_088_884) Size(122): Append(log_id: T1-N1.181, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00366: [000_088_884, 000_088_931) Size(47): Commit(T1-N1.181)
+  R-00367: [000_088_931, 000_089_387) Size(456): Append(log_id: T1-N1.182, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root >= seq(0)] then:[Put(Put key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root  ttl: 15000s)] else:[Get(Get key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root)]})
+    txn.if_then[0].put __fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root (ttl_ms=15000000):
+      ClientSession
+  R-00368: [000_089_387, 000_089_434) Size(47): Commit(T1-N1.182)
+  R-00369: [000_089_434, 000_089_646) Size(212): Append(log_id: T1-N1.183, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/D43gYDL/database-by-id/0)] else:[]})
+  R-00370: [000_089_646, 000_089_693) Size(47): Commit(T1-N1.183)
+  R-00371: [000_089_693, 000_090_149) Size(456): Append(log_id: T1-N1.184, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00372: [000_090_149, 000_090_196) Size(47): Commit(T1-N1.184)
+  R-00373: [000_090_196, 000_090_318) Size(122): Append(log_id: T1-N1.185, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00374: [000_090_318, 000_090_365) Size(47): Commit(T1-N1.185)
+  R-00375: [000_090_365, 000_090_577) Size(212): Append(log_id: T1-N1.186, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/D43gYDL/database-by-id/0)] else:[]})
+  R-00376: [000_090_577, 000_090_624) Size(47): Commit(T1-N1.186)
+  R-00377: [000_090_624, 000_090_914) Size(290): Append(log_id: T1-N1.187, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00378: [000_090_914, 000_090_961) Size(47): Commit(T1-N1.187)
+  R-00379: [000_090_961, 000_091_686) Size(725): Append(log_id: T1-N1.188, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/D43gYDL/db1 == seq(0),__fd_database_id_to_name/244 == seq(0),__fd_db_id_list/D43gYDL/db1 == seq(0)] then:[Put(Put key=__fd_database/D43gYDL/db1),Put(Put key=__fd_database_by_id/244),Put(Put key=__fd_db_id_list/D43gYDL/db1),Put(Put key=__fd_database_id_to_name/244)] else:[]})
+    txn.if_then[0].put __fd_database/D43gYDL/db1:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/244:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.324964Z, updated_on: 2026-02-11T14:35:39.324965Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/D43gYDL/db1:
+      DbIdList { id_list: [244] }
+    txn.if_then[3].put __fd_database_id_to_name/244:
+      unknown-prefix(21 bytes)
+  R-00380: [000_091_686, 000_091_733) Size(47): Commit(T1-N1.188)
+  R-00381: [000_091_733, 000_092_005) Size(272): Append(log_id: T1-N1.189, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/D43gYDL/database-by-id/244)] else:[]})
+    txn.if_then[0].put __fd_object_owners/D43gYDL/database-by-id/244:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 244 }, role: "account_admin" }
+  R-00382: [000_092_005, 000_092_052) Size(47): Commit(T1-N1.189)
+  R-00383: [000_092_052, 000_092_508) Size(456): Append(log_id: T1-N1.190, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root >= seq(0)] then:[Put(Put key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root  ttl: 15000s)] else:[Get(Get key=__fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root)]})
+    txn.if_then[0].put __fd_session/AvjQwvs/019c4d21%2d0e3c%2d7b41%2d824c%2d96dd52f99fe5/root (ttl_ms=15000000):
+      ClientSession
+  R-00384: [000_092_508, 000_092_555) Size(47): Commit(T1-N1.190)
+  R-00385: [000_092_555, 000_092_845) Size(290): Append(log_id: T1-N1.191, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00386: [000_092_845, 000_092_892) Size(47): Commit(T1-N1.191)
+  R-00387: [000_092_892, 000_093_014) Size(122): Append(log_id: T1-N1.192, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00388: [000_093_014, 000_093_061) Size(47): Commit(T1-N1.192)
+  R-00389: [000_093_061, 000_093_786) Size(725): Append(log_id: T1-N1.193, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/D43gYDL/db2 == seq(0),__fd_database_id_to_name/251 == seq(0),__fd_db_id_list/D43gYDL/db2 == seq(0)] then:[Put(Put key=__fd_database/D43gYDL/db2),Put(Put key=__fd_database_by_id/251),Put(Put key=__fd_db_id_list/D43gYDL/db2),Put(Put key=__fd_database_id_to_name/251)] else:[]})
+    txn.if_then[0].put __fd_database/D43gYDL/db2:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/251:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.383080Z, updated_on: 2026-02-11T14:35:39.383081Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/D43gYDL/db2:
+      DbIdList { id_list: [251] }
+    txn.if_then[3].put __fd_database_id_to_name/251:
+      unknown-prefix(21 bytes)
+  R-00390: [000_093_786, 000_093_833) Size(47): Commit(T1-N1.193)
+  R-00391: [000_093_833, 000_094_045) Size(212): Append(log_id: T1-N1.194, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/ahBFJuQ/database-by-id/0)] else:[]})
+  R-00392: [000_094_045, 000_094_092) Size(47): Commit(T1-N1.194)
+  R-00393: [000_094_092, 000_094_364) Size(272): Append(log_id: T1-N1.195, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/D43gYDL/database-by-id/251)] else:[]})
+    txn.if_then[0].put __fd_object_owners/D43gYDL/database-by-id/251:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 251 }, role: "account_admin" }
+  R-00394: [000_094_364, 000_094_411) Size(47): Commit(T1-N1.195)
+  R-00395: [000_094_411, 000_094_533) Size(122): Append(log_id: T1-N1.196, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[] else:[]})
+  R-00396: [000_094_533, 000_094_580) Size(47): Commit(T1-N1.196)
+  R-00397: [000_094_580, 000_094_792) Size(212): Append(log_id: T1-N1.197, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/ahBFJuQ/database-by-id/0)] else:[]})
+  R-00398: [000_094_792, 000_094_839) Size(47): Commit(T1-N1.197)
+  R-00399: [000_094_839, 000_095_295) Size(456): Append(log_id: T1-N1.198, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00400: [000_095_295, 000_095_342) Size(47): Commit(T1-N1.198)
+  R-00401: [000_095_342, 000_095_632) Size(290): Append(log_id: T1-N1.199, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00402: [000_095_632, 000_095_679) Size(47): Commit(T1-N1.199)
+  R-00403: [000_095_679, 000_096_404) Size(725): Append(log_id: T1-N1.200, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/ahBFJuQ/db1 == seq(0),__fd_database_id_to_name/258 == seq(0),__fd_db_id_list/ahBFJuQ/db1 == seq(0)] then:[Put(Put key=__fd_database/ahBFJuQ/db1),Put(Put key=__fd_database_by_id/258),Put(Put key=__fd_db_id_list/ahBFJuQ/db1),Put(Put key=__fd_database_id_to_name/258)] else:[]})
+    txn.if_then[0].put __fd_database/ahBFJuQ/db1:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/258:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.522220Z, updated_on: 2026-02-11T14:35:39.522220Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/ahBFJuQ/db1:
+      DbIdList { id_list: [258] }
+    txn.if_then[3].put __fd_database_id_to_name/258:
+      unknown-prefix(21 bytes)
+  R-00404: [000_096_404, 000_096_451) Size(47): Commit(T1-N1.200)
+  R-00405: [000_096_451, 000_096_723) Size(272): Append(log_id: T1-N1.201, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/ahBFJuQ/database-by-id/258)] else:[]})
+    txn.if_then[0].put __fd_object_owners/ahBFJuQ/database-by-id/258:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 258 }, role: "account_admin" }
+  R-00406: [000_096_723, 000_096_770) Size(47): Commit(T1-N1.201)
+  R-00407: [000_096_770, 000_097_226) Size(456): Append(log_id: T1-N1.202, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00408: [000_097_226, 000_097_273) Size(47): Commit(T1-N1.202)
+  R-00409: [000_097_273, 000_097_729) Size(456): Append(log_id: T1-N1.203, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root >= seq(0)] then:[Put(Put key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root  ttl: 15000s)] else:[Get(Get key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root)]})
+    txn.if_then[0].put __fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root (ttl_ms=15000000):
+      ClientSession
+  R-00410: [000_097_729, 000_097_776) Size(47): Commit(T1-N1.203)
+  R-00411: [000_097_776, 000_098_066) Size(290): Append(log_id: T1-N1.204, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/database_id >= seq(0)] then:[Put(Put key=__fd_id_gen/database_id)] else:[Get(Get key=__fd_id_gen/database_id)]})
+    txn.if_then[0].put __fd_id_gen/database_id:
+      unknown-prefix(0 bytes)
+  R-00412: [000_098_066, 000_098_113) Size(47): Commit(T1-N1.204)
+  R-00413: [000_098_113, 000_098_838) Size(725): Append(log_id: T1-N1.205, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/ahBFJuQ/db2 == seq(0),__fd_database_id_to_name/266 == seq(0),__fd_db_id_list/ahBFJuQ/db2 == seq(0)] then:[Put(Put key=__fd_database/ahBFJuQ/db2),Put(Put key=__fd_database_by_id/266),Put(Put key=__fd_db_id_list/ahBFJuQ/db2),Put(Put key=__fd_database_id_to_name/266)] else:[]})
+    txn.if_then[0].put __fd_database/ahBFJuQ/db2:
+      unknown-prefix(3 bytes)
+    txn.if_then[1].put __fd_database_by_id/266:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.579979Z, updated_on: 2026-02-11T14:35:39.579980Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[2].put __fd_db_id_list/ahBFJuQ/db2:
+      DbIdList { id_list: [266] }
+    txn.if_then[3].put __fd_database_id_to_name/266:
+      unknown-prefix(21 bytes)
+  R-00414: [000_098_838, 000_098_885) Size(47): Commit(T1-N1.205)
+  R-00415: [000_098_885, 000_099_157) Size(272): Append(log_id: T1-N1.206, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/ahBFJuQ/database-by-id/266)] else:[]})
+    txn.if_then[0].put __fd_object_owners/ahBFJuQ/database-by-id/266:
+      OwnershipInfo { object: Database { catalog_name: "default", db_id: 266 }, role: "account_admin" }
+  R-00416: [000_099_157, 000_099_204) Size(47): Commit(T1-N1.206)
+  R-00417: [000_099_204, 000_099_660) Size(456): Append(log_id: T1-N1.207, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root >= seq(0)] then:[Put(Put key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root)]})
+    txn.if_then[0].put __fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root (ttl_ms=15000000):
+      ClientSession
+  R-00418: [000_099_660, 000_099_707) Size(47): Commit(T1-N1.207)
+  R-00419: [000_099_707, 000_100_163) Size(456): Append(log_id: T1-N1.208, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00420: [000_100_163, 000_100_210) Size(47): Commit(T1-N1.208)
+  R-00421: [000_100_210, 000_100_666) Size(456): Append(log_id: T1-N1.209, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00422: [000_100_666, 000_100_713) Size(47): Commit(T1-N1.209)
+  R-00423: [000_100_713, 000_101_169) Size(456): Append(log_id: T1-N1.210, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00424: [000_101_169, 000_101_216) Size(47): Commit(T1-N1.210)
+  R-00425: [000_101_216, 000_101_672) Size(456): Append(log_id: T1-N1.211, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root >= seq(0)] then:[Put(Put key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root  ttl: 15000s)] else:[Get(Get key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root)]})
+    txn.if_then[0].put __fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root (ttl_ms=15000000):
+      ClientSession
+  R-00426: [000_101_672, 000_101_719) Size(47): Commit(T1-N1.211)
+  R-00427: [000_101_719, 000_102_175) Size(456): Append(log_id: T1-N1.212, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00428: [000_102_175, 000_102_222) Size(47): Commit(T1-N1.212)
+  R-00429: [000_102_222, 000_102_678) Size(456): Append(log_id: T1-N1.213, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root >= seq(0)] then:[Put(Put key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root)]})
+    txn.if_then[0].put __fd_session/CvgWxbN/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a7370c0119f/root (ttl_ms=15000000):
+      ClientSession
+  R-00430: [000_102_678, 000_102_725) Size(47): Commit(T1-N1.213)
+  R-00431: [000_102_725, 000_103_181) Size(456): Append(log_id: T1-N1.214, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00432: [000_103_181, 000_103_228) Size(47): Commit(T1-N1.214)
+  R-00433: [000_103_228, 000_103_684) Size(456): Append(log_id: T1-N1.215, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00434: [000_103_684, 000_103_731) Size(47): Commit(T1-N1.215)
+  R-00435: [000_103_731, 000_104_187) Size(456): Append(log_id: T1-N1.216, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00436: [000_104_187, 000_104_234) Size(47): Commit(T1-N1.216)
+  R-00437: [000_104_234, 000_104_690) Size(456): Append(log_id: T1-N1.217, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00438: [000_104_690, 000_104_737) Size(47): Commit(T1-N1.217)
+  R-00439: [000_104_737, 000_105_193) Size(456): Append(log_id: T1-N1.218, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00440: [000_105_193, 000_105_240) Size(47): Commit(T1-N1.218)
+  R-00441: [000_105_240, 000_105_521) Size(281): Append(log_id: T1-N1.219, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/table_id >= seq(0)] then:[Put(Put key=__fd_id_gen/table_id)] else:[Get(Get key=__fd_id_gen/table_id)]})
+    txn.if_then[0].put __fd_id_gen/table_id:
+      unknown-prefix(0 bytes)
+  R-00442: [000_105_521, 000_105_568) Size(47): Commit(T1-N1.219)
+  R-00443: [000_105_568, 000_107_758) Size(2190): Append(log_id: T1-N1.220, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database_by_id/251 == seq(253),__fd_table/251/test8 == seq(0),__fd_table_id_list/251/test8 == seq(0)] then:[Put(Put key=__fd_database_by_id/251),Put(Put key=__fd_table_by_id/284),Put(Put key=__fd_table_id_list/251/test8),Put(Put key=__fd_table_id_to_name/284),Put(Put key=__fd_table/251/test8)] else:[]})
+    txn.if_then[0].put __fd_database_by_id/251:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.383080Z, updated_on: 2026-02-11T14:35:39.383081Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[1].put __fd_table_by_id/284:
+      TableMeta { schema: TableSchema { fields: [TableField { name: "tiny", default_expr: None, data_type: Number(Int8), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "tiny_unsigned", default_expr: None, data_type: Number(UInt8), column_id: 1, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint", default_expr: None, data_type: Number(Int16), column_id: 2, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint_unsigned", default_expr: None, data_type: Number(UInt16), column_id: 3, computed_expr: None, auto_increment_expr: None }, TableField { name: "int", default_expr: None, data_type: Number(Int32), column_id: 4, computed_expr: None, auto_increment_expr: None }, TableField { name: "int_unsigned", default_expr: None, data_type: Number(UInt32), column_id: 5, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint", default_expr: None, data_type: Number(Int64), column_id: 6, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint_unsigned", default_expr: None, data_type: Number(UInt64), column_id: 7, computed_expr: None, auto_increment_expr: None }, TableField { name: "float", default_expr: None, data_type: Number(Float32), column_id: 8, computed_expr: None, auto_increment_expr: None }, TableField { name: "double", default_expr: None, data_type: Number(Float64), column_id: 9, computed_expr: None, auto_increment_expr: None }, TableField { name: "date", default_expr: None, data_type: Date, column_id: 10, computed_expr: None, auto_increment_expr: None }, TableField { name: "datetime", default_expr: None, data_type: Timestamp, column_id: 11, computed_expr: None, auto_increment_expr: None }, TableField { name: "ts", default_expr: None, data_type: Timestamp, column_id: 12, computed_expr: None, auto_increment_expr: None }, TableField { name: "str", default_expr: Some("'3'"), data_type: String, column_id: 13, computed_expr: None, auto_increment_expr: None }, TableField { name: "bool", default_expr: None, data_type: Boolean, column_id: 14, computed_expr: None, auto_increment_expr: None }, TableField { name: "arr", default_expr: None, data_type: Array(Nullable(String)), column_id: 15, computed_expr: None, auto_increment_expr: None }, TableField { name: "tup", default_expr: None, data_type: Tuple { fields_name: ["1", "2"], fields_type: [Nullable(Number(Float64)), Nullable(Number(Int32))] }, column_id: 16, computed_expr: None, auto_increment_expr: None }, TableField { name: "map", default_expr: None, data_type: Map(Tuple { fields_name: ["key", "value"], fields_type: [String, Nullable(Date)] }), column_id: 18, computed_expr: None, auto_increment_expr: None }, TableField { name: "bitmap", default_expr: None, data_type: Bitmap, column_id: 20, computed_expr: None, auto_increment_expr: None }, TableField { name: "variant", default_expr: None, data_type: Variant, column_id: 21, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 22 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {"TRANSIENT": "T", "compression": "zstd", "database_id": "251", "enable_auto_analyze": "1", "storage_format": "parquet"}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: 2026-02-11T14:35:40.181965Z, updated_on: 2026-02-11T14:35:40.181966Z, comment: "", field_comments: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, shared_by: {}, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {}, refs: {} }
+    txn.if_then[2].put __fd_table_id_list/251/test8:
+      TableIdList { id_list: [284] }
+    txn.if_then[3].put __fd_table_id_to_name/284:
+      DBIdTableName { db_id: 251, table_name: "test8" }
+    txn.if_then[4].put __fd_table/251/test8:
+      unknown-prefix(3 bytes)
+  R-00444: [000_107_758, 000_107_805) Size(47): Commit(T1-N1.220)
+  R-00445: [000_107_805, 000_108_078) Size(273): Append(log_id: T1-N1.221, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/D43gYDL/table-by-id/284)] else:[]})
+    txn.if_then[0].put __fd_object_owners/D43gYDL/table-by-id/284:
+      OwnershipInfo { object: Table { catalog_name: "default", db_id: 251, table_id: 284 }, role: "account_admin" }
+  R-00446: [000_108_078, 000_108_125) Size(47): Commit(T1-N1.221)
+  R-00447: [000_108_125, 000_108_581) Size(456): Append(log_id: T1-N1.222, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00448: [000_108_581, 000_108_628) Size(47): Commit(T1-N1.222)
+  R-00449: [000_108_628, 000_109_084) Size(456): Append(log_id: T1-N1.223, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root >= seq(0)] then:[Put(Put key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root  ttl: 15000s)] else:[Get(Get key=__fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root)]})
+    txn.if_then[0].put __fd_session/D43gYDL/019c4d21%2d0e3c%2d7b41%2d824c%2d96bc92b9a88f/root (ttl_ms=15000000):
+      ClientSession
+  R-00450: [000_109_084, 000_109_131) Size(47): Commit(T1-N1.223)
+  R-00451: [000_109_131, 000_109_587) Size(456): Append(log_id: T1-N1.224, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00452: [000_109_587, 000_109_634) Size(47): Commit(T1-N1.224)
+  R-00453: [000_109_634, 000_110_131) Size(497): Append(log_id: T1-N1.225, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/D43gYDL/db1 == seq(245),__fd_database_by_id/244 == seq(246)] then:[Delete(Delete key=__fd_database/D43gYDL/db1),Put(Put key=__fd_database_by_id/244)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/244:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.324964Z, updated_on: 2026-02-11T14:35:39.324965Z, comment: "", drop_on: Some(2026-02-11T14:35:40.437873Z), gc_in_progress: false }
+  R-00454: [000_110_131, 000_110_178) Size(47): Commit(T1-N1.225)
+  R-00455: [000_110_178, 000_110_392) Size(214): Append(log_id: T1-N1.226, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/D43gYDL/database-by-id/244)] else:[]})
+  R-00456: [000_110_392, 000_110_439) Size(47): Commit(T1-N1.226)
+  R-00457: [000_110_439, 000_110_937) Size(498): Append(log_id: T1-N1.227, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/D43gYDL/db2 == seq(252),__fd_database_by_id/251 == seq(285)] then:[Delete(Delete key=__fd_database/D43gYDL/db2),Put(Put key=__fd_database_by_id/251)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/251:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.383080Z, updated_on: 2026-02-11T14:35:39.383081Z, comment: "", drop_on: Some(2026-02-11T14:35:40.490199Z), gc_in_progress: false }
+  R-00458: [000_110_937, 000_110_984) Size(47): Commit(T1-N1.227)
+  R-00459: [000_110_984, 000_111_198) Size(214): Append(log_id: T1-N1.228, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/D43gYDL/database-by-id/251)] else:[]})
+  R-00460: [000_111_198, 000_111_245) Size(47): Commit(T1-N1.228)
+  R-00461: [000_111_245, 000_111_701) Size(456): Append(log_id: T1-N1.229, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00462: [000_111_701, 000_111_748) Size(47): Commit(T1-N1.229)
+  R-00463: [000_111_748, 000_112_204) Size(456): Append(log_id: T1-N1.230, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root >= seq(0)] then:[Put(Put key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root  ttl: 15000s)] else:[Get(Get key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root)]})
+    txn.if_then[0].put __fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root (ttl_ms=15000000):
+      ClientSession
+  R-00464: [000_112_204, 000_112_251) Size(47): Commit(T1-N1.230)
+  R-00465: [000_112_251, 000_112_707) Size(456): Append(log_id: T1-N1.231, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00466: [000_112_707, 000_112_754) Size(47): Commit(T1-N1.231)
+  R-00467: [000_112_754, 000_113_210) Size(456): Append(log_id: T1-N1.232, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root >= seq(0)] then:[Put(Put key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root  ttl: 15000s)] else:[Get(Get key=__fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root)]})
+    txn.if_then[0].put __fd_session/hmLpxb8/019c4d21%2d0e3c%2d7b41%2d824c%2d96e11567a013/root (ttl_ms=15000000):
+      ClientSession
+  R-00468: [000_113_210, 000_113_257) Size(47): Commit(T1-N1.232)
+  R-00469: [000_113_257, 000_113_538) Size(281): Append(log_id: T1-N1.233, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_id_gen/table_id >= seq(0)] then:[Put(Put key=__fd_id_gen/table_id)] else:[Get(Get key=__fd_id_gen/table_id)]})
+    txn.if_then[0].put __fd_id_gen/table_id:
+      unknown-prefix(0 bytes)
+  R-00470: [000_113_538, 000_113_585) Size(47): Commit(T1-N1.233)
+  R-00471: [000_113_585, 000_115_776) Size(2191): Append(log_id: T1-N1.234, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database_by_id/266 == seq(268),__fd_table/266/test8 == seq(0),__fd_table_id_list/266/test8 == seq(0)] then:[Put(Put key=__fd_database_by_id/266),Put(Put key=__fd_table_by_id/300),Put(Put key=__fd_table_id_list/266/test8),Put(Put key=__fd_table_id_to_name/300),Put(Put key=__fd_table/266/test8)] else:[]})
+    txn.if_then[0].put __fd_database_by_id/266:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.579979Z, updated_on: 2026-02-11T14:35:39.579980Z, comment: "", drop_on: None, gc_in_progress: false }
+    txn.if_then[1].put __fd_table_by_id/300:
+      TableMeta { schema: TableSchema { fields: [TableField { name: "tiny", default_expr: None, data_type: Number(Int8), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "tiny_unsigned", default_expr: None, data_type: Number(UInt8), column_id: 1, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint", default_expr: None, data_type: Number(Int16), column_id: 2, computed_expr: None, auto_increment_expr: None }, TableField { name: "smallint_unsigned", default_expr: None, data_type: Number(UInt16), column_id: 3, computed_expr: None, auto_increment_expr: None }, TableField { name: "int", default_expr: None, data_type: Number(Int32), column_id: 4, computed_expr: None, auto_increment_expr: None }, TableField { name: "int_unsigned", default_expr: None, data_type: Number(UInt32), column_id: 5, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint", default_expr: None, data_type: Number(Int64), column_id: 6, computed_expr: None, auto_increment_expr: None }, TableField { name: "bigint_unsigned", default_expr: None, data_type: Number(UInt64), column_id: 7, computed_expr: None, auto_increment_expr: None }, TableField { name: "float", default_expr: None, data_type: Number(Float32), column_id: 8, computed_expr: None, auto_increment_expr: None }, TableField { name: "double", default_expr: None, data_type: Number(Float64), column_id: 9, computed_expr: None, auto_increment_expr: None }, TableField { name: "date", default_expr: None, data_type: Date, column_id: 10, computed_expr: None, auto_increment_expr: None }, TableField { name: "datetime", default_expr: None, data_type: Timestamp, column_id: 11, computed_expr: None, auto_increment_expr: None }, TableField { name: "ts", default_expr: None, data_type: Timestamp, column_id: 12, computed_expr: None, auto_increment_expr: None }, TableField { name: "str", default_expr: Some("'3'"), data_type: String, column_id: 13, computed_expr: None, auto_increment_expr: None }, TableField { name: "bool", default_expr: None, data_type: Boolean, column_id: 14, computed_expr: None, auto_increment_expr: None }, TableField { name: "arr", default_expr: None, data_type: Array(Nullable(String)), column_id: 15, computed_expr: None, auto_increment_expr: None }, TableField { name: "tup", default_expr: None, data_type: Tuple { fields_name: ["1", "2"], fields_type: [Nullable(Number(Float64)), Nullable(Number(Int32))] }, column_id: 16, computed_expr: None, auto_increment_expr: None }, TableField { name: "map", default_expr: None, data_type: Map(Tuple { fields_name: ["key", "value"], fields_type: [String, Nullable(Date)] }), column_id: 18, computed_expr: None, auto_increment_expr: None }, TableField { name: "bitmap", default_expr: None, data_type: Bitmap, column_id: 20, computed_expr: None, auto_increment_expr: None }, TableField { name: "variant", default_expr: None, data_type: Variant, column_id: 21, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 22 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {"TRANSIENT": "T", "compression": "zstd", "database_id": "266", "enable_auto_analyze": "1", "storage_format": "parquet"}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, created_on: 2026-02-11T14:35:40.930941Z, updated_on: 2026-02-11T14:35:40.930941Z, comment: "", field_comments: ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, shared_by: {}, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {}, refs: {} }
+    txn.if_then[2].put __fd_table_id_list/266/test8:
+      TableIdList { id_list: [300] }
+    txn.if_then[3].put __fd_table_id_to_name/300:
+      DBIdTableName { db_id: 266, table_name: "test8" }
+    txn.if_then[4].put __fd_table/266/test8:
+      unknown-prefix(3 bytes)
+  R-00472: [000_115_776, 000_115_823) Size(47): Commit(T1-N1.234)
+  R-00473: [000_115_823, 000_116_096) Size(273): Append(log_id: T1-N1.235, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Put(Put key=__fd_object_owners/ahBFJuQ/table-by-id/300)] else:[]})
+    txn.if_then[0].put __fd_object_owners/ahBFJuQ/table-by-id/300:
+      OwnershipInfo { object: Table { catalog_name: "default", db_id: 266, table_id: 300 }, role: "account_admin" }
+  R-00474: [000_116_096, 000_116_143) Size(47): Commit(T1-N1.235)
+  R-00475: [000_116_143, 000_116_599) Size(456): Append(log_id: T1-N1.236, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00476: [000_116_599, 000_116_646) Size(47): Commit(T1-N1.236)
+  R-00477: [000_116_646, 000_117_102) Size(456): Append(log_id: T1-N1.237, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00478: [000_117_102, 000_117_149) Size(47): Commit(T1-N1.237)
+  R-00479: [000_117_149, 000_117_648) Size(499): Append(log_id: T1-N1.238, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/ahBFJuQ/db1 == seq(259),__fd_database_by_id/258 == seq(260)] then:[Delete(Delete key=__fd_database/ahBFJuQ/db1),Put(Put key=__fd_database_by_id/258)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/258:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.522220Z, updated_on: 2026-02-11T14:35:39.522220Z, comment: "", drop_on: Some(2026-02-11T14:35:41.229951Z), gc_in_progress: false }
+  R-00480: [000_117_648, 000_117_695) Size(47): Commit(T1-N1.238)
+  R-00481: [000_117_695, 000_117_909) Size(214): Append(log_id: T1-N1.239, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/ahBFJuQ/database-by-id/258)] else:[]})
+  R-00482: [000_117_909, 000_117_956) Size(47): Commit(T1-N1.239)
+  R-00483: [000_117_956, 000_118_455) Size(499): Append(log_id: T1-N1.240, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_database/ahBFJuQ/db2 == seq(267),__fd_database_by_id/266 == seq(301)] then:[Delete(Delete key=__fd_database/ahBFJuQ/db2),Put(Put key=__fd_database_by_id/266)] else:[]})
+    txn.if_then[1].put __fd_database_by_id/266:
+      DatabaseMeta { engine: "default", engine_options: {}, options: {}, created_on: 2026-02-11T14:35:39.579979Z, updated_on: 2026-02-11T14:35:39.579980Z, comment: "", drop_on: Some(2026-02-11T14:35:41.273105Z), gc_in_progress: false }
+  R-00484: [000_118_455, 000_118_502) Size(47): Commit(T1-N1.240)
+  R-00485: [000_118_502, 000_118_716) Size(214): Append(log_id: T1-N1.241, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[] then:[Delete(Delete key=__fd_object_owners/ahBFJuQ/database-by-id/266)] else:[]})
+  R-00486: [000_118_716, 000_118_763) Size(47): Commit(T1-N1.241)
+  R-00487: [000_118_763, 000_119_219) Size(456): Append(log_id: T1-N1.242, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00488: [000_119_219, 000_119_266) Size(47): Commit(T1-N1.242)
+  R-00489: [000_119_266, 000_119_722) Size(456): Append(log_id: T1-N1.243, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00490: [000_119_722, 000_119_769) Size(47): Commit(T1-N1.243)
+  R-00491: [000_119_769, 000_120_225) Size(456): Append(log_id: T1-N1.244, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00492: [000_120_225, 000_120_272) Size(47): Commit(T1-N1.244)
+  R-00493: [000_120_272, 000_120_728) Size(456): Append(log_id: T1-N1.245, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00494: [000_120_728, 000_120_775) Size(47): Commit(T1-N1.245)
+  R-00495: [000_120_775, 000_121_231) Size(456): Append(log_id: T1-N1.246, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00496: [000_121_231, 000_121_278) Size(47): Commit(T1-N1.246)
+  R-00497: [000_121_278, 000_121_734) Size(456): Append(log_id: T1-N1.247, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00498: [000_121_734, 000_121_781) Size(47): Commit(T1-N1.247)
+  R-00499: [000_121_781, 000_122_237) Size(456): Append(log_id: T1-N1.248, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00500: [000_122_237, 000_122_284) Size(47): Commit(T1-N1.248)
+  R-00501: [000_122_284, 000_122_740) Size(456): Append(log_id: T1-N1.249, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00502: [000_122_740, 000_122_787) Size(47): Commit(T1-N1.249)
+  R-00503: [000_122_787, 000_123_243) Size(456): Append(log_id: T1-N1.250, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00504: [000_123_243, 000_123_290) Size(47): Commit(T1-N1.250)
+  R-00505: [000_123_290, 000_123_746) Size(456): Append(log_id: T1-N1.251, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00506: [000_123_746, 000_123_793) Size(47): Commit(T1-N1.251)
+  R-00507: [000_123_793, 000_124_249) Size(456): Append(log_id: T1-N1.252, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00508: [000_124_249, 000_124_296) Size(47): Commit(T1-N1.252)
+  R-00509: [000_124_296, 000_124_752) Size(456): Append(log_id: T1-N1.253, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00510: [000_124_752, 000_124_799) Size(47): Commit(T1-N1.253)
+  R-00511: [000_124_799, 000_125_255) Size(456): Append(log_id: T1-N1.254, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00512: [000_125_255, 000_125_302) Size(47): Commit(T1-N1.254)
+  R-00513: [000_125_302, 000_125_758) Size(456): Append(log_id: T1-N1.255, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00514: [000_125_758, 000_125_805) Size(47): Commit(T1-N1.255)
+  R-00515: [000_125_805, 000_126_262) Size(457): Append(log_id: T1-N1.256, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00516: [000_126_262, 000_126_310) Size(48): Commit(T1-N1.256)
+  R-00517: [000_126_310, 000_126_767) Size(457): Append(log_id: T1-N1.257, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00518: [000_126_767, 000_126_815) Size(48): Commit(T1-N1.257)
+  R-00519: [000_126_815, 000_127_272) Size(457): Append(log_id: T1-N1.258, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00520: [000_127_272, 000_127_320) Size(48): Commit(T1-N1.258)
+  R-00521: [000_127_320, 000_127_777) Size(457): Append(log_id: T1-N1.259, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00522: [000_127_777, 000_127_825) Size(48): Commit(T1-N1.259)
+  R-00523: [000_127_825, 000_128_282) Size(457): Append(log_id: T1-N1.260, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root >= seq(0)] then:[Put(Put key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root  ttl: 15000s)] else:[Get(Get key=__fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root)]})
+    txn.if_then[0].put __fd_session/ahBFJuQ/019c4d21%2d0e3b%2d75a0%2d99ba%2d1a5a451006bf/root (ttl_ms=15000000):
+      ClientSession
+  R-00524: [000_128_282, 000_128_330) Size(48): Commit(T1-N1.260)
+  R-00525: [000_128_330, 000_130_005) Size(1675): Append(log_id: T1-N1.261, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO == seq(7)] then:[Put(Put key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO  ttl: 60s),Put(Put key=__fd_clusters_v6/test_tenant/online_clusters/test_warehouse/test_cluster/GEpfnEDRTyoVk9KF9wfgO  ttl: 60s),Put(Put key=__fd_warehouses/v1/test_tenant/test_warehouse  ttl: 60s),Get(Get key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO)] else:[Get(Get key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO),Get(Get key=__fd_warehouses/v1/test_tenant/test_warehouse)]})
+    txn.if_then[0].put __fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO (ttl_ms=60000):
+      unknown-prefix(431 bytes)
+    txn.if_then[1].put __fd_clusters_v6/test_tenant/online_clusters/test_warehouse/test_cluster/GEpfnEDRTyoVk9KF9wfgO (ttl_ms=60000):
+      unknown-prefix(371 bytes)
+    txn.if_then[2].put __fd_warehouses/v1/test_tenant/test_warehouse (ttl_ms=60000):
+      unknown-prefix(32 bytes)
+  R-00526: [000_130_005, 000_130_053) Size(48): Commit(T1-N1.261)
+  R-00527: [000_130_053, 000_131_730) Size(1677): Append(log_id: T1-N1.262, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO == seq(330)] then:[Put(Put key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO  ttl: 60s),Put(Put key=__fd_clusters_v6/test_tenant/online_clusters/test_warehouse/test_cluster/GEpfnEDRTyoVk9KF9wfgO  ttl: 60s),Put(Put key=__fd_warehouses/v1/test_tenant/test_warehouse  ttl: 60s),Get(Get key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO)] else:[Get(Get key=__fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO),Get(Get key=__fd_warehouses/v1/test_tenant/test_warehouse)]})
+    txn.if_then[0].put __fd_clusters_v6/test_tenant/online_nodes/GEpfnEDRTyoVk9KF9wfgO (ttl_ms=60000):
+      unknown-prefix(431 bytes)
+    txn.if_then[1].put __fd_clusters_v6/test_tenant/online_clusters/test_warehouse/test_cluster/GEpfnEDRTyoVk9KF9wfgO (ttl_ms=60000):
+      unknown-prefix(371 bytes)
+    txn.if_then[2].put __fd_warehouses/v1/test_tenant/test_warehouse (ttl_ms=60000):
+      unknown-prefix(32 bytes)

@@ -28,7 +28,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::plan::split_prefix;
-use databend_common_meta_types::NodeInfo;
+use databend_meta_types::NodeInfo;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use goldenfile::Mint;
 

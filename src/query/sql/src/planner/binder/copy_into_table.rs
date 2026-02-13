@@ -490,6 +490,12 @@ impl Binder {
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
                 case_sensitive,
+                Some(
+                    plan.stage_table_info
+                        .copy_into_table_options
+                        .on_error
+                        .clone(),
+                ),
             )
             .await?;
 
@@ -525,6 +531,7 @@ impl Binder {
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
         s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
+        s_expr = self.add_virtual_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -630,7 +637,8 @@ impl Binder {
 /// - mystage/
 /// - mystage/abc
 /// - ~/abc
-/// Returns user's stage info and relative path towards the stage's root.
+///
+/// Returns the stage name and relative path towards the stage's root.
 ///
 /// If input location is empty we will convert it to `/` means the root of stage
 ///
@@ -644,27 +652,65 @@ impl Binder {
 ///
 /// - mystage/abc => (mystage, "abc")
 ///
-/// For internal stage, we will also add prefix `/stage/<stage>/`
-///
-/// - ~/abc => (internal, "/stage/internal/abc")
-#[async_backtrace::framed]
-pub async fn resolve_stage_location(
-    ctx: &dyn TableContext,
-    location: &str,
-) -> Result<(StageInfo, String)> {
-    // my_named_stage/abc/
+/// - ~/abc => ("~", "abc")
+pub fn parse_stage_location(location: &str) -> Result<(String, String)> {
+    let location = location.trim_start_matches('@');
     let names: Vec<&str> = location.splitn(2, '/').filter(|v| !v.is_empty()).collect();
+    if names.is_empty() {
+        return Err(ErrorCode::BadArguments(
+            "stage path must include a stage name".to_string(),
+        ));
+    }
     if names[0] == STAGE_PLACEHOLDER {
         return Err(ErrorCode::BadArguments(
             "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.",
         ));
     }
 
-    let mut stage = if names[0] == "~" {
+    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
+    let path = if path.is_empty() { "/" } else { path };
+    Ok((names[0].to_string(), path.to_string()))
+}
+
+pub fn parse_stage_name(location: &str) -> Result<String> {
+    if !location.starts_with('@') {
+        return Err(ErrorCode::BadArguments(format!(
+            "stage path must start with @, but got {}",
+            location
+        )));
+    }
+    let stage_name = location.trim_start_matches('@');
+    if stage_name.is_empty() {
+        return Err(ErrorCode::BadArguments(
+            "stage path must include a stage name".to_string(),
+        ));
+    }
+    if stage_name == STAGE_PLACEHOLDER {
+        return Err(ErrorCode::BadArguments(
+            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.".to_string(),
+        ));
+    }
+    if stage_name.contains('/') {
+        return Err(ErrorCode::BadArguments(format!(
+            "stage argument must be a stage name, but got {}",
+            location
+        )));
+    }
+    Ok(stage_name.to_string())
+}
+
+#[async_backtrace::framed]
+pub async fn resolve_stage_location(
+    ctx: &dyn TableContext,
+    location: &str,
+) -> Result<(StageInfo, String)> {
+    let (stage_name, path) = parse_stage_location(location)?;
+
+    let mut stage = if stage_name == "~" {
         StageInfo::new_user_stage(&ctx.get_current_user()?.name)
     } else {
         UserApiProvider::instance()
-            .get_stage(&ctx.get_tenant(), names[0])
+            .get_stage(&ctx.get_tenant(), &stage_name)
             .await?
     };
     if ThreadTracker::capture_log_settings()
@@ -675,11 +721,8 @@ pub async fn resolve_stage_location(
         stage.allow_credential_chain = true;
     }
 
-    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
-    let path = if path.is_empty() { "/" } else { path };
-
     debug!("parsed stage: {stage:?}, path: {path}");
-    Ok((stage, path.to_string()))
+    Ok((stage, path))
 }
 
 #[async_backtrace::framed]

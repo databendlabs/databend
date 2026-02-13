@@ -33,6 +33,10 @@
 #![allow(clippy::let_unit_value)]
 #![feature(box_patterns)]
 
+mod auth;
+pub use auth::RefreshableToken;
+pub use auth::TokenFile;
+
 mod config;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
@@ -72,23 +76,16 @@ pub use stage::StageFilesInfo;
 pub use stage::init_stage_operator;
 
 mod copy;
-mod histogram;
 mod merge;
 mod meta_hll;
 mod metrics_layer;
 mod multi_table_insert;
-mod statistics;
 
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
 pub use copy::FileParseErrorAtLine;
 pub use copy::FileStatus;
-pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
-pub use histogram::Histogram;
-pub use histogram::HistogramBucket;
 pub use merge::MutationStatus;
 pub use meta_hll::MetaHLL;
 pub use meta_hll::MetaHLL12;
 pub use multi_table_insert::MultiTableInsertStatus;
-pub use statistics::Datum;
-pub use statistics::F64;

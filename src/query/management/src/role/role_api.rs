@@ -18,10 +18,10 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::role_ident;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_kvapi::kvapi::ListKVReply;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
+use databend_meta_kvapi::kvapi::ListKVReply;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RoleApi: Sync + Send {

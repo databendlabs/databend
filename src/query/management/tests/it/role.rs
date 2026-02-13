@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use anyhow::Result;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::UpsertKV;
-use databend_common_version::BUILD_INFO;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::UpsertKV;
 use tokio::sync::Mutex;
 
 fn make_role_key(role: &str) -> String {
@@ -31,9 +29,9 @@ fn make_role_key(role: &str) -> String {
 mod add {
 
     use databend_common_meta_app::principal::RoleInfo;
-    use databend_common_meta_kvapi::kvapi::KVApi;
-    use databend_common_meta_types::MatchSeq;
-    use databend_common_meta_types::Operation;
+    use databend_meta_kvapi::kvapi::KVApi;
+    use databend_meta_types::MatchSeq;
+    use databend_meta_types::Operation;
 
     use super::*;
 
@@ -88,8 +86,8 @@ mod add {
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> Result<(Arc<MetaStore>, RoleMgr)> {
-    let test_api = MetaStore::new_local_testing::<DatabendRuntime>(BUILD_INFO.semver()).await;
-    let client = test_api.deref().clone();
+    let test_api = MetaStore::new_local_testing::<DatabendRuntime>().await;
+    let client = test_api.inner().clone();
 
     let test_api = Arc::new(test_api);
 

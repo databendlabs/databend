@@ -21,7 +21,6 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::SeqV;
 use databend_common_storages_system::BacktraceTable;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
@@ -81,6 +80,7 @@ use databend_common_version::DATABEND_CREDITS_LICENSES;
 use databend_common_version::DATABEND_CREDITS_NAMES;
 use databend_common_version::DATABEND_CREDITS_VERSIONS;
 use databend_common_version::DATABEND_OPT_LEVEL;
+use databend_meta_types::SeqV;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
@@ -177,11 +177,11 @@ impl SystemDatabase {
                 DictionariesTable::create(sys_db_meta.next_table_id()),
                 Arc::new(ClusteringHistoryTable::create(
                     sys_db_meta.next_table_id(),
-                    config.query.max_query_log_size,
+                    config.query.common.max_query_log_size,
                 )),
                 QueryExecutionTable::create(
                     sys_db_meta.next_table_id(),
-                    config.query.max_query_log_size,
+                    config.query.common.max_query_log_size,
                 ),
                 ConstraintsTable::create(sys_db_meta.next_table_id()),
             ]);
@@ -192,7 +192,7 @@ impl SystemDatabase {
                 table_list.push(TasksTable::create(sys_db_meta.next_table_id()));
                 table_list.push(TaskHistoryTable::create(sys_db_meta.next_table_id()));
             }
-            disable_system_table_load = config.query.disable_system_table_load;
+            disable_system_table_load = config.query.common.disable_system_table_load;
         } else {
             disable_system_table_load = false;
         }

@@ -304,7 +304,9 @@ impl DefaultSettings {
                 }),
                 ("http_handler_result_timeout_secs", DefaultSettingValue {
                     value: {
-                        let result_timeout_secs = global_conf.as_ref().map(|conf| conf.query.http_handler_result_timeout_secs)
+                        let result_timeout_secs = global_conf
+                            .as_ref()
+                            .map(|conf| conf.query.common.http_handler_result_timeout_secs)
                             .unwrap_or(60);
                         UserSettingValue::UInt64(result_timeout_secs)
                     },
@@ -1012,6 +1014,14 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("udf_cloud_import_presign_expire_secs", DefaultSettingValue {
+                    // 3 day
+                    value: UserSettingValue::UInt64(259200),
+                    desc: "Presign expiry for cloud UDF stage imports",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("external_server_request_batch_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Request batch rows to external server",
@@ -1519,7 +1529,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_new_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables the experimental new join implement",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1616,7 +1626,7 @@ impl DefaultSettings {
     pub(crate) fn data_retention_time_in_days_max() -> u64 {
         match GlobalConfig::try_get_instance() {
             None => 90,
-            Some(conf) => conf.query.data_retention_time_in_days_max,
+            Some(conf) => conf.query.common.data_retention_time_in_days_max,
         }
     }
 
@@ -1641,8 +1651,8 @@ impl DefaultSettings {
                     // Detect CGROUPS ?
                 }
 
-                if conf.query.num_cpus != 0 {
-                    num_cpus = conf.query.num_cpus;
+                if conf.query.common.num_cpus != 0 {
+                    num_cpus = conf.query.common.num_cpus;
                 }
 
                 num_cpus.clamp(1, 96)
@@ -1655,7 +1665,7 @@ impl DefaultSettings {
 
         Ok(match GlobalConfig::try_get_instance() {
             None => 1024 * memory_info.total * 80 / 100,
-            Some(conf) => match conf.query.max_server_memory_usage {
+            Some(conf) => match conf.query.common.max_server_memory_usage {
                 0 => 1024 * memory_info.total * 80 / 100,
                 max_server_memory_usage => max_server_memory_usage,
             },

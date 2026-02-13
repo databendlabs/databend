@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::escape_string;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use paste::paste;
 use serde::Deserialize;
 use serde::Serialize;
@@ -359,7 +360,13 @@ impl FileFormatParams {
                 check_option!(p, nan_display)?;
             }
             FileFormatParams::Csv(p) => {
-                check_option!(p, field_delimiter)?;
+                check_field_delimiter_csv(&p.field_delimiter).map_err(|msg| {
+                    format!(
+                        "{} is currently set to '{}'. {msg}",
+                        OPT_FIELD_DELIMITER.to_ascii_uppercase(),
+                        p.field_delimiter
+                    )
+                })?;
                 check_option!(p, record_delimiter)?;
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
@@ -537,7 +544,7 @@ impl Default for TsvFileFormatParams {
             headers: 0,
             field_delimiter: "\t".to_string(),
             record_delimiter: "\n".to_string(),
-            nan_display: "nan".to_string(),
+            nan_display: "NaN".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
         }
@@ -664,6 +671,15 @@ pub enum BinaryFormat {
     #[default]
     Hex,
     Base64,
+}
+
+impl BinaryFormat {
+    pub fn to_display_format(&self) -> BinaryDisplayFormat {
+        match self {
+            BinaryFormat::Hex => BinaryDisplayFormat::Hex,
+            BinaryFormat::Base64 => BinaryDisplayFormat::Base64,
+        }
+    }
 }
 
 impl FromStr for BinaryFormat {
@@ -957,6 +973,18 @@ pub fn check_field_delimiter(option: &str) -> std::result::Result<(), String> {
         Ok(())
     } else {
         Err("Expecting a single one-byte, non-alphanumeric character.".into())
+    }
+}
+
+pub fn check_field_delimiter_csv(option: &str) -> std::result::Result<(), String> {
+    if option.len() == 1 && option.as_bytes()[0].is_ascii_alphanumeric() {
+        Err("Expecting a non-alphanumeric character.".into())
+    } else if option.len() > 20 {
+        Err("Expecting at most 20 bytes.".into())
+    } else if option.is_empty() {
+        Err("Should not be empty.".into())
+    } else {
+        Ok(())
     }
 }
 

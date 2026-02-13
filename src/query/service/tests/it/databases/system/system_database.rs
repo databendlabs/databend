@@ -33,7 +33,7 @@ fn test_disable_system_table() -> anyhow::Result<()> {
 
     // Disable.
     {
-        conf.query.disable_system_table_load = true;
+        conf.query.common.disable_system_table_load = true;
 
         let mut sys_db_meta = InMemoryMetas::create(SYS_DB_ID_BEGIN, SYS_TBL_ID_BEGIN);
         sys_db_meta.init_db("system");

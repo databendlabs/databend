@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicU64;
 use databend_common_ast::ast::OnErrorMode;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -26,7 +25,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_formats::FileFormatOptionsExt;
+use databend_common_io::prelude::InputFormatSettings;
 use databend_common_storage::FileParseError;
 
 use crate::read::default_expr_evaluator::DefaultExprEvaluator;
@@ -40,10 +39,10 @@ pub struct LoadContext {
     pub default_exprs: Option<Vec<RemoteDefaultExpr>>,
     pub default_expr_evaluator: Option<Arc<DefaultExprEvaluator>>,
     pub pos_projection: Option<Vec<usize>>,
-    pub is_copy: bool,
     pub stage_root: String,
 
-    pub file_format_options_ext: FileFormatOptionsExt,
+    pub is_select: bool,
+    pub settings: InputFormatSettings,
     pub block_compact_thresholds: BlockThresholds,
 
     pub error_handler: Arc<ErrorHandler>,
@@ -59,15 +58,15 @@ impl LoadContext {
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let is_select = stage_table_info.is_select;
-        let mut file_format_options_ext =
-            FileFormatOptionsExt::create_from_settings(&settings, is_select)?;
-        file_format_options_ext.disable_variant_check = stage_table_info
+        let mut settings = settings.get_input_format_settings()?;
+        settings.disable_variant_check = stage_table_info
             .copy_into_table_options
             .disable_variant_check;
         Self::try_create(
             ctx,
             stage_table_info.schema.clone(),
-            file_format_options_ext,
+            is_select,
+            settings,
             stage_table_info.default_exprs.clone(),
             pos_projection,
             block_compact_thresholds,
@@ -79,7 +78,8 @@ impl LoadContext {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
-        file_format_options_ext: FileFormatOptionsExt,
+        is_select: bool,
+        settings: InputFormatSettings,
         default_exprs: Option<Vec<RemoteDefaultExpr>>,
         pos_projection: Option<Vec<usize>>,
         block_compact_thresholds: BlockThresholds,
@@ -104,7 +104,6 @@ impl LoadContext {
         } else {
             None
         };
-        let is_copy = ctx.get_query_kind() == QueryKind::CopyIntoTable;
         Ok(Self {
             table_context: ctx,
             internal_columns,
@@ -113,9 +112,9 @@ impl LoadContext {
             default_expr_evaluator,
             default_exprs,
             pos_projection,
-            is_copy,
             stage_root,
-            file_format_options_ext,
+            is_select,
+            settings,
             error_handler: Arc::new(ErrorHandler {
                 on_error_mode,
                 on_error_count: AtomicU64::new(0),

@@ -20,6 +20,7 @@ use std::collections::VecDeque;
 use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use std::vec;
 
 use databend_common_ast::Span;
@@ -59,13 +60,19 @@ use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::client_config::build_client_config;
+use databend_common_cloud_control::client_config::make_request;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::ApplyResourceRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -157,7 +164,9 @@ use crate::binder::Binder;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
+use crate::binder::VirtualColumnName;
 use crate::binder::bind_values;
+use crate::binder::parse_stage_name;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
@@ -184,6 +193,7 @@ use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
+use crate::plans::ReadFileFunctionArgument;
 use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -195,6 +205,7 @@ use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFField;
 use crate::plans::UDFLambdaCall;
+use crate::plans::UDFLanguage;
 use crate::plans::UDFScriptCode;
 use crate::plans::UDFType;
 use crate::plans::Visitor as ScalarVisitor;
@@ -213,6 +224,195 @@ pub struct StageLocationParam {
     pub param_name: String,
     pub relative_path: String,
     pub stage_info: StageInfo,
+}
+
+#[derive(Debug, Clone)]
+struct UdfAsset {
+    location: String,
+    url: String,
+    headers: BTreeMap<String, String>,
+}
+
+// UDF server expects unsigned types in UINT* form instead of SQL unsigned names.
+fn udf_type_string(data_type: &DataType) -> String {
+    let sql_name = data_type.sql_name();
+    match sql_name.as_str() {
+        "TINYINT UNSIGNED" => "UINT8".to_string(),
+        "SMALLINT UNSIGNED" => "UINT16".to_string(),
+        "INT UNSIGNED" => "UINT32".to_string(),
+        "BIGINT UNSIGNED" => "UINT64".to_string(),
+        _ => sql_name,
+    }
+}
+
+fn build_udf_cloud_script(
+    code: &str,
+    handler: &str,
+    imports: &[UdfAsset],
+    packages: &[String],
+    input_types: &[String],
+    result_type: &str,
+) -> Result<String> {
+    const UDF_CLOUD_SCRIPT_TEMPLATE: &str = include_str!("udf_cloud_script.sh.tpl");
+    const UDF_IMPORTS_BLOCK_TEMPLATE: &str = include_str!("udf_cloud_imports_block.sh.tpl");
+    const UDF_IMPORT_DOWNLOADER_TEMPLATE: &str = include_str!("udf_import_downloader.sh.tpl");
+    let server_stub = build_udf_cloud_server_stub(handler, input_types, result_type)?;
+    let imports_json = if imports.is_empty() {
+        None
+    } else {
+        let imports_payload = imports
+            .iter()
+            .map(|asset| {
+                json!({
+                    "location": asset.location.as_str(),
+                    "url": asset.url.as_str(),
+                    "headers": &asset.headers,
+                })
+            })
+            .collect::<Vec<_>>();
+        Some(to_string(&imports_payload)?)
+    };
+    let mut contents = vec![code, server_stub.as_str()];
+    if let Some(json) = imports_json.as_ref() {
+        contents.push(json);
+    }
+    let code_marker = unique_heredoc_marker("UDF_CODE", &contents);
+    let server_marker = unique_heredoc_marker("UDF_SERVER", &contents);
+    let imports_marker = imports_json
+        .as_ref()
+        .map(|_| unique_heredoc_marker("UDF_IMPORTS", &contents));
+
+    let packages = packages
+        .iter()
+        .map(|pkg| pkg.trim())
+        .filter(|pkg| !pkg.is_empty())
+        .collect::<Vec<_>>();
+
+    let packages_block = if packages.is_empty() {
+        String::new()
+    } else {
+        let mut block = String::from("python -m pip install --no-cache-dir");
+        for pkg in &packages {
+            block.push(' ');
+            block.push_str(pkg);
+        }
+        block
+    };
+
+    let imports_block = if let Some(json) = imports_json {
+        let marker = imports_marker.expect("imports marker must exist");
+        let mut replacements = BTreeMap::new();
+        replacements.insert("IMPORTS_MARKER", marker);
+        replacements.insert("IMPORTS_JSON", json);
+        replacements.insert(
+            "IMPORTS_DOWNLOADER",
+            UDF_IMPORT_DOWNLOADER_TEMPLATE.to_string(),
+        );
+        render_template(UDF_IMPORTS_BLOCK_TEMPLATE, &replacements)?
+    } else {
+        String::new()
+    };
+
+    let mut replacements = BTreeMap::new();
+    replacements.insert("PACKAGES_BLOCK", packages_block);
+    replacements.insert("IMPORTS_BLOCK", imports_block);
+    replacements.insert("CODE_MARKER", code_marker);
+    replacements.insert("UDF_CODE", code.to_string());
+    replacements.insert("SERVER_MARKER", server_marker);
+    replacements.insert("SERVER_STUB", server_stub);
+    render_template(UDF_CLOUD_SCRIPT_TEMPLATE, &replacements)
+}
+
+fn build_udf_cloud_server_stub(
+    handler: &str,
+    input_types: &[String],
+    result_type: &str,
+) -> Result<String> {
+    const UDF_CLOUD_SERVER_STUB_TEMPLATE: &str = include_str!("udf_cloud_server_stub.py.tpl");
+    let handler_literal = escape_python_double_quoted(handler);
+    let input_types_literal = python_string_list(input_types);
+    let result_type_literal = escape_python_double_quoted(result_type);
+    let mut replacements = BTreeMap::new();
+    replacements.insert("HANDLER_LITERAL", handler_literal);
+    replacements.insert("INPUT_TYPES_LITERAL", input_types_literal);
+    replacements.insert("RESULT_TYPE_LITERAL", result_type_literal);
+    render_template(UDF_CLOUD_SERVER_STUB_TEMPLATE, &replacements)
+}
+
+fn render_template(template: &str, replacements: &BTreeMap<&str, String>) -> Result<String> {
+    let mut output = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(start) = rest.find("{{") {
+        output.push_str(&rest[..start]);
+        let after_start = &rest[start + 2..];
+        if let Some(end) = after_start.find("}}") {
+            let key = &after_start[..end];
+            let value = replacements.get(key).ok_or_else(|| {
+                ErrorCode::Internal(format!("missing template placeholder '{key}'"))
+            })?;
+            output.push_str(value);
+            rest = &after_start[end + 2..];
+        } else {
+            output.push_str(rest);
+            return Ok(output);
+        }
+    }
+    output.push_str(rest);
+    Ok(output)
+}
+
+fn python_string_list(values: &[String]) -> String {
+    let items = values
+        .iter()
+        .map(|value| format!("\"{}\"", escape_python_double_quoted(value)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("[{items}]")
+}
+
+fn escape_python_double_quoted(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn extract_script_metadata_deps(script: &str) -> Vec<String> {
+    let mut ss = String::new();
+    let mut meta_start = false;
+    for line in script.lines() {
+        if meta_start {
+            if line.starts_with("# ///") {
+                break;
+            }
+            ss.push_str(line.trim_start_matches('#').trim());
+            ss.push('\n');
+        }
+        if !meta_start && line.starts_with("# /// script") {
+            meta_start = true;
+        }
+    }
+
+    let parsed = ss.parse::<toml::Value>().unwrap();
+
+    if parsed.get("dependencies").is_none() {
+        return Vec::new();
+    }
+
+    if let Some(deps) = parsed["dependencies"].as_array() {
+        deps.iter()
+            .filter_map(|value| value.as_str().map(|item| item.to_string()))
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
+fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
+    let mut suffix = 0;
+    let mut marker = base.to_string();
+    while contents.iter().any(|content| content.contains(&marker)) {
+        suffix += 1;
+        marker = format!("{base}_{suffix}");
+    }
+    marker
 }
 
 /// A helper for type checking.
@@ -4744,8 +4944,8 @@ impl<'a> TypeChecker<'a> {
         if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
             if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
                 span,
-                &column.database_name,
-                &column.table_name,
+                base_column.table_index,
+                base_column.column_id,
                 &base_column.column_name,
                 &keypaths,
             ) {
@@ -5280,9 +5480,22 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         name: String,
         arguments: &[Expr],
-        mut udf_definition: UDFServer,
+        udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
+        self.resolve_udf_server_internal(span, name, arguments, udf_definition, true)
+    }
+
+    fn resolve_udf_server_internal(
+        &mut self,
+        span: Span,
+        name: String,
+        arguments: &[Expr],
+        mut udf_definition: UDFServer,
+        validate_address: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if validate_address {
+            UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
+        }
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
                 "Require {} parameters, but got: {}",
@@ -5466,6 +5679,142 @@ impl<'a> TypeChecker<'a> {
         Ok(value.to_owned())
     }
 
+    fn apply_udf_cloud_resource(
+        &self,
+        resource_type: &str,
+        script: String,
+    ) -> Result<(String, BTreeMap<String, String>)> {
+        let Some(_) = &GlobalConfig::instance()
+            .query
+            .common
+            .cloud_control_grpc_server_address
+        else {
+            return Err(ErrorCode::Unimplemented(
+                "SandboxUDF requires cloud control enabled, please set cloud_control_grpc_server_address in config",
+            ));
+        };
+
+        let provider = CloudControlApiProvider::instance();
+        let tenant = self.ctx.get_tenant();
+        let user = self
+            .ctx
+            .get_current_user()?
+            .identity()
+            .display()
+            .to_string();
+        let query_id = self.ctx.get_id();
+        let mut cfg = build_client_config(
+            tenant.tenant_name().to_string(),
+            user,
+            query_id,
+            provider.get_timeout(),
+        );
+        cfg.add_resource_version_info();
+
+        let req = ApplyResourceRequest {
+            r#type: resource_type.to_string(),
+            script,
+        };
+
+        let resp = databend_common_base::runtime::block_on(
+            provider
+                .get_resource_client()
+                .apply_resource(make_request(req, cfg)),
+        )?;
+
+        let endpoint = resp.endpoint;
+        if endpoint.is_empty() {
+            return Err(ErrorCode::CloudControlConnectError(
+                "UDF cloud resource endpoint is empty".to_string(),
+            ));
+        }
+
+        Ok((endpoint, resp.headers))
+    }
+
+    fn build_udf_cloud_imports(
+        &self,
+        imports: &[String],
+        expire: Duration,
+    ) -> Result<Vec<UdfAsset>> {
+        if imports.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let locations = imports
+            .iter()
+            .map(|location| location.trim_start_matches('@').to_string())
+            .collect::<Vec<_>>();
+
+        let stage_locations = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &locations,
+        ))?;
+
+        databend_common_base::runtime::block_on(async move {
+            let mut results = Vec::with_capacity(stage_locations.len());
+            for ((stage_info, path), location) in stage_locations.into_iter().zip(imports.iter()) {
+                let op = init_stage_operator(&stage_info).map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to get StageTable operator for UDF import '{}': {}",
+                        location, err
+                    ))
+                })?;
+                if !op.info().full_capability().presign {
+                    return Err(ErrorCode::StorageUnsupported(
+                        "storage doesn't support presign operation",
+                    ));
+                }
+                op.stat(&path).await.map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to stat UDF import '{}': {}",
+                        location, err
+                    ))
+                })?;
+                let presigned = op.presign_read(&path, expire).await.map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to presign UDF import '{}': {}",
+                        location, err
+                    ))
+                })?;
+                let headers = presigned
+                    .header()
+                    .into_iter()
+                    .map(|(name, value)| {
+                        let value = value.to_str().map_err(|err| {
+                            ErrorCode::SemanticError(format!(
+                                "Failed to parse presigned header for UDF import '{}': {err}",
+                                location
+                            ))
+                        })?;
+                        Ok((name.as_str().to_string(), value.to_string()))
+                    })
+                    .collect::<Result<BTreeMap<_, _>>>()?;
+                results.push(UdfAsset {
+                    location: location.to_string(),
+                    url: presigned.uri().to_string(),
+                    headers,
+                });
+            }
+
+            Ok(results)
+        })
+    }
+
+    fn build_udf_cloud_script(
+        &self,
+        code: &str,
+        handler: &str,
+        imports: &[UdfAsset],
+        packages: &[String],
+        arg_types: &[DataType],
+        return_type: &DataType,
+    ) -> Result<String> {
+        let input_types = arg_types.iter().map(udf_type_string).collect::<Vec<_>>();
+        let result_type = udf_type_string(return_type);
+        build_udf_cloud_script(code, handler, imports, packages, &input_types, &result_type)
+    }
+
     async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
         let file_location = match code.strip_prefix('@') {
             Some(location) => FileLocation::Stage(location.to_string()),
@@ -5555,7 +5904,13 @@ impl<'a> TypeChecker<'a> {
         } = udf_definition;
 
         let language = language.parse()?;
-        UDFValidator::is_udf_script_allowed(&language)?;
+        let use_cloud = matches!(language, UDFLanguage::Python)
+            && GlobalConfig::instance().query.common.enable_udf_sandbox;
+        if use_cloud {
+            UDFValidator::is_udf_cloud_script_allowed(&language)?;
+        } else {
+            UDFValidator::is_udf_script_allowed(&language)?;
+        }
         let mut arguments = Vec::with_capacity(args.len());
         for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
@@ -5564,6 +5919,41 @@ impl<'a> TypeChecker<'a> {
             } else {
                 arguments.push(arg);
             }
+        }
+
+        if use_cloud {
+            let code_bytes =
+                databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?;
+            let resolved_code = String::from_utf8(code_bytes).map_err(|err| {
+                ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
+            })?;
+            let settings = self.ctx.get_settings();
+            let import_assets = self.build_udf_cloud_imports(
+                &imports,
+                Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
+            )?;
+            let mut merged_packages = extract_script_metadata_deps(&resolved_code);
+            merged_packages.extend_from_slice(&packages);
+            let script = self.build_udf_cloud_script(
+                &resolved_code,
+                &handler,
+                &import_assets,
+                &merged_packages,
+                &arg_types,
+                &return_type,
+            )?;
+            let (endpoint, headers) = self.apply_udf_cloud_resource("udf", script)?;
+            let udf_definition = UDFServer {
+                address: endpoint,
+                handler,
+                headers,
+                language: language.to_string(),
+                arg_names: Vec::new(),
+                arg_types,
+                return_type,
+                immutable: _immutable,
+            };
+            return self.resolve_udf_server_internal(span, name, args, udf_definition, false);
         }
 
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
@@ -5804,6 +6194,7 @@ impl<'a> TypeChecker<'a> {
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
             "dict_get" => self.resolve_dict_get_async_function(span, func_name, arguments)?,
+            "read_file" => self.resolve_read_file_async_function(span, func_name, arguments)?,
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -6066,6 +6457,115 @@ impl<'a> TypeChecker<'a> {
             }),
             attr_type,
         )))
+    }
+
+    fn resolve_read_file_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if args.len() != 1 && args.len() != 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "read_file function need one or two arguments but got {}",
+                args.len()
+            ))
+            .set_span(span));
+        }
+
+        let mut resolved_args = Vec::with_capacity(args.len());
+        let mut arg_types = Vec::with_capacity(args.len());
+        for arg in args {
+            let box (arg_scalar, arg_type) = self.resolve(arg)?;
+            let arg_scalar = if arg_type.remove_nullable() != DataType::String {
+                wrap_cast(&arg_scalar, &DataType::String)
+            } else {
+                arg_scalar
+            };
+            resolved_args.push(arg_scalar);
+            arg_types.push(arg_type);
+        }
+
+        let mut read_file_arg = ReadFileFunctionArgument {
+            stage_name: None,
+            stage_info: None,
+        };
+
+        if args.len() == 1 {
+            if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
+                if let Some(location) = constant.value.as_string() {
+                    if !location.starts_with('@') {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "stage path must start with @, but got {}",
+                            location
+                        ))
+                        .set_span(span));
+                    }
+                }
+            }
+        } else if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
+            if let Some(stage) = constant.value.as_string() {
+                let stage_name = parse_stage_name(stage).map_err(|err| {
+                    ErrorCode::SemanticError(err.message().to_string()).set_span(span)
+                })?;
+                let stage_info =
+                    Self::resolve_stage_info_for_read_file(self.ctx.as_ref(), span, &stage_name)?;
+                read_file_arg.stage_name = Some(stage_name);
+                read_file_arg.stage_info = Some(Box::new(stage_info));
+            }
+        }
+
+        let return_type = if arg_types
+            .iter()
+            .any(|arg_type| arg_type.is_nullable_or_null())
+        {
+            DataType::Nullable(Box::new(DataType::Binary))
+        } else {
+            DataType::Binary
+        };
+
+        let display_name = if args.len() == 1 {
+            format!("{}({})", func_name, args[0])
+        } else {
+            format!("{}({}, {})", func_name, args[0], args[1])
+        };
+        Ok(Box::new((
+            ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+                span,
+                func_name: func_name.to_string(),
+                display_name,
+                return_type: Box::new(return_type.clone()),
+                arguments: resolved_args,
+                func_arg: AsyncFunctionArgument::ReadFile(read_file_arg),
+            }),
+            return_type,
+        )))
+    }
+
+    fn resolve_stage_info_for_read_file(
+        ctx: &dyn TableContext,
+        span: Span,
+        stage_name: &str,
+    ) -> Result<StageInfo> {
+        databend_common_base::runtime::block_on(async move {
+            let (stage_info, _) = resolve_stage_location(ctx, stage_name).await?;
+            if ctx.get_settings().get_enable_experimental_rbac_check()? {
+                let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+                if !(stage_info.is_temporary
+                    || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                    || stage_info.stage_type == StageType::User
+                        && stage_info.stage_name == ctx.get_current_user()?.name)
+                {
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege READ is required on stage {} for user {}",
+                        stage_info.stage_name.clone(),
+                        &ctx.get_current_user()?.identity().display(),
+                    ))
+                    .set_span(span));
+                }
+            }
+            Ok(stage_info)
+        })
     }
 
     fn resolve_cast_to_variant(
@@ -6427,28 +6927,35 @@ impl<'a> TypeChecker<'a> {
     fn try_rewrite_virtual_column(
         &mut self,
         span: Span,
-        database_name: &Option<String>,
-        table_name: &Option<String>,
+        table_index: IndexType,
+        column_id: ColumnId,
         column_name: &str,
         keypaths: &KeyPaths,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if !self.bind_context.allow_virtual_column {
             return None;
         }
-        let name = Self::keypaths_to_name(column_name, keypaths);
-        self.resolve(&Expr::ColumnRef {
-            span,
-            column: ColumnRef {
-                database: database_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                table: table_name
-                    .as_ref()
-                    .map(|name| Identifier::from_name(span, name)),
-                column: ColumnID::Name(Identifier::from_name(span, name)),
-            },
-        })
-        .ok()
+        let owned_keypaths = keypaths.to_owned();
+        let key_name = Self::keypaths_to_name(column_name, keypaths);
+        let virtual_column_name = VirtualColumnName {
+            table_index,
+            source_column_id: column_id,
+            key_name,
+        };
+
+        // add virtual column binding into `BindContext`
+        let column = self.bind_context.add_virtual_column_binding(
+            self.metadata.clone(),
+            column_name,
+            virtual_column_name,
+            owned_keypaths,
+        )?;
+
+        let data_type = *column.data_type.clone();
+        Some(Box::new((
+            BoundColumnRef { span, column }.into(),
+            data_type,
+        )))
     }
 
     fn keypaths_to_name(column_name: &str, keypaths: &KeyPaths) -> String {
@@ -6507,8 +7014,8 @@ impl<'a> TypeChecker<'a> {
                 if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
                     if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
                         span,
-                        &column.database_name,
-                        &column.table_name,
+                        base_column.table_index,
+                        base_column.column_id,
                         &base_column.column_name,
                         &keypaths,
                     ) {

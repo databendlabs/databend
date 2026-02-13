@@ -23,12 +23,12 @@ databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-license = { workspace = true }
-databend-common-meta-client = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-enterprise-query = { workspace = true }
+databend-meta-ver = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 limits-rs = { workspace = true }

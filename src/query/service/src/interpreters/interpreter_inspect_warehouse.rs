@@ -23,9 +23,9 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_types::NodeType;
 use databend_common_sql::plans::InspectWarehousePlan;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_meta_types::NodeType;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

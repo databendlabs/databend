@@ -21,14 +21,14 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
+use databend_common_management::errors::meta_service_error;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
+use databend_meta_types::SeqV;
 
 use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
@@ -63,8 +63,13 @@ impl UserApiProvider {
         user: UserIdentity,
     ) -> Result<SeqV<UserInfo>> {
         let client = self.user_api(tenant);
-        let get_user = client.get_user(user, MatchSeq::GE(0)).await?;
-        Ok(get_user)
+        client
+            .get_user(&user)
+            .await
+            .map_err(meta_service_error)?
+            .ok_or_else(|| {
+                ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
+            })
     }
 
     // Get one user and check client ip if has network policy.
@@ -105,7 +110,10 @@ impl UserApiProvider {
             }
         };
 
-        let whitelist = &GlobalConfig::instance().query.network_policy_whitelist;
+        let whitelist = &GlobalConfig::instance()
+            .query
+            .common
+            .network_policy_whitelist;
         for whitelist_ip in whitelist {
             let cidr: Ipv4Cidr = whitelist_ip.parse()?;
             if cidr.contains(&ip_addr) {
@@ -145,24 +153,18 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_users(&self, tenant: &Tenant) -> Result<Vec<UserInfo>> {
         let client = self.user_api(tenant);
-        let get_users = client.get_users();
+        let seq_users_info = client
+            .get_users()
+            .await
+            .map_err(|e| meta_service_error(e).add_message_back("(while get users)."))?;
 
-        let mut res = vec![];
-        match get_users.await {
-            Err(e) => Err(e.add_message_back("(while get users).")),
-            Ok(seq_users_info) => {
-                for seq_user_info in seq_users_info {
-                    res.push(seq_user_info.data);
-                }
-
-                Ok(res)
-            }
-        }
+        let res = seq_users_info.into_iter().map(|s| s.data).collect();
+        Ok(res)
     }
 
     // Add a new user info.
     #[async_backtrace::framed]
-    pub async fn add_user(
+    pub async fn create_user(
         &self,
         tenant: &Tenant,
         user_info: UserInfo,
@@ -191,7 +193,20 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client.add_user(user_info, create_option).await
+        let overriding = create_option.is_overriding();
+        let res = client
+            .create_user(user_info.clone(), overriding)
+            .await
+            .map_err(meta_service_error)?;
+
+        match (res, create_option) {
+            (Ok(_), _) => Ok(()),
+            (Err(_), CreateOption::CreateIfNotExists) => Ok(()),
+            (Err(_), _) => Err(ErrorCode::UserAlreadyExists(format!(
+                "User {} already exists.",
+                user_info.identity().display()
+            ))),
+        }
     }
 
     #[async_backtrace::framed]
@@ -201,7 +216,7 @@ impl UserApiProvider {
         user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
-    ) -> Result<Option<u64>> {
+    ) -> Result<u64> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot grant privileges to built-in user `{}`",
@@ -226,13 +241,13 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
-            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+        Ok(client
+            .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.grant_privileges(&object, privileges)
             })
             .await
-            .map_err(|e| e.add_message_back("(while set user privileges)"))
+            .map_err(|e| meta_service_error(e).add_message_back("(while set user privileges)"))??)
     }
 
     #[async_backtrace::framed]
@@ -242,7 +257,7 @@ impl UserApiProvider {
         user: UserIdentity,
         object: GrantObject,
         privileges: UserPrivilegeSet,
-    ) -> Result<Option<u64>> {
+    ) -> Result<u64> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot revoke privileges from built-in user `{}`",
@@ -256,13 +271,15 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
-            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+        Ok(client
+            .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.revoke_privileges(&object, privileges)
             })
             .await
-            .map_err(|e| e.add_message_back("(while revoke user privileges)"))
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while revoke user privileges)")
+            })??)
     }
 
     #[async_backtrace::framed]
@@ -271,7 +288,7 @@ impl UserApiProvider {
         tenant: &Tenant,
         user: UserIdentity,
         grant_role: String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<u64> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot grant role to built-in user `{}`",
@@ -279,13 +296,13 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
-            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+        Ok(client
+            .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.grant_role(grant_role)
             })
             .await
-            .map_err(|e| e.add_message_back("(while grant role to user)"))
+            .map_err(|e| meta_service_error(e).add_message_back("(while grant role to user)"))??)
     }
 
     #[async_backtrace::framed]
@@ -294,7 +311,7 @@ impl UserApiProvider {
         tenant: &Tenant,
         user: UserIdentity,
         revoke_role: String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<u64> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot revoke role from built-in user `{}`",
@@ -302,13 +319,15 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        client
-            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+        Ok(client
+            .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_user_time();
                 ui.grants.revoke_role(&revoke_role)
             })
             .await
-            .map_err(|e| e.add_message_back("(while revoke role from user)"))
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while revoke role from user)")
+            })??)
     }
 
     // Drop a user by name and hostname.
@@ -326,26 +345,25 @@ impl UserApiProvider {
             )));
         }
         let client = self.user_api(tenant);
-        let drop_user = client.drop_user(user, MatchSeq::GE(1));
-        match drop_user.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_USER {
+        let dropped = client.drop_user(&user).await.map_err(meta_service_error)?;
+
+        match dropped {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                if if_exists {
                     Ok(())
                 } else {
-                    Err(e.add_message_back("(while set drop user)"))
+                    Err(ErrorCode::UnknownUser(format!(
+                        "User {} does not exist.",
+                        user.display()
+                    )))
                 }
             }
         }
     }
 
     #[async_backtrace::framed]
-    pub async fn alter_user(
-        &self,
-        tenant: &Tenant,
-        user_info: &UserInfo,
-        seq: u64,
-    ) -> Result<Option<u64>> {
+    pub async fn alter_user(&self, tenant: &Tenant, user_info: &UserInfo, seq: u64) -> Result<u64> {
         let user_option = &user_info.option;
         if let Some(name) = user_option.network_policy() {
             if self.get_network_policy(tenant, name).await.is_err() {
@@ -365,13 +383,10 @@ impl UserApiProvider {
         }
 
         let client = self.user_api(tenant);
-        let seq = client
-            .upsert_user_info(user_info, MatchSeq::Exact(seq))
-            .await;
-        match seq {
-            Ok(s) => Ok(Some(s)),
-            Err(e) => Err(e.add_message_back("(while alter user).")),
-        }
+        Ok(client
+            .upsert_user_info(user_info, seq)
+            .await
+            .map_err(|e| meta_service_error(e).add_message_back("(while alter user)."))??)
     }
 
     // Update an user's default role
@@ -381,21 +396,18 @@ impl UserApiProvider {
         tenant: &Tenant,
         user: UserIdentity,
         default_role: Option<String>,
-    ) -> Result<Option<u64>> {
-        let user = self.get_meta_user(tenant, user.clone()).await?;
-        let seq = user.seq;
-        let mut user_info = user.data;
+    ) -> Result<u64> {
+        let seqv = self.get_meta_user(tenant, user.clone()).await?;
+        let seq = seqv.seq;
+        let mut user_info = seqv.data;
         user_info.option.set_default_role(default_role);
         user_info.update_user_time();
 
         let client = self.user_api(tenant);
-        let seq = client
-            .upsert_user_info(&user_info, MatchSeq::Exact(seq))
-            .await;
-        match seq {
-            Ok(s) => Ok(Some(s)),
-            Err(e) => Err(e.add_message_back("(while alter user).")),
-        }
+        Ok(client
+            .upsert_user_info(&user_info, seq)
+            .await
+            .map_err(|e| meta_service_error(e).add_message_back("(while alter user)."))??)
     }
 
     #[async_backtrace::framed]
@@ -413,20 +425,22 @@ impl UserApiProvider {
         }
 
         let client = self.user_api(&tenant);
-        let update_user = client
-            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+        client
+            .update_user_with(&user, |ui: &mut UserInfo| {
                 if authed {
                     ui.clear_login_fail_history()
                 } else {
                     ui.update_login_fail_history()
                 }
             })
-            .await;
-
-        match update_user {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.add_message_back("(while update user login result).")),
-        }
+            .await
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while update user login result).")
+            })?
+            .map_err(|e| {
+                ErrorCode::from(e).add_message_back("(while update user login result).")
+            })?;
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -440,15 +454,17 @@ impl UserApiProvider {
             return Ok(());
         }
         let client = self.user_api(tenant);
-        let update_user = client
-            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
+        client
+            .update_user_with(&user, |ui: &mut UserInfo| {
                 ui.update_lockout_time(lockout_time);
             })
-            .await;
-
-        match update_user {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.add_message_back("(while update user lockout time).")),
-        }
+            .await
+            .map_err(|e| {
+                meta_service_error(e).add_message_back("(while update user lockout time).")
+            })?
+            .map_err(|e| {
+                ErrorCode::from(e).add_message_back("(while update user lockout time).")
+            })?;
+        Ok(())
     }
 }

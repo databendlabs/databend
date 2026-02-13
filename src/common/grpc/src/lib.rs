@@ -21,9 +21,5 @@ pub use dns_resolver::DNSResolver;
 pub use dns_resolver::DNSService;
 pub use dns_resolver::GrpcConnectionError;
 pub use dns_resolver::TcpKeepAliveConfig;
-pub use grpc_token::GrpcClaim;
-pub use grpc_token::GrpcToken;
-
 mod client_conf;
 mod dns_resolver;
-mod grpc_token;

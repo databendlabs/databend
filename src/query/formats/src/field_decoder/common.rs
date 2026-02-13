@@ -37,7 +37,7 @@ pub(crate) fn read_timestamp(
         int64_to_timestamp(read_num_text_exact(data)?)
     } else {
         let mut buffer_readr = Cursor::new(&data);
-        let t = buffer_readr.read_timestamp_text(&settings.jiff_timezone)?;
+        let t = buffer_readr.read_timestamp_text(&settings.settings.jiff_timezone)?;
         match t {
             DateTimeResType::Datetime(t) => {
                 if !buffer_readr.eof() {
@@ -65,7 +65,7 @@ pub(crate) fn read_timestamp_tz(
     data: &[u8],
     settings: &InputCommonSettings,
 ) -> Result<()> {
-    let ts_tz = string_to_timestamp_tz(data, || &settings.jiff_timezone)?;
+    let ts_tz = string_to_timestamp_tz(data, || &settings.settings.jiff_timezone)?;
     column.push(ts_tz);
     Ok(())
 }

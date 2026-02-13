@@ -18,12 +18,13 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_meta_api::AutoIncrementApiTestSuite;
+use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::meta_service_test_harness;
 use test_harness::test;
 
 use crate::metasrv_builder::MetaSrvBuilder;
 
-#[test(harness = meta_service_test_harness)]
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]
 async fn test_auto_increment_api_single_node() -> anyhow::Result<()> {
     let builder = MetaSrvBuilder {

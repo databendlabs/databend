@@ -37,12 +37,13 @@ use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_io::GeometryDataType;
+use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
-use databend_common_io::constants::INF_BYTES_LOWER;
-use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
+use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
+use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
@@ -51,46 +52,63 @@ use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::BinaryDisplayFormat;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
+use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::TsvFileFormatParams;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
 
-use crate::FileFormatOptionsExt;
 use crate::OutputCommonSettings;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::field_encoder::helpers::write_quoted_string;
 
 pub struct FieldEncoderValues {
     pub common_settings: OutputCommonSettings,
+
     pub escape_char: u8,
     pub quote_char: u8,
-    // Output display format; CSV/TSV binary columns use common_settings.binary_format instead.
-    pub binary_format: BinaryDisplayFormat,
 }
 
 impl FieldEncoderValues {
-    pub fn create(options: &FileFormatOptionsExt) -> Self {
+    pub fn create_for_csv(
+        params: &CsvFileFormatParams,
+        mut settings: OutputFormatSettings,
+    ) -> Self {
+        settings.binary_format = params.binary_format.to_display_format();
+        settings.geometry_format = params.geometry_format;
+        FieldEncoderValues {
+            common_settings: OutputCommonSettings {
+                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
+                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
+                null_bytes: params.null_display.as_bytes().to_vec(),
+                nan_bytes: params.nan_display.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
+                settings: settings.clone(),
+            },
+            escape_char: 0, // not used
+            quote_char: 0,  // not used
+        }
+    }
+
+    pub fn create_for_tsv(params: &TsvFileFormatParams, settings: OutputFormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                jiff_timezone: options.jiff_timezone.clone(),
-                binary_format: Default::default(),
-                geometry_format: Default::default(),
+                null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+                nan_bytes: params.nan_display.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
+                settings: settings.clone(),
             },
-            escape_char: b'"',
-            quote_char: b'"',
-            binary_format: options.binary_format,
+            escape_char: 0, // not used
+            quote_char: 0,  // not used
         }
     }
 
-    pub fn create_for_http_handler(format: &FormatSettings) -> Self {
+    pub fn create_for_http_handler(settings: &OutputFormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -98,13 +116,10 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                jiff_timezone: format.jiff_timezone.clone(),
-                binary_format: Default::default(),
-                geometry_format: format.geometry_format,
+                settings: settings.clone(),
             },
             escape_char: b'\\',
             quote_char: b'"',
-            binary_format: format.binary_format,
         }
     }
 
@@ -112,7 +127,7 @@ impl FieldEncoderValues {
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
-    pub fn create_for_mysql_handler(format: &FormatSettings) -> Self {
+    pub fn create_for_mysql_handler(settings: &OutputFormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -120,13 +135,10 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                jiff_timezone: format.jiff_timezone.clone(),
-                binary_format: Default::default(),
-                geometry_format: format.geometry_format,
+                settings: settings.clone(),
             },
             escape_char: b'\\',
             quote_char: b'"',
-            binary_format: format.binary_format,
         }
     }
 
@@ -177,9 +189,6 @@ impl FieldEncoderValues {
         }
         Ok(())
     }
-    fn common_settings(&self) -> &OutputCommonSettings {
-        &self.common_settings
-    }
 
     fn write_string_inner(&self, in_buf: &[u8], out_buf: &mut Vec<u8>, in_nested: bool) {
         if in_nested {
@@ -198,16 +207,16 @@ impl FieldEncoderValues {
 
     fn write_bool(&self, column: &Bitmap, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = if column.get_bit(row_index) {
-            &self.common_settings().true_bytes
+            &self.common_settings.true_bytes
         } else {
-            &self.common_settings().false_bytes
+            &self.common_settings.false_bytes
         };
 
         out_buf.extend_from_slice(v);
     }
 
     pub fn write_null(&self, out_buf: &mut Vec<u8>) {
-        out_buf.extend_from_slice(&self.common_settings().null_bytes);
+        out_buf.extend_from_slice(&self.common_settings.null_bytes);
     }
 
     fn write_empty_array(&self, out_buf: &mut Vec<u8>) {
@@ -236,7 +245,7 @@ impl FieldEncoderValues {
     fn write_int<T>(&self, column: &Buffer<T>, row_index: usize, out_buf: &mut Vec<u8>)
     where T: Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat {
         let v = unsafe { column.get_unchecked(row_index) };
-        v.write_field(out_buf, self.common_settings())
+        v.write_field(out_buf, &self.common_settings)
     }
 
     fn write_float<T>(
@@ -248,7 +257,7 @@ impl FieldEncoderValues {
         T: Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat,
     {
         let v = unsafe { column.get_unchecked(row_index) };
-        v.0.write_field(out_buf, self.common_settings())
+        v.0.write_field(out_buf, &self.common_settings)
     }
 
     fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
@@ -263,7 +272,7 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
         let v = unsafe { column.index_unchecked(row_index) };
-        match self.binary_format {
+        match self.common_settings.settings.binary_format {
             BinaryDisplayFormat::Hex => {
                 out_buf.extend_from_slice(hex::encode_upper(v).as_bytes());
                 Ok(())
@@ -312,7 +321,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(*v as i64, &self.common_settings().jiff_timezone).to_string();
+        let s = date_to_string(*v as i64, &self.common_settings.settings.jiff_timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -336,7 +345,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string(*v, &self.common_settings().jiff_timezone).to_string();
+        let s = timestamp_to_string(*v, &self.common_settings.settings.jiff_timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -377,18 +386,22 @@ setting binary_output_format to 'UTF-8-LOSSY'."
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
         let s = ewkb_to_geo(&mut Ewkb(v))
-            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
-                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
-                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
-                GeometryDataType::EWKB => {
-                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
-                }
-                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
-                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
-            })
+            .and_then(
+                |(geo, srid)| match self.common_settings.settings.geometry_format {
+                    GeometryDataType::WKB => {
+                        geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes())
+                    }
+                    GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                    GeometryDataType::EWKB => {
+                        geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                    }
+                    GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                    GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+                },
+            )
             .unwrap_or_else(|_| v.to_vec());
 
-        match self.common_settings().geometry_format {
+        match self.common_settings.settings.geometry_format {
             GeometryDataType::GEOJSON => {
                 out_buf.extend_from_slice(&s);
             }
@@ -407,18 +420,22 @@ setting binary_output_format to 'UTF-8-LOSSY'."
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
         let s = ewkb_to_geo(&mut Ewkb(v.0))
-            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
-                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
-                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
-                GeometryDataType::EWKB => {
-                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
-                }
-                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
-                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
-            })
+            .and_then(
+                |(geo, srid)| match self.common_settings.settings.geometry_format {
+                    GeometryDataType::WKB => {
+                        geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes())
+                    }
+                    GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                    GeometryDataType::EWKB => {
+                        geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                    }
+                    GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                    GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+                },
+            )
             .unwrap_or_else(|_| v.0.to_vec());
 
-        match self.common_settings().geometry_format {
+        match self.common_settings.settings.geometry_format {
             GeometryDataType::GEOJSON => {
                 out_buf.extend_from_slice(&s);
             }
@@ -501,7 +518,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
                     if i > 0 {
                         out_buf.push(b',');
                     }
-                    v.write_field(out_buf, self.common_settings());
+                    v.write_field(out_buf, &self.common_settings);
                 }
             }
             VectorScalarRef::Float32(values) => {
@@ -509,7 +526,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
                     if i > 0 {
                         out_buf.push(b',');
                     }
-                    v.0.write_field(out_buf, self.common_settings());
+                    v.0.write_field(out_buf, &self.common_settings);
                 }
             }
         }

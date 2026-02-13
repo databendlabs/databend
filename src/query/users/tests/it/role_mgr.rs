@@ -15,7 +15,6 @@
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
-use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
@@ -28,6 +27,7 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
+use databend_meta_client::RpcClientConf;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -40,7 +40,7 @@ async fn test_role_manager() -> anyhow::Result<()> {
     {
         GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::empty(BUILD_INFO.semver());
+    let conf = RpcClientConf::empty();
     let tenant = Tenant::new_literal("tenant1");
 
     let role_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;

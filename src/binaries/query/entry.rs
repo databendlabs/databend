@@ -24,7 +24,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
@@ -33,6 +32,7 @@ use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::VERGEN_GIT_SHA;
+use databend_meta_ver::MIN_METASRV_VER_FOR_QUERY;
 use databend_query::GlobalServices;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::history_tables::GlobalHistoryLog;
@@ -59,7 +59,10 @@ pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
         None => return Ok(false),
         Some(Commands::Ver) => {
             println!("version: {}", *DATABEND_SEMVER);
-            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
+            println!(
+                "min-compatible-metasrv-version: {}",
+                *MIN_METASRV_VER_FOR_QUERY
+            );
         }
     }
 
@@ -98,8 +101,8 @@ pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), Main
 async fn precheck_services(conf: &InnerConfig) -> Result<(), MainError> {
     let make_error = || "failed to precheck";
 
-    if conf.query.max_memory_limit_enabled {
-        let size = conf.query.max_server_memory_usage as i64;
+    if conf.query.common.max_memory_limit_enabled {
+        let size = conf.query.common.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
         GLOBAL_MEM_STAT.set_limit(size, false);
     }
@@ -133,13 +136,13 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             .with_context(make_error)?;
         info!(
             "Databend query has been registered:{:?}/{:?} to metasrv:{:?}.",
-            conf.query.warehouse_id, conf.query.cluster_id, conf.meta.endpoints
+            conf.query.common.warehouse_id, conf.query.common.cluster_id, conf.meta.endpoints
         );
     }
 
     // RPC API service.
     {
-        let address = conf.query.flight_api_address.clone();
+        let address = conf.query.common.flight_api_address.clone();
         let mut srv = FlightService::create(conf.clone()).with_context(make_error)?;
         let listening = srv
             .start(address.parse().with_context(make_error)?)
@@ -151,12 +154,12 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // MySQL handler.
     {
-        let hostname = conf.query.mysql_handler_host.clone();
-        let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
-        let tcp_keepalive_timeout_secs = conf.query.mysql_handler_tcp_keepalive_timeout_secs;
+        let hostname = conf.query.common.mysql_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.common.mysql_handler_port);
+        let tcp_keepalive_timeout_secs = conf.query.common.mysql_handler_tcp_keepalive_timeout_secs;
         let tls_config = MySQLTlsConfig::new(
-            conf.query.mysql_tls_server_cert.clone(),
-            conf.query.mysql_tls_server_key.clone(),
+            conf.query.common.mysql_tls_server_cert.clone(),
+            conf.query.common.mysql_tls_server_key.clone(),
         );
 
         let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, tls_config)
@@ -177,8 +180,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // ClickHouse HTTP handler.
     {
-        let hostname = conf.query.clickhouse_http_handler_host.clone();
-        let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
+        let hostname = conf.query.common.clickhouse_http_handler_host.clone();
+        let listening = format!(
+            "{}:{}",
+            hostname, conf.query.common.clickhouse_http_handler_port
+        );
 
         let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse);
         let listening = srv
@@ -196,8 +202,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // Databend HTTP handler.
     {
-        let hostname = conf.query.http_handler_host.clone();
-        let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
+        let hostname = conf.query.common.http_handler_host.clone();
+        let listening = format!("{}:{}", hostname, conf.query.common.http_handler_port);
 
         let mut srv = HttpHandler::create(HttpHandlerKind::Query);
         let listening = srv
@@ -216,7 +222,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     // Metric API service.
     {
         set_system_version("query", DATABEND_GIT_SEMVER, VERGEN_GIT_SHA);
-        let address = conf.query.metric_api_address.clone();
+        let address = conf.query.common.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv
             .start(address.parse().with_context(make_error)?)
@@ -228,7 +234,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // Admin HTTP API service.
     {
-        let address = conf.query.admin_api_address.clone();
+        let address = conf.query.common.admin_api_address.clone();
         let mut srv = AdminService::create(conf);
         let listening = srv
             .start(address.parse().with_context(make_error)?)
@@ -242,7 +248,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     {
         let address = format!(
             "{}:{}",
-            conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
+            conf.query.common.flight_sql_handler_host, conf.query.common.flight_sql_handler_port
         );
         let mut srv =
             FlightSQLServer::create(conf.clone(), &BUILD_INFO).with_context(make_error)?;
@@ -304,10 +310,10 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     println!();
     println!("Memory:");
     println!("    limit: {}", {
-        if conf.query.max_memory_limit_enabled {
+        if conf.query.common.max_memory_limit_enabled {
             format!(
                 "Memory: server memory limit to {} (bytes)",
-                conf.query.max_server_memory_usage
+                conf.query.common.max_server_memory_usage
             )
         } else {
             "unlimited".to_string()
@@ -333,10 +339,10 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     println!();
     println!("Storage: {}", conf.storage.params);
     println!("Disk cache:");
-    println!("    storage: {}", conf.cache.data_cache_storage);
+    println!("    storage: {:?}", conf.cache.data_cache_storage);
     println!("    path: {:?}", conf.cache.disk_cache_config);
     println!(
-        "    reload policy: {}",
+        "    reload policy: {:?}",
         conf.cache.data_cache_key_reload_policy
     );
 
@@ -365,30 +371,30 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     println!();
     println!("Admin");
-    println!("    listened at {}", conf.query.admin_api_address);
+    println!("    listened at {}", conf.query.common.admin_api_address);
     println!("MySQL");
     println!(
         "    listened at {}:{}",
-        conf.query.mysql_handler_host, conf.query.mysql_handler_port
+        conf.query.common.mysql_handler_host, conf.query.common.mysql_handler_port
     );
     println!(
         "    connect via: mysql -u${{USER}} -p${{PASSWORD}} -h{} -P{}",
-        conf.query.mysql_handler_host, conf.query.mysql_handler_port
+        conf.query.common.mysql_handler_host, conf.query.common.mysql_handler_port
     );
     println!("Databend");
     println!(
         "    listened at {}:{}",
-        conf.query.http_handler_host, conf.query.http_handler_port
+        conf.query.common.http_handler_host, conf.query.common.http_handler_port
     );
 
     println!(
         "    usage with args: bendsql -u ${{USER}} -p ${{PASSWORD}} -h {} -P {}",
-        conf.query.http_handler_host, conf.query.http_handler_port
+        conf.query.common.http_handler_host, conf.query.common.http_handler_port
     );
 
     println!(
         "    usage with dsn: bendsql --dsn \"databend://${{USER}}:${{PASSWORD}}@{}:{}?sslmode=disable\"",
-        conf.query.http_handler_host, conf.query.http_handler_port
+        conf.query.common.http_handler_host, conf.query.common.http_handler_port
     );
 
     println!(
@@ -396,7 +402,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         HttpHandlerKind::Query.usage(
             format!(
                 "{}:{}",
-                conf.query.http_handler_host, conf.query.http_handler_port
+                conf.query.common.http_handler_host, conf.query.common.http_handler_port
             )
             .parse()
             .with_context(make_error)?
@@ -418,8 +424,9 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         start_time.elapsed().as_secs_f32()
     );
 
-    let graceful_shutdown_timeout =
-        Some(Duration::from_millis(conf.query.shutdown_wait_timeout_ms));
+    let graceful_shutdown_timeout = Some(Duration::from_millis(
+        conf.query.common.shutdown_wait_timeout_ms,
+    ));
     shutdown_handle
         .wait_for_termination_request(graceful_shutdown_timeout)
         .await;

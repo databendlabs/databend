@@ -20,13 +20,13 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::ProjectedBlock;
-use databend_common_hashtable::HashJoinHashMap;
-use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_hashtable::RawEntry;
-use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
+use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
+use crate::pipelines::processors::transforms::hash_join_table::RawEntry;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;

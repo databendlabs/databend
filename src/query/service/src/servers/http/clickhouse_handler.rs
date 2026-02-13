@@ -24,8 +24,9 @@ use databend_common_exception::ToErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::infer_table_schema;
 use databend_common_formats::ClickhouseFormatType;
-use databend_common_formats::FileFormatOptionsExt;
 use databend_common_formats::FileFormatTypeExt;
+use databend_common_formats::get_output_format;
+use databend_common_meta_app::principal::FileFormatParams;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::StreamExt;
@@ -145,10 +146,12 @@ async fn execute(
         async move {
             let mut data_stream = interpreter.execute(ctx.clone()).await?;
             let table_schema = infer_table_schema(&schema)?;
-            let mut output_format = FileFormatOptionsExt::get_output_format_from_clickhouse_format(
-                format,
+            let file_format_params = FileFormatParams::default_by_type(format.typ.clone())?;
+            let mut output_format = get_output_format(
                 table_schema,
-                &ctx.get_settings(),
+                file_format_params,
+                ctx.get_settings().get_output_format_settings()?,
+                Some(format.suffixes),
             )?;
 
             let prefix = Ok(output_format.serialize_prefix()?);

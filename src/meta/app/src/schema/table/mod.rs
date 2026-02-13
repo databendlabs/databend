@@ -33,8 +33,8 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaId;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::MetaId;
 use maplit::hashmap;
 
 use super::CatalogInfo;
@@ -106,9 +106,20 @@ impl TableInfo {
                 self.engine()
             )));
         }
-        let database_name = self.desc.split('.').next().unwrap();
-        let database_name = &database_name[1..database_name.len() - 1];
-        Ok(database_name)
+        // desc format is "'db_name'.'table_name'"
+        let raw = self
+            .desc
+            .split('.')
+            .next()
+            .ok_or_else(|| ErrorCode::Internal(format!("empty desc in table {}", self.name)))?;
+        raw.strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "unexpected desc format: {} in table {}",
+                    raw, self.name
+                ))
+            })
     }
 }
 
@@ -1275,11 +1286,11 @@ pub struct TruncateTableReply {}
 pub struct EmptyProto {}
 
 mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi::KeyBuilder;
+    use databend_meta_kvapi::kvapi::KeyError;
+    use databend_meta_kvapi::kvapi::KeyParser;
 
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
@@ -1450,8 +1461,8 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::Key;
 
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableMeta;

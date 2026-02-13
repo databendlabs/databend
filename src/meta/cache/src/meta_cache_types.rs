@@ -16,9 +16,9 @@
 
 use std::future::Future;
 
-use databend_common_meta_runtime_api::SpawnApi;
-use databend_common_meta_types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_runtime_api::SpawnApi;
+use databend_meta_types::SeqV;
 use sub_cache::TypeConfig;
 
 use crate::meta_client_source::MetaClientSource;

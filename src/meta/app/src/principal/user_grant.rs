@@ -24,7 +24,7 @@ use crate::principal::UserPrivilegeType;
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
+pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 22] = [
     "catalogs",
     "columns",
     "databases",
@@ -44,6 +44,7 @@ pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
     "one",
     "processes",
     "user_functions",
+    "procedures",
     "functions",
     "indexes",
 ];

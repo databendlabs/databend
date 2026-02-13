@@ -18,7 +18,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
-use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,8 +36,8 @@ use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::anyerror::func_name;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::anyerror::func_name;
 use databend_storages_common_session::SessionState;
 use parking_lot::RwLock;
 
@@ -88,12 +87,10 @@ impl CatalogManager {
         conf: &InnerConfig,
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
-        version: BuildInfoRef,
+        _version: BuildInfoRef,
     ) -> Result<Arc<CatalogManager>> {
         let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta.to_meta_grpc_client_conf(version.semver()),
-            ));
+            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
             provider
                 .create_meta_store::<DatabendRuntime>()
@@ -109,10 +106,18 @@ impl CatalogManager {
         // init external catalogs.
         let mut external_catalogs = HashMap::default();
         for (name, ctl_cfg) in conf.catalogs.iter() {
-            let CatalogConfig::Hive(hive_ctl_cfg) = ctl_cfg;
             let creator = catalog_creators.get(&CatalogType::Hive).ok_or_else(|| {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
+
+            if ctl_cfg.ty.as_str() != "hive" {
+                return Err(ErrorCode::CatalogNotSupported(format!(
+                    "got unsupported catalog type in config: {}",
+                    ctl_cfg.ty
+                )));
+            }
+
+            let hive_ctl_cfg = &ctl_cfg.hive;
 
             let ctl_info = CatalogInfo {
                 id: CatalogIdIdent::new(&tenant, 0).into(),

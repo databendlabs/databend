@@ -29,13 +29,13 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::TableLockIdent;
-use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_metrics::lock::record_acquired_lock_nums;
 use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_storages_fuse::operations::set_backoff;
 use databend_common_users::UserApiProvider;
+use databend_meta_kvapi::kvapi::Key;
+use databend_meta_types::protobuf::WatchRequest;
+use databend_meta_types::protobuf::watch_request::FilterType;
 use futures::future::Either;
 use futures::future::select;
 use futures_util::StreamExt;
@@ -45,7 +45,6 @@ use tokio::sync::Notify;
 use tokio::time::sleep;
 use tokio::time::timeout;
 
-use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::sessions::SessionManager;
 
@@ -125,7 +124,7 @@ impl LockHolder {
             // Get the previous revision, watch the delete event.
             let req = WatchRequest::new(watch_delete_ident.to_string_key(), None)
                 .with_filter(FilterType::Delete);
-            let mut watch_stream = meta_api.watch(req).await.map_err(meta_client_error)?;
+            let mut watch_stream = meta_api.watch(req).await.map_err(meta_service_error)?;
 
             let lock_meta = meta_api
                 .get_pb(&watch_delete_ident)

@@ -31,6 +31,7 @@ use databend_common_storages_parquet::ReadSettings;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::Join;
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::get_hashes;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::GraceHashJoinState;
@@ -68,6 +69,11 @@ unsafe impl<T: GraceMemoryJoin> Send for GraceHashJoin<T> {}
 unsafe impl<T: GraceMemoryJoin> Sync for GraceHashJoin<T> {}
 
 impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
+    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
+        // TODO: this is hacked to mark it as disabled, we may need look back latter
+        Ok(JoinRuntimeFilterPacket::disable_all(0))
+    }
+
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         let ready_partitions = match data {
             None => self.finalize_build_data(),
@@ -179,6 +185,10 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
                 Ok(Some(Box::new(EmptyJoinStream)))
             },
         }
+    }
+
+    fn is_spill_happened(&self) -> bool {
+        true
     }
 }
 

@@ -19,7 +19,7 @@ use std::sync::atomic::Ordering;
 use dashmap::DashMap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_types::MetaId;
+use databend_meta_types::MetaId;
 
 use crate::storages::Table;
 

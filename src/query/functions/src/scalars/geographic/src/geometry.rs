@@ -38,22 +38,25 @@ use databend_common_io::geo_to_ewkt;
 use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
+use databend_common_io::geometry::count_points;
 use databend_common_io::geometry::geometry_from_str;
+use databend_common_io::geometry::point_to_geohash;
+use databend_common_io::geometry::st_extreme;
 use databend_common_io::geometry_format;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::geometry_type_name;
 use databend_common_io::read_srid;
 use geo::Area;
-use geo::BoundingRect;
 use geo::Contains;
 use geo::ConvexHull;
 use geo::Coord;
-use geo::EuclideanDistance;
-use geo::EuclideanLength;
+use geo::Distance;
+use geo::Euclidean;
 use geo::Geometry;
 use geo::HasDimensions;
-use geo::HaversineDistance;
+use geo::Haversine;
 use geo::Intersects;
+use geo::Length;
 use geo::Line;
 use geo::LineString;
 use geo::MultiLineString;
@@ -68,7 +71,6 @@ use geo::Within;
 use geo::coord;
 use geo::dimensions::Dimensions;
 use geohash::decode_bbox;
-use geohash::encode;
 use geozero::CoordDimensions;
 use geozero::GeozeroGeometry;
 use geozero::ToGeo;
@@ -115,14 +117,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let p1 = Point::new(lon1, lat1);
             let p2 = Point::new(lon2, lat2);
-            let distance = p1.haversine_distance(&p2) * 0.001;
-
+            let distance = Haversine.distance(p1, p2) * 0.001;
             let distance = (distance * 1_000_000_000_f64).round() / 1_000_000_000_f64;
             builder.push(distance.into());
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, VariantType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, VariantType, _>(
         "st_asgeojson",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, VariantType>(|ewkb, builder, ctx| {
@@ -147,7 +148,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _>(
         "st_asewkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, BinaryType>(|ewkb, builder, ctx| {
@@ -170,7 +171,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, BinaryType, _>(
         "st_aswkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, BinaryType>(|ewkb, builder, ctx| {
@@ -193,7 +194,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "st_asewkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -216,7 +217,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "st_aswkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -426,7 +427,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 builder.push(F64::from(0_f64));
                                 return;
                             }
-                            let distance = l_geo.euclidean_distance(&r_geo);
+                            let distance = Euclidean.distance(&l_geo, &r_geo);
                             let distance =
                                 (distance * 1_000_000_000_f64).round() / 1_000_000_000_f64;
                             builder.push(distance.into());
@@ -440,7 +441,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             ),
         );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_area",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -465,7 +466,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _>(
         "st_convexhull",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|ewkb, builder, ctx| {
@@ -650,7 +651,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geomfromgeohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|geohash, builder, ctx| {
@@ -686,7 +687,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geompointfromgeohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|geohash, builder, ctx| {
@@ -721,29 +722,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType, _, _>(
-        "st_makegeompoint",
-        |_,_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType>(|longitude, latitude, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
+    registry
+        .register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType, _, _>(
+            "st_makegeompoint",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, GeometryType>(
+                |longitude, latitude, builder, ctx| {
+                    if let Some(validity) = &ctx.validity {
+                        if !validity.get_bit(builder.len()) {
+                            builder.commit_row();
+                            return;
+                        }
+                    }
+                    let geo = Geometry::from(Point::new(longitude.0, latitude.0));
+                    match geo_to_ewkb(geo, None) {
+                        Ok(binary) => builder.put_slice(binary.as_slice()),
+                        Err(e) => ctx.set_error(builder.len(), e.to_string()),
+                    }
                     builder.commit_row();
-                    return;
-                }
-            }
-            let geo = Geometry::from(Point::new(longitude.0, latitude.0));
-            match geo_to_ewkb(geo, None) {
-                Ok(binary) => builder.put_slice(binary.as_slice()),
-                Err(e) => ctx.set_error(
-                    builder.len(),
-                    e.to_string(),
-                ),
-            }
-            builder.commit_row();
-        })
-    );
+                },
+            ),
+        );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _>(
         "st_makepolygon",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, GeometryType>(|ewkb, builder, ctx| {
@@ -852,7 +853,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "st_geohash",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -905,7 +906,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geometryfromwkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|s, builder, ctx| {
@@ -935,7 +936,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _>(
         "st_geometryfromwkb",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BinaryType, GeometryType>(|binary, builder, ctx| {
@@ -1015,7 +1016,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "st_geometryfromwkt",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|wkt, builder, ctx| {
@@ -1054,7 +1055,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_length",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -1071,13 +1072,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match geo {
                         Geometry::LineString(lines) => {
                             for line in lines.lines() {
-                                distance += line.euclidean_length();
+                                distance += Euclidean.length(&line);
                             }
                         }
                         Geometry::MultiLineString(multi_lines) => {
                             for line_string in multi_lines.0 {
                                 for line in line_string.lines() {
-                                    distance += line.euclidean_length();
+                                    distance += Euclidean.length(&line);
                                 }
                             }
                         }
@@ -1085,7 +1086,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             for geometry in geom_c.0 {
                                 if let Geometry::LineString(line_string) = geometry {
                                     for line in line_string.lines() {
-                                        distance += line.euclidean_length();
+                                        distance += Euclidean.length(&line);
                                     }
                                 }
                             }
@@ -1103,7 +1104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_x",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -1132,7 +1133,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, NumberType<F64>, _>(
         "st_y",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, NumberType<F64>>(|ewkb, builder, ctx| {
@@ -1187,7 +1188,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, Int32Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, Int32Type, _>(
         "st_srid",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<GeometryType, Int32Type>(|ewkb, output, ctx| {
@@ -1305,7 +1306,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, UInt32Type, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, UInt32Type, _>(
         "st_npoints",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, UInt32Type>(|ewkb, builder, ctx| {
@@ -1329,7 +1330,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<GeometryType, StringType, _>(
         "to_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<GeometryType, StringType>(|ewkb, builder, ctx| {
@@ -1350,7 +1351,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, GeometryType, _>(
         "to_geometry",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, GeometryType>(|s, builder, ctx| {
@@ -1388,7 +1389,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<BinaryType, GeometryType, _>(
         "to_geometry",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BinaryType, GeometryType>(|binary, builder, ctx| {
@@ -1434,7 +1435,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_1_arg::<VariantType, GeometryType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<VariantType, GeometryType, _>(
         "to_geometry",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, GeometryType>(|json, builder, ctx| {
@@ -1641,30 +1642,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
-        "st_transform",
-        |_, _, _,_| FunctionDomain::MayThrow,
-        vectorize_with_builder_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType>(
-            |original, from_srid, to_srid, builder, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
-                        return;
+    registry
+        .register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
+            "st_transform",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType>(
+                |original, from_srid, to_srid, builder, ctx| {
+                    if let Some(validity) = &ctx.validity {
+                        if !validity.get_bit(builder.len()) {
+                            builder.commit_row();
+                            return;
+                        }
                     }
-                }
 
-                match st_transform_impl(original, from_srid, to_srid) {
-                    Ok(data) => {
-                        builder.put_slice(data.as_slice());
+                    match st_transform_impl(original, from_srid, to_srid) {
+                        Ok(data) => {
+                            builder.put_slice(data.as_slice());
+                        }
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                        }
                     }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                    }
-                }
-                builder.commit_row();
-            },
-        ),
-    );
+                    builder.commit_row();
+                },
+            ),
+        );
 }
 
 fn st_transform_impl(
@@ -1727,198 +1729,6 @@ fn json_to_geometry_impl(
     match json.to_ewkb(CoordDimensions::xy(), srid) {
         Ok(data) => Ok(data),
         Err(e) => Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
-    }
-}
-
-fn point_to_geohash(
-    geometry: &[u8],
-    precision: Option<i32>,
-) -> std::result::Result<String, Box<ErrorCode>> {
-    let point = match Ewkb(geometry).to_geo() {
-        Ok(geo) => Point::try_from(geo),
-        Err(e) => return Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
-    };
-
-    let hash = match point {
-        Ok(point) => encode(point.0, precision.map_or(12, |p| p as usize)),
-        Err(e) => return Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
-    };
-    match hash {
-        Ok(hash) => Ok(hash),
-        Err(e) => Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
-    }
-}
-
-fn st_extreme(geometry: &Geometry<f64>, axis: Axis, extremum: Extremum) -> Option<f64> {
-    match geometry {
-        Geometry::Point(point) => {
-            let coord = match axis {
-                Axis::X => point.x(),
-                Axis::Y => point.y(),
-            };
-            Some(coord)
-        }
-        Geometry::MultiPoint(multi_point) => {
-            let mut extreme_coord: Option<f64> = None;
-            for point in multi_point {
-                if let Some(coord) = st_extreme(&Geometry::Point(*point), axis, extremum) {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::Line(line) => {
-            let bounding_rect = line.bounding_rect();
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => bounding_rect.max().x,
-                    Extremum::Min => bounding_rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => bounding_rect.max().y,
-                    Extremum::Min => bounding_rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-        Geometry::MultiLineString(multi_line) => {
-            let mut extreme_coord: Option<f64> = None;
-            for line in multi_line {
-                if let Some(coord) = st_extreme(&Geometry::LineString(line.clone()), axis, extremum)
-                {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::Polygon(polygon) => {
-            let bounding_rect = polygon.bounding_rect().unwrap();
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => bounding_rect.max().x,
-                    Extremum::Min => bounding_rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => bounding_rect.max().y,
-                    Extremum::Min => bounding_rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-        Geometry::MultiPolygon(multi_polygon) => {
-            let mut extreme_coord: Option<f64> = None;
-            for polygon in multi_polygon {
-                if let Some(coord) = st_extreme(&Geometry::Polygon(polygon.clone()), axis, extremum)
-                {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::GeometryCollection(geometry_collection) => {
-            let mut extreme_coord: Option<f64> = None;
-            for geometry in geometry_collection {
-                if let Some(coord) = st_extreme(geometry, axis, extremum) {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::LineString(line_string) => line_string.bounding_rect().map(|rect| match axis {
-            Axis::X => match extremum {
-                Extremum::Max => rect.max().x,
-                Extremum::Min => rect.min().x,
-            },
-            Axis::Y => match extremum {
-                Extremum::Max => rect.max().y,
-                Extremum::Min => rect.min().y,
-            },
-        }),
-        Geometry::Rect(rect) => {
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => rect.max().x,
-                    Extremum::Min => rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => rect.max().y,
-                    Extremum::Min => rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-        Geometry::Triangle(triangle) => {
-            let bounding_rect = triangle.bounding_rect();
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => bounding_rect.max().x,
-                    Extremum::Min => bounding_rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => bounding_rect.max().y,
-                    Extremum::Min => bounding_rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-    }
-}
-
-fn count_points(geom: &Geometry) -> usize {
-    match geom {
-        Geometry::Point(_) => 1,
-        Geometry::Line(_) => 2,
-        Geometry::LineString(line_string) => line_string.0.len(),
-        Geometry::Polygon(polygon) => {
-            polygon.exterior().0.len()
-                + polygon
-                    .interiors()
-                    .iter()
-                    .map(|line_string| line_string.0.len())
-                    .sum::<usize>()
-        }
-        Geometry::MultiPoint(multi_point) => multi_point.0.len(),
-        Geometry::MultiLineString(multi_line_string) => multi_line_string
-            .0
-            .iter()
-            .map(|line_string| line_string.0.len())
-            .sum::<usize>(),
-        Geometry::MultiPolygon(multi_polygon) => multi_polygon
-            .0
-            .iter()
-            .map(|polygon| count_points(&Geometry::Polygon(polygon.clone())))
-            .sum::<usize>(),
-        Geometry::GeometryCollection(geometry_collection) => geometry_collection
-            .0
-            .iter()
-            .map(count_points)
-            .sum::<usize>(),
-        Geometry::Rect(_) => 5,
-        Geometry::Triangle(_) => 4,
     }
 }
 

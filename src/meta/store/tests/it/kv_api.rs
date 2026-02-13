@@ -13,23 +13,20 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_runtime_api::TokioRuntime;
-use databend_common_meta_store::LocalMetaService;
-use databend_common_version::BUILD_INFO;
+use databend_common_meta_store::MetaStore;
+use databend_meta_kvapi::kvapi;
+use databend_meta_runtime_api::TokioRuntime;
 
 #[derive(Clone)]
 struct MetaNodeUnitTestBuilder {}
 
 #[async_trait]
-impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
-    async fn build(&self) -> LocalMetaService {
-        LocalMetaService::new::<TokioRuntime>("UT-Meta", BUILD_INFO.semver())
-            .await
-            .unwrap()
+impl kvapi::ApiBuilder<MetaStore> for MetaNodeUnitTestBuilder {
+    async fn build(&self) -> MetaStore {
+        MetaStore::new_local_testing::<TokioRuntime>().await
     }
 
-    async fn build_cluster(&self) -> Vec<LocalMetaService> {
+    async fn build_cluster(&self) -> Vec<MetaStore> {
         todo!()
     }
 }
@@ -39,7 +36,7 @@ impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
 async fn test_meta_node_kv_api() -> anyhow::Result<()> {
     let builder = MetaNodeUnitTestBuilder {};
 
-    databend_common_meta_kvapi_test_suite::TestSuite {}
+    databend_meta_kvapi_test_suite::TestSuite {}
         .test_single_node(&builder)
         .await
 }

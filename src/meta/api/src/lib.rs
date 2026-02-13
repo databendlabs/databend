@@ -19,63 +19,44 @@
 #![allow(clippy::unnecessary_unwrap)]
 #![feature(try_blocks)]
 
-extern crate databend_common_meta_types;
-pub mod catalog_api;
-pub mod data_mask_api;
-mod data_mask_api_impl;
-pub mod data_retention_util;
-mod database_api;
-pub mod database_util;
-pub mod dictionary_api;
-pub mod error_util;
-pub mod garbage_collection_api;
-pub mod index_api;
-pub mod kv_app_error;
-pub use kv_app_error::KVAppResultExt;
-pub use kv_app_error::from_nested;
-pub mod kv_fetch_util;
-pub mod kv_pb_api;
-pub mod kv_pb_crud_api;
-pub mod lock_api;
-pub mod meta_txn_error;
-pub mod name_id_value_api;
-pub mod name_value_api;
-pub mod reply;
-mod schema_api;
-pub mod security_api;
-mod sequence_api;
-pub mod serialization_util;
-pub mod table_api;
-pub mod tag_api;
-pub mod txn_backoff;
-pub mod txn_condition_util;
-pub mod txn_core_util;
-pub mod txn_op_builder_util;
-pub mod txn_retry_util;
+pub mod api_impl;
+pub mod error;
+pub mod kv;
+pub mod txn;
 pub mod util;
 
-mod auto_increment_api;
-mod auto_increment_api_test_suite;
-mod auto_increment_impl;
-pub(crate) mod auto_increment_nextval_impl;
-pub mod crud;
-mod errors;
-mod row_access_policy_api;
-mod row_access_policy_api_impl;
-mod sequence_api_impl;
-pub(crate) mod sequence_nextval_impl;
-
+pub(crate) use api_impl::auto_increment_api;
+pub(crate) use api_impl::auto_increment_api_test_suite;
+pub use api_impl::catalog_api;
+pub use api_impl::data_mask_api;
+pub use api_impl::data_retention_util;
+pub(crate) use api_impl::database_api;
+pub use api_impl::database_util;
+pub use api_impl::dictionary_api;
+pub(crate) use api_impl::errors;
+pub use api_impl::garbage_collection_api;
+pub use api_impl::index_api;
+pub use api_impl::lock_api;
+pub use api_impl::name_id_value_api;
+pub use api_impl::name_value_api;
+pub(crate) use api_impl::row_access_policy_api;
+pub(crate) use api_impl::schema_api;
+pub use api_impl::security_api;
+pub(crate) use api_impl::sequence_api;
+pub use api_impl::table_api;
+pub use api_impl::tag_api;
 pub use auto_increment_api::AutoIncrementApi;
 pub use auto_increment_api_test_suite::AutoIncrementApiTestSuite;
 pub use catalog_api::CatalogApi;
 pub use data_mask_api::DatamaskApi;
-// Re-export from new data_retention_util module for backward compatibility
 pub use data_retention_util::get_retention_boundary;
 pub use data_retention_util::is_drop_time_retainable;
 pub use database_api::DatabaseApi;
 pub use databend_common_meta_app::schema::TagError;
 pub use dictionary_api::DictionaryApi;
-// Re-export from new error_util module for backward compatibility
+pub use error::app_error as kv_app_error;
+pub use error::constructors as error_util;
+pub use error::txn_error as meta_txn_error;
 pub use error_util::assert_table_exist;
 pub use error_util::db_has_to_exist;
 pub use error_util::db_has_to_not_exist;
@@ -86,7 +67,12 @@ pub use errors::MaskingPolicyError;
 pub use errors::RowAccessPolicyError;
 pub use garbage_collection_api::GarbageCollectionApi;
 pub use index_api::IndexApi;
-// Re-export from new kv_fetch_util module for backward compatibility
+pub use kv::crud;
+pub use kv::fetch_util as kv_fetch_util;
+pub use kv::pb_api as kv_pb_api;
+pub use kv::pb_crud_api as kv_pb_crud_api;
+pub use kv_app_error::KVAppResultExt;
+pub use kv_app_error::from_nested;
 pub use kv_fetch_util::deserialize_id_get_response;
 pub use kv_fetch_util::deserialize_struct_get_response;
 pub use kv_fetch_util::fetch_id;
@@ -98,25 +84,27 @@ pub use row_access_policy_api::RowAccessPolicyApi;
 pub use schema_api::SchemaApi;
 pub use security_api::SecurityApi;
 pub use sequence_api::SequenceApi;
-// Re-export from new serialization_util module for backward compatibility
-pub use serialization_util::{
-    deserialize_struct, deserialize_u64, serialize_struct, serialize_u64,
-};
+pub use serialization_util::deserialize_struct;
+pub use serialization_util::deserialize_u64;
+pub use serialization_util::serialize_struct;
+pub use serialization_util::serialize_u64;
 pub use table_api::TableApi;
 pub use tag_api::TagApi;
-// Re-export from new txn_condition_util module for backward compatibility
+pub use txn::backoff as txn_backoff;
+pub use txn::backoff::txn_backoff;
+pub use txn::condition as txn_condition_util;
+pub use txn::core as txn_core_util;
+pub use txn::op_builder as txn_op_builder_util;
+pub use txn::reply;
 pub use txn_condition_util::txn_cond_eq_seq;
 pub use txn_condition_util::txn_cond_seq;
-// Re-export from new txn_core_util module for backward compatibility
 pub use txn_core_util::send_txn;
 pub use txn_core_util::txn_delete_exact;
 pub use txn_core_util::txn_replace_exact;
-// Re-export from new txn_op_builder_util module for backward compatibility
 pub use txn_op_builder_util::txn_op_del;
 pub use txn_op_builder_util::txn_op_get;
 pub use txn_op_builder_util::txn_op_put;
 pub use txn_op_builder_util::txn_op_put_pb;
 pub use txn_op_builder_util::txn_put_pb;
-// Re-export from new txn_retry_util module for backward compatibility
-pub use txn_retry_util::txn_backoff;
 pub use util::DEFAULT_MGET_SIZE;
+pub use util::serialization as serialization_util;

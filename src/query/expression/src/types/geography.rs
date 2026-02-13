@@ -21,7 +21,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_io::geography::*;
-pub use databend_common_io::wkb::WkbInfo;
+use databend_common_io::wkb::WkbInfo;
 use databend_common_io::wkb::make_point;
 use databend_common_io::wkb::read_wkb_header;
 use geozero::ToWkt;

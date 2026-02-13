@@ -12,22 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_io::GeometryDataType;
+use databend_common_io::prelude::InputFormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::BinaryFormat;
-use jiff::tz::TimeZone;
 
 #[derive(Clone)]
 pub struct InputCommonSettings {
-    pub true_bytes: Vec<u8>,
-    pub false_bytes: Vec<u8>,
     pub null_if: Vec<Vec<u8>>,
     pub binary_format: BinaryFormat,
 
-    // from settings
-    pub jiff_timezone: TimeZone,
-    pub disable_variant_check: bool,
-    pub is_rounding_mode: bool,
-    pub enable_dst_hour_fix: bool,
+    pub settings: InputFormatSettings,
 }
 
 #[derive(Clone)]
@@ -37,10 +31,5 @@ pub struct OutputCommonSettings {
     pub null_bytes: Vec<u8>,
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
-    pub binary_format: BinaryFormat,
-
-    // from settings
-    pub jiff_timezone: TimeZone,
-    // File-format binary encoding (Hex/Base64); distinct from BinaryDisplayFormat.
-    pub geometry_format: GeometryDataType,
+    pub settings: OutputFormatSettings,
 }

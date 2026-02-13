@@ -15,7 +15,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use databend_common_meta_types::MatchSeq;
+use databend_meta_types::MatchSeq;
 
 use crate::app_error::AppErrorMessage;
 use crate::tenant_key::resource::TenantResource;
@@ -208,7 +208,7 @@ fn type_name<R: TenantResource>() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_types::MatchSeq;
+    use databend_meta_types::MatchSeq;
 
     use crate::principal::network_policy_ident;
 

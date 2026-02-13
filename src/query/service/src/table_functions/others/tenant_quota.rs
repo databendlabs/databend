@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use databend_base::non_empty::NonEmptyString;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -40,8 +41,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_app_types::non_empty::NonEmptyString;
-use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -49,6 +48,7 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_factory::Table;
 use databend_common_users::UserApiProvider;
+use databend_meta_types::MatchSeq;
 use fastrace::func_name;
 
 pub struct TenantQuotaTable {

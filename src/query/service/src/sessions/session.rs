@@ -27,7 +27,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -61,7 +60,6 @@ pub struct Session {
     pub(in crate::sessions) session_ctx: Box<SessionContext>,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
-    format_settings: FormatSettings,
 }
 
 impl Session {
@@ -78,7 +76,6 @@ impl Session {
             status,
             session_ctx,
             mysql_connection_id,
-            format_settings: FormatSettings::default(),
         })
     }
 
@@ -218,15 +215,6 @@ impl Session {
         self.session_ctx
             .set_query_context_shared(Arc::downgrade(&shared));
         Ok(QueryContext::create_from_shared(shared))
-    }
-
-    // only used for values and mysql output
-    pub fn set_format_settings(&mut self, other: FormatSettings) {
-        self.format_settings = other
-    }
-
-    pub fn get_format_settings(&self) -> FormatSettings {
-        self.format_settings.clone()
     }
 
     pub fn get_current_query_id(&self) -> Option<String> {

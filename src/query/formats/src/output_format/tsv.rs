@@ -18,34 +18,32 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 
-use crate::FileFormatOptionsExt;
 use crate::field_encoder::FieldEncoderCSV;
 use crate::field_encoder::helpers::write_tsv_escaped_string;
 use crate::output_format::OutputFormat;
 
-pub type TSVOutputFormat = TSVOutputFormatBase<false, false>;
-pub type TSVWithNamesOutputFormat = TSVOutputFormatBase<true, false>;
-pub type TSVWithNamesAndTypesOutputFormat = TSVOutputFormatBase<true, true>;
-
-pub struct TSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
+pub struct TSVOutputFormat {
     schema: TableSchemaRef,
     field_encoder: FieldEncoderCSV,
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
+
+    headers: u8,
 }
 
-impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
+impl TSVOutputFormat {
     pub fn create(
         schema: TableSchemaRef,
         params: &TsvFileFormatParams,
-        options_ext: &FileFormatOptionsExt,
+        field_encoder: FieldEncoderCSV,
+        headers: u8,
     ) -> Self {
-        let field_encoder = FieldEncoderCSV::create_tsv(params, options_ext);
         Self {
             schema,
             field_encoder,
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
+            headers,
         }
     }
 
@@ -65,9 +63,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NA
     }
 }
 
-impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
-    for TSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
-{
+impl OutputFormat for TSVOutputFormat {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.num_rows();
         let mut buf = Vec::with_capacity(block.memory_size());
@@ -97,7 +93,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
         let mut buf = vec![];
-        if WITH_NAMES {
+        if self.headers > 0 {
             let names = self
                 .schema
                 .fields()
@@ -105,7 +101,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
                 .map(|f| f.name().to_string())
                 .collect::<Vec<_>>();
             buf.extend_from_slice(&self.serialize_strings(names));
-            if WITH_TYPES {
+            if self.headers > 1 {
                 let types = self
                     .schema
                     .fields()
@@ -139,10 +135,10 @@ mod test {
     use databend_common_settings::Settings;
     use pretty_assertions::assert_eq;
 
-    use crate::FileFormatOptionsExt;
-    use crate::output_format::utils::gen_schema_and_block;
-    use crate::output_format::utils::get_output_format_clickhouse;
-    use crate::output_format::utils::get_simple_block;
+    use crate::get_output_format;
+    use crate::output_format::test_utils::gen_schema_and_block;
+    use crate::output_format::test_utils::get_output_format_clickhouse;
+    use crate::output_format::test_utils::get_simple_block;
 
     fn test_data_block(is_nullable: bool) -> Result<()> {
         let (schema, block) = get_simple_block(is_nullable);
@@ -154,7 +150,7 @@ mod test {
             let tsv_block = String::from_utf8(buffer)?;
             let expect = "1\ta\t1\t1.1\t1970-01-02\n\
                             2\tb\"\t1\t2.2\t1970-01-03\n\
-                            3\tc\'\t0\tnan\t1970-01-04\n";
+                            3\tc\'\t0\tNaN\t1970-01-04\n";
             assert_eq!(&tsv_block, expect);
 
             let formatter = get_output_format_clickhouse("TsvWithNames", schema.clone())?;
@@ -186,8 +182,8 @@ mod test {
                 FileFormatOptionsReader::from_map(options.clone()),
                 false,
             )?;
-            let mut options = FileFormatOptionsExt::create_from_settings(&settings, false)?;
-            let mut output_format = options.get_output_format(schema, params)?;
+            let mut output_format =
+                get_output_format(schema, params, settings.get_output_format_settings()?, None)?;
             let buffer = output_format.serialize_block(&block)?;
 
             let csv_block = String::from_utf8(buffer)?;
@@ -250,8 +246,9 @@ mod test {
             FileFormatOptionsReader::from_map(options.clone()),
             false,
         )?;
-        let mut options = FileFormatOptionsExt::create_from_settings(&settings, false)?;
-        let mut output_format = options.get_output_format(schema, params)?;
+        let mut output_format =
+            get_output_format(schema, params, settings.get_output_format_settings()?, None)?;
+
         let buffer = output_format.serialize_block(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;

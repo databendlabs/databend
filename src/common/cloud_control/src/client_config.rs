@@ -57,6 +57,13 @@ impl ClientConfig {
             crate::notification_client::NOTIFICATION_CLIENT_VERSION,
         );
     }
+
+    pub fn add_resource_version_info(&mut self) {
+        self.add_metadata(
+            crate::resource_client::RESOURCE_CLIENT_VERSION_NAME,
+            crate::resource_client::RESOURCE_CLIENT_VERSION,
+        );
+    }
     pub fn get_metadata(&self) -> &Vec<(String, String)> {
         &self.metadata
     }

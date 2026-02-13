@@ -11,15 +11,8 @@ runs:
     - name: Test compatibility
       shell: bash
       run: |
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.46   --reader-version  current  --meta-versions  1.2.527  1.2.677  1.2.833  --logictest-path  base
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.241  --reader-version  current  --meta-versions  1.2.527  1.2.677  1.2.833  --logictest-path  revoke
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.311  --reader-version  current  --meta-versions  1.2.527  1.2.677  1.2.833  --logictest-path  rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.318  --reader-version  current  --meta-versions  1.2.527  1.2.677  1.2.833  --logictest-path  rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  1.2.680  --reader-version  current  --meta-versions           1.2.680  1.2.833  --logictest-path  udf
-
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  current  --reader-version  1.2.311  --meta-versions  1.2.770           --logictest-path  rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  current  --reader-version  1.2.318  --meta-versions  1.2.770           --logictest-path  rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh  --writer-version  current  --reader-version  1.2.680  --meta-versions  1.2.770           --logictest-path  udf
+        pip install pyyaml -q
+        python3 ./tests/compat_fuse/test_compat_fuse.py --run-all
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

@@ -20,15 +20,6 @@ use anyerror::AnyError;
 use databend_base::shutdown::ShutdownGroup;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_runtime_api::RuntimeApi;
-use databend_common_meta_sled_store::openraft::MessageSummary;
-use databend_common_meta_types::Cmd;
-use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::MetaAPIError;
-use databend_common_meta_types::node::Node;
 use databend_common_storage::init_operator;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::GlobalLogger;
@@ -44,12 +35,21 @@ use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::server_metrics;
-use databend_meta::version::MIN_METACLI_SEMVER;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
 use databend_meta_cli_config::MetaConfig;
+use databend_meta_raft_store::config::RaftConfig;
+use databend_meta_raft_store::ondisk::DATA_VERSION;
+use databend_meta_raft_store::ondisk::OnDisk;
+use databend_meta_runtime_api::RuntimeApi;
+use databend_meta_sled_store::openraft::MessageSummary;
+use databend_meta_types::Cmd;
+use databend_meta_types::LogEntry;
+use databend_meta_types::MetaAPIError;
+use databend_meta_types::node::Node;
+use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use log::info;
 use log::warn;
 use tokio::time::Instant;
@@ -143,9 +143,11 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
         println!("      Status: {}", single_or_join);
         println!();
         let grpc_listen = conf.service.grpc.api_address().unwrap_or_else(|| "-".to_string());
+        let max_message = r.raft_grpc_max_message_size();
         println!("HTTP API listen at: {}", conf.admin.api_address);
         println!("gRPC API listen at: {} advertise: {}", grpc_listen, grpc_advertise);
-        println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
+        println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise);
+        println!("Raft API max message: {}MB", max_message / (1024 * 1024));
         println!();
     }
 
@@ -157,7 +159,7 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
     );
 
     let runtime = RT::new(Some(32), Some("meta-io-rt".to_string())).map_err(|e| {
-        databend_common_meta_types::MetaStartupError::MetaServiceError(format!(
+        databend_meta_types::MetaStartupError::MetaServiceError(format!(
             "Cannot create meta IO runtime: {}",
             e
         ))
@@ -185,8 +187,7 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
 
     // gRPC API service.
     {
-        let mut srv =
-            GrpcServer::<RT>::create(&conf.service, DATABEND_SEMVER.clone(), meta_handle.clone());
+        let mut srv = GrpcServer::<RT>::create(&conf.service, meta_handle.clone());
         info!(
             "Databend meta server listening on {:?}",
             conf.service.grpc.api_address()
@@ -299,7 +300,8 @@ async fn register_node<RT: RuntimeApi>(
 
         if meta_handle.handle_get_node(leader_id).await?.is_none() {
             warn!("Leader node is not replicated to local store, wait and try again");
-            sleep(Duration::from_millis(500)).await
+            sleep(Duration::from_millis(500)).await;
+            continue;
         }
 
         info!("Registering node with grpc-advertise-addr...");
@@ -346,7 +348,10 @@ fn run_cmd(conf: &MetaConfig) -> bool {
     match conf.cmd.as_str() {
         "ver" => {
             println!("version: {}", DATABEND_SEMVER.deref());
-            println!("min-compatible-client-version: {}", MIN_METACLI_SEMVER);
+            println!(
+                "min-compatible-client-version: {}",
+                *MIN_QUERY_VER_FOR_METASRV
+            );
             println!("data-version: {:?}", DATA_VERSION);
         }
         "show-config" => {

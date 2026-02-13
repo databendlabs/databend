@@ -17,7 +17,7 @@
 
 use std::fmt::Display;
 
-use databend_common_meta_app_types::non_empty::NonEmptyString;
+use databend_base::non_empty::NonEmptyString;
 
 use crate::app_error::TenantIsEmpty;
 
@@ -63,10 +63,6 @@ impl Tenant {
         &self.tenant
     }
 
-    pub fn to_nonempty(&self) -> NonEmptyString {
-        NonEmptyString::new(self.tenant.clone()).unwrap()
-    }
-
     pub fn display(&self) -> impl Display {
         format!("Tenant{}", self.tenant)
     }
@@ -91,9 +87,9 @@ impl ToTenant for &Tenant {
 
 mod kvapi_key_impl {
 
-    use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_meta_kvapi::kvapi;
+    use databend_meta_kvapi::kvapi::KeyBuilder;
+    use databend_meta_kvapi::kvapi::KeyError;
 
     use crate::tenant::tenant::Tenant;
 

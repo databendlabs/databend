@@ -24,18 +24,16 @@ use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::TxnCondition;
-use databend_common_meta_types::TxnOp;
-use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
+use databend_meta_client::ClientHandle;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::Operation;
+use databend_meta_types::TxnCondition;
+use databend_meta_types::TxnOp;
+use databend_meta_types::TxnRequest;
+use databend_meta_types::UpsertKV;
 use futures::FutureExt;
 use log::debug;
 use log::warn;
@@ -373,17 +371,15 @@ impl HistoryMetaHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Deref;
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
-    use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_store::MetaStore;
-    use databend_common_meta_types::UpsertKV;
     use databend_meta_runtime::DatabendRuntime;
+    use databend_meta_types::UpsertKV;
 
     use crate::history_tables::meta::HeartbeatMessage;
     use crate::history_tables::meta::HeartbeatTask;
@@ -391,16 +387,13 @@ mod tests {
     use crate::meta_service_error;
 
     pub async fn setup_meta_client() -> MetaStore {
-        MetaStore::new_local_testing::<DatabendRuntime>(
-            databend_common_version::BUILD_INFO.semver(),
-        )
-        .await
+        MetaStore::new_local_testing::<DatabendRuntime>().await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_heartbeat_basic() -> Result<()> {
         let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
+        let meta_client = meta_store.inner().clone();
 
         let heartbeat_guard =
             HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id_1", 4)
@@ -420,7 +413,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_heartbeat_extend() -> Result<()> {
         let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
+        let meta_client = meta_store.inner().clone();
 
         let heartbeat_guard =
             HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
@@ -442,7 +435,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_heartbeat_drop() -> Result<()> {
         let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
+        let meta_client = meta_store.inner().clone();
 
         let heartbeat_guard =
             HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
@@ -466,7 +459,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_heartbeat_from_others() -> Result<()> {
         let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
+        let meta_client = meta_store.inner().clone();
 
         let heartbeat_guard =
             HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
@@ -496,7 +489,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_heartbeat_concurrent() -> Result<()> {
         let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
+        let meta_client = meta_store.inner().clone();
 
         let barrier = Arc::new(tokio::sync::Barrier::new(5));
         let results = Arc::new(tokio::sync::Mutex::new(Vec::new()));
@@ -560,7 +553,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_check_and_update_last_execution_timestamp() -> Result<()> {
         let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
+        let meta_client = meta_store.inner().clone();
 
         let meta_handle = HistoryMetaHandle::new(meta_client, "test_node".to_string());
         let meta_key = "test/history_table/check_update";

@@ -35,6 +35,7 @@ use async_channel::Receiver;
 use async_channel::Sender;
 use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::Progress;
@@ -82,7 +83,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::InputFormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
@@ -1218,24 +1220,12 @@ impl TableContext for QueryContext {
         self.shared.version
     }
 
-    fn get_format_settings(&self) -> Result<FormatSettings> {
-        let tz = self.get_settings().get_timezone()?;
-        let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
-            ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
-        })?;
-        let settings = self.get_settings();
-        let geometry_format = settings.get_geometry_output_format()?;
-        let binary_format = settings.get_binary_output_format()?;
-        let format_null_as_str = settings.get_format_null_as_str()?;
-        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
-        let format = FormatSettings {
-            jiff_timezone,
-            geometry_format,
-            binary_format,
-            enable_dst_hour_fix,
-            format_null_as_str,
-        };
-        Ok(format)
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        self.get_settings().get_input_format_settings()
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+        self.get_settings().get_output_format_settings()
     }
 
     fn get_tenant(&self) -> Tenant {
@@ -2025,7 +2015,12 @@ impl TableContext for QueryContext {
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
         case_sensitive: bool,
+        on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
+        let copy_options = CopyIntoTableOptions {
+            on_error: on_error_mode.unwrap_or_default(),
+            ..Default::default()
+        };
         let operator = init_stage_operator(&stage_info)?;
         let info = operator.info();
         let stage_root = format!("{}{}", info.name(), info.root());
@@ -2080,7 +2075,7 @@ impl TableContext for QueryContext {
                         duplicated_files_detected: vec![],
                         is_select: true,
                         default_exprs: None,
-                        copy_into_table_options: Default::default(),
+                        copy_into_table_options: copy_options.clone(),
                         stage_root,
                         is_variant: true,
                         parquet_metas: None,
@@ -2107,6 +2102,7 @@ impl TableContext for QueryContext {
                     stage_root,
                     is_variant,
                     is_select: true,
+                    copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
                 OrcTable::try_create(self, info).await
@@ -2124,6 +2120,7 @@ impl TableContext for QueryContext {
                     is_select: true,
                     is_variant: true,
                     stage_root,
+                    copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
                 StageTable::try_create(info)
@@ -2158,6 +2155,7 @@ impl TableContext for QueryContext {
                     files_to_copy,
                     is_select: true,
                     stage_root,
+                    copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
                 StageTable::try_create(info)

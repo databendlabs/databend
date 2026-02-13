@@ -28,10 +28,10 @@ use databend_common_meta_app::row_access_policy::row_access_policy_name_ident::R
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandler;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandlerWrapper;
+use databend_meta_types::MetaError;
+use databend_meta_types::SeqV;
 
 use crate::meta_service_error;
 

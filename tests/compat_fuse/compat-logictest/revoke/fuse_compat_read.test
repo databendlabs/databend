@@ -1,0 +1,20 @@
+query T
+show grants for a;
+----
+INSERT default.default.t NULL USER a GRANT INSERT ON 'default'.'default'.'t' TO 'a'@'%'
+SELECT default.default.* NULL USER a GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
+CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT,OWNERSHIP default.db.* NULL USER a GRANT CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT,OWNERSHIP ON 'default'.'db'.* TO 'a'@'%'
+
+statement ok
+revoke insert on default.t from a;
+
+statement ok
+revoke select on default.* from a;
+
+statement ok
+revoke all on db.* from a;
+
+query T
+show grants for a;
+----
+

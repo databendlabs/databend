@@ -42,10 +42,8 @@ use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
-use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
@@ -54,13 +52,13 @@ use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
+use databend_common_io::prelude::InputFormatSettings;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 use serde::Deserialize;
 use serde_json::Deserializer;
 use serde_json::value::RawValue;
 
-use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
 use crate::binary::decode_binary;
 use crate::field_decoder::common::read_timestamp;
@@ -77,33 +75,34 @@ impl NestedValues {
     /// So we can use the same code to encode/decode in clients.
     /// It maybe needs to be configurable in the future,
     /// to read data from other DB which also support map/tuple/array.
-    pub fn create(options_ext: &FileFormatOptionsExt) -> Self {
+    pub fn create(settings: InputFormatSettings) -> Self {
         NestedValues {
             common_settings: InputCommonSettings {
-                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NULL_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                jiff_timezone: options_ext.jiff_timezone.clone(),
-                disable_variant_check: options_ext.disable_variant_check,
+                settings,
                 binary_format: Default::default(),
-                is_rounding_mode: options_ext.is_rounding_mode,
-                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
         }
     }
 }
 
 impl NestedValues {
-    fn common_settings(&self) -> &InputCommonSettings {
-        &self.common_settings
-    }
-
     fn match_bytes<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>, bs: &[u8]) -> bool {
         let pos = reader.checkpoint();
         if reader.ignore_bytes(bs) {
+            true
+        } else {
+            reader.rollback(pos);
+            false
+        }
+    }
+
+    fn match_byte<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>, bs: u8) -> bool {
+        let pos = reader.checkpoint();
+        if reader.ignore_byte(bs) {
             true
         } else {
             reader.rollback(pos);
@@ -166,20 +165,20 @@ impl NestedValues {
         column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        if self.match_bytes(reader, &self.common_settings().true_bytes) {
+        if self.match_byte(reader, b'1') {
             column.push(true);
-            Ok(())
-        } else if self.match_bytes(reader, &self.common_settings().false_bytes) {
+        } else if self.match_byte(reader, b'0') {
             column.push(false);
-            Ok(())
+        } else if self.match_bytes(reader, b"true") {
+            column.push(true);
+        } else if self.match_bytes(reader, b"false") {
+            column.push(false);
         } else {
-            let err_msg = format!(
-                "Incorrect boolean value, expect {} or {}",
-                self.common_settings().true_bytes.to_str().unwrap(),
-                self.common_settings().false_bytes.to_str().unwrap()
-            );
-            Err(ErrorCode::BadBytes(err_msg))
+            return Err(ErrorCode::BadBytes(
+                "Incorrect boolean value, expect one of 0/1/false/true",
+            ));
         }
+        Ok(())
     }
 
     fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
@@ -262,7 +261,7 @@ impl NestedValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
+        let date = buffer_readr.read_date_text(&self.common_settings.settings.jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
         Ok(())
@@ -294,7 +293,7 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        read_timestamp(column, &buf, self.common_settings())
+        read_timestamp(column, &buf, &self.common_settings)
     }
 
     fn read_timestamp_tz<R: AsRef<[u8]>>(
@@ -304,7 +303,7 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        read_timestamp_tz(column, &buf, self.common_settings())
+        read_timestamp_tz(column, &buf, &self.common_settings)
     }
 
     fn read_bitmap<R: AsRef<[u8]>>(
@@ -337,7 +336,7 @@ impl NestedValues {
                 column.commit_row();
             }
             Err(e) => {
-                if self.common_settings().disable_variant_check {
+                if self.common_settings.settings.disable_variant_check {
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(e.to_string()));
@@ -397,7 +396,7 @@ impl NestedValues {
         column: &mut NullableColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        for null in &self.common_settings().null_if {
+        for null in &self.common_settings.null_if {
             if self.match_bytes(reader, null) {
                 column.push_null();
                 return Ok(());
@@ -472,7 +471,12 @@ impl NestedValues {
         fields: &mut [ColumnBuilder],
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        reader.must_ignore_byte(b'(')?;
+        let closing = if reader.ignore_byte(b'(') {
+            b')'
+        } else {
+            reader.must_ignore_byte(b'[')?;
+            b']'
+        };
         for (idx, field) in fields.iter_mut().enumerate() {
             let _ = reader.ignore_white_spaces_or_comments();
             if idx != 0 {
@@ -481,7 +485,7 @@ impl NestedValues {
             let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(field, reader)?;
         }
-        reader.must_ignore_byte(b')')?;
+        reader.must_ignore_byte(closing)?;
         Ok(())
     }
 

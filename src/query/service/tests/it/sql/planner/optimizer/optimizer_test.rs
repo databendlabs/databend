@@ -33,7 +33,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::F64;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
-use databend_common_meta_types::NodeInfo;
 use databend_common_sql::BaseTableColumn;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::FormatOptions;
@@ -48,7 +47,8 @@ use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Statistics;
-use databend_common_storage::Datum;
+use databend_common_statistics::Datum;
+use databend_meta_types::NodeInfo;
 use databend_query::clusters::ClusterHelper;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::QueryContext;
@@ -319,13 +319,12 @@ fn to_datum(value: &Option<serde_json::Value>) -> Option<Datum> {
     value.as_ref().and_then(|v| match v {
         serde_json::Value::Number(n) => n
             .as_i64()
-            .and_then(|i| Datum::from_scalar(Scalar::Number(NumberScalar::Int64(i))))
+            .and_then(|i| Scalar::Number(NumberScalar::Int64(i)).to_datum())
             .or_else(|| {
-                n.as_f64().and_then(|f| {
-                    Datum::from_scalar(Scalar::Number(NumberScalar::Float64(f.into())))
-                })
+                n.as_f64()
+                    .and_then(|f| Scalar::Number(NumberScalar::Float64(f.into())).to_datum())
             }),
-        serde_json::Value::String(s) => Datum::from_scalar(Scalar::String(s.clone())),
+        serde_json::Value::String(s) => Scalar::String(s.clone()).to_datum(),
         _ => None,
     })
 }

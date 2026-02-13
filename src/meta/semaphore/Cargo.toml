@@ -15,11 +15,10 @@ test = true
 
 [dependencies]
 codeq = { workspace = true }
-databend-common-meta-client = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-runtime-api = { workspace = true }
-databend-common-meta-types = { workspace = true }
+databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
+databend-meta-runtime-api = { workspace = true }
+databend-meta-types = { workspace = true }
 display-more = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -31,10 +30,10 @@ tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-runtime-api = { workspace = true }
-databend-common-meta-types = { workspace = true }
+databend-meta-kvapi = { workspace = true }
+databend-meta-runtime-api = { workspace = true }
 databend-meta-test-harness = { workspace = true }
+databend-meta-types = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }

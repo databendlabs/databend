@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
-use databend_common_meta_types::MatchSeq;
+use databend_meta_types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -96,7 +96,7 @@ async fn compute_table_segments_diffs(
     let mut table_segments_diffs = HashMap::new();
     let mut table_original_snapshots = HashMap::new();
 
-    for (update_table_meta_req, _) in &req.update_table_metas {
+    for (update_table_meta_req, table_info) in &req.update_table_metas {
         let tid = update_table_meta_req.table_id;
         let engine = update_table_meta_req.new_table_meta.engine.as_str();
 
@@ -118,6 +118,7 @@ async fn compute_table_segments_diffs(
             0,
             update_table_meta_req.new_table_meta.clone(),
             storage_class,
+            table_info.desc.as_str(),
         )?;
 
         let base_snapshot = new_table
@@ -175,7 +176,18 @@ async fn try_rebuild_req(
             )));
         }
         let storage_class = ctx.get_settings().get_s3_storage_class()?;
-        let latest_table = FuseTable::from_table_meta(tid, seq, table_meta, storage_class)?;
+        let (_, table_info) = req
+            .update_table_metas
+            .iter()
+            .find(|(meta, _)| meta.table_id == tid)
+            .unwrap();
+        let latest_table = FuseTable::from_table_meta(
+            tid,
+            seq,
+            table_meta,
+            storage_class,
+            table_info.desc.as_str(),
+        )?;
         let default_cluster_key_id = latest_table.cluster_key_id();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
         let (update_table_meta_req, _) = req

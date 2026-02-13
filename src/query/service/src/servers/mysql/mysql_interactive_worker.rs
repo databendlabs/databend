@@ -29,7 +29,7 @@ use databend_common_exception::ToErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
@@ -256,9 +256,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                     .await
                     .map_err(|err| err.display_with_sql(query));
 
-                let format = self.base.session.get_format_settings();
-
-                let mut write_result = writer.write(query_result, &format).await;
+                let mut write_result = writer.write(query_result).await;
 
                 if let Err(cause) = write_result {
                     self.base.session.txn_mgr().lock().set_fail();
@@ -394,7 +392,7 @@ impl InteractiveWorkerBase {
         &mut self,
         query_id: String,
         query: &str,
-    ) -> Result<(QueryResult, Option<FormatSettings>)> {
+    ) -> Result<(QueryResult, Option<OutputFormatSettings>)> {
         match self.federated_server_command_check(query) {
             Some((schema, data_block)) => {
                 info!("Federated query: {}", query);
@@ -434,7 +432,7 @@ impl InteractiveWorkerBase {
                     schema = real_schema;
                 }
 
-                let format = context.get_format_settings()?;
+                let format = context.get_output_format_settings()?;
                 Ok((
                     QueryResult::create(
                         blocks,

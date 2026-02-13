@@ -222,7 +222,12 @@ impl CloudTaskInterpreter {
 impl TaskInterpreter for CloudTaskInterpreter {
     async fn create_task(&self, ctx: &Arc<QueryContext>, plan: &CreateTaskPlan) -> Result<()> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot create task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
@@ -251,7 +256,12 @@ impl TaskInterpreter for CloudTaskInterpreter {
 
     async fn execute_task(&self, ctx: &Arc<QueryContext>, plan: &ExecuteTaskPlan) -> Result<()> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot execute task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
@@ -272,7 +282,12 @@ impl TaskInterpreter for CloudTaskInterpreter {
 
     async fn alter_task(&self, ctx: &Arc<QueryContext>, plan: &AlterTaskPlan) -> Result<()> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot alter task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
@@ -294,7 +309,12 @@ impl TaskInterpreter for CloudTaskInterpreter {
         plan: &DescribeTaskPlan,
     ) -> Result<Option<task_utils::Task>> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot describe task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
@@ -316,7 +336,12 @@ impl TaskInterpreter for CloudTaskInterpreter {
 
     async fn drop_task(&self, ctx: &Arc<QueryContext>, plan: &DropTaskPlan) -> Result<()> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot drop task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
@@ -341,7 +366,12 @@ impl TaskInterpreter for CloudTaskInterpreter {
         plan: &ShowTasksPlan,
     ) -> Result<Vec<task_utils::Task>> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot drop task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));

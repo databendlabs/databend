@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use databend_common_meta_client::ClientHandle;
-use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_version::BUILD_INFO;
+use databend_common_meta_store::MetaStore;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_kvapi::kvapi;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::MetaSrvTestContext;
 use databend_meta_test_harness::start_metasrv;
@@ -32,18 +32,18 @@ pub struct MetaSrvBuilder {
 }
 
 #[async_trait]
-impl kvapi::ApiBuilder<Arc<ClientHandle<DatabendRuntime>>> for MetaSrvBuilder {
-    async fn build(&self) -> Arc<ClientHandle<DatabendRuntime>> {
+impl kvapi::ApiBuilder<MetaStore> for MetaSrvBuilder {
+    async fn build(&self) -> MetaStore {
         let (tc, addr) = start_metasrv::<DatabendRuntime>().await.unwrap();
 
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
-            BUILD_INFO.semver(),
             "root",
             "xxx",
             None,
             None,
             None,
+            DEFAULT_GRPC_MESSAGE_SIZE,
         )
         .unwrap();
 
@@ -52,18 +52,18 @@ impl kvapi::ApiBuilder<Arc<ClientHandle<DatabendRuntime>>> for MetaSrvBuilder {
             tcs.push(tc);
         }
 
-        client
+        MetaStore::R(client)
     }
 
-    async fn build_cluster(&self) -> Vec<Arc<ClientHandle<DatabendRuntime>>> {
+    async fn build_cluster(&self) -> Vec<MetaStore> {
         let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2])
             .await
             .unwrap();
 
         let cluster = vec![
-            tcs[0].grpc_client().await.unwrap(),
-            tcs[1].grpc_client().await.unwrap(),
-            tcs[2].grpc_client().await.unwrap(),
+            MetaStore::R(tcs[0].grpc_client().await.unwrap()),
+            MetaStore::R(tcs[1].grpc_client().await.unwrap()),
+            MetaStore::R(tcs[2].grpc_client().await.unwrap()),
         ];
 
         {

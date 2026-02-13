@@ -11,17 +11,20 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-raft-store = { workspace = true }
-databend-common-meta-sled-store = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 databend-common-protos = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-meta-kvapi = { workspace = true }
+databend-meta-raft-store = { workspace = true }
+databend-meta-sled-store = { workspace = true }
+databend-meta-types = { workspace = true }
 openraft = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+regex = { workspace = true }
 
 [lints]
 workspace = true

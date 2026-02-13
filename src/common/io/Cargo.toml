@@ -12,8 +12,6 @@ bincode = { workspace = true }
 borsh = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
-chrono = { workspace = true }
-chrono-tz = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-timezone = { workspace = true }
@@ -21,6 +19,7 @@ enquote = { workspace = true }
 enumflags2 = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
+geohash = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
 jiff = { workspace = true }

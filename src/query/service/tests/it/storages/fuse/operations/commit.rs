@@ -51,7 +51,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
+use databend_common_io::prelude::InputFormatSettings;
+use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -134,8 +135,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
@@ -151,6 +150,8 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_meta_types::MetaId;
+use databend_meta_types::SeqV;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
@@ -628,7 +629,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_format_settings(&self) -> Result<FormatSettings> {
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        todo!()
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
         todo!()
     }
 

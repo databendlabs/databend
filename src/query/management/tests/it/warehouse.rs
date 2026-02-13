@@ -22,16 +22,16 @@ use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
 use databend_common_management::*;
-use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MatchSeqExt;
-use databend_common_meta_types::NodeInfo;
-use databend_common_meta_types::NodeType;
-use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;
+use databend_meta_kvapi::kvapi::KvApiExt;
 use databend_meta_runtime::DatabendRuntime;
+use databend_meta_types::MatchSeq;
+use databend_meta_types::MatchSeqExt;
+use databend_meta_types::NodeInfo;
+use databend_meta_types::NodeType;
+use databend_meta_types::SeqV;
 use tokio::sync::Barrier;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -1564,7 +1564,7 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
 
 async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
     let test_api = MetaStore::L(Arc::new(
-        LocalMetaService::new::<DatabendRuntime>("management-test", BUILD_INFO.semver())
+        LocalMetaService::new::<DatabendRuntime>("management-test")
             .await
             .unwrap(),
     ));
