@@ -379,14 +379,14 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
     query_ctx.add_query_profiles(&info.profiling);
     let query_profiles = query_ctx.get_query_profiles();
 
-    hook_clear_m_cte_temp_table(&query_ctx)?;
-    hook_vacuum_temp_files(&query_ctx)?;
-    hook_disk_temp_dir(&query_ctx)?;
+    // Cleanup failures should not skip final query/profile logs.
+    let cleanup_err = hook_clear_m_cte_temp_table(&query_ctx)
+        .and_then(|_| hook_vacuum_temp_files(&query_ctx))
+        .and_then(|_| hook_disk_temp_dir(&query_ctx))
+        .err();
 
-    let err_opt = match &info.res {
-        Ok(_) => None,
-        Err(e) => Some(e.clone()),
-    };
+    let execution_err = info.res.as_ref().err().cloned();
+    let err_opt = execution_err.clone().or_else(|| cleanup_err.clone());
 
     if query_ctx.on_query_execution_finish(err_opt.is_some()) {
         let has_profiles = !query_profiles.is_empty();
@@ -398,24 +398,32 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
                 statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
             }
 
-            info!(
-                target: "databend::log::profile",
-                "{}",
-                serde_json::to_string(&QueryProfiles {
-                    query_id: query_ctx.get_id(),
-                    profiles: query_profiles.clone(),
-                    statistics_desc: get_statistics_desc(),
-                })?
-            );
+            match serde_json::to_string(&QueryProfiles {
+                query_id: query_ctx.get_id(),
+                profiles: query_profiles.clone(),
+                statistics_desc: get_statistics_desc(),
+            }) {
+                Ok(profile_json) => {
+                    info!(target: "databend::log::profile", "{}", profile_json);
+                }
+                Err(err) => {
+                    error!("Failed to serialize query profiles: {:?}", err);
+                }
+            }
         }
 
         emit_query_finished(&query_ctx, err_opt, has_profiles);
     }
 
-    match &info.res {
-        Ok(_) => Ok(()),
-        Err(error) => Err(error.clone()),
+    if let Some(error) = execution_err {
+        return Err(error);
     }
+
+    if let Some(error) = cleanup_err {
+        return Err(error);
+    }
+
+    Ok(())
 }
 
 /// Check if the statement need acquire a table lock.
