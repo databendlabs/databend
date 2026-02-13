@@ -59,7 +59,6 @@ pub use crate::predefined_tables::HistoryTable;
 pub use crate::predefined_tables::get_all_history_table_names;
 pub use crate::predefined_tables::init_history_tables;
 pub use crate::query_log_deduplicator::QueryLogDeduplicator;
-pub use crate::query_log_deduplicator::QueryLogEmitPoint;
 pub use crate::remote_log::LogBuffer as RemoteLogBuffer;
 pub use crate::remote_log::LogMessage;
 pub use crate::remote_log::RemoteLog;

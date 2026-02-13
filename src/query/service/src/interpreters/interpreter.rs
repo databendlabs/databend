@@ -45,7 +45,6 @@ use databend_common_pipeline::core::always_callback;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
-use databend_common_tracing::QueryLogEmitPoint;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
@@ -95,7 +94,8 @@ pub trait Interpreter: Sync + Send {
         match self.execute_inner(ctx.clone()).await {
             Ok(stream) => Ok(stream),
             Err(err) => {
-                log_query_finished(&ctx, Some(err.clone()), false);
+                let has_profiles = !ctx.get_query_profiles().is_empty();
+                log_query_finished(&ctx, Some(err.clone()), has_profiles);
                 Err(err)
             }
         }
@@ -149,7 +149,8 @@ pub trait Interpreter: Sync + Send {
         };
 
         if build_res.main_pipeline.is_empty() {
-            log_query_finished(&ctx, None, false);
+            let has_profiles = !ctx.get_query_profiles().is_empty();
+            log_query_finished(&ctx, None, has_profiles);
             return Ok(Box::pin(DataBlockStream::create(None, vec![])));
         }
 
@@ -205,7 +206,7 @@ pub type InterpreterPtr = Arc<dyn Interpreter>;
 
 fn log_query_start(ctx: &QueryContext) {
     // Nested execution paths may invoke this multiple times for one query context.
-    if !ctx.try_log_query(QueryLogEmitPoint::Start) {
+    if !ctx.on_query_execution_start() {
         return;
     }
 
@@ -222,12 +223,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 }
 
-fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
-    // Multiple on_finished callbacks may exist; only the first one should emit finish logs.
-    if !ctx.try_log_query(QueryLogEmitPoint::Finish) {
-        return;
-    }
-
+fn emit_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
     InterpreterMetrics::record_query_finished(ctx, error.clone());
 
     let now = SystemTime::now();
@@ -254,6 +250,15 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
         error!("Failed to log query finish: {:?}", error)
     }
+}
+
+fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles: bool) {
+    // Emit finish only when the last execution leaves.
+    if !ctx.on_query_execution_finish() {
+        return;
+    }
+
+    emit_query_finished(ctx, error, has_profiles);
 }
 
 /// There are two steps to execute a query:
@@ -371,12 +376,21 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
 
 #[fastrace::trace]
 pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
-    let mut has_profiles = false;
     query_ctx.add_query_profiles(&info.profiling);
     let query_profiles = query_ctx.get_query_profiles();
-    if !query_profiles.is_empty() {
-        has_profiles = true;
-        if query_ctx.try_log_query(QueryLogEmitPoint::Profile) {
+
+    hook_clear_m_cte_temp_table(&query_ctx)?;
+    hook_vacuum_temp_files(&query_ctx)?;
+    hook_disk_temp_dir(&query_ctx)?;
+
+    let err_opt = match &info.res {
+        Ok(_) => None,
+        Err(e) => Some(e.clone()),
+    };
+
+    if query_ctx.on_query_execution_finish() {
+        let has_profiles = !query_profiles.is_empty();
+        if has_profiles {
             #[derive(serde::Serialize)]
             struct QueryProfiles {
                 query_id: String,
@@ -394,18 +408,10 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
                 })?
             );
         }
+
+        emit_query_finished(&query_ctx, err_opt, has_profiles);
     }
 
-    hook_clear_m_cte_temp_table(&query_ctx)?;
-    hook_vacuum_temp_files(&query_ctx)?;
-    hook_disk_temp_dir(&query_ctx)?;
-
-    let err_opt = match &info.res {
-        Ok(_) => None,
-        Err(e) => Some(e.clone()),
-    };
-
-    log_query_finished(&query_ctx, err_opt, has_profiles);
     match &info.res {
         Ok(_) => Ok(()),
         Err(error) => Err(error.clone()),

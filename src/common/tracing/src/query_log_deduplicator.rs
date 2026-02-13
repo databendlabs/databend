@@ -13,35 +13,76 @@
 // limitations under the License.
 
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 #[derive(Default)]
 pub struct QueryLogDeduplicator {
-    // Guards "start" query log emission for a shared query context.
-    started: AtomicBool,
-    // Guards "finish" query log emission for a shared query context.
-    finished: AtomicBool,
-    // Guards profile log emission for a shared query context.
-    profile: AtomicBool,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum QueryLogEmitPoint {
-    Start,
-    Finish,
-    Profile,
+    // Number of in-flight executions for one query context.
+    active_executions: AtomicUsize,
+    // Guards "start" query log emission.
+    start_logged: AtomicBool,
+    // Guards terminal ("final") log emission.
+    terminal_logged: AtomicBool,
 }
 
 impl QueryLogDeduplicator {
-    /// Returns true only for the first caller at the given emit point.
-    pub fn try_log(&self, emit_point: QueryLogEmitPoint) -> bool {
-        let gate = match emit_point {
-            QueryLogEmitPoint::Start => &self.started,
-            QueryLogEmitPoint::Finish => &self.finished,
-            QueryLogEmitPoint::Profile => &self.profile,
-        };
-
-        gate.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+    /// Marks one execution enter.
+    /// Returns true only for the first start log.
+    pub fn on_execution_start(&self) -> bool {
+        self.active_executions.fetch_add(1, Ordering::AcqRel);
+        self.start_logged
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
+    }
+
+    /// Marks one execution leave.
+    /// Returns true only when this leave reaches terminal state.
+    pub fn on_execution_finish(&self) -> bool {
+        loop {
+            let current = self.active_executions.load(Ordering::Acquire);
+            if current == 0 {
+                return false;
+            }
+
+            let next = current - 1;
+            if self
+                .active_executions
+                .compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                if next != 0 {
+                    return false;
+                }
+
+                return self
+                    .terminal_logged
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok();
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::QueryLogDeduplicator;
+
+    #[test]
+    fn test_start_is_emitted_once() {
+        let deduplicator = QueryLogDeduplicator::default();
+        assert!(deduplicator.on_execution_start());
+        assert!(!deduplicator.on_execution_start());
+    }
+
+    #[test]
+    fn test_finish_is_emitted_only_on_terminal_execution() {
+        let deduplicator = QueryLogDeduplicator::default();
+        assert!(deduplicator.on_execution_start());
+        assert!(!deduplicator.on_execution_start());
+
+        assert!(!deduplicator.on_execution_finish());
+        assert!(deduplicator.on_execution_finish());
+        assert!(!deduplicator.on_execution_finish());
     }
 }

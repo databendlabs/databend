@@ -129,7 +129,6 @@ use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetTable;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_tracing::QueryLogEmitPoint;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
@@ -214,8 +213,12 @@ impl QueryContext {
         })
     }
 
-    pub(crate) fn try_log_query(&self, emit_point: QueryLogEmitPoint) -> bool {
-        self.shared.query_log_deduplicator.try_log(emit_point)
+    pub(crate) fn on_query_execution_start(&self) -> bool {
+        self.shared.query_log_deduplicator.on_execution_start()
+    }
+
+    pub(crate) fn on_query_execution_finish(&self) -> bool {
+        self.shared.query_log_deduplicator.on_execution_finish()
     }
 
     /// Build fuse/system normal table by table info.
