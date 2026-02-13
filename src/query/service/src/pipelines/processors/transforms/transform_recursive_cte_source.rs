@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::IndexType;
@@ -52,6 +53,7 @@ use futures_util::TryStreamExt;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::QueryFinishHooks;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanVisitor;
@@ -158,7 +160,10 @@ impl TransformRecursiveCteSource {
             union_plan.right.clone()
         };
         ctx.clear_runtime_filter();
-        let build_res = build_query_pipeline_without_render_result_set(&ctx, &plan).await?;
+        let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &plan).await?;
+        build_res.main_pipeline.set_on_finished(always_callback(
+            QueryFinishHooks::nested().into_callback(ctx.clone()),
+        ));
         let settings = ExecutorSettings::try_create(ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
         ctx.set_executor(pulling_executor.get_inner())?;
@@ -354,7 +359,7 @@ async fn create_memory_table_for_cte_scan(
     for create_table_plan in create_table_plans {
         let create_table_interpreter =
             CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-        let _ = create_table_interpreter.execute(ctx.clone()).await?;
+        create_table_interpreter.execute2().await?;
     }
 
     Ok(())

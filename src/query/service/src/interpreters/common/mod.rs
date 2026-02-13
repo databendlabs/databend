@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod column;
+mod finish_hook;
 mod grant;
 mod metrics;
 mod notification;
@@ -22,10 +23,13 @@ mod table;
 mod task;
 mod util;
 
+mod log;
 pub mod table_option_validation;
 
 pub use column::*;
+pub use finish_hook::QueryFinishHooks;
 pub use grant::validate_grant_object_exists;
+pub use log::*;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
 pub use stream::dml_build_update_stream_req;
