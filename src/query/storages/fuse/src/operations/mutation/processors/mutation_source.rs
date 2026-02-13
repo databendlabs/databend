@@ -17,6 +17,8 @@ use std::ops::Not;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
@@ -82,6 +84,7 @@ pub struct MutationSource {
     filter: Arc<Option<Expr>>,
     block_reader: Arc<BlockReader>,
     remain_reader: Arc<Option<BlockReader>>,
+    internal_columns: Vec<InternalColumn>,
     operators: Vec<BlockOperator>,
     storage_format: FuseStorageFormat,
     action: MutationAction,
@@ -99,6 +102,7 @@ impl MutationSource {
         filter: Arc<Option<Expr>>,
         block_reader: Arc<BlockReader>,
         remain_reader: Arc<Option<BlockReader>>,
+        internal_columns: Vec<InternalColumn>,
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {
@@ -109,6 +113,7 @@ impl MutationSource {
             filter,
             block_reader,
             remain_reader,
+            internal_columns,
             operators,
             storage_format,
             action,
@@ -186,6 +191,11 @@ impl Processor for MutationSource {
                 if let Some(filter) = self.filter.as_ref() {
                     assert_eq!(filter.data_type(), &DataType::Boolean);
 
+                    let base_cols_len = data_block.num_columns();
+                    if !self.internal_columns.is_empty() {
+                        data_block = self.add_internal_columns(data_block, fuse_part)?;
+                    }
+
                     let func_ctx = self.ctx.get_function_context()?;
                     let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
@@ -194,6 +204,12 @@ impl Processor for MutationSource {
                         .map_err(|e| e.add_message("eval filter failed:"))?
                         .try_downcast::<BooleanType>()
                         .unwrap();
+
+                    // Remove internal columns after filter evaluation
+                    if data_block.num_columns() > base_cols_len {
+                        let projection = (0..base_cols_len).collect();
+                        data_block = data_block.project(&projection);
+                    }
 
                     let affect_rows = match &predicates {
                         Value::Scalar(v) => {
@@ -417,6 +433,45 @@ impl Processor for MutationSource {
 }
 
 impl MutationSource {
+    fn add_internal_columns(
+        &self,
+        mut data_block: DataBlock,
+        part: &FuseBlockPartInfo,
+    ) -> Result<DataBlock> {
+        let Some(block_meta_index) = part.block_meta_index.as_ref() else {
+            let column_names: Vec<_> = self
+                .internal_columns
+                .iter()
+                .map(|c| c.column_name())
+                .collect();
+            return Err(ErrorCode::Internal(format!(
+                "block_meta_index is missing but internal columns {:?} were requested",
+                column_names
+            )));
+        };
+
+        let num_rows = data_block.num_rows();
+        let internal_column_meta = InternalColumnMeta {
+            segment_idx: block_meta_index.segment_idx,
+            block_id: block_meta_index.block_id,
+            block_location: block_meta_index.block_location.clone(),
+            segment_location: block_meta_index.segment_location.clone(),
+            snapshot_location: block_meta_index.snapshot_location.clone(),
+            offsets: None,
+            base_block_ids: None,
+            inner: None,
+            matched_rows: block_meta_index.matched_rows.clone(),
+            matched_scores: block_meta_index.matched_scores.clone(),
+            vector_scores: block_meta_index.vector_scores.clone(),
+        };
+
+        for internal_column in &self.internal_columns {
+            let entry = internal_column.generate_column_values(&internal_column_meta, num_rows);
+            data_block.add_entry(entry);
+        }
+        Ok(data_block)
+    }
+
     fn update_mutation_status(&self, num_rows: usize) {
         let (update_rows, deleted_rows) = if self.action == MutationAction::Update {
             (num_rows as u64, 0)

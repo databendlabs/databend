@@ -1,0 +1,66 @@
+## Test DELETE with numeric column names to ensure no panic
+## This guards against the regression where numeric column names could be
+## mistaken for metadata indices and cause out-of-bounds access
+
+statement ok
+drop table if exists numeric_cols
+
+statement ok
+create table numeric_cols(`1` int, `2` int, `6` int, `10` varchar)
+
+statement ok
+insert into numeric_cols values(100, 200, 600, 'test1'), (101, 201, 601, 'test2'), (102, 202, 602, 'test3')
+
+query IIIT
+select * from numeric_cols order by `1`
+----
+100 200 600 test1
+101 201 601 test2
+102 202 602 test3
+
+## Test DELETE with simple filter on numeric column name
+statement ok
+delete from numeric_cols where `1` = 100
+
+query IIIT
+select * from numeric_cols order by `1`
+----
+101 201 601 test2
+102 202 602 test3
+
+## Test DELETE with subquery involving numeric column names
+statement ok
+drop table if exists numeric_cols2
+
+statement ok
+create table numeric_cols2(`1` int, `2` int)
+
+statement ok
+insert into numeric_cols2 values(101, 201), (103, 203)
+
+statement ok
+delete from numeric_cols where `1` in (select `1` from numeric_cols2)
+
+query IIIT
+select * from numeric_cols order by `1`
+----
+102 202 602 test3
+
+## Test DELETE with complex filter on high-index numeric column name
+statement ok
+insert into numeric_cols values(104, 204, 604, 'test4'), (105, 205, 605, 'test5')
+
+statement ok
+delete from numeric_cols where `6` > 603
+
+query IIIT
+select * from numeric_cols order by `1`
+----
+102 202 602 test3
+
+## Cleanup
+statement ok
+drop table if exists numeric_cols
+
+statement ok
+drop table if exists numeric_cols2
