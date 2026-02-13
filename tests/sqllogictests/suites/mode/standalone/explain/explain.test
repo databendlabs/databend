@@ -1929,3 +1929,43 @@ EvalScalar
         │                                                           ├── estimated rows: 0.00
         │                                                           └── RecursiveCteScan
         └── DummyTableScan(Probe)
+
+# Test explain analyze for recursive CTE
+query T
+explain analyze WITH RECURSIVE t(n) AS (SELECT 5 UNION ALL SELECT n + 1 FROM t WHERE n < 9) SELECT * FROM t;
+----
+UnionAll(recursive cte)
+├── output columns: [5 (#3)]
+├── estimated rows: 1.00
+├── EvalScalar
+│   ├── cpu time: <slt:ignore>
+│   ├── output rows: 1
+│   ├── output bytes: <slt:ignore>
+│   ├── output columns: [5 (#0)]
+│   ├── expressions: [5]
+│   ├── estimated rows: 1.00
+│   └── DummyTableScan
+│       ├── cpu time: <slt:ignore>
+│       ├── output rows: 1
+│       ├── output bytes: <slt:ignore>
+│       └── bytes scanned: <slt:ignore>
+└── EvalScalar
+    ├── cpu time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── output columns: [n + 1 (#2)]
+    ├── expressions: [t.n (#1) + 1]
+    ├── estimated rows: 0.00
+    └── Filter
+        ├── cpu time: <slt:ignore>
+        ├── output rows: <slt:ignore>
+        ├── output bytes: <slt:ignore>
+        ├── output columns: [n (#1)]
+        ├── filters: [t.n (#1) < 9]
+        ├── estimated rows: 0.00
+        └── RecursiveCteScan
+            ├── cpu time: <slt:ignore>
+            ├── wait time: <slt:ignore>
+            ├── output rows: <slt:ignore>
+            ├── output bytes: <slt:ignore>
+            └── bytes scanned: <slt:ignore>
