@@ -33,6 +33,7 @@ pub use expr_runtime_pruner::RuntimeFilterExpr;
 pub use fuse_pruner::FusePruner;
 pub use fuse_pruner::PruningContext;
 pub use fuse_pruner::table_sample;
+pub use inverted_index_pruner::InvertedIndexFieldId;
 pub use inverted_index_pruner::InvertedIndexPruner;
 pub use inverted_index_pruner::create_inverted_index_query;
 pub use pruner_location::SegmentLocation;

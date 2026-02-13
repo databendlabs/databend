@@ -18,13 +18,61 @@
 use std::collections::BTreeMap;
 
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataField;
+use databend_common_expression::DataFieldIndex;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableFieldIndex;
 use databend_common_expression::TableSchema;
 use databend_common_expression::create_test_complex_schema;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use pretty_assertions::assert_eq;
+
+#[test]
+fn test_typed_schema_apis() -> anyhow::Result<()> {
+    let field1 = TableField::new("a", TableDataType::Number(NumberDataType::UInt64));
+    let field2 = TableField::new("b", TableDataType::Number(NumberDataType::UInt64));
+    let schema = TableSchema::new(vec![field1, field2]);
+
+    let b_idx = schema.index_of_field("b")?;
+    assert_eq!(b_idx, TableFieldIndex::new(1));
+    assert_eq!(schema.field_at(b_idx).name(), "b");
+
+    let (b_idx2, b_field) = schema.column_with_name_typed("b").unwrap();
+    assert_eq!(b_idx2, b_idx);
+    assert_eq!(b_field.name(), "b");
+
+    assert_eq!(
+        schema.column_id_of_field_index(b_idx)?,
+        schema.column_id_of_index(1)?
+    );
+
+    let projected = schema.project_typed(&[b_idx]);
+    assert_eq!(projected.num_fields(), 1);
+    assert_eq!(projected.field_at(TableFieldIndex::new(0)).name(), "b");
+
+    let data_schema = DataSchema::new(vec![
+        DataField::new("x", DataType::Number(NumberDataType::UInt64)),
+        DataField::new("y", DataType::String),
+    ]);
+
+    let y_idx = data_schema.index_of_field("y")?;
+    assert_eq!(y_idx, DataFieldIndex::new(1));
+    assert_eq!(data_schema.field_at(y_idx).name(), "y");
+
+    let (y_idx2, y_field) = data_schema.column_with_name_typed("y").unwrap();
+    assert_eq!(y_idx2, y_idx);
+    assert_eq!(y_field.name(), "y");
+
+    let data_projected = data_schema.project_typed(&[y_idx]);
+    assert_eq!(data_projected.num_fields(), 1);
+    assert_eq!(data_projected.field_at(DataFieldIndex::new(0)).name(), "y");
+
+    Ok(())
+}
 
 #[test]
 fn test_project_schema_from_tuple() -> anyhow::Result<()> {

@@ -16,3 +16,19 @@ pub mod block_filter_reader;
 mod column_filter_reader;
 
 pub use block_filter_reader::BloomBlockFilterReader;
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct BloomIndexColumnOrdinal(usize);
+
+impl BloomIndexColumnOrdinal {
+    #[inline]
+    pub const fn new(value: usize) -> Self {
+        Self(value)
+    }
+
+    #[inline]
+    pub const fn as_usize(self) -> usize {
+        self.0
+    }
+}

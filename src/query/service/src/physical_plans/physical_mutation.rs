@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
+use databend_common_expression::DataFieldIndex;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
@@ -32,6 +33,7 @@ use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableFieldIndex;
 use databend_common_expression::TableSchema;
 use databend_common_expression::expr::*;
 use databend_common_expression::type_check::check_cast;
@@ -335,7 +337,7 @@ impl PhysicalPlanBuilder {
         if *strategy == MutationStrategy::Direct {
             // MutationStrategy::Direct: If the mutation filter is a simple expression,
             // we use MutationSource to execute the mutation directly.
-            let mut field_id_to_schema_index = HashMap::new();
+            let mut table_field_index_to_input_schema_index = HashMap::new();
             let (mutation_expr, computed_expr, mutation_kind) =
                 if let Some(update_list) = &matched_evaluators[0].update {
                     let (database, table_name) = match table_name_alias {
@@ -353,13 +355,13 @@ impl PhysicalPlanBuilder {
                         &table_name,
                     )?;
 
-                    build_field_id_to_schema_index(
+                    build_table_field_index_to_input_schema_index(
                         database,
                         &table_name,
                         bind_context,
                         table.schema_with_stream(),
                         mutation_input_schema.clone(),
-                        &mut field_id_to_schema_index,
+                        &mut table_field_index_to_input_schema_index,
                     );
 
                     let computed_expr = generate_stored_computed_list(
@@ -388,7 +390,7 @@ impl PhysicalPlanBuilder {
                 mutation_expr,
                 computed_expr,
                 mutation_kind,
-                field_id_to_schema_index,
+                table_field_index_to_input_schema_index,
                 input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
@@ -916,7 +918,7 @@ pub fn mutation_update_expr(
     predicate_column_index: Option<usize>,
     database: Option<&str>,
     table: &str,
-) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
+) -> Result<Vec<(TableFieldIndex, RemoteExpr)>> {
     let predicate = if let Some(predicate_column_index) = predicate_column_index {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
@@ -986,7 +988,7 @@ pub fn mutation_update_expr(
                 .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
             let (expr, _) =
                 ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-            acc.push((*index, expr.as_remote_expr()));
+            acc.push((TableFieldIndex::new(*index), expr.as_remote_expr()));
             Ok::<_, ErrorCode>(acc)
         },
     )
@@ -1000,7 +1002,7 @@ pub fn generate_stored_computed_list(
     database: Option<&str>,
     table: &str,
     update_list: &HashMap<FieldIndex, ScalarExpr>,
-) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
+) -> Result<Vec<(TableFieldIndex, RemoteExpr)>> {
     let mut remote_exprs = Vec::new();
     for (i, f) in schema.fields().iter().enumerate() {
         if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
@@ -1034,22 +1036,22 @@ pub fn generate_stored_computed_list(
                 })?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-                remote_exprs.push((i, expr.as_remote_expr()));
+                remote_exprs.push((TableFieldIndex::new(i), expr.as_remote_expr()));
             }
         }
     }
     Ok(remote_exprs)
 }
 
-fn build_field_id_to_schema_index(
+fn build_table_field_index_to_input_schema_index(
     database: Option<&str>,
     table_name: &str,
     bind_context: &BindContext,
     table_schema_with_stream: Arc<TableSchema>,
     mutation_input_schema: Arc<DataSchema>,
-    field_id_to_schema_index: &mut HashMap<usize, usize>,
+    table_field_index_to_input_schema_index: &mut HashMap<TableFieldIndex, DataFieldIndex>,
 ) {
-    for (field_id, field) in table_schema_with_stream.fields().iter().enumerate() {
+    for (table_field_index, field) in table_schema_with_stream.fields().iter().enumerate() {
         if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
             continue;
         }
@@ -1064,7 +1066,10 @@ fn build_field_id_to_schema_index(
                 let schema_index = mutation_input_schema
                     .index_of(&column_index.to_string())
                     .unwrap();
-                field_id_to_schema_index.insert(field_id, schema_index);
+                table_field_index_to_input_schema_index.insert(
+                    TableFieldIndex::new(table_field_index),
+                    DataFieldIndex::new(schema_index),
+                );
                 break;
             }
         }

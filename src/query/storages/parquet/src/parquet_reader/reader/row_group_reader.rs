@@ -340,7 +340,7 @@ impl RowGroupReader {
                 .build()?;
 
         let mut predicates = Vec::new();
-        let fn_field_id = |field: &FieldRef| {
+        let parquet_field_id_of = |field: &FieldRef| {
             field
                 .metadata()
                 .get(PARQUET_FIELD_ID_META_KEY)
@@ -368,7 +368,8 @@ impl RowGroupReader {
                 .iter()
                 .zip(record_batch.columns().iter())
                 .filter(|(field, _)| {
-                    fn_field_id(field).map(|field_id| equality_ids.contains(&field_id))
+                    parquet_field_id_of(field)
+                        .map(|parquet_field_id| equality_ids.contains(&parquet_field_id))
                         == Some(true)
                 })
                 .collect::<Vec<_>>();

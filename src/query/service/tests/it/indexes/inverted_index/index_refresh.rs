@@ -31,6 +31,7 @@ use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
+use databend_common_storages_fuse::pruning::InvertedIndexFieldId;
 use databend_common_storages_fuse::pruning::create_inverted_index_query;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
@@ -150,8 +151,8 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let has_score = true;
     let need_position = false;
     let mut field_ids = HashSet::new();
-    field_ids.insert(0);
-    field_ids.insert(1);
+    field_ids.insert(InvertedIndexFieldId::new(0));
+    field_ids.insert(InvertedIndexFieldId::new(1));
     let index_record = IndexRecordOption::WithFreqsAndPositions;
 
     let queries = vec![

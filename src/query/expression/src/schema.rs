@@ -31,6 +31,8 @@ use crate::BlockMetaInfo;
 use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
 use crate::display::display_tuple_field_name;
+use crate::ids::DataFieldIndex;
+use crate::ids::TableFieldIndex;
 use crate::types::DataType;
 use crate::types::DecimalDataKind;
 use crate::types::NumberDataType;
@@ -397,6 +399,12 @@ impl DataSchema {
         &self.fields[i]
     }
 
+    /// Typed variant of DataSchema::field.
+    #[inline]
+    pub fn field_at(&self, i: DataFieldIndex) -> &DataField {
+        &self.fields[i.as_usize()]
+    }
+
     /// Returns an immutable reference of a specific `Field` instance selected by name.
     pub fn field_with_name(&self, name: &str) -> Result<&DataField> {
         Ok(&self.fields[self.index_of(name)?])
@@ -424,6 +432,12 @@ impl DataSchema {
         )))
     }
 
+    /// Typed variant of DataSchema::index_of.
+    #[inline]
+    pub fn index_of_field(&self, name: &str) -> Result<DataFieldIndex> {
+        Ok(DataFieldIndex::new(self.index_of(name)?))
+    }
+
     /// Look up a column by name and return a immutable reference to the column along with
     /// its index.
     pub fn column_with_name(&self, name: &str) -> Option<(FieldIndex, &DataField)> {
@@ -431,6 +445,13 @@ impl DataSchema {
             .iter()
             .enumerate()
             .find(|&(_, c)| c.name() == name)
+    }
+
+    /// Typed variant of DataSchema::column_with_name.
+    #[inline]
+    pub fn column_with_name_typed(&self, name: &str) -> Option<(DataFieldIndex, &DataField)> {
+        self.column_with_name(name)
+            .map(|(idx, field)| (DataFieldIndex::new(idx), field))
     }
 
     pub fn set_field_type(&mut self, i: FieldIndex, data_type: DataType) {
@@ -473,6 +494,16 @@ impl DataSchema {
         let fields = projection
             .iter()
             .map(|idx| self.fields()[*idx].clone())
+            .collect();
+        Self::new_from(fields, self.meta().clone())
+    }
+
+    /// Typed variant of DataSchema::project.
+    #[must_use]
+    pub fn project_typed(&self, projection: &[DataFieldIndex]) -> Self {
+        let fields = projection
+            .iter()
+            .map(|idx| self.fields()[idx.as_usize()].clone())
             .collect();
         Self::new_from(fields, self.meta().clone())
     }
@@ -568,6 +599,12 @@ impl TableSchema {
 
     pub fn column_id_of_index(&self, i: FieldIndex) -> Result<ColumnId> {
         Ok(self.fields[i].column_id())
+    }
+
+    /// Typed variant of TableSchema::column_id_of_index.
+    #[inline]
+    pub fn column_id_of_field_index(&self, i: TableFieldIndex) -> Result<ColumnId> {
+        self.column_id_of_index(i.as_usize())
     }
 
     pub fn column_id_of(&self, name: &str) -> Result<ColumnId> {
@@ -794,6 +831,12 @@ impl TableSchema {
         &self.fields[i]
     }
 
+    /// Typed variant of [`TableSchema::field`].
+    #[inline]
+    pub fn field_at(&self, i: TableFieldIndex) -> &TableField {
+        &self.fields[i.as_usize()]
+    }
+
     /// Returns an immutable reference of a specific `Field` instance selected by name.
     pub fn field_with_name(&self, name: &str) -> Result<&TableField> {
         Ok(&self.fields[self.index_of(name)?])
@@ -820,6 +863,12 @@ impl TableSchema {
         )))
     }
 
+    /// Typed variant of [`TableSchema::index_of`].
+    #[inline]
+    pub fn index_of_field(&self, name: &str) -> Result<TableFieldIndex> {
+        Ok(TableFieldIndex::new(self.index_of(name)?))
+    }
+
     /// Look up a column by name and return a immutable reference to the column along with
     /// its index.
     pub fn column_with_name(&self, name: &str) -> Option<(FieldIndex, &TableField)> {
@@ -827,6 +876,13 @@ impl TableSchema {
             .iter()
             .enumerate()
             .find(|&(_, c)| c.name == name)
+    }
+
+    /// Typed variant of [`TableSchema::column_with_name`].
+    #[inline]
+    pub fn column_with_name_typed(&self, name: &str) -> Option<(TableFieldIndex, &TableField)> {
+        self.column_with_name(name)
+            .map(|(idx, field)| (TableFieldIndex::new(idx), field))
     }
 
     /// Check to see if `self` is a superset of `other` schema. Here are the comparison rules:
@@ -849,6 +905,21 @@ impl TableSchema {
         let mut fields = Vec::with_capacity(projection.len());
         for idx in projection {
             fields.push(self.fields[*idx].clone());
+        }
+
+        Self {
+            fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
+    }
+
+    /// Typed variant of [`TableSchema::project`].
+    #[must_use]
+    pub fn project_typed(&self, projection: &[TableFieldIndex]) -> Self {
+        let mut fields = Vec::with_capacity(projection.len());
+        for idx in projection {
+            fields.push(self.fields[idx.as_usize()].clone());
         }
 
         Self {
