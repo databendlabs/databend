@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Assert that latest query is compatible with an old version query on fuse-table format.
+Fuse table format compatibility test.
 
-Tests write-then-read compatibility across query versions with meta upgrades.
+Tests both backward (old writer → current reader) and forward (current writer → old reader)
+compatibility across query versions with meta upgrades.
 """
 
 import argparse
