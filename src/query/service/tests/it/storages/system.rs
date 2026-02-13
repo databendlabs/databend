@@ -481,7 +481,7 @@ async fn test_users_table() -> anyhow::Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 13);
+    assert_eq!(block.num_columns(), 14);
     assert!(block.num_rows() >= 2);
 
     let output = box_render(

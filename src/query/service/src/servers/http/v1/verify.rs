@@ -28,6 +28,7 @@ pub struct VerifyResponse {
     auth_type: String,
     is_configured: bool,
     default_role: String,
+    default_warehouse: String,
     roles: Vec<String>,
 }
 
@@ -44,6 +45,7 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
         .is_some();
     let auth_type = user.auth_info.get_type().to_str().to_string();
     let default_role = user.option.default_role().cloned().unwrap_or_default();
+    let default_warehouse = user.option.default_warehouse().cloned().unwrap_or_default();
     let roles = ctx
         .session
         .get_all_effective_roles()
@@ -58,6 +60,7 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
         is_configured,
         auth_type,
         default_role,
+        default_warehouse,
         roles,
     }))
 }
