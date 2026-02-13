@@ -259,8 +259,6 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             opt_ctx.clone(),
             &DEFAULT_REWRITE_RULES,
         ))
-        // CTE filter pushdown optimization
-        .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
@@ -288,6 +286,8 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             settings.get_enable_cse_optimizer()?,
             CommonSubexpressionOptimizer::new(opt_ctx.clone()),
         )
+        // CTE filter pushdown optimization
+        .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
         // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
         // Eliminate unnecessary scalar calculations to clean up the final plan

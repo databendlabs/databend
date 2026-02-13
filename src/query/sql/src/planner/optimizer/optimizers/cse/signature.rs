@@ -67,7 +67,6 @@ fn compute_s_expr_signature_rec(
                 matches!(column, ColumnEntry::InternalColumn(_))
             });
             if has_internal_column
-                || scan.prewhere.is_some()
                 || scan.agg_index.is_some()
                 || scan.change_type.is_some()
                 || scan.update_stream_columns
@@ -140,6 +139,15 @@ fn compute_s_expr_signature_rec(
                 tables,
                 has_aggregate: false,
             };
+            signature_to_exprs
+                .entry(signature.clone())
+                .or_default()
+                .push((path.clone(), expr.clone()));
+            Some(signature)
+        }
+        RelOperator::Filter(_) => {
+            let child_signature = child_signatures.first()?.as_ref()?;
+            let signature = child_signature.clone();
             signature_to_exprs
                 .entry(signature.clone())
                 .or_default()
