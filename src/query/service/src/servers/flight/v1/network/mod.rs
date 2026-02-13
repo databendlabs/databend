@@ -15,6 +15,7 @@
 pub mod flagged_waker;
 pub mod inbound_channel;
 pub mod inbound_quota;
+pub mod local_channel;
 pub mod outbound_buffer;
 pub mod outbound_channel;
 pub mod outbound_transport;
@@ -25,6 +26,9 @@ pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;
 pub use inbound_channel::NetworkInboundSender;
 pub use inbound_quota::ConnectionQuota;
+pub use local_channel::LocalInboundChannel;
+pub use local_channel::LocalOutboundChannel;
+pub use local_channel::create_local_channels;
 pub use outbound_buffer::ExchangeBufferConfig;
 pub use outbound_buffer::ExchangeSinkBuffer;
 pub use outbound_channel::BroadcastChannel;

@@ -84,14 +84,14 @@ struct RemoteInstance {
 }
 
 impl RemoteInstance {
-    fn new(num_channels: usize, exchange: PingPongExchange) -> Self {
-        let channels = (0..num_channels).map(|_| Channel::new()).collect();
+    fn new(num_threads: usize, exchange: PingPongExchange) -> Self {
+        let channels = (0..num_threads).map(|_| Channel::new()).collect();
         Self {
+            exchange,
             state: Mutex::new(RemoteInstanceState {
                 channels,
                 last_error: None,
             }),
-            exchange,
         }
     }
 }
@@ -105,7 +105,7 @@ struct ExchangeSinkBufferInner {
     queue_capacity: usize,
     queue_size: AtomicUsize,
     /// Blocked sender wakers
-    blocked_wakers: Mutex<Vec<Waker>>,
+    blocked_wakers: Arc<Mutex<Vec<Waker>>>,
 }
 
 impl ExchangeSinkBufferInner {
@@ -178,13 +178,9 @@ impl ExchangeSinkBuffer {
     /// Create a new ExchangeSinkBuffer.
     ///
     /// - `exchanges`: Pre-created PingPongExchange instances (not yet started).
-    /// - `num_channels`: Number of channels per remote instance.
+    /// - `num_threads`: Number of channels per remote instance.
     /// - `config`: Buffer configuration.
-    pub fn create(
-        exchanges: Vec<PingPongExchange>,
-        num_channels: usize,
-        config: ExchangeBufferConfig,
-    ) -> Result<Self> {
+    pub fn create(exchanges: Vec<PingPongExchange>, config: ExchangeBufferConfig) -> Result<Self> {
         let queue_capacity = config.queue_capacity_factor * exchanges.len().max(1);
 
         Ok(Self {
@@ -197,7 +193,8 @@ impl ExchangeSinkBuffer {
                         buffer: weak_inner.clone(),
                     }));
 
-                    remotes.push(Arc::new(RemoteInstance::new(num_channels, exchange)));
+                    let num_threads = exchange.num_threads;
+                    remotes.push(Arc::new(RemoteInstance::new(num_threads, exchange)));
                 }
 
                 ExchangeSinkBufferInner {
@@ -205,52 +202,47 @@ impl ExchangeSinkBuffer {
                     remotes,
                     queue_capacity,
                     queue_size: AtomicUsize::new(0),
-                    blocked_wakers: Mutex::new(Vec::new()),
+                    blocked_wakers: Arc::new(Mutex::new(Vec::new())),
                 }
             }),
         })
     }
 
-    /// Poll to send data to the specified destination.
-    ///
-    /// - `channel_id`: Channel identifier.
-    /// - `dest_idx`: Destination index.
-    /// - `data`: Data to send.
-    /// - `waker`: Waker to be notified when backpressure is released.
-    ///
-    /// Returns:
-    /// - `Poll::Ready(Ok(()))`: Data accepted.
-    /// - `Poll::Ready(Err(...))`: Error from the destination.
-    /// - `Poll::Pending`: Backpressure, waker registered.
-    pub fn poll_send(
-        &self,
-        tid: usize,
-        dest_idx: usize,
-        data: FlightData,
-        waker: &Waker,
-    ) -> Poll<Result<()>> {
+    pub async fn add_data(&self, tid: usize, dest_idx: usize, data: FlightData) -> Result<()> {
         let remote = &self.inner.remotes[dest_idx];
 
         // Try to send directly first
         if let Some(data) = remote.exchange.try_send(data)? {
             // Failed to send (in-flight or channel full), queue the data
-            let mut state = remote.state.lock();
+            {
+                let mut state = remote.state.lock();
 
-            // Check for previous error
-            if let Some(status) = state.last_error.take() {
-                return Poll::Ready(Err(status.into()));
+                // Check for previous error
+                if let Some(status) = state.last_error.take() {
+                    return Err(status.into());
+                }
+
+                state.channels[tid].pending_queue.push_back(data);
             }
-
-            state.channels[tid].pending_queue.push_back(data);
 
             // Check backpressure
             if self.inner.queue_size.fetch_add(1, Ordering::SeqCst) >= self.inner.queue_capacity {
-                let mut wakers = self.inner.blocked_wakers.lock();
-                wakers.push(waker.clone());
-                return Poll::Pending;
+                let mut registered = false;
+                let blocked_wakes = self.inner.blocked_wakers.clone();
+                let register_waker = std::future::poll_fn(|cx| {
+                    if registered {
+                        return Poll::Ready(());
+                    }
+
+                    registered = true;
+                    blocked_wakes.lock().push(cx.waker().clone());
+                    return Poll::Pending;
+                });
+
+                register_waker.await;
             }
         }
 
-        Poll::Ready(Ok(()))
+        Ok(())
     }
 }

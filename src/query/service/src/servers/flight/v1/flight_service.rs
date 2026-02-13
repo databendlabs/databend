@@ -148,10 +148,17 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_exchange(&self, req: StreamReq<FlightData>) -> Response<Self::DoExchangeStream> {
-        let query_id = req.get_metadata("x-query-id")?;
-        let channel_id = req.get_metadata("x-channel-id")?;
+        let params_json = req.get_metadata("x-exchange-params")?;
+        let params: crate::servers::flight::DoExchangeParams = serde_json::from_str(&params_json)
+            .map_err(|e| {
+            Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
+        })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(&query_id, &channel_id)?;
+        let sender = DataExchangeManager::instance().handle_do_exchange(
+            &params.query_id,
+            &params.exchange_id,
+            params.num_threads,
+        )?;
 
         let mut stream = req.into_inner();
         let (tx, rx) = async_channel::bounded(1);

@@ -44,7 +44,6 @@ use concurrent_queue::PopError;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use event_listener::Event;
-use futures_util::future::BoxFuture;
 use parking_lot::RwLock;
 
 use super::inbound_quota::ConnectionQuota;
@@ -114,7 +113,7 @@ impl NetworkInboundChannel {
                     return match sub_queues[best_idx].queue.pop() {
                         Ok(item) => {
                             sub_queues[best_idx].quota.release(item.size);
-                            Ok(self.deserialize(item.data))
+                            Ok(self.deserialize(strip_tid(item.data)))
                         }
                         Err(PopError::Empty) => {
                             continue;
@@ -146,6 +145,11 @@ impl NetworkInboundChannel {
 
         self.recv_ops.notify(usize::MAX);
     }
+
+    pub fn is_closed(&self) -> bool {
+        let sub_queues = self.sub_queues.read();
+        Self::all_closed(&sub_queues)
+    }
 }
 
 /// The set of NetworkInboundChannels for one channel_id.
@@ -161,6 +165,10 @@ impl NetworkInboundChannelSet {
         Self {
             channels: Arc::new(channels),
         }
+    }
+
+    pub fn create_receiver(&self, thread_idx: usize) -> Arc<dyn InboundChannel> {
+        NetworkInboundReceiver::create(self.channels[thread_idx].clone())
     }
 }
 
@@ -240,9 +248,13 @@ impl Drop for NetworkInboundSender {
 }
 
 /// Trait for receiving data blocks from the network.
+#[async_trait::async_trait]
 pub trait InboundChannel: Send + Sync {
-    fn recv(&self) -> BoxFuture<'static, Option<Result<DataBlock, ErrorCode>>>;
     fn close(&self);
+
+    fn is_closed(&self) -> bool;
+
+    async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode>;
 }
 
 /// Processor-side handle, bound to a specific tid.
@@ -253,21 +265,31 @@ pub struct NetworkInboundReceiver {
 }
 
 impl NetworkInboundReceiver {
-    pub fn new(channel: Arc<NetworkInboundChannel>) -> Self {
-        Self { channel }
+    pub fn create(channel: Arc<NetworkInboundChannel>) -> Arc<dyn InboundChannel> {
+        Arc::new(Self { channel })
     }
 }
 
+#[async_trait::async_trait]
 impl InboundChannel for NetworkInboundReceiver {
-    fn recv(&self) -> BoxFuture<'static, Option<Result<DataBlock, ErrorCode>>> {
-        Box::pin(RecvFuture {
-            channel: self.channel.clone(),
-            listener: None,
-        })
-    }
-
     fn close(&self) {
         self.channel.close_by_receiver();
+    }
+
+    fn is_closed(&self) -> bool {
+        self.channel.is_closed()
+    }
+
+    async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
+        let future = RecvFuture {
+            channel: self.channel.clone(),
+            listener: None,
+        };
+        match future.await {
+            Some(Ok(block)) => Ok(Some(block)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
     }
 }
 

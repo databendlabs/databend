@@ -32,8 +32,6 @@ use tokio::task::JoinHandle;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::servers::flight::FlightClient;
-
 /// Response from a ping-pong exchange.
 pub struct PingPongResponse {
     pub data: Result<FlightData, Status>,
@@ -58,6 +56,7 @@ pub struct PingPongExchangeInner {
 /// When a request is sent, subsequent sends will return the data back to the caller
 /// until a response is received.
 pub struct PingPongExchange {
+    pub num_threads: usize,
     inner: Arc<PingPongExchangeInner>,
     response_stream: Mutex<Option<Streaming<FlightData>>>,
 }
@@ -114,19 +113,11 @@ impl PingPongExchangeInner {
 }
 
 impl PingPongExchange {
-    /// Create a new ping-pong exchange connection.
-    ///
-    /// The exchange is created but the receiver is not started yet.
-    /// Call `start` to begin receiving responses.
-    pub async fn connect(
-        client: &mut FlightClient,
-        query_id: &str,
-        channel_id: &str,
-    ) -> Result<Self, Status> {
-        let (send_tx, send_rx) = async_channel::bounded(1);
-
-        let response_stream = client.do_exchange(query_id, channel_id, send_rx).await?;
-
+    pub fn from_parts(
+        num_threads: usize,
+        send_tx: async_channel::Sender<FlightData>,
+        response_stream: tonic::Streaming<FlightData>,
+    ) -> Self {
         let inner = Arc::new(PingPongExchangeInner {
             in_flight: AtomicBool::new(false),
             send_time: Mutex::new(None),
@@ -134,10 +125,11 @@ impl PingPongExchange {
             shutdown: WatchNotify::new(),
         });
 
-        Ok(Self {
+        Self {
             inner,
+            num_threads,
             response_stream: Mutex::new(Some(response_stream)),
-        })
+        }
     }
 
     /// Start the receiver with the given callback.

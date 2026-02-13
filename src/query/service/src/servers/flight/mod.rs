@@ -18,6 +18,7 @@ pub(crate) mod keep_alive;
 mod request_builder;
 pub mod v1;
 
+pub use flight_client::DoExchangeParams;
 pub use flight_client::FlightClient;
 pub use flight_client::FlightExchange;
 pub use flight_client::FlightReceiver;
