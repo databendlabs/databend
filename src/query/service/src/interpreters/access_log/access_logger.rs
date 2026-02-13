@@ -514,11 +514,16 @@ impl AccessLogger {
     }
 
     fn log_copy_into_location(&mut self, plan: &CopyIntoLocationPlan) {
+        let partition_columns = plan.partition_by.as_ref().map(|desc| {
+            vec![AccessObjectColumn {
+                column_name: format!("PARTITION BY ({})", desc.display),
+            }]
+        });
         let modified_object = AccessObject {
             object_domain: ObjectDomain::Stage,
             object_name: plan.info.stage.stage_name.clone(),
             stage_type: Some(plan.info.stage.stage_type.clone()),
-            columns: None,
+            columns: partition_columns,
         };
         self.entry.objects_modified.push(modified_object);
 
