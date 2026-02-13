@@ -67,11 +67,35 @@ pub struct ConnectionTagSetTarget {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ViewTagSetTarget {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub view: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UDFTagSetTarget {
+    pub if_exists: bool,
+    pub udf_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProcedureTagSetTarget {
+    pub if_exists: bool,
+    pub name: String,
+    pub args: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TagSetObject {
     Database(DatabaseTagSetTarget),
     Table(TableTagSetTarget),
     Stage(StageTagSetTarget),
     Connection(ConnectionTagSetTarget),
+    View(ViewTagSetTarget),
+    UDF(UDFTagSetTarget),
+    Procedure(ProcedureTagSetTarget),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

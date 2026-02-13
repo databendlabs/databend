@@ -16,6 +16,9 @@ use std::collections::HashSet;
 
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::principal::ProcedureIdentity;
+use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::connection_ident::ConnectionIdent;
 use databend_common_meta_app::principal::user_stage_ident::StageIdent;
 use databend_common_meta_app::schema::CreateTagReply;
@@ -87,6 +90,11 @@ fn get_object_key(tenant: &Tenant, object: &TaggableObject) -> String {
         TaggableObject::Stage { name } => StageIdent::new(tenant.clone(), name).to_string_key(),
         TaggableObject::Database { db_id } => DatabaseId::new(*db_id).to_string_key(),
         TaggableObject::Table { table_id } => TableId::new(*table_id).to_string_key(),
+        TaggableObject::UDF { name } => UdfIdent::new(tenant.clone(), name).to_string_key(),
+        TaggableObject::Procedure { name, args } => {
+            ProcedureNameIdent::new(tenant.clone(), ProcedureIdentity::new(name, args))
+                .to_string_key()
+        }
     }
 }
 
@@ -402,8 +410,11 @@ where
                         }
                     }
                 }
-                // Stage and Connection use name-based keys, no soft delete concept
-                TaggableObject::Stage { .. } | TaggableObject::Connection { .. } => {}
+                // Stage, Connection, UDF, and Procedure use name-based keys, no soft delete concept
+                TaggableObject::Stage { .. }
+                | TaggableObject::Connection { .. }
+                | TaggableObject::UDF { .. }
+                | TaggableObject::Procedure { .. } => {}
             }
 
             debug!(req :? =(&req); "set_object_tags retry due to concurrent modification");

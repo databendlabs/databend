@@ -8,6 +8,12 @@ statement ok
 DROP CONNECTION IF EXISTS test_tag_conn
 
 statement ok
+DROP FUNCTION IF EXISTS test_tag_udf
+
+statement ok
+DROP PROCEDURE IF EXISTS test_tag_proc(DECIMAL(10,2))
+
+statement ok
 DROP TAG IF EXISTS test_env_tag
 
 statement ok
@@ -25,6 +31,9 @@ statement ok
 CREATE TABLE test_tag_ref_db.test_table (id INT)
 
 statement ok
+CREATE VIEW test_tag_ref_db.test_view AS SELECT * FROM test_tag_ref_db.test_table
+
+statement ok
 CREATE TAG test_env_tag ALLOWED_VALUES = ('dev', 'prod', 'staging')
 
 statement ok
@@ -38,6 +47,16 @@ CREATE STAGE test_tag_stage
 
 statement ok
 CREATE CONNECTION test_tag_conn STORAGE_TYPE = 's3' ACCESS_KEY_ID = 'fake_key' SECRET_ACCESS_KEY = 'fake_secret'
+
+statement ok
+CREATE FUNCTION test_tag_udf AS (p) -> not(is_null(p))
+
+statement ok
+CREATE PROCEDURE test_tag_proc(x DECIMAL(10,2)) RETURNS INT NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 1;
+END;
+$$;
 
 ## Test TAG_REFERENCES with valid database - should return empty (no tags set yet)
 query TTTTT
@@ -98,6 +117,29 @@ query TTTTT
 SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db.test_table', 'TABLE')
 ----
 test_env_tag dev test_tag_ref_db test_table TABLE
+
+
+## Test TAG_REFERENCES with view - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db.test_view', 'VIEW')
+----
+
+## Set tags on view
+statement ok
+ALTER VIEW test_tag_ref_db.test_view SET TAG test_env_tag = 'staging', test_owner_tag = 'view_team'
+
+## Verify TAG_REFERENCES returns tags for view
+query TTTTT rowsort
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_ref_db.test_view', 'VIEW')
+----
+test_env_tag staging test_tag_ref_db test_view VIEW
+test_owner_tag view_team test_tag_ref_db test_view VIEW
+
+## Verify object_id is not null for view
+query B
+SELECT object_id IS NOT NULL FROM TAG_REFERENCES('test_tag_ref_db.test_view', 'VIEW') LIMIT 1
+----
+1
 
 
 ## Test TAG_REFERENCES with stage - should return empty (no tags set yet)
@@ -167,6 +209,55 @@ SELECT object_id IS NULL FROM TAG_REFERENCES('test_tag_conn', 'CONNECTION') LIMI
 ----
 1
 
+
+## Test TAG_REFERENCES with udf - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_udf', 'UDF')
+----
+
+## Set tags on udf
+statement ok
+ALTER FUNCTION test_tag_udf SET TAG test_env_tag = 'dev', test_owner_tag = 'udf_team'
+
+## Verify TAG_REFERENCES returns tags for udf
+query TTTTT rowsort
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_udf', 'UDF')
+----
+test_env_tag dev NULL test_tag_udf UDF
+test_owner_tag udf_team NULL test_tag_udf UDF
+
+## Verify object_id is NULL for udf
+query B
+SELECT object_id IS NULL FROM TAG_REFERENCES('test_tag_udf', 'UDF') LIMIT 1
+----
+1
+
+
+## Test TAG_REFERENCES with procedure - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_proc(DECIMAL(10,2))', 'PROCEDURE')
+----
+
+## Set tags on procedure
+statement ok
+ALTER PROCEDURE test_tag_proc(DECIMAL(10,2)) SET TAG test_env_tag = 'prod'
+
+## Verify TAG_REFERENCES returns tags for procedure
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_proc(DECIMAL(10,2))', 'PROCEDURE')
+----
+test_env_tag prod NULL test_tag_proc(DECIMAL(10,2)) PROCEDURE
+
+## Verify object_id is NULL for procedure
+query B
+SELECT object_id IS NULL FROM TAG_REFERENCES('test_tag_proc(DECIMAL(10,2))', 'PROCEDURE') LIMIT 1
+----
+1
+
+## Test TAG_REFERENCES with malformed procedure reference
+statement error
+SELECT * FROM TAG_REFERENCES('test_tag_proc(DECIMAL(10,2)', 'PROCEDURE')
+
 ## Test TAG_REFERENCES with invalid domain
 statement error 1006
 SELECT * FROM TAG_REFERENCES('test_tag_ref_db', 'INVALID_DOMAIN')
@@ -205,6 +296,24 @@ ALTER STAGE test_tag_stage UNSET TAG test_env_tag, test_owner_tag
 
 statement ok
 ALTER CONNECTION test_tag_conn UNSET TAG test_env_tag, test_owner_tag
+
+statement ok
+ALTER VIEW test_tag_ref_db.test_view UNSET TAG test_env_tag, test_owner_tag
+
+statement ok
+ALTER FUNCTION test_tag_udf UNSET TAG test_env_tag, test_owner_tag
+
+statement ok
+ALTER PROCEDURE test_tag_proc(DECIMAL(10,2)) UNSET TAG test_env_tag
+
+statement ok
+DROP VIEW test_tag_ref_db.test_view
+
+statement ok
+DROP FUNCTION test_tag_udf
+
+statement ok
+DROP PROCEDURE test_tag_proc(DECIMAL(10,2))
 
 statement ok
 DROP TABLE test_tag_ref_db.test_table

@@ -19,6 +19,7 @@ use databend_common_ast::ast::CreateTagStmt;
 use databend_common_ast::ast::DropTagStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowTagsStmt;
 use databend_common_ast::ast::TagSetItem;
@@ -28,19 +29,23 @@ use databend_common_exception::Result;
 use crate::SelectBuilder;
 use crate::binder::BindContext;
 use crate::binder::Binder;
+use crate::planner::binder::ddl::procedure::generate_procedure_name_ident;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::ConnectionTagSetTarget;
 use crate::plans::CreateTagPlan;
 use crate::plans::DatabaseTagSetTarget;
 use crate::plans::DropTagPlan;
 use crate::plans::Plan;
+use crate::plans::ProcedureTagSetTarget;
 use crate::plans::RewriteKind;
 use crate::plans::SetObjectTagsPlan;
 use crate::plans::StageTagSetTarget;
 use crate::plans::TableTagSetTarget;
 use crate::plans::TagSetObject;
 use crate::plans::TagSetPlanItem;
+use crate::plans::UDFTagSetTarget;
 use crate::plans::UnsetObjectTagsPlan;
+use crate::plans::ViewTagSetTarget;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -215,6 +220,46 @@ impl Binder {
                 connection_name: normalize_identifier(connection_name, &self.name_resolution_ctx)
                     .name,
             })),
+            AlterObjectTagTarget::View {
+                if_exists,
+                catalog,
+                database,
+                view,
+            } => {
+                let (catalog, database, view) =
+                    self.normalize_object_identifier_triple(catalog, database, view);
+                Ok(TagSetObject::View(ViewTagSetTarget {
+                    if_exists: *if_exists,
+                    catalog,
+                    database,
+                    view,
+                }))
+            }
+            AlterObjectTagTarget::Function {
+                if_exists,
+                udf_name,
+            } => Ok(TagSetObject::UDF(UDFTagSetTarget {
+                if_exists: *if_exists,
+                udf_name: normalize_identifier(udf_name, &self.name_resolution_ctx).name,
+            })),
+            AlterObjectTagTarget::Procedure {
+                if_exists,
+                name,
+                arg_types,
+            } => {
+                let ast_identity = AstProcedureIdentity {
+                    name: name.to_string(),
+                    args_type: arg_types.clone(),
+                };
+                let name_ident =
+                    generate_procedure_name_ident(&self.ctx.get_tenant(), &ast_identity)?;
+                let proc_identity = name_ident.procedure_name();
+                Ok(TagSetObject::Procedure(ProcedureTagSetTarget {
+                    if_exists: *if_exists,
+                    name: proc_identity.name.clone(),
+                    args: proc_identity.args.clone(),
+                }))
+            }
         }
     }
 
