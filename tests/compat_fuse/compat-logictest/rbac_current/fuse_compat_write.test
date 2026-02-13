@@ -55,4 +55,3 @@ GRANT create sequence on *.* to role 'role1';
 
 statement ok
 GRANT create procedure on *.* to role 'role1';
-

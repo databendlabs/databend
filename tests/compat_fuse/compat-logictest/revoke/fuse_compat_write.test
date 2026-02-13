@@ -17,4 +17,4 @@ statement ok
 create database if not exists db;
 
 statement ok
-grant all on db.* to a;
+grant CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT,OWNERSHIP on db.* to a;

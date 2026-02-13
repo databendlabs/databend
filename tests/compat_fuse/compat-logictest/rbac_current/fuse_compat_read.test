@@ -5,7 +5,7 @@ statement ok
 GRANT access sequence on sequence seq2 to role 'role2';
 
 statement ok
-GRANT access sequence on procedure p1(int) to role 'role2';
+GRANT access procedure on procedure p1(int) to role 'role2';
 
 statement ok
 GRANT ownership on connection c2 to role 'role2';
