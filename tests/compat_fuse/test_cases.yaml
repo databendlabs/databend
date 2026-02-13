@@ -19,7 +19,7 @@
 - { writer: "1.2.680", reader: current, meta: [1.2.527, 1.2.680, 1.2.833], suite: udf }
 
 # --- Backward compat: rbac_current (procedure/sequence/connection/warehouse) ---
-# Requires writer >= 1.2.832 (procedure without experimental toggle).
+# Requires writer >= 1.2.832 (procedure enabled by default since this version).
 - { writer: "1.2.833", reader: current, meta: [1.2.833], suite: rbac_current }
 
 # --- Forward compat: current writer -> old reader ---
