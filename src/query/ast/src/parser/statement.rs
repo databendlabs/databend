@@ -1289,7 +1289,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let vacuum_virtual_column = map(
         rule! {
-            VACUUM ~ VIRTUAL ~ ^COLUMN ~ ^( FOR | ON ) ~ ^#dot_separated_idents_1_to_3
+            VACUUM ~ VIRTUAL ~ ^COLUMN ~ ^FROM ~ ^#dot_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
             Statement::VacuumVirtualColumn(VacuumVirtualColumnStmt {
@@ -2881,7 +2881,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
             | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"

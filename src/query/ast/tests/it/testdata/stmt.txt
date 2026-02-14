@@ -23729,9 +23729,9 @@ RefreshVirtualColumn(
 
 
 ---------- Input ----------
-VACUUM VIRTUAL COLUMN FOR t
+VACUUM VIRTUAL COLUMN FROM t
 ---------- Output ---------
-VACUUM VIRTUAL COLUMN ON t
+VACUUM VIRTUAL COLUMN FROM t
 ---------- AST ------------
 VacuumVirtualColumn(
     VacuumVirtualColumnStmt {
@@ -23739,7 +23739,7 @@ VacuumVirtualColumn(
         database: None,
         table: Identifier {
             span: Some(
-                26..27,
+                27..28,
             ),
             name: "t",
             quote: None,

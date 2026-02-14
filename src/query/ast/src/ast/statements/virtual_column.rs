@@ -95,7 +95,7 @@ pub struct VacuumVirtualColumnStmt {
 
 impl Display for VacuumVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "VACUUM VIRTUAL COLUMN ON ")?;
+        write!(f, "VACUUM VIRTUAL COLUMN FROM ")?;
         write_dot_separated_list(
             f,
             self.catalog
