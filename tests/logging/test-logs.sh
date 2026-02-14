@@ -25,8 +25,19 @@ sleep 1
 nohup vector --config-yaml ./tests/logging/vector/config.yaml &
 python3 scripts/ci/wait_tcp.py --timeout 10 --port 4317
 
-NOW=$(date +%s)
-echo "SELECT ${NOW}" | bendsql
+NOW1=$(date +%s)
+echo "SELECT ${NOW1}" | bendsql
+
+sleep 3
+
+NOW2=$(date +%s)
+echo "EXPLAIN ANALYZE SELECT ${NOW2}" | bendsql
+
+sleep 3
+
+NOW3=$(date +%s)
+RECURSIVE_SQL="WITH RECURSIVE t(n) AS (SELECT ${NOW3} UNION ALL SELECT n + 1 FROM t WHERE n < ${NOW3} + 4) SELECT * FROM t"
+echo "${RECURSIVE_SQL}" | bendsql
 
 sleep 1
 echo "Exiting..."
@@ -34,4 +45,6 @@ killall databend-query || true
 killall vector || true
 sleep 1
 
-./tests/logging/check_logs.py --sql "SELECT ${NOW}"
+./tests/logging/check_logs.py --sql "SELECT ${NOW1}" --profile-keyword "${NOW1}"
+./tests/logging/check_logs.py --sql "EXPLAIN ANALYZE SELECT ${NOW2}" --profile-keyword "${NOW2}"
+./tests/logging/check_logs.py --sql "${RECURSIVE_SQL}" --profile-keyword "${NOW3}"
