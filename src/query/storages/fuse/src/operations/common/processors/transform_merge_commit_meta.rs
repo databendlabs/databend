@@ -171,6 +171,7 @@ impl TransformMergeCommitMeta {
         }
     }
 
+    // Remove redundant virtual column fields to prevent TableMeta from becoming excessively large.
     fn trim_virtual_schema_fields(mut virtual_schema: VirtualDataSchema) -> VirtualDataSchema {
         if virtual_schema.fields.len() > VIRTUAL_COLUMNS_LIMIT {
             virtual_schema.fields.truncate(VIRTUAL_COLUMNS_LIMIT);
@@ -232,6 +233,33 @@ impl TransformMergeCommitMeta {
     }
 }
 
+impl AccumulatingTransform for TransformMergeCommitMeta {
+    const NAME: &'static str = "TransformMergeCommitMeta";
+
+    fn transform(
+        &mut self,
+        data: databend_common_expression::DataBlock,
+    ) -> databend_common_exception::Result<Vec<databend_common_expression::DataBlock>> {
+        let commit_meta = CommitMeta::try_from(data)?;
+        self.to_merged.push(commit_meta);
+        Ok(vec![])
+    }
+
+    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+        let to_merged = std::mem::take(&mut self.to_merged);
+        if to_merged.is_empty() {
+            return Ok(vec![]);
+        }
+        let table_id = to_merged[0].table_id;
+        let merged = to_merged
+            .into_iter()
+            .fold(CommitMeta::empty(table_id), |acc, x| {
+                Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
+            });
+        Ok(vec![merged.into()])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::VariantDataType;
@@ -280,32 +308,5 @@ mod tests {
             merged.fields.last().unwrap().column_id,
             VIRTUAL_COLUMNS_LIMIT as u32 - 1
         );
-    }
-}
-
-impl AccumulatingTransform for TransformMergeCommitMeta {
-    const NAME: &'static str = "TransformMergeCommitMeta";
-
-    fn transform(
-        &mut self,
-        data: databend_common_expression::DataBlock,
-    ) -> databend_common_exception::Result<Vec<databend_common_expression::DataBlock>> {
-        let commit_meta = CommitMeta::try_from(data)?;
-        self.to_merged.push(commit_meta);
-        Ok(vec![])
-    }
-
-    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        let to_merged = std::mem::take(&mut self.to_merged);
-        if to_merged.is_empty() {
-            return Ok(vec![]);
-        }
-        let table_id = to_merged[0].table_id;
-        let merged = to_merged
-            .into_iter()
-            .fold(CommitMeta::empty(table_id), |acc, x| {
-                Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
-            });
-        Ok(vec![merged.into()])
     }
 }
