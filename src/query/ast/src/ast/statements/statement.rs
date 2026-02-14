@@ -190,6 +190,7 @@ pub enum Statement {
     VacuumTable(VacuumTableStmt),
     VacuumDropTable(VacuumDropTableStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
+    VacuumVirtualColumn(VacuumVirtualColumnStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     ShowStatistics(ShowStatisticsStmt),
@@ -496,6 +497,7 @@ impl Statement {
             | Statement::VacuumTable(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
+            | Statement::VacuumVirtualColumn(..)
             | Statement::AnalyzeTable(..)
             | Statement::ExistsTable(..)
             | Statement::ShowCreateDictionary(..)
@@ -856,6 +858,7 @@ impl Display for Statement {
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDictionary(stmt) => write!(f, "{stmt}")?,

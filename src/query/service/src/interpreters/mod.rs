@@ -188,6 +188,7 @@ mod interpreter_view_create;
 mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
+mod interpreter_virtual_column_vacuum;
 mod task;
 mod util;
 
@@ -301,3 +302,4 @@ pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
 pub use interpreter_virtual_column_refresh::RefreshVirtualColumnInterpreter;
+pub use interpreter_virtual_column_vacuum::VacuumVirtualColumnInterpreter;

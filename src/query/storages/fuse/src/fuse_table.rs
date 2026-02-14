@@ -1480,7 +1480,7 @@ impl Table for FuseTable {
         {
             // ignore persistent system tables {
             if let Ok(database_name) = self.table_info.database_name() {
-                if database_name == "persistent_system" {
+                if database_name == "persistent_system" || database_name == "system_history" {
                     return false;
                 }
             }

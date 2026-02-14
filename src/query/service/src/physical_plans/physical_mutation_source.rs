@@ -50,6 +50,7 @@ use databend_common_storages_fuse::operations::CommitMeta;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
+use databend_common_storages_fuse::operations::VirtualSchemaMode;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::MutationSourceFormatter;
@@ -134,6 +135,7 @@ impl IPhysicalPlan for MutationSource {
                         new_segment_locs: vec![],
                         table_id: table.get_id(),
                         virtual_schema: None,
+                        virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));

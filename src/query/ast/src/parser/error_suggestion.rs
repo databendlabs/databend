@@ -37,6 +37,7 @@ const PATTERNS: &[&str] = &[
     "VACUUM DROP TABLE",
     "VACUUM TEMPORARY FILES",
     "VACUUM TEMPORARY TABLES",
+    "VACUUM VIRTUAL COLUMN",
 ];
 
 /// Generate suggestion for SQL parsing error
