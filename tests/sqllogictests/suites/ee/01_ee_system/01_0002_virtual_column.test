@@ -255,6 +255,9 @@ statement ok
 REFRESH VIRTUAL COLUMN FOR t2;
 
 statement ok
+VACUUM VIRTUAL COLUMN FOR t2;
+
+statement ok
 create or replace table tweets (id int, data json);
 
 statement ok
