@@ -1,0 +1,62 @@
+statement ok
+set global timezone = 'UTC';
+
+statement ok
+set global max_block_size = 65536;
+
+statement ok
+DROP TABLE IF EXISTS fuse_compat_table;
+
+statement ok
+CREATE TABLE fuse_compat_table (
+        c_bool BOOL,
+        c_tinyint TINYINT,
+        c_smallint SMALLINT,
+        c_int INT,
+        c_bigint BIGINT,
+        c_float FLOAT,
+        c_double DOUBLE,
+        c_date DATE,
+        c_timestamp TIMESTAMP,
+        c_varchar VARCHAR,
+        c_array VARIANT,
+        c_object VARIANT,
+        c_variant VARIANT,
+        c_array_str ARRAY(String),
+        c_decimal_64 DECIMAL(8, 4),
+        c_decimal_128 DECIMAL(28, 4),
+        c_decimal_256 DECIMAL(72, 4)
+) Engine = Fuse;
+
+statement ok
+CREATE TABLE fuse_compat_table_2 like fuse_compat_table Engine = Fuse cluster by (c_smallint, c_varchar);
+
+statement ok
+INSERT INTO fuse_compat_table VALUES(
+        0,
+        127,
+        3267,
+        2147483647,
+        9223372036854775807,
+        3.4,
+        1.7,
+        '9999-12-31',
+        '1991-01-01 00:00:00',
+        'varchar',
+        parse_json('[1,2,3,["a","b","c"]]'),
+        parse_json('{"a":1,"b":{"c":2}}'),
+        parse_json('[1,{"a":1,"b":{"c":2}}]'),
+        ['item1', 'item2_looooooooooooooooooong_val', 'item3', 'item4'],
+        123.345,
+        123.3456,
+        123.456789
+);
+
+statement ok
+INSERT INTO fuse_compat_table_2 select * FROM fuse_compat_table;
+
+statement ok
+INSERT INTO fuse_compat_table_2 select * FROM fuse_compat_table_2;
+
+statement ok
+INSERT INTO fuse_compat_table_2 select * FROM fuse_compat_table_2;

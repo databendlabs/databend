@@ -44,7 +44,7 @@ pub struct RowBasedFileWriter {
     // always blocks for a whole file if not empty
     input_data: Option<DataBlock>,
     // always the data for a whole file if not empty
-    file_to_write: Option<(Vec<u8>, DataSummary)>,
+    file_to_write: Option<(Vec<u8>, DataSummary, Option<Arc<str>>)>,
 
     unload_output: UnloadOutput,
     unload_output_blocks: Option<VecDeque<DataBlock>>,
@@ -145,6 +145,7 @@ impl Processor for RowBasedFileWriter {
         let block = self.input_data.take().unwrap();
         let block_meta = block.get_owned_meta().unwrap();
         let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
+        let partition = buffers.partition.clone();
         let size = buffers
             .buffers
             .iter()
@@ -171,20 +172,21 @@ impl Processor for RowBasedFileWriter {
             input_bytes,
             output_bytes,
         };
-        self.file_to_write = Some((output, summary));
+        self.file_to_write = Some((output, summary, partition));
         Ok(())
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
+        let (data, summary, partition) = mem::take(&mut self.file_to_write).unwrap();
         let path = unload_path(
             &self.info,
             &self.query_id,
             self.group_id,
             self.batch_id,
             self.compression,
+            partition.as_deref(),
         );
-        let (data, summary) = mem::take(&mut self.file_to_write).unwrap();
         self.unload_output.add_file(&path, summary);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;

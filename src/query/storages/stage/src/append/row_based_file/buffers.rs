@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::local_block_meta_serde;
@@ -31,11 +33,12 @@ impl FileOutputBuffer {
 #[derive(Debug)]
 pub struct FileOutputBuffers {
     pub buffers: Vec<FileOutputBuffer>,
+    pub partition: Option<Arc<str>>,
 }
 
 impl FileOutputBuffers {
-    pub fn create_block(buffers: Vec<FileOutputBuffer>) -> DataBlock {
-        DataBlock::empty_with_meta(Box::new(FileOutputBuffers { buffers }))
+    pub fn create_block(buffers: Vec<FileOutputBuffer>, partition: Option<Arc<str>>) -> DataBlock {
+        DataBlock::empty_with_meta(Box::new(FileOutputBuffers { buffers, partition }))
     }
 }
 

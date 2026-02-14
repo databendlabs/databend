@@ -1,0 +1,38 @@
+statement ok
+GRANT access connection on connection c2 to role 'role2';
+
+statement ok
+GRANT access sequence on sequence seq2 to role 'role2';
+
+statement ok
+GRANT access procedure on procedure p1(int) to role 'role2';
+
+statement ok
+GRANT ownership on connection c2 to role 'role2';
+
+statement ok
+GRANT ownership on sequence seq2 to role 'role2';
+
+statement ok
+GRANT ownership on procedure p1(int) to role 'role2';
+
+statement ok
+show grants for role 'role1';
+
+statement ok
+grant ownership on udf a to role 'role2'
+
+statement ok
+show grants for role 'role1';
+
+statement ok
+show grants for role 'role2';
+
+statement ok
+drop role role1;
+
+statement ok
+drop role role2;
+
+statement ok
+show roles;

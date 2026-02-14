@@ -488,6 +488,16 @@ error:
 
 
 ---------- Input ----------
+COPY INTO @stage/path FROM mytable PARTITION BY concat('p=', id);
+---------- Output ---------
+error: 
+  --> SQL:1:49
+  |
+1 | COPY INTO @stage/path FROM mytable PARTITION BY concat('p=', id);
+  |                                                 ^^^^^^ unexpected `concat`, expecting `(`
+
+
+---------- Input ----------
 CALL system$test
 ---------- Output ---------
 error: 

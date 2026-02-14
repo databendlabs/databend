@@ -1,0 +1,29 @@
+# Fuse table compatibility test matrix.
+#
+# Each entry tests write-then-read across query versions:
+#   writer  — the query version that writes data
+#   reader  — the query version that reads data ("current" = latest build)
+#   meta    — meta-service versions to run in order; used to upgrade on-disk meta data
+#   suite   — sqllogictest sub-directory under tests/compat_fuse/compat-logictest/
+#
+# To add a new test case, append an entry to the appropriate section below.
+# To bump a version, edit the version string in place.
+
+# --- Backward compat: old writer -> current reader ---
+# NOTE: current query requires min-compatible-metasrv-version >= 1.2.770,
+# so meta chains must end with a version >= 1.2.770 (here 1.2.833).
+- { writer: "1.2.46", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: base }
+- { writer: "1.2.241", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: revoke }
+- { writer: "1.2.311", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: rbac_v1_2_311 }
+- { writer: "1.2.318", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: rbac_v1_2_311 }
+- { writer: "1.2.680", reader: current, meta: [1.2.527, 1.2.680, 1.2.833], suite: udf }
+
+# --- Backward compat: rbac_current (procedure/sequence/connection/warehouse) ---
+# Requires writer >= 1.2.832 (procedure enabled by default since this version).
+- { writer: "1.2.833", reader: current, meta: [1.2.833], suite: rbac_current }
+
+# --- Forward compat: current writer -> old reader ---
+- { writer: current, reader: "1.2.311", meta: [1.2.770], suite: rbac_v1_2_311 }
+- { writer: current, reader: "1.2.318", meta: [1.2.770], suite: rbac_v1_2_311 }
+- { writer: current, reader: "1.2.680", meta: [1.2.770], suite: udf }
+- { writer: current, reader: "1.2.833", meta: [1.2.833], suite: rbac_current }

@@ -1,0 +1,20 @@
+statement ok
+show grants for role 'role1';
+
+statement ok
+grant ownership on udf a to role 'role2'
+
+statement ok
+show grants for role 'role1';
+
+statement ok
+show grants for role 'role2';
+
+statement ok
+drop role role1;
+
+statement ok
+drop role role2;
+
+statement ok
+show roles;

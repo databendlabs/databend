@@ -22,9 +22,9 @@ Unit tests stay close to the affected crate (`#[cfg(test)]` modules), and integr
 
 ## Commit & Pull Request Guidelines
 
-History follows a Conventional-style subject such as `fix(storage): avoid stale snapshot (#19174)` or `feat(storage): support self join elimination (#19169)`; keep the first line imperative and under 72 characters. Commits should stay scoped to a logical change set and include formatting/linting updates in the same patch. PRs must outline motivation, implementation notes, and validation commands, plus link issues or RFCs, and the final description should follow `PULL_REQUEST_TEMPLATE.md` (checkboxes, verification, screenshots when needed). Attach screenshots or sample queries when UI, SQL plans, or system tables change, and call out rollout risks (migrations, config toggles, backfills) so reviewers can plan accordingly.
+History follows a Conventional-style subject such as `fix(storage): avoid stale snapshot (#19174)` or `feat: support self join elimination (#19169)`; keep the first line imperative and under 72 characters. Commits should stay scoped to a logical change set and include formatting/linting updates in the same patch. PRs must outline motivation, implementation notes, and validation commands, plus link issues or RFCs, and the final description should follow `PULL_REQUEST_TEMPLATE.md` (checkboxes, verification, screenshots when needed). Attach screenshots or sample queries when UI, SQL plans, or system tables change, and call out rollout risks (migrations, config toggles, backfills) so reviewers can plan accordingly.
 
-There is the example of pull requests, you must follow the style strictly:
+There is the example of pull requests:
 
 ````
 I hereby agree to the terms of the CLA available at: https://docs.databend.com/dev/policies/cla/
@@ -86,3 +86,4 @@ This change is [<img src="https://reviewable.io/review_button.svg" height="34"
 Pull request mus be pushed into fork and create pr into origin.
 You can use gh tools to do it.
 ```
+

@@ -34,6 +34,7 @@ use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
 use crate::parser::common::*;
+use crate::parser::expr::expr;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::expr::literal_u64;
@@ -123,14 +124,16 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
             ~ #hint?
             ~ INTO ~ #file_location
             ~ ^FROM ~ ^#copy_into_location_source
+            ~ (PARTITION ~ BY ~ "(" ~ #expr ~ ")")?
             ~ #copy_into_location_option*
         },
-        |(with, _copy, opt_hints, _into, dst, _from, src, opts)| {
+        |(with, _copy, opt_hints, _into, dst, _from, src, partition_by, opts)| {
             let mut copy_stmt = CopyIntoLocationStmt {
                 with,
                 hints: opt_hints,
                 src,
                 dst,
+                partition_by: partition_by.map(|(_, _, _, expr, _)| expr),
                 file_format: Default::default(),
                 options: Default::default(),
             };
