@@ -1,4 +1,0 @@
-interface:
-  display_name: "Cargo Crate Path Mapper"
-  short_description: "Map file paths to Cargo crate names."
-  default_prompt: "Use $cargo-crate-path-map to map file paths to Cargo crate names in this workspace."

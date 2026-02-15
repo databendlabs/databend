@@ -169,9 +169,7 @@ where
         }
 
         let num_merge = sort.prepare_merge(memory_settings).await?;
-        if sort.current.len() >= 2 {
-            assert!(num_merge >= 2);
-        }
+        assert!(num_merge >= 2);
         log::debug!(
             current_len = sort.current.len(),
             subsequent_len = sort.subsequent.len(),
