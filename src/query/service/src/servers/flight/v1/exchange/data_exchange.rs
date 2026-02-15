@@ -65,7 +65,8 @@ impl DataExchange {
 
     /// Whether this exchange type uses do_exchange (ping-pong) instead of do_get.
     pub fn use_do_exchange(&self) -> bool {
-        matches!(self, DataExchange::Broadcast(_))
+        false
+        // matches!(self, DataExchange::Broadcast(_))
     }
 
     pub fn get_parallel(&self) -> usize {

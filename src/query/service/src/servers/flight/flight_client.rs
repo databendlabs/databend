@@ -214,8 +214,8 @@ impl FlightClient {
 
     pub fn do_exchange(
         &mut self,
-        params: DoExchangeParams,
         request_rx: Receiver<FlightData>,
+        params: DoExchangeParams,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<Output = std::result::Result<Streaming<FlightData>, Status>>

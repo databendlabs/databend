@@ -325,14 +325,11 @@ impl DataExchangeManager {
 
                                 let (send_tx, send_rx) = async_channel::bounded(1);
                                 let response_stream = flight_client
-                                    .do_exchange(
-                                        DoExchangeParams {
-                                            query_id,
-                                            num_threads,
-                                            exchange_id: exchange_id.clone(),
-                                        },
-                                        send_rx,
-                                    )
+                                    .do_exchange(send_rx, DoExchangeParams {
+                                        query_id,
+                                        num_threads,
+                                        exchange_id: exchange_id.clone(),
+                                    })
                                     .await
                                     .map_err(|e| {
                                         ErrorCode::Internal(format!(
