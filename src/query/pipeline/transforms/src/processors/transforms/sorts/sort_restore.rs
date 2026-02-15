@@ -32,17 +32,15 @@ use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
 use crate::HookTransform;
 use crate::HookTransformer;
-use crate::MemorySettings;
-use crate::traits::DataBlockSpill;
+use crate::traits::SortSpiller;
 
-pub struct TransformSortRestore<A: SortAlgorithm, S: DataBlockSpill> {
+pub struct TransformSortRestore<A: SortAlgorithm, S: SortSpiller> {
     input: Vec<SortCollectedMeta>,
     output: Option<DataBlock>,
 
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
     /// we can generate and output the order column to avoid the extra converting in the next transform.
     remove_order_col: bool,
-    memory_settings: MemorySettings,
 
     base: Base<S>,
     inner: Option<SortSpill<A, S>>,
@@ -51,14 +49,13 @@ pub struct TransformSortRestore<A: SortAlgorithm, S: DataBlockSpill> {
 impl<A, S> TransformSortRestore<A, S>
 where
     A: SortAlgorithm + Send + 'static,
-    S: DataBlockSpill,
+    S: SortSpiller,
 {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         base: Base<S>,
         output_order_col: bool,
-        memory_settings: MemorySettings,
     ) -> Result<HookTransformer<Self>> {
         Ok(HookTransformer::new(input, output, Self {
             input: Vec::new(),
@@ -66,7 +63,6 @@ where
             remove_order_col: !output_order_col,
             base,
             inner: None,
-            memory_settings,
         }))
     }
 }
@@ -76,7 +72,7 @@ impl<A, S> HookTransform for TransformSortRestore<A, S>
 where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
-    S: DataBlockSpill,
+    S: SortSpiller,
 {
     const NAME: &'static str = "TransformSortRestore";
 
@@ -128,7 +124,9 @@ where
             block,
             bound: (bound_index, _),
             finish,
-        } = spill_sort.on_restore(&self.memory_settings).await?;
+        } = spill_sort
+            .on_restore(self.base.spiller.memory_settings())
+            .await?;
         if let Some(block) = block {
             let mut block =
                 block.add_meta(Some(SortBound::create(bound_index, SortBoundNext::More)))?;
