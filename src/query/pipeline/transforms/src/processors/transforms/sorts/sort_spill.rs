@@ -169,9 +169,7 @@ where
         }
 
         let num_merge = sort.prepare_merge(memory_settings).await?;
-        if sort.current.len() >= 2 {
-            assert!(num_merge >= 2);
-        }
+        assert!(num_merge >= 2);
         log::debug!(
             current_len = sort.current.len(),
             subsequent_len = sort.subsequent.len(),
@@ -868,16 +866,13 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
     }
 
     async fn spill_skip(&mut self, skip: usize) -> Result<()> {
-        for b in &mut self
-            .blocks
-            .iter_mut()
-            .skip(skip)
-            .filter(|b| b.data.is_some())
-        {
+        for b in &mut self.blocks.iter_mut().skip(skip) {
             if let Some(loc) = &b.location {
                 self.fetch.remove(loc);
             }
-            b.spill(&self.spiller).await?;
+            if b.data.is_some() {
+                b.spill(&self.spiller).await?;
+            }
         }
         Ok(())
     }
