@@ -7,6 +7,8 @@ Resolves CalVer references so the output has only databend tag versions.
 import os
 import sys
 
+from tsv import parse_tsv
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.join(SCRIPT_DIR, "..")
 SRC_DIR = os.path.join(BASE_DIR, "src")
@@ -15,146 +17,126 @@ INPUT = os.path.join(SRC_DIR, "min_compatible_versions.txt")
 EXTERNAL = os.path.join(SRC_DIR, "external-meta-min-compatibles.txt")
 OUTPUT = os.path.join(BASE_DIR, "generated", "resolved_min_compatibles.txt")
 
+EXT_PREFIX = "ext:"
 
-def is_calver(v: str) -> bool:
-    """Check if a version string is a CalVer (e.g. "260205.0.0").
 
-    Args:
-        v: A version string like "1.2.770" or "260205.0.0".
+class ExternalMinCompatibles:
+    """Resolves ext: CalVer references to databend repo tag versions.
 
-    Returns:
-        True if the first component is >= 200000 (indicating a CalVer).
+    Combines two data sources:
+    - external-meta-min-compatibles.txt: CalVer → (min_server, min_client)
+    - min_compatible_versions.txt: CalVer → first repo tag (per column)
     """
-    try:
-        return int(v.split(".")[0]) >= 200000
-    except ValueError:
-        return False
 
+    def __init__(
+        self,
+        min_compatibles: dict[str, tuple[str, str]],
+        client_calver_to_tag: dict[str, str],
+        service_calver_to_tag: dict[str, str],
+    ):
+        """
+        Args:
+            min_compatibles: CalVer → (min_server, min_client) from external crate.
+            client_calver_to_tag: maps a client CalVer to the first databend tag that uses it.
+            service_calver_to_tag: maps a service CalVer to the first databend tag that uses it.
+        """
+        self._min_compatibles = min_compatibles
+        self._client_calver_to_tag = client_calver_to_tag
+        self._service_calver_to_tag = service_calver_to_tag
 
-def parse_tsv(path: str, min_columns: int) -> list[list[str]]:
-    """Parse a whitespace-separated file, skipping headers and separators.
+    @staticmethod
+    def load(external_path: str, input_path: str) -> "ExternalMinCompatibles":
+        """Build from external-meta-min-compatibles.txt and min_compatible_versions.txt."""
+        min_compatibles = {
+            r[0]: (r[1], r[2]) for r in parse_tsv(external_path, 3)
+        }
 
-    Args:
-        path: Path to the file.
-        min_columns: Minimum number of columns a row must have to be included.
+        client_calver_to_tag: dict[str, str] = {}
+        service_calver_to_tag: dict[str, str] = {}
+        for r in parse_tsv(input_path, 3):
+            ver = _strip_ext_prefix(r[1])
+            if ver is not None:
+                client_calver_to_tag.setdefault(ver, r[0])
+            ver = _strip_ext_prefix(r[2])
+            if ver is not None:
+                service_calver_to_tag.setdefault(ver, r[0])
 
-    Returns:
-        List of rows, each row is a list of string fields.
-        Header lines (starting with a letter) and separator lines (starting
-        with "-") are excluded.
-    """
-    rows = []
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line[0].isalpha() or line.startswith("-"):
-                continue
-            parts = line.split()
-            if len(parts) >= min_columns:
-                rows.append(parts)
-    return rows
+        return ExternalMinCompatibles(
+            min_compatibles, client_calver_to_tag, service_calver_to_tag
+        )
 
+    def resolve_min_server(self, v: str) -> str | None:
+        """Resolve a MetaClient column value to a min-server repo tag.
 
-def load_external() -> dict[str, tuple[str, str]]:
-    """Load external-meta-min-compatibles.txt.
+        If v is "ext:X", looks up X → (min_server, _) and translates to a tag.
+        Non-ext values pass through unchanged.
+        """
+        return self._resolve(v, 0, self._service_calver_to_tag)
 
-    Returns:
-        Mapping from external crate CalVer (e.g. "260205.0.0") to
-        (min_server, min_client) where both values are version strings
-        that may themselves be CalVer or SemVer.
-    """
-    return {r[0]: (r[1], r[2]) for r in parse_tsv(EXTERNAL, 3)}
+    def resolve_min_client(self, v: str) -> str | None:
+        """Resolve a MetaService column value to a min-client repo tag.
 
+        If v is "ext:X", looks up X → (_, min_client) and translates to a tag.
+        Non-ext values pass through unchanged.
+        """
+        return self._resolve(v, 1, self._client_calver_to_tag)
 
-def build_calver_to_tag() -> dict[str, str]:
-    """Scan INPUT to map each CalVer to the first repo tag that uses it.
+    def resolve_to_min_compatibles(
+        self, tag: str, meta_client: str, meta_service: str
+    ) -> tuple[str, str, str] | None:
+        """Resolve ext: CalVer in meta_client/meta_service to the first databend tag that references each CalVer.
 
-    Returns:
-        Mapping from CalVer (e.g. "260205.0.0") to the first databend
-        repo tag (e.g. "1.2.880") whose 4th column matches that CalVer.
-    """
-    mapping: dict[str, str] = {}
-    for r in parse_tsv(INPUT, 4):
-        if r[3] != "-":
-            mapping.setdefault(r[3], r[0])
-    return mapping
-
-
-def resolve_calver(v: str, calver_to_tag: dict[str, str]) -> str:
-    """Translate a CalVer to a repo tag version if possible.
-
-    Args:
-        v: A version string, either SemVer ("1.2.770") or CalVer ("260205.0.0").
-        calver_to_tag: Mapping from CalVer to repo tag.
-
-    Returns:
-        The corresponding repo tag if v is a CalVer found in the mapping,
-        otherwise v unchanged.
-    """
-    if is_calver(v):
-        return calver_to_tag.get(v, v)
-    return v
-
-
-def resolve_row(
-    parts: list[str],
-    ext: dict[str, tuple[str, str]],
-    calver_to_tag: dict[str, str],
-) -> tuple[str, str, str, str] | None:
-    """Resolve a single row from the input file.
-
-    For rows where min_server/min_client are "-", looks up the 4th column
-    (CalVer) in `ext` to get the external crate's min versions, then
-    translates any CalVer values to repo tags.
-
-    Args:
-        parts: A row from INPUT, e.g. ["1.2.880", "-", "-", "260205.0.0"].
-        ext: Output of load_external().
-        calver_to_tag: Output of build_calver_to_tag().
-
-    Returns:
-        (tag, min_server, min_client, calver) with all versions resolved
-        to repo tags, or None if the row cannot be resolved.
-    """
-    tag = parts[0]
-    server, client = parts[1], parts[2]
-    calver = parts[3] if len(parts) >= 4 else "-"
-
-    if server == "-" or client == "-":
-        if calver == "-" or calver not in ext:
+        Non-ext values pass through unchanged.
+        Returns (tag, min_client, min_server), or None if a CalVer cannot be resolved.
+        """
+        server = self.resolve_min_server(meta_client)
+        if server is None:
             return None
-        server, client = ext[calver]
-        server = resolve_calver(server, calver_to_tag)
-        client = resolve_calver(client, calver_to_tag)
 
-    return (tag, server, client, calver)
+        client = self.resolve_min_client(meta_service)
+        if client is None:
+            return None
+
+        return (tag, client, server)
+
+    def _resolve(
+        self, v: str, ext_col: int, calver_to_tag: dict[str, str]
+    ) -> str | None:
+        ver = _strip_ext_prefix(v)
+        if ver is not None:
+            if ver not in self._min_compatibles:
+                return None
+            resolved = self._min_compatibles[ver][ext_col]
+            return calver_to_tag.get(resolved, resolved)
+        return v
 
 
-def write_output(rows: list[tuple[str, str, str, str]]) -> None:
-    """Write resolved rows to OUTPUT file.
+def _strip_ext_prefix(v: str) -> str | None:
+    """Return the version after "ext:" prefix, or None if not an ext ref."""
+    if v.startswith(EXT_PREFIX):
+        return v[len(EXT_PREFIX):]
+    return None
 
-    Args:
-        rows: List of (tag, min_server, min_client, calver) tuples,
-              all versions already resolved to repo tags.
-    """
+
+def write_resolved_versions(rows: list[tuple[str, str, str]]) -> None:
+    """Write resolved rows (tag, min_client, min_server) to OUTPUT file."""
     with open(OUTPUT, "w") as out:
-        out.write(f"{'tag':<16}{'min_meta_server':<20}{'min_meta_client':<20}{'external_meta_crate':<20}\n")
-        out.write("-" * 76 + "\n")
-        for tag, server, client, calver in rows:
-            out.write(f"{tag:<16}{server:<20}{client:<20}{calver:<20}\n")
+        out.write(f"{'tag':<16}{'min_meta_client':<20}{'min_meta_server':<20}\n")
+        out.write("-" * 56 + "\n")
+        for tag, client, server in rows:
+            out.write(f"{tag:<16}{client:<20}{server:<20}\n")
 
 
 def main():
-    ext = load_external()
-    calver_to_tag = build_calver_to_tag()
+    ext_compat = ExternalMinCompatibles.load(EXTERNAL, INPUT)
 
     resolved = []
-    for parts in parse_tsv(INPUT, 3):
-        row = resolve_row(parts, ext, calver_to_tag)
-        if row:
-            resolved.append(row)
+    for row in parse_tsv(INPUT, 3):
+        resolved_row = ext_compat.resolve_to_min_compatibles(*row)
+        if resolved_row:
+            resolved.append(resolved_row)
 
-    write_output(resolved)
+    write_resolved_versions(resolved)
     print(f"Written to {OUTPUT}", file=sys.stderr)
 
 
