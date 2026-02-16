@@ -181,7 +181,7 @@ pub trait KVPbApi: KVApi {
                 .map_err(PbApiReadError::KvApiError)?;
             let v = raw_seqv
                 .map(|seqv| {
-                    decode_seqv::<K::ValueType>(seqv, || format!("decode value of {}", key.clone()))
+                    decode_seqv::<K::ValueType>(seqv, || format!("decode value of {}", key))
                 })
                 .transpose()?;
             Ok(v)
@@ -240,15 +240,8 @@ pub trait KVPbApi: KVApi {
         I: IntoIterator<Item = K>,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
-        self.get_pb_stream_low(keys)
-            // This `map()` handles Future result
-            .map(|r| match r {
-                Ok(strm) => {
-                    // These two `map_xx()` handles Stream result
-                    Ok(strm.map_ok(|(_k, v)| v).map_err(Self::Error::from).boxed())
-                }
-                Err(e) => Err(e),
-            })
+        self.get_pb_stream(keys)
+            .map_ok(|strm| strm.map_ok(|(_k, v)| v).boxed())
     }
 
     /// Same as [`get_pb_stream`](Self::get_pb_stream) but collect the result in a `Vec` instead of a stream.
@@ -310,10 +303,8 @@ pub trait KVPbApi: KVApi {
         I: IntoIterator<Item = K>,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
-        self.get_pb_stream_low(keys).map(|r| match r {
-            Ok(strm) => Ok(strm.map_err(Self::Error::from).boxed()),
-            Err(e) => Err(e),
-        })
+        self.get_pb_stream_low(keys)
+            .map_ok(|strm| strm.map_err(Self::Error::from).boxed())
     }
 
     /// Same as `get_pb_stream` but returns [`PbApiReadError`]. No require of `From<PbApiReadError>` for `Self::Error`.
@@ -349,14 +340,14 @@ pub trait KVPbApi: KVApi {
 
                 let k = K::from_str_key(&item.key).map_err(PbApiReadError::KeyError)?;
 
-                let v = if let Some(pb_seqv) = item.value {
-                    let seqv = decode_seqv::<K::ValueType>(SeqV::from(pb_seqv), || {
-                        format!("decode value of {}", k.to_string_key())
-                    })?;
-                    Some(seqv)
-                } else {
-                    None
-                };
+                let v = item
+                    .value
+                    .map(|pb_seqv| {
+                        decode_seqv::<K::ValueType>(SeqV::from(pb_seqv), || {
+                            format!("decode value of {}", k.to_string_key())
+                        })
+                    })
+                    .transpose()?;
 
                 Ok((k, v))
             });
@@ -586,7 +577,6 @@ mod tests {
         }
     }
 
-    // TODO: test upsert_kv
     // TODO: test upsert_kv
     // TODO: test list_kv
 
