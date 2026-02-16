@@ -212,22 +212,9 @@ pub trait KVPbApi: KVApi {
         I::IntoIter: Send,
         Self::Error: From<PbApiReadError<Self::Error>>,
     {
-        let it = keys.into_iter();
-        let key_chunks = it
-            .chunks(Self::CHUNK_SIZE)
-            .into_iter()
-            .map(|x| x.collect::<Vec<_>>())
-            .collect::<Vec<_>>();
-
         async move {
-            let mut res = vec![];
-            for chunk in key_chunks {
-                let strm = self.get_pb_values(chunk).await?;
-
-                let vec = strm.try_collect::<Vec<_>>().await?;
-                res.extend(vec);
-            }
-            Ok(res)
+            let pairs = self.get_pb_vec(keys).await?;
+            Ok(pairs.into_iter().map(|(_k, v)| v).collect())
         }
     }
 
