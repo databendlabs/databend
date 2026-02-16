@@ -43,28 +43,28 @@ where T: FromToProto {
 }
 
 /// Decode Change<Vec<u8>> into Change<T>, with FromToProto.
-pub fn decode_transition<T>(transition: Change<Vec<u8>>) -> Result<Change<T>, PbDecodeError>
+pub fn decode_change<T>(change: Change<Vec<u8>>) -> Result<Change<T>, PbDecodeError>
 where T: FromToProto {
-    let prev = transition
+    let prev = change
         .prev
         .map(|seqv| {
             decode_seqv::<T>(seqv, || {
-                format!("decode `prev` value of {:?}", transition.ident)
+                format!("decode `prev` value of {:?}", change.ident)
             })
         })
         .transpose()?;
 
-    let result = transition
+    let result = change
         .result
         .map(|seqv| {
             decode_seqv::<T>(seqv, || {
-                format!("decode `result` value of {:?}", transition.ident)
+                format!("decode `result` value of {:?}", change.ident)
             })
         })
         .transpose()?;
 
     let c = Change {
-        ident: transition.ident,
+        ident: change.ident,
         prev,
         result,
     };

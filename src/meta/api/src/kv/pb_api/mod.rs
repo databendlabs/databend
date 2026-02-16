@@ -44,9 +44,9 @@ use futures::stream::StreamExt;
 use itertools::Itertools;
 use seq_marked::SeqValue;
 
+pub(crate) use self::codec::decode_change;
 pub(crate) use self::codec::decode_non_empty_item;
 pub use self::codec::decode_seqv;
-pub(crate) use self::codec::decode_transition;
 pub(crate) use self::codec::encode_operation;
 pub use self::upsert_pb::UpsertPB;
 use crate::kv_pb_api::errors::PbApiReadError;
@@ -97,7 +97,7 @@ pub trait KVPbApi: KVApi {
                 .upsert_kv(req)
                 .await
                 .map_err(PbApiWriteError::KvApiError)?;
-            let transition = decode_transition(reply)?;
+            let transition = decode_change(reply)?;
             Ok(transition)
         }
     }
