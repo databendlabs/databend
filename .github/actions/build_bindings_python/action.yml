@@ -60,7 +60,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update -yq
-        sudo apt-get install -yq --no-install-recommends build-essential clang libssl-dev pkg-config cmake protobuf-compiler
+        sudo apt-get install -yq --no-install-recommends build-essential clang mold libssl-dev pkg-config cmake protobuf-compiler
         if [[ "${{ inputs.target }}" == aarch64-* ]]; then
           echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
         else
