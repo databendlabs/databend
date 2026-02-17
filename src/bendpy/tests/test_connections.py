@@ -44,23 +44,11 @@ class MockSessionContext:
         self.sql(sql)
 
     def register_csv(self, name, path, pattern=None, connection=None):
-        self._register_delimited(name, path, "csv", pattern, connection)
-
-    def _register_delimited(self, name, path, fmt, pattern=None, connection=None):
-        """CSV/TSV: infer schema first, then create view with column positions."""
         file_path = path if connection else (f"fs://{path}" if path.startswith("/") else path)
-        conn_infer = f", connection_name => '{connection}'" if connection else ""
-        pattern_infer = f", pattern => '{pattern}'" if pattern else ""
-        self.sql(
-            f"SELECT column_name FROM infer_schema(location => '{file_path}', file_format => '{fmt.upper()}'{pattern_infer}{conn_infer})"
-        )
-        # Simulated: infer_schema returns 3 columns
-        select = "$1 AS `col1`, $2 AS `col2`, $3 AS `col3`"
         pattern_clause = f", pattern => '{pattern}'" if pattern else ""
         conn_clause = f", connection => '{connection}'" if connection else ""
-        self.sql(
-            f"create view {name} as select {select} from '{file_path}' (file_format => '{fmt}'{pattern_clause}{conn_clause})"
-        )
+        sql = f"create view {name} as select * from '{file_path}' (file_format => 'csv'{pattern_clause}{conn_clause})"
+        self.sql(sql)
 
     def create_azblob_connection(self, name, endpoint_url, account_name, account_key):
         sql = f"CREATE OR REPLACE CONNECTION {name} STORAGE_TYPE = 'AZBLOB' endpoint_url = '{endpoint_url}' account_name = '{account_name}' account_key = '{account_key}'"
@@ -263,15 +251,8 @@ class TestRegisterWithConnection:
 
             self.ctx.register_csv("users", "s3://bucket/users.csv", connection="my_s3")
 
-            assert mock_sql.call_count == 2
-            # First call: infer_schema
-            mock_sql.assert_any_call(
-                "SELECT column_name FROM infer_schema(location => 's3://bucket/users.csv', file_format => 'CSV', connection_name => 'my_s3')"
-            )
-            # Second call: create view with column positions
-            mock_sql.assert_any_call(
-                "create view users as select $1 AS `col1`, $2 AS `col2`, $3 AS `col3` from 's3://bucket/users.csv' (file_format => 'csv', connection => 'my_s3')"
-            )
+            expected_sql = "create view users as select * from 's3://bucket/users.csv' (file_format => 'csv', connection => 'my_s3')"
+            mock_sql.assert_called_once_with(expected_sql)
 
     def test_register_parquet_legacy_mode(self):
         with unittest.mock.patch.object(self.ctx, "sql") as mock_sql:
@@ -288,15 +269,8 @@ class TestRegisterWithConnection:
 
             self.ctx.register_csv("logs", "/data/logs/", pattern="*.csv")
 
-            assert mock_sql.call_count == 2
-            # First call: infer_schema with pattern passed through
-            mock_sql.assert_any_call(
-                "SELECT column_name FROM infer_schema(location => 'fs:///data/logs/', file_format => 'CSV', pattern => '*.csv')"
-            )
-            # Second call: create view with column positions
-            mock_sql.assert_any_call(
-                "create view logs as select $1 AS `col1`, $2 AS `col2`, $3 AS `col3` from 'fs:///data/logs/' (file_format => 'csv', pattern => '*.csv')"
-            )
+            expected_sql = "create view logs as select * from 'fs:///data/logs/' (file_format => 'csv', pattern => '*.csv')"
+            mock_sql.assert_called_once_with(expected_sql)
 
     def test_register_csv_with_pattern_and_connection(self):
         with unittest.mock.patch.object(self.ctx, "sql") as mock_sql:
@@ -306,15 +280,8 @@ class TestRegisterWithConnection:
                 "logs", "s3://bucket/logs/", pattern="*.csv", connection="my_s3"
             )
 
-            assert mock_sql.call_count == 2
-            # First call: infer_schema with both pattern and connection
-            mock_sql.assert_any_call(
-                "SELECT column_name FROM infer_schema(location => 's3://bucket/logs/', file_format => 'CSV', pattern => '*.csv', connection_name => 'my_s3')"
-            )
-            # Second call: create view with column positions
-            mock_sql.assert_any_call(
-                "create view logs as select $1 AS `col1`, $2 AS `col2`, $3 AS `col3` from 's3://bucket/logs/' (file_format => 'csv', pattern => '*.csv', connection => 'my_s3')"
-            )
+            expected_sql = "create view logs as select * from 's3://bucket/logs/' (file_format => 'csv', pattern => '*.csv', connection => 'my_s3')"
+            mock_sql.assert_called_once_with(expected_sql)
 
 
 class TestStages:
