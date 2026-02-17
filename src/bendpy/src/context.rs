@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_version::BUILD_INFO;
 use databend_query::sessions::BuildInfoRef;
@@ -44,17 +42,23 @@ fn resolve_file_path(path: &str) -> String {
     )
 }
 
-fn extract_string_column(
-    entry: &BlockEntry,
-) -> Option<&databend_common_expression::types::StringColumn> {
-    match entry {
-        BlockEntry::Column(Column::String(col)) => Some(col),
-        BlockEntry::Column(Column::Nullable(n)) => match &n.column {
-            Column::String(col) => Some(col),
-            _ => None,
-        },
-        _ => None,
-    }
+/// Extract the real filesystem path from a `fs://` URI.
+fn fs_path_from_uri(uri: &str) -> Option<&str> {
+    uri.strip_prefix("fs://")
+}
+
+/// Read the header line of a CSV file and return column names.
+fn read_csv_column_names(path: &str) -> std::io::Result<Vec<String>> {
+    use std::io::BufRead;
+    let file = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut header = String::new();
+    reader.read_line(&mut header)?;
+    Ok(header
+        .trim()
+        .split(',')
+        .map(|s| s.trim().trim_matches('"').to_string())
+        .collect())
 }
 
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
@@ -212,7 +216,7 @@ impl PySessionContext {
             .unwrap_or_default();
 
         let select_clause = match file_format {
-            "csv" => self.build_column_select(&file_path, file_format, pattern, connection, py)?,
+            "csv" => self.build_column_select(&file_path)?,
             _ => "*".to_string(),
         };
 
@@ -224,44 +228,25 @@ impl PySessionContext {
         Ok(())
     }
 
-    /// Infer column names via `infer_schema` and build `$1 AS col1, $2 AS col2, ...`.
-    fn build_column_select(
-        &mut self,
-        file_path: &str,
-        file_format: &str,
-        pattern: Option<&str>,
-        connection: Option<&str>,
-        py: Python,
-    ) -> PyResult<String> {
-        let conn_clause = connection
-            .map(|c| format!(", connection_name => '{}'", c))
-            .unwrap_or_default();
-        let pattern_clause = pattern
-            .map(|p| format!(", pattern => '{}'", p))
-            .unwrap_or_default();
-        let sql = format!(
-            "SELECT column_name FROM infer_schema(location => '{}', file_format => '{}'{}{})",
-            file_path,
-            file_format.to_uppercase(),
-            pattern_clause,
-            conn_clause
-        );
-
-        let blocks = self.sql(&sql, py)?.collect(py)?;
-        let col_names: Vec<String> = blocks
-            .blocks
-            .iter()
-            .filter(|b| b.num_rows() > 0)
-            .filter_map(|b| extract_string_column(b.get_by_offset(0)))
-            .flat_map(|col| col.iter().map(|s| s.to_string()))
-            .collect();
-
+    /// Read CSV header from local file and build `$1 AS col1, $2 AS col2, ...`.
+    fn build_column_select(&self, file_path: &str) -> PyResult<String> {
+        let fs_path = fs_path_from_uri(file_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "CSV column inference only supports local files (fs://), got: {}",
+                file_path
+            ))
+        })?;
+        let col_names = read_csv_column_names(fs_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to read CSV header: {}",
+                e
+            ))
+        })?;
         if col_names.is_empty() {
             return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
                 "Could not infer schema: no columns found",
             ));
         }
-
         Ok(col_names
             .iter()
             .enumerate()
