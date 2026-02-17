@@ -55,6 +55,18 @@ runs:
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
         echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
+    - name: Setup build dependencies for Linux
+      if: contains(inputs.target, '-linux') && inputs.version == ''
+      shell: bash
+      run: |
+        bash ./scripts/setup/dev_setup.sh -yb
+        if [[ "${{ inputs.target }}" == aarch64-* ]]; then
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
+        else
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+        fi
+        echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
+
     - name: Setup uv
       uses: astral-sh/setup-uv@v5
       with:
