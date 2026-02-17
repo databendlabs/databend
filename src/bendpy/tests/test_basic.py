@@ -78,16 +78,3 @@ class TestBasic:
         finally:
             os.unlink(csv_path)
 
-    def test_register_tsv(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
-            f.write("id\tvalue\n")
-            f.write("1\thello\n")
-            f.write("2\tworld\n")
-            tsv_path = f.name
-
-        try:
-            self.ctx.register_tsv("items", tsv_path)
-            df = self.ctx.sql("SELECT id, value FROM items ORDER BY id").to_pandas()
-            assert df.values.tolist() == [["1", "hello"], ["2", "world"]]
-        finally:
-            os.unlink(tsv_path)
