@@ -59,7 +59,8 @@ runs:
       if: contains(inputs.target, '-linux') && inputs.version == ''
       shell: bash
       run: |
-        bash ./scripts/setup/dev_setup.sh -yb
+        sudo apt-get update -yq
+        sudo apt-get install -yq --no-install-recommends build-essential clang libssl-dev pkg-config cmake protobuf-compiler
         if [[ "${{ inputs.target }}" == aarch64-* ]]; then
           echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
         else
