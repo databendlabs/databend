@@ -1290,7 +1290,7 @@ impl<'a> Evaluator<'a> {
         validity: Option<Bitmap>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
-        if args.len() < 3 && args.len() % 2 == 0 {
+        if args.len() < 3 || args.len() % 2 == 0 {
             unreachable!()
         }
 
