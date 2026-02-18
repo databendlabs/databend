@@ -33,7 +33,6 @@ tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-meta-kvapi = { workspace = true }
 databend-meta-test-harness = { workspace = true }
 databend-meta-types = { workspace = true }
 fastrace = { workspace = true }
