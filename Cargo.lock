@@ -4098,23 +4098,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-meta-kvapi-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "databend-common-meta-store",
- "databend-common-version",
- "databend-meta-client",
- "databend-meta-kvapi",
- "databend-meta-kvapi-test-suite",
- "databend-meta-runtime",
- "databend-meta-test-harness",
- "fastrace",
- "test-harness",
-]
-
-[[package]]
 name = "databend-common-meta-process"
 version = "0.1.0"
 dependencies = [

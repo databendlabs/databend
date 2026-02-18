@@ -20,7 +20,6 @@ members = [
     "src/meta/control",
     "src/meta/ee",
     "src/meta/admin",
-    "src/meta/kvapi-tests",
     "src/meta/process",
     "src/meta/proto-conv",
     "src/meta/protos",
@@ -46,7 +45,6 @@ default-members = [
     "src/meta/control",
     "src/meta/ee",
     "src/meta/admin",
-    "src/meta/kvapi-tests",
     "src/meta/process",
     "src/meta/proto-conv",
     "src/meta/protos",
@@ -92,7 +90,6 @@ databend-common-meta-app = { path = "src/meta/app" }
 databend-common-meta-app-storage = { path = "src/meta/app-storage" }
 databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-control = { path = "src/meta/control" }
-databend-common-meta-kvapi-tests = { path = "src/meta/kvapi-tests" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
 databend-common-meta-schema-api-tests = { path = "src/meta/schema-api-tests" }
