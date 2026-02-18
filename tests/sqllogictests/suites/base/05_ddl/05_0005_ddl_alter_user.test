@@ -60,6 +60,9 @@ statement ok
 ALTER USER 'test-h' WITH DEFAULT_ROLE = role1
 
 statement ok
+ALTER USER 'test-h' WITH DEFAULT_WAREHOUSE = 'my_warehouse'
+
+statement ok
 DROP USER IF EXISTS 'test-e'
 
 statement ok

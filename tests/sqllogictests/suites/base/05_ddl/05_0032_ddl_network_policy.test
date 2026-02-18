@@ -52,10 +52,10 @@ CREATE USER user1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='test_policy2'
 statement ok
 CREATE USER user1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='test_policy'
 
-query TTTTTBTTBT
+query TTTTTTBTTBT
 DESC USER user1
 ----
-user1 % double_sha1_password (empty) (empty) 0 test_policy NULL NULL NULL
+user1 % double_sha1_password (empty) (empty) (empty) 0 test_policy NULL NULL NULL
 
 statement error 2210
 DROP NETWORK POLICY test_policy

@@ -154,6 +154,7 @@ message UserOption {
   optional bool disabled = 5;
   optional bool must_change_password = 6;
   optional string workload_group = 7;
+  optional string default_warehouse = 8;
 }
 
 message UserInfo {

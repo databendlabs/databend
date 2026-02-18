@@ -192,6 +192,7 @@ impl TryFrom<Vec<u8>> for UserInfo {
 pub struct UserOption {
     flags: BitFlags<UserOptionFlag>,
     default_role: Option<String>,
+    default_warehouse: Option<String>,
     network_policy: Option<String>,
     password_policy: Option<String>,
     workload_group: Option<String>,
@@ -204,6 +205,7 @@ impl UserOption {
         Self {
             flags,
             default_role: None,
+            default_warehouse: None,
             network_policy: None,
             password_policy: None,
             workload_group: None,
@@ -223,6 +225,11 @@ impl UserOption {
 
     pub fn with_default_role(mut self, default_role: Option<String>) -> Self {
         self.default_role = default_role;
+        self
+    }
+
+    pub fn with_default_warehouse(mut self, default_warehouse: Option<String>) -> Self {
+        self.default_warehouse = default_warehouse;
         self
     }
 
@@ -264,6 +271,10 @@ impl UserOption {
         self.default_role.as_ref()
     }
 
+    pub fn default_warehouse(&self) -> Option<&String> {
+        self.default_warehouse.as_ref()
+    }
+
     pub fn network_policy(&self) -> Option<&String> {
         self.network_policy.as_ref()
     }
@@ -287,6 +298,10 @@ impl UserOption {
 
     pub fn set_default_role(&mut self, default_role: Option<String>) {
         self.default_role = default_role;
+    }
+
+    pub fn set_default_warehouse(&mut self, default_warehouse: Option<String>) {
+        self.default_warehouse = default_warehouse;
     }
 
     pub fn set_network_policy(&mut self, network_policy: Option<String>) {
@@ -339,6 +354,7 @@ impl UserOption {
                 }
             }
             UserOptionItem::DefaultRole(v) => self.default_role = Some(v.clone()),
+            UserOptionItem::DefaultWarehouse(v) => self.default_warehouse = Some(v.clone()),
             UserOptionItem::SetNetworkPolicy(v) => self.network_policy = Some(v.clone()),
             UserOptionItem::UnsetNetworkPolicy => self.network_policy = None,
             UserOptionItem::SetPasswordPolicy(v) => self.password_policy = Some(v.clone()),
@@ -391,6 +407,33 @@ mod tests {
             assert_eq!(AuthInfo::JWT, u.auth_info);
             assert_eq!(BitFlags::all(), u.option.flags);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_user_option_default_warehouse() -> anyhow::Result<()> {
+        use databend_common_ast::ast::UserOptionItem;
+
+        // default is None
+        let opt = UserOption::empty();
+        assert_eq!(opt.default_warehouse(), None);
+
+        // with_default_warehouse builder
+        let opt = UserOption::empty().with_default_warehouse(Some("wh1".to_string()));
+        assert_eq!(opt.default_warehouse(), Some(&"wh1".to_string()));
+
+        // set_default_warehouse
+        let mut opt = UserOption::empty();
+        opt.set_default_warehouse(Some("wh2".to_string()));
+        assert_eq!(opt.default_warehouse(), Some(&"wh2".to_string()));
+        opt.set_default_warehouse(None);
+        assert_eq!(opt.default_warehouse(), None);
+
+        // apply DefaultWarehouse
+        let mut opt = UserOption::empty();
+        opt.apply(&UserOptionItem::DefaultWarehouse("wh3".to_string()));
+        assert_eq!(opt.default_warehouse(), Some(&"wh3".to_string()));
 
         Ok(())
     }

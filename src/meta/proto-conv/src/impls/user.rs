@@ -103,6 +103,7 @@ impl FromToProto for mt::principal::UserOption {
         Ok(mt::principal::UserOption::default()
             .with_flags(flags)
             .with_default_role(p.default_role)
+            .with_default_warehouse(p.default_warehouse)
             .with_network_policy(p.network_policy)
             .with_password_policy(p.password_policy)
             .with_workload_group(p.workload_group)
@@ -116,6 +117,7 @@ impl FromToProto for mt::principal::UserOption {
             min_reader_ver: MIN_READER_VER,
             flags: self.flags().bits(),
             default_role: self.default_role().cloned(),
+            default_warehouse: self.default_warehouse().cloned(),
             network_policy: self.network_policy().cloned(),
             password_policy: self.password_policy().cloned(),
             workload_group: self.workload_group().cloned(),
