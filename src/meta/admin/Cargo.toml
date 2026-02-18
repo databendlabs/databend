@@ -32,9 +32,7 @@ serde_urlencoded = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-common-version = { workspace = true }
-databend-meta = { workspace = true }
 databend-meta-runtime = { workspace = true }
-databend-meta-runtime-api = { workspace = true }
 databend-meta-test-harness = { workspace = true }
 fastrace = { workspace = true }
 maplit = { workspace = true }
