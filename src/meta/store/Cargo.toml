@@ -11,7 +11,7 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 databend-base = { workspace = true }
-databend-common-meta-semaphore = { workspace = true }
+databend-meta-plugin-semaphore = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-client = { workspace = true }

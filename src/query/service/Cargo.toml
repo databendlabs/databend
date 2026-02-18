@@ -69,7 +69,7 @@ databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-semaphore = { workspace = true }
+databend-meta-plugin-semaphore = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline = { workspace = true }
