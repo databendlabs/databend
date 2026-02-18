@@ -14,6 +14,7 @@
 
 //! Kv API with `kvapi::Key` type key and protobuf encoded value.
 
+pub mod compress;
 pub mod errors;
 
 mod codec;
@@ -46,8 +47,10 @@ use seq_marked::SeqValue;
 
 pub(crate) use self::codec::decode_change;
 pub(crate) use self::codec::decode_non_empty_item;
+pub use self::codec::decode_pb;
 pub use self::codec::decode_seqv;
 pub(crate) use self::codec::encode_operation;
+pub use self::codec::encode_pb;
 pub use self::upsert_pb::UpsertPB;
 use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_api::errors::PbApiWriteError;

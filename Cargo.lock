@@ -3999,6 +3999,7 @@ dependencies = [
  "tokio",
  "tonic 0.13.1",
  "uuid",
+ "zstd 0.12.4",
 ]
 
 [[package]]
