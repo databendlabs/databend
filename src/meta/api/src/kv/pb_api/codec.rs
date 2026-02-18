@@ -20,21 +20,33 @@ use databend_meta_types::Operation;
 use databend_meta_types::SeqV;
 use databend_meta_types::protobuf::StreamItem;
 
+use super::compress;
 use crate::kv_pb_api::errors::NoneValue;
 use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_api::errors::PbDecodeError;
 use crate::kv_pb_api::errors::PbEncodeError;
 
+/// Encode a `FromToProto` value to protobuf bytes, with transparent zstd compression.
+pub fn encode_pb<T: FromToProto>(value: &T) -> Result<Vec<u8>, PbEncodeError> {
+    let p = value.to_pb()?;
+    let mut buf = vec![];
+    prost::Message::encode(&p, &mut buf)?;
+    Ok(compress::encode_value(buf))
+}
+
+/// Decode protobuf bytes (possibly zstd-compressed) to a `FromToProto` value.
+pub fn decode_pb<T: FromToProto>(buf: &[u8]) -> Result<T, PbDecodeError> {
+    let buf = compress::decode_value(buf)
+        .map_err(|e| PbDecodeError::from(prost::DecodeError::new(e.to_string())))?;
+    let p: T::PB = prost::Message::decode(buf.as_ref()).map_err(PbDecodeError::from)?;
+    T::from_pb(p).map_err(PbDecodeError::from)
+}
+
 /// Encode an upsert Operation of T into protobuf encoded value.
 pub fn encode_operation<T>(value: &Operation<T>) -> Result<Operation<Vec<u8>>, PbEncodeError>
 where T: FromToProto {
     match value {
-        Operation::Update(t) => {
-            let p = t.to_pb()?;
-            let mut buf = vec![];
-            prost::Message::encode(&p, &mut buf)?;
-            Ok(Operation::Update(buf))
-        }
+        Operation::Update(t) => Ok(Operation::Update(encode_pb(t)?)),
         Operation::Delete => Ok(Operation::Delete),
         _ => {
             unreachable!("Operation::AsIs is not supported")
@@ -82,14 +94,8 @@ pub fn decode_seqv<T>(
 where
     T: FromToProto,
 {
-    let buf = &seqv.data;
-    let x: Result<_, PbDecodeError> = try {
-        let p: T::PB = prost::Message::decode(buf.as_ref()).map_err(PbDecodeError::from)?;
-        let v: T = FromToProto::from_pb(p).map_err(PbDecodeError::from)?;
-        SeqV::new_with_meta(seqv.seq, seqv.meta, v)
-    };
-
-    x.map_err(|e: PbDecodeError| e.with_context(context()))
+    let v = decode_pb::<T>(seqv.data.as_ref()).map_err(|e| e.with_context(context()))?;
+    Ok(SeqV::new_with_meta(seqv.seq, seqv.meta, v))
 }
 
 /// Decode key and protobuf encoded value from `StreamItem`.

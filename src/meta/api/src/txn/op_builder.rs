@@ -19,16 +19,14 @@ use databend_meta_kvapi::kvapi;
 use databend_meta_types::InvalidArgument;
 use databend_meta_types::TxnOp;
 
+use crate::kv_pb_api::encode_pb;
+
 pub fn txn_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
 where
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
 {
-    let p = value.to_pb().map_err(|e| InvalidArgument::new(e, ""))?;
-
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf).map_err(|e| InvalidArgument::new(e, ""))?;
-
+    let buf = encode_pb(value).map_err(|e| InvalidArgument::new(e, ""))?;
     Ok(TxnOp::put(key.to_string_key(), buf))
 }
 
@@ -42,11 +40,7 @@ where
     K: kvapi::Key,
     K::ValueType: FromToProto + 'static,
 {
-    let p = value.to_pb().map_err(|e| InvalidArgument::new(e, ""))?;
-
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf).map_err(|e| InvalidArgument::new(e, ""))?;
-
+    let buf = encode_pb(value).map_err(|e| InvalidArgument::new(e, ""))?;
     Ok(TxnOp::put_with_ttl(key.to_string_key(), buf, ttl))
 }
 

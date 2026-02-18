@@ -34,6 +34,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 uuid = { workspace = true }
+zstd = { workspace = true }
 
 [lints]
 workspace = true
