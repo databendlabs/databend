@@ -14,11 +14,8 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 doctest = false
-test = true
 
 [dependencies]
 async-trait = { workspace = true }
@@ -33,11 +30,8 @@ tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-meta-kvapi = { workspace = true }
 databend-meta-test-harness = { workspace = true }
-databend-meta-types = { workspace = true }
 fastrace = { workspace = true }
-log = { workspace = true }
 test-harness = { workspace = true }
 tokio = { workspace = true }
 

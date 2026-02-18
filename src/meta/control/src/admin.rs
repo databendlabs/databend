@@ -16,7 +16,9 @@ use databend_meta_admin::v1::features::FeatureResponse;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
+/// HTTP client for the `databend-meta` admin API.
 pub struct MetaAdminClient {
     client: Client,
     endpoint: String,
@@ -24,134 +26,79 @@ pub struct MetaAdminClient {
 
 impl MetaAdminClient {
     pub fn new(addr: &str) -> Self {
-        let client = Client::new();
         MetaAdminClient {
-            client,
+            client: Client::new(),
             endpoint: format!("http://{}", addr),
         }
     }
 
-    pub async fn status(&self) -> anyhow::Result<AdminStatusResponse> {
+    /// Send a GET request and return the response on success,
+    /// or an error containing the status code and response body on failure.
+    async fn checked_get(&self, path: &str) -> anyhow::Result<reqwest::Response> {
         let resp = self
             .client
-            .get(format!("{}/v1/cluster/status", self.endpoint))
+            .get(format!("{}{path}", self.endpoint))
             .send()
             .await?;
         let status = resp.status();
         if status.is_success() {
-            let result = resp.json::<AdminStatusResponse>().await?;
-            Ok(result)
+            Ok(resp)
         } else {
             let data = resp.bytes().await?;
             let msg = String::from_utf8_lossy(&data);
-            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
+            Err(anyhow::anyhow!("status code: {status}, msg: {msg}"))
         }
     }
 
+    /// Send a GET request and deserialize the JSON response.
+    async fn get_json<T: DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
+        let resp = self.checked_get(path).await?;
+        Ok(resp.json().await?)
+    }
+
+    pub async fn status(&self) -> anyhow::Result<AdminStatusResponse> {
+        self.get_json("/v1/cluster/status").await
+    }
+
+    /// Transfer raft leadership to the specified node, or to a random voter if `target` is `None`.
     pub async fn transfer_leader(
         &self,
         target: Option<u64>,
     ) -> anyhow::Result<AdminTransferLeaderResponse> {
-        let resp = match target {
-            Some(to) => {
-                self.client
-                    .get(format!(
-                        "{}/v1/ctrl/trigger_transfer_leader?to={}",
-                        self.endpoint, to
-                    ))
-                    .send()
-                    .await?
-            }
-            None => {
-                self.client
-                    .get(format!("{}/v1/ctrl/trigger_transfer_leader", self.endpoint))
-                    .send()
-                    .await?
-            }
-        };
-        let status = resp.status();
-        if status.is_success() {
-            let result = resp.json::<AdminTransferLeaderResponse>().await?;
-            Ok(result)
-        } else {
-            let data = resp.bytes().await?;
-            let msg = String::from_utf8_lossy(&data);
-            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
+        let mut path = "/v1/ctrl/trigger_transfer_leader".to_string();
+        if let Some(to) = target {
+            path = format!("{path}?to={to}");
         }
+        self.get_json(&path).await
     }
 
+    /// Trigger a raft snapshot on this node.
     pub async fn trigger_snapshot(&self) -> anyhow::Result<()> {
-        let resp = self
-            .client
-            .get(format!("{}/v1/ctrl/trigger_snapshot", self.endpoint))
-            .send()
-            .await?;
-        let status = resp.status();
-        if status.is_success() {
-            Ok(())
-        } else {
-            let data = resp.bytes().await?;
-            let msg = String::from_utf8_lossy(&data);
-            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
-        }
+        self.checked_get("/v1/ctrl/trigger_snapshot").await?;
+        Ok(())
     }
 
+    /// Enable or disable a feature flag.
     pub async fn set_feature(
         &self,
         feature: &str,
         enable: bool,
     ) -> anyhow::Result<FeatureResponse> {
-        let resp = self
-            .client
-            .get(format!(
-                "{}/v1/features/set?feature={}&enable={}",
-                self.endpoint, feature, enable
-            ))
-            .send()
-            .await?;
-        let status = resp.status();
-        if status.is_success() {
-            let result = resp.json::<FeatureResponse>().await?;
-            Ok(result)
-        } else {
-            let data = resp.bytes().await?;
-            let msg = String::from_utf8_lossy(&data);
-            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
-        }
+        self.get_json(&format!(
+            "/v1/features/set?feature={feature}&enable={enable}"
+        ))
+        .await
     }
 
+    /// List all feature flags and their current states.
     pub async fn list_features(&self) -> anyhow::Result<FeatureResponse> {
-        let resp = self
-            .client
-            .get(format!("{}/v1/features/list", self.endpoint))
-            .send()
-            .await?;
-        let status = resp.status();
-        if status.is_success() {
-            let result = resp.json::<FeatureResponse>().await?;
-            Ok(result)
-        } else {
-            let data = resp.bytes().await?;
-            let msg = String::from_utf8_lossy(&data);
-            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
-        }
+        self.get_json("/v1/features/list").await
     }
 
+    /// Retrieve Prometheus-format metrics from this node.
     pub async fn get_metrics(&self) -> anyhow::Result<String> {
-        let resp = self
-            .client
-            .get(format!("{}/v1/metrics", self.endpoint))
-            .send()
-            .await?;
-        let status = resp.status();
-        if status.is_success() {
-            let result = resp.text().await?;
-            Ok(result)
-        } else {
-            let data = resp.bytes().await?;
-            let msg = String::from_utf8_lossy(&data);
-            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
-        }
+        let resp = self.checked_get("/v1/metrics").await?;
+        Ok(resp.text().await?)
     }
 }
 

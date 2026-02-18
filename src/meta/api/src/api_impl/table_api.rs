@@ -151,6 +151,29 @@ use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
 
+/// Assert that `table_id` is the latest entry in `tb_id_list`.
+///
+/// Returns an error if the last ID in the history list doesn't match the
+/// expected current table ID, indicating a concurrent modification.
+fn assert_table_id_is_latest(
+    table_id: u64,
+    tb_id_list: &TableIdList,
+    table_name: &str,
+    operation: &str,
+) -> Result<(), KVAppError> {
+    let last = tb_id_list.last().copied();
+    if Some(table_id) == last {
+        return Ok(());
+    }
+    let msg = format!(
+        "{operation} {table_name}: table id conflict, id list last: {last:?}, current: {table_id}"
+    );
+    error!("{msg}");
+    Err(KVAppError::AppError(AppError::UnknownTable(
+        UnknownTable::new(table_name, msg),
+    )))
+}
+
 /// TableApi defines APIs for table lifecycle and metadata management.
 ///
 /// This trait handles:
@@ -622,20 +645,12 @@ where
                 .into_value()
                 .unwrap_or_else(|| TableIdList::new_with_ids([table_id]));
 
-            {
-                let last = tb_id_list.last().copied();
-                if Some(table_id) != last {
-                    let err_message = format!(
-                        "rename_table {:?} but last table id conflict, id list last: {:?}, current: {}",
-                        req.name_ident, last, table_id
-                    );
-                    error!("{}", err_message);
-
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(&req.name_ident.table_name, err_message),
-                    )));
-                }
-            }
+            assert_table_id_is_latest(
+                table_id,
+                &tb_id_list,
+                &req.name_ident.table_name,
+                "rename_table",
+            )?;
 
             // Get the renaming target db to ensure presence.
 
@@ -807,32 +822,18 @@ where
                 .into_value()
                 .unwrap_or_else(|| TableIdList::new_with_ids([table_id_right]));
 
-            // Validate table IDs in history lists
-            {
-                let last_left = tb_id_list_left.last().copied();
-                if Some(table_id_left) != last_left {
-                    let err_message = format!(
-                        "swap_table {:?} but last table id conflict, id list last: {:?}, current: {}",
-                        req.origin_table, last_left, table_id_left
-                    );
-                    error!("{}", err_message);
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(&req.origin_table.table_name, err_message),
-                    )));
-                }
-
-                let last_right = tb_id_list_right.last().copied();
-                if Some(table_id_right) != last_right {
-                    let err_message = format!(
-                        "swap_table {:?} but last table id conflict, id list last: {:?}, current: {}",
-                        req.target_table_name, last_right, table_id_right
-                    );
-                    error!("{}", err_message);
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(&req.target_table_name, err_message),
-                    )));
-                }
-            }
+            assert_table_id_is_latest(
+                table_id_left,
+                &tb_id_list_left,
+                &req.origin_table.table_name,
+                "swap_table",
+            )?;
+            assert_table_id_is_latest(
+                table_id_right,
+                &tb_id_list_right,
+                &req.target_table_name,
+                "swap_table",
+            )?;
 
             // Get table id to name mappings
             let table_id_to_name_key_left = TableIdToName {
