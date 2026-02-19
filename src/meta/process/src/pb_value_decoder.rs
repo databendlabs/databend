@@ -53,19 +53,18 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_api::kv_pb_api::decode_pb;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_types::Cmd;
 use databend_meta_types::Operation;
 use databend_meta_types::txn_op::Request;
-use prost::Message;
 
 fn decode_as<T>(bytes: &[u8]) -> Result<String, String>
 where
     T: FromToProto + fmt::Debug,
-    T::PB: Message + Default,
+    T::PB: prost::Message + Default,
 {
-    let pb = T::PB::decode(bytes).map_err(|e| e.to_string())?;
-    let val = T::from_pb(pb).map_err(|e| e.to_string())?;
+    let val: T = decode_pb(bytes).map_err(|e| e.to_string())?;
     Ok(format!("{:?}", val))
 }
 
@@ -311,10 +310,10 @@ pub fn decode_cmd_values(cmd: &Cmd) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_meta_api::kv_pb_api;
     use databend_common_proto_conv::FromToProto;
     use databend_meta_types::TxnOp;
     use databend_meta_types::TxnRequest;
-    use prost::Message;
 
     use super::*;
 
@@ -323,12 +322,8 @@ mod tests {
         re.replace_all(s, "<TS>").to_string()
     }
 
-    fn encode_pb<T: FromToProto>(val: &T) -> Vec<u8>
-    where T::PB: Message + Default {
-        let pb = val.to_pb().unwrap();
-        let mut buf = vec![];
-        pb.encode(&mut buf).unwrap();
-        buf
+    fn encode_pb<T: FromToProto>(val: &T) -> Vec<u8> {
+        kv_pb_api::encode_pb(val).unwrap()
     }
 
     // -- decode_pb_value tests --
@@ -345,7 +340,7 @@ mod tests {
     fn test_decode_pb_value_corrupted_bytes() {
         assert_eq!(
             decode_pb_value("__fd_database_by_id/123", &[0xff, 0xff]),
-            "decode-error(__fd_database_by_id/): failed to decode Protobuf message: invalid varint"
+            "decode-error(__fd_database_by_id/): PbDecodeError: failed to decode Protobuf message: invalid varint"
         );
     }
 
@@ -428,7 +423,7 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert_eq!(
             lines[0],
-            "    value(__fd_database_by_id/bad): decode-error(__fd_database_by_id/): failed to decode Protobuf message: invalid varint"
+            "    value(__fd_database_by_id/bad): decode-error(__fd_database_by_id/): PbDecodeError: failed to decode Protobuf message: invalid varint"
         );
     }
 

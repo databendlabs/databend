@@ -10,6 +10,7 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
+databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 databend-common-protos = { workspace = true }
