@@ -21,6 +21,11 @@ use databend_meta_types::TxnOp;
 
 use crate::kv_pb_api::encode_pb;
 
+pub fn txn_put_u64(key: &impl kvapi::Key, value: u64) -> Result<TxnOp, InvalidArgument> {
+    let v = serde_json::to_vec(&value).map_err(|e| InvalidArgument::new(e, ""))?;
+    Ok(TxnOp::put(key.to_string_key(), v))
+}
+
 pub fn txn_put_pb<K>(key: &K, value: &K::ValueType) -> Result<TxnOp, InvalidArgument>
 where
     K: kvapi::Key,

@@ -137,7 +137,6 @@ use crate::kv_fetch_util::mget_u64_values;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_u64_value;
-use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
@@ -145,8 +144,8 @@ use crate::txn_core_util::send_txn;
 use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
 use crate::txn_op_get;
-use crate::txn_op_put;
 use crate::txn_put_pb;
+use crate::txn_put_u64;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
 
@@ -467,8 +466,7 @@ where
                 } else {
                     // Otherwise, make newly created table visible by putting the tuple:
                     // (tenant, db_id, tb_name) -> tb_id
-                    txn.if_then
-                        .push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
+                    txn.if_then.push(txn_put_u64(&key_dbid_tbname, table_id)?)
                 }
 
                 for table_field in req.table_meta.schema.fields() {
@@ -709,8 +707,8 @@ where
                         txn_cond_seq(&table_id_to_name_key, Eq, table_id_to_name_seq),
                     ],
                     vec![
-                        txn_op_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
-                        txn_op_put(&newdbid_newtbname, serialize_u64(table_id)?), /* (db_id, new_tb_name) -> tb_id */
+                        txn_op_del(&dbid_tbname),                   // (db_id, tb_name) -> tb_id
+                        txn_put_u64(&newdbid_newtbname, table_id)?, /* (db_id, new_tb_name) -> tb_id */
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         txn_put_pb(&seq_db_id.data, &*db_meta)?, // (db_id) -> db_meta
@@ -871,8 +869,8 @@ where
                     ],
                     vec![
                         // Swap table name->table_id mappings
-                        txn_op_put(&dbid_tbname_left, serialize_u64(table_id_right)?), /* origin_table_name -> target_table_id */
-                        txn_op_put(&dbid_tbname_right, serialize_u64(table_id_left)?), /* target_table_name -> origin_table_id */
+                        txn_put_u64(&dbid_tbname_left, table_id_right)?, /* origin_table_name -> target_table_id */
+                        txn_put_u64(&dbid_tbname_right, table_id_left)?, /* target_table_name -> origin_table_id */
                         // Update database metadata sequences
                         txn_put_pb(&seq_db_id_left.data, &*db_meta_left)?,
                         // Update table history lists
@@ -1115,7 +1113,7 @@ where
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         txn_put_pb(&DatabaseId { db_id }, &db_meta)?, // (db_id) -> db_meta
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
+                        txn_put_u64(&dbid_tbname, table_id)?, /* (tenant, db_id, tb_name) -> tb_id */
                         // txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
                         txn_put_pb(&tbid, &tb_meta)?, // (tenant, db_id, tb_id) -> tb_meta
                         txn_op_del(&orphan_dbid_tbname_idlist), // del orphan table idlist

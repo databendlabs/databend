@@ -94,15 +94,14 @@ use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
-use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
-use crate::txn_op_put;
 use crate::txn_put_pb;
+use crate::txn_put_u64;
 
 impl<KV> SchemaApi for KV
 where
@@ -610,7 +609,7 @@ pub async fn handle_undrop_table(
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         txn_op_put_pb(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), // (tenant, db_id, tb_name) -> tb_id
+                        txn_put_u64(&dbid_tbname, table_id)?, // (tenant, db_id, tb_name) -> tb_id
                         txn_op_put_pb(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     policy_restore_ops,

@@ -106,5 +106,6 @@ pub use txn_op_builder_util::txn_op_get;
 pub use txn_op_builder_util::txn_op_put;
 pub use txn_op_builder_util::txn_op_put_pb;
 pub use txn_op_builder_util::txn_put_pb;
+pub use txn_op_builder_util::txn_put_u64;
 pub use util::DEFAULT_MGET_SIZE;
 pub use util::serialization as serialization_util;

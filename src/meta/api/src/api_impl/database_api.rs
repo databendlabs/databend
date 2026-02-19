@@ -71,13 +71,12 @@ use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
-use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_op_del;
-use crate::txn_op_put;
 use crate::txn_put_pb;
+use crate::txn_put_u64;
 
 impl<KV> DatabaseApi for KV
 where
@@ -189,7 +188,7 @@ where
                     txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
                 ]);
                 txn.if_then.extend(vec![
-                    txn_op_put(name_key, serialize_u64(db_id)?), // (tenant, db_name) -> db_id
+                    txn_put_u64(name_key, db_id)?, // (tenant, db_name) -> db_id
                     txn_put_pb(&id_key, &req.meta)?, // (db_id) -> db_meta
                     txn_put_pb(&dbid_idlist, &db_id_list)?, /* _fd_db_id_list/<tenant>/<db_name> -> db_id_list */
                     txn_put_pb(&id_to_name_key, &DatabaseNameIdentRaw::from(name_key))?, /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
@@ -335,8 +334,8 @@ where
                         txn_cond_seq(&dbid, Eq, db_meta_seq),
                     ],
                     vec![
-                        txn_op_put(name_key, serialize_u64(db_id)?), // (tenant, db_name) -> db_id
-                        txn_put_pb(&dbid, &db_meta)?,                // (db_id) -> db_meta
+                        txn_put_u64(name_key, db_id)?, // (tenant, db_name) -> db_id
+                        txn_put_pb(&dbid, &db_meta)?,  // (db_id) -> db_meta
                     ],
                 );
 
@@ -473,7 +472,7 @@ where
             let if_then = vec![
                 txn_op_del(tenant_dbname), // del old_db_name
                 // Renaming db should not affect the seq of db_meta. Just modify db name.
-                txn_op_put(&tenant_newdbname, serialize_u64(*old_db_id)?), /* (tenant, new_db_name) -> old_db_id */
+                txn_put_u64(&tenant_newdbname, *old_db_id)?, /* (tenant, new_db_name) -> old_db_id */
                 txn_put_pb(&new_dbid_idlist, &new_db_id_list)?, /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
                 txn_put_pb(&dbid_idlist, &db_id_list)?, /* _fd_db_id_list/tenant/db_name -> db_id_list */
                 txn_put_pb(&db_id_key, &DatabaseNameIdentRaw::from(&tenant_newdbname))?, /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
