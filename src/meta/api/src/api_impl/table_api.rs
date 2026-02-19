@@ -137,17 +137,15 @@ use crate::kv_fetch_util::mget_u64_values;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_u64_value;
-use crate::serialize_struct;
-use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_builder_util::txn_op_put_pb;
-use crate::txn_op_del;
-use crate::txn_op_get;
-use crate::txn_op_put;
+use crate::txn_del;
+use crate::txn_get;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
+use crate::txn_put_u64;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
 
@@ -449,15 +447,12 @@ where
                 txn.if_then.extend(vec![
                     // Changing a table in a db has to update the seq of db_meta,
                     // to block the batch-delete-tables when deleting a db.
-                    txn_op_put(&key_dbid, serialize_struct(&db_meta.data)?), /* (db_id) -> db_meta */
-                    txn_op_put(
-                        key_table_id,
-                        serialize_struct(&req.table_meta)?,
-                    ), /* (tenant, db_id, tb_id) -> tb_meta */
-                    txn_op_put(&save_key_table_id_list, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                    txn_put_pb(&key_dbid, &db_meta.data)?, /* (db_id) -> db_meta */
+                    txn_put_pb(key_table_id, &req.table_meta)?, /* (tenant, db_id, tb_id) -> tb_meta */
+                    txn_put_pb(&save_key_table_id_list, &tb_id_list)?, /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                     // This record does not need to assert `table_id_to_name_key == 0`,
                     // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
-                    txn_op_put(&key_table_id_to_name, serialize_struct(&key_dbid_tbname)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
+                    txn_put_pb(&key_table_id_to_name, &key_dbid_tbname)?, /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                 ]);
 
                 if req.as_dropped {
@@ -467,12 +462,11 @@ where
                     // - also, the `table_id_seq` of newly create table should be obtained.
                     //   The caller need to know the `table_id_seq` to manipulate the table more efficiently
                     //   This TxnOp::Get is(should be) the last operation in the `if_then` list.
-                    txn.if_then.push(txn_op_get(key_table_id));
+                    txn.if_then.push(txn_get(key_table_id));
                 } else {
                     // Otherwise, make newly created table visible by putting the tuple:
                     // (tenant, db_id, tb_name) -> tb_id
-                    txn.if_then
-                        .push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
+                    txn.if_then.push(txn_put_u64(&key_dbid_tbname, table_id)?)
                 }
 
                 for table_field in req.table_meta.schema.fields() {
@@ -713,24 +707,20 @@ where
                         txn_cond_seq(&table_id_to_name_key, Eq, table_id_to_name_seq),
                     ],
                     vec![
-                        txn_op_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
-                        txn_op_put(&newdbid_newtbname, serialize_u64(table_id)?), /* (db_id, new_tb_name) -> tb_id */
+                        txn_del(&dbid_tbname),                      // (db_id, tb_name) -> tb_id
+                        txn_put_u64(&newdbid_newtbname, table_id)?, /* (db_id, new_tb_name) -> tb_id */
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        txn_op_put(&seq_db_id.data, serialize_struct(&*db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
-                        txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?), /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
-                        txn_op_put(&table_id_to_name_key, serialize_struct(&db_id_table_name)?), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
+                        txn_put_pb(&seq_db_id.data, &*db_meta)?, // (db_id) -> db_meta
+                        txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?, /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
+                        txn_put_pb(&new_dbid_tbname_idlist, &new_tb_id_list)?, /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
+                        txn_put_pb(&table_id_to_name_key, &db_id_table_name)?, /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                     ],
                 );
 
                 if *seq_db_id.data != *new_seq_db_id.data {
-                    txn.if_then.push(
-                        txn_op_put(
-                            &new_seq_db_id.data,
-                            serialize_struct(&*new_db_meta)?,
-                        ), // (db_id) -> db_meta
-                    );
+                    txn.if_then
+                        .push(txn_put_pb(&new_seq_db_id.data, &*new_db_meta)?); // (db_id) -> db_meta
                 }
 
                 let (succ, _responses) = send_txn(self, txn).await?;
@@ -879,28 +869,16 @@ where
                     ],
                     vec![
                         // Swap table name->table_id mappings
-                        txn_op_put(&dbid_tbname_left, serialize_u64(table_id_right)?), /* origin_table_name -> target_table_id */
-                        txn_op_put(&dbid_tbname_right, serialize_u64(table_id_left)?), /* target_table_name -> origin_table_id */
+                        txn_put_u64(&dbid_tbname_left, table_id_right)?, /* origin_table_name -> target_table_id */
+                        txn_put_u64(&dbid_tbname_right, table_id_left)?, /* target_table_name -> origin_table_id */
                         // Update database metadata sequences
-                        txn_op_put(&seq_db_id_left.data, serialize_struct(&*db_meta_left)?),
+                        txn_put_pb(&seq_db_id_left.data, &*db_meta_left)?,
                         // Update table history lists
-                        txn_op_put(
-                            &dbid_tbname_idlist_left,
-                            serialize_struct(&tb_id_list_left)?,
-                        ),
-                        txn_op_put(
-                            &dbid_tbname_idlist_right,
-                            serialize_struct(&tb_id_list_right)?,
-                        ),
+                        txn_put_pb(&dbid_tbname_idlist_left, &tb_id_list_left)?,
+                        txn_put_pb(&dbid_tbname_idlist_right, &tb_id_list_right)?,
                         // Update table_id->name mappings
-                        txn_op_put(
-                            &table_id_to_name_key_left,
-                            serialize_struct(&db_id_table_name_right)?,
-                        ), // origin_table_id -> target_table_name
-                        txn_op_put(
-                            &table_id_to_name_key_right,
-                            serialize_struct(&db_id_table_name_left)?,
-                        ), // target_table_id -> origin_table_name
+                        txn_put_pb(&table_id_to_name_key_left, &db_id_table_name_right)?, /* origin_table_id -> target_table_name */
+                        txn_put_pb(&table_id_to_name_key_right, &db_id_table_name_left)?, /* target_table_id -> origin_table_name */
                     ],
                 );
 
@@ -1134,12 +1112,12 @@ where
                     vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
-                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
-                        // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
-                        txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
-                        txn_op_del(&orphan_dbid_tbname_idlist),         // del orphan table idlist
-                        txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list.data)?), /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+                        txn_put_pb(&DatabaseId { db_id }, &db_meta)?, // (db_id) -> db_meta
+                        txn_put_u64(&dbid_tbname, table_id)?, /* (tenant, db_id, tb_name) -> tb_id */
+                        // txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
+                        txn_put_pb(&tbid, &tb_meta)?, // (tenant, db_id, tb_id) -> tb_meta
+                        txn_del(&orphan_dbid_tbname_idlist), // del orphan table idlist
+                        txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data)?, /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                     ],
                 );
 
@@ -1269,8 +1247,7 @@ where
                 txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
             }
 
-            txn.if_then
-                .push(txn_op_put(&tbid, serialize_struct(&new_table_meta)?));
+            txn.if_then.push(txn_put_pb(&tbid, &new_table_meta)?);
             txn.else_then.push(TxnOp {
                 request: Some(Request::Get(TxnGetRequest::new(tbid.to_string_key()))),
             });
@@ -1310,7 +1287,8 @@ where
                 if req.insert_if_not_exists {
                     txn.condition.push(txn_cond_eq_seq(&key, 0));
                 }
-                txn.if_then.push(txn_op_put_pb(&key, &file_info, req.ttl)?)
+                txn.if_then
+                    .push(txn_put_pb_with_ttl(&key, &file_info, req.ttl)?)
             }
         }
 
@@ -1354,8 +1332,7 @@ where
 
             txn.condition
                 .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
-            txn.if_then
-                .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
+            txn.if_then.push(txn_put_pb(&stream_id, &new_stream_meta)?);
         }
 
         for deduplicated_label in deduplicated_labels {

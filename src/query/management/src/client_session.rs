@@ -25,11 +25,8 @@ use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token_ident::TokenIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::Key;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaError;
-use databend_meta_types::Operation;
-use databend_meta_types::UpsertKV;
 use databend_meta_types::With;
 
 use crate::errors::meta_service_error;
@@ -100,16 +97,10 @@ impl ClientSessionMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn drop_token(&self, token_hash: &str) -> Result<()> {
-        let key = self.token_ident(token_hash).to_string_key();
-
+        let ident = self.token_ident(token_hash);
         // simply ignore the result
         self.kv_api
-            .upsert_kv(UpsertKV::new(
-                &key,
-                MatchSeq::GE(0),
-                Operation::Delete,
-                None,
-            ))
+            .upsert_pb(&UpsertPB::delete(ident))
             .await
             .map_err(meta_service_error)?;
 
@@ -163,18 +154,10 @@ impl ClientSessionMgr {
         user_name: &str,
         client_session_id: &str,
     ) -> Result<()> {
-        let key = self
-            .session_ident(user_name, client_session_id)
-            .to_string_key();
-
+        let ident = self.session_ident(user_name, client_session_id);
         // simply ignore the result
         self.kv_api
-            .upsert_kv(UpsertKV::new(
-                &key,
-                MatchSeq::GE(0),
-                Operation::Delete,
-                None,
-            ))
+            .upsert_pb(&UpsertPB::delete(ident))
             .await
             .map_err(meta_service_error)?;
 

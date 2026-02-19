@@ -20,8 +20,8 @@ use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
-use databend_common_meta_api::txn_op_del;
-use databend_common_meta_api::txn_op_put;
+use databend_common_meta_api::txn_del;
+use databend_common_meta_api::txn_put_pb;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
@@ -68,7 +68,6 @@ use crate::errors::meta_service_error;
 use crate::role::role_api::RoleApi;
 use crate::serde::Quota;
 use crate::serde::check_and_upgrade_to_pb;
-use crate::serialize_struct;
 
 static TXN_MAX_RETRY_TIMES: u32 = 60;
 
@@ -124,12 +123,11 @@ impl RoleMgr {
         role_info: &RoleInfo,
         seq: MatchSeq,
     ) -> Result<u64, ErrorCode> {
-        let key = self.role_ident(role_info.identity()).to_string_key();
-        let value = serialize_struct(role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
-
+        let key = self.role_ident(role_info.identity());
+        let req = UpsertPB::new(key, seq, Operation::Update(role_info.clone()), None);
         let res = self
             .kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
+            .upsert_pb(&req)
             .await
             .map_err(meta_service_error)?;
         match res.result {
@@ -496,17 +494,15 @@ impl RoleApi for RoleMgr {
                     need_transfer = true;
                     let object = own.data.object;
                     let owner_key = self.ownership_object_ident(&object);
-                    let owner_value = serialize_struct(
-                        &OwnershipInfo {
-                            object,
-                            role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-                        },
-                        ErrorCode::IllegalUserInfoFormat,
-                        || "",
-                    )?;
                     // Ensure accurate matching of a key
                     condition.push(txn_cond_seq(&owner_key, Eq, own.seq));
-                    if_then.push(txn_op_put(&owner_key, owner_value))
+                    if_then.push(
+                        txn_put_pb(&owner_key, &OwnershipInfo {
+                            object,
+                            role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
+                        })
+                        .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+                    );
                 }
             }
 
@@ -547,17 +543,14 @@ impl RoleApi for RoleMgr {
             let grant_object = convert_to_grant_obj(object);
 
             let owner_key = self.ownership_object_ident(object);
-            let owner_value = serialize_struct(
-                &OwnershipInfo {
+            let mut condition = vec![];
+            let mut if_then = vec![
+                txn_put_pb(&owner_key, &OwnershipInfo {
                     object: object.clone(),
                     role: new_role.to_string(),
-                },
-                ErrorCode::IllegalUserInfoFormat,
-                || "",
-            )?;
-
-            let mut condition = vec![];
-            let mut if_then = vec![txn_op_put(&owner_key, owner_value.clone())];
+                })
+                .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+            ];
 
             if let Some(ref old_role) = old_role {
                 // BUILTIN role or Dropped role may get err, no need to revoke
@@ -571,10 +564,10 @@ impl RoleApi for RoleMgr {
                     );
                     old_role_info.update_role_time();
                     condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                    if_then.push(txn_op_put(
-                        &old_key,
-                        serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
-                    ));
+                    if_then.push(
+                        txn_put_pb(&old_key, &old_role_info)
+                            .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+                    );
                 }
             }
 
@@ -688,7 +681,7 @@ impl RoleApi for RoleMgr {
 
             let owner_key = self.ownership_object_ident(object);
 
-            let mut if_then = vec![txn_op_del(&owner_key)];
+            let mut if_then = vec![txn_del(&owner_key)];
             let mut condition = vec![];
 
             if let Some(role) = role {
@@ -709,14 +702,10 @@ impl RoleApi for RoleMgr {
                         );
                         old_role_info.update_role_time();
                         condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                        if_then.push(txn_op_put(
-                            &old_key,
-                            serialize_struct(
-                                &old_role_info,
-                                ErrorCode::IllegalUserInfoFormat,
-                                || "",
-                            )?,
-                        ));
+                        if_then.push(
+                            txn_put_pb(&old_key, &old_role_info)
+                                .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+                        );
                     }
                 }
             }
@@ -743,11 +732,11 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
-        let key = self.role_ident(&role).to_string_key();
-
+        let key = self.role_ident(&role);
+        let req = UpsertPB::new(key, seq, Operation::Delete, None);
         let res = self
             .kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Delete, None))
+            .upsert_pb(&req)
             .await
             .map_err(meta_service_error)?;
 

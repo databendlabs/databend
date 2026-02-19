@@ -155,7 +155,6 @@ use databend_meta_kvapi::kvapi::Key;
 use databend_meta_kvapi::kvapi::KvApiExt;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaError;
-use databend_meta_types::UpsertKV;
 use fastrace::func_name;
 use log::debug;
 use log::info;
@@ -2128,7 +2127,7 @@ impl SchemaApiTestSuite {
                 db_id: *util.db_id(),
             };
             util.meta_api()
-                .upsert_kv(UpsertKV::delete(id_to_name_key.to_string_key()))
+                .upsert_pb(&UpsertPB::delete(id_to_name_key))
                 .await?;
         }
 
@@ -2151,7 +2150,7 @@ impl SchemaApiTestSuite {
             // remove db id list
             let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant, db);
             util.meta_api()
-                .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
+                .upsert_pb(&UpsertPB::delete(dbid_idlist.clone()))
                 .await?;
 
             // drop db
@@ -2178,7 +2177,7 @@ impl SchemaApiTestSuite {
             let dbid_idlist = DatabaseIdHistoryIdent::new(&tenant2, db);
 
             util.meta_api()
-                .upsert_kv(UpsertKV::delete(dbid_idlist.to_string_key()))
+                .upsert_pb(&UpsertPB::delete(dbid_idlist))
                 .await?;
 
             let res = mt
@@ -2220,7 +2219,7 @@ impl SchemaApiTestSuite {
             table_name: table.to_string(),
         };
         util.meta_api()
-            .upsert_kv(UpsertKV::delete(table_id_idlist.to_string_key()))
+            .upsert_pb(&UpsertPB::delete(table_id_idlist.clone()))
             .await?;
 
         // drop table

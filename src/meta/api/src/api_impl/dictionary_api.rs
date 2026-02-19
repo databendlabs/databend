@@ -41,8 +41,8 @@ use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_builder_util::txn_op_put_pb;
-use crate::txn_op_del;
+use crate::txn_del;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// DictionaryApi defines APIs for dictionary management.
 ///
@@ -169,8 +169,8 @@ where
                 txn_cond_seq(&new_name_ident, Eq, 0),
             ];
             let if_then = vec![
-                txn_op_del(&req.name_ident),                          // del old dict name
-                txn_op_put_pb(&new_name_ident, &dict_id.data, None)?, // put new dict name
+                txn_del(&req.name_ident), // del old dict name
+                txn_put_pb_with_ttl(&new_name_ident, &dict_id.data, None)?, // put new dict name
             ];
 
             let txn_req = TxnRequest::new(condition, if_then);

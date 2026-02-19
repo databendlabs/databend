@@ -26,15 +26,12 @@ use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_kvapi::kvapi;
 use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::Key;
 use databend_meta_kvapi::kvapi::KvApiExt;
 use databend_meta_kvapi::kvapi::ListKVReply;
 use databend_meta_kvapi::kvapi::ListOptions;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaError;
-use databend_meta_types::Operation;
 use databend_meta_types::SeqV;
-use databend_meta_types::UpsertKV;
 use databend_meta_types::With;
 use fastrace::func_name;
 use futures::TryStreamExt;
@@ -174,17 +171,8 @@ impl UserApi for UserMgr {
         user: &UserIdentity,
     ) -> Result<Result<(), UnknownError<UserIdentResource, UserIdentity>>, MetaError> {
         let ident = self.user_ident(user);
-        let key = ident.to_string_key();
-
-        let res = self
-            .kv_api
-            .upsert_kv(UpsertKV::new(
-                &key,
-                MatchSeq::GE(1),
-                Operation::Delete,
-                None,
-            ))
-            .await?;
+        let req = UpsertPB::delete(ident.clone());
+        let res = self.kv_api.upsert_pb(&req).await?;
 
         match res.prev {
             Some(_) => Ok(Ok(())),

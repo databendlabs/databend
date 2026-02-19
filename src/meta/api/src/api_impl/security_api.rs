@@ -41,12 +41,11 @@ use super::errors::TableError;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_del;
-use crate::txn_op_put;
+use crate::txn_del;
+use crate::txn_put_pb;
 
 /// SecurityApi defines APIs for table security policy management.
 ///
@@ -134,7 +133,7 @@ where
                     txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 vec![
-                    txn_op_put(&tbid, serialize_struct(&new_table_meta)?), // tb_id -> tb_meta
+                    txn_put_pb(&tbid, &new_table_meta)?, // tb_id -> tb_meta
                 ],
             );
 
@@ -213,8 +212,8 @@ where
                     // Compatibility, can be deleted in the future
                     new_table_meta.row_access_policy = None;
                     txn_req.if_then = vec![
-                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy Some */
-                        txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
+                        txn_put_pb(&tbid, &new_table_meta)?, /* tb_id -> tb_meta row access policy Some */
+                        txn_put_pb(&ident, &RowAccessPolicyTableId {})?, // add policy_tb_id
                     ];
                 }
                 SetSecurityPolicyAction::Unset(old_policy) => {
@@ -248,8 +247,8 @@ where
                     }
 
                     txn_req.if_then = vec![
-                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy None */
-                        txn_op_del(&ident), // table drop row access policy, del policy_tb_id
+                        txn_put_pb(&tbid, &new_table_meta)?, /* tb_id -> tb_meta row access policy None */
+                        txn_del(&ident), // table drop row access policy, del policy_tb_id
                     ];
                 }
             }
@@ -284,7 +283,7 @@ async fn update_mask_policy(
             let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), id);
             txn_req
                 .if_then
-                .push(txn_op_put(&ident, serialize_struct(&MaskPolicyTableId)?));
+                .push(txn_put_pb(&ident, &MaskPolicyTableId)?);
         }
         SetSecurityPolicyAction::Unset(policy_id) => {
             let id = MaskPolicyIdTableId {
@@ -292,7 +291,7 @@ async fn update_mask_policy(
                 table_id,
             };
             let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), id);
-            txn_req.if_then.push(txn_op_del(&ident));
+            txn_req.if_then.push(txn_del(&ident));
         }
     }
 

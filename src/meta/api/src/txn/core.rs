@@ -22,8 +22,8 @@ use display_more::DisplaySliceExt;
 use log::debug;
 
 use super::condition::txn_cond_eq_seq;
-use super::op_builder::txn_op_del;
-use super::op_builder::txn_op_put_pb;
+use super::op_builder::txn_del;
+use super::op_builder::txn_put_pb_with_ttl;
 use super::reply::unpack_txn_reply;
 
 /// Send a transaction to the KV API and return success status and responses.
@@ -43,7 +43,7 @@ pub async fn send_txn(
 /// Add a delete operation by key and exact seq to [`TxnRequest`].
 pub fn txn_delete_exact(txn: &mut TxnRequest, key: &impl kvapi::Key, seq: u64) {
     txn.condition.push(txn_cond_eq_seq(key, seq));
-    txn.if_then.push(txn_op_del(key));
+    txn.if_then.push(txn_del(key));
 }
 
 /// Add a replace operation by key and exact seq to [`TxnRequest`].
@@ -58,7 +58,7 @@ where
     K::ValueType: FromToProto + 'static,
 {
     txn.condition.push(txn_cond_eq_seq(key, seq));
-    txn.if_then.push(txn_op_put_pb(key, value, None)?);
+    txn.if_then.push(txn_put_pb_with_ttl(key, value, None)?);
 
     Ok(())
 }

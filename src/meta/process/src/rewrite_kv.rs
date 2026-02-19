@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_api::kv_pb_api::decode_pb;
+use databend_common_meta_api::kv_pb_api::encode_pb;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_proto_conv::FromToProto;
-use databend_common_protos::pb;
 use databend_meta_kvapi::kvapi::Key;
-use prost::Message;
 
 /// Convert old version TableMeta protobuf message to new version.
 ///
@@ -28,13 +27,8 @@ pub fn upgrade_table_meta(key: &str, v: Vec<u8>) -> Result<Vec<u8>, anyhow::Erro
         return Ok(v);
     }
 
-    let p: pb::TableMeta = Message::decode(v.as_slice())?;
-    let v1: TableMeta = FromToProto::from_pb(p)?;
-
-    let p_latest = FromToProto::to_pb(&v1)?;
-
-    let mut buf = vec![];
-    Message::encode(&p_latest, &mut buf)?;
+    let v1: TableMeta = decode_pb(v.as_slice())?;
+    let buf = encode_pb(&v1)?;
     Ok(buf)
 }
 
@@ -45,9 +39,8 @@ pub fn print_table_meta(key: &str, v: Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
         return Ok(v);
     }
 
-    let p: pb::TableMeta = Message::decode(v.as_slice())?;
-
-    println!("{:?}", p);
+    let val: TableMeta = decode_pb(v.as_slice())?;
+    println!("{:?}", val);
 
     Ok(v)
 }

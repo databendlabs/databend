@@ -3999,6 +3999,7 @@ dependencies = [
  "tokio",
  "tonic 0.13.1",
  "uuid",
+ "zstd 0.12.4",
 ]
 
 [[package]]
@@ -4082,9 +4083,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-proto-conv",
- "databend-common-protos",
  "databend-common-tracing",
  "databend-meta-kvapi",
  "databend-meta-raft-store",

@@ -33,7 +33,7 @@ use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_builder_util::txn_op_put_pb;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// [`KVPbCrudApi`] provide generic meta-service access pattern implementations for `name -> value` mapping.
 ///
@@ -141,7 +141,8 @@ where
             };
 
             txn.condition.push(txn_cond_eq_seq(name_ident, seq));
-            txn.if_then.push(txn_op_put_pb(name_ident, &updated, ttl)?);
+            txn.if_then
+                .push(txn_put_pb_with_ttl(name_ident, &updated, ttl)?);
 
             let (succ, _responses) = send_txn(self, txn).await?;
 
