@@ -163,7 +163,7 @@ impl AuthMgr {
                             ));
                         }
                         if let Some(ensure_user) = jwt.custom.ensure_user {
-                            let current_roles = user_info.grants.roles();
+                            let current_roles = user_info.grants.roles_vec();
                             // ensure jwt roles to user if not exists
                             if let Some(ref roles) = ensure_user.roles {
                                 for role in roles.iter() {
@@ -184,9 +184,8 @@ impl AuthMgr {
                                 }
                             }
                             if let Some(ref jwt_default_role) = ensure_user.default_role {
-                                let current_roles = user_info.grants.roles();
                                 // grant default role to user if not exists
-                                if !current_roles.contains(jwt_default_role) {
+                                if !user_info.grants.roles().contains(jwt_default_role) {
                                     info!(
                                         "JWT grant default role to user: {} -> {}",
                                         user_info.name, jwt_default_role

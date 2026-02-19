@@ -341,11 +341,11 @@ impl FromToProto for mt::principal::UserGrantSet {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let mut entries = Vec::new();
-        for entry in p.entries.iter() {
+        for entry in p.entries.into_iter() {
             // If we add new GrantObject in new version
             // Rollback to old version, GrantEntry.object will be None
             // GrantEntry::from_pb will return err so user can not login in old version.
-            match mt::principal::GrantEntry::from_pb(entry.clone()) {
+            match mt::principal::GrantEntry::from_pb(entry) {
                 Ok(entry) => entries.push(entry),
                 Err(e) => log::error!("GrantEntry::from_pb with error : {e}"),
             }

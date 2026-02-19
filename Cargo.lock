@@ -3948,12 +3948,12 @@ dependencies = [
  "databend-common-functions",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-meta-cache",
  "databend-common-meta-store",
  "databend-common-proto-conv",
  "databend-common-version",
  "databend-meta-client",
  "databend-meta-kvapi",
+ "databend-meta-plugin-cache",
  "databend-meta-runtime",
  "databend-meta-types",
  "enumflags2",
@@ -4041,26 +4041,6 @@ dependencies = [
  "opendal",
  "serde",
  "tokio",
-]
-
-[[package]]
-name = "databend-common-meta-cache"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "databend-meta-client",
- "databend-meta-runtime",
- "databend-meta-runtime-api",
- "databend-meta-test-harness",
- "databend-meta-types",
- "fastrace",
- "futures",
- "log",
- "sub-cache",
- "test-harness",
- "tokio",
- "tonic 0.13.1",
 ]
 
 [[package]]
@@ -4155,42 +4135,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-meta-semaphore"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "codeq",
- "databend-meta-client",
- "databend-meta-runtime",
- "databend-meta-runtime-api",
- "databend-meta-test-harness",
- "databend-meta-types",
- "display-more 0.2.2",
- "fastrace",
- "futures",
- "itertools 0.13.0",
- "log",
- "pretty_assertions",
- "seq-marked",
- "test-harness",
- "thiserror 1.0.69",
- "tokio",
- "tonic 0.13.1",
-]
-
-[[package]]
 name = "databend-common-meta-store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "databend-base",
- "databend-common-meta-semaphore",
  "databend-common-tracing",
  "databend-meta",
  "databend-meta-client",
  "databend-meta-kvapi",
  "databend-meta-kvapi-test-suite",
+ "databend-meta-plugin-semaphore",
  "databend-meta-runtime",
  "databend-meta-runtime-api",
  "databend-meta-types",
@@ -4990,12 +4946,12 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-meta-cache",
  "databend-common-meta-store",
  "databend-common-metrics",
  "databend-common-version",
  "databend-meta-client",
  "databend-meta-kvapi",
+ "databend-meta-plugin-cache",
  "databend-meta-runtime",
  "databend-meta-types",
  "divan",
@@ -5413,7 +5369,6 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-control",
- "databend-common-meta-semaphore",
  "databend-common-meta-store",
  "databend-common-storage",
  "databend-common-tracing",
@@ -5423,6 +5378,7 @@ dependencies = [
  "databend-meta-cli-config",
  "databend-meta-client",
  "databend-meta-kvapi",
+ "databend-meta-plugin-semaphore",
  "databend-meta-raft-store",
  "databend-meta-runtime",
  "databend-meta-runtime-api",
@@ -5522,6 +5478,50 @@ dependencies = [
  "log",
  "state-machine-api",
  "tokio",
+]
+
+[[package]]
+name = "databend-meta-plugin-cache"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "databend-meta-client",
+ "databend-meta-runtime",
+ "databend-meta-runtime-api",
+ "databend-meta-test-harness",
+ "databend-meta-types",
+ "fastrace",
+ "futures",
+ "log",
+ "sub-cache",
+ "test-harness",
+ "tokio",
+ "tonic 0.13.1",
+]
+
+[[package]]
+name = "databend-meta-plugin-semaphore"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "codeq",
+ "databend-meta-client",
+ "databend-meta-runtime",
+ "databend-meta-runtime-api",
+ "databend-meta-test-harness",
+ "databend-meta-types",
+ "display-more 0.2.2",
+ "fastrace",
+ "futures",
+ "itertools 0.13.0",
+ "log",
+ "pretty_assertions",
+ "seq-marked",
+ "test-harness",
+ "thiserror 1.0.69",
+ "tokio",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -5729,7 +5729,6 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-meta-semaphore",
  "databend-common-meta-store",
  "databend-common-metrics",
  "databend-common-pipeline",
@@ -5766,6 +5765,7 @@ dependencies = [
  "databend-enterprise-virtual-column",
  "databend-meta-client",
  "databend-meta-kvapi",
+ "databend-meta-plugin-semaphore",
  "databend-meta-runtime",
  "databend-meta-types",
  "databend-storages-common-blocks",

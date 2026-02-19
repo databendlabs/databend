@@ -1,6 +1,13 @@
 [package]
-name = "databend-common-meta-semaphore"
-description = "A semaphore impl based on distributed meta-service"
+name = "databend-meta-plugin-cache"
+description = """
+A distributed cache implementation that:
+- Maintains a local view of data stored in the meta-service
+- Automatically synchronizes with the meta-service via watch API
+- Provides safe concurrent access with two-level locking
+- Handles connection failures with automatic recovery
+- Ensures data consistency through sequence number tracking
+"""
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -11,26 +18,22 @@ edition = { workspace = true }
 doctest = false
 
 [dependencies]
-codeq = { workspace = true }
+async-trait = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-runtime-api = { workspace = true }
 databend-meta-types = { workspace = true }
-display-more = { workspace = true }
 futures = { workspace = true }
-itertools = { workspace = true }
 log = { workspace = true }
-seq-marked = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
+sub-cache = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-meta-test-harness = { workspace = true }
 fastrace = { workspace = true }
-pretty_assertions = { workspace = true }
 test-harness = { workspace = true }
+tokio = { workspace = true }
 
 [[test]]
 name = "it"

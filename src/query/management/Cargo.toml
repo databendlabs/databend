@@ -19,11 +19,11 @@ databend-common-exception = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-cache = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-kvapi = { workspace = true }
+databend-meta-plugin-cache = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-types = { workspace = true }
 enumflags2 = { workspace = true }

@@ -24,9 +24,9 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
-use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
+use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_runtime::DatabendRuntime;
 use futures_util::StreamExt;
 
