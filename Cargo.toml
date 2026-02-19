@@ -88,12 +88,10 @@ databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
 databend-common-meta-app-storage = { path = "src/meta/app-storage" }
-databend-meta-plugin-cache = { path = "src/meta/plugins/cache" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-schema-api-test-suite = { path = "src/meta/schema-api-test-suite" }
 databend-common-meta-schema-api-tests = { path = "src/meta/schema-api-tests" }
-databend-meta-plugin-semaphore = { path = "src/meta/plugins/semaphore" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
@@ -151,6 +149,8 @@ databend-meta-cli-config = { path = "src/meta/cli-config" }
 databend-meta-client = "260205.3.0"
 databend-meta-kvapi = "260205.3.0"
 databend-meta-kvapi-test-suite = "260205.3.0"
+databend-meta-plugin-cache = { path = "src/meta/plugins/cache" }
+databend-meta-plugin-semaphore = { path = "src/meta/plugins/semaphore" }
 databend-meta-raft-store = "260205.3.0"
 databend-meta-runtime = { path = "src/meta/runtime" }
 databend-meta-runtime-api = "260205.3.0"

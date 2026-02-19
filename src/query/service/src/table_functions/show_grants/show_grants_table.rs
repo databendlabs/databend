@@ -286,7 +286,7 @@ async fn show_role_grantees(ctx: Arc<dyn TableContext>, name: &str) -> Result<Op
 
     let mut collected_grantees: Vec<(String, String)> = Vec::new();
 
-    let f = |roles: Vec<String>,
+    let f = |roles: &HashSet<String>,
              type_str: String,
              grantee_name: String,
              name: &String|
@@ -361,7 +361,7 @@ async fn show_account_grants(
                 .get_user(&tenant, UserIdentity::new(name, "%"))
                 .await?;
             if current_user.identity().username != name && !has_grant_priv {
-                let mut roles = current_user.grants.roles();
+                let mut roles: Vec<String> = current_user.grants.roles().iter().cloned().collect();
                 roles.sort();
 
                 return Err(ErrorCode::PermissionDenied(format!(
@@ -385,7 +385,7 @@ async fn show_account_grants(
                 .map(|role| role.name.to_string())
                 .collect();
             if !effective_roles_names.contains(&name.to_string()) && !has_grant_priv {
-                let mut roles = current_user.grants.roles();
+                let mut roles: Vec<String> = current_user.grants.roles().iter().cloned().collect();
                 roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
@@ -395,8 +395,9 @@ async fn show_account_grants(
             }
 
             let role_info = user_api.get_role(&tenant, name.to_string()).await?;
+            let role_info_roles: Vec<String> = role_info.grants.roles().iter().cloned().collect();
             let related_roles = RoleCacheManager::instance()
-                .find_related_roles(&tenant, &role_info.grants.roles())
+                .find_related_roles(&tenant, &role_info_roles)
                 .await?;
             let mut roles: Vec<String> = related_roles
                 .iter()
@@ -420,8 +421,9 @@ async fn show_account_grants(
     };
 
     // TODO: display roles list instead of the inherited roles
+    let grant_set_roles: Vec<String> = grant_set.roles().iter().cloned().collect();
     let related_roles = RoleCacheManager::instance()
-        .find_related_roles(&tenant, &grant_set.roles())
+        .find_related_roles(&tenant, &grant_set_roles)
         .await?;
 
     let roles: Vec<String> = if let Some(roles) = roles_list {
@@ -434,12 +436,13 @@ async fn show_account_grants(
             .collect()
     };
 
+    let folded;
     let grant_entries = if expand_roles {
-        related_roles
+        folded = related_roles
             .into_iter()
             .map(|role| role.grants)
-            .fold(grant_set, |a, b| a | b)
-            .entries()
+            .fold(grant_set, |a, b| a | b);
+        folded.entries()
     } else {
         grant_set.entries()
     };
@@ -478,12 +481,12 @@ async fn show_account_grants(
 
     for grant_entry in grant_entries {
         let object = grant_entry.object();
-        let privilege = get_priv_str(&grant_entry);
+        let privilege = get_priv_str(grant_entry);
         // Ownership will list ownerships kv
         if privilege.to_lowercase() != "ownership" {
             match object {
                 GrantObject::TableById(catalog_name, db_id, table_id) => {
-                    let privileges_str = get_priv_str(&grant_entry);
+                    let privileges_str = get_priv_str(grant_entry);
                     if let Some(tables_id_priv) = catalog_table_ids.get_mut(catalog_name) {
                         tables_id_priv.push((*db_id, *table_id, privileges_str));
                     } else {
@@ -495,7 +498,7 @@ async fn show_account_grants(
                     }
                 }
                 GrantObject::DatabaseById(catalog_name, db_id) => {
-                    let privileges_str = get_priv_str(&grant_entry);
+                    let privileges_str = get_priv_str(grant_entry);
                     if let Some(dbs_id_priv) = catalog_db_ids.get_mut(catalog_name) {
                         dbs_id_priv.push((*db_id, privileges_str));
                     } else {
@@ -505,25 +508,25 @@ async fn show_account_grants(
                 GrantObject::Database(catalog_name, database_name) => {
                     object_name.push(format!("{}.{}.*", catalog_name, database_name));
                     object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
+                    privileges.push(get_priv_str(grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
                 GrantObject::Table(catalog_name, database_name, table_name) => {
                     object_name.push(format!("{}.{}.{}", catalog_name, database_name, table_name));
                     object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
+                    privileges.push(get_priv_str(grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
                 GrantObject::Stage(stage_name) => {
                     object_name.push(stage_name.to_string());
                     object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
+                    privileges.push(get_priv_str(grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
                 GrantObject::UDF(udf_name) => {
                     object_name.push(udf_name.to_string());
                     object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
+                    privileges.push(get_priv_str(grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
                 GrantObject::Warehouse(id) => {
@@ -540,20 +543,20 @@ async fn show_account_grants(
                     {
                         object_name.push(sw.id.to_string());
                         object_id.push(Some(id.to_string()));
-                        privileges.push(get_priv_str(&grant_entry));
+                        privileges.push(get_priv_str(grant_entry));
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
                 GrantObject::Connection(connection) => {
                     object_name.push(connection.to_string());
                     object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
+                    privileges.push(get_priv_str(grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
                 GrantObject::Sequence(seq) => {
                     object_name.push(seq.to_string());
                     object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
+                    privileges.push(get_priv_str(grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
                 GrantObject::Procedure(procedure_id) => {
@@ -564,7 +567,7 @@ async fn show_account_grants(
                     {
                         object_name.push(p);
                         object_id.push(Some(procedure_id.to_string()));
-                        privileges.push(get_priv_str(&grant_entry));
+                        privileges.push(get_priv_str(grant_entry));
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
@@ -577,7 +580,7 @@ async fn show_account_grants(
                     {
                         object_name.push(policy_name);
                         object_id.push(Some(policy_id.to_string()));
-                        privileges.push(get_priv_str(&grant_entry));
+                        privileges.push(get_priv_str(grant_entry));
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
@@ -590,7 +593,7 @@ async fn show_account_grants(
                     {
                         object_name.push(policy_name);
                         object_id.push(Some(policy_id.to_string()));
-                        privileges.push(get_priv_str(&grant_entry));
+                        privileges.push(get_priv_str(grant_entry));
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
@@ -598,7 +601,7 @@ async fn show_account_grants(
                     // grant all on *.* to a
                     object_name.push("*.*".to_string());
                     object_id.push(None);
-                    privileges.push(get_priv_str(&grant_entry));
+                    privileges.push(get_priv_str(grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
             }

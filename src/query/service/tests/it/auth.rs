@@ -361,7 +361,8 @@ async fn test_auth_mgr_with_jwt() -> anyhow::Result<()> {
             )
             .await?;
         let user_info = session.get_current_user()?;
-        assert_eq!(user_info.grants.roles(), &["role1"]);
+        assert!(user_info.grants.roles().contains("role1"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and grant roles
@@ -389,7 +390,8 @@ async fn test_auth_mgr_with_jwt() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        assert_eq!(user_info.grants.roles(), &["test-role"]);
+        assert!(user_info.grants.roles().contains("test-role"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and auth role
@@ -600,7 +602,8 @@ async fn test_auth_mgr_with_jwt_es256() -> anyhow::Result<()> {
             )
             .await?;
         let user_info = session.get_current_user()?;
-        assert_eq!(user_info.grants.roles(), &["role1"]);
+        assert!(user_info.grants.roles().contains("role1"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and grant roles
@@ -627,7 +630,8 @@ async fn test_auth_mgr_with_jwt_es256() -> anyhow::Result<()> {
             .await?;
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        assert_eq!(user_info.grants.roles(), &["test-role"]);
+        assert!(user_info.grants.roles().contains("test-role"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and auth role
@@ -800,7 +804,8 @@ async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        assert_eq!(user_info.grants.roles(), &["existing-role"]);
+        assert!(user_info.grants.roles().contains("existing-role"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // Now test ensure roles - add new roles to existing user
@@ -830,7 +835,7 @@ async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles = user_info.grants.roles().to_vec();
+        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
         assert!(roles.contains(&"existing-role".to_string()));
         assert!(roles.contains(&"new-role-1".to_string()));
         assert!(roles.contains(&"new-role-2".to_string()));
@@ -893,7 +898,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles = user_info.grants.roles().to_vec();
+        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
         assert!(roles.contains(&"role1".to_string()));
         assert!(roles.contains(&"role2".to_string()));
         assert!(user_info.option.default_role().is_none());
@@ -1000,7 +1005,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles = user_info.grants.roles().to_vec();
+        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
         assert!(roles.contains(&"role1".to_string()));
         assert!(roles.contains(&"role2".to_string()));
         assert!(roles.contains(&"role3".to_string()));

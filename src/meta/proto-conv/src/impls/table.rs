@@ -493,7 +493,7 @@ impl FromToProto for mt::SnapshotRef {
             min_reader_ver: MIN_READER_VER,
             id: self.id,
             expire_at: self.expire_at.to_pb_opt()?,
-            typ: self.typ.clone() as i32,
+            typ: self.typ as i32,
             loc: self.loc.clone(),
         };
         Ok(p)
