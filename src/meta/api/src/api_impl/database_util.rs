@@ -46,7 +46,7 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_app_error::KVAppResultExt;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_condition_util::txn_cond_seq;
-use crate::txn_op_del;
+use crate::txn_del;
 use crate::txn_put_pb;
 
 pub(crate) async fn drop_database_meta(
@@ -74,7 +74,7 @@ pub(crate) async fn drop_database_meta(
     if drop_name_key {
         txn.condition
             .push(txn_cond_seq(tenant_dbname, Eq, seq_db_id.seq));
-        txn.if_then.push(txn_op_del(tenant_dbname)); // (tenant, db_name) -> db_id
+        txn.if_then.push(txn_del(tenant_dbname)); // (tenant, db_name) -> db_id
     }
 
     // Delete db by these operations:
@@ -133,7 +133,7 @@ pub(crate) async fn drop_database_meta(
         };
         let ownership_key =
             TenantOwnershipObjectIdent::new(tenant_dbname.tenant(), ownership_object);
-        txn.if_then.push(txn_op_del(&ownership_key));
+        txn.if_then.push(txn_del(&ownership_key));
     }
 
     // Clean up tag references (UNDROP won't restore them; small race window is acceptable,
@@ -159,8 +159,8 @@ pub(crate) async fn drop_database_meta(
             tenant_dbname.tenant().clone(),
             TagIdObjectRef::new(tag_id, taggable_object.clone()),
         );
-        txn.if_then.push(txn_op_del(&obj_ref_key));
-        txn.if_then.push(txn_op_del(&tag_ref_key));
+        txn.if_then.push(txn_del(&obj_ref_key));
+        txn.if_then.push(txn_del(&tag_ref_key));
     }
 
     Ok(db_id)

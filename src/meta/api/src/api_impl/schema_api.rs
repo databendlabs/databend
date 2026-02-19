@@ -98,8 +98,8 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_builder_util::txn_op_put_pb;
-use crate::txn_op_del;
+use crate::txn_del;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
 use crate::txn_put_u64;
 
@@ -258,7 +258,7 @@ pub async fn construct_drop_table_txn_operations(
         .collect();
 
     txn.if_then.extend(policy_ids.into_iter().map(|policy_id| {
-        txn_op_del(&MaskPolicyTableIdIdent::new_generic(
+        txn_del(&MaskPolicyTableIdIdent::new_generic(
             tenant.clone(),
             MaskPolicyIdTableId {
                 policy_id,
@@ -270,7 +270,7 @@ pub async fn construct_drop_table_txn_operations(
     // Delete row access policy reference
     if let Some(policy_map) = &tb_meta.row_access_policy_columns_ids {
         txn.if_then
-            .push(txn_op_del(&RowAccessPolicyTableIdIdent::new_generic(
+            .push(txn_del(&RowAccessPolicyTableIdIdent::new_generic(
                 tenant.clone(),
                 RowAccessPolicyIdTableId {
                     policy_id: policy_map.policy_id,
@@ -299,7 +299,7 @@ pub async fn construct_drop_table_txn_operations(
         txn.condition
             .push(txn_cond_seq(&dbid_tbname, Eq, tb_id_seq));
         // (db_id, tb_name) -> tb_id
-        txn.if_then.push(txn_op_del(&dbid_tbname));
+        txn.if_then.push(txn_del(&dbid_tbname));
     }
 
     // add TableIdListKey if not exist
@@ -335,7 +335,7 @@ pub async fn construct_drop_table_txn_operations(
             table_id,
         };
         let ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), ownership_object);
-        txn.if_then.push(txn_op_del(&ownership_key));
+        txn.if_then.push(txn_del(&ownership_key));
     }
 
     // Clean up tag references (UNDROP won't restore them; small race window is acceptable,
@@ -360,8 +360,8 @@ pub async fn construct_drop_table_txn_operations(
             tenant.clone(),
             TagIdObjectRef::new(tag_id, taggable_object.clone()),
         );
-        txn.if_then.push(txn_op_del(&obj_ref_key));
-        txn.if_then.push(txn_op_del(&tag_ref_key));
+        txn.if_then.push(txn_del(&obj_ref_key));
+        txn.if_then.push(txn_del(&tag_ref_key));
     }
 
     Ok((tb_id_seq, table_id))
@@ -608,9 +608,9 @@ pub async fn handle_undrop_table(
                     vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        txn_op_put_pb(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
+                        txn_put_pb_with_ttl(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
                         txn_put_u64(&dbid_tbname, table_id)?, // (tenant, db_id, tb_name) -> tb_id
-                        txn_op_put_pb(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
+                        txn_put_pb_with_ttl(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     policy_restore_ops,
                 ]
@@ -680,7 +680,7 @@ async fn restore_policy_references_on_undrop(
                     // Critical: if policy is dropped before txn execution, this prevents
                     // creating a dangling reference to a non-existent policy.
                     conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
-                    ops.push(txn_op_put_pb(&ref_key, &MaskPolicyTableId, None)?);
+                    ops.push(txn_put_pb_with_ttl(&ref_key, &MaskPolicyTableId, None)?);
                 }
             }
         }
@@ -728,7 +728,11 @@ async fn restore_policy_references_on_undrop(
                 // Critical: if policy is dropped before txn execution, this prevents
                 // creating a dangling reference to a non-existent policy.
                 conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
-                ops.push(txn_op_put_pb(&ref_key, &RowAccessPolicyTableId, None)?);
+                ops.push(txn_put_pb_with_ttl(
+                    &ref_key,
+                    &RowAccessPolicyTableId,
+                    None,
+                )?);
             }
         }
     }

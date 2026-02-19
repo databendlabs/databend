@@ -30,7 +30,7 @@ use chrono::Utc;
 use clap::Parser;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::TableApi;
-use databend_common_meta_api::txn_op_put_pb;
+use databend_common_meta_api::txn_put_pb_with_ttl;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -345,7 +345,7 @@ async fn benchmark_table_copy_file(
             last_modified: Some(Utc::now()),
         };
 
-        let put_op = txn_op_put_pb(
+        let put_op = txn_put_pb_with_ttl(
             &copied_file_ident,
             &copied_file_value,
             param.ttl_ms.map(Duration::from_millis),

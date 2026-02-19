@@ -80,10 +80,10 @@ use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
 use crate::txn_core_util::txn_replace_exact;
-use crate::txn_op_builder_util::txn_op_put_pb;
+use crate::txn_del;
+use crate::txn_get;
 use crate::txn_op_builder_util::txn_put_pb;
-use crate::txn_op_del;
-use crate::txn_op_get;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// GarbageCollectionApi defines APIs for garbage collection operations.
 ///
@@ -224,7 +224,7 @@ async fn remove_copied_files_for_dropped_table(
             // It is a dropped table, thus there is no data will be written to the table.
             // Therefore, we only need to assert the table_meta seq, and there is no need to assert
             // seq of each copied file.
-            txn.if_then.push(txn_op_del(copied_ident));
+            txn.if_then.push(txn_del(copied_ident));
         }
 
         info!(
@@ -439,7 +439,7 @@ async fn gc_dropped_db_by_id(
         new_db_meta.gc_in_progress = true;
         let mut txn = TxnRequest::default();
         txn_replace_exact(&mut txn, &dbid, new_db_meta.seq, &new_db_meta.data)?;
-        txn.if_then.push(txn_op_get(&dbid));
+        txn.if_then.push(txn_get(&dbid));
         let (success, mut responses) = send_txn(kv_api, txn).await?;
         if !success {
             return Err(KVAppError::AppError(AppError::from(
@@ -485,7 +485,7 @@ async fn gc_dropped_db_by_id(
             let targets: Vec<DBIdTableName> = targets.into_iter().try_collect()?;
             num_db_id_table_name_keys_removed += targets.len();
             for target in &targets {
-                txn.if_then.push(txn_op_del(target));
+                txn.if_then.push(txn_del(target));
             }
             let (succ, _resp) = send_txn(kv_api, txn).await?;
             if !succ {
@@ -548,13 +548,13 @@ async fn gc_dropped_db_by_id(
 
         txn.condition
             .push(txn_cond_eq_seq(&ident, table_history.seq));
-        txn.if_then.push(txn_op_del(&ident));
+        txn.if_then.push(txn_del(&ident));
     }
 
     txn.condition
         .push(txn_cond_eq_seq(&db_id_history_ident, seq_dbid_list.seq));
     if db_id_list.id_list.is_empty() {
-        txn.if_then.push(txn_op_del(&db_id_history_ident));
+        txn.if_then.push(txn_del(&db_id_history_ident));
     } else {
         // save new db id list
         txn.if_then
@@ -565,10 +565,10 @@ async fn gc_dropped_db_by_id(
     // This establishes a condition for the transaction that will prevent it from committing
     // if the database metadata was modified by another concurrent operation (like un-dropping).
     txn.condition.push(txn_cond_eq_seq(&dbid, db_meta_seq));
-    txn.if_then.push(txn_op_del(&dbid));
+    txn.if_then.push(txn_del(&dbid));
     txn.condition
         .push(txn_cond_eq_seq(&id_to_name, seq_name.seq));
-    txn.if_then.push(txn_op_del(&id_to_name));
+    txn.if_then.push(txn_del(&id_to_name));
 
     // Clean up tag references for the dropped database (handles orphan data from
     // databases dropped before tag cleanup was added to drop_database_meta)
@@ -592,8 +592,8 @@ async fn gc_dropped_db_by_id(
                 tenant.clone(),
                 TagIdObjectRef::new(tag_id, taggable_object.clone()),
             );
-            txn.if_then.push(txn_op_del(&obj_ref_key));
-            txn.if_then.push(txn_op_del(&tag_ref_key));
+            txn.if_then.push(txn_del(&obj_ref_key));
+            txn.if_then.push(txn_del(&tag_ref_key));
         }
     }
 
@@ -717,11 +717,11 @@ async fn update_txn_to_remove_table_history(
     );
 
     if history.id_list.is_empty() {
-        txn.if_then.push(txn_op_del(table_id_history_ident));
+        txn.if_then.push(txn_del(table_id_history_ident));
     } else {
         // save new table id list
         txn.if_then
-            .push(txn_op_put_pb(table_id_history_ident, &history, None)?);
+            .push(txn_put_pb_with_ttl(table_id_history_ident, &history, None)?);
     }
 
     Ok(())
@@ -779,7 +779,7 @@ async fn remove_data_for_dropped_table(
             .await?;
 
         while let Some(auto_increment_ident) = auto_increments.try_next().await? {
-            txn.if_then.push(txn_op_del(&auto_increment_ident));
+            txn.if_then.push(txn_del(&auto_increment_ident));
         }
     }
     // Remove table ownership
@@ -832,8 +832,8 @@ async fn remove_data_for_dropped_table(
                 tenant.clone(),
                 TagIdObjectRef::new(tag_id, taggable_object.clone()),
             );
-            txn.if_then.push(txn_op_del(&obj_ref_key));
-            txn.if_then.push(txn_op_del(&tag_ref_key));
+            txn.if_then.push(txn_del(&obj_ref_key));
+            txn.if_then.push(txn_del(&tag_ref_key));
         }
     }
 
@@ -851,7 +851,7 @@ async fn remove_data_for_dropped_table(
             .collect();
 
         txn.if_then.extend(policy_ids.into_iter().map(|policy_id| {
-            txn_op_del(&MaskPolicyTableIdIdent::new_generic(
+            txn_del(&MaskPolicyTableIdIdent::new_generic(
                 tenant.clone(),
                 MaskPolicyIdTableId {
                     policy_id,
@@ -864,7 +864,7 @@ async fn remove_data_for_dropped_table(
     // Delete row access policy reference
     if let Some(policy_map) = &tb_meta.row_access_policy_columns_ids {
         txn.if_then
-            .push(txn_op_del(&RowAccessPolicyTableIdIdent::new_generic(
+            .push(txn_del(&RowAccessPolicyTableIdIdent::new_generic(
                 tenant.clone(),
                 RowAccessPolicyIdTableId {
                     policy_id: policy_map.policy_id,
@@ -894,9 +894,9 @@ async fn remove_index_for_dropped_table(
         let id_ident = IndexIdIdent::new_generic(tenant, index_id);
         let id_to_name_ident = IndexIdToNameIdent::new_generic(tenant, index_id);
 
-        txn.if_then.push(txn_op_del(&name_ident)); // (tenant, index_name) -> index_id
-        txn.if_then.push(txn_op_del(&id_ident)); // (index_id) -> index_meta
-        txn.if_then.push(txn_op_del(&id_to_name_ident)); // __fd_index_id_to_name/<index_id> -> (tenant,index_name)
+        txn.if_then.push(txn_del(&name_ident)); // (tenant, index_name) -> index_id
+        txn.if_then.push(txn_del(&id_ident)); // (index_id) -> index_meta
+        txn.if_then.push(txn_del(&id_to_name_ident)); // __fd_index_id_to_name/<index_id> -> (tenant,index_name)
     }
 
     Ok(())

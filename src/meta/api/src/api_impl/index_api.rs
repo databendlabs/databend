@@ -69,8 +69,8 @@ use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
-use crate::txn_op_builder_util::txn_op_put_pb;
-use crate::txn_op_del;
+use crate::txn_del;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
 
 /// IndexApi defines APIs for index management and metadata.
@@ -357,7 +357,7 @@ where
                 //
                 vec![txn_cond_eq_seq(&tbid, tb_meta_seq)],
                 vec![
-                    txn_op_put_pb(&tbid, &table_meta, None)?, // tb_id -> tb_meta
+                    txn_put_pb_with_ttl(&tbid, &table_meta, None)?, // tb_id -> tb_meta
                 ],
             );
 
@@ -514,7 +514,7 @@ where
 
             for index_id in index_ids {
                 txn.if_then
-                    .push(txn_op_del(&MarkedDeletedIndexIdIdent::new_generic(
+                    .push(txn_del(&MarkedDeletedIndexIdIdent::new_generic(
                         tenant,
                         MarkedDeletedIndexId::new(table_id, *index_id),
                     )));
@@ -544,7 +544,7 @@ where
 
             for (index_name, index_version) in indexes {
                 txn.if_then
-                    .push(txn_op_del(&MarkedDeletedTableIndexIdIdent::new_generic(
+                    .push(txn_del(&MarkedDeletedTableIndexIdIdent::new_generic(
                         tenant,
                         MarkedDeletedTableIndexId::new(
                             table_id,

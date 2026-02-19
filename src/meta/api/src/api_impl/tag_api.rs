@@ -72,8 +72,8 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_builder_util::txn_op_del;
-use crate::txn_op_builder_util::txn_op_put_pb;
+use crate::txn_op_builder_util::txn_del;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// Returns the meta-service key for a taggable object.
 ///
@@ -124,9 +124,9 @@ where
         let mut txn = TxnRequest::default();
         txn.condition.push(txn_cond_eq_seq(&name_ident, 0));
         txn.if_then.extend(vec![
-            txn_op_put_pb(&name_ident, &tag_id, None)?, // name -> id
-            txn_op_put_pb(&id_ident, &meta, None)?,     // id -> meta
-            txn_op_put_pb(&id_to_name_ident, &name_raw, None)?, // id -> name
+            txn_put_pb_with_ttl(&name_ident, &tag_id, None)?, // name -> id
+            txn_put_pb_with_ttl(&id_ident, &meta, None)?,     // id -> meta
+            txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None)?, // id -> name
         ]);
 
         let (succ, _) = send_txn(self, txn).await?;
@@ -178,9 +178,9 @@ where
             // Ensure no references exist before deletion
             txn.condition
                 .push(txn_cond_eq_keys_with_prefix(&refs_dir, 0));
-            txn.if_then.push(txn_op_del(name_ident)); // name -> id
-            txn.if_then.push(txn_op_del(&tag_meta_key)); // id -> meta
-            txn.if_then.push(txn_op_del(&id_to_name_key)); // id -> name
+            txn.if_then.push(txn_del(name_ident)); // name -> id
+            txn.if_then.push(txn_del(&tag_meta_key)); // id -> meta
+            txn.if_then.push(txn_del(&id_to_name_key)); // id -> name
 
             let (success, _) = send_txn(self, txn).await?;
             if success {
@@ -344,14 +344,14 @@ where
                     TagIdObjectRef::new(*tag_id, req.taggable_object.clone()),
                 );
 
-                txn_ops.push(txn_op_put_pb(
+                txn_ops.push(txn_put_pb_with_ttl(
                     &obj_ref_key,
                     &ObjectTagIdRefValue {
                         tag_allowed_value: tag_value.clone(),
                     },
                     None,
                 )?);
-                txn_ops.push(txn_op_put_pb(&tag_ref_key, &EmptyProto {}, None)?);
+                txn_ops.push(txn_put_pb_with_ttl(&tag_ref_key, &EmptyProto {}, None)?);
             }
 
             let (succ, _) = send_txn(self, TxnRequest::new(txn_conditions, txn_ops)).await?;
@@ -432,8 +432,8 @@ where
                 TagIdObjectRef::new(*tag_id, req.taggable_object.clone()),
             );
 
-            txn_ops.push(txn_op_del(&obj_ref_key));
-            txn_ops.push(txn_op_del(&tag_ref_key));
+            txn_ops.push(txn_del(&obj_ref_key));
+            txn_ops.push(txn_del(&tag_ref_key));
         }
 
         let (succ, _) = send_txn(self, TxnRequest::new(vec![], txn_ops)).await?;

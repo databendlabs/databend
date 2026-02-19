@@ -141,9 +141,9 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_builder_util::txn_op_put_pb;
-use crate::txn_op_del;
-use crate::txn_op_get;
+use crate::txn_del;
+use crate::txn_get;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
 use crate::txn_put_u64;
 use crate::util::IdempotentKVTxnResponse;
@@ -462,7 +462,7 @@ where
                     // - also, the `table_id_seq` of newly create table should be obtained.
                     //   The caller need to know the `table_id_seq` to manipulate the table more efficiently
                     //   This TxnOp::Get is(should be) the last operation in the `if_then` list.
-                    txn.if_then.push(txn_op_get(key_table_id));
+                    txn.if_then.push(txn_get(key_table_id));
                 } else {
                     // Otherwise, make newly created table visible by putting the tuple:
                     // (tenant, db_id, tb_name) -> tb_id
@@ -707,7 +707,7 @@ where
                         txn_cond_seq(&table_id_to_name_key, Eq, table_id_to_name_seq),
                     ],
                     vec![
-                        txn_op_del(&dbid_tbname),                   // (db_id, tb_name) -> tb_id
+                        txn_del(&dbid_tbname),                      // (db_id, tb_name) -> tb_id
                         txn_put_u64(&newdbid_newtbname, table_id)?, /* (db_id, new_tb_name) -> tb_id */
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
@@ -1116,7 +1116,7 @@ where
                         txn_put_u64(&dbid_tbname, table_id)?, /* (tenant, db_id, tb_name) -> tb_id */
                         // txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
                         txn_put_pb(&tbid, &tb_meta)?, // (tenant, db_id, tb_id) -> tb_meta
-                        txn_op_del(&orphan_dbid_tbname_idlist), // del orphan table idlist
+                        txn_del(&orphan_dbid_tbname_idlist), // del orphan table idlist
                         txn_put_pb(&dbid_tbname_idlist, &tb_id_list.data)?, /* _fd_table_id_list/db_id/table_name -> tb_id_list */
                     ],
                 );
@@ -1287,7 +1287,8 @@ where
                 if req.insert_if_not_exists {
                     txn.condition.push(txn_cond_eq_seq(&key, 0));
                 }
-                txn.if_then.push(txn_op_put_pb(&key, &file_info, req.ttl)?)
+                txn.if_then
+                    .push(txn_put_pb_with_ttl(&key, &file_info, req.ttl)?)
             }
         }
 

@@ -21,7 +21,7 @@ use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_cond_eq_seq;
 use databend_common_meta_api::txn_cond_seq;
-use databend_common_meta_api::txn_op_del;
+use databend_common_meta_api::txn_del;
 use databend_common_meta_api::txn_put_pb;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::StageFile;
@@ -165,7 +165,7 @@ impl StageApi for StageMgr {
                 .iter()
                 .map(|(key, _)| TxnOp::delete(key))
                 .collect();
-            dels.push(txn_op_del(&stage_ident));
+            dels.push(txn_del(&stage_ident));
 
             let txn_req = TxnRequest::new(
                 vec![
@@ -328,7 +328,7 @@ impl StageApi for StageMgr {
             let mut if_then = Vec::with_capacity(paths.len());
             for path in &paths {
                 let key = self.stage_file_ident(name, path);
-                if_then.push(txn_op_del(&key));
+                if_then.push(txn_del(&key));
             }
             old_stage.number_of_files -= paths.len() as u64;
             if_then.push(

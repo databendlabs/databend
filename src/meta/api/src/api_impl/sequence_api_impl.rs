@@ -50,8 +50,8 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
+use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb;
-use crate::txn_op_del;
 
 #[async_trait::async_trait]
 #[tonic::async_trait]
@@ -230,7 +230,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
         let txn = TxnRequest::new(
             vec![txn_cond_seq(&req.ident, ConditionResult::Gt, 0)],
-            vec![txn_op_del(&req.ident), txn_op_del(&storage_ident)],
+            vec![txn_del(&req.ident), txn_del(&storage_ident)],
         );
         let (success, _response) = send_txn(self, txn).await?;
 

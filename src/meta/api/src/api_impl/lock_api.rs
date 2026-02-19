@@ -40,7 +40,7 @@ use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
-use crate::txn_op_builder_util::txn_op_put_pb;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
@@ -109,7 +109,7 @@ where
             ];
             let if_then = vec![
                 txn_put_pb(&id_generator, &IdGeneratorValue)?,
-                txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
+                txn_put_pb_with_ttl(&key, &lock_meta, Some(req.ttl))?,
             ];
             let txn_req = TxnRequest::new(condition, if_then);
             let txn_response = txn_sender.send_txn(self, txn_req).await?;

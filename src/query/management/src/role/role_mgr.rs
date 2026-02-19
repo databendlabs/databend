@@ -20,7 +20,7 @@ use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
-use databend_common_meta_api::txn_op_del;
+use databend_common_meta_api::txn_del;
 use databend_common_meta_api::txn_put_pb;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
@@ -683,7 +683,7 @@ impl RoleApi for RoleMgr {
 
             let owner_key = self.ownership_object_ident(object);
 
-            let mut if_then = vec![txn_op_del(&owner_key)];
+            let mut if_then = vec![txn_del(&owner_key)];
             let mut condition = vec![];
 
             if let Some(role) = role {

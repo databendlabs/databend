@@ -74,7 +74,7 @@ use crate::kv_pb_api::UpsertPB;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_del;
+use crate::txn_del;
 use crate::txn_put_pb;
 use crate::txn_put_u64;
 
@@ -470,7 +470,7 @@ where
                 txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq),
             ];
             let if_then = vec![
-                txn_op_del(tenant_dbname), // del old_db_name
+                txn_del(tenant_dbname), // del old_db_name
                 // Renaming db should not affect the seq of db_meta. Just modify db name.
                 txn_put_u64(&tenant_newdbname, *old_db_id)?, /* (tenant, new_db_name) -> old_db_id */
                 txn_put_pb(&new_dbid_idlist, &new_db_id_list)?, /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
