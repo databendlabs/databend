@@ -71,7 +71,7 @@ use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
 use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
-use crate::txn_op_put;
+use crate::txn_put_pb;
 
 /// IndexApi defines APIs for index management and metadata.
 ///
@@ -442,7 +442,7 @@ where
                     txn_cond_seq(&tbid, Eq, seq_meta.seq),
                 ],
                 vec![
-                    txn_op_put(&tbid, serialize_struct(&table_meta)?), // tb_id -> tb_meta
+                    txn_put_pb(&tbid, &table_meta)?, // tb_id -> tb_meta
                     TxnOp::put(m_key, m_value),
                 ],
             );

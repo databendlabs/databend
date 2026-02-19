@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use databend_common_meta_api::kv_pb_api::decode_pb;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyTableId;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
@@ -53,7 +54,6 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::tenant::TenantQuota;
-use databend_common_meta_api::kv_pb_api::decode_pb;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_types::Cmd;
 use databend_meta_types::Operation;

@@ -102,6 +102,7 @@ use crate::txn_core_util::send_txn;
 use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
 use crate::txn_op_put;
+use crate::txn_put_pb;
 
 impl<KV> SchemaApi for KV
 where
@@ -291,8 +292,8 @@ pub async fn construct_drop_table_txn_operations(
 
     txn.if_then.extend(vec![
         // update db_meta seq so that no other txn can delete this db
-        txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), // (db_id) -> db_meta
-        txn_op_put(&tbid, serialize_struct(&tb_meta)?), // (tenant, db_id, tb_id) -> tb_meta
+        txn_put_pb(&DatabaseId { db_id }, &db_meta)?, // (db_id) -> db_meta
+        txn_put_pb(&tbid, &tb_meta)?,                 // (tenant, db_id, tb_id) -> tb_meta
     ]);
     if if_delete {
         // still this table id
@@ -322,10 +323,8 @@ pub async fn construct_drop_table_txn_operations(
 
             txn.condition
                 .push(txn_cond_seq(&dbid_tbname_idlist, Eq, tb_id_list_seq));
-            txn.if_then.push(txn_op_put(
-                &dbid_tbname_idlist,
-                serialize_struct(&tb_id_list)?,
-            ));
+            txn.if_then
+                .push(txn_put_pb(&dbid_tbname_idlist, &tb_id_list)?);
         }
     }
 
