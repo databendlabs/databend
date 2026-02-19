@@ -245,7 +245,7 @@ pub async fn construct_drop_table_txn_operations(
     //
     // Concurrency safety:
     // - The `table_meta.seq` condition below protects against concurrent modifications
-    // - Using `txn_op_del` (instead of `txn_delete_exact`) is safe here because:
+    // - Using `txn_del` (instead of `txn_delete_exact`) is safe here because:
     //   1. Any concurrent unset/modify of policies will change `table_meta.seq`, causing this txn to fail
     //   2. Deleting a non-existent reference is idempotent and won't cause errors (returns success=false)
     //   3. The transaction ensures atomicity - either all references are deleted or none

@@ -68,7 +68,6 @@ use crate::errors::meta_service_error;
 use crate::role::role_api::RoleApi;
 use crate::serde::Quota;
 use crate::serde::check_and_upgrade_to_pb;
-use crate::serialize_struct;
 
 static TXN_MAX_RETRY_TIMES: u32 = 60;
 
@@ -124,12 +123,11 @@ impl RoleMgr {
         role_info: &RoleInfo,
         seq: MatchSeq,
     ) -> Result<u64, ErrorCode> {
-        let key = self.role_ident(role_info.identity()).to_string_key();
-        let value = serialize_struct(role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
-
+        let key = self.role_ident(role_info.identity());
+        let req = UpsertPB::new(key, seq, Operation::Update(role_info.clone()), None);
         let res = self
             .kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
+            .upsert_pb(&req)
             .await
             .map_err(meta_service_error)?;
         match res.result {
@@ -734,11 +732,11 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
-        let key = self.role_ident(&role).to_string_key();
-
+        let key = self.role_ident(&role);
+        let req = UpsertPB::new(key, seq, Operation::Delete, None);
         let res = self
             .kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Delete, None))
+            .upsert_pb(&req)
             .await
             .map_err(meta_service_error)?;
 
