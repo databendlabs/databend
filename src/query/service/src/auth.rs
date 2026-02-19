@@ -163,8 +163,7 @@ impl AuthMgr {
                             ));
                         }
                         if let Some(ensure_user) = jwt.custom.ensure_user {
-                            let current_roles: std::collections::HashSet<String> =
-                                user_info.grants.roles().iter().cloned().collect();
+                            let current_roles = user_info.grants.roles_vec();
                             // ensure jwt roles to user if not exists
                             if let Some(ref roles) = ensure_user.roles {
                                 for role in roles.iter() {

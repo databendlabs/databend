@@ -71,7 +71,7 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListUsersResponse> {
             hostname: user.hostname.clone(),
             auth_type: user.auth_info.get_type().to_str().to_string(),
             default_role: user.option.default_role().cloned().unwrap_or_default(),
-            grant_roles: user.grants.roles().iter().cloned().collect(),
+            grant_roles: user.grants.roles_vec(),
             disabled: user.option.disabled().cloned().unwrap_or_default(),
             network_policy: user.option.network_policy().cloned(),
             password_policy: user.option.password_policy().cloned(),

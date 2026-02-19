@@ -361,7 +361,7 @@ async fn show_account_grants(
                 .get_user(&tenant, UserIdentity::new(name, "%"))
                 .await?;
             if current_user.identity().username != name && !has_grant_priv {
-                let mut roles: Vec<String> = current_user.grants.roles().iter().cloned().collect();
+                let mut roles: Vec<String> = current_user.grants.roles_vec();
                 roles.sort();
 
                 return Err(ErrorCode::PermissionDenied(format!(
@@ -385,7 +385,7 @@ async fn show_account_grants(
                 .map(|role| role.name.to_string())
                 .collect();
             if !effective_roles_names.contains(&name.to_string()) && !has_grant_priv {
-                let mut roles: Vec<String> = current_user.grants.roles().iter().cloned().collect();
+                let mut roles: Vec<String> = current_user.grants.roles_vec();
                 roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
@@ -395,7 +395,7 @@ async fn show_account_grants(
             }
 
             let role_info = user_api.get_role(&tenant, name.to_string()).await?;
-            let role_info_roles: Vec<String> = role_info.grants.roles().iter().cloned().collect();
+            let role_info_roles: Vec<String> = role_info.grants.roles_vec();
             let related_roles = RoleCacheManager::instance()
                 .find_related_roles(&tenant, &role_info_roles)
                 .await?;
@@ -421,7 +421,7 @@ async fn show_account_grants(
     };
 
     // TODO: display roles list instead of the inherited roles
-    let grant_set_roles: Vec<String> = grant_set.roles().iter().cloned().collect();
+    let grant_set_roles: Vec<String> = grant_set.roles_vec();
     let related_roles = RoleCacheManager::instance()
         .find_related_roles(&tenant, &grant_set_roles)
         .await?;

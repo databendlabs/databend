@@ -265,6 +265,10 @@ impl UserGrantSet {
         &self.roles
     }
 
+    pub fn roles_vec(&self) -> Vec<String> {
+        self.roles.iter().cloned().collect()
+    }
+
     pub fn grant_role(&mut self, role: String) {
         self.roles.insert(role);
     }

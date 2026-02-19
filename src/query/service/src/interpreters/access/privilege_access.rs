@@ -2232,7 +2232,7 @@ async fn has_priv(
         }
     }
 
-    let grant_set_roles: Vec<String> = grant_set.roles().iter().cloned().collect();
+    let grant_set_roles: Vec<String> = grant_set.roles_vec();
     Ok(RoleCacheManager::instance()
         .find_related_roles(tenant, &grant_set_roles)
         .await?

@@ -835,7 +835,7 @@ async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
+        let roles: Vec<String> = user_info.grants.roles_vec();
         assert!(roles.contains(&"existing-role".to_string()));
         assert!(roles.contains(&"new-role-1".to_string()));
         assert!(roles.contains(&"new-role-2".to_string()));
@@ -898,7 +898,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
+        let roles: Vec<String> = user_info.grants.roles_vec();
         assert!(roles.contains(&"role1".to_string()));
         assert!(roles.contains(&"role2".to_string()));
         assert!(user_info.option.default_role().is_none());
@@ -1005,7 +1005,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
+        let roles: Vec<String> = user_info.grants.roles_vec();
         assert!(roles.contains(&"role1".to_string()));
         assert!(roles.contains(&"role2".to_string()));
         assert!(roles.contains(&"role3".to_string()));
