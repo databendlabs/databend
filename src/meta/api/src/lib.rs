@@ -103,7 +103,6 @@ pub use txn_core_util::txn_delete_exact;
 pub use txn_core_util::txn_replace_exact;
 pub use txn_op_builder_util::txn_op_del;
 pub use txn_op_builder_util::txn_op_get;
-pub use txn_op_builder_util::txn_op_put;
 pub use txn_op_builder_util::txn_op_put_pb;
 pub use txn_op_builder_util::txn_put_pb;
 pub use txn_op_builder_util::txn_put_u64;

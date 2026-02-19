@@ -21,7 +21,7 @@ use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
-use databend_common_meta_api::txn_op_put;
+use databend_common_meta_api::txn_put_pb;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
@@ -496,17 +496,15 @@ impl RoleApi for RoleMgr {
                     need_transfer = true;
                     let object = own.data.object;
                     let owner_key = self.ownership_object_ident(&object);
-                    let owner_value = serialize_struct(
-                        &OwnershipInfo {
-                            object,
-                            role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-                        },
-                        ErrorCode::IllegalUserInfoFormat,
-                        || "",
-                    )?;
                     // Ensure accurate matching of a key
                     condition.push(txn_cond_seq(&owner_key, Eq, own.seq));
-                    if_then.push(txn_op_put(&owner_key, owner_value))
+                    if_then.push(
+                        txn_put_pb(&owner_key, &OwnershipInfo {
+                            object,
+                            role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
+                        })
+                        .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+                    );
                 }
             }
 
@@ -547,17 +545,14 @@ impl RoleApi for RoleMgr {
             let grant_object = convert_to_grant_obj(object);
 
             let owner_key = self.ownership_object_ident(object);
-            let owner_value = serialize_struct(
-                &OwnershipInfo {
+            let mut condition = vec![];
+            let mut if_then = vec![
+                txn_put_pb(&owner_key, &OwnershipInfo {
                     object: object.clone(),
                     role: new_role.to_string(),
-                },
-                ErrorCode::IllegalUserInfoFormat,
-                || "",
-            )?;
-
-            let mut condition = vec![];
-            let mut if_then = vec![txn_op_put(&owner_key, owner_value.clone())];
+                })
+                .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+            ];
 
             if let Some(ref old_role) = old_role {
                 // BUILTIN role or Dropped role may get err, no need to revoke
@@ -571,10 +566,10 @@ impl RoleApi for RoleMgr {
                     );
                     old_role_info.update_role_time();
                     condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                    if_then.push(txn_op_put(
-                        &old_key,
-                        serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
-                    ));
+                    if_then.push(
+                        txn_put_pb(&old_key, &old_role_info)
+                            .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+                    );
                 }
             }
 
@@ -709,14 +704,10 @@ impl RoleApi for RoleMgr {
                         );
                         old_role_info.update_role_time();
                         condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                        if_then.push(txn_op_put(
-                            &old_key,
-                            serialize_struct(
-                                &old_role_info,
-                                ErrorCode::IllegalUserInfoFormat,
-                                || "",
-                            )?,
-                        ));
+                        if_then.push(
+                            txn_put_pb(&old_key, &old_role_info)
+                                .map_err(|e| ErrorCode::IllegalUserInfoFormat(e.to_string()))?,
+                        );
                     }
                 }
             }

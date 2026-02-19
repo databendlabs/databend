@@ -17,8 +17,6 @@ use databend_meta_types::InvalidArgument;
 use databend_meta_types::MetaError;
 use databend_meta_types::MetaNetworkError;
 
-use crate::kv_pb_api::errors::PbDecodeError;
-
 /// An error occurred when encoding with FromToProto.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[error("PbEncodeError: {0}")]

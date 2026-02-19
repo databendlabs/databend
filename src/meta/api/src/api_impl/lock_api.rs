@@ -16,6 +16,7 @@ use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TableLockExpired;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::id_generator::IdGeneratorValue;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
@@ -40,7 +41,7 @@ use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_op_builder_util::txn_op_put_pb;
-use crate::txn_op_put;
+use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
 
@@ -107,7 +108,7 @@ where
                 txn_cond_seq(&key, Eq, 0),
             ];
             let if_then = vec![
-                txn_op_put(&id_generator, b"".to_vec()),
+                txn_put_pb(&id_generator, &IdGeneratorValue)?,
                 txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
             ];
             let txn_req = TxnRequest::new(condition, if_then);

@@ -18,10 +18,31 @@ use std::ops::DerefMut;
 
 use databend_common_meta_app as mt;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
+use databend_common_protos::pb;
 
 use crate::FromToProto;
 use crate::Incompatible;
+use crate::MIN_READER_VER;
 use crate::VER;
+
+impl FromToProto for mt::id_generator::IdGeneratorValue {
+    type PB = pb::EmptyProto;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(_p: pb::EmptyProto) -> Result<Self, Incompatible> {
+        Ok(Self)
+    }
+
+    fn to_pb(&self) -> Result<pb::EmptyProto, Incompatible> {
+        Ok(pb::EmptyProto {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+        })
+    }
+}
 
 impl<T> FromToProto for mt::primitive::Id<T>
 where

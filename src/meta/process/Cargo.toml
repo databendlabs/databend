@@ -13,7 +13,6 @@ clap = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-proto-conv = { workspace = true }
-databend-common-protos = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta-kvapi = { workspace = true }
 databend-meta-raft-store = { workspace = true }

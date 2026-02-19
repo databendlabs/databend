@@ -4086,7 +4086,6 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-proto-conv",
- "databend-common-protos",
  "databend-common-tracing",
  "databend-meta-kvapi",
  "databend-meta-raft-store",
