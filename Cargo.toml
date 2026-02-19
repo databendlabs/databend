@@ -218,6 +218,7 @@ brotli = { version = "3.3", features = ["std"] }
 bstr = "1"
 buf-list = "1.0.3"
 bumpalo = "3.12.0"
+byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive", "extern_crate_alloc", "must_cast", "transparentwrapper_extra"] }
 byteorder = "1.5.0"
 bytes = "1.5.0"
@@ -256,11 +257,14 @@ enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.2", features = ["serde", "macros"] }
 faststr = "0.2"
+feature-set = { version = "0.1.1" }
 feistel-permutation-rs = "0.1.1"
 flatbuffers = "25" # Must use the same version with arrow-ipc
 foreign_vec = "0.1.0"
 form_urlencoded = { version = "1" }
+fs_extra = "1.3.0"
 futures = "0.3.24"
+futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
 geo = { version = "0.32.0", features = ["use-serde"] }
 geohash = "0.13.1"
@@ -277,6 +281,7 @@ headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
 hive_metastore = "0.2.0"
+hostname = "0.3.1"
 http = "1"
 humantime = "2.1.0"
 hyper = "1"
@@ -292,10 +297,20 @@ iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/databendlab
 iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e" }
 iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e" }
 
+# Explicitly specify compatible AWS SDK versions
+aws-config = "1.5.18"
+aws-smithy-http = "0.61.1"
+aws-smithy-runtime = "1.7.8"
+aws-smithy-runtime-api = "1.7.3"
+aws-smithy-types = "1.2.13"
+
 indexmap = "2.0.0"
+indicatif = "0.17.5"
 itertools = "0.13.0"
 jaq-core = "2.2.1"
+jaq-interpret = "1.5.0"
 jaq-json = { version = "1.1.3", features = ["serde_json"] }
+jaq-parse = "1.0.3"
 jaq-std = "2.1.2"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.5"
@@ -402,6 +417,7 @@ rustix = { version = "0.38.37", features = ["fs"] }
 rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
+rustyline = "14"
 scroll = "0.12.0"
 self_cell = "1.2.0"
 semver = "1.0.14"
@@ -429,6 +445,7 @@ snailquote = "0.3.1"
 snap = "1"
 socket2 = "0.5.3"
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
+stacker = "0.1"
 state = "0.6.0"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
@@ -457,6 +474,7 @@ tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", features = ["parse"] }
 tonic = { version = "0.13", features = ["transport", "codegen", "tls-native-roots"] }
 tonic-build = { version = "0.13" }
+tonic-reflection = { version = "0.13" }
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3.3"
 twox-hash = "1.6.3"
