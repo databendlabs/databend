@@ -163,22 +163,16 @@ impl Semaphore {
         static UNIQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let uniq = UNIQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
+        let generator_key = format!("{}/seq_generator", prefix);
         let mut sem = Semaphore {
+            seq_policy: SeqPolicy::GeneratorKey { generator_key },
             prefix,
-            seq_policy: SeqPolicy::TimeBased {
-                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
-            },
             meta_client,
             permit_ttl,
             subscriber_task_handle: None,
             subscriber_cancel_tx: cancel_tx,
             sem_event_rx: Some(rx),
             uniq,
-        };
-
-        // The default is using generator key
-        sem.seq_policy = SeqPolicy::GeneratorKey {
-            generator_key: sem.seq_generator_key(),
         };
 
         sem.spawn_meta_event_subscriber(tx, capacity, cancel_rx)
