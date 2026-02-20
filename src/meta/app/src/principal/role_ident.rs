@@ -41,7 +41,6 @@ mod kvapi_impl {
 
     use crate::principal::RoleIdent;
     use crate::principal::RoleInfo;
-    use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;
 
@@ -61,11 +60,8 @@ mod kvapi_impl {
         }
     }
 
-    impl From<ExistError<Resource>> for ErrorCode {
-        fn from(err: ExistError<Resource>) -> Self {
-            ErrorCode::RoleAlreadyExists(err.to_string())
-        }
-    }
+    // ExistError<Resource> is no longer produced: create_role returns bool.
+    // impl From<ExistError<Resource>> for ErrorCode {
 
     impl From<UnknownError<Resource>> for ErrorCode {
         fn from(err: UnknownError<Resource>) -> Self {

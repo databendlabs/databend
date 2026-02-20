@@ -17,7 +17,6 @@ use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::role_ident;
-use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_kvapi::kvapi::ListKVReply;
 use databend_meta_types::MetaError;
@@ -25,11 +24,12 @@ use databend_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RoleApi: Sync + Send {
-    async fn create_role(
-        &self,
-        role_info: RoleInfo,
-        can_replace: bool,
-    ) -> Result<Result<(), ExistError<role_ident::Resource>>, MetaError>;
+    /// Create a role.
+    ///
+    /// Returns `Ok(true)` if the role was created successfully.
+    /// When `can_replace` is true, an existing role is overwritten and still returns `Ok(true)`.
+    /// Returns `Ok(false)` only when `can_replace` is false and the role already exists.
+    async fn create_role(&self, role_info: RoleInfo, can_replace: bool) -> Result<bool, MetaError>;
 
     async fn get_role(&self, role: &str) -> Result<Option<SeqV<RoleInfo>>, MetaError>;
 
@@ -40,13 +40,10 @@ pub trait RoleApi: Sync + Send {
 
     async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, MetaError>;
 
-    /// List ownerships filtered by the variant of `obj`.
-    ///
-    /// Only the enum variant is used to determine the key prefix;
-    /// field values inside `obj` are ignored.
-    async fn list_ownerships_by_type(
+    /// List ownerships filtered by owner object type.
+    async fn list_ownerships_by_owner_object(
         &self,
-        obj: OwnershipObject,
+        owner_object: OwnershipObject,
     ) -> Result<Vec<OwnershipInfo>, MetaError>;
 
     /// General role update.
@@ -114,8 +111,8 @@ pub trait RoleApi: Sync + Send {
         objects: &[OwnershipObject],
     ) -> Result<Vec<Option<OwnershipInfo>>, MetaError>;
 
-    async fn drop_role(
-        &self,
-        role: &str,
-    ) -> Result<Result<(), UnknownError<role_ident::Resource>>, MetaError>;
+    /// Drop a role by name.
+    ///
+    /// Returns `Ok(true)` if the role was dropped, `Ok(false)` if it did not exist.
+    async fn drop_role(&self, role: &str) -> Result<bool, MetaError>;
 }

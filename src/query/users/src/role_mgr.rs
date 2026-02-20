@@ -128,17 +128,18 @@ impl UserApiProvider {
     ) -> Result<()> {
         let can_replace = create_option.is_overriding();
         let client = self.role_api(tenant);
-        client
+        let role_name = role_info.name.clone();
+        let created = client
             .create_role(role_info, can_replace)
             .await
-            .map_err(meta_service_error)?
-            .or_else(|e| {
-                if create_option.if_not_exist() {
-                    Ok(())
-                } else {
-                    Err(ErrorCode::from(e))
-                }
-            })
+            .map_err(meta_service_error)?;
+        if !created && !create_option.if_not_exist() {
+            return Err(ErrorCode::RoleAlreadyExists(format!(
+                "Role '{}' already exists",
+                role_name
+            )));
+        }
+        Ok(())
     }
 
     // Update role comment.
@@ -328,16 +329,14 @@ impl UserApiProvider {
                 ErrorCode::from(e).add_message_back("(while transfer_ownership_to_admin)")
             })?;
 
-        match client.drop_role(&role).await.map_err(meta_service_error)? {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                if if_exists {
-                    Ok(())
-                } else {
-                    Err(ErrorCode::from(e).add_message_back("(while drop role)"))
-                }
-            }
+        let dropped = client.drop_role(&role).await.map_err(meta_service_error)?;
+        if !dropped && !if_exists {
+            return Err(ErrorCode::UnknownRole(format!(
+                "Role '{}' does not exist (while drop role)",
+                role
+            )));
         }
+        Ok(())
     }
 
     // Find all related roles by role names. Every role have a PUBLIC role, and ACCOUNT_ADMIN

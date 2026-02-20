@@ -34,7 +34,6 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::role_ident;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_client::ClientHandle;
 use databend_meta_kvapi::kvapi;
@@ -172,11 +171,7 @@ impl RoleMgr {
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn create_role(
-        &self,
-        info: RoleInfo,
-        can_replace: bool,
-    ) -> Result<Result<(), ExistError<role_ident::Resource>>, MetaError> {
+    async fn create_role(&self, info: RoleInfo, can_replace: bool) -> Result<bool, MetaError> {
         let ident = RoleIdent::new(&self.tenant, &info.name);
 
         let seq = if can_replace {
@@ -185,14 +180,14 @@ impl RoleApi for RoleMgr {
             MatchSeq::Exact(0)
         };
 
-        let req = UpsertPB::insert(ident.clone(), info).with(seq);
+        let req = UpsertPB::insert(ident, info).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if !can_replace && res.prev.is_some() {
-            return Ok(Err(ident.exist_error(func_name!())));
+            return Ok(false);
         }
 
-        Ok(Ok(()))
+        Ok(true)
     }
 
     #[async_backtrace::framed]
@@ -299,11 +294,11 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn list_ownerships_by_type(
+    async fn list_ownerships_by_owner_object(
         &self,
-        obj: OwnershipObject,
+        owner_object: OwnershipObject,
     ) -> Result<Vec<OwnershipInfo>, MetaError> {
-        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), owner_object);
         let dir_name = DirName::new(ident);
         let values = self
             .kv_api
@@ -364,12 +359,10 @@ impl RoleApi for RoleMgr {
                     let owner_key = self.ownership_object_ident(&object);
                     // Ensure accurate matching of a key
                     condition.push(txn_cond_seq(&owner_key, Eq, own.seq));
-                    if_then.push(
-                        txn_put_pb(&owner_key, &OwnershipInfo {
-                            object,
-                            role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
-                        })?,
-                    );
+                    if_then.push(txn_put_pb(&owner_key, &OwnershipInfo {
+                        object,
+                        role: BUILTIN_ROLE_ACCOUNT_ADMIN.to_string(),
+                    })?);
                 }
             }
 
@@ -407,12 +400,10 @@ impl RoleApi for RoleMgr {
 
             let owner_key = self.ownership_object_ident(object);
             let mut condition = vec![];
-            let mut if_then = vec![
-                txn_put_pb(&owner_key, &OwnershipInfo {
-                    object: object.clone(),
-                    role: new_role.to_string(),
-                })?,
-            ];
+            let mut if_then = vec![txn_put_pb(&owner_key, &OwnershipInfo {
+                object: object.clone(),
+                role: new_role.to_string(),
+            })?];
 
             if let Some(ref old_role) = old_role {
                 // BUILTIN role or Dropped role may get err, no need to revoke
@@ -557,12 +548,8 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn drop_role(
-        &self,
-        role: &str,
-    ) -> Result<Result<(), UnknownError<role_ident::Resource>>, MetaError> {
-        let ident = self.role_ident(role);
-        let key = ident.to_string_key();
+    async fn drop_role(&self, role: &str) -> Result<bool, MetaError> {
+        let key = self.role_ident(role).to_string_key();
         let res = self
             .kv_api
             .upsert_kv(UpsertKV::new(
@@ -572,10 +559,7 @@ impl RoleApi for RoleMgr {
                 None,
             ))
             .await?;
-        match res.prev {
-            Some(_) => Ok(Ok(())),
-            None => Ok(Err(ident.unknown_error(func_name!()))),
-        }
+        Ok(res.prev.is_some())
     }
 }
 

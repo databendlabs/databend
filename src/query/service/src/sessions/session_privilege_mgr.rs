@@ -395,7 +395,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                 let role_api = user_api.role_api(&self.session_ctx.get_current_tenant());
                 let ownerships = match object.to_ownership_object() {
                     Some(obj) => role_api
-                        .list_ownerships_by_type(obj)
+                        .list_ownerships_by_owner_object(obj)
                         .await
                         .map_err(meta_service_error)?,
                     None => role_api
