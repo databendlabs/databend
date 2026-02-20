@@ -3677,7 +3677,6 @@ dependencies = [
  "base64 0.22.1",
  "borsh",
  "bumpalo",
- "cfg-if",
  "comfy-table",
  "databend-common-ast",
  "databend-common-base",
