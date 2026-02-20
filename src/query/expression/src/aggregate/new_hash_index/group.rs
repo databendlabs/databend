@@ -44,7 +44,7 @@ mod portable_simd {
             let cmp = self.0.simd_eq(u8x8::splat(tag.0));
             let vec_mask = cmp.to_int().cast::<u8>();
 
-            unsafe { BitMask(u64::from_ne_bytes(vec_mask.to_array())) }
+            BitMask(u64::from_ne_bytes(vec_mask.to_array()))
         }
 
         #[inline]
@@ -52,7 +52,7 @@ mod portable_simd {
             let mask = self.0.cast::<i8>().is_negative();
             let vec_mask = mask.to_int().cast::<u8>();
 
-            unsafe { BitMask(u64::from_ne_bytes(vec_mask.to_array())) }
+            BitMask(u64::from_ne_bytes(vec_mask.to_array()))
         }
 
         #[inline]

@@ -62,21 +62,13 @@ impl ExperimentalHashIndex {
 
 impl ExperimentalHashIndex {
     #[inline]
-    fn ctrl(&mut self, index: usize) -> *mut Tag {
-        debug_assert!(index < self.ctrls.len());
-        unsafe { self.ctrls.get_unchecked_mut(index) }
-    }
-
-    #[inline]
     fn set_ctrl(&mut self, index: usize, tag: Tag) {
-        // This is the same as `(index.wrapping_sub(Group::WIDTH)) % self.num_buckets() + Group::WIDTH`
-        // because the number of buckets is a power of two, and `self.bucket_mask = self.num_buckets() - 1`.
+        // Mirror: keep the tail padding in sync with the head so that
+        // Group::load across the boundary sees consistent ctrl bytes.
         let index2 = ((index.wrapping_sub(Group::WIDTH)) & self.bucket_mask) + Group::WIDTH;
 
-        unsafe {
-            *self.ctrl(index) = tag;
-            *self.ctrl(index2) = tag;
-        }
+        self.ctrls[index] = tag;
+        self.ctrls[index2] = tag;
     }
 
     #[inline]
@@ -145,8 +137,7 @@ impl ExperimentalHashIndex {
         let tag_hash = Tag::full(hash);
         let mut pos = self.h1(hash);
         loop {
-            let ctrl = unsafe { *self.ctrl(pos) };
-            if ctrl.is_empty() {
+            if self.ctrls[pos].is_empty() {
                 self.set_ctrl(pos, tag_hash);
                 return pos;
             }
@@ -252,9 +243,7 @@ impl ExperimentalHashIndex {
 
     pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
         let index = self.probe_empty(hash);
-        unsafe {
-            *self.pointers.get_unchecked_mut(index) = row_ptr;
-        }
+        self.pointers[index] = row_ptr;
         self.count += 1;
     }
 }
