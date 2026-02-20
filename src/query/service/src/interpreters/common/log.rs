@@ -31,11 +31,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 
 pub fn log_query_start(ctx: &QueryContext) {
-    // Nested execution paths may invoke this multiple times for one query context.
-    if !ctx.on_query_execution_start() {
-        return;
-    }
-
     InterpreterMetrics::record_query_start(ctx);
     let now = SystemTime::now();
     let session = ctx.get_current_session();
@@ -50,11 +45,6 @@ pub fn log_query_start(ctx: &QueryContext) {
 }
 
 pub fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
-    // Emit finish immediately on error, otherwise only on terminal leave.
-    if !ctx.on_query_execution_finish(error.is_some()) {
-        return;
-    }
-
     // metrics
     InterpreterMetrics::record_query_finished(ctx, error.clone());
 

@@ -29,7 +29,6 @@ mod structlog;
 
 mod predefined_tables;
 mod query_log_collector;
-mod query_log_deduplicator;
 
 pub use crash_hook::SignalListener;
 pub use crash_hook::pipe_file;
@@ -58,7 +57,6 @@ pub use crate::panic_hook::set_panic_hook;
 pub use crate::predefined_tables::HistoryTable;
 pub use crate::predefined_tables::get_all_history_table_names;
 pub use crate::predefined_tables::init_history_tables;
-pub use crate::query_log_deduplicator::QueryLogDeduplicator;
 pub use crate::remote_log::LogBuffer as RemoteLogBuffer;
 pub use crate::remote_log::LogMessage;
 pub use crate::remote_log::RemoteLog;

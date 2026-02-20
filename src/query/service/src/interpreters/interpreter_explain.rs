@@ -50,7 +50,6 @@ use serde_json;
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter::on_execution_finished;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::physical_plans::FormatContext;
@@ -544,7 +543,8 @@ impl ExplainInterpreter {
         build_res
             .main_pipeline
             .set_on_finished(always_callback(move |info: &ExecutionInfo| {
-                on_execution_finished(info, ctx)
+                ctx.add_query_profiles(&info.profiling);
+                info.res.clone()
             }));
         match build_res.main_pipeline.is_complete_pipeline()? {
             true => {

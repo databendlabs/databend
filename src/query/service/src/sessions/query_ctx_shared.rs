@@ -64,7 +64,6 @@ use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::MutationStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_tracing::QueryLogDeduplicator;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -120,7 +119,6 @@ pub struct QueryContextShared {
     running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     running_query_text_hash: Arc<RwLock<Option<String>>>,
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
-    pub(super) query_log_deduplicator: QueryLogDeduplicator,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
@@ -226,7 +224,6 @@ impl QueryContextShared {
             running_query_kind: Arc::new(RwLock::new(None)),
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
-            query_log_deduplicator: QueryLogDeduplicator::default(),
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),

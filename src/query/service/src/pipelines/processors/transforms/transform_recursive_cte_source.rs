@@ -362,7 +362,7 @@ async fn create_memory_table_for_cte_scan(
     for create_table_plan in create_table_plans {
         let create_table_interpreter =
             CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-        let _ = create_table_interpreter.execute(ctx.clone()).await?;
+        create_table_interpreter.execute2().await?;
     }
 
     Ok(())
