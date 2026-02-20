@@ -122,3 +122,65 @@ where
         Err(e) => Err(PbApiReadError::KvApiError(e)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::DateTime;
+    use chrono::Utc;
+    use databend_common_meta_app::schema::CatalogMeta;
+    use databend_common_meta_app::schema::CatalogOption;
+    use databend_common_meta_app::schema::HiveCatalogOption;
+
+    use super::*;
+    use crate::kv_pb_api::compress::COMPRESS_THRESHOLD;
+
+    /// Large values written via `encode_pb` (the path used by `upsert_pb`) must be
+    /// stored with the `[0x0F, FLAG_ZSTD, 0x00, 0x00]` header so that the metaservice
+    /// holds them in compressed form.
+    #[test]
+    fn test_large_value_is_stored_compressed() {
+        let large_address = "x".repeat(COMPRESS_THRESHOLD + 1024);
+        let meta = CatalogMeta {
+            catalog_option: CatalogOption::Hive(HiveCatalogOption {
+                address: large_address,
+                storage_params: None,
+            }),
+            created_on: DateTime::<Utc>::MIN_UTC,
+        };
+
+        let encoded = encode_pb(&meta).unwrap();
+
+        assert!(encoded.len() >= 4, "encoded value must be at least 4 bytes");
+        assert_eq!(
+            &encoded[..4],
+            &[0x0F, 0x01, 0x00, 0x00],
+            "large values must start with the zstd compression header [0x0F, FLAG_ZSTD, 0, 0]"
+        );
+
+        let decoded: CatalogMeta = decode_pb(&encoded).unwrap();
+        assert_eq!(decoded, meta, "round-trip must recover the original value");
+    }
+
+    /// Small values must be stored as raw protobuf (no compression header).
+    #[test]
+    fn test_small_value_is_not_compressed() {
+        let meta = CatalogMeta {
+            catalog_option: CatalogOption::Hive(HiveCatalogOption {
+                address: "127.0.0.1:10000".to_string(),
+                storage_params: None,
+            }),
+            created_on: DateTime::<Utc>::MIN_UTC,
+        };
+
+        let encoded = encode_pb(&meta).unwrap();
+
+        assert_ne!(
+            encoded.first().copied(),
+            Some(0x0F),
+            "small values must not have the compression header"
+        );
+
+        let decoded: CatalogMeta = decode_pb(&encoded).unwrap();
+        assert_eq!(decoded, meta, "round-trip must recover the original value");
+    }
+}

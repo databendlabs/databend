@@ -1,0 +1,23 @@
+[package]
+name = "databend-meta-kv-tests"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+
+[dev-dependencies]
+anyhow = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-meta-kvapi = { workspace = true }
+databend-meta-runtime-api = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

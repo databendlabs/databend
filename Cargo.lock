@@ -5450,6 +5450,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-meta-kv-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "databend-common-meta-api",
+ "databend-common-meta-app",
+ "databend-common-meta-store",
+ "databend-meta-kvapi",
+ "databend-meta-runtime-api",
+ "tokio",
+]
+
+[[package]]
 name = "databend-meta-kvapi"
 version = "260205.3.0"
 source = "git+https://github.com/databendlabs/databend-meta?tag=v260205.3.0#f7f65c98ee0606712565ab91714eea62fff2f544"
