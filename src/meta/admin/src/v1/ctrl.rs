@@ -44,12 +44,8 @@ impl<SP: SpawnApi> HttpService<SP> {
         meta_handle
             .handle_trigger_snapshot()
             .await
-            .map_err(|e| {
-                poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?
-            .map_err(|e| {
-                poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
+            .map_err(internal_err)?
+            .map_err(internal_err)?;
         Ok(Json(()).into_response())
     }
 
@@ -60,9 +56,7 @@ impl<SP: SpawnApi> HttpService<SP> {
         let metrics = meta_handle
             .handle_raft_metrics()
             .await
-            .map_err(|e| {
-                poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?
+            .map_err(internal_err)?
             .borrow_watched()
             .clone();
 
@@ -116,12 +110,8 @@ impl<SP: SpawnApi> HttpService<SP> {
         meta_handle
             .handle_trigger_transfer_leader(to)
             .await
-            .map_err(|e| {
-                poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?
-            .map_err(|e| {
-                poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
+            .map_err(internal_err)?
+            .map_err(internal_err)?;
 
         Ok(Json(TransferLeaderResponse {
             from: id,
@@ -130,4 +120,8 @@ impl<SP: SpawnApi> HttpService<SP> {
         })
         .into_response())
     }
+}
+
+fn internal_err(e: impl std::fmt::Display) -> poem::Error {
+    poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)
 }

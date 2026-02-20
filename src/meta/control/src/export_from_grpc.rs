@@ -91,7 +91,7 @@ pub async fn export_from_grpc(
 
     let mut stream = exported.into_inner();
 
-    let file: Option<File> = if !save.is_empty() {
+    let mut file: Option<File> = if !save.is_empty() {
         eprintln!("    To:   File: {}", save);
         Some(File::create(&save)?)
     } else {
@@ -114,18 +114,16 @@ pub async fn export_from_grpc(
                 }
             }
 
-            if file.as_ref().is_none() {
-                println!("{}", line);
+            if let Some(ref mut f) = file {
+                f.write_all(format!("{}\n", line).as_bytes())?;
             } else {
-                file.as_ref()
-                    .unwrap()
-                    .write_all(format!("{}\n", line).as_bytes())?;
+                println!("{}", line);
             }
         }
     }
 
-    if file.as_ref().is_some() {
-        file.as_ref().unwrap().sync_all()?;
+    if let Some(ref f) = file {
+        f.sync_all()?;
     }
 
     Ok(())
