@@ -631,6 +631,21 @@ impl PrivilegeAccess {
                 )
                 .await
             }
+            TagSetObject::View(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.view,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::UDF(_) | TagSetObject::Procedure(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await
+            }
         }
     }
 
