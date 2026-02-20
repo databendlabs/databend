@@ -1547,7 +1547,7 @@ impl DefaultSettings {
                 }),
                 ("enable_experiment_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable experiment aggregate, default is 0, 1 for enable",
+                    desc: "Enable experiment aggregate(enabled by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1582,7 +1582,7 @@ impl DefaultSettings {
                 }),
                 ("enable_experiment_hash_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting enable hash index(disable by default).",
+                    desc: "experiment setting enable hash index(enabled by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
