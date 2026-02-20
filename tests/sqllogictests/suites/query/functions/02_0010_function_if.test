@@ -111,6 +111,9 @@ multi-if
 statement error 1065
 select if(number = 4, 3) from numbers(1)
 
+statement error 1065
+select if(number = 1, 1, 2, 3) from numbers(1)
+
 query R
 select if(number = 1, number, number = 0, number, number / 0) from numbers(1)
 ----
