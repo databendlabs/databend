@@ -25,14 +25,18 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::always_callback;
 use databend_common_sql::Planner;
 use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_runtime::DatabendRuntime;
-use futures_util::StreamExt;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::PipelineBuildResult;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 
@@ -97,8 +101,34 @@ impl ExplainPerfInterpreter {
         );
         let (plan, _extras) = planner.plan_sql(&self.sql).await?;
         let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
-        let mut data_stream = interpreter.execute(self.ctx.clone()).await?;
-        while data_stream.next().await.is_some() {}
+        let mut build_res = interpreter.execute2().await?;
+
+        if build_res.main_pipeline.is_empty() {
+            return Ok(());
+        }
+
+        let ctx = self.ctx.clone();
+        build_res
+            .main_pipeline
+            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                ctx.add_query_profiles(&info.profiling);
+                info.res.clone()
+            }));
+
+        let settings = self.ctx.get_settings();
+        build_res.set_max_threads(settings.get_max_threads()? as usize);
+        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+
+        if build_res.main_pipeline.is_complete_pipeline()? {
+            let mut pipelines = build_res.sources_pipelines;
+            pipelines.push(build_res.main_pipeline);
+            let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+            executor.execute()?;
+        } else {
+            let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            executor.start();
+            while (executor.pull_data()?).is_some() {}
+        }
         Ok(())
     }
 }

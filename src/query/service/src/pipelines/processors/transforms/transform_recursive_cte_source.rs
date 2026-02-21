@@ -38,6 +38,7 @@ use databend_common_expression::infer_schema_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
@@ -158,7 +159,14 @@ impl TransformRecursiveCteSource {
             union_plan.right.clone()
         };
         ctx.clear_runtime_filter();
-        let build_res = build_query_pipeline_without_render_result_set(&ctx, &plan).await?;
+        let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &plan).await?;
+        let ctx_for_profiles = ctx.clone();
+        build_res
+            .main_pipeline
+            .set_on_finished(move |info: &ExecutionInfo| {
+                ctx_for_profiles.add_query_profiles(&info.profiling);
+                Ok(())
+            });
         let settings = ExecutorSettings::try_create(ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
         ctx.set_executor(pulling_executor.get_inner())?;
@@ -354,7 +362,7 @@ async fn create_memory_table_for_cte_scan(
     for create_table_plan in create_table_plans {
         let create_table_interpreter =
             CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-        let _ = create_table_interpreter.execute(ctx.clone()).await?;
+        create_table_interpreter.execute2().await?;
     }
 
     Ok(())
