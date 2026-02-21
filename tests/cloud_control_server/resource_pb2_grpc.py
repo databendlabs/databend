@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class ResourceServiceStub(object):
+class WorkerServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -34,43 +34,91 @@ class ResourceServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.ApplyResource = channel.unary_unary(
-                '/resourceproto.ResourceService/ApplyResource',
-                request_serializer=resource__pb2.ApplyResourceRequest.SerializeToString,
-                response_deserializer=resource__pb2.ApplyResourceResponse.FromString,
+        self.CreateWorker = channel.unary_unary(
+                '/resourceproto.WorkerService/CreateWorker',
+                request_serializer=resource__pb2.CreateWorkerRequest.SerializeToString,
+                response_deserializer=resource__pb2.CreateWorkerResponse.FromString,
+                _registered_method=True)
+        self.AlterWorker = channel.unary_unary(
+                '/resourceproto.WorkerService/AlterWorker',
+                request_serializer=resource__pb2.AlterWorkerRequest.SerializeToString,
+                response_deserializer=resource__pb2.AlterWorkerResponse.FromString,
+                _registered_method=True)
+        self.DropWorker = channel.unary_unary(
+                '/resourceproto.WorkerService/DropWorker',
+                request_serializer=resource__pb2.DropWorkerRequest.SerializeToString,
+                response_deserializer=resource__pb2.DropWorkerResponse.FromString,
+                _registered_method=True)
+        self.ListWorkers = channel.unary_unary(
+                '/resourceproto.WorkerService/ListWorkers',
+                request_serializer=resource__pb2.ListWorkersRequest.SerializeToString,
+                response_deserializer=resource__pb2.ListWorkersResponse.FromString,
                 _registered_method=True)
 
 
-class ResourceServiceServicer(object):
+class WorkerServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def ApplyResource(self, request, context):
+    def CreateWorker(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AlterWorker(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DropWorker(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListWorkers(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_ResourceServiceServicer_to_server(servicer, server):
+def add_WorkerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'ApplyResource': grpc.unary_unary_rpc_method_handler(
-                    servicer.ApplyResource,
-                    request_deserializer=resource__pb2.ApplyResourceRequest.FromString,
-                    response_serializer=resource__pb2.ApplyResourceResponse.SerializeToString,
+            'CreateWorker': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateWorker,
+                    request_deserializer=resource__pb2.CreateWorkerRequest.FromString,
+                    response_serializer=resource__pb2.CreateWorkerResponse.SerializeToString,
+            ),
+            'AlterWorker': grpc.unary_unary_rpc_method_handler(
+                    servicer.AlterWorker,
+                    request_deserializer=resource__pb2.AlterWorkerRequest.FromString,
+                    response_serializer=resource__pb2.AlterWorkerResponse.SerializeToString,
+            ),
+            'DropWorker': grpc.unary_unary_rpc_method_handler(
+                    servicer.DropWorker,
+                    request_deserializer=resource__pb2.DropWorkerRequest.FromString,
+                    response_serializer=resource__pb2.DropWorkerResponse.SerializeToString,
+            ),
+            'ListWorkers': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListWorkers,
+                    request_deserializer=resource__pb2.ListWorkersRequest.FromString,
+                    response_serializer=resource__pb2.ListWorkersResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'resourceproto.ResourceService', rpc_method_handlers)
+            'resourceproto.WorkerService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('resourceproto.ResourceService', rpc_method_handlers)
+    server.add_registered_method_handlers('resourceproto.WorkerService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class ResourceService(object):
+class WorkerService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def ApplyResource(request,
+    def CreateWorker(request,
             target,
             options=(),
             channel_credentials=None,
@@ -83,9 +131,90 @@ class ResourceService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/resourceproto.ResourceService/ApplyResource',
-            resource__pb2.ApplyResourceRequest.SerializeToString,
-            resource__pb2.ApplyResourceResponse.FromString,
+            '/resourceproto.WorkerService/CreateWorker',
+            resource__pb2.CreateWorkerRequest.SerializeToString,
+            resource__pb2.CreateWorkerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AlterWorker(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/resourceproto.WorkerService/AlterWorker',
+            resource__pb2.AlterWorkerRequest.SerializeToString,
+            resource__pb2.AlterWorkerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DropWorker(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/resourceproto.WorkerService/DropWorker',
+            resource__pb2.DropWorkerRequest.SerializeToString,
+            resource__pb2.DropWorkerResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListWorkers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/resourceproto.WorkerService/ListWorkers',
+            resource__pb2.ListWorkersRequest.SerializeToString,
+            resource__pb2.ListWorkersResponse.FromString,
             options,
             channel_credentials,
             insecure,

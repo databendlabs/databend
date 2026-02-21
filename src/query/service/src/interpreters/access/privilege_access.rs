@@ -1967,7 +1967,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_) => {
+            | Plan::AlterTask(_)
+            | Plan::CreateWorker(_)
+            | Plan::AlterWorker(_)
+            | Plan::DropWorker(_)
+            | Plan::ShowWorkers => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }

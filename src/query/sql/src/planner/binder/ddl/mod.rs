@@ -35,4 +35,5 @@ mod tag;
 mod task;
 mod view;
 mod warehouse;
+mod worker;
 mod workload;

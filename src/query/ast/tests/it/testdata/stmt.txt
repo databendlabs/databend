@@ -3450,6 +3450,313 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE WORKER read_env
+---------- Output ---------
+CREATE WORKER read_env
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: false,
+        name: Identifier {
+            span: Some(
+                14..22,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        options: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE WORKER IF NOT EXISTS read_env
+---------- Output ---------
+CREATE WORKER IF NOT EXISTS read_env
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: true,
+        name: Identifier {
+            span: Some(
+                28..36,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        options: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE WORKER read_env WITH size='small', auto_suspend='300', auto_resume='true', max_cluster_count='3', min_cluster_count='1'
+---------- Output ---------
+CREATE WORKER read_env WITH  auto_resume = 'true', auto_suspend = '300', max_cluster_count = '3', min_cluster_count = '1', size = 'small'
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: false,
+        name: Identifier {
+            span: Some(
+                14..22,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        options: {
+            "auto_resume": "true",
+            "auto_suspend": "300",
+            "max_cluster_count": "3",
+            "min_cluster_count": "1",
+            "size": "small",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SET size='medium', auto_suspend='600'
+---------- Output ---------
+ALTER WORKER read_env SET auto_suspend = '600',size = 'medium'
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: SetOptions {
+            options: {
+                "auto_suspend": "600",
+                "size": "medium",
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env UNSET size, auto_suspend
+---------- Output ---------
+ALTER WORKER read_env UNSET size, auto_suspend
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: UnsetOptions {
+            options: [
+                Identifier {
+                    span: Some(
+                        28..32,
+                    ),
+                    name: "size",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        34..46,
+                    ),
+                    name: "auto_suspend",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SET TAG purpose='sandbox', owner='ci'
+---------- Output ---------
+ALTER WORKER read_env SET TAG purpose = 'sandbox', owner = 'ci'
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: SetTag {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            30..37,
+                        ),
+                        name: "purpose",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "sandbox",
+                },
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            49..54,
+                        ),
+                        name: "owner",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "ci",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env UNSET TAG purpose, owner
+---------- Output ---------
+ALTER WORKER read_env UNSET TAG purpose, owner
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: UnsetTag {
+            tags: [
+                Identifier {
+                    span: Some(
+                        32..39,
+                    ),
+                    name: "purpose",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        41..46,
+                    ),
+                    name: "owner",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW WORKERS
+---------- Output ---------
+SHOW WORKERS
+---------- AST ------------
+ShowWorkers(
+    ShowWorkersStmt,
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SUSPEND
+---------- Output ---------
+ALTER WORKER read_env SUSPEND
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: Suspend,
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env RESUME
+---------- Output ---------
+ALTER WORKER read_env RESUME
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: Resume,
+    },
+)
+
+
+---------- Input ----------
+DROP WORKER read_env
+---------- Output ---------
+DROP WORKER read_env
+---------- AST ------------
+DropWorker(
+    DropWorkerStmt {
+        if_exists: false,
+        name: Identifier {
+            span: Some(
+                12..20,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP WORKER IF EXISTS read_env
+---------- Output ---------
+DROP WORKER IF EXISTS read_env
+---------- AST ------------
+DropWorker(
+    DropWorkerStmt {
+        if_exists: true,
+        name: Identifier {
+            span: Some(
+                22..30,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 truncate table a;
 ---------- Output ---------
 TRUNCATE TABLE a

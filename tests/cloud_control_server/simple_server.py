@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -21,12 +22,21 @@ import timestamp_pb2
 import resource_pb2
 import resource_pb2_grpc
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:
+        tomllib = None
+
 # Simple in-memory database
 TASK_DB = {}
 TASK_RUN_DB = {}
 
 NOTIFICATION_DB = {}
 NOTIFICATION_HISTORY_DB = {}
+WORKER_DB = {}
 
 UDF_HEADERS = {"x-authorization": os.getenv("UDF_MOCK_TOKEN", "123")}
 UDF_DOCKER_KEEP_CONTAINER = True
@@ -47,10 +57,102 @@ RESOURCE_IMAGE_BY_TYPE = {
 RESOURCE_SERVICE_PORT_BY_TYPE = {
     "udf": UDF_DOCKER_CONTAINER_PORT,
 }
+UDF_ENV_CONFIG_PATH = os.getenv(
+    "UDF_ENV_CONFIG",
+    os.path.join(os.path.dirname(__file__), "udf_env.toml"),
+)
+UDF_ENV_CONFIG_LOCK = threading.Lock()
+UDF_ENV_CONFIG_CACHE = {"mtime": None, "data": {}}
+ENV_KEY_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+RESERVED_ENV_KEYS = {"RESOURCE_STATUS_ADDR", "UDF_SERVER_ADDR"}
 
 
 def _log(*args):
     print(*args, flush=True)
+
+
+def _get_metadata_value(context, key):
+    target = key.lower()
+    for meta_key, meta_value in context.invocation_metadata():
+        if meta_key.lower() == target:
+            return meta_value
+    return ""
+
+
+def _stringify_env_value(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(value, sort_keys=True)
+
+
+def _sanitize_env_vars(env_vars):
+    cleaned = {}
+    for key, value in (env_vars or {}).items():
+        if not isinstance(key, str) or not ENV_KEY_RE.match(key):
+            _log(f"Skip invalid env key: {key!r}")
+            continue
+        if key in RESERVED_ENV_KEYS:
+            _log(f"Skip reserved env key: {key}")
+            continue
+        cleaned[key] = _stringify_env_value(value)
+    return cleaned
+
+
+def _load_udf_env_config():
+    if tomllib is None:
+        raise RuntimeError("tomllib is required to parse udf_env.toml")
+    path = UDF_ENV_CONFIG_PATH
+    if not os.path.isfile(path):
+        with UDF_ENV_CONFIG_LOCK:
+            UDF_ENV_CONFIG_CACHE["mtime"] = None
+            UDF_ENV_CONFIG_CACHE["data"] = {}
+        return {}
+    mtime = os.path.getmtime(path)
+    with UDF_ENV_CONFIG_LOCK:
+        if UDF_ENV_CONFIG_CACHE["mtime"] != mtime:
+            with open(path, "rb") as handle:
+                data = tomllib.load(handle)
+            UDF_ENV_CONFIG_CACHE["mtime"] = mtime
+            UDF_ENV_CONFIG_CACHE["data"] = data
+        return UDF_ENV_CONFIG_CACHE["data"]
+
+
+def _get_udf_env_vars(tenant, resource_name):
+    if not tenant or not resource_name:
+        return {}
+    data = _load_udf_env_config()
+    udf_env = data.get("udf_env") or {}
+    if not isinstance(udf_env, dict):
+        return {}
+    key = f"{tenant}.{resource_name}"
+    udf_cfg = udf_env.get(key) or {}
+    if not isinstance(udf_cfg, dict):
+        return {}
+    return _sanitize_env_vars(udf_cfg)
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get_worker_store(tenant_id):
+    if not tenant_id:
+        tenant_id = "default"
+    return WORKER_DB.setdefault(tenant_id, {})
+
+
+def _worker_to_pb(worker):
+    return resource_pb2.Worker(
+        name=worker["name"],
+        tags=worker.get("tags") or {},
+        created_at=worker.get("created_at") or "",
+        updated_at=worker.get("updated_at") or "",
+        options=worker.get("options") or {},
+    )
 
 
 def _run_command(args, input_text=None):
@@ -128,6 +230,7 @@ def _start_resource_container(
     status_port,
     container_name,
     script,
+    env_vars,
 ):
     if UDF_DOCKER_LOG_COMMANDS:
         _log(
@@ -148,6 +251,9 @@ def _start_resource_container(
         "-e",
         f"UDF_SERVER_ADDR=0.0.0.0:{host_port}",
     ]
+    if env_vars:
+        for key, value in env_vars.items():
+            cmd.extend(["-e", f"{key}={value}"])
     if not UDF_DOCKER_KEEP_CONTAINER:
         cmd.append("--rm")
     cmd.extend(
@@ -167,11 +273,16 @@ def _start_resource_container(
             _log(f"Sandbox docker container_id={container_id}")
 
 
-def _ensure_resource_endpoint(resource_type, script):
+def _ensure_resource_endpoint(resource_type, script, env_vars):
     image_tag = _get_resource_image(resource_type)
     service_port = _get_resource_service_port(resource_type)
     key_payload = json.dumps(
-        {"type": resource_type, "image": image_tag, "script": script},
+        {
+            "type": resource_type,
+            "image": image_tag,
+            "script": script,
+            "env": env_vars or {},
+        },
         sort_keys=True,
     )
     key_hash = hashlib.sha256(key_payload.encode("utf-8")).hexdigest()[:12]
@@ -200,6 +311,7 @@ def _ensure_resource_endpoint(resource_type, script):
             status_port,
             container_name,
             script,
+            env_vars,
         )
 
         endpoint = f"http://{UDF_DOCKER_HOST}:{host_port}"
@@ -659,32 +771,124 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         )
 
 
-class ResourceService(resource_pb2_grpc.ResourceServiceServicer):
-    def ApplyResource(self, request, context):
-        _log("ApplyResource", request)
-        if not _docker_available():
-            context.abort(
-                grpc.StatusCode.FAILED_PRECONDITION,
-                "docker not found; a working docker CLI is required",
-            )
+class WorkerService(resource_pb2_grpc.WorkerServiceServicer):
+    def CreateWorker(self, request, context):
+        _log("CreateWorker", request)
+        store = _get_worker_store(request.tenant_id)
+        name = request.name
+        if not name:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing worker name")
+        worker = store.get(name)
+        if worker is None:
+            now = _now_iso()
+            worker = {
+                "name": name,
+                "tags": dict(request.tags),
+                "options": dict(request.options),
+                "created_at": now,
+                "updated_at": now,
+            }
+            store[name] = worker
+        elif not request.if_not_exists:
+            context.abort(grpc.StatusCode.ALREADY_EXISTS, "worker already exists")
 
-        resource_type = request.type or "udf"
-        script = request.script
-        if not script:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing script")
-        _log("Sandbox script:\n", script)
+        endpoint = ""
+        headers = {}
+        if request.script:
+            if not _docker_available():
+                context.abort(
+                    grpc.StatusCode.FAILED_PRECONDITION,
+                    "docker not found; a working docker CLI is required",
+                )
 
-        try:
-            endpoint, _status_endpoint = _ensure_resource_endpoint(resource_type, script)
-        except Exception as exc:
-            context.abort(
-                grpc.StatusCode.INTERNAL,
-                f"failed to provision sandbox container: {exc}",
-            )
+            resource_type = request.type or "udf"
+            resource_name = name
+            script = request.script
+            _log("Sandbox script:\n", script)
 
-        return resource_pb2.ApplyResourceResponse(
-            endpoint=endpoint, headers=UDF_HEADERS
+            env_vars = {}
+            if resource_type == "udf":
+                tenant = request.tenant_id or _get_metadata_value(
+                    context, "x-databend-tenant"
+                )
+                try:
+                    env_vars = _get_udf_env_vars(tenant, resource_name)
+                except Exception as exc:
+                    context.abort(
+                        grpc.StatusCode.FAILED_PRECONDITION,
+                        f"failed to load udf env config: {exc}",
+                    )
+                if env_vars:
+                    _log(
+                        "Sandbox env keys:",
+                        ",".join(sorted(env_vars.keys())),
+                    )
+
+            try:
+                endpoint, _status_endpoint = _ensure_resource_endpoint(
+                    resource_type, script, env_vars
+                )
+            except Exception as exc:
+                context.abort(
+                    grpc.StatusCode.INTERNAL,
+                    f"failed to provision sandbox container: {exc}",
+                )
+            headers = UDF_HEADERS
+
+        return resource_pb2.CreateWorkerResponse(
+            worker=_worker_to_pb(worker), endpoint=endpoint, headers=headers
         )
+
+    def AlterWorker(self, request, context):
+        _log("AlterWorker", request)
+        store = _get_worker_store(request.tenant_id)
+        name = request.name
+        if not name:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing worker name")
+        if name not in store:
+            context.abort(grpc.StatusCode.NOT_FOUND, "worker not found")
+        worker = store[name]
+        if request.set_tags:
+            worker.setdefault("tags", {}).update(dict(request.set_tags))
+        if request.unset_tags:
+            tags = worker.get("tags") or {}
+            for key in request.unset_tags:
+                tags.pop(key, None)
+            worker["tags"] = tags
+        if request.set_options:
+            worker.setdefault("options", {}).update(dict(request.set_options))
+        if request.unset_options:
+            options = worker.get("options") or {}
+            for key in request.unset_options:
+                options.pop(key, None)
+            worker["options"] = options
+        suspend_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Suspend")
+        resume_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Resume")
+        if request.state_action == suspend_action:
+            worker.setdefault("options", {})["suspended"] = "true"
+        elif request.state_action == resume_action:
+            worker.setdefault("options", {})["suspended"] = "false"
+        worker["updated_at"] = _now_iso()
+        return resource_pb2.AlterWorkerResponse(worker=_worker_to_pb(worker))
+
+    def DropWorker(self, request, context):
+        _log("DropWorker", request)
+        store = _get_worker_store(request.tenant_id)
+        name = request.name
+        if not name:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing worker name")
+        if name not in store:
+            if request.if_exists:
+                return resource_pb2.DropWorkerResponse()
+            context.abort(grpc.StatusCode.NOT_FOUND, "worker not found")
+        del store[name]
+        return resource_pb2.DropWorkerResponse()
+
+    def ListWorkers(self, request, context):
+        _log("ListWorkers", request)
+        store = _get_worker_store(request.tenant_id)
+        workers = [_worker_to_pb(worker) for worker in store.values()]
+        return resource_pb2.ListWorkersResponse(workers=workers)
 
 
 def serve():
@@ -693,14 +897,12 @@ def serve():
     notification_pb2_grpc.add_NotificationServiceServicer_to_server(
         NotificationService(), server
     )
-    resource_pb2_grpc.add_ResourceServiceServicer_to_server(
-        ResourceService(), server
-    )
+    resource_pb2_grpc.add_WorkerServiceServicer_to_server(WorkerService(), server)
     # Add reflection service
     SERVICE_NAMES = (
         task_pb2.DESCRIPTOR.services_by_name["TaskService"].full_name,
         notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].full_name,
-        resource_pb2.DESCRIPTOR.services_by_name["ResourceService"].full_name,
+        resource_pb2.DESCRIPTOR.services_by_name["WorkerService"].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)
