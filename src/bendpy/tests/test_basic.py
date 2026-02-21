@@ -60,3 +60,4 @@ class TestBasic:
             "select sum(a) x, max(b) y, max(d) z from aa where c"
         ).to_polars()
         assert df.to_pandas().values.tolist() == [[90.0, "9", 9.0]]
+

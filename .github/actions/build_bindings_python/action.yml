@@ -55,6 +55,19 @@ runs:
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
         echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
+    - name: Setup build dependencies for Linux
+      if: contains(inputs.target, '-linux') && inputs.version == ''
+      shell: bash
+      run: |
+        sudo apt-get update -yq
+        sudo apt-get install -yq --no-install-recommends build-essential clang mold libssl-dev pkg-config cmake protobuf-compiler
+        if [[ "${{ inputs.target }}" == aarch64-* ]]; then
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
+        else
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+        fi
+        echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
+
     - name: Setup uv
       uses: astral-sh/setup-uv@v5
       with:

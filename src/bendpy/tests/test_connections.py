@@ -44,12 +44,10 @@ class MockSessionContext:
         self.sql(sql)
 
     def register_csv(self, name, path, pattern=None, connection=None):
-        if connection:
-            pattern_clause = f", pattern => '{pattern}'" if pattern else ""
-            sql = f"create view {name} as select * from '{path}' (file_format => 'csv'{pattern_clause}, connection => '{connection}')"
-        else:
-            pattern_clause = f", pattern => '{pattern}'" if pattern else ""
-            sql = f"create view {name} as select * from '{path}' (file_format => 'csv'{pattern_clause})"
+        file_path = path if connection else (f"fs://{path}" if path.startswith("/") else path)
+        pattern_clause = f", pattern => '{pattern}'" if pattern else ""
+        conn_clause = f", connection => '{connection}'" if connection else ""
+        sql = f"create view {name} as select * from '{file_path}' (file_format => 'csv'{pattern_clause}{conn_clause})"
         self.sql(sql)
 
     def create_azblob_connection(self, name, endpoint_url, account_name, account_key):
@@ -271,7 +269,18 @@ class TestRegisterWithConnection:
 
             self.ctx.register_csv("logs", "/data/logs/", pattern="*.csv")
 
-            expected_sql = "create view logs as select * from '/data/logs/' (file_format => 'csv', pattern => '*.csv')"
+            expected_sql = "create view logs as select * from 'fs:///data/logs/' (file_format => 'csv', pattern => '*.csv')"
+            mock_sql.assert_called_once_with(expected_sql)
+
+    def test_register_csv_with_pattern_and_connection(self):
+        with unittest.mock.patch.object(self.ctx, "sql") as mock_sql:
+            mock_sql.return_value.collect.return_value = None
+
+            self.ctx.register_csv(
+                "logs", "s3://bucket/logs/", pattern="*.csv", connection="my_s3"
+            )
+
+            expected_sql = "create view logs as select * from 's3://bucket/logs/' (file_format => 'csv', pattern => '*.csv', connection => 'my_s3')"
             mock_sql.assert_called_once_with(expected_sql)
 
 

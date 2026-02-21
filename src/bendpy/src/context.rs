@@ -28,6 +28,39 @@ use crate::dataframe::default_box_size;
 use crate::utils::RUNTIME;
 use crate::utils::wait_for_future;
 
+fn resolve_file_path(path: &str) -> String {
+    if path.contains("://") {
+        return path.to_owned();
+    }
+    if path.starts_with('/') {
+        return format!("fs://{}", path);
+    }
+    format!(
+        "fs://{}/{}",
+        std::env::current_dir().unwrap().to_str().unwrap(),
+        path
+    )
+}
+
+/// Extract the real filesystem path from a `fs://` URI.
+fn fs_path_from_uri(uri: &str) -> Option<&str> {
+    uri.strip_prefix("fs://")
+}
+
+/// Read the header line of a CSV file and return column names.
+fn read_csv_column_names(path: &str) -> std::io::Result<Vec<String>> {
+    use std::io::BufRead;
+    let file = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut header = String::new();
+    reader.read_line(&mut header)?;
+    Ok(header
+        .trim()
+        .split(',')
+        .map(|s| s.trim().trim_matches('"').to_string())
+        .collect())
+}
+
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
@@ -171,39 +204,55 @@ impl PySessionContext {
         connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        let sql = if let Some(connection_name) = connection {
-            let pattern_clause = pattern
-                .map(|p| format!(", pattern => '{}'", p))
-                .unwrap_or_default();
-            format!(
-                "create view {} as select * from '{}' (file_format => '{}'{}, connection => '{}')",
-                name, path, file_format, pattern_clause, connection_name
-            )
-        } else {
-            let mut path = path.to_owned();
-            if path.starts_with('/') {
-                path = format!("fs://{}", path);
-            }
+        let file_path = match connection {
+            Some(_) => path.to_owned(),
+            None => resolve_file_path(path),
+        };
+        let connection_clause = connection
+            .map(|c| format!(", connection => '{}'", c))
+            .unwrap_or_default();
+        let pattern_clause = pattern
+            .map(|p| format!(", pattern => '{}'", p))
+            .unwrap_or_default();
 
-            if !path.contains("://") {
-                path = format!(
-                    "fs://{}/{}",
-                    std::env::current_dir().unwrap().to_str().unwrap(),
-                    path.as_str()
-                );
-            }
-
-            let pattern_clause = pattern
-                .map(|p| format!(", pattern => '{}'", p))
-                .unwrap_or_default();
-            format!(
-                "create view {} as select * from '{}' (file_format => '{}'{})",
-                name, path, file_format, pattern_clause
-            )
+        let select_clause = match file_format {
+            "csv" => self.build_column_select(&file_path)?,
+            _ => "*".to_string(),
         };
 
+        let sql = format!(
+            "create view {} as select {} from '{}' (file_format => '{}'{}{})",
+            name, select_clause, file_path, file_format, pattern_clause, connection_clause
+        );
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
+    }
+
+    /// Read CSV header from local file and build `$1 AS col1, $2 AS col2, ...`.
+    fn build_column_select(&self, file_path: &str) -> PyResult<String> {
+        let fs_path = fs_path_from_uri(file_path).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "CSV column inference only supports local files (fs://), got: {}",
+                file_path
+            ))
+        })?;
+        let col_names = read_csv_column_names(fs_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to read CSV header: {}",
+                e
+            ))
+        })?;
+        if col_names.is_empty() {
+            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                "Could not infer schema: no columns found",
+            ));
+        }
+        Ok(col_names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| format!("${} AS `{}`", i + 1, name))
+            .collect::<Vec<_>>()
+            .join(", "))
     }
 
     #[pyo3(signature = (name, access_key_id, secret_access_key, endpoint_url = None, region = None))]
