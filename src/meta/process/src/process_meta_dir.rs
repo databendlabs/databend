@@ -51,8 +51,7 @@ where F: Fn(RaftStoreEntry) -> Result<Option<RaftStoreEntry>, anyhow::Error> {
             converted.len()
         );
 
-        for (v1_ent, v2_ent) in converted {
-            let _ = v1_ent;
+        for (_v1_ent, v2_ent) in converted {
             let (k, v) = RaftStoreEntry::serialize(&v2_ent)?;
             tree.insert(k, v)?;
         }

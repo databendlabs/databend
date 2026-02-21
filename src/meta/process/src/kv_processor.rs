@@ -187,9 +187,10 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
     }
 
     fn proc_condition(&self, c: TxnCondition) -> TxnCondition {
-        if let Some(Target::Value(_)) = &c.target {
-            unreachable!("we has never used value");
-        }
+        debug_assert!(
+            !matches!(&c.target, Some(Target::Value(_))),
+            "we have never used value"
+        );
         c
     }
 
