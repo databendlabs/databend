@@ -42,6 +42,8 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
+const DEFAULT_ANTI_JOIN_SELECTIVITY: f64 = 0.3;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Cross,
@@ -489,8 +491,10 @@ impl Join {
             }
             JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
             JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
-            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
-            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
+            JoinType::LeftAnti => left_cardinality * DEFAULT_ANTI_JOIN_SELECTIVITY,
+            JoinType::RightAnti => right_cardinality * DEFAULT_ANTI_JOIN_SELECTIVITY,
+            JoinType::LeftSingle | JoinType::RightMark => left_cardinality,
+            JoinType::RightSingle | JoinType::LeftMark => right_cardinality,
         };
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
