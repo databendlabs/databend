@@ -90,6 +90,7 @@ pub struct ProcessorAsyncTask {
     workers_condvar: Arc<WorkersCondvar>,
     instant: Instant,
     last_nanos: usize,
+    first_poll: bool,
     graph: Arc<RunningGraph>,
     inner: BoxFuture<'static, Result<()>>,
 }
@@ -157,6 +158,7 @@ impl ProcessorAsyncTask {
             instant,
             graph,
             inner: inner.boxed(),
+            first_poll: true,
         }
     }
 }
@@ -171,11 +173,17 @@ impl Future for ProcessorAsyncTask {
 
         let last_nanos = self.last_nanos;
         let last_instant = self.instant;
+        let is_first_poll = std::mem::take(&mut self.first_poll);
         let inner = self.inner.as_mut();
 
         let before_poll_nanos = elapsed_nanos(last_instant);
         let wait_nanos = before_poll_nanos - last_nanos;
-        Profile::record_usize_profile(ProfileStatisticsName::WaitTime, wait_nanos);
+
+        if is_first_poll {
+            Profile::record_usize_profile(ProfileStatisticsName::ScheduleTime, wait_nanos);
+        } else {
+            Profile::record_usize_profile(ProfileStatisticsName::WaitTime, wait_nanos);
+        }
 
         let poll_res = catch_unwind(move || inner.poll(cx));
 

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::hints::assume;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_exception::Result;
 
@@ -27,6 +29,7 @@ pub trait PhysicalFormat {
         // explain analyze
         if let Some(prof) = ctx.profs.get(&self.get_meta().plan_id) {
             let mut children = Vec::with_capacity(format_node.children.len() + 10);
+            assume(prof.statistics.len() == std::mem::variant_count::<ProfileStatisticsName>());
             for (_, desc) in get_statistics_desc().iter() {
                 if prof.statistics[desc.index] != 0 {
                     children.push(FormatTreeNode::new(format!(

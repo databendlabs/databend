@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
@@ -96,6 +97,7 @@ impl Processor for TransformRuntimeFilterWait {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
+        let instant = Instant::now();
         if self.runtime_filter_ready.is_empty() {
             self.runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
         }
@@ -135,6 +137,13 @@ impl Processor for TransformRuntimeFilterWait {
 
         self.runtime_filter_ready.clear();
         self.wait_finished = true;
+
+        log::info!(
+            "RUNTIME-FILTER: scan_id={} ready_count={} elapsed={:?}",
+            self.scan_id,
+            self.runtime_filter_ready.len(),
+            instant.elapsed()
+        );
         Ok(())
     }
 }
