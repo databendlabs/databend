@@ -222,6 +222,35 @@ where
     #[logcall::logcall]
     #[fastrace::trace]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        validate_create_table_request(&req)?;
+        validate_index_columns(&req.table_meta)?;
+
+        let tenant_dbname = req.name_ident.db_name_ident();
+        let seq_db_id = self
+            .get_database_id_or_err(&tenant_dbname, "create_table")
+            .await?
+            .map_err(|e| KVAppError::AppError(AppError::UnknownDatabase(e)))?;
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+            match self.try_create_table_txn(&req, &seq_db_id).await? {
+                Some(reply) => return Ok(reply),
+                None => continue,
+            }
+        }
+    }
+
+    /// Attempt one transaction to create a table, returning `Some(reply)` on
+    /// success or `None` if a write conflict was detected and the caller should
+    /// retry.
+    async fn try_create_table_txn(
+        &self,
+        req: &CreateTableReq,
+        seq_db_id: &SeqV<DatabaseId>,
+    ) -> Result<Option<CreateTableReply>, KVAppError> {
         // Make an error if table exists.
         fn make_exists_err(req: &CreateTableReq) -> AppError {
             let name = &req.name_ident.table_name;
@@ -246,31 +275,11 @@ where
             }
         }
 
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let tenant_dbname_tbname = &req.name_ident;
-        let tenant_dbname = req.name_ident.db_name_ident();
-
-        let mut maybe_key_table_id: Option<TableId> = None;
-
-        validate_create_table_request(&req)?;
-
-        // fixed: does not change in every loop.
-        let seq_db_id = self
-            .get_database_id_or_err(&tenant_dbname, "create_table")
-            .await?
-            .map_err(|e| KVAppError::AppError(AppError::UnknownDatabase(e)))?;
-
-        // fixed
         let key_dbid = seq_db_id.data;
-
-        // fixed
         let key_dbid_tbname = DBIdTableName {
             db_id: *seq_db_id.data,
             table_name: req.name_ident.table_name.clone(),
         };
-
-        // fixed
         let key_table_id_list = TableIdHistoryIdent {
             database_id: *seq_db_id.data,
             table_name: req.name_ident.table_name.clone(),
@@ -287,242 +296,205 @@ where
             (None, key_table_id_list.clone())
         };
 
-        // The keys of values to re-fetch for every retry in this txn.
+        // Fetch current values of all keys involved in the transaction.
         let keys = vec![
             key_dbid.to_string_key(),
             key_dbid_tbname.to_string_key(),
             key_table_id_list.to_string_key(),
         ];
-
-        // Initialize required key-values
         let mut data = {
             let values = self.mget_kv(&keys).await?;
             keys.iter()
-                .zip(values.into_iter())
+                .zip(values)
                 .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
                 .collect::<Vec<_>>()
         };
 
-        validate_index_columns(&req.table_meta)?;
+        let db_meta = {
+            let d = data.remove(0);
+            let (k, v) = deserialize_struct_get_response::<DatabaseId>(d)?;
+            assert_eq!(key_dbid, k);
 
-        let mut trials = txn_backoff(None, func_name!());
+            v.ok_or_else(|| {
+                AppError::UnknownDatabaseId(UnknownDatabaseId::new(
+                    *seq_db_id.data,
+                    format!("{}: {}", func_name!(), seq_db_id.data),
+                ))
+            })?
+        };
 
-        loop {
-            trials.next().unwrap()?.await;
+        let mut txn = TxnRequest::default();
 
-            // When retrying, data is cleared and re-fetched in one shot.
-            if data.is_empty() {
-                data = {
-                    let values = self.mget_kv(&keys).await?;
-                    keys.iter()
-                        .zip(values.into_iter())
-                        .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
-                        .collect::<Vec<_>>()
-                };
-            }
+        let seq_table_id = {
+            let d = data.remove(0);
+            let (k, v) = deserialize_id_get_response::<DBIdTableName>(d)?;
+            assert_eq!(key_dbid_tbname, k);
 
-            let db_meta = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<DatabaseId>(d)?;
-                assert_eq!(key_dbid, k);
-
-                v.ok_or_else(|| {
-                    AppError::UnknownDatabaseId(UnknownDatabaseId::new(
-                        *seq_db_id.data,
-                        format!("{}: {}", func_name!(), seq_db_id.data),
-                    ))
-                })?
-            };
-
-            let mut txn = TxnRequest::default();
-
-            let seq_table_id = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_id_get_response::<DBIdTableName>(d)?;
-                assert_eq!(key_dbid_tbname, k);
-
-                if let Some(id) = v {
-                    // TODO: move if_not_exists to upper caller. It is not duty of SchemaApi.
-                    match req.create_option {
-                        CreateOption::Create => {
-                            let app_err = make_exists_err(&req);
-                            return Err(KVAppError::AppError(app_err));
-                        }
-                        CreateOption::CreateIfNotExists => {
-                            return Ok(CreateTableReply {
-                                table_id: *id.data,
-                                table_id_seq: None,
-                                db_id: *seq_db_id.data,
-                                new_table: false,
-                                spec_vec: None,
-                                prev_table_id: None,
-                                orphan_table_name: None,
-                            });
-                        }
-                        CreateOption::CreateOrReplace => {
-                            if req.as_dropped {
-                                // If the table is being created as a dropped table, we do not
-                                // need to combine with drop_table_txn operations, just return
-                                // the sequence number associated with the value part of
-                                // the key-value pair (key_dbid_tbname, table_id).
-
-                                SeqV::new(id.seq, *id.data)
-                            } else {
-                                let (seq, id) = construct_drop_table_txn_operations(
-                                    self,
-                                    req.name_ident.table_name.clone(),
-                                    &req.name_ident.tenant,
-                                    req.catalog_name.clone(),
-                                    *id.data,
-                                    *seq_db_id.data,
-                                    true,
-                                    false,
-                                    &mut txn,
-                                )
-                                .await?;
-                                SeqV::new(seq, id)
-                            }
+            if let Some(id) = v {
+                // TODO: move if_not_exists to upper caller. It is not duty of SchemaApi.
+                match req.create_option {
+                    CreateOption::Create => {
+                        let app_err = make_exists_err(req);
+                        return Err(KVAppError::AppError(app_err));
+                    }
+                    CreateOption::CreateIfNotExists => {
+                        return Ok(Some(CreateTableReply {
+                            table_id: *id.data,
+                            table_id_seq: None,
+                            db_id: *seq_db_id.data,
+                            new_table: false,
+                            spec_vec: None,
+                            prev_table_id: None,
+                            orphan_table_name: None,
+                        }));
+                    }
+                    CreateOption::CreateOrReplace => {
+                        if req.as_dropped {
+                            // If the table is being created as a dropped table, we do not
+                            // need to combine with drop_table_txn operations, just return
+                            // the sequence number associated with the value part of
+                            // the key-value pair (key_dbid_tbname, table_id).
+                            SeqV::new(id.seq, *id.data)
+                        } else {
+                            let (seq, id) = construct_drop_table_txn_operations(
+                                self,
+                                req.name_ident.table_name.clone(),
+                                &req.name_ident.tenant,
+                                req.catalog_name.clone(),
+                                *id.data,
+                                *seq_db_id.data,
+                                true,
+                                false,
+                                &mut txn,
+                            )
+                            .await?;
+                            SeqV::new(seq, id)
                         }
                     }
-                } else {
-                    SeqV::new(0, 0)
                 }
-            };
-
-            let (mut tb_id_list, prev_table_id, tb_id_list_seq) = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
-                assert_eq!(key_table_id_list, k);
-
-                let tb_id_list = v.unwrap_or_default();
-
-                // if `as_dropped` is true, append new table id into a temp new table
-                // if create table return success, table id will be moved to table id list,
-                // else, it will be vacuum when `vacuum drop table`
-                if req.as_dropped {
-                    (
-                        // a new TableIdList
-                        TableIdList::new(),
-                        // save last table id and check when commit table meta
-                        tb_id_list.data.id_list.last().copied(),
-                        // seq MUST be 0
-                        0,
-                    )
-                } else {
-                    (tb_id_list.data, None, tb_id_list.seq)
-                }
-            };
-
-            // Table id is unique and does not need to re-generate in every loop.
-            let key_table_id = match &maybe_key_table_id {
-                None => {
-                    let id = fetch_id(self, IdGenerator::table_id()).await?;
-                    maybe_key_table_id = Some(TableId { table_id: id });
-                    maybe_key_table_id.as_ref().unwrap()
-                }
-                Some(id) => id,
-            };
-
-            let table_id = key_table_id.table_id;
-
-            let key_table_id_to_name = TableIdToName { table_id };
-
-            debug!(
-                key_table_id :? =(key_table_id),
-                name :? =(tenant_dbname_tbname);
-                "new table id"
-            );
-
-            {
-                // append new table_id into list
-                tb_id_list.append(table_id);
-                let dbid_tbname_seq = seq_table_id.seq;
-
-                txn.condition.extend(vec![
-                    // db has not to change, i.e., no new table is created.
-                    // Renaming db is OK and does not affect the seq of db_meta.
-                    txn_cond_seq(&key_dbid, Eq, db_meta.seq),
-                    // no other table with the same name is inserted.
-                    txn_cond_seq(&key_dbid_tbname, Eq, dbid_tbname_seq),
-                    // no other table id with the same name is append.
-                    txn_cond_seq(&save_key_table_id_list, Eq, tb_id_list_seq),
-                ]);
-
-                txn.if_then.extend(vec![
-                    // Changing a table in a db has to update the seq of db_meta,
-                    // to block the batch-delete-tables when deleting a db.
-                    txn_put_pb(&key_dbid, &db_meta.data)?, /* (db_id) -> db_meta */
-                    txn_put_pb(key_table_id, &req.table_meta)?, /* (tenant, db_id, tb_id) -> tb_meta */
-                    txn_put_pb(&save_key_table_id_list, &tb_id_list)?, /* _fd_table_id_list/db_id/table_name -> tb_id_list */
-                    // This record does not need to assert `table_id_to_name_key == 0`,
-                    // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
-                    txn_put_pb(&key_table_id_to_name, &key_dbid_tbname)?, /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
-                ]);
-
-                if req.as_dropped {
-                    // To create the table in a "dropped" state,
-                    // - we intentionally omit the tuple (key_dbid_name, table_id).
-                    //   This ensures the table remains invisible, and available to be vacuumed.
-                    // - also, the `table_id_seq` of newly create table should be obtained.
-                    //   The caller need to know the `table_id_seq` to manipulate the table more efficiently
-                    //   This TxnOp::Get is(should be) the last operation in the `if_then` list.
-                    txn.if_then.push(txn_get(key_table_id));
-                } else {
-                    // Otherwise, make newly created table visible by putting the tuple:
-                    // (tenant, db_id, tb_name) -> tb_id
-                    txn.if_then.push(txn_put_u64(&key_dbid_tbname, table_id)?)
-                }
-
-                for table_field in req.table_meta.schema.fields() {
-                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
-                        continue;
-                    };
-
-                    let auto_increment_key =
-                        AutoIncrementKey::new(table_id, table_field.column_id());
-                    let storage_ident =
-                        AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
-                    let storage_value =
-                        Id::new_typed(AutoIncrementStorageValue(auto_increment_expr.start));
-                    txn.if_then
-                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)?]);
-                }
-
-                let (succ, responses) = send_txn(self, txn).await?;
-
-                debug!(
-                    name :? =(tenant_dbname_tbname),
-                    key_table_id :? =(key_table_id),
-                    succ = succ,
-                    responses :? =(responses);
-                    "create_table"
-                );
-
-                // extract the table_id_seq (if any) from the kv txn responses
-                let table_id_seq = if req.as_dropped {
-                    responses.last().and_then(|r| match &r.response {
-                        Some(Response::Get(resp)) => resp.value.as_ref().map(|v| v.seq),
-                        _ => None,
-                    })
-                } else {
-                    None
-                };
-
-                if succ {
-                    return Ok(CreateTableReply {
-                        table_id,
-                        table_id_seq,
-                        db_id: *seq_db_id.data,
-                        new_table: dbid_tbname_seq == 0,
-                        spec_vec: None,
-                        prev_table_id,
-                        orphan_table_name,
-                    });
-                } else {
-                    // re-run txn with re-fetched data
-                    data = vec![];
-                }
+            } else {
+                SeqV::new(0, 0)
             }
+        };
+
+        let (mut tb_id_list, prev_table_id, tb_id_list_seq) = {
+            let d = data.remove(0);
+            let (k, v) = deserialize_struct_get_response::<TableIdHistoryIdent>(d)?;
+            assert_eq!(key_table_id_list, k);
+
+            let tb_id_list = v.unwrap_or_default();
+
+            // if `as_dropped` is true, append new table id into a temp new table
+            // if create table return success, table id will be moved to table id list,
+            // else, it will be vacuum when `vacuum drop table`
+            if req.as_dropped {
+                (
+                    // a new TableIdList
+                    TableIdList::new(),
+                    // save last table id and check when commit table meta
+                    tb_id_list.data.id_list.last().copied(),
+                    // seq MUST be 0
+                    0,
+                )
+            } else {
+                (tb_id_list.data, None, tb_id_list.seq)
+            }
+        };
+
+        let table_id = fetch_id(self, IdGenerator::table_id()).await?;
+        let key_table_id = TableId { table_id };
+        let key_table_id_to_name = TableIdToName { table_id };
+
+        debug!(
+            key_table_id :? =(&key_table_id),
+            name :? =(&req.name_ident);
+            "new table id"
+        );
+
+        // append new table_id into list
+        tb_id_list.append(table_id);
+        let dbid_tbname_seq = seq_table_id.seq;
+
+        txn.condition.extend(vec![
+            // db has not to change, i.e., no new table is created.
+            // Renaming db is OK and does not affect the seq of db_meta.
+            txn_cond_seq(&key_dbid, Eq, db_meta.seq),
+            // no other table with the same name is inserted.
+            txn_cond_seq(&key_dbid_tbname, Eq, dbid_tbname_seq),
+            // no other table id with the same name is append.
+            txn_cond_seq(&save_key_table_id_list, Eq, tb_id_list_seq),
+        ]);
+
+        txn.if_then.extend(vec![
+            // Changing a table in a db has to update the seq of db_meta,
+            // to block the batch-delete-tables when deleting a db.
+            txn_put_pb(&key_dbid, &db_meta.data)?, /* (db_id) -> db_meta */
+            txn_put_pb(&key_table_id, &req.table_meta)?, /* (tenant, db_id, tb_id) -> tb_meta */
+            txn_put_pb(&save_key_table_id_list, &tb_id_list)?, /* _fd_table_id_list/db_id/table_name -> tb_id_list */
+            // This record does not need to assert `table_id_to_name_key == 0`,
+            // Because this is a reverse index for db_id/table_name -> table_id, and it is unique.
+            txn_put_pb(&key_table_id_to_name, &key_dbid_tbname)?, /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
+        ]);
+
+        if req.as_dropped {
+            // To create the table in a "dropped" state,
+            // - we intentionally omit the tuple (key_dbid_name, table_id).
+            //   This ensures the table remains invisible, and available to be vacuumed.
+            // - also, the `table_id_seq` of newly create table should be obtained.
+            //   The caller need to know the `table_id_seq` to manipulate the table more efficiently
+            //   This TxnOp::Get is(should be) the last operation in the `if_then` list.
+            txn.if_then.push(txn_get(&key_table_id));
+        } else {
+            // Otherwise, make newly created table visible by putting the tuple:
+            // (tenant, db_id, tb_name) -> tb_id
+            txn.if_then.push(txn_put_u64(&key_dbid_tbname, table_id)?)
+        }
+
+        for table_field in req.table_meta.schema.fields() {
+            let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                continue;
+            };
+
+            let auto_increment_key = AutoIncrementKey::new(table_id, table_field.column_id());
+            let storage_ident =
+                AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
+            let storage_value = Id::new_typed(AutoIncrementStorageValue(auto_increment_expr.start));
+            txn.if_then
+                .extend(vec![txn_put_pb(&storage_ident, &storage_value)?]);
+        }
+
+        let (succ, responses) = send_txn(self, txn).await?;
+
+        debug!(
+            name :? =(&req.name_ident),
+            key_table_id :? =(&key_table_id),
+            succ = succ,
+            responses :? =(responses);
+            "create_table"
+        );
+
+        // extract the table_id_seq (if any) from the kv txn responses
+        let table_id_seq = if req.as_dropped {
+            responses.last().and_then(|r| match &r.response {
+                Some(Response::Get(resp)) => resp.value.as_ref().map(|v| v.seq),
+                _ => None,
+            })
+        } else {
+            None
+        };
+
+        if succ {
+            Ok(Some(CreateTableReply {
+                table_id,
+                table_id_seq,
+                db_id: *seq_db_id.data,
+                new_table: dbid_tbname_seq == 0,
+                spec_vec: None,
+                prev_table_id,
+                orphan_table_name,
+            }))
+        } else {
+            Ok(None)
         }
     }
 
