@@ -12,20 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::runtime::TraceFilterOptions;
+mod query_trace;
 
-use crate::servers::flight::v1::packets::QueryFragment;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct QueryFragments {
-    pub query_id: String,
-    pub fragments: Vec<QueryFragment>,
-    #[serde(default)]
-    pub trace_flag: bool,
-    /// W3C Trace Context traceparent header for distributed tracing
-    #[serde(default)]
-    pub trace_parent: Option<String>,
-    /// Filter options for trace collection
-    #[serde(default)]
-    pub trace_filter_options: TraceFilterOptions,
-}
+pub use query_trace::CollectorGuard;
+pub use query_trace::GlobalTraceReporter;
+pub use query_trace::QueryTrace;
+pub use query_trace::TraceCollector;
+pub use query_trace::TraceFilterOptions;

@@ -40,6 +40,7 @@ use crate::stream::PullingExecutorStream;
 /// If plan is distributed plan it will build_distributed_pipeline
 /// else build_local_pipeline.
 #[async_backtrace::framed]
+#[fastrace::trace]
 pub async fn build_query_pipeline(
     ctx: &Arc<QueryContext>,
     result_columns: &[ColumnBinding],
@@ -60,6 +61,7 @@ pub async fn build_query_pipeline(
 }
 
 #[async_backtrace::framed]
+#[fastrace::trace]
 pub async fn build_query_pipeline_without_render_result_set(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
@@ -79,6 +81,7 @@ pub async fn build_query_pipeline_without_render_result_set(
 
 /// Build local pipeline.
 #[async_backtrace::framed]
+#[fastrace::trace]
 pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
@@ -94,6 +97,7 @@ pub async fn build_local_pipeline(
 
 /// Build distributed pipeline via fragment and actions.
 #[async_backtrace::framed]
+#[fastrace::trace]
 pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,

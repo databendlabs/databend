@@ -15,6 +15,7 @@
 use databend_common_ast::Span;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::ExplainOption;
+use databend_common_ast::ast::ExplainTraceOptions;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -165,5 +166,25 @@ impl Binder {
                 plan: Box::new(self.bind_statement(bind_context, inner).await?),
             }),
         }
+    }
+
+    pub async fn bind_explain_trace(
+        &mut self,
+        _bind_context: &mut BindContext,
+        options: &ExplainTraceOptions,
+        inner: &Statement,
+    ) -> Result<Plan> {
+        if let Statement::Explain { .. }
+        | Statement::ExplainTrace { .. }
+        | Statement::ExplainAnalyze { .. }
+        | Statement::ReportIssue { .. } = inner
+        {
+            return Err(ErrorCode::SyntaxException("Invalid statement"));
+        }
+
+        Ok(Plan::ExplainTrace {
+            sql: inner.to_string(),
+            options: options.clone(),
+        })
     }
 }

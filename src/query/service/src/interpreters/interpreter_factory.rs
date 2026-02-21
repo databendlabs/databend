@@ -127,6 +127,7 @@ pub struct InterpreterFactory;
 /// Such as: Plan::Query -> InterpreterSelectV2
 impl InterpreterFactory {
     #[async_backtrace::framed]
+    #[fastrace::trace]
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
@@ -282,6 +283,9 @@ impl InterpreterFactory {
                 sql.clone(),
                 ctx,
             )?)),
+            Plan::ExplainTrace { sql, options } => Ok(Arc::new(
+                ExplainTraceInterpreter::try_create(sql.clone(), options.clone(), ctx)?,
+            )),
             Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(
                 ctx,
                 sql.clone(),

@@ -18,10 +18,14 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
+use databend_common_base::runtime::CollectorGuard;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
+use databend_common_base::runtime::QueryTrace;
+use databend_common_base::runtime::TraceCollector;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::PlanProfile;
@@ -51,17 +55,25 @@ impl StatisticsSender {
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
+        trace_collector: Option<Arc<std::sync::Mutex<TraceCollector>>>,
+        trace_collector_id: Option<String>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
+        // Create guard to ensure collector is unregistered even on panic
+        let collector_guard = trace_collector_id.map(CollectorGuard::new);
+
         let handle = spawner
             .try_spawn({
                 let query_id = query_id.to_string();
 
                 async move {
+                    // Keep guard alive until task completes
+                    let _collector_guard = collector_guard;
+
                     let mut cnt = 0;
                     let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                     let mut notified = Box::pin(shutdown_flag_receiver.recv());
@@ -130,6 +142,10 @@ impl StatisticsSender {
 
                     if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
                         warn!("Perf send has error, cause: {:?}.", error);
+                    }
+
+                    if let Err(error) = Self::send_trace(&ctx, &trace_collector, &tx).await {
+                        warn!("Trace send has error, cause: {:?}.", error);
                     }
 
                     if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
@@ -280,6 +296,35 @@ impl StatisticsSender {
             let dumped = QueryPerf::dump(profiler_guard)?;
             let data_packet = DataPacket::QueryPerf(dumped);
             flight_sender.send(data_packet).await?;
+        }
+        Ok(())
+    }
+
+    async fn send_trace(
+        ctx: &Arc<QueryContext>,
+        trace_collector: &Option<Arc<std::sync::Mutex<TraceCollector>>>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        if ctx.get_trace_flag() {
+            if let Some(collector) = trace_collector {
+                // Flush fastrace to ensure all spans are collected
+                fastrace::flush();
+
+                // Get spans from collector
+                let spans = collector.lock().unwrap().get_spans();
+
+                // Get current node ID
+                let node_id = GlobalConfig::instance().query.node_id.clone();
+
+                // Convert to Jaeger JSON with node ID
+                let trace_json = QueryTrace::to_jaeger_json_with_node(spans, &node_id);
+
+                // Send via flight
+                let data_packet = DataPacket::QueryTrace(trace_json);
+                flight_sender.send(data_packet).await?;
+
+                // Note: collector is unregistered by CollectorGuard when task completes
+            }
         }
         Ok(())
     }

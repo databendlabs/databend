@@ -111,6 +111,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    // EXPLAIN TRACE with optional LEVEL and FILTER options
+    let explain_trace = map_res(
+        rule! {
+            EXPLAIN ~ TRACE ~ ( "(" ~ #explain_trace_options ~ ")" )? ~ #statement
+        },
+        |(_, _, options, statement)| {
+            Ok(Statement::ExplainTrace {
+                options: options.map(|(_, opts, _)| opts).unwrap_or_default(),
+                query: Box::new(statement.stmt),
+            })
+        },
+    );
+
     let query_setting = map_res(
         rule! {
             SETTINGS ~ #query_statement_setting? ~ #statement_body
@@ -2692,7 +2705,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ).parse(i),
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
-            #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            #explain_trace : "`EXPLAIN TRACE [(<options>)] <statement>`"
+            | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
         REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),
@@ -6398,6 +6412,111 @@ fn index_type(i: Input) -> IResult<TableIndexType> {
         value(TableIndexType::Ngram, rule! { NGRAM }),
         value(TableIndexType::Vector, rule! { VECTOR }),
         value(TableIndexType::Spatial, rule! { SPATIAL }),
+    ))
+    .parse(i)
+}
+
+/// Parse EXPLAIN TRACE options: LEVEL = 'high'|'all', FILTER <condition>
+fn explain_trace_options(i: Input) -> IResult<ExplainTraceOptions> {
+    map(
+        rule! {
+            #comma_separated_list1(explain_trace_single_option)
+        },
+        |options| {
+            let mut level = TraceLevel::All;
+            let mut filter = None;
+
+            for opt in options {
+                match opt {
+                    ExplainTraceSingleOption::Level(l) => level = l,
+                    ExplainTraceSingleOption::Filter(f) => filter = Some(f),
+                }
+            }
+
+            ExplainTraceOptions { level, filter }
+        },
+    )
+    .parse(i)
+}
+
+enum ExplainTraceSingleOption {
+    Level(TraceLevel),
+    Filter(TraceFilter),
+}
+
+fn explain_trace_single_option(i: Input) -> IResult<ExplainTraceSingleOption> {
+    let level_opt = map(
+        rule! {
+            LEVEL ~ "=" ~ #literal_string
+        },
+        |(_, _, level_str)| {
+            let level = match level_str.to_lowercase().as_str() {
+                "high" => TraceLevel::High,
+                _ => TraceLevel::All,
+            };
+            ExplainTraceSingleOption::Level(level)
+        },
+    );
+
+    let filter_opt = map(
+        rule! {
+            FILTER ~ #trace_filter_expr
+        },
+        |(_, filter)| ExplainTraceSingleOption::Filter(filter),
+    );
+
+    rule!(#level_opt | #filter_opt).parse(i)
+}
+
+/// Parse trace filter expression
+fn trace_filter_expr(i: Input) -> IResult<TraceFilter> {
+    trace_filter_or(i)
+}
+
+fn trace_filter_or(i: Input) -> IResult<TraceFilter> {
+    let (i, first) = trace_filter_and(i)?;
+    let (i, rest) = nom::multi::many0(rule! { OR ~ #trace_filter_and }).parse(i)?;
+
+    let result = rest.into_iter().fold(first, |acc, (_, filter)| {
+        TraceFilter::Or(Box::new(acc), Box::new(filter))
+    });
+    Ok((i, result))
+}
+
+fn trace_filter_and(i: Input) -> IResult<TraceFilter> {
+    let (i, first) = trace_filter_primary(i)?;
+    let (i, rest) = nom::multi::many0(rule! { AND ~ #trace_filter_primary }).parse(i)?;
+
+    let result = rest.into_iter().fold(first, |acc, (_, filter)| {
+        TraceFilter::And(Box::new(acc), Box::new(filter))
+    });
+    Ok((i, result))
+}
+
+fn trace_filter_primary(i: Input) -> IResult<TraceFilter> {
+    let duration_filter = map(
+        rule! {
+            DURATION ~ #trace_filter_op ~ #literal_duration_us
+        },
+        |(_, op, threshold_us)| TraceFilter::Duration { op, threshold_us },
+    );
+
+    let paren_filter = map(rule! { "(" ~ #trace_filter_expr ~ ")" }, |(_, f, _)| f);
+
+    rule!(
+        #duration_filter
+        | #paren_filter
+    )
+    .parse(i)
+}
+
+fn trace_filter_op(i: Input) -> IResult<TraceFilterOp> {
+    alt((
+        value(TraceFilterOp::Gte, rule! { ">=" }),
+        value(TraceFilterOp::Gt, rule! { ">" }),
+        value(TraceFilterOp::Lte, rule! { "<=" }),
+        value(TraceFilterOp::Lt, rule! { "<" }),
+        value(TraceFilterOp::Eq, rule! { "=" }),
     ))
     .parse(i)
 }

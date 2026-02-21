@@ -178,6 +178,12 @@ pub enum TokenKind {
     #[regex(r"0[xX][a-fA-F0-9]+")]
     MySQLLiteralHex,
 
+    // Duration literals (must be before LiteralInteger/LiteralFloat to match first)
+    // Supports: 1s, 100ms, 50us, 1.5s, 0.5ms
+    #[regex(r"[0-9]+(_|[0-9])*(ms|us|s)", ignore(ascii_case))]
+    #[regex(r"([0-9]*\.[0-9]+|[0-9]+\.[0-9]*)(ms|us|s)", ignore(ascii_case))]
+    LiteralDuration,
+
     #[regex(r"[0-9]+(_|[0-9])*")]
     LiteralInteger,
 
@@ -575,6 +581,8 @@ pub enum TokenKind {
     DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
     DISTINCT,
+    #[token("DURATION", ignore(ascii_case))]
+    DURATION,
     #[token("RESPECT", ignore(ascii_case))]
     RESPECT,
     #[token("IGNORE", ignore(ascii_case))]
@@ -668,6 +676,8 @@ pub enum TokenKind {
     FILE,
     #[token("FILES", ignore(ascii_case))]
     FILES,
+    #[token("FILTER", ignore(ascii_case))]
+    FILTER,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
     #[token("FLASHBACK", ignore(ascii_case))]
@@ -849,6 +859,8 @@ pub enum TokenKind {
     LEFT,
     #[token("LET", ignore(ascii_case))]
     LET,
+    #[token("LEVEL", ignore(ascii_case))]
+    LEVEL,
     #[token("LIKE", ignore(ascii_case))]
     LIKE,
     #[token("LIMIT", ignore(ascii_case))]
@@ -1281,6 +1293,8 @@ pub enum TokenKind {
     TOKEN,
     #[token("TRAILING", ignore(ascii_case))]
     TRAILING,
+    #[token("TRACE", ignore(ascii_case))]
+    TRACE,
     #[token("TRANSIENT", ignore(ascii_case))]
     TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]

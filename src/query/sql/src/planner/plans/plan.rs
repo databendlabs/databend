@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExplainTraceOptions;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -225,6 +226,10 @@ pub enum Plan {
     },
     ExplainPerf {
         sql: String,
+    },
+    ExplainTrace {
+        sql: String,
+        options: ExplainTraceOptions,
     },
     ReportIssue(String),
 
@@ -551,7 +556,8 @@ impl Plan {
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. }
             | Plan::ExplainAnalyze { .. }
-            | Plan::ExplainPerf { .. } => {
+            | Plan::ExplainPerf { .. }
+            | Plan::ExplainTrace { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::DataMutation { schema, .. } => schema.clone(),

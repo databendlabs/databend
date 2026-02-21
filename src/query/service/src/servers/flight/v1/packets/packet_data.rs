@@ -67,6 +67,7 @@ pub enum DataPacket {
     DataCacheMetrics(DataCacheMetricValues),
     PartStatistics(HashMap<u32, PartStatistics>),
     QueryPerf(String),
+    QueryTrace(String),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -85,6 +86,7 @@ impl DataPacket {
             DataPacket::QueryProfiles(_) => 0,
             DataPacket::DataCacheMetrics(_) => 0,
             DataPacket::QueryPerf(_) => 0,
+            DataPacket::QueryTrace(_) => 0,
             DataPacket::PartStatistics(_) => 0,
         }
     }
@@ -158,6 +160,12 @@ impl TryFrom<DataPacket> for FlightData {
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
+            DataPacket::QueryTrace(query_trace) => FlightData {
+                app_metadata: vec![0x11].into(),
+                data_body: query_trace.into_bytes().into(),
+                data_header: Default::default(),
+                flight_descriptor: None,
+            },
         })
     }
 }
@@ -228,6 +236,11 @@ impl TryFrom<FlightData> for DataPacket {
                 let stat =
                     serde_json::from_slice::<HashMap<u32, PartStatistics>>(&flight_data.data_body)?;
                 Ok(DataPacket::PartStatistics(stat))
+            }
+            0x11 => {
+                let query_trace = String::from_utf8(flight_data.data_body.to_vec())
+                    .map_err(|_| ErrorCode::BadBytes("Invalid UTF-8 in query trace data."))?;
+                Ok(DataPacket::QueryTrace(query_trace))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
