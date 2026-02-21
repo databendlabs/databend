@@ -24,7 +24,7 @@ Error: APIError: QueryFailed: [1006]invalid float literal while evaluating funct
 1	10
 1	10	1.01
 1
-1	10	1.01
+1	10	2.2
 10	2	2.2
 begin test default column
 1

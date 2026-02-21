@@ -1,0 +1,178 @@
+statement ok
+CREATE OR REPLACE DATABASE db_09_0103
+
+statement ok
+USE db_09_0103
+
+statement ok
+CREATE TABLE t_ct(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
+
+#############################################
+# time travel: default-only modify keeps snapshot-specific defaults #
+#############################################
+
+statement ok
+CREATE TABLE t(a INT NOT NULL)
+
+statement ok
+INSERT INTO t VALUES(1),(2)
+
+statement ok
+ALTER TABLE t ADD COLUMN b INT DEFAULT 10
+
+query II
+SELECT a,b FROM t ORDER BY a
+----
+1 10
+2 10
+
+statement ok
+ALTER TABLE t MODIFY COLUMN b INT DEFAULT 20
+
+query II
+SELECT a,b FROM t ORDER BY a
+----
+1 20
+2 20
+
+query T
+SELECT snapshot:schema:fields[1]:default_expr FROM fuse_dump_snapshots('db_09_0103', 't') LIMIT 2
+----
+"20"
+"10"
+
+#############################################################
+# non-deterministic default: default-only modify triggers rewrite #
+#############################################################
+
+statement ok
+CREATE TABLE t_nd(a INT NOT NULL) row_per_block=1
+
+statement ok
+INSERT INTO t_nd VALUES(1)
+
+statement ok
+ALTER TABLE t_nd ADD COLUMN b FLOAT DEFAULT 1.0
+
+# The ADD COLUMN above is metadata-only, so the existing block does not have
+# physical column metadata for `b`.
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_nd MODIFY COLUMN b FLOAT DEFAULT rand()
+
+# Changing the default to a non-deterministic expression requires rewriting
+# existing blocks to materialize stable values.
+query B
+SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = 'b'
+----
+1
+
+#############################################################
+# nextval default: default-only modify triggers rewrite            #
+#############################################################
+
+statement ok
+CREATE SEQUENCE seq_09_0103
+
+statement ok
+CREATE TABLE t_nv(a INT NOT NULL) row_per_block=1
+
+statement ok
+INSERT INTO t_nv VALUES(1)
+
+statement ok
+ALTER TABLE t_nv ADD COLUMN b INT DEFAULT 1
+
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_nv MODIFY COLUMN b INT DEFAULT nextval(seq_09_0103)
+
+# nextval is non-deterministic (AsyncFunctionCall); must trigger rewrite.
+query B
+SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = 'b'
+----
+1
+
+####################################################
+# remove default: metadata-only, column falls back to type default #
+####################################################
+
+statement ok
+CREATE TABLE t_rm(a INT NOT NULL, b INT DEFAULT 10)
+
+statement ok
+INSERT INTO t_rm(a) VALUES(1)
+
+statement ok
+ALTER TABLE t_rm MODIFY COLUMN b INT
+
+query II
+SELECT a, b FROM t_rm
+----
+1 10
+
+statement ok
+INSERT INTO t_rm(a) VALUES(2)
+
+query IT
+SELECT a, b FROM t_rm ORDER BY a
+----
+1 10
+2 NULL
+
+####################################################
+# change tracking: reject schema changes on non-empty table  #
+####################################################
+
+statement ok
+INSERT INTO t_ct(a) VALUES(1)
+
+statement error 1132
+ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 99
+
+statement ok
+INSERT INTO t_ct(a) VALUES(2)
+
+query II
+SELECT a,b FROM t_ct ORDER BY a
+----
+1 10
+2 10
+
+statement error 1132
+ALTER TABLE t_ct MODIFY COLUMN b STRING
+
+####################################################
+# change tracking: no-op column spec should not trigger guard      #
+####################################################
+
+# Re-specifying column b with its current type and default is a no-op;
+# it must not be rejected on a change-tracking table.
+statement ok
+ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 10
+
+####################################################
+# change tracking: allow schema changes on empty table         #
+####################################################
+
+statement ok
+CREATE TABLE t_ct_empty(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
+
+statement ok
+ALTER TABLE t_ct_empty MODIFY COLUMN b INT DEFAULT 99
+
+query T
+SELECT default_expression FROM system.columns WHERE database = 'db_09_0103' AND table = 't_ct_empty' AND name = 'b'
+----
+99
+
+statement ok
+DROP DATABASE db_09_0103

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -23,6 +22,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -30,6 +30,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -380,38 +381,90 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut modified_default_scalars = HashMap::new();
+        let schema_changed = schema != new_schema;
+        let is_empty_table = base_snapshot.is_none_or(|v| v.summary.row_count == 0);
+
+        let mut need_rebuild = false;
+        let mut has_column_change = false;
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         let format_as_parquet = fuse_table.storage_format_as_parquet();
-        if schema != new_schema {
+        if schema_changed {
             for (field, _) in field_and_comments {
                 let old_field = schema.field_with_name(&field.name)?;
-                let is_alter_column_string_to_binary =
-                    is_string_to_binary(&old_field.data_type, &field.data_type);
-                // If two conditions are met, we don't need rebuild the table,
-                // as rebuild table can be a time-consuming job.
-                // 1. alter column from string to binary in parquet or data type not changed.
-                // 2. default expr and computed expr not changed. Otherwise, we need fill value for
-                //    new added column.
-                if ((format_as_parquet && is_alter_column_string_to_binary)
-                    || old_field.data_type == field.data_type)
-                    && old_field.default_expr == field.default_expr
-                    && old_field.computed_expr == field.computed_expr
+                let data_type_changed = old_field.data_type != field.data_type;
+                let default_expr_changed = old_field.default_expr != field.default_expr;
+                let computed_expr_changed = old_field.computed_expr != field.computed_expr;
+
+                // Validate the new default expression against the new column type
+                // to catch invalid defaults at ALTER time rather than at query time.
+                if data_type_changed || default_expr_changed {
+                    let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+                    let _ = default_expr_binder
+                        .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
+                }
+
+                // Parquet String -> Binary: safe metadata-only conversion,
+                // physical data is identical so no rebuild or CDC concern.
+                if format_as_parquet
+                    && is_string_to_binary(&old_field.data_type, &field.data_type)
+                    && !default_expr_changed
+                    && !computed_expr_changed
                 {
                     continue;
                 }
-                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
-                let default_scalar = default_expr_binder
-                    .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
-                modified_default_scalars.insert(field_index, default_scalar);
+
+                // No-op: nothing changed for this field, skip it.
+                if !data_type_changed && !default_expr_changed && !computed_expr_changed {
+                    continue;
+                }
+
+                has_column_change = true;
+
+                // Already decided to rebuild from a previous field; keep
+                // iterating only to validate remaining default expressions.
+                if need_rebuild {
+                    continue;
+                }
+
+                if data_type_changed || computed_expr_changed {
+                    need_rebuild = true;
+                    continue;
+                }
+
+                // Default-only change: skip rebuild unless non-deterministic.
+                if default_expr_changed && field.default_expr.is_some() {
+                    let data_field: DataField = field.into();
+                    let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
+                    // Use default_value_evaluable() to detect nextval (AsyncFunctionCall)
+                    // because parse_and_bind may wrap the result in CastExpr, hiding
+                    // the AsyncFunctionCall from a top-level matches! check.
+                    // See: https://github.com/databendlabs/databend/issues/19451
+                    let (_, has_nextval) = scalar_expr.default_value_evaluable();
+                    let is_deterministic = !has_nextval
+                        && scalar_expr
+                            .as_expr()?
+                            .project_column_ref(|col| Ok(col.index))?
+                            .is_deterministic(&BUILTIN_FUNCTIONS);
+                    if !is_deterministic {
+                        need_rebuild = true;
+                    }
+                }
             }
         }
 
+        // Block non-fastpath schema changes on non-empty change-tracking tables.
+        // Metadata-only default changes can silently alter historical row values
+        // without producing change records, breaking stream/CDC consistency.
+        if has_column_change && !is_empty_table && fuse_table.change_tracking_enabled() {
+            return Err(ErrorCode::AlterTableError(format!(
+                "table {} has change tracking enabled, modifying columns should be avoided",
+                table_info.desc
+            )));
+        }
+
         // if don't need to rebuild table, only update table meta.
-        if modified_default_scalars.is_empty()
-            || base_snapshot.is_none_or(|v| v.summary.row_count == 0)
-        {
+        if !need_rebuild || is_empty_table {
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
@@ -429,16 +482,6 @@ impl ModifyTableColumnInterpreter {
             .await?;
 
             return Ok(PipelineBuildResult::create());
-        }
-
-        if fuse_table.change_tracking_enabled() {
-            // Modifying columns while change tracking is active may break
-            // the consistency between tracked changes and the current table schema,
-            // leading to incorrect or incomplete change records.
-            return Err(ErrorCode::AlterTableError(format!(
-                "table {} has change tracking enabled, modifying columns should be avoided",
-                table_info.desc
-            )));
         }
 
         // construct sql for selecting data from old table.
