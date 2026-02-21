@@ -185,10 +185,11 @@ impl FromToProto for mt::TableMeta {
             .ok_or_else(|| Incompatible::new("TableMeta.schema can not be None".to_string()))?;
         let virtual_schema = p.virtual_schema.from_pb_opt()?;
 
-        let mut indexes = BTreeMap::new();
-        for (name, index) in p.indexes {
-            indexes.insert(name, mt::TableIndex::from_pb(index)?);
-        }
+        let indexes = p
+            .indexes
+            .into_iter()
+            .map(|(name, index)| Ok((name, mt::TableIndex::from_pb(index)?)))
+            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
 
         let cluster_key_seq = if let Some(seq) = p.cluster_key_seq {
             seq
@@ -197,14 +198,16 @@ impl FromToProto for mt::TableMeta {
         } else {
             p.cluster_keys.len() as u32 - 1
         };
-        let mut constraints = BTreeMap::new();
-        for (constraint_name, constraint) in p.constraints {
-            constraints.insert(constraint_name, mt::Constraint::from_pb(constraint)?);
-        }
-        let mut refs = BTreeMap::new();
-        for (ref_name, snapshot_ref) in p.refs {
-            refs.insert(ref_name, mt::SnapshotRef::from_pb(snapshot_ref)?);
-        }
+        let constraints = p
+            .constraints
+            .into_iter()
+            .map(|(name, constraint)| Ok((name, mt::Constraint::from_pb(constraint)?)))
+            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+        let refs = p
+            .refs
+            .into_iter()
+            .map(|(name, snapshot_ref)| Ok((name, mt::SnapshotRef::from_pb(snapshot_ref)?)))
+            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             engine: p.engine,
@@ -253,18 +256,21 @@ impl FromToProto for mt::TableMeta {
     }
 
     fn to_pb(&self) -> Result<pb::TableMeta, Incompatible> {
-        let mut indexes = BTreeMap::new();
-        for (name, index) in &self.indexes {
-            indexes.insert(name.clone(), index.to_pb()?);
-        }
-        let mut constraints = BTreeMap::new();
-        for (constraint_name, constraint) in &self.constraints {
-            constraints.insert(constraint_name.clone(), constraint.to_pb()?);
-        }
-        let mut refs = BTreeMap::new();
-        for (ref_name, snapshot_ref) in &self.refs {
-            refs.insert(ref_name.clone(), snapshot_ref.to_pb()?);
-        }
+        let indexes = self
+            .indexes
+            .iter()
+            .map(|(name, index)| Ok((name.clone(), index.to_pb()?)))
+            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+        let constraints = self
+            .constraints
+            .iter()
+            .map(|(name, constraint)| Ok((name.clone(), constraint.to_pb()?)))
+            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+        let refs = self
+            .refs
+            .iter()
+            .map(|(name, snapshot_ref)| Ok((name.clone(), snapshot_ref.to_pb()?)))
+            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
         let (cluster_key_id, cluster_key) = self.cluster_key_meta().unzip();
         let p = pb::TableMeta {
             ver: VER,
