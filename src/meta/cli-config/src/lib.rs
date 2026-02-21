@@ -782,6 +782,9 @@ impl Default for StorageLogConfig {
 #[allow(clippy::from_over_into)]
 impl Into<InnerLogHistoryConfig> for StorageLogConfig {
     fn into(self) -> InnerLogHistoryConfig {
+        // Falling back to default storage params when conversion fails is intentional:
+        // log-history storage is optional and a misconfigured value should not prevent
+        // the node from starting.
         let storage_params: Option<InnerStorageConfig> =
             Some(self.log_storage_params.try_into().unwrap_or_default());
         InnerLogHistoryConfig {
