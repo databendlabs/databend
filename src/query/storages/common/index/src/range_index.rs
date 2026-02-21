@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use databend_common_ast::Span;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Constant;
@@ -25,6 +26,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::cast_scalar;
 use databend_common_expression::is_internal_column;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::types::AccessType;
@@ -227,8 +229,22 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
         }
         _ => {
             let stat = stats[0];
-            let min = stat.min();
-            let max = stat.max();
+            let mut min = stat.min().clone();
+            let mut max = stat.max().clone();
+            if min.is_null() || max.is_null() {
+                return Domain::full(data_type);
+            }
+            let inferred_type = min.as_ref().infer_data_type();
+            if inferred_type != *data_type {
+                let cast_min = cast_scalar(Span::None, min.clone(), data_type, &BUILTIN_FUNCTIONS);
+                let cast_max = cast_scalar(Span::None, max.clone(), data_type, &BUILTIN_FUNCTIONS);
+                if let (Ok(cast_min), Ok(cast_max)) = (cast_min, cast_max) {
+                    min = cast_min;
+                    max = cast_max;
+                } else {
+                    return Domain::full(data_type);
+                }
+            }
 
             with_number_mapped_type!(|NUM_TYPE| match data_type {
                 DataType::Number(NumberDataType::NUM_TYPE) => {
@@ -289,5 +305,24 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
 impl Index for RangeIndex {
     fn supported_type(data_type: &DataType) -> bool {
         databend_storages_common_table_meta::meta::supported_stat_type(data_type)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Domain;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+    use super::statistics_to_domain;
+
+    #[test]
+    fn test_statistics_to_domain_null_min_max_full() {
+        let stat = ColumnStatistics::new(Scalar::Null, Scalar::Null, 0, 0, None);
+        let ty = DataType::Number(NumberDataType::Int64);
+        let domain = statistics_to_domain(vec![&stat], &ty);
+        assert_eq!(domain, Domain::full(&ty));
     }
 }

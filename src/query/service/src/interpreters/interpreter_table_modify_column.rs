@@ -387,15 +387,20 @@ impl ModifyTableColumnInterpreter {
         if schema != new_schema {
             for (field, _) in field_and_comments {
                 let old_field = schema.field_with_name(&field.name)?;
-                let is_alter_column_string_to_binary =
-                    is_string_to_binary(&old_field.data_type, &field.data_type);
+                let is_parquet_no_rewrite = format_as_parquet
+                    && is_parquet_no_rewrite_compatible(&old_field.data_type, &field.data_type)
+                    // Only allow no-rewrite widening when stats can safely infer old types.
+                    && (is_string_to_binary(&old_field.data_type, &field.data_type)
+                        || is_range_index_supported_for_no_rewrite(
+                            &old_field.data_type,
+                            &field.data_type,
+                        ));
                 // If two conditions are met, we don't need rebuild the table,
                 // as rebuild table can be a time-consuming job.
-                // 1. alter column from string to binary in parquet or data type not changed.
+                // 1. alter column with compatible data type in parquet or data type not changed.
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
-                if ((format_as_parquet && is_alter_column_string_to_binary)
-                    || old_field.data_type == field.data_type)
+                if (is_parquet_no_rewrite || old_field.data_type == field.data_type)
                     && old_field.default_expr == field.default_expr
                     && old_field.computed_expr == field.computed_expr
                 {
@@ -862,6 +867,136 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
                     .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
         }
         _ => false,
+    }
+}
+
+fn is_decimal_precision_widening(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    match (old_ty, new_ty) {
+        (TableDataType::Decimal(old_dec), TableDataType::Decimal(new_dec)) => {
+            let old_size = old_dec.size();
+            let new_size = new_dec.size();
+            old_size.scale() == new_size.scale() && new_size.precision() >= old_size.precision()
+        }
+        (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
+            is_decimal_precision_widening(old_ty, new_ty)
+        }
+        (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
+            is_decimal_precision_widening(old_ty, new_ty)
+        }
+        (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
+            is_decimal_precision_widening(old_ty, new_ty)
+        }
+        (
+            TableDataType::Tuple {
+                fields_type: old_tys,
+                ..
+            },
+            TableDataType::Tuple {
+                fields_type: new_tys,
+                ..
+            },
+        ) => {
+            old_tys.len() == new_tys.len()
+                && old_tys
+                    .iter()
+                    .zip(new_tys)
+                    .all(|(old_ty, new_ty)| is_decimal_precision_widening(old_ty, new_ty))
+        }
+        _ => false,
+    }
+}
+
+fn is_lossless_numeric_widening(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    match (old_ty, new_ty) {
+        (TableDataType::Number(old_num), TableDataType::Number(new_num)) => {
+            old_num.can_lossless_cast_to(*new_num)
+        }
+        (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
+            is_lossless_numeric_widening(old_ty, new_ty)
+        }
+        (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
+            is_lossless_numeric_widening(old_ty, new_ty)
+        }
+        (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
+            is_lossless_numeric_widening(old_ty, new_ty)
+        }
+        (
+            TableDataType::Tuple {
+                fields_type: old_tys,
+                ..
+            },
+            TableDataType::Tuple {
+                fields_type: new_tys,
+                ..
+            },
+        ) => {
+            old_tys.len() == new_tys.len()
+                && old_tys
+                    .iter()
+                    .zip(new_tys)
+                    .all(|(old_ty, new_ty)| is_lossless_numeric_widening(old_ty, new_ty))
+        }
+        _ => false,
+    }
+}
+
+fn is_parquet_no_rewrite_compatible(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    if old_ty == new_ty {
+        return true;
+    }
+
+    match (old_ty, new_ty) {
+        (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
+            is_parquet_no_rewrite_compatible(old_ty, new_ty)
+        }
+        (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
+            is_parquet_no_rewrite_compatible(old_ty, new_ty)
+        }
+        (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
+            is_parquet_no_rewrite_compatible(old_ty, new_ty)
+        }
+        (
+            TableDataType::Tuple {
+                fields_name: old_names,
+                fields_type: old_tys,
+                ..
+            },
+            TableDataType::Tuple {
+                fields_name: new_names,
+                fields_type: new_tys,
+                ..
+            },
+        ) => {
+            // Tuple field order is part of the on-disk schema. Reordering or renaming fields
+            // changes leaf paths, so require exact field name order to avoid unsafe no-rewrite.
+            old_names == new_names
+                && old_tys.len() == new_tys.len()
+                && old_tys
+                    .iter()
+                    .zip(new_tys)
+                    .all(|(old_ty, new_ty)| is_parquet_no_rewrite_compatible(old_ty, new_ty))
+        }
+        _ => {
+            is_string_to_binary(old_ty, new_ty)
+                || is_lossless_numeric_widening(old_ty, new_ty)
+                || is_decimal_precision_widening(old_ty, new_ty)
+        }
+    }
+}
+
+fn is_range_index_supported_for_no_rewrite(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    is_range_index_supported_table_type(old_ty) && is_range_index_supported_table_type(new_ty)
+}
+
+fn is_range_index_supported_table_type(data_type: &TableDataType) -> bool {
+    match data_type {
+        TableDataType::Nullable(inner) => is_range_index_supported_table_type(inner),
+        TableDataType::Map(inner) => is_range_index_supported_table_type(inner),
+        TableDataType::Array(inner) => is_range_index_supported_table_type(inner),
+        TableDataType::Tuple { fields_type, .. } => {
+            fields_type.iter().all(is_range_index_supported_table_type)
+        }
+        _ => RangeIndex::supported_table_type(data_type),
     }
 }
 

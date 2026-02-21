@@ -119,8 +119,8 @@ result   : Uncertain
 | 3         | Map(String, Variant) | Column(ArrayColumn { values: Tuple([StringColumn[a, b, a, b, b, c, d], Variant([0x2000000010000003616263, 0x20000000200000025064, 0x2000000010000003616263, 0x20000000200000025064, 0x2000000010000003646566, 0x2000000040000000, 0x200000001000000378797a])]), offsets: [0, 2, 4, 6, 7] }) |
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 expr     : eq<String, String>(1, "d")
-filter   : __bloom_column_1_1
-domains  : {"1": String(StringDomain { min: "The early bird catches the worm", max: Some("a") }), "__bloom_column_1_1": Boolean(BooleanDomain { has_false: true, has_true: false })}
+filter   : eq<String, String>(1, "d")
+domains  : {"1": String(StringDomain { min: "The early bird catches the worm", max: Some("a") })}
 result   : MustFalse
 
 
@@ -164,9 +164,9 @@ result   : Uncertain
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 3_u8), CAST<String>("x" AS String NULL)))
 fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 3_u8), "x"))
-filter   : is_true<Boolean NULL>(__bloom_column_2_1)
-domains  : {"2": Map(Some(Tuple([Number(UInt8(SimpleDomain { min: 0, max: 255 })), String(StringDomain { min: "", max: None })]))), "__bloom_column_2_1": Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: false })) })}
-result   : MustFalse
+filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(get<T0=UInt8, T1=String><Map(T0, T1 NULL), T0>(CAST<Map(UInt8, String)>(2 AS Map(UInt8, String NULL)), 3_u8), "x"))
+domains  : {"2": Map(Some(Tuple([Number(UInt8(SimpleDomain { min: 0, max: 255 })), String(StringDomain { min: "", max: None })])))}
+result   : Uncertain
 
 
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -194,9 +194,9 @@ result   : Uncertain
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 expr     : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "d") AS String NULL), CAST<String>("xxx" AS String NULL)))
 fold_expr: is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "d") AS String NULL), "xxx"))
-filter   : is_true<Boolean NULL>(__bloom_column_3_1)
-domains  : {"3": Map(Some(Tuple([String(StringDomain { min: "", max: None }), Undefined]))), "__bloom_column_3_1": Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: false })) })}
-result   : MustFalse
+filter   : is_true<Boolean NULL>(eq<String NULL, String NULL>(TRY_CAST<Variant NULL>(get<T0=String, T1=Variant><Map(T0, T1 NULL), T0>(CAST<Map(String, Variant)>(3 AS Map(String, Variant NULL)), "d") AS String NULL), "xxx"))
+domains  : {"3": Map(Some(Tuple([String(StringDomain { min: "", max: None }), Undefined])))}
+result   : Uncertain
 
 
 +-----------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+

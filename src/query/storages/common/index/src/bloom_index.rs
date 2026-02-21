@@ -78,6 +78,9 @@ use parquet::format::FileMetaData;
 use serde::Deserialize;
 use serde::Serialize;
 
+// Digest cache key: column id + scalar, to avoid cross-column reuse when stats types differ.
+type DigestKey = (ColumnId, Scalar);
+
 use super::eliminate_cast::is_injective_cast;
 use crate::Index;
 use crate::eliminate_cast::cast_const;
@@ -260,8 +263,8 @@ impl BloomIndex {
     pub fn apply(
         &self,
         expr: Expr<String>,
-        eq_scalar_map: &HashMap<Scalar, u64>,
-        like_scalar_map: &HashMap<Scalar, Vec<u64>>,
+        eq_scalar_map: &HashMap<DigestKey, u64>,
+        like_scalar_map: &HashMap<DigestKey, Vec<u64>>,
         ngram_args: &[NgramArgs],
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
@@ -288,8 +291,8 @@ impl BloomIndex {
     pub fn rewrite_expr(
         &self,
         expr: Expr<String>,
-        eq_scalar_map: &HashMap<Scalar, u64>,
-        like_scalar_map: &HashMap<Scalar, Vec<u64>>,
+        eq_scalar_map: &HashMap<DigestKey, u64>,
+        like_scalar_map: &HashMap<DigestKey, Vec<u64>>,
         ngram_args: &[NgramArgs],
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
@@ -571,8 +574,8 @@ impl BloomIndex {
         table_field: &TableField,
         target: &Scalar,
         ty: &DataType,
-        eq_scalar_map: &HashMap<Scalar, u64>,
-        like_scalar_map: &HashMap<Scalar, Vec<u64>>,
+        eq_scalar_map: &HashMap<DigestKey, u64>,
+        like_scalar_map: &HashMap<DigestKey, Vec<u64>>,
         ngram_args: &[NgramArgs],
         is_like: bool,
     ) -> Result<FilterEvalResult> {
@@ -605,12 +608,14 @@ impl BloomIndex {
             let data_value = scalar_to_datavalue(target);
             filter.contains(&data_value)
         } else if is_like {
+            let key = (table_field.column_id(), target.clone());
             like_scalar_map
-                .get(target)
+                .get(&key)
                 .is_none_or(|digests| digests.iter().all(|digest| filter.contains_digest(*digest)))
         } else {
+            let key = (table_field.column_id(), target.clone());
             eq_scalar_map
-                .get(target)
+                .get(&key)
                 .is_none_or(|digest| filter.contains_digest(*digest))
         };
 
@@ -1184,8 +1189,8 @@ struct RewriteVisitor<'a> {
     new_col_id: usize,
     index: &'a BloomIndex,
     data_schema: TableSchemaRef,
-    eq_scalar_map: &'a HashMap<Scalar, u64>,
-    like_scalar_map: &'a HashMap<Scalar, Vec<u64>>,
+    eq_scalar_map: &'a HashMap<DigestKey, u64>,
+    like_scalar_map: &'a HashMap<DigestKey, Vec<u64>>,
     ngram_args: &'a [NgramArgs],
     column_stats: &'a StatisticsOfColumns,
     domains: &'a mut HashMap<String, Domain>,

@@ -7,7 +7,18 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-
+ahash = { workspace = true }
+arrow = { workspace = true }
+arrow-array = { workspace = true }
+arrow-ipc = { workspace = true }
+arrow-schema = { workspace = true }
+async-backtrace = { workspace = true }
+async-channel = { workspace = true }
+async-trait = { workspace = true }
+backoff = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-column = { workspace = true }
@@ -38,18 +49,6 @@ databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-
-ahash = { workspace = true }
-arrow = { workspace = true }
-arrow-array = { workspace = true }
-arrow-ipc = { workspace = true }
-arrow-schema = { workspace = true }
-async-backtrace = { workspace = true }
-async-channel = { workspace = true }
-async-trait = { workspace = true }
-backoff = { workspace = true }
-bytes = { workspace = true }
-chrono = { workspace = true }
 enum-as-inner = { workspace = true }
 enum_dispatch = { workspace = true }
 fastrace = { workspace = true }

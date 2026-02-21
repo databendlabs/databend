@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -544,20 +545,26 @@ fn eval_index_expr(
         .collect::<Vec<_>>();
     let result = BloomIndex::filter_index_field(&expr, bloom_fields, ngram_fields).unwrap();
 
-    let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
-    for (_, scalar, ty) in result.bloom_scalars.into_iter() {
-        eq_scalar_map.entry(scalar).or_insert_with_key(|scalar| {
-            BloomIndex::calculate_scalar_digest(&func_ctx, scalar, &ty).unwrap()
+    let mut eq_scalar_map = HashMap::<(ColumnId, Scalar), u64>::new();
+    for (index, scalar, ty) in result.bloom_scalars.into_iter() {
+        let Some(field) = result.bloom_fields.get(index) else {
+            continue;
+        };
+        let key = (field.column_id, scalar.clone());
+        eq_scalar_map.entry(key).or_insert_with(|| {
+            BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty).unwrap()
         });
     }
 
-    let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
-    for (field, (_, scalar)) in result
-        .ngram_fields
-        .iter()
-        .zip(result.ngram_scalars.into_iter())
-    {
-        let Some(ngram_arg) = ngram_args.iter().find(|arg| arg.field() == field) else {
+    let mut like_scalar_map = HashMap::<(ColumnId, Scalar), Vec<u64>>::new();
+    for (index, scalar) in result.ngram_scalars.into_iter() {
+        let Some(field) = result.ngram_fields.get(index) else {
+            continue;
+        };
+        let Some(ngram_arg) = ngram_args
+            .iter()
+            .find(|arg| arg.column_id() == field.column_id)
+        else {
             continue;
         };
         let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
@@ -568,7 +575,8 @@ fn eval_index_expr(
         .next() else {
             continue;
         };
-        like_scalar_map.entry(scalar).or_insert(digests);
+        let key = (field.column_id, scalar);
+        like_scalar_map.entry(key).or_insert(digests);
     }
 
     let mut builder =

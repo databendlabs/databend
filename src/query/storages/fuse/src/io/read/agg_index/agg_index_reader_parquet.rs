@@ -81,6 +81,7 @@ impl AggIndexReader {
             &part.compression,
             &part.location,
             None,
+            part.columns_stat.as_ref(),
         )?;
 
         self.apply_agg_info(block)
