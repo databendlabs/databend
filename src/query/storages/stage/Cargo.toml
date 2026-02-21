@@ -33,6 +33,7 @@ databend-common-storages-parquet = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = { workspace = true }
+futures = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 log = { workspace = true }
