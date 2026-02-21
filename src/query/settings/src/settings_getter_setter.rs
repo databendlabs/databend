@@ -776,6 +776,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
     }
 
+    pub fn get_enable_parquet_delta_binary_packed_heuristic_rule(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_delta_binary_packed_heuristic_rule")? != 0)
+    }
+
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
     }
@@ -986,6 +990,10 @@ impl Settings {
 
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
+    }
+
+    pub fn get_auto_block_shuffle_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("auto_block_shuffle_threshold")? as usize)
     }
 
     pub fn get_persist_materialized_cte(&self) -> Result<bool> {

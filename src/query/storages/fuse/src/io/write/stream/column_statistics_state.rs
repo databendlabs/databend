@@ -26,6 +26,7 @@ use crate::io::write::stream::ColumnNDVEstimator;
 use crate::io::write::stream::ColumnNDVEstimatorOps;
 use crate::io::write::stream::ColumnStatisticsBuilder;
 use crate::io::write::stream::ColumnStatsOps;
+use crate::io::write::stream::column_statistics_builder::ColumnStatsPeek;
 use crate::io::write::stream::create_column_ndv_estimator;
 use crate::io::write::stream::create_column_stats_builder;
 use crate::statistics::traverse_values_dfs;
@@ -89,8 +90,17 @@ impl ColumnStatisticsState {
     pub fn peek_cols_ndv(&self) -> HashMap<ColumnId, usize> {
         self.distinct_columns
             .iter()
-            .map(|(column_id, ndv_estimator)| (*column_id, ndv_estimator.peek()))
+            .map(|(column_id, ndv_estimator)| (*column_id, ndv_estimator.count()))
             .collect()
+    }
+
+    pub fn peek_column_stats(&self) -> Result<StatisticsOfColumns> {
+        let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
+        for (column_id, builder) in &self.col_stats {
+            let stats = builder.peek()?;
+            statistics.insert(*column_id, stats);
+        }
+        Ok(statistics)
     }
 
     pub fn finalize(
@@ -98,7 +108,7 @@ impl ColumnStatisticsState {
         mut column_distinct_count: HashMap<ColumnId, usize>,
     ) -> Result<StatisticsOfColumns> {
         for (column_id, estimator) in &self.distinct_columns {
-            column_distinct_count.insert(*column_id, estimator.finalize());
+            column_distinct_count.insert(*column_id, estimator.count());
         }
 
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());

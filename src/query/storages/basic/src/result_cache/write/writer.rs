@@ -15,6 +15,7 @@
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_blocks::ParquetWriteOptions;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -72,14 +73,8 @@ impl ResultCacheWriter {
     #[async_backtrace::framed]
     pub async fn write_to_storage(&self) -> Result<String> {
         let mut buf = Vec::with_capacity(self.current_bytes);
-        let _ = blocks_to_parquet(
-            &self.schema,
-            self.blocks.clone(),
-            &mut buf,
-            TableCompression::None,
-            false,
-            None,
-        )?;
+        let options = ParquetWriteOptions::builder(TableCompression::None).build();
+        let _ = blocks_to_parquet(&self.schema, self.blocks.clone(), &mut buf, &options)?;
 
         let file_location = format!("{}/{}.parquet", self.location, Uuid::new_v4().as_simple());
 

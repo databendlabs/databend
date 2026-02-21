@@ -1000,6 +1000,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_parquet_delta_binary_packed_heuristic_rule", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables the DELTA_BINARY_PACKED heuristic rule for Parquet integer columns.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("external_server_connect_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
                     desc: "Connection timeout to external server",
@@ -1337,6 +1344,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("auto_block_shuffle_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(5),
+                    desc: "Threshold for automatic block-level shuffle. When segment_count < cluster_nodes * threshold, uses block-level distribution (hash(segment_location, block_idx) % num_executors) instead of segment-level. Set to 0 to disable.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
