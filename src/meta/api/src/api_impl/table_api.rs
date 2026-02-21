@@ -172,6 +172,21 @@ fn assert_table_id_is_latest(
     )))
 }
 
+fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError> {
+    let name = &req.name_ident.table_name;
+    if !req.as_dropped && req.table_meta.drop_on.is_some() {
+        return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
+            CreateTableWithDropTime::new(name),
+        )));
+    }
+    if req.as_dropped && req.table_meta.drop_on.is_none() {
+        return Err(KVAppError::AppError(
+            AppError::CreateAsDropTableWithoutDropTime(CreateAsDropTableWithoutDropTime::new(name)),
+        ));
+    }
+    Ok(())
+}
+
 /// TableApi defines APIs for table lifecycle and metadata management.
 ///
 /// This trait handles:
@@ -219,19 +234,7 @@ where
 
         let mut maybe_key_table_id: Option<TableId> = None;
 
-        if !req.as_dropped && req.table_meta.drop_on.is_some() {
-            return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
-                CreateTableWithDropTime::new(&tenant_dbname_tbname.table_name),
-            )));
-        }
-
-        if req.as_dropped && req.table_meta.drop_on.is_none() {
-            return Err(KVAppError::AppError(
-                AppError::CreateAsDropTableWithoutDropTime(CreateAsDropTableWithoutDropTime::new(
-                    &tenant_dbname_tbname.table_name,
-                )),
-            ));
-        }
+        validate_create_table_request(&req)?;
 
         // fixed: does not change in every loop.
         let seq_db_id = self
