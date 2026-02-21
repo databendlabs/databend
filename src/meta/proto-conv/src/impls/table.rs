@@ -189,7 +189,7 @@ impl FromToProto for mt::TableMeta {
             .indexes
             .into_iter()
             .map(|(name, index)| Ok((name, mt::TableIndex::from_pb(index)?)))
-            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let cluster_key_seq = if let Some(seq) = p.cluster_key_seq {
             seq
@@ -202,12 +202,12 @@ impl FromToProto for mt::TableMeta {
             .constraints
             .into_iter()
             .map(|(name, constraint)| Ok((name, mt::Constraint::from_pb(constraint)?)))
-            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
         let refs = p
             .refs
             .into_iter()
             .map(|(name, snapshot_ref)| Ok((name, mt::SnapshotRef::from_pb(snapshot_ref)?)))
-            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             engine: p.engine,
@@ -260,17 +260,17 @@ impl FromToProto for mt::TableMeta {
             .indexes
             .iter()
             .map(|(name, index)| Ok((name.clone(), index.to_pb()?)))
-            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
         let constraints = self
             .constraints
             .iter()
             .map(|(name, constraint)| Ok((name.clone(), constraint.to_pb()?)))
-            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
         let refs = self
             .refs
             .iter()
             .map(|(name, snapshot_ref)| Ok((name.clone(), snapshot_ref.to_pb()?)))
-            .collect::<Result<BTreeMap<_, _>, Incompatible>>()?;
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
         let (cluster_key_id, cluster_key) = self.cluster_key_meta().unzip();
         let p = pb::TableMeta {
             ver: VER,
