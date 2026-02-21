@@ -75,6 +75,13 @@ pub fn rewrite_sexpr(
     materialized_ctes: Vec<SExpr>,
 ) -> Result<SExpr> {
     let mut result = s_expr.clone();
+    let mut replacements = replacements;
+    replacements.sort_by(|a, b| {
+        b.path
+            .len()
+            .cmp(&a.path.len())
+            .then_with(|| a.path.cmp(&b.path))
+    });
 
     for replacement in replacements {
         result = replace_at_path(&result, &replacement.path, replacement.new_expr)?;
