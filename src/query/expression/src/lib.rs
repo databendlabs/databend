@@ -64,6 +64,8 @@ mod projected_block;
 mod property;
 mod stat_evaluator;
 
+pub mod ids;
+
 pub mod row_encoding;
 pub mod sampler;
 pub mod schema;
@@ -87,6 +89,7 @@ pub use crate::function::register_comparison::*;
 pub use crate::function::register_vectorize::*;
 pub use crate::function::*;
 pub use crate::hilbert::*;
+pub use crate::ids::*;
 pub use crate::kernels::*;
 pub use crate::projected_block::*;
 pub use crate::property::*;

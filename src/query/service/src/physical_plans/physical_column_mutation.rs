@@ -18,8 +18,10 @@ use std::collections::HashMap;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataFieldIndex;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableFieldIndex;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
@@ -42,10 +44,11 @@ pub struct ColumnMutation {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub table_info: TableInfo,
-    pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
-    pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub mutation_expr: Option<Vec<(TableFieldIndex, RemoteExpr)>>,
+    pub computed_expr: Option<Vec<(TableFieldIndex, RemoteExpr)>>,
     pub mutation_kind: MutationKind,
-    pub field_id_to_schema_index: HashMap<usize, usize>,
+    #[serde(rename = "field_id_to_schema_index")]
+    pub table_field_index_to_input_schema_index: HashMap<TableFieldIndex, DataFieldIndex>,
     pub input_num_columns: usize,
     pub has_filter_column: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
@@ -92,7 +95,9 @@ impl IPhysicalPlan for ColumnMutation {
             mutation_expr: self.mutation_expr.clone(),
             computed_expr: self.computed_expr.clone(),
             mutation_kind: self.mutation_kind,
-            field_id_to_schema_index: self.field_id_to_schema_index.clone(),
+            table_field_index_to_input_schema_index: self
+                .table_field_index_to_input_schema_index
+                .clone(),
             input_num_columns: self.input_num_columns,
             has_filter_column: self.has_filter_column,
             table_meta_timestamps: self.table_meta_timestamps,
@@ -103,21 +108,24 @@ impl IPhysicalPlan for ColumnMutation {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        let mut field_id_to_schema_index = self.field_id_to_schema_index.clone();
+        let mut table_field_index_to_block_index =
+            self.table_field_index_to_input_schema_index.clone();
         if let Some(mutation_expr) = &self.mutation_expr {
             let mut block_operators = Vec::new();
             let mut next_column_offset = self.input_num_columns;
-            let mut schema_offset_to_new_offset = HashMap::new();
+            let mut block_offset_to_new_offset = HashMap::new();
 
             // Build update expression BlockOperator.
             let mut exprs = Vec::with_capacity(mutation_expr.len());
-            for (id, remote_expr) in mutation_expr {
+            for (table_field_index, remote_expr) in mutation_expr {
                 let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-                let schema_index = field_id_to_schema_index.get(id).unwrap();
-                schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
-                field_id_to_schema_index
-                    .entry(*id)
-                    .and_modify(|e| *e = next_column_offset);
+                let block_index = table_field_index_to_block_index
+                    .get(table_field_index)
+                    .unwrap();
+                block_offset_to_new_offset.insert(block_index.as_usize(), next_column_offset);
+                table_field_index_to_block_index
+                    .entry(*table_field_index)
+                    .and_modify(|e| *e = DataFieldIndex::new(next_column_offset));
                 next_column_offset += 1;
                 exprs.push(expr);
             }
@@ -133,12 +141,12 @@ impl IPhysicalPlan for ColumnMutation {
                 && !computed_expr.is_empty()
             {
                 let mut exprs = Vec::with_capacity(computed_expr.len());
-                for (id, remote_expr) in computed_expr.iter() {
+                for (table_field_index, remote_expr) in computed_expr.iter() {
                     let expr =
                         remote_expr
                             .as_expr(&BUILTIN_FUNCTIONS)
                             .project_column_ref(|index| {
-                                schema_offset_to_new_offset
+                                block_offset_to_new_offset
                                     .get(index)
                                     .ok_or_else(|| {
                                         ErrorCode::BadArguments(format!(
@@ -148,11 +156,13 @@ impl IPhysicalPlan for ColumnMutation {
                                     })
                                     .copied()
                             })?;
-                    let schema_index = field_id_to_schema_index.get(id).unwrap();
-                    schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
-                    field_id_to_schema_index
-                        .entry(*id)
-                        .and_modify(|e| *e = next_column_offset);
+                    let block_index = table_field_index_to_block_index
+                        .get(table_field_index)
+                        .unwrap();
+                    block_offset_to_new_offset.insert(block_index.as_usize(), next_column_offset);
+                    table_field_index_to_block_index
+                        .entry(*table_field_index)
+                        .and_modify(|e| *e = DataFieldIndex::new(next_column_offset));
                     next_column_offset += 1;
                     exprs.push(expr);
                 }
@@ -167,7 +177,7 @@ impl IPhysicalPlan for ColumnMutation {
                 self.input_num_columns - self.has_filter_column as usize - self.udf_col_num;
             let mut projection = Vec::with_capacity(num_output_columns);
             for idx in 0..num_output_columns {
-                if let Some(index) = schema_offset_to_new_offset.get(&idx) {
+                if let Some(index) = block_offset_to_new_offset.get(&idx) {
                     projection.push(*index);
                 } else {
                     projection.push(idx);

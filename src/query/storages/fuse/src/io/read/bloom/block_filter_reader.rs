@@ -24,7 +24,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -41,6 +40,7 @@ use parquet::schema::types::SchemaDescPtr;
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
 use crate::io::MetaReaders;
+use crate::io::read::bloom::BloomIndexColumnOrdinal;
 use crate::io::read::bloom::column_filter_reader::BloomColumnFilterReader;
 #[async_trait::async_trait]
 pub trait BloomBlockFilterReader {
@@ -99,7 +99,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
     for column_name in column_needed {
         for (idx, (name, column_meta)) in index_column_chunk_metas.iter().enumerate() {
             if name == column_name {
-                col_metas.insert(idx as ColumnId, (name, column_meta));
+                col_metas.insert(BloomIndexColumnOrdinal::new(idx), (name, column_meta));
                 break;
             }
         }
@@ -149,7 +149,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
 async fn load_column_bloom_filter<'a>(
-    idx: ColumnId,
+    idx: BloomIndexColumnOrdinal,
     filter_name: &str,
     col_chunk_meta: &'a SingleColumnMeta,
     index_path: &'a str,

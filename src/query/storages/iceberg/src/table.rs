@@ -42,9 +42,11 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::ParquetFieldId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::column_id_from_parquet_field_id;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -160,12 +162,13 @@ impl IcebergTable {
         let mut fields = Vec::with_capacity(arrow_schema.fields().len());
 
         for arrow_f in arrow_schema.fields().iter() {
-            let field_id: ColumnId = arrow_f
+            let parquet_field_id = arrow_f
                 .metadata()
                 .get(PARQUET_FIELD_ID_META_KEY)
-                .map(|s| s.parse::<ColumnId>())
+                .map(|s| s.parse::<u32>().map(ParquetFieldId::new))
                 .transpose()?
-                .unwrap_or(0);
+                .unwrap_or(ParquetFieldId::new(0));
+            let field_id: ColumnId = column_id_from_parquet_field_id(parquet_field_id);
             let mut field = TableField::try_from(arrow_f.as_ref())?;
             field.column_id = field_id;
             fields.push(field);

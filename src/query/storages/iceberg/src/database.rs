@@ -29,6 +29,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableDataType::Null;
 use databend_common_expression::TableDataType::Timestamp;
 use databend_common_expression::TableSchema;
+use databend_common_expression::parquet_field_id_from_column_id;
 use databend_common_expression::types::NumberDataType::Float32;
 use databend_common_expression::types::NumberDataType::Float64;
 use databend_common_meta_app::schema::CreateOption;
@@ -317,7 +318,9 @@ fn convert_table_schema(
         let mut metadata = HashMap::new();
         metadata.insert(
             PARQUET_FIELD_ID_META_KEY.to_string(),
-            f.column_id.to_string(),
+            parquet_field_id_from_column_id(f.column_id)
+                .as_u32()
+                .to_string(),
         );
         fields.push(Field::from(f).with_metadata(metadata));
     }
