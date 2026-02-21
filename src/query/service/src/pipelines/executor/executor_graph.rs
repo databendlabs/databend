@@ -40,6 +40,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
+use databend_common_pipeline::core::ExecutorWaker;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
@@ -186,6 +187,7 @@ struct ExecutingGraph {
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
     executor_stats: ExecutorStats,
+    waker: Arc<ExecutorWaker>,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -197,6 +199,7 @@ impl ExecutingGraph {
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
+        let waker = pipeline.get_waker();
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
@@ -213,6 +216,7 @@ impl ExecutingGraph {
             finish_condvar_notify,
             finished_error: Mutex::new(None),
             executor_stats,
+            waker,
         })
     }
 
@@ -222,6 +226,17 @@ impl ExecutingGraph {
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
+        // Create a shared waker at the graph level
+        let graph_waker = ExecutorWaker::create();
+
+        // Proxy each pipeline's waker to the graph_waker
+        for pipeline in &pipelines {
+            let proxy_target = graph_waker.clone();
+            pipeline
+                .get_waker()
+                .bind(Box::new(move |pid, wid| proxy_target.wake(pid, wid)));
+        }
+
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
@@ -240,6 +255,7 @@ impl ExecutingGraph {
             finish_condvar_notify,
             finished_error: Mutex::new(None),
             executor_stats,
+            waker: graph_waker,
         })
     }
 
@@ -853,6 +869,10 @@ impl RunningGraph {
 
     pub fn get_query_id(&self) -> Arc<String> {
         self.0.query_id.clone()
+    }
+
+    pub fn get_waker(&self) -> Arc<ExecutorWaker> {
+        self.0.waker.clone()
     }
 
     pub fn get_error(&self) -> Option<ErrorCode> {

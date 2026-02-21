@@ -23,6 +23,7 @@ pub mod port_trigger;
 pub mod processor;
 pub mod profile;
 mod unsafe_cell_wrap;
+mod waker;
 
 pub use finished_chain::Callback;
 pub use finished_chain::ExecutionInfo;
@@ -48,3 +49,4 @@ pub use processor::Processor;
 pub use processor::ProcessorPtr;
 pub use profile::PlanProfile;
 pub use profile::PlanScope;
+pub use waker::ExecutorWaker;

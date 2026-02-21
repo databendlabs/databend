@@ -26,6 +26,8 @@ mod exchange_transform_scatter;
 mod exchange_transform_shuffle;
 mod statistics_receiver;
 mod statistics_sender;
+mod thread_channel_reader;
+mod thread_channel_writer;
 
 pub mod serde;
 
@@ -42,3 +44,5 @@ pub use exchange_sorting::ExchangeSorting;
 pub use exchange_transform_scatter::ScatterTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
 pub use exchange_transform_shuffle::ExchangeShuffleTransform;
+pub use thread_channel_reader::ThreadChannelReader;
+pub use thread_channel_writer::ThreadChannelWriter;

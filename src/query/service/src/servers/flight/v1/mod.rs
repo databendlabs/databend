@@ -14,6 +14,7 @@
 
 pub mod actions;
 pub mod exchange;
+pub mod network;
 pub mod packets;
 pub mod scatter;
 
