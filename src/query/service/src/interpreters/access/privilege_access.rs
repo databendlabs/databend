@@ -1482,6 +1482,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RefreshVirtualColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
+            Plan::VacuumVirtualColumn(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            }
 
             // Table.
             Plan::ShowCreateTable(plan) => {

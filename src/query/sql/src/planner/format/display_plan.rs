@@ -136,6 +136,7 @@ impl Plan {
 
             // Virtual Columns
             Plan::RefreshVirtualColumn(_) => Ok("RefreshVirtualColumn".to_string()),
+            Plan::VacuumVirtualColumn(_) => Ok("VacuumVirtualColumn".to_string()),
 
             // Insert
             Plan::Insert(_) => Ok("Insert".to_string()),

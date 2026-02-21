@@ -23422,6 +23422,27 @@ RefreshVirtualColumn(
 
 
 ---------- Input ----------
+VACUUM VIRTUAL COLUMN FOR t
+---------- Output ---------
+VACUUM VIRTUAL COLUMN ON t
+---------- AST ------------
+VacuumVirtualColumn(
+    VacuumVirtualColumnStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                26..27,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
 ---------- Output ---------
 CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'

@@ -255,6 +255,9 @@ statement ok
 REFRESH VIRTUAL COLUMN FOR t2;
 
 statement ok
+VACUUM VIRTUAL COLUMN FOR t2;
+
+statement ok
 create or replace table tweets (id int, data json);
 
 statement ok
@@ -502,9 +505,6 @@ query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
 27
-
-statement error
-REFRESH VIRTUAL COLUMN FOR tweets;
 
 statement ok
 set enable_experimental_virtual_column = 1;
