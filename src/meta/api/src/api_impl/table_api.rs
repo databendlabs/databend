@@ -172,6 +172,25 @@ fn assert_table_id_is_latest(
     )))
 }
 
+fn validate_index_columns(meta: &TableMeta) -> Result<(), KVAppError> {
+    let mut seen = HashSet::new();
+    for (_, index) in meta.indexes.iter() {
+        for &column_id in &index.column_ids {
+            if meta.schema.is_column_deleted(column_id) {
+                return Err(KVAppError::AppError(AppError::IndexColumnIdNotFound(
+                    IndexColumnIdNotFound::new(column_id, &index.name),
+                )));
+            }
+            if !seen.insert((column_id, index.index_type.clone())) {
+                return Err(KVAppError::AppError(AppError::DuplicatedIndexColumnId(
+                    DuplicatedIndexColumnId::new(column_id, &index.name),
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn validate_create_table_request(req: &CreateTableReq) -> Result<(), KVAppError> {
     let name = &req.name_ident.table_name;
     if !req.as_dropped && req.table_meta.drop_on.is_some() {
@@ -284,25 +303,7 @@ where
                 .collect::<Vec<_>>()
         };
 
-        if !req.table_meta.indexes.is_empty() {
-            // check the index column id exists and not be duplicated.
-            let mut index_column_ids = HashSet::new();
-            for (_, index) in req.table_meta.indexes.iter() {
-                for column_id in &index.column_ids {
-                    if req.table_meta.schema.is_column_deleted(*column_id) {
-                        return Err(KVAppError::AppError(AppError::IndexColumnIdNotFound(
-                            IndexColumnIdNotFound::new(*column_id, &index.name),
-                        )));
-                    }
-                    if index_column_ids.contains(&(*column_id, index.index_type.clone())) {
-                        return Err(KVAppError::AppError(AppError::DuplicatedIndexColumnId(
-                            DuplicatedIndexColumnId::new(*column_id, &index.name),
-                        )));
-                    }
-                    index_column_ids.insert((*column_id, index.index_type.clone()));
-                }
-            }
-        }
+        validate_index_columns(&req.table_meta)?;
 
         let mut trials = txn_backoff(None, func_name!());
 
