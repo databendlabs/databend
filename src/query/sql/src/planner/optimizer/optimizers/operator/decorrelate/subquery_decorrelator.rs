@@ -478,6 +478,7 @@ impl SubqueryDecorrelatorOptimizer {
                     (marker_index, marker_index.to_string())
                 } else if let UnnestResult::SingleJoin = result {
                     let mut output_column = subquery.output_column;
+
                     if let Some(index) = self.derived_columns.get(&output_column.index) {
                         output_column.index = *index;
                     }

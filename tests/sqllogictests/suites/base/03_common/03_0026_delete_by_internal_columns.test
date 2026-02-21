@@ -1,0 +1,155 @@
+## Test DELETE/UPDATE with internal columns
+## This tests the fix for panic when using internal columns in DELETE/UPDATE filters
+
+statement ok
+DROP DATABASE IF EXISTS test_internal_cols
+
+statement ok
+CREATE DATABASE test_internal_cols
+
+statement ok
+USE test_internal_cols
+
+statement ok
+CREATE TABLE t (id INT, name VARCHAR)
+
+statement ok
+INSERT INTO t VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')
+
+query I
+SELECT COUNT(*) FROM t
+----
+3
+
+## Test 1: Basic DELETE with arbitrary _block_name value (core scenario - should not error)
+## This is the most basic case that was causing panic before the fix
+statement ok
+DELETE FROM t WHERE _block_name = 'non_existent_block_name'
+
+query I
+SELECT COUNT(*) FROM t
+----
+3
+
+## Test 2: DELETE with arbitrary _segment_name value (should not error)
+statement ok
+DELETE FROM t WHERE _segment_name = 'non_existent_segment_name'
+
+query I
+SELECT COUNT(*) FROM t
+----
+3
+
+## Test 3: DELETE with internal column in function
+## Tests that internal columns can be used in expressions
+statement ok
+DELETE FROM t WHERE LENGTH(_block_name) > 0
+
+query I
+SELECT COUNT(*) FROM t
+----
+0
+
+## Test 4: DELETE with subquery on internal column
+## Tests the advanced case that was failing before
+statement ok
+TRUNCATE TABLE t
+
+statement ok
+INSERT INTO t VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')
+
+statement ok
+DELETE FROM t WHERE _block_name = (SELECT _block_name FROM t LIMIT 1)
+
+query I
+SELECT COUNT(*) FROM t
+----
+0
+
+## Test 5: DELETE with internal column AND regular column
+## Tests combination of internal and regular columns
+statement ok
+TRUNCATE TABLE t
+
+statement ok
+INSERT INTO t VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')
+
+statement ok
+DELETE FROM t WHERE id > 1 AND _block_name = (SELECT _block_name FROM t LIMIT 1)
+
+query I
+SELECT COUNT(*) FROM t
+----
+1
+
+query I
+SELECT id FROM t
+----
+1
+
+## Test 6: UPDATE with arbitrary _block_name value (should not error)
+statement ok
+TRUNCATE TABLE t
+
+statement ok
+INSERT INTO t VALUES (1, 'alice'), (2, 'bob')
+
+statement ok
+UPDATE t SET name = 'updated' WHERE _block_name = 'non_existent_block'
+
+query I
+SELECT COUNT(*) FROM t WHERE name = 'updated'
+----
+0
+
+## Test 7: UPDATE with internal column in function
+statement ok
+UPDATE t SET name = 'updated' WHERE LENGTH(_block_name) > 0
+
+query I
+SELECT COUNT(*) FROM t WHERE name = 'updated'
+----
+2
+
+## Test 8: UPDATE with subquery on internal column
+statement ok
+TRUNCATE TABLE t
+
+statement ok
+INSERT INTO t VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')
+
+statement ok
+UPDATE t SET name = 'updated' WHERE _block_name = (SELECT _block_name FROM t LIMIT 1)
+
+query I
+SELECT COUNT(*) FROM t WHERE name = 'updated'
+----
+3
+
+## Test 9: UPDATE with internal column AND regular column
+statement ok
+TRUNCATE TABLE t
+
+statement ok
+INSERT INTO t VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie')
+
+statement ok
+UPDATE t SET name = 'updated' WHERE id <= 2 AND _segment_name = (SELECT _segment_name FROM t LIMIT 1)
+
+query I
+SELECT COUNT(*) FROM t WHERE name = 'updated'
+----
+2
+
+query I
+SELECT id, name FROM t ORDER BY id
+----
+1 updated
+2 updated
+3 charlie
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE test_internal_cols

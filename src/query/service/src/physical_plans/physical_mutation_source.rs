@@ -30,6 +30,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -39,6 +40,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
+use databend_common_sql::Metadata;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::StreamContext;
 use databend_common_sql::binder::MutationType;
@@ -67,7 +69,23 @@ pub struct MutationSource {
     pub filters: Option<Filters>,
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
+
+    /// Metadata column indices used in the mutation query.
+    /// These are column references in the query's metadata, which may include both
+    /// base table columns and internal columns (like _block_name).
     pub read_partition_columns: ColumnSet,
+
+    /// Actual table schema positions for base table columns.
+    /// This is derived from read_partition_columns by mapping metadata column indices
+    /// to their positions in the physical table schema. Internal columns are excluded.
+    /// The positions are sorted and deduplicated.
+    pub read_column_positions: Vec<usize>,
+
+    /// Internal columns (e.g., _block_name, _segment_name) that need to be materialized.
+    /// These columns don't exist in the base table schema but are generated on-the-fly
+    /// from block metadata during query execution.
+    pub internal_columns: Vec<databend_common_catalog::plan::InternalColumn>,
+
     pub truncate_table: bool,
 
     pub partitions: Partitions,
@@ -110,6 +128,8 @@ impl IPhysicalPlan for MutationSource {
             output_schema: self.output_schema.clone(),
             input_type: self.input_type.clone(),
             read_partition_columns: self.read_partition_columns.clone(),
+            read_column_positions: self.read_column_positions.clone(),
+            internal_columns: self.internal_columns.clone(),
             truncate_table: self.truncate_table,
             partitions: self.partitions.clone(),
             statistics: self.statistics.clone(),
@@ -143,8 +163,7 @@ impl IPhysicalPlan for MutationSource {
             );
         }
 
-        let read_partition_columns: Vec<usize> =
-            self.read_partition_columns.clone().into_iter().collect();
+        let read_partition_columns = self.read_column_positions.clone();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
         if is_lazy {
@@ -191,13 +210,14 @@ impl IPhysicalPlan for MutationSource {
         } else {
             MutationAction::Update
         };
-        let col_indices = self.read_partition_columns.clone().into_iter().collect();
+        let col_indices = self.read_column_positions.clone();
         let update_mutation_with_filter =
             self.input_type == MutationType::Update && filter.is_some();
         table.add_mutation_source(
             builder.ctx.clone(),
             filter,
             col_indices,
+            self.internal_columns.clone(),
             &mut builder.main_pipeline,
             mutation_action,
         )?;
@@ -262,6 +282,13 @@ impl PhysicalPlanBuilder {
         }
         let output_schema = DataSchemaRefExt::create(fields);
 
+        let table_schema = &mutation_info.table_info.meta.schema;
+        let (read_column_positions, internal_columns) = resolve_column_positions(
+            &metadata,
+            mutation_source.read_partition_columns.iter().copied(),
+            table_schema,
+        )?;
+
         let truncate_table =
             mutation_source.mutation_type == MutationType::Delete && filters.is_none();
         Ok(PhysicalPlan::new(MutationSource {
@@ -271,12 +298,64 @@ impl PhysicalPlanBuilder {
             filters,
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
+            read_column_positions,
+            internal_columns,
             truncate_table,
             meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),
             statistics: mutation_info.statistics.clone(),
         }))
     }
+}
+
+/// Resolves metadata column indices to actual table schema positions and internal columns.
+///
+/// Given a list of metadata column indices, this function separates them into:
+/// - Base table column positions: indices of columns in the actual table schema
+/// - Internal columns: special columns like _block_name that don't exist in the base schema
+///
+/// The returned positions are sorted and deduplicated.
+///
+/// # Arguments
+/// * `metadata` - Query metadata containing column entries
+/// * `column_indices` - Iterator of metadata column indices to resolve
+/// * `table_schema` - The physical table schema
+///
+/// # Returns
+/// A tuple of (read_column_positions, internal_columns)
+pub fn resolve_column_positions(
+    metadata: &Metadata,
+    column_indices: impl Iterator<Item = IndexType>,
+    table_schema: &TableSchemaRef,
+) -> Result<(
+    Vec<usize>,
+    Vec<databend_common_catalog::plan::InternalColumn>,
+)> {
+    let mut read_column_positions = Vec::new();
+    let mut internal_columns = Vec::new();
+
+    for column_index in column_indices {
+        let column_entry = metadata.column(column_index);
+
+        match column_entry {
+            databend_common_sql::ColumnEntry::BaseTableColumn(base) => {
+                // Find the column's index in the table schema
+                if let Ok(_field) = table_schema.field_with_name(&base.column_name) {
+                    let schema_index = table_schema.index_of(&base.column_name).unwrap();
+                    read_column_positions.push(schema_index);
+                }
+            }
+            databend_common_sql::ColumnEntry::InternalColumn(internal) => {
+                internal_columns.push(internal.internal_column.clone());
+            }
+            _ => {}
+        }
+    }
+
+    read_column_positions.sort_unstable();
+    read_column_positions.dedup();
+
+    Ok((read_column_positions, internal_columns))
 }
 
 /// create push down filters

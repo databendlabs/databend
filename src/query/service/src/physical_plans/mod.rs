@@ -90,6 +90,7 @@ pub use physical_mutation::Mutation;
 pub use physical_mutation_into_organize::MutationOrganize;
 pub use physical_mutation_into_split::MutationSplit;
 pub use physical_mutation_manipulate::MutationManipulate;
+pub use physical_mutation_source::resolve_column_positions;
 pub use physical_mutation_source::*;
 pub use physical_project_set::ProjectSet;
 pub use physical_r_cte_scan::RecursiveCteScan;

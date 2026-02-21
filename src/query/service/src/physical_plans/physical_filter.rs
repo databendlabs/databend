@@ -160,18 +160,99 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("Filter"),
             projections,
             input,
-            predicates: filter
-                .predicates
-                .iter()
-                .map(|scalar| {
-                    let expr = scalar
-                        .type_check(input_schema.as_ref())?
-                        .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
-                    let expr = cast_expr_to_non_null_boolean(expr)?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    Ok(expr.as_remote_expr())
-                })
-                .collect::<Result<_>>()?,
+            predicates: {
+                filter
+                    .predicates
+                    .iter()
+                    .map(|scalar| {
+                        // Try the standard approach first: type check with input_schema
+                        let expr_result = scalar
+                            .type_check(input_schema.as_ref())
+                            .and_then(|expr| {
+                                expr.project_column_ref(|index| {
+                                    input_schema.index_of(&index.to_string())
+                                })
+                            });
+
+                        // If standard approach works, use it
+                        let expr = if let Ok(expr) = expr_result {
+                            expr
+                        } else {
+                            // Fallback for internal columns: use metadata for type checking
+                            // This handles cases where internal columns are used in filters
+                            let metadata = self.metadata.read();
+                            scalar.type_check(&*metadata)?.project_column_ref(|index| {
+                                // First try: find by metadata index string
+                                if let Ok(schema_index) = input_schema.index_of(&index.to_string())
+                                {
+                                    return Ok(schema_index);
+                                }
+
+                                // Second try: find by column name
+                                let column_entry = metadata.column(*index);
+                                let column_name = column_entry.name();
+                                if let Ok(schema_index) = input_schema.index_of(&column_name) {
+                                    return Ok(schema_index);
+                                }
+
+                                // Third try: for internal columns from decorrelated subqueries
+                                // When a subquery with internal columns is decorrelated into a JOIN,
+                                // the internal column gets a NEW metadata index in the subquery context.
+                                // The schema uses the subquery's metadata index (e.g., "6"), not the
+                                // outer metadata index (e.g., "2"). We need to find which metadata index
+                                // in the schema refers to the same internal column by matching canonical names.
+                                if let databend_common_sql::ColumnEntry::InternalColumn(
+                                    internal_col,
+                                ) = column_entry
+                                {
+                                    let canonical_name = internal_col.internal_column.column_name();
+
+                                    // Search through all field names in the input schema.
+                                    // Field names in decorrelated subqueries are metadata indices as strings.
+                                    for (i, field) in input_schema.fields().iter().enumerate() {
+                                        let field_name = field.name();
+
+                                        // Try to parse the field name as a metadata index
+                                        if let Ok(field_metadata_idx) = field_name.parse::<usize>() {
+                                            // Guard against out-of-bounds access: user columns with numeric names
+                                            // (e.g., "6") could parse as valid indices but exceed metadata bounds
+                                            if field_metadata_idx >= metadata.columns().len() {
+                                                continue;
+                                            }
+
+                                            // Get the column entry for this metadata index
+                                            if let databend_common_sql::ColumnEntry::InternalColumn(field_internal_col)
+                                                = metadata.column(field_metadata_idx)
+                                            {
+                                                // Check if this internal column has the same canonical name
+                                                if field_internal_col.internal_column.column_name() == canonical_name {
+                                                    return Ok(i);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Internal column not found in input schema yet.
+                                    // This is expected when internal columns will be added later by
+                                    // TransformAddInternalColumns. Return the metadata index as-is.
+                                    // The index will be correct after internal columns are materialized.
+                                    return Ok(*index);
+                                }
+
+                                Err(databend_common_exception::ErrorCode::BadArguments(format!(
+                                    "Unable to map column {} to input schema",
+                                    column_name
+                                )))
+                            })?
+                        };
+
+                        let expr = cast_expr_to_non_null_boolean(expr)?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        Ok(expr.as_remote_expr())
+                    })
+                    .collect::<Result<_>>()?
+            },
 
             stat_info: Some(stat_info),
         }))
