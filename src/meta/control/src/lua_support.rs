@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::RefCell;
+use std::future::Future;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,11 +29,37 @@ use mlua::LuaSerdeExt;
 use mlua::UserData;
 use mlua::UserDataMethods;
 use mlua::Value;
+use serde::Serialize;
 use tokio::time;
 
 use crate::admin::MetaAdminClient;
 
 const LUA_UTIL: &str = include_str!("../lua_util.lua");
+
+/// Call an async API method, convert the result to a Lua value, and return
+/// the `(Option<Value>, Option<String>)` tuple expected by Lua methods.
+///
+/// On API error, returns `(nil, "<api_err>: <error>")`.
+/// On Lua serialization error, returns `(nil, "Lua conversion error: <error>")`.
+async fn lua_call<T, E, F, Fut>(
+    lua: &Lua,
+    api_err: &'static str,
+    f: F,
+) -> mlua::Result<(Option<Value>, Option<String>)>
+where
+    T: Serialize,
+    E: std::fmt::Display,
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+{
+    match f().await {
+        Ok(result) => match lua.to_value(&result) {
+            Ok(v) => Ok((Some(v), None)),
+            Err(e) => Ok((None, Some(format!("Lua conversion error: {e}")))),
+        },
+        Err(e) => Ok((None, Some(format!("{api_err}: {e}")))),
+    }
+}
 
 pub struct LuaGrpcClient {
     client: Arc<ClientHandle<DatabendRuntime>>,
@@ -47,26 +74,14 @@ impl LuaGrpcClient {
 impl UserData for LuaGrpcClient {
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_async_method("get", |lua, this, key: String| async move {
-            match this.client.get_kv(&key).await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("gRPC error: {}", e)))),
-            }
+            lua_call(&lua, "gRPC error", || this.client.get_kv(&key)).await
         });
 
         methods.add_async_method(
             "upsert",
             |lua, this, (key, value): (String, String)| async move {
                 let upsert = UpsertKV::update(key, value.as_bytes());
-                match this.client.upsert_kv(upsert).await {
-                    Ok(result) => match lua.to_value(&result) {
-                        Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                        Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                    },
-                    Err(e) => Ok((None::<Value>, Some(format!("gRPC error: {}", e)))),
-                }
+                lua_call(&lua, "gRPC error", || this.client.upsert_kv(upsert)).await
             },
         );
     }
@@ -92,23 +107,11 @@ impl UserData for LuaAdminClient {
         });
 
         methods.add_async_method("status", |lua, this, ()| async move {
-            match this.client.status().await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-            }
+            lua_call(&lua, "Admin API error", || this.client.status()).await
         });
 
         methods.add_async_method("transfer_leader", |lua, this, to: Option<u64>| async move {
-            match this.client.transfer_leader(to).await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-            }
+            lua_call(&lua, "Admin API error", || this.client.transfer_leader(to)).await
         });
 
         methods.add_async_method("trigger_snapshot", |_lua, this, ()| async move {
@@ -119,25 +122,16 @@ impl UserData for LuaAdminClient {
         });
 
         methods.add_async_method("list_features", |lua, this, ()| async move {
-            match this.client.list_features().await {
-                Ok(result) => match lua.to_value(&result) {
-                    Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                    Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                },
-                Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-            }
+            lua_call(&lua, "Admin API error", || this.client.list_features()).await
         });
 
         methods.add_async_method(
             "set_feature",
             |lua, this, (feature, enable): (String, bool)| async move {
-                match this.client.set_feature(&feature, enable).await {
-                    Ok(result) => match lua.to_value(&result) {
-                        Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
-                        Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),
-                    },
-                    Err(e) => Ok((None::<Value>, Some(format!("Admin API error: {}", e)))),
-                }
+                lua_call(&lua, "Admin API error", || {
+                    this.client.set_feature(&feature, enable)
+                })
+                .await
             },
         );
     }
