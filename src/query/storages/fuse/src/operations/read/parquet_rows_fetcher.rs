@@ -62,6 +62,7 @@ pub struct RowsFetchMetadataImpl {
     pub nums_rows: usize,
     pub compression: Compression,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub variant_encoding: databend_storages_common_table_meta::meta::VariantEncoding,
 }
 
 impl RowsFetchMetadata for RowsFetchMetadataImpl {
@@ -256,6 +257,7 @@ impl ParquetRowsFetcher {
                         &metadata.location,
                         &metadata.columns_meta,
                         &None,
+                        metadata.variant_encoding,
                     )
                     .await?;
 
@@ -309,6 +311,7 @@ impl ParquetRowsFetcher {
                 compression: fuse_part.compression,
                 location: fuse_part.location.clone(),
                 columns_meta: fuse_part.columns_meta.clone(),
+                variant_encoding: fuse_part.variant_encoding,
             });
         }
 
@@ -328,6 +331,7 @@ impl ParquetRowsFetcher {
             &metadata.compression,
             &metadata.location,
             None,
+            metadata.variant_encoding,
         )
     }
 }

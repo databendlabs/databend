@@ -35,6 +35,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use futures_util::future;
 use tokio::sync::OwnedSemaphorePermit;
@@ -200,6 +201,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                             col_metas: columns_meta.clone(),
                             compression,
                             block_size,
+                            variant_encoding: VariantEncoding::default(),
                         };
 
                         if !bloom_pruner
@@ -267,6 +269,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         columns_meta,
                         Some(columns_stat),
                         compression,
+                        VariantEncoding::default(),
                         None, // TODO(Sky): sort_min_max
                         Some(block_meta_index),
                         create_on,

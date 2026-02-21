@@ -19,6 +19,7 @@ async-backtrace = { workspace = true }
 base64 = { workspace = true }
 borsh = { workspace = true }
 bumpalo = { workspace = true }
+chrono = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
@@ -47,10 +48,11 @@ jsonb = { workspace = true }
 lexical-core = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
-memchr = { workspace = true, default-features = false }
+memchr = { default-features = false, workspace = true }
 micromarshal = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
+parquet-variant = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
 recursive = { workspace = true }

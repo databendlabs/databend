@@ -85,7 +85,7 @@ AggregateFinal
         ├── read size: 5.90 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore> ms>, blocks: <range pruning: 2 to 2 cost: <slt:ignore> ms>]
         ├── push downs: [filters: [is_true(t.number (#0) > 10)], limit: NONE]
         └── estimated rows: 2983.50
 
@@ -109,7 +109,7 @@ AggregateFinal
         ├── read size: 5.90 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore> ms>, blocks: <range pruning: 2 to 2 cost: <slt:ignore> ms>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 3000.00
 
@@ -162,7 +162,7 @@ EvalScalar
                     ├── read size: 10.51 KiB
                     ├── partitions total: 2
                     ├── partitions scanned: 2
-                    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+                    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore> ms>, blocks: <range pruning: 2 to 2 cost: <slt:ignore> ms>]
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 3000.00
 
@@ -208,7 +208,7 @@ EvalScalar
             ├── read size: 10.51 KiB
             ├── partitions total: 2
             ├── partitions scanned: 2
-            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore> ms>, blocks: <range pruning: 2 to 2 cost: <slt:ignore> ms>]
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 3000.00
 

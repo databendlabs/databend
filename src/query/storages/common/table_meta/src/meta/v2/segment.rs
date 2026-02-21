@@ -66,6 +66,15 @@ impl SegmentInfo {
     }
 }
 
+/// Variant encoding used for Parquet storage.
+#[derive(Default, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, FrozenAPI)]
+#[serde(rename_all = "snake_case")]
+pub enum VariantEncoding {
+    #[default]
+    Jsonb,
+    ParquetVariant,
+}
+
 // The virtual column variant types
 const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
 const VIRTUAL_COLUMN_BOOL_TYPE: u8 = 1;
@@ -194,6 +203,8 @@ pub struct BlockMeta {
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
+    #[serde(default)]
+    pub variant_encoding: VariantEncoding,
 
     // block create_on
     pub create_on: Option<DateTime<Utc>>,
@@ -217,6 +228,7 @@ impl BlockMeta {
         vector_index_location: Option<Location>,
         virtual_block_meta: Option<VirtualBlockMeta>,
         compression: Compression,
+        variant_encoding: VariantEncoding,
         create_on: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
@@ -235,6 +247,7 @@ impl BlockMeta {
             vector_index_location,
             virtual_block_meta,
             compression,
+            variant_encoding,
             create_on,
         }
     }
@@ -395,6 +408,7 @@ impl BlockMeta {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
+            variant_encoding: VariantEncoding::default(),
             inverted_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
@@ -423,6 +437,7 @@ impl BlockMeta {
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
+            variant_encoding: VariantEncoding::default(),
             inverted_index_size: None,
             vector_index_size: None,
             vector_index_location: None,

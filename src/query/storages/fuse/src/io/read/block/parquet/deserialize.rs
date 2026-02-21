@@ -26,6 +26,11 @@ use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::basic::Compression as ParquetCompression;
 
+use crate::io::VariantShreddedColumn;
+use crate::io::arrow_schema_with_parquet_variant;
+use crate::io::arrow_schema_with_parquet_variant_and_shredding;
+use crate::io::parquet_variant_leaf_column_ids;
+use crate::io::parquet_variant_leaf_column_ids_with_shredding;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 
@@ -36,12 +41,30 @@ pub fn column_chunks_to_record_batch(
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
     selection: Option<RowSelection>,
+    use_variant_struct: bool,
+    shredded_columns: Option<&[VariantShreddedColumn]>,
 ) -> databend_common_exception::Result<RecordBatch> {
-    let arrow_schema = Schema::from(original_schema);
+    let arrow_schema = if use_variant_struct {
+        if let Some(shredded_columns) = shredded_columns {
+            arrow_schema_with_parquet_variant_and_shredding(original_schema, Some(shredded_columns))
+        } else {
+            arrow_schema_with_parquet_variant(original_schema)
+        }
+    } else {
+        Schema::from(original_schema)
+    };
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
 
-    let column_id_to_dfs_id = original_schema
-        .to_leaf_column_ids()
+    let leaf_column_ids = if use_variant_struct {
+        if let Some(shredded_columns) = shredded_columns {
+            parquet_variant_leaf_column_ids_with_shredding(original_schema, Some(shredded_columns))
+        } else {
+            parquet_variant_leaf_column_ids(original_schema)
+        }
+    } else {
+        original_schema.to_leaf_column_ids()
+    };
+    let column_id_to_dfs_id = leaf_column_ids
         .iter()
         .enumerate()
         .map(|(dfs_id, column_id)| (*column_id, dfs_id))

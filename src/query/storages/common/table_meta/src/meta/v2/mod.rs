@@ -24,6 +24,7 @@ pub use segment::DraftVirtualBlockMeta;
 pub use segment::DraftVirtualColumnMeta;
 pub use segment::ExtendedBlockMeta;
 pub use segment::SegmentInfo;
+pub use segment::VariantEncoding;
 pub use segment::VirtualBlockMeta;
 pub use segment::VirtualColumnMeta;
 pub use segment_statistics::SegmentStatistics;

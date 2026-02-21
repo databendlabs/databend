@@ -55,6 +55,7 @@ impl AggIndexReader {
                     columns_meta,
                     None,
                     self.compression.into(),
+                    databend_storages_common_table_meta::meta::VariantEncoding::default(),
                     None,
                     None,
                     None,

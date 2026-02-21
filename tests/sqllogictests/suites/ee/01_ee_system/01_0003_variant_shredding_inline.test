@@ -1,0 +1,151 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_auto_materialize_cte = 0;
+
+statement ok
+drop database if exists test_variant_shredding;
+
+statement ok
+create database test_variant_shredding;
+
+statement ok
+use test_variant_shredding;
+
+statement ok
+set enable_experimental_variant_shredding = 1;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t1 (id int, v variant) storage_format = 'parquet';
+
+statement ok
+insert into t1 values
+    (1, parse_json('{"a":11,"b":"x"}')),
+    (2, parse_json('{"a":22,"b":"y"}')),
+    (3, parse_json('{"a":33,"b":"z"}'));
+
+query TTTITT
+show virtual columns from t1;
+----
+test_variant_shredding t1 v 3000000000 ['a'] UInt64
+test_variant_shredding t1 v 3000000001 ['b'] String
+
+query T
+explain select id, v['a'] from t1;
+----
+TableScan
+├── table: default.test_variant_shredding.t1
+├── scan id: 0
+├── output columns: [id (#0), v['a'] (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a']]
+├── variant shredding: inline
+└── estimated rows: 3.00
+
+statement ok
+set enable_experimental_variant_shredding = 0;
+
+statement ok
+set enable_experimental_virtual_column = 1;
+
+query T
+explain select id, v['a'] from t1;
+----
+TableScan
+├── table: default.test_variant_shredding.t1
+├── scan id: 0
+├── output columns: [id (#0), v['a'] (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a']]
+└── estimated rows: 3.00
+
+statement ok
+set enable_experimental_variant_shredding = 1;
+
+query II
+select row_count, virtual_column_size from fuse_block('test_variant_shredding', 't1');
+----
+3 0
+
+query I
+select distinct virtual_block_size from fuse_virtual_column('test_variant_shredding', 't1');
+----
+0
+
+query ITT
+select id, v['a'], v['b'] from t1 order by id;
+----
+1 11 "x"
+2 22 "y"
+3 33 "z"
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t2 (id int, v variant) storage_format = 'parquet';
+
+statement ok
+set enable_experimental_variant_shredding = 0;
+
+statement ok
+insert into t2 values
+    (1, parse_json('{"a":1,"arr":[10,20]}'));
+
+statement ok
+set enable_experimental_variant_shredding = 1;
+
+statement ok
+insert into t2 values
+    (2, parse_json('{"a":2,"arr":[30,40]}'));
+
+query ITT
+select id, v['a'], v['arr'][0] from t2 order by id;
+----
+1 1 10
+2 2 30
+
+statement ok
+drop table if exists t3;
+
+statement ok
+create table t3 (v variant) storage_format = 'parquet';
+
+statement ok
+set enable_experimental_variant_shredding = 1;
+
+statement ok
+insert into t3 values
+    (parse_json('{"a":1}')),
+    (parse_json('{"a":{}}'));
+
+query I
+select count() from system.virtual_columns
+where database = 'test_variant_shredding' and table = 't3';
+----
+0

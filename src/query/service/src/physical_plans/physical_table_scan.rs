@@ -91,6 +91,8 @@ pub struct TableScan {
 
     pub table_index: Option<IndexType>,
     pub stat_info: Option<PlanStatsInfo>,
+    #[serde(default)]
+    pub variant_shredding_inline: bool,
 }
 
 #[typetag::serde]
@@ -194,6 +196,7 @@ impl IPhysicalPlan for TableScan {
             internal_column: self.internal_column.clone(),
             table_index: self.table_index,
             stat_info: self.stat_info.clone(),
+            variant_shredding_inline: self.variant_shredding_inline,
         })
     }
 
@@ -255,6 +258,7 @@ impl TableScan {
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
         internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        variant_shredding_inline: bool,
     ) -> PhysicalPlan {
         let name = match &source.source_info {
             DataSourceInfo::TableSource(_) => "TableScan".to_string(),
@@ -272,6 +276,7 @@ impl TableScan {
             table_index,
             stat_info,
             internal_column,
+            variant_shredding_inline,
         })
     }
 
@@ -415,6 +420,11 @@ impl PhysicalPlanBuilder {
 
         let table_entry = metadata.table(scan.table_index);
         let table = table_entry.table();
+        let variant_shredding_inline = self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_variant_shredding()?
+            && table.storage_format_as_parquet();
 
         if !table.result_can_be_cached() {
             self.ctx.set_cacheable(false);
@@ -503,6 +513,7 @@ impl PhysicalPlanBuilder {
             Some(scan.table_index),
             Some(stat_info),
             internal_column,
+            variant_shredding_inline,
         );
 
         // Update stream columns if needed.
@@ -591,6 +602,7 @@ impl PhysicalPlanBuilder {
                 estimated_rows: 1.0,
             }),
             None,
+            false,
         ))
     }
 

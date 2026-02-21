@@ -13,12 +13,24 @@
 // limitations under the License.
 
 mod locations;
+mod parquet_variant;
 pub mod read;
 mod segments;
 mod snapshots;
 mod write;
 
 pub use locations::TableMetaLocationGenerator;
+pub(crate) use parquet_variant::VariantShreddedColumn;
+pub(crate) use parquet_variant::arrow_schema_with_parquet_variant;
+pub(crate) use parquet_variant::arrow_schema_with_parquet_variant_and_shredding;
+pub(crate) use parquet_variant::build_parquet_variant_record_batch;
+pub(crate) use parquet_variant::build_parquet_variant_record_batch_with_arrow_schema;
+pub(crate) use parquet_variant::build_parquet_variant_record_batch_with_inline_shredding;
+pub(crate) use parquet_variant::is_variant_value_column_id;
+pub(crate) use parquet_variant::parquet_variant_leaf_column_ids;
+pub(crate) use parquet_variant::parquet_variant_leaf_column_ids_with_shredding;
+pub(crate) use parquet_variant::variant_data_type_to_arrow;
+pub(crate) use parquet_variant::variant_value_column_id;
 pub use read::AggIndexReader;
 pub use read::BlockReadResult;
 pub use read::BlockReader;

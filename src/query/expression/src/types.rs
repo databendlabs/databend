@@ -38,6 +38,7 @@ pub mod timestamp;
 pub mod timestamp_tz;
 pub mod tuple;
 pub mod variant;
+pub mod variant_parquet;
 pub mod vector;
 pub mod zero_size_type;
 

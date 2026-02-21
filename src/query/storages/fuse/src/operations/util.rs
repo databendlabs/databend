@@ -71,6 +71,14 @@ pub fn column_parquet_metas(
     file_meta: &parquet::format::FileMetaData,
     schema: &TableSchemaRef,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
+    let column_ids = schema.to_leaf_column_ids();
+    column_parquet_metas_with_leaf_ids(file_meta, &column_ids)
+}
+
+pub fn column_parquet_metas_with_leaf_ids(
+    file_meta: &parquet::format::FileMetaData,
+    column_ids: &[ColumnId],
+) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only
     let num_row_groups = file_meta.row_groups.len();
     if num_row_groups != 1 {
@@ -79,8 +87,6 @@ pub fn column_parquet_metas(
             num_row_groups
         )));
     }
-    // use `to_leaf_column_ids` instead of `to_column_ids` to handle nested type column ids.
-    let column_ids = schema.to_leaf_column_ids();
     let row_group = &file_meta.row_groups[0];
     // Make sure that schema and row_group has the same number column, or else it is a panic error.
     assert_eq!(column_ids.len(), row_group.columns.len());
@@ -142,6 +148,7 @@ pub async fn read_block(
             &block_meta.location.0,
             &block_meta.col_metas,
             &None,
+            block_meta.variant_encoding,
         )
         .await?;
 
@@ -160,6 +167,7 @@ pub async fn read_block(
                 &block_meta_ptr.col_metas,
                 column_chunks,
                 &storage_format,
+                block_meta_ptr.variant_encoding,
             )
         })
         .await

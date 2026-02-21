@@ -40,6 +40,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -57,6 +58,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_SIZE;
@@ -80,9 +82,12 @@ use sha2::Sha256;
 
 use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexRebuilder;
+use crate::io::is_variant_value_column_id;
+use crate::io::variant_value_column_id;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
@@ -114,9 +119,43 @@ impl FuseTable {
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        mut push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        // Inline variant shredding may fall back to get_by_keypath for a block when typed_value
+        // is missing or all NULL. Ensure source variant columns are included in the projection
+        // so block parts carry their column metas.
+        if ctx
+            .get_settings()
+            .get_enable_experimental_variant_shredding()
+            .unwrap_or_default()
+            && matches!(self.storage_format, FuseStorageFormat::Parquet)
+        {
+            if let Some(push_downs) = &mut push_downs {
+                if let Some(virtual_column) = &push_downs.virtual_column {
+                    let schema = self.schema_with_stream();
+                    let mut extra_indices = Vec::new();
+                    for source_id in &virtual_column.source_column_ids {
+                        if let Some((idx, _)) = schema
+                            .fields()
+                            .iter()
+                            .enumerate()
+                            .find(|(_, field)| field.column_id() == *source_id)
+                        {
+                            extra_indices.push(idx);
+                        }
+                    }
+                    if !extra_indices.is_empty() {
+                        let extra_projection = Projection::Columns(extra_indices);
+                        if let Some(projection) = &mut push_downs.projection {
+                            projection.merge(&extra_projection);
+                        } else {
+                            push_downs.projection = Some(extra_projection);
+                        }
+                    }
+                }
+            }
+        }
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
@@ -1075,6 +1114,7 @@ impl FuseTable {
             columns_meta,
             Some(columns_stats),
             meta.compression(),
+            meta.variant_encoding,
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
@@ -1093,6 +1133,8 @@ impl FuseTable {
 
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
+            let is_variant =
+                column.table_field.data_type().remove_nullable() == TableDataType::Variant;
             for column_id in &column.leaf_column_ids {
                 // ignore column this block dose not exist
                 if let Some(column_meta) = meta.col_metas.get(column_id) {
@@ -1101,6 +1143,39 @@ impl FuseTable {
                 if let Some(column_stat) = meta.col_stats.get(column_id) {
                     columns_stat.insert(*column_id, column_stat.clone());
                 }
+            }
+
+            if is_variant && meta.variant_encoding == VariantEncoding::ParquetVariant {
+                let derived_column_id = variant_value_column_id(column.table_field.column_id());
+                if let Some(column_meta) = meta.col_metas.get(&derived_column_id) {
+                    columns_meta.insert(derived_column_id, column_meta.clone());
+                }
+                if let Some(column_stat) = meta.col_stats.get(&derived_column_id) {
+                    columns_stat.insert(derived_column_id, column_stat.clone());
+                }
+            }
+        }
+
+        if meta.variant_encoding == VariantEncoding::ParquetVariant {
+            let mut extra_metas = Vec::new();
+            let mut extra_stats = Vec::new();
+            for column_id in columns_meta.keys() {
+                if is_variant_value_column_id(*column_id) {
+                    continue;
+                }
+                let derived_column_id = variant_value_column_id(*column_id);
+                if let Some(column_meta) = meta.col_metas.get(&derived_column_id) {
+                    extra_metas.push((derived_column_id, column_meta.clone()));
+                }
+                if let Some(column_stat) = meta.col_stats.get(&derived_column_id) {
+                    extra_stats.push((derived_column_id, column_stat.clone()));
+                }
+            }
+            for (column_id, column_meta) in extra_metas {
+                columns_meta.insert(column_id, column_meta);
+            }
+            for (column_id, column_stat) in extra_stats {
+                columns_stat.insert(column_id, column_stat);
             }
         }
 
@@ -1123,6 +1198,7 @@ impl FuseTable {
             columns_meta,
             Some(columns_stat),
             meta.compression(),
+            meta.variant_encoding,
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,

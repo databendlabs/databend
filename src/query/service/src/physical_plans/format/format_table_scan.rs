@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnEntry;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
@@ -84,17 +88,51 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                     .map_or("NONE".to_string(), |limit| limit.to_string())
             });
 
-        let virtual_columns = self.inner.source.push_downs.as_ref().and_then(|extras| {
-            extras.virtual_column.as_ref().map(|virtual_column| {
-                let mut names = virtual_column
+        let virtual_column_info = self
+            .inner
+            .source
+            .push_downs
+            .as_ref()
+            .and_then(|extras| extras.virtual_column.as_ref());
+
+        let virtual_columns = virtual_column_info.map(|virtual_column| {
+            let mut names = virtual_column
+                .virtual_column_fields
+                .iter()
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>();
+            names.sort();
+            names.iter().join(", ")
+        });
+
+        let mut has_variant_virtual_columns = false;
+        if self.inner.variant_shredding_inline {
+            if let (Some(virtual_column_info), Some(table_index)) =
+                (virtual_column_info, self.inner.table_index)
+            {
+                let source_column_ids: HashSet<u32> = virtual_column_info
                     .virtual_column_fields
                     .iter()
-                    .map(|c| c.name.clone())
-                    .collect::<Vec<_>>();
-                names.sort();
-                names.iter().join(", ")
-            })
-        });
+                    .map(|field| field.source_column_id)
+                    .collect();
+                if !source_column_ids.is_empty() {
+                    has_variant_virtual_columns = ctx
+                        .metadata
+                        .columns_by_table_index(table_index)
+                        .iter()
+                        .any(|entry| match entry {
+                            ColumnEntry::BaseTableColumn(base) => {
+                                source_column_ids.contains(&base.column_id)
+                                    && matches!(
+                                        base.data_type.remove_nullable(),
+                                        TableDataType::Variant
+                                    )
+                            }
+                            _ => false,
+                        });
+                }
+            }
+        }
 
         let agg_index = self
             .inner
@@ -133,6 +171,9 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                 let virtual_columns = format!("virtual columns: [{virtual_columns}]");
                 children.push(FormatTreeNode::new(virtual_columns));
             }
+        }
+        if self.inner.variant_shredding_inline && has_variant_virtual_columns {
+            children.push(FormatTreeNode::new("variant shredding: inline".to_string()));
         }
 
         // Aggregating index

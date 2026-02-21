@@ -83,12 +83,51 @@ impl VirtualColumnPruner {
         let Some(virtual_block_meta) = virtual_block_meta else {
             return Ok(None);
         };
-        if virtual_block_meta.virtual_column_size == 0 {
+        let is_inline = virtual_block_meta.virtual_column_size == 0;
+        if is_inline && virtual_block_meta.virtual_column_metas.is_empty() {
             return Ok(None);
         }
-        if TableMetaLocationGenerator::is_legacy_virtual_block_location(
-            &virtual_block_meta.virtual_location.0,
-        ) {
+        if !is_inline
+            && TableMetaLocationGenerator::is_legacy_virtual_block_location(
+                &virtual_block_meta.virtual_location.0,
+            )
+        {
+            return Ok(None);
+        }
+
+        if is_inline {
+            let mut virtual_column_metas = BTreeMap::new();
+            let mut need_source_column_ids = HashSet::new();
+            for virtual_column_field in &self.virtual_column_fields {
+                let field = &virtual_column_field.field;
+                if let Some(virtual_column_meta) = virtual_block_meta
+                    .virtual_column_metas
+                    .get(&field.column_id)
+                {
+                    virtual_column_metas.insert(field.column_id, virtual_column_meta.clone());
+                    continue;
+                }
+                // The virtual column does not exist and must be generated from the source column.
+                need_source_column_ids.insert(field.source_column_id);
+            }
+
+            // Inline shredding may need to fall back to get_by_keypath when typed_value is all
+            // NULL for a block. That fallback requires the source variant column to be present,
+            // so we must not ignore source columns for inline blocks.
+            // TODO: persist per-block scalar-safe markers to safely skip source columns.
+            let ignored_source_column_ids = HashSet::new();
+
+            if !virtual_column_metas.is_empty() {
+                let virtual_block_meta = VirtualBlockMetaIndex {
+                    virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
+                    virtual_column_metas,
+                    shared_virtual_column_ids: BTreeMap::new(),
+                    ignored_source_column_ids,
+                    virtual_column_read_plan: BTreeMap::new(),
+                    is_inline,
+                };
+                return Ok(Some(virtual_block_meta));
+            }
             return Ok(None);
         }
 
@@ -167,7 +206,7 @@ impl VirtualColumnPruner {
             if let Some(node) = matched_node {
                 if !has_index {
                     // Build direct/object/shared plans when the full path exists in the trie.
-                    let mut node_plans = build_plans_for_node(
+                    let (mut node_plans, _) = build_plans_for_node(
                         node,
                         source_column_id,
                         segments,
@@ -185,7 +224,7 @@ impl VirtualColumnPruner {
                     // The suffix will be extracted at read time.
                     let parent_node = prefix_nodes[prefix_len - 1];
                     let parent_segments = &segments[..prefix_len];
-                    let parent_plans = build_plans_for_node(
+                    let (parent_plans, _) = build_plans_for_node(
                         parent_node,
                         source_column_id,
                         parent_segments,
@@ -239,6 +278,7 @@ impl VirtualColumnPruner {
                 shared_virtual_column_ids,
                 ignored_source_column_ids,
                 virtual_column_read_plan,
+                is_inline,
             };
             return Ok(Some(virtual_block_meta));
         }
@@ -326,8 +366,9 @@ fn build_plans_for_node(
     virtual_meta: &VirtualColumnFileMeta,
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
     shared_virtual_column_ids: &mut BTreeMap<ColumnId, ColumnId>,
-) -> Vec<VirtualColumnReadPlan> {
+) -> (Vec<VirtualColumnReadPlan>, bool) {
     let mut plans = Vec::new();
+    let mut has_index_descendant = false;
 
     if let Some(leaf) = node.leaf.as_ref() {
         match leaf {
@@ -367,12 +408,15 @@ fn build_plans_for_node(
         let Some(segment_name) = virtual_meta.string_table.get(child_id as usize) else {
             continue;
         };
+        if is_index_segment(segment_name) {
+            has_index_descendant = true;
+        }
         let Some(child_key) = segment_to_object_key(segment_name) else {
             continue;
         };
         let mut child_segments = segments.to_vec();
         child_segments.push(segment_name.to_string());
-        let child_plans = build_plans_for_node(
+        let (child_plans, child_has_index) = build_plans_for_node(
             child_node,
             source_column_id,
             &child_segments,
@@ -380,16 +424,17 @@ fn build_plans_for_node(
             virtual_column_metas,
             shared_virtual_column_ids,
         );
+        if child_has_index {
+            has_index_descendant = true;
+        }
         if let Some(plan) = child_plans.into_iter().next() {
             entries.push((child_key, plan));
         }
     }
-    if !entries.is_empty() {
-        // Object: reconstruct a parent object from child plans.
-        plans.push(VirtualColumnReadPlan::Object { entries });
-    }
+    // Avoid reconstructing parent objects from child plans to preserve
+    // correct semantics for NULL vs missing/object values.
 
-    plans
+    (plans, has_index_descendant)
 }
 
 struct KeyPathMatchInfo {
@@ -441,4 +486,8 @@ fn segment_to_object_key(segment: &str) -> Option<String> {
         return None;
     }
     Some(segment.to_string())
+}
+
+fn is_index_segment(segment: &str) -> bool {
+    segment.parse::<i32>().is_ok()
 }

@@ -58,6 +58,7 @@ pub use snapshot_hint::*;
 pub use table_index::do_refresh_table_index;
 pub use util::acquire_task_permit;
 pub use util::column_parquet_metas;
+pub use util::column_parquet_metas_with_leaf_ids;
 pub use util::read_block;
 pub use util::set_backoff;
 pub use vacuum::ASSUMPTION_MAX_TXN_DURATION;

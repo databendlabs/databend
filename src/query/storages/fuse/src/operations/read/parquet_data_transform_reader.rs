@@ -202,6 +202,7 @@ impl AsyncTransform for ReadParquetDataTransform {
                                         &part.location,
                                         &part.columns_meta,
                                         ignore_column_ids,
+                                        part.variant_encoding,
                                     )
                                     .await?;
 

@@ -40,7 +40,13 @@ impl AggIndexReader {
                 let columns_meta = build_columns_meta(row_group);
                 let res = self
                     .reader
-                    .read_columns_data_by_merge_io(read_settings, loc, &columns_meta, &None)
+                    .read_columns_data_by_merge_io(
+                        read_settings,
+                        loc,
+                        &columns_meta,
+                        &None,
+                        databend_storages_common_table_meta::meta::VariantEncoding::Jsonb,
+                    )
                     .await
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;
@@ -50,6 +56,7 @@ impl AggIndexReader {
                     columns_meta,
                     None,
                     self.compression.into(),
+                    databend_storages_common_table_meta::meta::VariantEncoding::default(),
                     None,
                     None,
                     None,
@@ -81,6 +88,7 @@ impl AggIndexReader {
             &part.compression,
             &part.location,
             None,
+            part.variant_encoding,
         )?;
 
         self.apply_agg_info(block)

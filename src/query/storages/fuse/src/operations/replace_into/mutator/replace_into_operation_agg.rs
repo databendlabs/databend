@@ -123,7 +123,7 @@ impl ReplaceIntoOperationAggregator {
     ) -> Result<Self> {
         let data_accessor = table.get_operator();
         let table_schema = table.schema_with_stream();
-        let write_settings = table.get_write_settings();
+        let write_settings = table.get_write_settings_with_variant(ctx.as_ref());
         let update_stream_columns = table.change_tracking_enabled();
 
         let deletion_accumulator = DeletionAccumulator::default();
@@ -642,6 +642,7 @@ impl AggregationContext {
                 &block_meta.location.0,
                 &block_meta.col_metas,
                 &None,
+                block_meta.variant_encoding,
             )
             .await?;
 
@@ -660,6 +661,7 @@ impl AggregationContext {
                     &block_meta_ptr.col_metas,
                     column_chunks,
                     &storage_format,
+                    block_meta_ptr.variant_encoding,
                 )
             })
             .await

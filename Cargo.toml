@@ -306,7 +306,7 @@ aws-smithy-runtime = "1.7.8"
 aws-smithy-runtime-api = "1.7.3"
 aws-smithy-types = "1.2.13"
 
-indexmap = "2.0.0"
+indexmap = "2.10.0"
 indicatif = "0.17.5"
 itertools = "0.13.0"
 jaq-core = "2.2.1"
@@ -375,7 +375,8 @@ orc-rust = "0.6.0"
 ordered-float = { version = "5.1.0", default-features = false }
 p256 = "0.13"
 parking_lot = "0.12.1"
-parquet = { version = "56", features = ["async"] }
+parquet = { version = "56", features = ["async", "variant_experimental"] }
+parquet-variant = "0.1.0"
 passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"

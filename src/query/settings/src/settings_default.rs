@@ -1507,6 +1507,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_variant_shredding", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental variant shredding for Parquet storage",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_auto_materialize_cte", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables auto materialize CTE, 0 for disable, 1 for enable",

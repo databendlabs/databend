@@ -161,6 +161,7 @@ impl BloomIndexRebuilder {
                 &block_read_info.location,
                 &block_read_info.col_metas,
                 &None,
+                block_read_info.variant_encoding,
             )
             .await?;
         let data_block = block_reader.deserialize_chunks_with_meta(

@@ -86,8 +86,8 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     assert!(!result.data.is_empty());
     assert_eq!(
         result.draft_virtual_block_meta.virtual_column_metas.len(),
-        4
-    ); // Expect a, b.c, b.d, e
+        5
+    ); // Expect a, b.c, b.d, e[0].f, e[1]
 
     // Check v['a']
     let meta_a = find_virtual_col(
@@ -122,16 +122,27 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     assert_eq!(meta_bd.name, "['b']['d']");
     assert_eq!(meta_bd.data_type, VariantDataType::Boolean);
 
-    // Check v['e']
-    let meta_bd = find_virtual_col(
+    // Check v['e'][0]['f']
+    let meta_e0f = find_virtual_col(
         &result.draft_virtual_block_meta.virtual_column_metas,
         1,
-        "['e']",
+        "['e'][0]['f']",
     )
-    .expect("Virtual column ['e'] not found");
-    assert_eq!(meta_bd.source_column_id, 1);
-    assert_eq!(meta_bd.name, "['e']");
-    assert_eq!(meta_bd.data_type, VariantDataType::Jsonb);
+    .expect("Virtual column ['e'][0]['f'] not found");
+    assert_eq!(meta_e0f.source_column_id, 1);
+    assert_eq!(meta_e0f.name, "['e'][0]['f']");
+    assert_eq!(meta_e0f.data_type, VariantDataType::UInt64);
+
+    // Check v['e'][1]
+    let meta_e1 = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['e'][1]",
+    )
+    .expect("Virtual column ['e'][1] not found");
+    assert_eq!(meta_e1.source_column_id, 1);
+    assert_eq!(meta_e1.name, "['e'][1]");
+    assert_eq!(meta_e1.data_type, VariantDataType::UInt64);
 
     let block = DataBlock::new(
         vec![
@@ -293,8 +304,8 @@ async fn test_virtual_column_builder() -> anyhow::Result<()> {
     builder.add_block(&block)?;
     let result = builder.finalize(&write_settings, &location)?;
 
-    // all columns should be add to shared_column due to > 70% nulls
-    assert!(!result.data.is_empty());
+    // Paths with > 70% nulls are discarded.
+    assert!(result.data.is_empty());
     assert!(
         result
             .draft_virtual_block_meta
