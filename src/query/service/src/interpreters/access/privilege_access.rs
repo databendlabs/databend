@@ -266,7 +266,11 @@ impl PrivilegeAccess {
         }
 
         let user_api = UserApiProvider::instance();
-        let ownerships = user_api.role_api(tenant).list_ownerships().await?;
+        let ownerships = user_api
+            .role_api(tenant)
+            .list_ownerships()
+            .await
+            .map_err(meta_service_error)?;
         Ok((roles_name, ownerships))
     }
 
