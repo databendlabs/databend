@@ -363,10 +363,11 @@ impl FromToProto for mt::principal::UserGrantSet {
             entries.push(entry.to_pb()?);
         }
 
-        let mut roles = BTreeMap::new();
-        for role in self.roles().iter() {
-            roles.insert(role.clone(), true);
-        }
+        let roles = self
+            .roles()
+            .iter()
+            .map(|role| (role.clone(), true))
+            .collect::<BTreeMap<_, _>>();
 
         Ok(pb::UserGrantSet {
             ver: VER,
