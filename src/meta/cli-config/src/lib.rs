@@ -573,7 +573,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             profile: ProfileLogConfig::default(),
             structlog: StructLogConfig::default(),
             tracing: TracingConfig::default(),
-            history: self.storage.into(),
+            history: self.storage.try_into()?,
         })
     }
 }
@@ -779,19 +779,23 @@ impl Default for StorageLogConfig {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<InnerLogHistoryConfig> for StorageLogConfig {
-    fn into(self) -> InnerLogHistoryConfig {
-        let storage_params: Option<InnerStorageConfig> =
-            Some(self.log_storage_params.try_into().unwrap_or_default());
-        InnerLogHistoryConfig {
+impl TryInto<InnerLogHistoryConfig> for StorageLogConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<InnerLogHistoryConfig, Self::Error> {
+        let storage_params: Option<InnerStorageConfig> = Some(
+            self.log_storage_params
+                .try_into()
+                .map_err(|e| format!("log_storage_params: {e}"))?,
+        );
+        Ok(InnerLogHistoryConfig {
             on: self.log_storage_on,
             interval: self.log_storage_interval,
             stage_name: self.log_storage_stage_name,
             level: self.log_storage_level,
             storage_params: storage_params.map(|cfg| cfg.params),
             ..Default::default()
-        }
+        })
     }
 }
 
