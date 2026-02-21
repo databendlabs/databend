@@ -189,12 +189,18 @@ impl Table for InferSchemaTable {
             Some(f) => ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
-        if let FileFormatParams::Csv(fmt) = &file_format_params {
-            if fmt.field_delimiter.len() != 1 {
-                return Err(ErrorCode::BadArguments(
-                    "It is not supported to infer CSV file with multi-bytes FIELD_DELIMITER",
-                ));
-            };
+        let maybe_field_delimiter = match &file_format_params {
+            FileFormatParams::Csv(fmt) => Some(("CSV", fmt.field_delimiter.as_str())),
+            FileFormatParams::Tsv(fmt) => Some(("TSV", fmt.field_delimiter.as_str())),
+            _ => None,
+        };
+
+        if let Some((file_format, field_delimiter)) = maybe_field_delimiter
+            && field_delimiter.len() != 1
+        {
+            return Err(ErrorCode::BadArguments(format!(
+                "It is not supported to infer {file_format} file with multi-bytes FIELD_DELIMITER",
+            )));
         }
         let operator = init_stage_operator(&stage_info)?;
         let stage_file_infos = files_info
@@ -230,7 +236,7 @@ impl Table for InferSchemaTable {
         let info = InferSchemaPartInfo::from_part(&part)?;
 
         match info.file_format_params {
-            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) => {
+            FileFormatParams::Csv(_) | FileFormatParams::Tsv(_) | FileFormatParams::NdJson(_) => {
                 let partitions = info
                     .stage_file_infos
                     .iter()
@@ -304,7 +310,7 @@ impl Table for InferSchemaTable {
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "infer_schema is currently limited to format Parquet, CSV and NDJSON",
+                    "infer_schema is currently limited to format Parquet, CSV, TSV and NDJSON",
                 ));
             }
         }

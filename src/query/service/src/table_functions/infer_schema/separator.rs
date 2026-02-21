@@ -64,6 +64,29 @@ impl InferSchemaSeparator {
             is_finished: false,
         }
     }
+
+    fn infer_delimited_schema(
+        bytes: Cursor<&[u8]>,
+        field_delimiter: &str,
+        quote: &str,
+        headers: u64,
+        escape: &str,
+        max_records: Option<usize>,
+    ) -> std::result::Result<Schema, Option<ArrowError>> {
+        let mut format = Format::default()
+            .with_delimiter(field_delimiter.as_bytes()[0])
+            .with_quote(quote.as_bytes()[0])
+            .with_header(headers != 0);
+
+        if !escape.is_empty() {
+            format = format.with_escape(escape.as_bytes()[0]);
+        }
+
+        format
+            .infer_schema(bytes, max_records)
+            .map(|(schema, _)| schema)
+            .map_err(Some)
+    }
 }
 
 impl AccumulatingTransform for InferSchemaSeparator {
@@ -93,27 +116,24 @@ impl AccumulatingTransform for InferSchemaSeparator {
         if self.max_records.is_none() && !batch.is_eof {
             return Ok(vec![DataBlock::empty()]);
         }
-        let bytes = Cursor::new(bytes);
+        let bytes = Cursor::new(bytes.as_slice());
         let result = match &self.file_format_params {
-            FileFormatParams::Csv(params) => {
-                let escape = if params.escape.is_empty() {
-                    None
-                } else {
-                    Some(params.escape.as_bytes()[0])
-                };
-
-                let mut format = Format::default()
-                    .with_delimiter(params.field_delimiter.as_bytes()[0])
-                    .with_quote(params.quote.as_bytes()[0])
-                    .with_header(params.headers != 0);
-                if let Some(escape) = escape {
-                    format = format.with_escape(escape);
-                }
-                format
-                    .infer_schema(bytes, self.max_records)
-                    .map(|(schema, _)| schema)
-                    .map_err(Some)
-            }
+            FileFormatParams::Csv(params) => Self::infer_delimited_schema(
+                bytes,
+                &params.field_delimiter,
+                &params.quote,
+                params.headers,
+                &params.escape,
+                self.max_records,
+            ),
+            FileFormatParams::Tsv(params) => Self::infer_delimited_schema(
+                bytes,
+                &params.field_delimiter,
+                &params.quote,
+                params.headers,
+                &params.escape,
+                self.max_records,
+            ),
             FileFormatParams::NdJson(_) => {
                 let mut records = ValueIter::new(bytes, self.max_records);
                 let fn_ndjson = |max_records| -> std::result::Result<Schema, Option<ArrowError>> {
@@ -133,7 +153,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "InferSchemaSeparator is currently limited to format CSV and NDJSON",
+                    "InferSchemaSeparator is currently limited to format CSV, TSV and NDJSON",
                 ));
             }
         };
