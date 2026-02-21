@@ -1261,6 +1261,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_sort_spill_prefetch", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable asynchronous restore prefetch for spilled sort blocks",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_last_snapshot_location_hint", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables writing last_snapshot_location_hint object",

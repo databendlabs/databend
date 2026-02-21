@@ -82,9 +82,10 @@ impl MemorySettingsExt for MemorySettings {
         }
 
         let max_query_memory_usage = settings.get_max_query_memory_usage()? as usize;
-        let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
-        if matches!(out_of_memory_behavior, OutofMemoryBehavior::Spilling)
-            && max_query_memory_usage != 0
+        if matches!(
+            settings.get_query_out_of_memory_behavior()?,
+            OutofMemoryBehavior::Spilling
+        ) && max_query_memory_usage != 0
         {
             builder = builder.with_max_query_memory_usage(
                 max_query_memory_usage,

@@ -35,18 +35,17 @@ use super::TransformSortMergeLimit;
 use super::core::RowConverter;
 use super::core::Rows;
 use super::core::algorithm::SortAlgorithm;
-use crate::MemorySettings;
-use crate::traits::DataBlockSpill;
+use crate::traits::SortSpiller;
 
 #[allow(clippy::large_enum_variant)]
-enum Inner<A: SortAlgorithm, S: DataBlockSpill> {
+enum Inner<A: SortAlgorithm, S: SortSpiller> {
     Collect(Vec<DataBlock>),
     Limit(TransformSortMergeLimit<A::Rows>),
     Spill(Vec<DataBlock>, SortSpill<A, S>),
     None,
 }
 
-pub struct TransformSortCollect<A: SortAlgorithm, C, S: DataBlockSpill> {
+pub struct TransformSortCollect<A: SortAlgorithm, C, S: SortSpiller> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -67,14 +66,14 @@ pub struct TransformSortCollect<A: SortAlgorithm, C, S: DataBlockSpill> {
 
     aborting: AtomicBool,
 
-    memory_settings: MemorySettings,
+    enable_restore_prefetch: bool,
 }
 
 impl<A, C, S> TransformSortCollect<A, C, S>
 where
     A: SortAlgorithm,
     C: RowConverter<A::Rows>,
-    S: DataBlockSpill,
+    S: SortSpiller,
 {
     pub fn new(
         input: Arc<InputPort>,
@@ -85,7 +84,7 @@ where
         default_num_merge: usize,
         sort_limit: bool,
         order_col_generated: bool,
-        memory_settings: MemorySettings,
+        enable_restore_prefetch: bool,
     ) -> Result<Self> {
         let row_converter = C::create(&sort_desc, base.schema.clone())?;
         let (name, inner) = match base.limit {
@@ -106,9 +105,9 @@ where
             base,
             inner,
             aborting: AtomicBool::new(false),
-            memory_settings,
             max_block_size,
             default_num_merge,
+            enable_restore_prefetch,
         })
     }
 
@@ -129,6 +128,7 @@ where
             SortSpillParams {
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
+                prefetch: false,
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -154,6 +154,7 @@ where
             SortSpillParams {
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
+                prefetch: false,
             }
         } else {
             self.determine_params(num_bytes, num_rows)
@@ -179,8 +180,9 @@ where
         SortSpillParams::determine(
             bytes,
             rows,
-            ByteSize(self.memory_settings.spill_unit_size as _),
+            ByteSize(self.base.spiller.memory_settings().spill_unit_size as _),
             self.max_block_size,
+            self.enable_restore_prefetch,
         )
     }
 
@@ -211,22 +213,23 @@ where
     }
 
     fn check_spill(&self) -> bool {
+        let memory_settings = self.base.spiller.memory_settings();
         match &self.inner {
             Inner::Limit(limit_sort) => {
-                self.memory_settings.check_spill()
+                memory_settings.check_spill()
                     && limit_sort.num_bytes()
-                        >= ByteSize(self.memory_settings.spill_unit_size as _) * 2_u64
+                        >= ByteSize(memory_settings.spill_unit_size as _) * 2_u64
             }
             Inner::Collect(input_data) => {
-                self.memory_settings.check_spill()
+                memory_settings.check_spill()
                     && input_data.iter().map(|b| b.memory_size()).sum::<usize>()
-                        >= self.memory_settings.spill_unit_size * 2
+                        >= memory_settings.spill_unit_size * 2
             }
             Inner::Spill(input_data, sort_spill) => {
-                let rows = input_data.in_memory_rows();
-                let params = sort_spill.params();
-                self.memory_settings.check_spill() && rows >= params.batch_rows * 2
-                    || input_data.in_memory_rows() >= params.max_rows()
+                input_data.in_memory_rows() >= sort_spill.params().batch_rows * 2 && {
+                    let remain = memory_settings.check_spill_remain().unwrap();
+                    remain < memory_settings.spill_unit_size as isize * 2
+                }
             }
             _ => unreachable!(),
         }
@@ -251,7 +254,7 @@ where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
     C: RowConverter<A::Rows> + Send + 'static,
-    S: DataBlockSpill,
+    S: SortSpiller,
 {
     fn name(&self) -> String {
         self.name.to_string()

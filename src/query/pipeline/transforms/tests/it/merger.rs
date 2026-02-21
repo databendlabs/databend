@@ -20,6 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::types::Int32Type;
+use databend_common_pipeline_transforms::sorts::core::AsyncSortedStream;
 use databend_common_pipeline_transforms::sorts::core::Merger;
 use databend_common_pipeline_transforms::sorts::core::SimpleRowsAsc;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
@@ -61,6 +62,13 @@ impl SortedStream for TestStream {
                 false,
             ))
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSortedStream for TestStream {
+    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
+        self.next()
     }
 }
 
