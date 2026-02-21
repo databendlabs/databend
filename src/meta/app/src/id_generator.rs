@@ -50,37 +50,63 @@ impl IdGenerator {
     }
 
     /// Create a key for generating generic id
-    pub fn generic() -> Self { Self::new(ID_GEN_GENERIC) }
+    pub fn generic() -> Self {
+        Self::new(ID_GEN_GENERIC)
+    }
 
     /// Create a key for generating table id with kvapi::KVApi
-    pub fn table_id() -> Self { Self::new(ID_GEN_TABLE) }
+    pub fn table_id() -> Self {
+        Self::new(ID_GEN_TABLE)
+    }
 
     /// Create a key for generating database id with kvapi::KVApi
-    pub fn database_id() -> Self { Self::new(ID_GEN_DATABASE) }
+    pub fn database_id() -> Self {
+        Self::new(ID_GEN_DATABASE)
+    }
 
     /// Create a key for generating dictionary id with kvapi::KVApi
-    pub fn dictionary_id() -> Self { Self::new(ID_GEN_DICTIONARY) }
+    pub fn dictionary_id() -> Self {
+        Self::new(ID_GEN_DICTIONARY)
+    }
 
     /// Create a key for generating share id with kvapi::KVApi
-    pub fn share_id() -> Self { Self::new(ID_GEN_SHARE) }
+    pub fn share_id() -> Self {
+        Self::new(ID_GEN_SHARE)
+    }
 
-    pub fn share_endpoint_id() -> Self { Self::new(ID_GEN_SHARE_ENDPOINT) }
+    pub fn share_endpoint_id() -> Self {
+        Self::new(ID_GEN_SHARE_ENDPOINT)
+    }
 
-    pub fn index_id() -> Self { Self::new(ID_GEN_INDEX) }
+    pub fn index_id() -> Self {
+        Self::new(ID_GEN_INDEX)
+    }
 
-    pub fn data_mask_id() -> Self { Self::new(ID_GEN_DATA_MASK) }
+    pub fn data_mask_id() -> Self {
+        Self::new(ID_GEN_DATA_MASK)
+    }
 
-    pub fn row_access_id() -> Self { Self::new(ID_GEN_ROW_POLICY) }
+    pub fn row_access_id() -> Self {
+        Self::new(ID_GEN_ROW_POLICY)
+    }
 
-    pub fn table_lock_id() -> Self { Self::new(ID_GEN_TABLE_LOCK) }
+    pub fn table_lock_id() -> Self {
+        Self::new(ID_GEN_TABLE_LOCK)
+    }
 
-    pub fn background_job_id() -> Self { Self::new(ID_GEN_BACKGROUND_JOB) }
+    pub fn background_job_id() -> Self {
+        Self::new(ID_GEN_BACKGROUND_JOB)
+    }
 
     /// Create a key for generating catalog id with kvapi::KVApi
-    pub fn catalog_id() -> Self { Self::new(ID_GEN_CATALOG) }
+    pub fn catalog_id() -> Self {
+        Self::new(ID_GEN_CATALOG)
+    }
 
     /// Create a key for generating procedure id with kvapi::KVApi
-    pub fn procedure_id() -> Self { Self::new(ID_GEN_PROCEDURE) }
+    pub fn procedure_id() -> Self {
+        Self::new(ID_GEN_PROCEDURE)
+    }
 }
 
 impl kvapi::KeyCodec for IdGenerator {
