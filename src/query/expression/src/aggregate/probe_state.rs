@@ -112,13 +112,27 @@ impl<T> Index<RowID> for [T] {
     type Output = T;
 
     fn index(&self, index: RowID) -> &T {
-        &self[index.0 as usize]
+        let i = index.0 as usize;
+        debug_assert!(
+            i < self.len(),
+            "RowID out of bounds: index={} len={}",
+            i,
+            self.len()
+        );
+        unsafe { self.get_unchecked(i) }
     }
 }
 
 impl<T> IndexMut<RowID> for [T] {
     fn index_mut(&mut self, index: RowID) -> &mut T {
-        &mut self[index.0 as usize]
+        let i = index.0 as usize;
+        debug_assert!(
+            i < self.len(),
+            "RowID out of bounds: index={} len={}",
+            i,
+            self.len()
+        );
+        unsafe { self.get_unchecked_mut(i) }
     }
 }
 
@@ -126,7 +140,14 @@ impl<T> Index<RowID> for Vec<T> {
     type Output = T;
 
     fn index(&self, index: RowID) -> &T {
-        &self[index.0 as usize]
+        let i = index.0 as usize;
+        debug_assert!(
+            i < self.len(),
+            "RowID out of bounds: index={} len={}",
+            i,
+            self.len()
+        );
+        unsafe { self.get_unchecked(i) }
     }
 }
 

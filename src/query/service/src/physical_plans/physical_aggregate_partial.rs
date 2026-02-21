@@ -179,6 +179,7 @@ impl IPhysicalPlan for AggregatePartial {
         let max_threads = builder.settings.get_max_threads()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
         let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
+        let enable_experiment_hash_index = builder.settings.get_enable_experiment_hash_index()?;
         let cluster = &builder.ctx.get_cluster();
 
         let params = PipelineBuilder::build_aggregator_params(
@@ -188,6 +189,7 @@ impl IPhysicalPlan for AggregatePartial {
             builder.is_exchange_parent(),
             max_spill_io_requests as usize,
             enable_experiment_aggregate,
+            enable_experiment_hash_index,
             max_block_rows,
             max_block_bytes,
         )?;
@@ -216,6 +218,8 @@ impl IPhysicalPlan for AggregatePartial {
                     .cluster_with_partial(true, builder.ctx.get_cluster().nodes.len())
             }
         };
+        let partial_agg_config =
+            partial_agg_config.with_experiment_hash_index(enable_experiment_hash_index);
 
         // For rank limit, we can filter data using sort with rank before partial.
         if let Some((sort_desc, limit)) =

@@ -41,6 +41,7 @@ pub struct AggregatorParams {
     pub max_spill_io_requests: usize,
 
     pub enable_experiment_aggregate: bool,
+    pub enable_experiment_hash_index: bool,
 
     pub max_block_rows: usize,
     pub max_block_bytes: usize,
@@ -57,6 +58,7 @@ impl AggregatorParams {
         cluster_aggregator: bool,
         max_spill_io_requests: usize,
         enable_experiment_aggregate: bool,
+        enable_experiment_hash_index: bool,
         max_block_rows: usize,
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
@@ -78,6 +80,7 @@ impl AggregatorParams {
             max_block_bytes,
             max_spill_io_requests,
             enable_experiment_aggregate,
+            enable_experiment_hash_index,
         }))
     }
 

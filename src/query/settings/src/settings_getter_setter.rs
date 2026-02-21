@@ -1174,4 +1174,8 @@ impl Settings {
     pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("force_aggregate_shuffle_mode")
     }
+
+    pub fn get_enable_experiment_hash_index(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experiment_hash_index")? != 0)
+    }
 }
