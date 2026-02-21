@@ -67,9 +67,11 @@ impl SendPartState {
         fuse_pruner: Arc<FusePruner>,
         data_metrics: Arc<StorageMetrics>,
         partitions_total: usize,
+        shuffle_kind: Option<databend_common_catalog::plan::PartitionsShuffleKind>,
     ) -> Self {
         let mut statistics = PartStatistics::default_exact();
         statistics.partitions_total = partitions_total;
+        statistics.shuffle_kind = shuffle_kind;
         SendPartState {
             cache: Mutex::new(SendPartCache {
                 partitions: Partitions::default(),

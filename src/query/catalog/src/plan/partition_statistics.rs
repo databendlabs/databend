@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 
+use crate::plan::PartitionsShuffleKind;
 use crate::plan::PruningStatistics;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
@@ -31,6 +32,9 @@ pub struct PartStatistics {
     pub is_exact: bool,
     /// Pruning stats.
     pub pruning_stats: PruningStatistics,
+    /// Shuffle kind used for this query (helps determine merge strategy)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shuffle_kind: Option<PartitionsShuffleKind>,
 }
 
 impl PartStatistics {
@@ -49,6 +53,7 @@ impl PartStatistics {
             partitions_total,
             is_exact: false,
             pruning_stats: Default::default(),
+            shuffle_kind: None,
         }
     }
 
@@ -66,6 +71,7 @@ impl PartStatistics {
             is_exact: true,
             snapshot: None,
             pruning_stats: Default::default(),
+            shuffle_kind: None,
         }
     }
 
@@ -101,10 +107,41 @@ impl PartStatistics {
     }
 
     pub fn merge(&mut self, other: &Self) {
-        self.read_rows += other.read_rows;
-        self.read_bytes += other.read_bytes;
-        self.partitions_scanned += other.partitions_scanned;
-        self.partitions_total += other.partitions_total;
-        self.pruning_stats.merge(&other.pruning_stats);
+        // Preserve shuffle_kind if not set
+        if self.shuffle_kind.is_none() && other.shuffle_kind.is_some() {
+            self.shuffle_kind = other.shuffle_kind.clone();
+        }
+
+        // Determine merge strategy based on shuffle kind
+        let shuffle_kind = self.shuffle_kind.as_ref().or(other.shuffle_kind.as_ref());
+        let use_max_for_counts = matches!(
+            shuffle_kind,
+            Some(PartitionsShuffleKind::BroadcastCluster)
+                | Some(PartitionsShuffleKind::BroadcastWarehouse)
+        );
+        let use_max_for_segments =
+            use_max_for_counts || matches!(shuffle_kind, Some(PartitionsShuffleKind::BlockMod(_)));
+
+        if use_max_for_counts {
+            // Broadcast: all nodes see the same data, use max
+            self.read_rows = self.read_rows.max(other.read_rows);
+            self.read_bytes = self.read_bytes.max(other.read_bytes);
+            self.partitions_scanned = self.partitions_scanned.max(other.partitions_scanned);
+        } else {
+            // Seq/Mod/BlockMod: each node sees different data, use sum
+            self.read_rows += other.read_rows;
+            self.read_bytes += other.read_bytes;
+            self.partitions_scanned += other.partitions_scanned;
+        }
+
+        // partitions_total represents the total number of partitions in the table (before pruning),
+        // which should be the same across all nodes. Always use max to avoid inflation.
+        self.partitions_total = self.partitions_total.max(other.partitions_total);
+
+        self.pruning_stats.merge(
+            &other.pruning_stats,
+            use_max_for_segments,
+            use_max_for_counts,
+        );
     }
 }
