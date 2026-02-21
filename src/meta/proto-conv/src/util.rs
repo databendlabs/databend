@@ -238,3 +238,24 @@ pub fn missing(reason: impl ToString) -> impl FnOnce() -> Incompatible {
     let s = reason.to_string();
     move || Incompatible::new(s)
 }
+
+/// Convert a value using `TryFrom`, wrapping errors in [`Incompatible`].
+///
+/// The error message names the field and the target type so callers only need
+/// to pass the field name, e.g.:
+///
+/// ```ignore
+/// let size_limit: usize = convert_field(p.size_limit, "CopyOptions.size_limit")?;
+/// ```
+pub fn convert_field<T, U>(value: T, field_name: &str) -> Result<U, Incompatible>
+where
+    U: TryFrom<T>,
+    <U as TryFrom<T>>::Error: std::fmt::Display,
+{
+    U::try_from(value).map_err(|err| {
+        Incompatible::new(format!(
+            "{field_name} cannot be converted to {}: {err}",
+            std::any::type_name::<U>()
+        ))
+    })
+}
