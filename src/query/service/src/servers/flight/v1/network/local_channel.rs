@@ -27,8 +27,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::task::Poll;
-use std::task::Waker;
 
 use concurrent_queue::ConcurrentQueue;
 use concurrent_queue::PopError;
@@ -37,7 +35,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use event_listener::Event;
-use parking_lot::Mutex;
 
 use super::inbound_channel::InboundChannel;
 use super::outbound_channel::OutboundChannel;
@@ -57,18 +54,19 @@ struct LocalChannelSharedState {
     max_bytes: usize,
     /// Per-channel event: notifies receiver when data is pushed.
     recv_events: Vec<Event>,
-    /// Blocked sender wakers (replaces send_event).
-    blocked_wakers: Arc<Mutex<Vec<Waker>>>,
+    /// Notifies blocked senders when bytes are drained below threshold.
+    send_event: Event,
 }
 
 impl LocalChannelSharedState {
     fn wake_blocked(&self) {
-        if self.total_bytes.load(Ordering::Acquire) <= self.max_bytes {
-            let mut wakers = self.blocked_wakers.lock();
-            for waker in wakers.drain(..) {
-                waker.wake();
-            }
-        }
+        self.send_event.notify(usize::MAX);
+    }
+
+    /// Returns true if backpressure should be released.
+    fn backpressure_cleared(&self, channel_idx: usize) -> bool {
+        self.total_bytes.load(Ordering::Acquire) <= self.max_bytes
+            || self.queues[channel_idx].is_closed()
     }
 }
 
@@ -106,25 +104,13 @@ impl OutboundChannel for LocalOutboundChannel {
         self.state.total_bytes.fetch_add(size, Ordering::AcqRel);
         self.state.recv_events[self.channel_idx].notify_additional(1);
 
-        // Backpressure with try-register-retry pattern
-        if self.state.total_bytes.load(Ordering::Acquire) > self.state.max_bytes {
-            let blocked_wakers = self.state.blocked_wakers.clone();
-            let total_bytes = &self.state.total_bytes;
-            let max_bytes = self.state.max_bytes;
-            std::future::poll_fn(|cx| {
-                // Check condition
-                if total_bytes.load(Ordering::Acquire) <= max_bytes {
-                    return Poll::Ready(());
-                }
-                // Register waker
-                blocked_wakers.lock().push(cx.waker().clone());
-                // Re-check after registration (catches race with wake_blocked)
-                if total_bytes.load(Ordering::Acquire) <= max_bytes {
-                    return Poll::Ready(());
-                }
-                Poll::Pending
-            })
-            .await;
+        // Backpressure: try-listen-retry
+        while !self.state.backpressure_cleared(self.channel_idx) {
+            let listener = self.state.send_event.listen();
+            if self.state.backpressure_cleared(self.channel_idx) {
+                break;
+            }
+            listener.await;
         }
 
         Ok(())
@@ -151,10 +137,7 @@ impl InboundChannel for LocalInboundChannel {
     fn close(&self) {
         self.state.queues[self.channel_idx].close();
         // Wake blocked senders so they can detect closed state
-        let mut wakers = self.state.blocked_wakers.lock();
-        for waker in wakers.drain(..) {
-            waker.wake();
-        }
+        self.state.send_event.notify(usize::MAX);
         self.state.recv_events[self.channel_idx].notify(usize::MAX);
     }
 
@@ -219,7 +202,7 @@ pub fn create_local_channels(
         total_bytes: AtomicUsize::new(0),
         max_bytes,
         recv_events: (0..num_channels).map(|_| Event::new()).collect(),
-        blocked_wakers: Arc::new(Mutex::new(Vec::new())),
+        send_event: Event::new(),
     });
 
     let outbound: Vec<Arc<dyn OutboundChannel>> = (0..num_channels)
@@ -247,8 +230,8 @@ pub fn create_local_channels(
 mod tests {
     use std::time::Duration;
 
-    use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
 
     use super::*;
 
@@ -299,7 +282,10 @@ mod tests {
 
         // Give sender time to push data and block
         tokio::time::sleep(Duration::from_millis(50)).await;
-        assert!(!send_handle.is_finished(), "sender should be blocked on backpressure");
+        assert!(
+            !send_handle.is_finished(),
+            "sender should be blocked on backpressure"
+        );
 
         // Drain the block — should unblock sender
         let block = inp[0].recv().await.unwrap().unwrap();
@@ -419,5 +405,77 @@ mod tests {
             .map(|r| r.unwrap())
             .sum();
         assert_eq!(total, num_channels * n);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_no_stale_listener_accumulation() {
+        // Regression: old Vec<Waker> approach accumulated stale wakers when the
+        // re-check found the condition already satisfied (Ready on re-check).
+        // With Event, dropped listeners auto-deregister — no accumulation.
+        //
+        // Strategy: use a max_bytes just above one block's size so that every
+        // second send hits backpressure, but a concurrent fast receiver clears
+        // it before the sender actually blocks. This maximizes the "listen then
+        // immediately drop" path. Repeat many times to surface any leak.
+        let block = make_block(10);
+        let block_size = block.memory_size();
+        // Allow ~1.5 blocks so the second consecutive send triggers backpressure
+        let max_bytes = block_size + block_size / 2;
+        let (out, inp) = create_local_channels(1, max_bytes);
+
+        let out0 = out[0].clone();
+        let inp0 = inp[0].clone();
+        let n = 500;
+
+        let sender = databend_common_base::runtime::spawn(async move {
+            for _ in 0..n {
+                out0.add_block(make_block(10)).await.unwrap();
+            }
+            out0.close();
+        });
+
+        let receiver = databend_common_base::runtime::spawn(async move {
+            let mut count = 0;
+            while let Ok(Some(_)) = inp0.recv().await {
+                count += 1;
+            }
+            count
+        });
+
+        let count = tokio::time::timeout(Duration::from_secs(5), async {
+            sender.await.unwrap();
+            receiver.await.unwrap()
+        })
+        .await
+        .expect("should not deadlock from stale listeners");
+
+        assert_eq!(count, n);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_backpressure_cleared_by_close() {
+        // Sender blocked on backpressure must wake up when receiver closes.
+        let (out, inp) = create_local_channels(1, 1);
+
+        let out0 = out[0].clone();
+        let send_handle = databend_common_base::runtime::spawn(async move {
+            // First block pushes data; backpressure blocks the sender.
+            let _ = out0.add_block(make_block(100)).await;
+            // After close wakes us, a second send should fail.
+            out0.add_block(make_block(1)).await
+        });
+
+        // Let sender block on backpressure
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Close receiver — should wake the blocked sender via send_event
+        inp[0].close();
+
+        let result = tokio::time::timeout(Duration::from_secs(2), send_handle)
+            .await
+            .expect("sender should wake up after receiver close")
+            .unwrap();
+
+        assert!(result.is_err(), "send after close should fail");
     }
 }

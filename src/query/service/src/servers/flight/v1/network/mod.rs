@@ -21,6 +21,8 @@ pub mod outbound_channel;
 pub mod outbound_transport;
 
 pub use flagged_waker::FlaggedWaker;
+pub use flagged_waker::SyncTaskHandle;
+pub use flagged_waker::SyncTaskSet;
 pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;

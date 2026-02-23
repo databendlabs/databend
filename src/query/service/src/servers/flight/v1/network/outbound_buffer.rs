@@ -17,11 +17,10 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::task::Poll;
-use std::task::Waker;
 
 use arrow_flight::FlightData;
 use databend_common_exception::Result;
+use event_listener::Event;
 use parking_lot::Mutex;
 use tonic::Status;
 
@@ -104,8 +103,8 @@ struct ExchangeSinkBufferInner {
     remotes: Vec<Arc<RemoteInstance>>,
     queue_capacity: usize,
     queue_size: AtomicUsize,
-    /// Blocked sender wakers
-    blocked_wakers: Arc<Mutex<Vec<Waker>>>,
+    /// Blocked sender event
+    send_event: Event,
 }
 
 impl ExchangeSinkBufferInner {
@@ -139,12 +138,11 @@ impl ExchangeSinkBufferInner {
     }
 
     fn wake_blocked(&self) {
-        if self.queue_size.load(Ordering::SeqCst) <= self.queue_capacity {
-            let mut wakers = self.blocked_wakers.lock();
-            for waker in wakers.drain(..) {
-                waker.wake();
-            }
-        }
+        self.send_event.notify(usize::MAX);
+    }
+
+    fn backpressure_cleared(&self) -> bool {
+        self.queue_size.load(Ordering::SeqCst) <= self.queue_capacity
     }
 }
 
@@ -169,7 +167,7 @@ impl PingPongCallback for SinkBufferCallback {
 /// This buffer manages multiple remote instances (one per destination node) and uses
 /// ping-pong mode to ensure at most one request is in-flight per instance at any time.
 ///
-/// Uses `std::task::Waker` for backpressure signaling.
+/// Uses `event_listener::Event` for backpressure signaling.
 pub struct ExchangeSinkBuffer {
     inner: Arc<ExchangeSinkBufferInner>,
 }
@@ -202,7 +200,7 @@ impl ExchangeSinkBuffer {
                     remotes,
                     queue_capacity,
                     queue_size: AtomicUsize::new(0),
-                    blocked_wakers: Arc::new(Mutex::new(Vec::new())),
+                    send_event: Event::new(),
                 }
             }),
         })
@@ -225,25 +223,15 @@ impl ExchangeSinkBuffer {
                 state.channels[tid].pending_queue.push_back(data);
             }
 
-            // Check backpressure with try-register-retry pattern
+            // Check backpressure with try-listen-retry
             if self.inner.queue_size.fetch_add(1, Ordering::SeqCst) >= self.inner.queue_capacity {
-                let blocked_wakers = self.inner.blocked_wakers.clone();
-                let queue_size = &self.inner.queue_size;
-                let queue_capacity = self.inner.queue_capacity;
-                std::future::poll_fn(|cx| {
-                    // Check condition
-                    if queue_size.load(Ordering::SeqCst) <= queue_capacity {
-                        return Poll::Ready(());
+                while !self.inner.backpressure_cleared() {
+                    let listener = self.inner.send_event.listen();
+                    if self.inner.backpressure_cleared() {
+                        break;
                     }
-                    // Register waker
-                    blocked_wakers.lock().push(cx.waker().clone());
-                    // Re-check after registration (catches race with wake_blocked)
-                    if queue_size.load(Ordering::SeqCst) <= queue_capacity {
-                        return Poll::Ready(());
-                    }
-                    Poll::Pending
-                })
-                .await;
+                    listener.await;
+                }
             }
         }
 

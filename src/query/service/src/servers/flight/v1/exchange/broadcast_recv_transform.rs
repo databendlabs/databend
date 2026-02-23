@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Merge processor that reads from an input port and multiple InboundChannels.
+//! Broadcast receive processor. Merges data from an input port and multiple
+//! InboundChannels.
 //!
-//! Pure synchronous processor - no `async_process` needed.
-//! Uses FlaggedWaker to poll a single BoxFuture from an async_event helper.
-//! Scans receivers from first to last; finishes when input port and all receivers are done.
+//! Pure synchronous processor — no `async_process` needed.
+//! Uses FlaggedWaker to poll a single BoxFuture from ReceiversStream.
 
 use std::any::Any;
 use std::sync::Arc;
@@ -41,7 +41,7 @@ use super::receivers_stream::ReceiversStream;
 use crate::servers::flight::v1::network::FlaggedWaker;
 use crate::servers::flight::v1::network::InboundChannel;
 
-pub struct ThreadChannelReader {
+pub struct BroadcastRecvTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     waker: FlaggedWaker,
@@ -52,36 +52,25 @@ pub struct ThreadChannelReader {
     next_data_future: Option<BoxFuture<'static, Option<Result<DataBlock>>>>,
 }
 
-impl ThreadChannelReader {
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        receivers: Vec<Arc<dyn InboundChannel>>,
-    ) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(Self {
-            input,
-            output,
-            next_data_future: None,
-            remote_finished: false,
-            waker: FlaggedWaker::create(Waker::noop().clone()),
-            receivers_stream: ReceiversStream::new(receivers),
-        }))
-    }
-
+impl BroadcastRecvTransform {
     pub fn create_item(receivers: Vec<Arc<dyn InboundChannel>>) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
-        PipeItem::create(
-            Self::create(input.clone(), output.clone(), receivers),
-            vec![input],
-            vec![output],
-        )
+        let processor = ProcessorPtr::create(Box::new(Self {
+            input: input.clone(),
+            output: output.clone(),
+            waker: FlaggedWaker::create(Waker::noop().clone()),
+            remote_finished: false,
+            receivers_stream: ReceiversStream::new(receivers),
+            next_data_future: None,
+        }));
+        PipeItem::create(processor, vec![input], vec![output])
     }
 }
 
-impl Processor for ThreadChannelReader {
+impl Processor for BroadcastRecvTransform {
     fn name(&self) -> String {
-        String::from("ThreadChannelReader")
+        String::from("BroadcastRecvTransform")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -144,6 +133,6 @@ impl Processor for ThreadChannelReader {
         }
 
         self.input.set_need_data();
-        return Ok(Event::NeedData);
+        Ok(Event::NeedData)
     }
 }
