@@ -24,6 +24,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 
+use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_sink_writer::create_writer_item;
@@ -31,7 +32,6 @@ use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::serde::ExchangeSerializeMeta;
-use super::thread_channel_writer::ThreadChannelWriter;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::network::BroadcastChannel;
@@ -39,8 +39,6 @@ use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::RemoteChannel;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
-use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
-use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -125,30 +123,25 @@ impl ExchangeSink {
         }
     }
 
-    /// BroadcastExchange sink: use ThreadChannelWriter to broadcast data
+    /// BroadcastExchange sink: use BroadcastSendTransform to broadcast data
     /// to all destinations. Local output is discarded via dummy sinks.
     ///
     /// ```text
-    /// Pipe 1: P ThreadChannelWriters  (P inputs → P outputs)
-    ///         remote partitions → OutboundChannels (RemoteChannel → PingPong)
-    ///         local partition → output port (discarded)
-    /// Pipe 2: P dummy sinks           (P inputs → 0 outputs)
+    /// Pipe 1: P BroadcastSendTransforms (P inputs → P outputs)
+    ///         remote channels → OutboundChannels (RemoteChannel → PingPong)
+    ///         local → output port (discarded)
+    /// Pipe 2: P dummy sinks             (P inputs → 0 outputs)
     /// ```
     fn broadcast_sink(
         ctx: &Arc<QueryContext>,
         pipeline: &mut Pipeline,
         params: &BroadcastExchangeParams,
     ) -> Result<()> {
-        let num_destinations = params.destination_channels.len();
         let local_pos = params
             .destination_channels
             .iter()
             .position(|(dest, _)| dest == &params.executor_id)
             .expect("local destination not found in broadcast exchange");
-
-        let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(
-            BroadcastFlightScatter::try_create(num_destinations)?,
-        ));
 
         let compression = ctx.get_settings().get_query_flight_compression()?;
 
@@ -159,12 +152,9 @@ impl ExchangeSink {
         let mut output_items = Vec::with_capacity(output_len);
 
         for _idx in 0..output_len {
-            output_items.push(ThreadChannelWriter::create_item(
+            output_items.push(BroadcastSendTransform::create_item(
                 channels.clone(),
                 local_pos,
-                scatter.clone(),
-                1024,
-                256 * 1024,
             ));
         }
 

@@ -45,11 +45,7 @@ pub struct BroadcastSendTransform {
 }
 
 impl BroadcastSendTransform {
-    pub fn create_item(
-        channels: Vec<Arc<dyn OutboundChannel>>,
-        local_idx: usize,
-        executor_waker: &Arc<ExecutorWaker>,
-    ) -> PipeItem {
+    pub fn create_item(channels: Vec<Arc<dyn OutboundChannel>>, local_idx: usize) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
         let processor = ProcessorPtr::create(Box::new(Self {
@@ -58,7 +54,7 @@ impl BroadcastSendTransform {
             output: output.clone(),
             local_idx,
             channels,
-            tasks: SyncTaskSet::new(executor_waker.clone()),
+            tasks: SyncTaskSet::new(ExecutorWaker::create()),
             handle: None,
         }));
         PipeItem::create(processor, vec![input], vec![output])
