@@ -106,16 +106,22 @@ impl OutboundChannel for LocalOutboundChannel {
         self.state.total_bytes.fetch_add(size, Ordering::AcqRel);
         self.state.recv_events[self.channel_idx].notify_additional(1);
 
-        // Backpressure: if over limit, register waker and pend once
+        // Backpressure with try-register-retry pattern
         if self.state.total_bytes.load(Ordering::Acquire) > self.state.max_bytes {
-            let mut registered = false;
             let blocked_wakers = self.state.blocked_wakers.clone();
+            let total_bytes = &self.state.total_bytes;
+            let max_bytes = self.state.max_bytes;
             std::future::poll_fn(|cx| {
-                if registered {
+                // Check condition
+                if total_bytes.load(Ordering::Acquire) <= max_bytes {
                     return Poll::Ready(());
                 }
-                registered = true;
+                // Register waker
                 blocked_wakers.lock().push(cx.waker().clone());
+                // Re-check after registration (catches race with wake_blocked)
+                if total_bytes.load(Ordering::Acquire) <= max_bytes {
+                    return Poll::Ready(());
+                }
                 Poll::Pending
             })
             .await;
@@ -235,4 +241,183 @@ pub fn create_local_channels(
         .collect();
 
     (outbound, inbound)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::FromData;
+
+    use super::*;
+
+    fn make_block(rows: usize) -> DataBlock {
+        let col = Int32Type::from_data(vec![0i32; rows]);
+        DataBlock::new_from_columns(vec![col])
+    }
+
+    #[tokio::test]
+    async fn test_send_recv_basic() {
+        let (out, inp) = create_local_channels(1, 1024 * 1024);
+        let block = make_block(10);
+        out[0].add_block(block).await.unwrap();
+        let received = inp[0].recv().await.unwrap().unwrap();
+        assert_eq!(received.num_rows(), 10);
+    }
+
+    #[tokio::test]
+    async fn test_close_returns_none() {
+        let (out, inp) = create_local_channels(1, 1024 * 1024);
+        drop(out);
+        let result = inp[0].recv().await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_multiple_channels() {
+        let (out, inp) = create_local_channels(3, 1024 * 1024);
+        for (i, o) in out.iter().enumerate() {
+            o.add_block(make_block(i + 1)).await.unwrap();
+        }
+        for (i, ch) in inp.iter().enumerate() {
+            let block = ch.recv().await.unwrap().unwrap();
+            assert_eq!(block.num_rows(), i + 1);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_backpressure_triggers() {
+        // max_bytes = 1 byte, even the first block triggers backpressure
+        let (out, inp) = create_local_channels(1, 1);
+
+        let out0 = out[0].clone();
+        let send_handle = databend_common_base::runtime::spawn(async move {
+            // Data is pushed to queue, but sender blocks on backpressure
+            out0.add_block(make_block(100)).await.unwrap();
+        });
+
+        // Give sender time to push data and block
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(!send_handle.is_finished(), "sender should be blocked on backpressure");
+
+        // Drain the block — should unblock sender
+        let block = inp[0].recv().await.unwrap().unwrap();
+        assert_eq!(block.num_rows(), 100);
+
+        // Sender should complete now
+        tokio::time::timeout(Duration::from_secs(1), send_handle)
+            .await
+            .expect("sender should unblock after drain")
+            .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_backpressure_no_missed_wakeup() {
+        // Regression: sender must not miss wakeup when receiver drains concurrently
+        let (out, inp) = create_local_channels(1, 1);
+
+        let out0 = out[0].clone();
+        let inp0 = inp[0].clone();
+
+        // Sender sends N blocks, each triggers backpressure
+        let n = 20;
+        let sender = databend_common_base::runtime::spawn(async move {
+            for _ in 0..n {
+                out0.add_block(make_block(10)).await.unwrap();
+            }
+            out0.close();
+        });
+
+        // Receiver drains all blocks
+        let receiver = databend_common_base::runtime::spawn(async move {
+            let mut count = 0;
+            while let Ok(Some(_)) = inp0.recv().await {
+                count += 1;
+            }
+            count
+        });
+
+        // Both should complete without deadlock
+        let recv_res = tokio::time::timeout(Duration::from_secs(5), async {
+            sender.await.unwrap();
+            receiver.await.unwrap()
+        })
+        .await
+        .expect("should not deadlock");
+
+        assert_eq!(recv_res, n);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_concurrent_send_recv() {
+        let (out, inp) = create_local_channels(1, 4 * 1024 * 1024);
+        let out0 = out[0].clone();
+        let inp0 = inp[0].clone();
+
+        let n = 1000;
+
+        let sender = databend_common_base::runtime::spawn(async move {
+            for _ in 0..n {
+                out0.add_block(make_block(1)).await.unwrap();
+            }
+            out0.close();
+        });
+
+        let receiver = databend_common_base::runtime::spawn(async move {
+            let mut count = 0;
+            while let Ok(Some(_)) = inp0.recv().await {
+                count += 1;
+            }
+            count
+        });
+
+        sender.await.unwrap();
+        let count = receiver.await.unwrap();
+        assert_eq!(count, n);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_multi_sender_multi_receiver() {
+        let num_channels = 4;
+        let (out, inp) = create_local_channels(num_channels, 4 * 1024 * 1024);
+        let n = 200;
+
+        let senders: Vec<_> = out
+            .iter()
+            .map(|o| {
+                let o = o.clone();
+                databend_common_base::runtime::spawn(async move {
+                    for _ in 0..n {
+                        o.add_block(make_block(1)).await.unwrap();
+                    }
+                    o.close();
+                })
+            })
+            .collect();
+
+        let receivers: Vec<_> = inp
+            .iter()
+            .map(|i| {
+                let i = i.clone();
+                databend_common_base::runtime::spawn(async move {
+                    let mut count = 0;
+                    while let Ok(Some(_)) = i.recv().await {
+                        count += 1;
+                    }
+                    count
+                })
+            })
+            .collect();
+
+        for s in senders {
+            s.await.unwrap();
+        }
+        let total: usize = futures::future::join_all(receivers)
+            .await
+            .into_iter()
+            .map(|r| r.unwrap())
+            .sum();
+        assert_eq!(total, num_channels * n);
+    }
 }

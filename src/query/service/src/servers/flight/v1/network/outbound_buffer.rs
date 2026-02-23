@@ -225,21 +225,25 @@ impl ExchangeSinkBuffer {
                 state.channels[tid].pending_queue.push_back(data);
             }
 
-            // Check backpressure
+            // Check backpressure with try-register-retry pattern
             if self.inner.queue_size.fetch_add(1, Ordering::SeqCst) >= self.inner.queue_capacity {
-                let mut registered = false;
-                let blocked_wakes = self.inner.blocked_wakers.clone();
-                let register_waker = std::future::poll_fn(|cx| {
-                    if registered {
+                let blocked_wakers = self.inner.blocked_wakers.clone();
+                let queue_size = &self.inner.queue_size;
+                let queue_capacity = self.inner.queue_capacity;
+                std::future::poll_fn(|cx| {
+                    // Check condition
+                    if queue_size.load(Ordering::SeqCst) <= queue_capacity {
                         return Poll::Ready(());
                     }
-
-                    registered = true;
-                    blocked_wakes.lock().push(cx.waker().clone());
-                    return Poll::Pending;
-                });
-
-                register_waker.await;
+                    // Register waker
+                    blocked_wakers.lock().push(cx.waker().clone());
+                    // Re-check after registration (catches race with wake_blocked)
+                    if queue_size.load(Ordering::SeqCst) <= queue_capacity {
+                        return Poll::Ready(());
+                    }
+                    Poll::Pending
+                })
+                .await;
             }
         }
 

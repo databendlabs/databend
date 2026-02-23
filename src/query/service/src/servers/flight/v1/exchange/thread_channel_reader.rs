@@ -46,7 +46,7 @@ use crate::servers::flight::v1::network::InboundChannel;
 pub struct ThreadChannelReader {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    waker: Waker,
+    waker: FlaggedWaker,
 
     remote_finished: bool,
     receivers_stream: ReceiversStream,
@@ -65,7 +65,7 @@ impl ThreadChannelReader {
             output,
             next_data_future: None,
             remote_finished: false,
-            waker: Waker::noop().clone(),
+            waker: FlaggedWaker::create(Waker::noop().clone()),
             receivers_stream: ReceiversStream::new(receivers),
         }))
     }
@@ -95,6 +95,7 @@ impl Processor for ThreadChannelReader {
     }
 
     fn event(&mut self) -> Result<Event> {
+        self.waker.reset();
         if self.output.is_finished() {
             self.receivers_stream.close();
             return Ok(Event::Finished);

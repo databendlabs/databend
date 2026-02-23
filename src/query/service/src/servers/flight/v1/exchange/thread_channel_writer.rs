@@ -56,7 +56,7 @@ pub struct ThreadChannelWriter {
     scatter: Arc<Box<dyn FlightScatter>>,
     partition_stream: BlockPartitionStream,
 
-    waker: Waker,
+    waker: FlaggedWaker,
 
     /// Block pulled from input, waiting for `process()` to scatter/partition.
     input_block: Option<DataBlock>,
@@ -91,7 +91,7 @@ impl ThreadChannelWriter {
                 bytes_threshold,
                 scatter_size,
             ),
-            waker: Waker::noop().clone(),
+            waker: FlaggedWaker::create(Waker::noop().clone()),
             input_block: None,
             output_block: None,
             send_futures: Vec::new(),
@@ -168,6 +168,7 @@ impl Processor for ThreadChannelWriter {
     }
 
     fn event(&mut self) -> Result<Event> {
+        self.waker.reset();
         if !self.output.is_finished() && self.output.can_push() {
             if let Some(output_block) = self.output_block.take() {
                 self.output.push_data(Ok(output_block));
