@@ -24,6 +24,7 @@ use arrow_schema::Schema;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
@@ -300,6 +301,11 @@ impl StreamBlockBuilder {
                     },
                 )?;
                 BlockWriterImpl::Native(writer)
+            }
+            FuseStorageFormat::Vortex => {
+                return Err(ErrorCode::Unimplemented(
+                    "stream write is not supported for Vortex storage format",
+                ));
             }
         };
 

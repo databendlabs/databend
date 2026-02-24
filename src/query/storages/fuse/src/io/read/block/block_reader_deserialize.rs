@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use arrow_array::ArrayRef;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -31,6 +32,7 @@ use super::BlockReader;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
+use crate::fuse_vortex::read_vortex;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 pub enum DeserializedArray<'a> {
@@ -85,6 +87,9 @@ impl BlockReader {
             FuseStorageFormat::Native => {
                 self.deserialize_native_chunks(block_path, num_rows, column_metas, column_chunks)
             }
+            FuseStorageFormat::Vortex => Err(ErrorCode::Internal(
+                "Vortex format does not support merge-io chunk deserialization",
+            )),
         }
     }
 
@@ -96,12 +101,29 @@ impl BlockReader {
         meta: &BlockMeta,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
-        // Get the merged IO read result.
-        let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
-            .await?;
+        match storage_format {
+            FuseStorageFormat::Vortex => {
+                let data = self.operator.read(&meta.location.0).await?;
+                read_vortex(self.schema().as_ref(), data.to_bytes().as_ref())
+            }
+            FuseStorageFormat::Parquet | FuseStorageFormat::Native => {
+                // Get the merged IO read result.
+                let merge_io_read_result = self
+                    .read_columns_data_by_merge_io(
+                        settings,
+                        &meta.location.0,
+                        &meta.col_metas,
+                        &None,
+                    )
+                    .await?;
 
-        self.deserialize_chunks_with_meta(&meta.into(), storage_format, merge_io_read_result)
+                self.deserialize_chunks_with_meta(
+                    &meta.into(),
+                    storage_format,
+                    merge_io_read_result,
+                )
+            }
+        }
     }
 
     pub fn deserialize_chunks_with_meta(
@@ -130,6 +152,9 @@ impl BlockReader {
                 &meta.col_metas,
                 column_chunks,
             ),
+            FuseStorageFormat::Vortex => Err(ErrorCode::Internal(
+                "Vortex format does not support merge-io chunk deserialization",
+            )),
         }
     }
 }

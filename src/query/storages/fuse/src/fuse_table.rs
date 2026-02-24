@@ -356,6 +356,7 @@ impl FuseTable {
         match self.storage_format {
             FuseStorageFormat::Parquet => None,
             FuseStorageFormat::Native => Some(self.get_write_settings().max_page_size),
+            FuseStorageFormat::Vortex => None,
         }
     }
 

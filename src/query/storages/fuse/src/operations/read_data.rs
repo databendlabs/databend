@@ -36,6 +36,7 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
+use crate::operations::read::fuse_source::build_fuse_vortex_source_pipeline;
 
 impl FuseTable {
     pub fn create_block_reader(
@@ -254,6 +255,17 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
+            ),
+            FuseStorageFormat::Vortex => build_fuse_vortex_source_pipeline(
+                ctx,
+                table_schema,
+                pipeline,
+                block_reader,
+                plan,
+                max_threads,
+                max_io_requests,
+                index_reader,
                 receiver,
             ),
         }

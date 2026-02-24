@@ -43,6 +43,7 @@ use crate::operations::read::block_partition_receiver_source::BlockPartitionRece
 use crate::operations::read::block_partition_source::BlockPartitionSource;
 use crate::operations::read::native_data_transform_reader::ReadNativeDataTransform;
 use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
+use crate::operations::read::vortex_data_transform_reader::ReadVortexDataTransform;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
@@ -210,6 +211,64 @@ pub fn build_fuse_parquet_source_pipeline(
             virtual_reader.clone(),
         )
     })?;
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_fuse_vortex_source_pipeline(
+    ctx: Arc<dyn TableContext>,
+    table_schema: Arc<TableSchema>,
+    pipeline: &mut Pipeline,
+    block_reader: Arc<BlockReader>,
+    plan: &DataSourcePlan,
+    mut max_threads: usize,
+    mut max_io_requests: usize,
+    index_reader: Arc<Option<AggIndexReader>>,
+    receiver: Option<Receiver<Result<PartInfoPtr>>>,
+) -> Result<()> {
+    (max_threads, max_io_requests) =
+        adjust_threads_and_request(false, max_threads, max_io_requests, plan);
+
+    let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+    let partitions = StealablePartitions::new(partitions, ctx.clone());
+
+    match receiver {
+        Some(rx) => {
+            let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
+            pipeline.add_pipe(pipe);
+        }
+        None => {
+            // Vortex read transform decodes one partition into one output block.
+            // Force one partition per input block to keep block metadata mapping stable.
+            let pipe = build_block_source(max_io_requests, partitions.clone(), 1, ctx.clone())?;
+            pipeline.add_pipe(pipe);
+        }
+    }
+
+    pipeline.add_transform(|input, output| {
+        Ok(TransformRuntimeFilterWait::create(
+            ctx.clone(),
+            plan.scan_id,
+            input,
+            output,
+        ))
+    })?;
+
+    pipeline.add_transform(|input, output| {
+        ReadVortexDataTransform::create(
+            plan.scan_id,
+            ctx.clone(),
+            table_schema.clone(),
+            block_reader.clone(),
+            plan,
+            index_reader.clone(),
+            input,
+            output,
+        )
+    })?;
+
+    pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
 
     Ok(())
 }

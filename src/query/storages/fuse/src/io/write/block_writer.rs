@@ -51,6 +51,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
@@ -58,6 +59,7 @@ use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
+use crate::fuse_vortex::write_vortex;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
@@ -140,6 +142,22 @@ pub fn serialize_block_with_column_stats(
                 metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
             }
 
+            Ok(metas)
+        }
+        FuseStorageFormat::Vortex => {
+            let num_rows = block.num_rows() as u64;
+            write_vortex(schema.as_ref(), block, buf)?;
+
+            let meta = ColumnMeta::Parquet(SingleColumnMeta {
+                offset: 0,
+                len: buf.len() as u64,
+                num_values: num_rows,
+            });
+            let metas = schema
+                .to_leaf_column_ids()
+                .into_iter()
+                .map(|column_id| (column_id, meta.clone()))
+                .collect::<HashMap<_, _>>();
             Ok(metas)
         }
     }

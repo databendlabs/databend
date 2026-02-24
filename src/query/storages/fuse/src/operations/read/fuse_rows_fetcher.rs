@@ -96,6 +96,9 @@ pub fn row_fetch_processor(
                 ))
             }))
         }
+        FuseStorageFormat::Vortex => Err(ErrorCode::Unimplemented(
+            "row fetcher is not supported for Vortex storage format",
+        )),
     }
 }
 

@@ -1,0 +1,60 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0051
+
+statement ok
+CREATE DATABASE db_09_0051
+
+statement ok
+USE db_09_0051
+
+statement ok
+CREATE TABLE t_vortex (
+    id INT,
+    name STRING NULL,
+    city STRING
+) STORAGE_FORMAT = 'vortex'
+
+statement ok
+INSERT INTO t_vortex VALUES
+    (1, 'alice', 'shanghai'),
+    (2, NULL, 'beijing'),
+    (3, '中文', 'hangzhou'),
+    (4, 'emoji🙂🚀', 'newyork'),
+    (5, 'combiningé', 'tokyo')
+
+query ITT rowsort
+SELECT id, IFNULL(name, '<NULL>'), city FROM t_vortex ORDER BY id
+----
+1 alice shanghai
+2 <NULL> beijing
+3 中文 hangzhou
+4 emoji🙂🚀 newyork
+5 combiningé tokyo
+
+query TI rowsort
+SELECT city, id FROM t_vortex WHERE id IN (1, 3, 5) ORDER BY id
+----
+shanghai 1
+hangzhou 3
+tokyo 5
+
+query I
+SELECT count() FROM t_vortex
+----
+5
+
+query I
+SELECT count() FROM t_vortex WHERE name IS NULL
+----
+1
+
+statement ok
+OPTIMIZE TABLE t_vortex COMPACT
+
+query I
+SELECT sum(id) FROM t_vortex
+----
+15
+
+statement ok
+DROP DATABASE db_09_0051
