@@ -109,7 +109,7 @@ impl ExplainPerfInterpreter {
 
         let ctx = self.ctx.clone();
         build_res.main_pipeline.set_on_finished(always_callback(
-            QueryFinishHooks::nested().into_callback(ctx.clone()),
+            QueryFinishHooks::nested_with_hooks().into_callback(ctx.clone()),
         ));
 
         let settings = self.ctx.get_settings();

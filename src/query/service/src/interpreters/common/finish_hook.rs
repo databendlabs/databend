@@ -32,22 +32,11 @@ fn run_hooks(query_ctx: Arc<QueryContext>) -> Result<()> {
 
 /// Controls which post-execution actions are performed when a pipeline finishes.
 ///
-/// Three independent concerns are managed here:
-///
-/// - `collect_profiles`: Gather per-operator execution profiles from the pipeline and
-///   store them in the query context. Needed by any execution that wants to surface
-///   profiling data.
-///
-/// - `run_hooks`: Run cleanup hooks after the query completes — drops materialized-CTE
-///   temp tables, vacuums spilled temporary files, and cleans up disk spill directories.
-///   Should only run for top-level user queries, not for nested/internal executions.
-///
-/// - `log_finished`: Emit the query-finish log entry (metrics, session stats, profile
-///   JSON, and the system query log). Should only run for top-level user queries.
-///
-/// Use [`QueryFinishHooks::top_level`] for normal user-facing queries and
-/// [`QueryFinishHooks::nested`] for internal sub-executions (e.g. EXPLAIN ANALYZE
-/// inner pipeline, EXPLAIN PERF simulation, recursive CTE setup).
+/// Use [`QueryFinishHooks::top_level`] for normal user-facing queries,
+/// [`QueryFinishHooks::nested_with_hooks`] for internal sub-executions that may
+/// create temporary artifacts (e.g. EXPLAIN ANALYZE, EXPLAIN PERF inner pipelines),
+/// and [`QueryFinishHooks::nested`] for lightweight internal pipelines that don't
+/// need cleanup (e.g. recursive CTE inner pipeline).
 pub struct QueryFinishHooks {
     /// Collect pipeline execution profiles into the query context.
     pub collect_profiles: bool,
@@ -68,11 +57,24 @@ impl QueryFinishHooks {
     }
 
     /// Profiles only — no hooks, no logging. Use for nested/internal pipeline
-    /// executions where the outer query owns the lifecycle.
+    /// executions where the outer query owns the lifecycle (e.g. recursive CTE
+    /// inner pipeline).
     pub fn nested() -> Self {
         Self {
             collect_profiles: true,
             run_hooks: false,
+            log_finished: false,
+        }
+    }
+
+    /// Profiles and cleanup hooks, but no logging. Use for nested pipelines
+    /// that may create temporary artifacts (spill files, CTE temp tables) and
+    /// need cleanup even on failure, while the outer query owns the log
+    /// lifecycle (e.g. EXPLAIN ANALYZE, EXPLAIN PERF inner pipelines).
+    pub fn nested_with_hooks() -> Self {
+        Self {
+            collect_profiles: true,
+            run_hooks: true,
             log_finished: false,
         }
     }

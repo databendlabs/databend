@@ -541,7 +541,7 @@ impl ExplainInterpreter {
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
         let ctx = self.ctx.clone();
         build_res.main_pipeline.set_on_finished(always_callback(
-            QueryFinishHooks::nested().into_callback(ctx.clone()),
+            QueryFinishHooks::nested_with_hooks().into_callback(ctx.clone()),
         ));
         match build_res.main_pipeline.is_complete_pipeline()? {
             true => {
