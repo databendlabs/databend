@@ -337,7 +337,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         db_names: &[String],
         tables_ids: &[u64],
         tables_names: &mut BTreeSet<String>,
-        get_ownership: bool,
+        get_owner_field: bool,
     ) -> Result<
         Option<(
             Vec<String>,         // catalogs
@@ -401,7 +401,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     continue;
                 }
 
-                if get_ownership {
+                if get_owner_field {
                     let ownership_objects: Vec<OwnershipObject> = filtered_tables
                         .iter()
                         .map(|t| OwnershipObject::Table {
@@ -563,7 +563,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut catalog_name: Vec<String> = Vec::new();
 
         let mut get_stats = true;
-        let mut get_ownership = true;
+        let mut get_owner_field = true;
         let mut projection_empty = false;
         let mut owner_field_indexes: HashSet<usize> = HashSet::new();
         let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
@@ -606,7 +606,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 get_stats = v
                     .iter()
                     .any(|field_index| stats_fields_indexes.contains(field_index));
-                get_ownership = v
+                get_owner_field = v
                     .iter()
                     .any(|field_index| owner_field_indexes.contains(field_index));
             }
@@ -708,13 +708,13 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         }
 
-        // Optimized path: when filter specifies both databases and tables within reasonable size,
+        // Optimized path: when filter specifies tables (with or without databases) within reasonable size,
         // use lightweight permission check without loading all ownerships.
-        // Limit to MAX_OPTIMIZED_PATH_CHECKS db * table combinations to prevent excessive checks.
+        // Limit to MAX_OPTIMIZED_PATH_CHECKS combinations to prevent excessive checks.
         let table_count = tables_names.len() + tables_ids.len();
-        let use_optimized_path = !db_name.is_empty()
-            && table_count > 0
-            && db_name.len() * table_count <= MAX_OPTIMIZED_PATH_CHECKS
+        let use_optimized_path = table_count > 0
+            && (db_name.is_empty() || db_name.len() * table_count <= MAX_OPTIMIZED_PATH_CHECKS)
+            && table_count <= MAX_OPTIMIZED_PATH_CHECKS
             && !WITH_HISTORY
             && !is_external_catalog;
 
@@ -730,7 +730,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     &db_name,
                     &tables_ids,
                     &mut tables_names,
-                    get_ownership,
+                    get_owner_field,
                 )
                 .await?
             {
@@ -868,7 +868,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 // Now we get the final dbs, need to clear dbs vec.
                 dbs.clear();
 
-                let ownership = if get_ownership && visibility_checker.is_some() {
+                let ownership = if get_owner_field && visibility_checker.is_some() {
                     let t = std::time::Instant::now();
                     let result = user_api.list_ownerships(&tenant).await.unwrap_or_default();
                     trace!(

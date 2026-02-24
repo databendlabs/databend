@@ -203,9 +203,9 @@ pub async fn collect_visible_tables(
     // Determine visibility strategy
     let strategy = if catalog.is_external() {
         VisibilityStrategy::NoCheck
-    } else if !filtered_db_names.is_empty()
-        && !filtered_table_names.is_empty()
-        && filtered_db_names.len() * filtered_table_names.len() <= MAX_OPTIMIZED_PATH_CHECKS
+    } else if !filtered_table_names.is_empty()
+        && (filtered_db_names.is_empty()
+            || filtered_db_names.len() * filtered_table_names.len() <= MAX_OPTIMIZED_PATH_CHECKS)
     {
         // Precise filters within reasonable size: use optimized path to avoid loading all ownerships
         let grants_checker = ctx.get_visibility_checker(true, Object::All).await?;
