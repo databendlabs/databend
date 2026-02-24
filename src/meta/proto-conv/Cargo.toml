@@ -21,8 +21,6 @@ num = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 
-[build-dependencies]
-
 [dev-dependencies]
 anyhow = { workspace = true }
 convert_case = { workspace = true }

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -84,9 +85,47 @@ impl TransformRecursiveCteSource {
         union_plan: UnionAll,
     ) -> Result<ProcessorPtr> {
         let mut union_plan = union_plan;
+
+        // Recursive CTE uses internal MEMORY tables addressed by name in the current database.
+        // If we keep using the stable scan name (cte name/alias), concurrent queries can interfere
+        // by creating/dropping/recreating the same table name, leading to wrong or flaky results.
+        //
+        // Make the internal table names query-unique by prefixing them with the query id.
+        // This is purely internal and does not change user-visible semantics.
+        let rcte_prefix = make_rcte_prefix(&ctx.get_id());
+        let local_cte_scan_names = {
+            let names = collect_local_recursive_scan_names(&union_plan.right);
+            if names.is_empty() {
+                union_plan.cte_scan_names.clone()
+            } else {
+                names
+            }
+        };
+        if union_plan.cte_scan_names != local_cte_scan_names {
+            union_plan.cte_scan_names = local_cte_scan_names;
+        }
+        let local_cte_scan_name_set: HashSet<&str> = union_plan
+            .cte_scan_names
+            .iter()
+            .map(String::as_str)
+            .collect();
+
         let mut exec_ids: HashMap<String, Vec<u64>> = HashMap::new();
-        assign_exec_ids(&mut union_plan.left, &mut exec_ids);
-        assign_exec_ids(&mut union_plan.right, &mut exec_ids);
+        rewrite_assign_and_strip_recursive_cte(
+            &mut union_plan.left,
+            &local_cte_scan_name_set,
+            &rcte_prefix,
+            &mut exec_ids,
+        );
+        rewrite_assign_and_strip_recursive_cte(
+            &mut union_plan.right,
+            &local_cte_scan_name_set,
+            &rcte_prefix,
+            &mut exec_ids,
+        );
+        for name in union_plan.cte_scan_names.iter_mut() {
+            *name = format!("{rcte_prefix}{name}");
+        }
 
         let left_outputs = union_plan
             .left_outputs
@@ -134,6 +173,8 @@ impl TransformRecursiveCteSource {
         if ctx.get_settings().get_max_cte_recursive_depth()? < recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
+        #[cfg(debug_assertions)]
+        crate::test_kits::rcte_hooks::maybe_pause_before_step(&ctx.get_id(), recursive_step).await;
         let mut cte_scan_tables = vec![];
         let plan = if recursive_step == 0 {
             // Find all cte scan in the union right child plan, then create memory table for them.
@@ -170,6 +211,81 @@ impl TransformRecursiveCteSource {
         let data_blocks = join_handle.await??;
         Ok((data_blocks, cte_scan_tables))
     }
+}
+
+fn make_rcte_prefix(query_id: &str) -> String {
+    // Keep it readable and safe as an identifier.
+    // Preserve full query-id entropy to avoid collisions across concurrent queries.
+    let suffix = if query_id.is_empty() {
+        "unknown"
+    } else {
+        query_id
+    };
+    format!("__rcte_{suffix}_")
+}
+
+fn rewrite_assign_and_strip_recursive_cte(
+    plan: &mut PhysicalPlan,
+    local_cte_scan_name_set: &HashSet<&str>,
+    prefix: &str,
+    exec_ids: &mut HashMap<String, Vec<u64>>,
+) {
+    // Only nested recursive UNION nodes that reference the current recursive CTE should be
+    // downgraded to normal unions to avoid nested recursive sources for the same table.
+    if let Some(union_all) = UnionAll::from_mut_physical_plan(plan) {
+        if !union_all.cte_scan_names.is_empty()
+            && union_all
+                .cte_scan_names
+                .iter()
+                .all(|name| local_cte_scan_name_set.contains(name.as_str()))
+        {
+            union_all.cte_scan_names.clear();
+        }
+    }
+
+    if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
+        if local_cte_scan_name_set.contains(recursive_cte_scan.table_name.as_str()) {
+            recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
+            let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
+            recursive_cte_scan.exec_id = Some(id);
+            exec_ids
+                .entry(recursive_cte_scan.table_name.clone())
+                .or_default()
+                .push(id);
+        }
+    }
+
+    for child in plan.children_mut() {
+        rewrite_assign_and_strip_recursive_cte(child, local_cte_scan_name_set, prefix, exec_ids);
+    }
+}
+
+fn collect_local_recursive_scan_names(plan: &PhysicalPlan) -> Vec<String> {
+    fn walk(plan: &PhysicalPlan, names: &mut Vec<String>, seen: &mut HashSet<String>) {
+        // Nested recursive unions belong to other recursive CTEs. Leave them to their own
+        // TransformRecursiveCteSource instance.
+        if let Some(union_all) = UnionAll::from_physical_plan(plan) {
+            if !union_all.cte_scan_names.is_empty() {
+                return;
+            }
+        }
+
+        if let Some(recursive_cte_scan) = RecursiveCteScan::from_physical_plan(plan) {
+            if seen.insert(recursive_cte_scan.table_name.clone()) {
+                names.push(recursive_cte_scan.table_name.clone());
+            }
+            return;
+        }
+
+        for child in plan.children() {
+            walk(child, names, seen);
+        }
+    }
+
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    walk(plan, &mut names, &mut seen);
+    names
 }
 
 #[async_trait::async_trait]
@@ -236,21 +352,6 @@ impl AsyncSource for TransformRecursiveCteSource {
     }
 }
 
-fn assign_exec_ids(plan: &mut PhysicalPlan, mapping: &mut HashMap<String, Vec<u64>>) {
-    if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
-        let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
-        recursive_cte_scan.exec_id = Some(id);
-        mapping
-            .entry(recursive_cte_scan.table_name.clone())
-            .or_default()
-            .push(id);
-    }
-
-    for child in plan.children_mut() {
-        assign_exec_ids(child, mapping);
-    }
-}
-
 async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result<()> {
     for table_name in table_names {
         let drop_table_plan = DropTablePlan {
@@ -311,7 +412,6 @@ async fn create_memory_table_for_cte_scan(
 
                 let mut options = BTreeMap::new();
                 options.insert(OPT_KEY_RECURSIVE_CTE.to_string(), "1".to_string());
-
                 self.plans.push(CreateTablePlan {
                     schema,
                     create_option: CreateOption::CreateIfNotExists,

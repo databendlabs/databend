@@ -197,12 +197,12 @@ pub fn check_table_visibility_with_roles(
                     }
                 }
                 GrantObject::DatabaseById(cat, id) if cat == catalog && *id == db_id => {
-                    if !is_usage_only(&grant_entry) {
+                    if !is_usage_only(grant_entry) {
                         return true;
                     }
                 }
                 GrantObject::Database(cat, db) if cat == catalog && db == db_name => {
-                    if !is_usage_only(&grant_entry) {
+                    if !is_usage_only(grant_entry) {
                         return true;
                     }
                 }

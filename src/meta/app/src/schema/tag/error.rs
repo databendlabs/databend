@@ -129,6 +129,8 @@ impl From<TagMetaError> for ErrorCode {
                 TaggableObject::Stage { .. } => ErrorCode::UnknownStage(s),
                 TaggableObject::Database { .. } => ErrorCode::UnknownDatabase(s),
                 TaggableObject::Table { .. } => ErrorCode::UnknownTable(s),
+                TaggableObject::UDF { .. } => ErrorCode::UnknownFunction(s),
+                TaggableObject::Procedure { .. } => ErrorCode::UnknownProcedure(s),
             },
         }
     }

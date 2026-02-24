@@ -443,8 +443,10 @@ impl FromToProto for mt::storage::StorageNetworkParams {
             retry_io_timeout: p.retry_io_timeout,
             tcp_keepalive: p.tcp_keepalive,
             connect_timeout: p.connect_timeout,
-            pool_max_idle_per_host: p.pool_max_idle_per_host as usize,
-            max_concurrent_io_requests: p.max_concurrent_io_requests as usize,
+            pool_max_idle_per_host: usize::try_from(p.pool_max_idle_per_host)
+                .map_err(|_| Incompatible::new("pool_max_idle_per_host overflows usize"))?,
+            max_concurrent_io_requests: usize::try_from(p.max_concurrent_io_requests)
+                .map_err(|_| Incompatible::new("max_concurrent_io_requests overflows usize"))?,
         })
     }
 

@@ -362,6 +362,7 @@ impl TransformPartitionBucket {
             self.params.aggregate_functions.clone(),
             self.params.num_states(),
             0,
+            self.params.enable_experiment_hash_index,
             Arc::new(Bump::new()),
         )?;
 

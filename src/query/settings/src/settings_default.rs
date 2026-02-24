@@ -1546,8 +1546,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
                 }),
                 ("enable_experiment_aggregate", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable experiment aggregate, default is 0, 1 for enable",
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable experiment aggregate(enabled by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1579,6 +1579,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
+                }),
+                ("enable_experiment_hash_index", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "experiment setting enable hash index(enabled by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
             ]);
 

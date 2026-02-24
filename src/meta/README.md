@@ -18,10 +18,10 @@ Databend Meta is a transactional metadata service.
 
 **Higher-level features**:
 - [`admin`](./admin/): Admin HTTP API service for databend-meta.
-- [`cache`](./cache/): Distributed cache that synchronizes with meta-service via watch API.
+- [`cache`](./plugins/cache/): Distributed cache that synchronizes with meta-service via watch API.
 - [`control`](./control/): Meta control utilities.
 - [`process`](./process/): Tools for processing meta-service data.
-- [`semaphore`](./semaphore/): Distributed semaphore implementation based on meta-service.
+- [`semaphore`](./plugins/semaphore/): Distributed semaphore implementation based on meta-service.
 
 **Configuration and runtime**:
 - [`cli-config`](./cli-config/): CLI config parsing for databend-meta.
@@ -34,7 +34,7 @@ Databend Meta is a transactional metadata service.
 - `databend-metaverifier`: Data verification tool.
 
 **Test suites**:
-- [`kvapi-tests`](./kvapi-tests/): Test suite for KV API implementations.
+- [`kv-tests`](./kv-tests/): Test suite for KV API implementations.
 - [`schema-api-test-suite`](./schema-api-test-suite/): Test suite for schema API.
 
 **Enterprise**:

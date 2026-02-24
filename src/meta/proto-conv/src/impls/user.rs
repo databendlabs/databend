@@ -103,6 +103,7 @@ impl FromToProto for mt::principal::UserOption {
         Ok(mt::principal::UserOption::default()
             .with_flags(flags)
             .with_default_role(p.default_role)
+            .with_default_warehouse(p.default_warehouse)
             .with_network_policy(p.network_policy)
             .with_password_policy(p.password_policy)
             .with_workload_group(p.workload_group)
@@ -116,6 +117,7 @@ impl FromToProto for mt::principal::UserOption {
             min_reader_ver: MIN_READER_VER,
             flags: self.flags().bits(),
             default_role: self.default_role().cloned(),
+            default_warehouse: self.default_warehouse().cloned(),
             network_policy: self.network_policy().cloned(),
             password_policy: self.password_policy().cloned(),
             workload_group: self.workload_group().cloned(),
@@ -341,11 +343,14 @@ impl FromToProto for mt::principal::UserGrantSet {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let mut entries = Vec::new();
-        for entry in p.entries.iter() {
+        for entry in p.entries.into_iter() {
             // If we add new GrantObject in new version
             // Rollback to old version, GrantEntry.object will be None
             // GrantEntry::from_pb will return err so user can not login in old version.
-            match mt::principal::GrantEntry::from_pb(entry.clone()) {
+            // Silently dropping unrecognized grant entries and logging the error is
+            // intentional: the node must still start and serve other users even when
+            // some grant entries are unrecognizable (e.g. during a version rollback).
+            match mt::principal::GrantEntry::from_pb(entry) {
                 Ok(entry) => entries.push(entry),
                 Err(e) => log::error!("GrantEntry::from_pb with error : {e}"),
             }
@@ -363,10 +368,11 @@ impl FromToProto for mt::principal::UserGrantSet {
             entries.push(entry.to_pb()?);
         }
 
-        let mut roles = BTreeMap::new();
-        for role in self.roles().iter() {
-            roles.insert(role.clone(), true);
-        }
+        let roles = self
+            .roles()
+            .iter()
+            .map(|role| (role.clone(), true))
+            .collect::<BTreeMap<_, _>>();
 
         Ok(pb::UserGrantSet {
             ver: VER,

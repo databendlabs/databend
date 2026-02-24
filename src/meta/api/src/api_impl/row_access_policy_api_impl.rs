@@ -47,8 +47,8 @@ use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
-use crate::txn_op_builder_util::txn_op_del;
-use crate::txn_op_builder_util::txn_op_put_pb;
+use crate::txn_op_builder_util::txn_del;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// RowAccessPolicyApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls RowAccessPolicyApi.
@@ -95,9 +95,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             txn.condition.push(txn_cond_eq_seq(name_ident, 0));
             txn.condition.push(txn_cond_eq_seq(&mask_name_ident, 0));
             txn.if_then.extend(vec![
-                txn_op_put_pb(name_ident, &policy_id, None)?, // name -> policy_id
-                txn_op_put_pb(&id_ident, &meta, None)?,       // id -> meta
-                txn_op_put_pb(&id_to_name_ident, &name_raw, None)?, // id -> name
+                txn_put_pb_with_ttl(name_ident, &policy_id, None)?, // name -> policy_id
+                txn_put_pb_with_ttl(&id_ident, &meta, None)?,       // id -> meta
+                txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None)?, // id -> name
             ]);
         }
 
@@ -174,7 +174,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
             txn_delete_exact(&mut txn, name_ident, seq_id.seq);
             txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            txn.if_then.push(txn_op_del(&id_to_name_ident));
+            txn.if_then.push(txn_del(&id_to_name_ident));
 
             let (succ, _responses) = send_txn(self, txn).await?;
             if succ {

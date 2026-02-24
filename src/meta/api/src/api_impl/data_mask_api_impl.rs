@@ -49,8 +49,8 @@ use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
-use crate::txn_op_builder_util::txn_op_del;
-use crate::txn_op_builder_util::txn_op_put_pb;
+use crate::txn_op_builder_util::txn_del;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// DatamaskApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls DatamaskApi.
@@ -99,11 +99,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 .push(txn_cond_eq_seq(&row_access_name_ident, 0));
 
             txn.if_then.extend(vec![
-                txn_op_put_pb(name_ident, &id, None)?, // name -> masking_policy_id
-                txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
-                txn_op_put_pb(&id_to_name_ident, &name_raw, None)?, // id -> name
+                txn_put_pb_with_ttl(name_ident, &id, None)?, // name -> masking_policy_id
+                txn_put_pb_with_ttl(&id_ident, &meta, None)?, // id -> meta
+                txn_put_pb_with_ttl(&id_to_name_ident, &name_raw, None)?, // id -> name
                 // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
-                txn_op_put_pb(&id_list_key, &id_list, None)?, // data mask name -> id_list
+                txn_put_pb_with_ttl(&id_list_key, &id_list, None)?, // data mask name -> id_list
             ]);
         }
 
@@ -180,7 +180,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             txn_delete_exact(&mut txn, name_ident, seq_id.seq);
             txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            txn.if_then.push(txn_op_del(&id_to_name_ident));
+            txn.if_then.push(txn_del(&id_to_name_ident));
 
             // TODO: Tentative retention for compatibility. Can be deleted later.
             clear_table_column_mask_policy(self, name_ident, &mut txn).await?;

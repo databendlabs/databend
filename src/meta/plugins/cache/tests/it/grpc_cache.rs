@@ -16,7 +16,7 @@
 
 use std::time::Duration;
 
-use databend_common_meta_cache::Cache;
+use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::make_grpc_client;
 use databend_meta_test_harness::meta_service_test_harness;

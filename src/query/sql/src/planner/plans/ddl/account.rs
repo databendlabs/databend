@@ -65,6 +65,7 @@ impl DescUserPlan {
             DataField::new("hostname", DataType::String),
             DataField::new("auth_type", DataType::String),
             DataField::new("default_role", DataType::String),
+            DataField::new("default_warehouse", DataType::String),
             DataField::new("roles", DataType::String),
             DataField::new("disabled", DataType::Boolean),
             DataField::new(

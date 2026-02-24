@@ -16222,6 +16222,237 @@ AlterObjectTag(
 
 
 ---------- Input ----------
+ALTER VIEW v SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER VIEW v SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: View {
+            if_exists: false,
+            catalog: None,
+            database: None,
+            view: Identifier {
+                span: Some(
+                    11..12,
+                ),
+                name: "v",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            21..25,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER VIEW IF EXISTS db.v UNSET TAG tag1;
+---------- Output ---------
+ALTER VIEW IF EXISTS db.v UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: View {
+            if_exists: true,
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        21..23,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            view: Identifier {
+                span: Some(
+                    24..25,
+                ),
+                name: "v",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        36..40,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION my_udf SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER FUNCTION my_udf SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Function {
+            if_exists: false,
+            udf_name: Identifier {
+                span: Some(
+                    15..21,
+                ),
+                name: "my_udf",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            30..34,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION IF EXISTS my_udf UNSET TAG tag1;
+---------- Output ---------
+ALTER FUNCTION IF EXISTS my_udf UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Function {
+            if_exists: true,
+            udf_name: Identifier {
+                span: Some(
+                    25..31,
+                ),
+                name: "my_udf",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        42..46,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PROCEDURE my_proc(INT, STRING) SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER PROCEDURE my_proc(Int32, STRING) SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Procedure {
+            if_exists: false,
+            name: Identifier {
+                span: Some(
+                    16..23,
+                ),
+                name: "my_proc",
+                quote: None,
+                ident_type: None,
+            },
+            arg_types: [
+                Int32,
+                String,
+            ],
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            45..49,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PROCEDURE IF EXISTS my_proc() UNSET TAG tag1;
+---------- Output ---------
+ALTER PROCEDURE IF EXISTS my_proc() UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Procedure {
+            if_exists: true,
+            name: Identifier {
+                span: Some(
+                    26..33,
+                ),
+                name: "my_proc",
+                quote: None,
+                ident_type: None,
+            },
+            arg_types: [],
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        46..50,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE ctl.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE ctl.c RENAME TO a

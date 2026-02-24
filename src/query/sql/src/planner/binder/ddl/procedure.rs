@@ -318,7 +318,7 @@ impl Binder {
     }
 }
 
-fn generate_procedure_name_ident(
+pub(in crate::planner::binder) fn generate_procedure_name_ident(
     tenant: &Tenant,
     name: &AstProcedureIdentity,
 ) -> Result<ProcedureNameIdent> {

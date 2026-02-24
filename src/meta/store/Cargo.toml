@@ -11,12 +11,12 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 databend-base = { workspace = true }
-databend-common-meta-semaphore = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-kvapi = { workspace = true }
 databend-meta-kvapi-test-suite = { workspace = true }
+databend-meta-plugin-semaphore = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-runtime-api = { workspace = true }
 databend-meta-types = { workspace = true }
@@ -27,9 +27,6 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
-
-[dev-dependencies]
-databend-common-version = { workspace = true }
 
 [lints]
 workspace = true

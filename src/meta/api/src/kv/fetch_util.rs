@@ -14,6 +14,8 @@
 
 use std::any::type_name;
 
+use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::id_generator::IdGeneratorValue;
 use databend_common_meta_app::primitive::Id;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_kvapi::kvapi;
@@ -24,12 +26,13 @@ use databend_meta_types::MetaError;
 use databend_meta_types::MetaNetworkError;
 use databend_meta_types::SeqV;
 use databend_meta_types::TxnGetResponse;
-use databend_meta_types::UpsertKV;
 use databend_meta_types::errors;
 use futures::TryStreamExt;
 
 use crate::deserialize_struct;
 use crate::deserialize_u64;
+use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_api::UpsertPB;
 
 /// Get u64 value by key.
 ///
@@ -195,15 +198,15 @@ pub async fn mget_u64_values<K: kvapi::Key>(
 ///
 /// Ids are categorized by generators.
 /// Ids may not be consecutive.
-pub async fn fetch_id<T: kvapi::Key>(
+pub async fn fetch_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    generator: T,
+    generator: IdGenerator,
 ) -> Result<u64, MetaError> {
     // Each `upsert` bumps the seq atomically inside metasrv, therefore every caller
     // receives a unique, monotonically increasing id even when multiple sessions
     // fetch from the same generator concurrently.
     let res = kv_api
-        .upsert_kv(UpsertKV::update(generator.to_string_key(), b""))
+        .upsert_pb(&UpsertPB::update(generator, IdGeneratorValue))
         .await?;
 
     // seq: MatchSeq::Any always succeeds

@@ -45,10 +45,9 @@ use crate::error_util::unknown_database_error;
 use crate::kv_app_error::KVAppError;
 use crate::kv_app_error::KVAppResultExt;
 use crate::kv_pb_api::KVPbApi;
-use crate::serialize_struct;
 use crate::txn_condition_util::txn_cond_seq;
-use crate::txn_op_del;
-use crate::txn_op_put;
+use crate::txn_del;
+use crate::txn_put_pb;
 
 pub(crate) async fn drop_database_meta(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
@@ -75,7 +74,7 @@ pub(crate) async fn drop_database_meta(
     if drop_name_key {
         txn.condition
             .push(txn_cond_seq(tenant_dbname, Eq, seq_db_id.seq));
-        txn.if_then.push(txn_op_del(tenant_dbname)); // (tenant, db_name) -> db_id
+        txn.if_then.push(txn_del(tenant_dbname)); // (tenant, db_name) -> db_id
     }
 
     // Delete db by these operations:
@@ -103,8 +102,7 @@ pub(crate) async fn drop_database_meta(
         txn.condition
             .push(txn_cond_seq(&db_id_key, Eq, db_meta.seq));
 
-        txn.if_then
-            .push(txn_op_put(&db_id_key, serialize_struct(&*db_meta)?)); // (db_id) -> db_meta
+        txn.if_then.push(txn_put_pb(&db_id_key, &*db_meta)?); // (db_id) -> db_meta
     }
 
     // add DbIdListKey if not exists
@@ -124,8 +122,7 @@ pub(crate) async fn drop_database_meta(
         txn.condition
             .push(txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq));
         // _fd_db_id_list/<tenant>/<db_name> -> db_id_list
-        txn.if_then
-            .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
+        txn.if_then.push(txn_put_pb(&dbid_idlist, &db_id_list)?);
     };
 
     // Clean up ownership if catalog_name is provided (CREATE OR REPLACE case)
@@ -136,7 +133,7 @@ pub(crate) async fn drop_database_meta(
         };
         let ownership_key =
             TenantOwnershipObjectIdent::new(tenant_dbname.tenant(), ownership_object);
-        txn.if_then.push(txn_op_del(&ownership_key));
+        txn.if_then.push(txn_del(&ownership_key));
     }
 
     // Clean up tag references (UNDROP won't restore them; small race window is acceptable,
@@ -162,8 +159,8 @@ pub(crate) async fn drop_database_meta(
             tenant_dbname.tenant().clone(),
             TagIdObjectRef::new(tag_id, taggable_object.clone()),
         );
-        txn.if_then.push(txn_op_del(&obj_ref_key));
-        txn.if_then.push(txn_op_del(&tag_ref_key));
+        txn.if_then.push(txn_del(&obj_ref_key));
+        txn.if_then.push(txn_del(&tag_ref_key));
     }
 
     Ok(db_id)

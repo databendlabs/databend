@@ -56,7 +56,7 @@ pub enum CreateDatabaseOption {
     Options(Vec<SQLProperty>),
 }
 
-fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
+pub fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
     let procedure_type_names = map(
         rule! {
             "(" ~ #comma_separated_list1(type_name) ~ ")"
@@ -4444,6 +4444,36 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
                 connection_name,
             },
         ),
+        map(
+            rule! {
+                VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, view))| AlterObjectTagTarget::View {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            },
+        ),
+        map(
+            rule! {
+                FUNCTION ~ ( IF ~ ^EXISTS )? ~ #ident
+            },
+            |(_, opt_if_exists, udf_name)| AlterObjectTagTarget::Function {
+                if_exists: opt_if_exists.is_some(),
+                udf_name,
+            },
+        ),
+        map(
+            rule! {
+                PROCEDURE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #procedure_type_name
+            },
+            |(_, opt_if_exists, name, arg_types)| AlterObjectTagTarget::Procedure {
+                if_exists: opt_if_exists.is_some(),
+                name,
+                arg_types,
+            },
+        ),
     ))
     .parse(i)
 }
@@ -5544,6 +5574,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
+    let default_warehouse_option = map(
+        rule! {
+            DEFAULT_WAREHOUSE ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, warehouse)| UserOptionItem::DefaultWarehouse(warehouse),
+    );
     let set_network_policy = map(
         rule! {
             SET ~ NETWORK ~ POLICY ~ ^"=" ~ ^#literal_string
@@ -5597,6 +5633,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         #tenant_setting
         | #no_tenant_setting
         | #default_role_option
+        | #default_warehouse_option
         | #set_network_policy
         | #unset_network_policy
         | #set_password_policy

@@ -72,5 +72,6 @@ pub use traits::ToProtoOptionExt;
 pub use util::MIN_MSG_VER;
 pub use util::MIN_READER_VER;
 pub use util::VER;
+pub use util::convert_field;
 pub use util::missing;
 pub use util::reader_check_msg;

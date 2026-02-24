@@ -18,6 +18,9 @@ use databend_meta_types::InvalidArgument;
 use databend_meta_types::InvalidReply;
 use databend_meta_types::MetaNetworkError;
 
+use crate::kv_pb_api::decode_pb;
+use crate::kv_pb_api::encode_pb;
+
 pub fn serialize_u64(value: impl Into<Id>) -> Result<Vec<u8>, MetaNetworkError> {
     let v = serde_json::to_vec(&*value.into()).map_err(|e| {
         let inv = InvalidArgument::new(e, "");
@@ -36,27 +39,10 @@ pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaNetworkError> {
 
 pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
 where T: FromToProto + 'static {
-    let p = value.to_pb().map_err(|e| {
-        let inv = InvalidArgument::new(e, "");
-        MetaNetworkError::InvalidArgument(inv)
-    })?;
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf).map_err(|e| {
-        let inv = InvalidArgument::new(e, "");
-        MetaNetworkError::InvalidArgument(inv)
-    })?;
-    Ok(buf)
+    encode_pb(value).map_err(|e| MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "")))
 }
 
 pub fn deserialize_struct<T>(buf: &[u8]) -> Result<T, MetaNetworkError>
 where T: FromToProto {
-    let p: T::PB = prost::Message::decode(buf).map_err(|e| {
-        let inv = InvalidReply::new("", &e);
-        MetaNetworkError::InvalidReply(inv)
-    })?;
-    let v: T = FromToProto::from_pb(p).map_err(|e| {
-        let inv = InvalidReply::new("", &e);
-        MetaNetworkError::InvalidReply(inv)
-    })?;
-    Ok(v)
+    decode_pb(buf).map_err(|e| MetaNetworkError::InvalidReply(InvalidReply::new("", &e)))
 }

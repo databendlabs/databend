@@ -152,6 +152,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'default_expression'              | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'default_kind'                    | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'default_role'                    | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'default_warehouse'               | 'system'             | 'users'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'definition'                      | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'definition'                      | 'system'             | 'task_history'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'definition'                      | 'system'             | 'tasks'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

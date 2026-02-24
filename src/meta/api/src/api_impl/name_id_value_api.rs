@@ -44,8 +44,8 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
-use crate::txn_op_builder_util::txn_op_put_pb;
-use crate::txn_op_del;
+use crate::txn_del;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// NameIdValueApi provide generic meta-service access pattern implementations for `name -> id -> value` mapping.
 ///
@@ -118,7 +118,7 @@ where
                         // If it does not override, no such condition is required.
                         let id_ident = seq_id.data.into_t_ident(tenant);
                         txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
-                        txn.if_then.push(txn_op_del(&id_ident));
+                        txn.if_then.push(txn_del(&id_ident));
 
                         // Following txn must match this seq to proceed.
                         current_id_seq = seq_id.seq;
@@ -149,8 +149,10 @@ where
             txn.condition
                 .extend(vec![txn_cond_eq_seq(name_ident, current_id_seq)]);
 
-            txn.if_then.push(txn_op_put_pb(name_ident, &id, None)?); // (tenant, name) -> id
-            txn.if_then.push(txn_op_put_pb(&id_ident, value, None)?); // (id) -> value
+            txn.if_then
+                .push(txn_put_pb_with_ttl(name_ident, &id, None)?); // (tenant, name) -> id
+            txn.if_then
+                .push(txn_put_pb_with_ttl(&id_ident, value, None)?); // (id) -> value
 
             // Add associated
             let kvs = associated_records(id);

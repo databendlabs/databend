@@ -164,21 +164,16 @@ impl Semaphore {
         let uniq = UNIQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         let mut sem = Semaphore {
-            prefix,
-            seq_policy: SeqPolicy::TimeBased {
-                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
+            seq_policy: SeqPolicy::GeneratorKey {
+                generator_key: Self::seq_generator_key_for(&prefix),
             },
+            prefix,
             meta_client,
             permit_ttl,
             subscriber_task_handle: None,
             subscriber_cancel_tx: cancel_tx,
             sem_event_rx: Some(rx),
             uniq,
-        };
-
-        // The default is using generator key
-        sem.seq_policy = SeqPolicy::GeneratorKey {
-            generator_key: sem.seq_generator_key(),
         };
 
         sem.spawn_meta_event_subscriber(tx, capacity, cancel_rx)
@@ -326,7 +321,11 @@ impl Semaphore {
     ///
     /// Update this key in the meta-service to obtain a new sequence number.
     fn seq_generator_key(&self) -> String {
-        format!("{}/seq_generator", self.prefix)
+        Self::seq_generator_key_for(&self.prefix)
+    }
+
+    fn seq_generator_key_for(prefix: &str) -> String {
+        format!("{}/seq_generator", prefix)
     }
 
     /// The left-close right-open range for the semaphore ids.

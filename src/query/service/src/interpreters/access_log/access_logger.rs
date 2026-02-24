@@ -427,7 +427,13 @@ impl AccessLogger {
                 format!("{}.{}.{}", target.catalog, target.database, target.table),
             ),
             TagSetObject::Stage(target) => (ObjectDomain::Stage, target.stage_name.clone()),
-            TagSetObject::Connection(_) => return,
+            TagSetObject::Connection(_) | TagSetObject::UDF(_) | TagSetObject::Procedure(_) => {
+                return;
+            }
+            TagSetObject::View(target) => (
+                ObjectDomain::Table,
+                format!("{}.{}.{}", target.catalog, target.database, target.view),
+            ),
         };
         self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
             object_domain,

@@ -30,7 +30,7 @@ use log::debug;
 use crate::kv_app_error::KVAppError;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_op_builder_util::txn_op_put_pb;
+use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
 /// The implementation of `next_val` for sequence number.
 ///
@@ -77,7 +77,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
 
         let condition = vec![txn_cond_eq_seq(&self.ident, self.sequence_meta.seq)];
         let if_then = vec![
-            txn_op_put_pb(&self.ident, &self.sequence_meta.data, None)?, // name -> meta
+            txn_put_pb_with_ttl(&self.ident, &self.sequence_meta.data, None)?, // name -> meta
         ];
 
         let txn_req = TxnRequest::new(condition, if_then);

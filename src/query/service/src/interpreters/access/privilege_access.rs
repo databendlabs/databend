@@ -631,6 +631,21 @@ impl PrivilegeAccess {
                 )
                 .await
             }
+            TagSetObject::View(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.view,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::UDF(_) | TagSetObject::Procedure(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await
+            }
         }
     }
 
@@ -2235,8 +2250,9 @@ async fn has_priv(
         }
     }
 
+    let grant_set_roles: Vec<String> = grant_set.roles_vec();
     Ok(RoleCacheManager::instance()
-        .find_related_roles(tenant, &grant_set.roles())
+        .find_related_roles(tenant, &grant_set_roles)
         .await?
         .into_iter()
         .map(|role| role.grants)

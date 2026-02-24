@@ -226,6 +226,7 @@ pub struct SnapshotRef {
     serde::Serialize,
     serde::Deserialize,
     Clone,
+    Copy,
     Debug,
     Eq,
     PartialEq,
@@ -275,7 +276,7 @@ impl BranchInfo {
     }
 
     pub fn branch_type(&self) -> SnapshotRefType {
-        self.info.typ.clone()
+        self.info.typ
     }
 }
 

@@ -195,6 +195,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (163, "2025-12-31: Add: SnapshotRef"),
     (164, "2026-01-22: Update: user.proto/CsvFileFormatParams add allow_quoted_nulls and quoted_empty_field_as, change null_display to optional", ),
     (165, "2026-01-24: Add: add cluster_key_v2 on TableMeta"),
+    (166, "2026-02-13: Add: UserOption::default_warehouse"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
@@ -237,4 +238,25 @@ pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Inc
 pub fn missing(reason: impl ToString) -> impl FnOnce() -> Incompatible {
     let s = reason.to_string();
     move || Incompatible::new(s)
+}
+
+/// Convert a value using `TryFrom`, wrapping errors in [`Incompatible`].
+///
+/// The error message names the field and the target type so callers only need
+/// to pass the field name, e.g.:
+///
+/// ```ignore
+/// let size_limit: usize = convert_field(p.size_limit, "CopyOptions.size_limit")?;
+/// ```
+pub fn convert_field<T, U>(value: T, field_name: &str) -> Result<U, Incompatible>
+where
+    U: TryFrom<T>,
+    <U as TryFrom<T>>::Error: std::fmt::Display,
+{
+    U::try_from(value).map_err(|err| {
+        Incompatible::new(format!(
+            "{field_name} cannot be converted to {}: {err}",
+            std::any::type_name::<U>()
+        ))
+    })
 }

@@ -15,6 +15,7 @@
 use databend_common_proto_conv::Incompatible;
 use databend_meta_types::InvalidArgument;
 use databend_meta_types::MetaError;
+use databend_meta_types::MetaNetworkError;
 
 /// An error occurred when encoding with FromToProto.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -29,6 +30,15 @@ impl From<PbEncodeError> for MetaError {
         match value {
             PbEncodeError::EncodeError(e) => MetaError::from(InvalidArgument::new(e, "")),
             PbEncodeError::Incompatible(e) => MetaError::from(InvalidArgument::new(e, "")),
+        }
+    }
+}
+
+impl From<PbEncodeError> for MetaNetworkError {
+    fn from(value: PbEncodeError) -> Self {
+        match value {
+            PbEncodeError::EncodeError(e) => MetaNetworkError::from(InvalidArgument::new(e, "")),
+            PbEncodeError::Incompatible(e) => MetaNetworkError::from(InvalidArgument::new(e, "")),
         }
     }
 }

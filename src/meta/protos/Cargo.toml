@@ -18,8 +18,6 @@ prost-build = { workspace = true }
 semver = { workspace = true }
 tonic-build = { workspace = true }
 
-[dev-dependencies]
-
 [package.metadata.cargo-machete]
 ignored = ["num-derive", "num-traits"]
 

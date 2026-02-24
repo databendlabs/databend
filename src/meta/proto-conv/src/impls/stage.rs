@@ -15,8 +15,6 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use std::convert::TryFrom;
-
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app as mt;
@@ -31,6 +29,7 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::ToProtoOptionExt;
 use crate::VER;
+use crate::convert_field;
 use crate::reader_check_msg;
 
 impl FromToProto for mt::principal::StageParams {
@@ -109,31 +108,10 @@ impl FromToProto for mt::principal::CopyOptions {
         let on_error = mt::principal::OnErrorMode::from_pb(p.on_error.ok_or_else(|| {
             Incompatible::new("CopyOptions.on_error cannot be None".to_string())
         })?)?;
-        let size_limit = usize::try_from(p.size_limit).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.size_limit cannot be convert to usize: {}",
-                err
-            ))
-        })?;
-        let max_files = usize::try_from(p.max_files).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.max_files cannot be convert to usize: {}",
-                err
-            ))
-        })?;
-        let split_size = usize::try_from(p.split_size).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.split_size cannot be convert to usize: {}",
-                err
-            ))
-        })?;
-
-        let max_file_size = usize::try_from(p.max_file_size).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.max_file_size cannot be convert to usize: {}",
-                err
-            ))
-        })?;
+        let size_limit: usize = convert_field(p.size_limit, "CopyOptions.size_limit")?;
+        let max_files: usize = convert_field(p.max_files, "CopyOptions.max_files")?;
+        let split_size: usize = convert_field(p.split_size, "CopyOptions.split_size")?;
+        let max_file_size: usize = convert_field(p.max_file_size, "CopyOptions.max_file_size")?;
         Ok(mt::principal::CopyOptions {
             on_error,
             size_limit,
@@ -150,30 +128,10 @@ impl FromToProto for mt::principal::CopyOptions {
 
     fn to_pb(&self) -> Result<pb::stage_info::CopyOptions, Incompatible> {
         let on_error = mt::principal::OnErrorMode::to_pb(&self.on_error)?;
-        let size_limit = u64::try_from(self.size_limit).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.size_limit cannot be convert to u64: {}",
-                err
-            ))
-        })?;
-        let max_files = u64::try_from(self.max_files).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.max_files cannot be convert to u64: {}",
-                err
-            ))
-        })?;
-        let split_size = u64::try_from(self.split_size).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.split_size cannot be convert to u64: {}",
-                err
-            ))
-        })?;
-        let max_file_size = u64::try_from(self.max_file_size).map_err(|err| {
-            Incompatible::new(format!(
-                "CopyOptions.max_file_size cannot be convert to u64: {}",
-                err
-            ))
-        })?;
+        let size_limit: u64 = convert_field(self.size_limit, "CopyOptions.size_limit")?;
+        let max_files: u64 = convert_field(self.max_files, "CopyOptions.max_files")?;
+        let split_size: u64 = convert_field(self.split_size, "CopyOptions.split_size")?;
+        let max_file_size: u64 = convert_field(self.max_file_size, "CopyOptions.max_file_size")?;
         Ok(pb::stage_info::CopyOptions {
             on_error: Some(on_error),
             size_limit,

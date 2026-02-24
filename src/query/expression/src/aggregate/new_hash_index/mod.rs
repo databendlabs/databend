@@ -1,3 +1,4 @@
+// Copyright (c) 2016 Amanieu d'Antras
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,5 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod metasrv_builder;
-mod test_kv_api;
+/// Portions of this mod are derived from the excellent
+/// [hashbrown](https://github.com/rust-lang/hashbrown/tree/master) crate
+mod bitmask;
+mod group;
+mod hash_index;
+
+pub use hash_index::ExperimentalHashIndex;
