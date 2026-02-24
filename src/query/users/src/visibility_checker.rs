@@ -618,7 +618,7 @@ impl GrantObjectVisibilityChecker {
 
     #[inline(always)]
     pub fn check_database_visibility_by_id(&self, catalog_id: u32, db_id: u64) -> bool {
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -644,8 +644,13 @@ impl GrantObjectVisibilityChecker {
     }
 
     #[inline(always)]
+    pub fn has_global_db_table_privilege(&self) -> bool {
+        self.granted_global_db_table
+    }
+
+    #[inline(always)]
     pub fn check_table_visibility_by_id(&self, catalog_id: u32, db_id: u64, table_id: u64) -> bool {
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -672,7 +677,7 @@ impl GrantObjectVisibilityChecker {
     #[inline]
     pub fn check_database_visibility(&self, catalog: &str, db: &str, db_id: u64) -> bool {
         // Fast path: global privileges
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -724,7 +729,7 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
 
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -856,7 +861,7 @@ impl GrantObjectVisibilityChecker {
     pub fn get_visibility_database(
         &self,
     ) -> Option<HashMap<&str, HashSet<(Option<&str>, Option<&u64>)>>> {
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return None;
         }
 

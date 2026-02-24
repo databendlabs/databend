@@ -181,6 +181,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("system_tables_count_db_concurrency", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(16),
+                    desc: "Sets the DB-level concurrency used by system.tables count optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=256)),
+                }),
                 ("max_vacuum_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets the maximum number of threads to execute vacuum operation.",
