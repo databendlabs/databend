@@ -244,34 +244,43 @@ async fn do_register<RT: RuntimeApi>(
     });
     info!("Raft log entry for updating node: {:?}", ent);
 
-    // Get leader's raft endpoint
-    let leader_node = meta_handle
-        .handle_get_node(leader_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("leader node {} not found", leader_id))?;
-    let leader_raft_endpoint = leader_node.endpoint;
+    if meta_handle.id == leader_id {
+        // We are the leader: write directly via raft to avoid stale endpoint lookup
+        info!("This node is the leader, writing directly");
+        meta_handle
+            .request(move |meta_node| {
+                Box::pin(async move {
+                    meta_node.raft.client_write(ent).await.map(|_| ())
+                })
+            })
+            .await??;
+    } else {
+        // Forward to leader via gRPC
+        let leader_node = meta_handle
+            .handle_get_node(leader_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("leader node {} not found", leader_id))?;
+        let leader_raft_endpoint = leader_node.endpoint;
 
-    // Connect to leader via gRPC
-    let addr = format!("http://{}", leader_raft_endpoint);
-    info!(
-        "Forwarding register request to leader {} at {}",
-        leader_id, addr
-    );
+        let addr = format!("http://{}", leader_raft_endpoint);
+        info!(
+            "Forwarding register request to leader {} at {}",
+            leader_id, addr
+        );
 
-    let client = RaftServiceClient::connect(addr).await?;
+        let client = RaftServiceClient::connect(addr).await?;
 
-    let max_msg_size = config.raft_config.raft_grpc_max_message_size();
-    let mut client = client
-        .max_decoding_message_size(max_msg_size)
-        .max_encoding_message_size(max_msg_size);
+        let max_msg_size = config.raft_config.raft_grpc_max_message_size();
+        let mut client = client
+            .max_decoding_message_size(max_msg_size)
+            .max_encoding_message_size(max_msg_size);
 
-    // Send the write request to the leader
-    let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
-    let resp = client.forward(forward_req).await?;
-    let raft_reply = resp.into_inner();
+        let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
+        let resp = client.forward(forward_req).await?;
+        let raft_reply = resp.into_inner();
 
-    // Parse response
-    let _res: ForwardResponse = reply_to_api_result(raft_reply)?;
+        let _res: ForwardResponse = reply_to_api_result(raft_reply)?;
+    }
 
     info!("Done register");
     Ok(())
