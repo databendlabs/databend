@@ -51,8 +51,6 @@ use databend_meta_runtime_api::RuntimeApi;
 use databend_meta_sled_store::openraft::MessageSummary;
 use databend_meta_types::Cmd;
 use databend_meta_types::LogEntry;
-use databend_meta_types::MetaAPIError;
-use databend_meta_types::MetaNetworkError;
 use databend_meta_types::node::Node;
 use databend_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_meta_types::raft_types::NodeId;
@@ -230,7 +228,7 @@ async fn do_register<RT: RuntimeApi>(
     meta_handle: &Arc<MetaHandle<RT>>,
     config: &MetaServiceConfig,
     leader_id: NodeId,
-) -> Result<(), MetaAPIError> {
+) -> anyhow::Result<()> {
     let node_id = meta_handle.id;
     let raft_endpoint = config.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
@@ -249,14 +247,8 @@ async fn do_register<RT: RuntimeApi>(
     // Get leader's raft endpoint
     let leader_node = meta_handle
         .handle_get_node(leader_id)
-        .await
-        .map_err(|e| MetaAPIError::CanNotForward(AnyError::new(&e)))?
-        .ok_or_else(|| {
-            MetaAPIError::CanNotForward(AnyError::error(format!(
-                "leader node {} not found",
-                leader_id
-            )))
-        })?;
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("leader node {} not found", leader_id))?;
     let leader_raft_endpoint = leader_node.endpoint;
 
     // Connect to leader via gRPC
@@ -266,9 +258,7 @@ async fn do_register<RT: RuntimeApi>(
         leader_id, addr
     );
 
-    let client = RaftServiceClient::connect(addr)
-        .await
-        .map_err(MetaNetworkError::from)?;
+    let client = RaftServiceClient::connect(addr).await?;
 
     let max_msg_size = config.raft_config.raft_grpc_max_message_size();
     let mut client = client
@@ -277,10 +267,7 @@ async fn do_register<RT: RuntimeApi>(
 
     // Send the write request to the leader
     let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
-    let resp = client
-        .forward(forward_req)
-        .await
-        .map_err(MetaNetworkError::from)?;
+    let resp = client.forward(forward_req).await?;
     let raft_reply = resp.into_inner();
 
     // Parse response
