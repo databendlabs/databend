@@ -368,7 +368,7 @@ async fn register_node<RT: RuntimeApi>(
     }
 
     if let Some(e) = last_err {
-        return Err(e.into());
+        return Err(e);
     }
 
     Err(anyhow::anyhow!("timeout; no error received"))
