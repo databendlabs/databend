@@ -31,10 +31,14 @@ use databend_common_version::METASRV_COMMIT_VERSION;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs::MetaServiceConfig;
+use databend_meta::message::ForwardRequest;
+use databend_meta::message::ForwardRequestBody;
+use databend_meta::message::ForwardResponse;
 use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::server_metrics;
+use databend_meta::util::reply_to_api_result;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
 use databend_meta_admin::HttpService;
@@ -48,7 +52,10 @@ use databend_meta_sled_store::openraft::MessageSummary;
 use databend_meta_types::Cmd;
 use databend_meta_types::LogEntry;
 use databend_meta_types::MetaAPIError;
+use databend_meta_types::MetaNetworkError;
 use databend_meta_types::node::Node;
+use databend_meta_types::protobuf::raft_service_client::RaftServiceClient;
+use databend_meta_types::raft_types::NodeId;
 use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use log::info;
 use log::warn;
@@ -222,6 +229,7 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
 async fn do_register<RT: RuntimeApi>(
     meta_handle: &Arc<MetaHandle<RT>>,
     config: &MetaServiceConfig,
+    leader_id: NodeId,
 ) -> Result<(), MetaAPIError> {
     let node_id = meta_handle.id;
     let raft_endpoint = config.raft_config.raft_api_advertise_host_endpoint();
@@ -238,10 +246,46 @@ async fn do_register<RT: RuntimeApi>(
     });
     info!("Raft log entry for updating node: {:?}", ent);
 
-    meta_handle
-        .request(move |meta_node| Box::pin(async move { meta_node.write(ent).await }))
+    // Get leader's raft endpoint
+    let leader_node = meta_handle
+        .handle_get_node(leader_id)
         .await
-        .unwrap()?;
+        .map_err(|e| MetaAPIError::CanNotForward(AnyError::new(&e)))?
+        .ok_or_else(|| {
+            MetaAPIError::CanNotForward(AnyError::error(format!(
+                "leader node {} not found",
+                leader_id
+            )))
+        })?;
+    let leader_raft_endpoint = leader_node.endpoint;
+
+    // Connect to leader via gRPC
+    let addr = format!("http://{}", leader_raft_endpoint);
+    info!(
+        "Forwarding register request to leader {} at {}",
+        leader_id, addr
+    );
+
+    let client = RaftServiceClient::connect(addr)
+        .await
+        .map_err(MetaNetworkError::from)?;
+
+    let max_msg_size = config.raft_config.raft_grpc_max_message_size();
+    let mut client = client
+        .max_decoding_message_size(max_msg_size)
+        .max_encoding_message_size(max_msg_size);
+
+    // Send the write request to the leader
+    let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
+    let resp = client
+        .forward(forward_req)
+        .await
+        .map_err(MetaNetworkError::from)?;
+    let raft_reply = resp.into_inner();
+
+    // Parse response
+    let _res: ForwardResponse = reply_to_api_result(raft_reply)?;
+
     info!("Done register");
     Ok(())
 }
@@ -309,7 +353,7 @@ async fn register_node<RT: RuntimeApi>(
 
         info!("Registering node with grpc-advertise-addr...");
 
-        let res = do_register::<RT>(meta_handle, &conf.service).await;
+        let res = do_register::<RT>(meta_handle, &conf.service, leader_id).await;
         info!("Register-node result: {:?}", res);
 
         match res {
