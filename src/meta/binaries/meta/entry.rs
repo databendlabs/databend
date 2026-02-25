@@ -238,7 +238,10 @@ async fn do_register<RT: RuntimeApi>(
     });
     info!("Raft log entry for updating node: {:?}", ent);
 
-    meta_handle.handle_write(ent).await.unwrap()?;
+    meta_handle
+        .request(move |meta_node| Box::pin(async move { meta_node.write(ent).await }))
+        .await
+        .unwrap()?;
     info!("Done register");
     Ok(())
 }
