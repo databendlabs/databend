@@ -16306,6 +16306,210 @@ AlterObjectTag(
 
 
 ---------- Input ----------
+ALTER USER 'u1' SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER USER 'u1'@'%' SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: User {
+            if_exists: false,
+            user: UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            24..28,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER USER IF EXISTS 'u1' UNSET TAG tag1;
+---------- Output ---------
+ALTER USER IF EXISTS 'u1'@'%' UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: User {
+            if_exists: true,
+            user: UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        36..40,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER ROLE r1 SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER ROLE 'r1' SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Role {
+            if_exists: false,
+            role_name: "r1",
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            22..26,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER ROLE IF EXISTS r1 UNSET TAG tag1;
+---------- Output ---------
+ALTER ROLE IF EXISTS 'r1' UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Role {
+            if_exists: true,
+            role_name: "r1",
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        34..38,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER STREAM s1 SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER STREAM s1 SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Stream {
+            if_exists: false,
+            catalog: None,
+            database: None,
+            stream: Identifier {
+                span: Some(
+                    13..15,
+                ),
+                name: "s1",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            24..28,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER STREAM IF EXISTS db.s1 UNSET TAG tag1;
+---------- Output ---------
+ALTER STREAM IF EXISTS db.s1 UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Stream {
+            if_exists: true,
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        23..25,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            stream: Identifier {
+                span: Some(
+                    26..28,
+                ),
+                name: "s1",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        39..43,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER FUNCTION my_udf SET TAG tag1 = 'val1';
 ---------- Output ---------
 ALTER FUNCTION my_udf SET TAG tag1 = 'val1'

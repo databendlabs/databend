@@ -127,6 +127,8 @@ impl From<TagMetaError> for ErrorCode {
             TagMetaError::ObjectNotFound(ref obj) => match obj {
                 TaggableObject::Connection { .. } => ErrorCode::UnknownConnection(s),
                 TaggableObject::Stage { .. } => ErrorCode::UnknownStage(s),
+                TaggableObject::User { .. } => ErrorCode::UnknownUser(s),
+                TaggableObject::Role { .. } => ErrorCode::UnknownRole(s),
                 TaggableObject::Database { .. } => ErrorCode::UnknownDatabase(s),
                 TaggableObject::Table { .. } => ErrorCode::UnknownTable(s),
                 TaggableObject::UDF { .. } => ErrorCode::UnknownFunction(s),

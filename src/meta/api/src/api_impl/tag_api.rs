@@ -18,6 +18,8 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::RoleIdent;
+use databend_common_meta_app::principal::TenantUserIdent;
 use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::connection_ident::ConnectionIdent;
 use databend_common_meta_app::principal::user_stage_ident::StageIdent;
@@ -88,6 +90,10 @@ fn get_object_key(tenant: &Tenant, object: &TaggableObject) -> String {
             ConnectionIdent::new(tenant.clone(), name).to_string_key()
         }
         TaggableObject::Stage { name } => StageIdent::new(tenant.clone(), name).to_string_key(),
+        TaggableObject::User { user } => {
+            TenantUserIdent::new(tenant.clone(), user.clone()).to_string_key()
+        }
+        TaggableObject::Role { name } => RoleIdent::new(tenant.clone(), name).to_string_key(),
         TaggableObject::Database { db_id } => DatabaseId::new(*db_id).to_string_key(),
         TaggableObject::Table { table_id } => TableId::new(*table_id).to_string_key(),
         TaggableObject::UDF { name } => UdfIdent::new(tenant.clone(), name).to_string_key(),
@@ -410,8 +416,10 @@ where
                         }
                     }
                 }
-                // Stage, Connection, UDF, and Procedure use name-based keys, no soft delete concept
+                // Stage/User/Role/Connection/UDF/Procedure use name-based keys, no soft delete concept
                 TaggableObject::Stage { .. }
+                | TaggableObject::User { .. }
+                | TaggableObject::Role { .. }
                 | TaggableObject::Connection { .. }
                 | TaggableObject::UDF { .. }
                 | TaggableObject::Procedure { .. } => {}

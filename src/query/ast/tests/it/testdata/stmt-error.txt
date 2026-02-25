@@ -291,7 +291,7 @@ error:
   --> SQL:1:21
   |
 1 | alter user 'test-e' identifies by 'new-password';
-  |                     ^^^^^^^^^^ unexpected `identifies`, expecting `IDENTIFIED`, `WITH`, `FORMAT`, `@`, or `;`
+  |                     ^^^^^^^^^^ unexpected `identifies`, expecting `IDENTIFIED`, `SET`, `WITH`, `UNSET`, `FORMAT`, `@`, or `;`
 
 
 ---------- Input ----------
