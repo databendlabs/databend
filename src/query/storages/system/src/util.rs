@@ -170,19 +170,16 @@ pub const MAX_OPTIMIZED_PATH_CHECKS: usize = 20;
 ///
 /// Note: the two branches are intentionally split so the tables-only case never
 /// falls through to `0 * table_count`, which would always be true.
-fn should_use_optimized_visibility_path(
-    filtered_db_names: &[String],
-    filtered_table_names: &[String],
-) -> bool {
-    if filtered_table_names.is_empty() {
+#[inline]
+pub fn should_use_optimized_visibility_path(db_count: usize, table_count: usize) -> bool {
+    if table_count == 0 {
         return false;
     }
 
-    let table_count = filtered_table_names.len();
-    if filtered_db_names.is_empty() {
+    if db_count == 0 {
         table_count <= MAX_OPTIMIZED_PATH_CHECKS
     } else {
-        filtered_db_names.len().saturating_mul(table_count) <= MAX_OPTIMIZED_PATH_CHECKS
+        db_count.saturating_mul(table_count) <= MAX_OPTIMIZED_PATH_CHECKS
     }
 }
 
@@ -227,7 +224,10 @@ pub async fn collect_visible_tables(
     // Determine visibility strategy
     let strategy = if catalog.is_external() {
         VisibilityStrategy::NoCheck
-    } else if should_use_optimized_visibility_path(filtered_db_names, filtered_table_names) {
+    } else if should_use_optimized_visibility_path(
+        filtered_db_names.len(),
+        filtered_table_names.len(),
+    ) {
         // Precise filters within reasonable size: use optimized path to avoid loading all ownerships
         let grants_checker = ctx.get_visibility_checker(true, Object::All).await?;
         if grants_checker.has_global_db_table_privilege() {

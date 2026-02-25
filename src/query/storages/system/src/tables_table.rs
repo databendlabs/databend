@@ -58,7 +58,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_basic::NullTable;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::has_table_name_grants;
@@ -70,10 +69,10 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::MAX_OPTIMIZED_PATH_CHECKS;
 use crate::util::collect_visible_tables;
 use crate::util::extract_leveled_strings;
 use crate::util::generate_default_catalog_meta;
+use crate::util::should_use_optimized_visibility_path;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -447,7 +446,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         )))
     }
 
-    fn build_default_block_with_rows(rows: usize) -> DataBlock {
+    /// Build a DataBlock with the correct schema but only default-valued constant columns.
+    /// Used exclusively for count-only fast paths where no column data is read.
+    fn build_count_only_block(rows: usize) -> DataBlock {
         let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
         let entries = schema
             .fields()
@@ -462,8 +463,14 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         DataBlock::new(entries, rows)
     }
 
+    /// Count tables across all catalogs for users with global db/table privilege.
+    /// Skips permission checks, ownership lookups, and stats collection.
+    ///
+    /// Errors from `list_databases` or `list_tables` are logged as warnings and
+    /// the affected database is counted as 0. The returned total may therefore be
+    /// lower than the actual table count when individual databases are unreachable.
     #[async_backtrace::framed]
-    async fn count_tables_for_admin(
+    async fn generate_tables_counts(
         ctx: Arc<dyn TableContext>,
         tenant: &Tenant,
         ctls: &[(String, Arc<dyn Catalog>)],
@@ -693,28 +700,29 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             && tables_ids.is_empty();
 
         if can_use_count_fast_path {
-            let is_account_admin = ctx
-                .get_all_effective_roles()
+            let has_global_privilege = ctx
+                .get_visibility_checker(true, Object::All)
                 .await?
-                .iter()
-                .any(|role| role.name == BUILTIN_ROLE_ACCOUNT_ADMIN);
-            if is_account_admin {
+                .has_global_db_table_privilege();
+            if has_global_privilege {
                 let db_concurrency =
                     ctx.get_settings()
                         .get_system_tables_count_db_concurrency()? as usize;
                 let total_rows =
-                    Self::count_tables_for_admin(ctx.clone(), &tenant, &ctls, db_concurrency).await;
-                return Ok(Self::build_default_block_with_rows(total_rows));
+                    Self::generate_tables_counts(ctx.clone(), &tenant, &ctls, db_concurrency).await;
+                debug_assert!(
+                    projection_empty,
+                    "build_count_only_block requires empty projection"
+                );
+                return Ok(Self::build_count_only_block(total_rows));
             }
         }
 
         // Optimized path: when filter specifies tables (with or without databases) within reasonable size,
         // use lightweight permission check without loading all ownerships.
-        // Limit to MAX_OPTIMIZED_PATH_CHECKS combinations to prevent excessive checks.
+        // Threshold logic is shared with collect_visible_tables via should_use_optimized_visibility_path.
         let table_count = tables_names.len() + tables_ids.len();
-        let use_optimized_path = table_count > 0
-            && (db_name.is_empty() || db_name.len() * table_count <= MAX_OPTIMIZED_PATH_CHECKS)
-            && table_count <= MAX_OPTIMIZED_PATH_CHECKS
+        let use_optimized_path = should_use_optimized_visibility_path(db_name.len(), table_count)
             && !WITH_HISTORY
             && !is_external_catalog;
 
