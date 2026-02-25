@@ -249,9 +249,7 @@ async fn do_register<RT: RuntimeApi>(
         info!("This node is the leader, writing directly");
         meta_handle
             .request(move |meta_node| {
-                Box::pin(async move {
-                    meta_node.raft.client_write(ent).await.map(|_| ())
-                })
+                Box::pin(async move { meta_node.raft.client_write(ent).await.map(|_| ()) })
             })
             .await??;
     } else {
