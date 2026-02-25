@@ -43,8 +43,11 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::tag_api::TagApi;
 use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -59,6 +62,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::planner::NameResolutionContext;
 use databend_common_sql::planner::normalize_identifier;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
@@ -312,6 +316,69 @@ async fn collect_tag_references(
                 stage_name.to_string(),
             )
         }
+        "USER" => {
+            let user_name = object_name.trim();
+            if user_name.is_empty() {
+                return Err(ErrorCode::BadArguments("object_name must not be empty"));
+            }
+
+            let user_identity = UserIdentity::new(user_name, "%");
+            let current_user = ctx.get_current_user()?;
+            let has_grant_priv = ctx
+                .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
+                .await
+                .is_ok();
+            if current_user.identity().username != user_name && !has_grant_priv {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege [Grant] is required on *.* for user {}",
+                    current_user.identity().display(),
+                )));
+            }
+            let user = UserApiProvider::instance()
+                .get_user(&tenant, user_identity)
+                .await?;
+            let object_name = user.identity().display().to_string();
+            (
+                TaggableObject::User {
+                    user: user.identity(),
+                },
+                None,
+                None,
+                object_name,
+            )
+        }
+        "ROLE" => {
+            let role_name = object_name.trim();
+            if role_name.is_empty() {
+                return Err(ErrorCode::BadArguments("object_name must not be empty"));
+            }
+            let current_user = ctx.get_current_user()?;
+            let has_grant_priv = ctx
+                .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
+                .await
+                .is_ok();
+            let effective_roles = ctx.get_all_effective_roles().await?;
+            let has_role = effective_roles
+                .iter()
+                .any(|role| role.name.eq_ignore_ascii_case(role_name));
+            if !has_role && !has_grant_priv {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege [Grant] is required on *.* for user {}",
+                    current_user.identity().display(),
+                )));
+            }
+            let role_info = UserApiProvider::instance()
+                .get_role(&tenant, role_name.to_string())
+                .await?;
+            (
+                TaggableObject::Role {
+                    name: role_info.name.clone(),
+                },
+                None,
+                None,
+                role_info.name,
+            )
+        }
         "CONNECTION" => {
             let conn_name = object_name.trim();
             // Check connection visibility
@@ -375,6 +442,40 @@ async fn collect_tag_references(
                 Some(db_name),
                 Some(table_id),
                 view_name,
+            )
+        }
+        "STREAM" => {
+            let (catalog_name, db_name, stream_name) = parse_table_name(&ctx, &object_name)?;
+            let catalog = ctx.get_catalog(&catalog_name).await?;
+            let db = catalog.get_database(&tenant, &db_name).await?;
+            let db_id = db.get_db_info().database_id.db_id;
+            let table = catalog.get_table(&tenant, &db_name, &stream_name).await?;
+            if table.engine() != STREAM_ENGINE {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "'{}' is not a stream",
+                    stream_name
+                )));
+            }
+            let table_id = table.get_table_info().ident.table_id;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
+            if !visibility_checker.check_table_visibility(
+                &catalog_name,
+                &db_name,
+                &stream_name,
+                db_id,
+                table_id,
+            ) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: No privilege on stream '{}' for user '{}'",
+                    stream_name,
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
+            (
+                TaggableObject::Table { table_id },
+                Some(db_name),
+                Some(table_id),
+                stream_name,
             )
         }
         "UDF" => {
@@ -468,7 +569,7 @@ async fn collect_tag_references(
         }
         _ => {
             return Err(ErrorCode::BadArguments(format!(
-                "Invalid object_domain '{}'. Supported values: DATABASE, TABLE, STAGE, CONNECTION, VIEW, UDF, PROCEDURE",
+                "Invalid object_domain '{}'. Supported values: DATABASE, TABLE, STAGE, USER, ROLE, CONNECTION, VIEW, STREAM, UDF, PROCEDURE",
                 object_domain
             )));
         }

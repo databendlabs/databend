@@ -38,13 +38,16 @@ use crate::plans::DropTagPlan;
 use crate::plans::Plan;
 use crate::plans::ProcedureTagSetTarget;
 use crate::plans::RewriteKind;
+use crate::plans::RoleTagSetTarget;
 use crate::plans::SetObjectTagsPlan;
 use crate::plans::StageTagSetTarget;
+use crate::plans::StreamTagSetTarget;
 use crate::plans::TableTagSetTarget;
 use crate::plans::TagSetObject;
 use crate::plans::TagSetPlanItem;
 use crate::plans::UDFTagSetTarget;
 use crate::plans::UnsetObjectTagsPlan;
+use crate::plans::UserTagSetTarget;
 use crate::plans::ViewTagSetTarget;
 
 impl Binder {
@@ -212,6 +215,19 @@ impl Binder {
                 if_exists: *if_exists,
                 stage_name: stage_name.clone(),
             })),
+            AlterObjectTagTarget::User { if_exists, user } => {
+                Ok(TagSetObject::User(UserTagSetTarget {
+                    if_exists: *if_exists,
+                    user: user.clone().into(),
+                }))
+            }
+            AlterObjectTagTarget::Role {
+                if_exists,
+                role_name,
+            } => Ok(TagSetObject::Role(RoleTagSetTarget {
+                if_exists: *if_exists,
+                role_name: role_name.clone(),
+            })),
             AlterObjectTagTarget::Connection {
                 if_exists,
                 connection_name,
@@ -233,6 +249,21 @@ impl Binder {
                     catalog,
                     database,
                     view,
+                }))
+            }
+            AlterObjectTagTarget::Stream {
+                if_exists,
+                catalog,
+                database,
+                stream,
+            } => {
+                let (catalog, database, stream) =
+                    self.normalize_object_identifier_triple(catalog, database, stream);
+                Ok(TagSetObject::Stream(StreamTagSetTarget {
+                    if_exists: *if_exists,
+                    catalog,
+                    database,
+                    stream,
                 }))
             }
             AlterObjectTagTarget::Function {
