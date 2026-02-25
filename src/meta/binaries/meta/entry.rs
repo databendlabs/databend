@@ -37,6 +37,7 @@ use databend_meta::message::ForwardResponse;
 use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
+use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::metrics::server_metrics;
 use databend_meta::util::reply_to_api_result;
 use databend_meta::version::raft_client_requires;
@@ -237,7 +238,7 @@ async fn do_register<RT: RuntimeApi>(
     println!("Register this node: {{{}}}", node);
     println!();
 
-    let mut ent = LogEntry::new(Cmd::AddNode {
+    let ent = LogEntry::new(Cmd::AddNode {
         node_id,
         node,
         overriding: true,
@@ -246,17 +247,13 @@ async fn do_register<RT: RuntimeApi>(
 
     if meta_handle.id == leader_id {
         // We are the leader: write directly via raft to avoid stale endpoint lookup.
-        // Set timestamp like MetaLeader::write() does.
-        ent.time_ms = Some(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
-        );
         info!("This node is the leader, writing directly");
         meta_handle
             .request(move |meta_node| {
-                Box::pin(async move { meta_node.raft.client_write(ent).await.map(|_| ()) })
+                Box::pin(async move {
+                    let leader = MetaLeader::new(&meta_node);
+                    leader.write(ent).await.map(|_| ())
+                })
             })
             .await??;
     } else {
