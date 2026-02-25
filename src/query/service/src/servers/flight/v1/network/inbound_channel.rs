@@ -32,6 +32,7 @@
 //! - Network-side backpressure uses `event_listener::Event` with
 //!   try-listen-retry pattern.
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -39,10 +40,15 @@ use std::task::Context;
 use std::task::Poll;
 
 use arrow_flight::FlightData;
+use arrow_flight::utils::flight_data_to_arrow_batch;
+use arrow_schema::Schema as ArrowSchema;
 use concurrent_queue::ConcurrentQueue;
 use concurrent_queue::PopError;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_io::prelude::BinaryRead;
+use databend_common_io::prelude::bincode_deserialize_from_stream;
 use event_listener::Event;
 use parking_lot::RwLock;
 
@@ -78,9 +84,8 @@ impl NetworkInboundChannel {
         self.sub_queues.write().push(sq);
     }
 
-    fn deserialize(&self, _flight_data: FlightData) -> Result<DataBlock, ErrorCode> {
-        // TODO:
-        unimplemented!()
+    fn deserialize(&self, flight_data: FlightData) -> Result<DataBlock, ErrorCode> {
+        deserialize_flight_data(flight_data)
     }
 
     /// Non-blocking pop. Prioritizes the connection with highest `quota.current_bytes`.
@@ -371,4 +376,67 @@ pub fn strip_tid(mut data: FlightData) -> FlightData {
         data.app_metadata = data.app_metadata.slice(2..);
     }
     data
+}
+
+/// Deserialize a FlightData (after tid stripping) back into a DataBlock.
+///
+/// Format of `app_metadata`:
+/// - Fragment (last byte 0x01): `[row_count: u32][block_meta: bincode][schema: bincode][0x01]`
+/// - Dictionary (last byte 0x05): dictionary IPC data (currently unsupported)
+pub(crate) fn deserialize_flight_data(flight_data: FlightData) -> Result<DataBlock, ErrorCode> {
+    let meta_bytes = &flight_data.app_metadata;
+    if meta_bytes.is_empty() {
+        return Err(ErrorCode::BadBytes("empty app_metadata in FlightData"));
+    }
+
+    let marker = meta_bytes[meta_bytes.len() - 1];
+    if marker == 0x05 {
+        return Err(ErrorCode::Unimplemented(
+            "dictionary FlightData not yet supported in broadcast exchange",
+        ));
+    }
+
+    if marker != 0x01 {
+        return Err(ErrorCode::BadBytes(format!(
+            "unknown FlightData marker: 0x{:02x}",
+            marker
+        )));
+    }
+
+    // Parse metadata (excluding the trailing 0x01 marker)
+    let meta = &meta_bytes[..meta_bytes.len() - 1];
+    const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
+
+    let mut cursor = &meta[..ROW_HEADER_SIZE];
+    let row_count: u32 = cursor
+        .read_scalar()
+        .map_err(|e| ErrorCode::BadBytes(format!("failed to read row_count: {}", e)))?;
+
+    let mut remaining = &meta[ROW_HEADER_SIZE..];
+    let block_meta: Option<databend_common_expression::BlockMetaInfoPtr> =
+        bincode_deserialize_from_stream(&mut remaining)
+            .map_err(|e| ErrorCode::BadBytes(format!("failed to deserialize block_meta: {}", e)))?;
+
+    let schema: DataSchema = bincode_deserialize_from_stream(&mut remaining)
+        .map_err(|e| ErrorCode::BadBytes(format!("failed to deserialize schema: {}", e)))?;
+
+    if row_count == 0 {
+        return Ok(DataBlock::new_with_meta(vec![], 0, block_meta));
+    }
+
+    let arrow_schema = Arc::new(ArrowSchema::from(&schema));
+    let batch = flight_data_to_arrow_batch(&flight_data, arrow_schema, &HashMap::new())
+        .map_err(|e| ErrorCode::BadBytes(format!("failed to decode arrow batch: {}", e)))?;
+
+    let block = DataBlock::from_record_batch(&schema, &batch)?;
+
+    if block.num_columns() == 0 {
+        return Ok(DataBlock::new_with_meta(
+            vec![],
+            row_count as usize,
+            block_meta,
+        ));
+    }
+
+    block.add_meta(block_meta)
 }

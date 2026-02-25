@@ -201,6 +201,7 @@ impl FragmentDeriveHandle {
     pub fn get_exchange(
         cluster: Arc<Cluster>,
         plan: &PhysicalPlan,
+        num_threads: usize,
     ) -> Result<Option<DataExchange>> {
         let Some(exchange_sink) = ExchangeSink::from_physical_plan(plan) else {
             return Ok(None);
@@ -240,7 +241,10 @@ impl FragmentDeriveHandle {
                 exchange_sink.ignore_exchange,
                 exchange_sink.allow_adjust_parallelism,
             )),
-            FragmentKind::Expansive => Some(BroadcastExchange::create(get_executors(cluster))),
+            FragmentKind::Expansive => Some(BroadcastExchange::create(
+                get_executors(cluster),
+                num_threads,
+            )),
         })
     }
 }
@@ -285,7 +289,8 @@ impl DeriveHandle for FragmentDeriveHandle {
             let fragment_type = fragment_type_visitor.fragment_type.clone();
 
             let cluster = self.ctx.get_cluster();
-            let exchange = Self::get_exchange(cluster, &plan).unwrap();
+            let max_threads = self.ctx.get_settings().get_max_threads().unwrap() as usize;
+            let exchange = Self::get_exchange(cluster, &plan, max_threads).unwrap();
 
             let source_fragment = PlanFragment {
                 plan,

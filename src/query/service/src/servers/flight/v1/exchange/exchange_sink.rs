@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -22,9 +23,7 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::create_dummy_item;
 
-use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_sink_writer::create_writer_item;
@@ -98,9 +97,9 @@ impl ExchangeSink {
                 pipeline.add_pipe(Pipe::create(output, 0, items));
                 Ok(())
             }
-            ExchangeParams::BroadcastExchange(params) => {
-                Self::broadcast_sink(ctx, pipeline, params)
-            }
+            ExchangeParams::BroadcastExchange(_) => Err(ErrorCode::Internal(
+                "BroadcastExchange should not appear on the sink side",
+            )),
             ExchangeParams::NodeShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
 
@@ -121,50 +120,6 @@ impl ExchangeSink {
             }
             ExchangeParams::GlobalShuffleExchange(_) => Ok(()),
         }
-    }
-
-    /// BroadcastExchange sink: use BroadcastSendTransform to broadcast data
-    /// to all destinations. Local output is discarded via dummy sinks.
-    ///
-    /// ```text
-    /// Pipe 1: P BroadcastSendTransforms (P inputs → P outputs)
-    ///         remote channels → OutboundChannels (RemoteChannel → PingPong)
-    ///         local → output port (discarded)
-    /// Pipe 2: P dummy sinks             (P inputs → 0 outputs)
-    /// ```
-    fn broadcast_sink(
-        ctx: &Arc<QueryContext>,
-        pipeline: &mut Pipeline,
-        params: &BroadcastExchangeParams,
-    ) -> Result<()> {
-        let local_pos = params
-            .destination_channels
-            .iter()
-            .position(|(dest, _)| dest == &params.executor_id)
-            .expect("local destination not found in broadcast exchange");
-
-        let compression = ctx.get_settings().get_query_flight_compression()?;
-
-        let local_channels = vec![];
-        let channels = build_broadcast_outbound_channels(params, local_channels, compression)?;
-
-        let output_len = pipeline.output_len();
-        let mut output_items = Vec::with_capacity(output_len);
-
-        for _idx in 0..output_len {
-            output_items.push(BroadcastSendTransform::create_item(
-                channels.clone(),
-                local_pos,
-            ));
-        }
-
-        pipeline.add_pipe(Pipe::create(output_len, output_len, output_items));
-
-        // Pipe 2: dummy sinks to consume local output (P inputs → 0 outputs)
-        let sink_items: Vec<_> = (0..output_len).map(|_| create_dummy_item()).collect();
-        pipeline.add_pipe(Pipe::create(output_len, 0, sink_items));
-
-        Ok(())
     }
 }
 
@@ -222,7 +177,11 @@ pub(super) fn build_broadcast_outbound_channels(
 
     // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong, N channels each
     let config = ExchangeBufferConfig::default();
-    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(exchanges_seq, config)?);
+    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+        exchanges_seq,
+        config,
+        &GlobalIORuntime::instance(),
+    )?);
 
     let local_channel = BroadcastChannel::create(local_outbound_channels);
     let mut remote_idx = 0;

@@ -129,39 +129,44 @@ impl ExchangeTransform {
         }
 
         let compression = ctx.get_settings().get_query_flight_compression()?;
+        let waker = pipeline.get_waker();
 
         let max_bytes = 20 * 1024 * 1024;
         let (local_outbound, local_inbound) = create_local_channels(local_threads, max_bytes);
         let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
 
-        let output_len = pipeline.output_len();
-        let mut output_items = Vec::with_capacity(output_len);
+        pipeline.resize(local_threads, false)?;
 
-        for _idx in 0..output_len {
-            output_items.push(BroadcastSendTransform::create_item(
-                channels.clone(),
+        let mut items = Vec::with_capacity(local_threads);
+
+        for _idx in 0..local_threads {
+            items.push(BroadcastSendTransform::create_item(
                 local_pos,
+                channels.clone(),
+                waker.clone(),
             ));
         }
 
-        pipeline.add_pipe(Pipe::create(output_len, output_len, output_items));
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
 
         let query_id = &params.query_id;
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
-        let channels = exchange_manager.get_exchange_source_channel(query_id, exchange_id)?;
 
-        let local_threads = local_inbound.len();
+        let remotes = exchange_manager.get_exchange_source_channel(query_id, exchange_id)?;
 
-        assert_eq!(channels.len(), output_len);
-        assert_eq!(local_threads, output_len);
+        assert_eq!(remotes.len(), local_threads);
+        assert_eq!(local_inbound.len(), local_threads);
 
-        let mut items = Vec::with_capacity(output_len);
-        for (remote, local) in channels.into_iter().zip(local_inbound.into_iter()) {
-            items.push(BroadcastRecvTransform::create_item(vec![remote, local]));
+        let mut items = Vec::with_capacity(local_threads);
+        for (remote, local) in remotes.into_iter().zip(local_inbound.into_iter()) {
+            items.push(BroadcastRecvTransform::create_item(
+                vec![remote, local],
+                waker.clone(),
+            ));
         }
 
-        pipeline.add_pipe(Pipe::create(output_len, output_len, items));
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
         Ok(())
     }
 }

@@ -65,8 +65,7 @@ impl DataExchange {
 
     /// Whether this exchange type uses do_exchange (ping-pong) instead of do_get.
     pub fn use_do_exchange(&self) -> bool {
-        false
-        // matches!(self, DataExchange::Broadcast(_))
+        matches!(self, DataExchange::Broadcast(_))
     }
 
     pub fn get_parallel(&self) -> usize {
@@ -116,11 +115,12 @@ pub struct BroadcastExchange {
 }
 
 impl BroadcastExchange {
-    pub fn create(destination_ids: Vec<String>) -> DataExchange {
+    pub fn create(destination_ids: Vec<String>, num_threads: usize) -> DataExchange {
         let mut destination_channels = Vec::with_capacity(destination_ids.len());
 
         for destination in &destination_ids {
-            destination_channels.push((destination.clone(), vec![GlobalUniq::unique()]));
+            let channels = (0..num_threads).map(|_| GlobalUniq::unique()).collect();
+            destination_channels.push((destination.clone(), channels));
         }
 
         DataExchange::Broadcast(BroadcastExchange {

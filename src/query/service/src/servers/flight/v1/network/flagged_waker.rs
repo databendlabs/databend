@@ -151,12 +151,15 @@ impl<'a, T> SyncTaskHandle<'a, T> {
         if reset {
             self.waker.reset();
         }
+
         if let Some(value) = self.value.take() {
             return Poll::Ready(value);
         }
+
         let Some(future) = &mut self.future else {
             panic!("SyncTaskHandle polled after value was consumed");
         };
+
         let mut cx = Context::from_waker(&self.waker);
         match future.as_mut().poll(&mut cx) {
             Poll::Ready(value) => {
@@ -165,11 +168,6 @@ impl<'a, T> SyncTaskHandle<'a, T> {
             }
             Poll::Pending => Poll::Pending,
         }
-    }
-
-    /// Whether the future has completed (value ready or already consumed).
-    pub fn is_done(&self) -> bool {
-        self.future.is_none()
     }
 }
 

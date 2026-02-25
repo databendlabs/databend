@@ -47,6 +47,7 @@ use petgraph::prelude::EdgeRef;
 use tokio::sync::oneshot;
 use tonic::Status;
 
+use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::MergeExchangeParams;
 use super::exchange_params::ShuffleExchangeParams;
@@ -316,6 +317,10 @@ impl DataExchangeManager {
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
                         let num_threads = channels.len();
+                        warn!(
+                            "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
+                            config.query.node_id, target_id, exchange_id, num_threads
+                        );
 
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
@@ -615,6 +620,10 @@ impl DataExchangeManager {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
+        warn!(
+            "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
+            query_id, channel_id, num_threads
+        );
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -1290,18 +1299,13 @@ impl FragmentCoordinator {
                     channel_id: exchange.channel_id.clone(),
                 })))
             }
-            DataExchange::Broadcast(exchange) => Ok(Some(ExchangeParams::NodeShuffleExchange(
-                ShuffleExchangeParams {
-                    exchange_injector: exchange_injector.clone(),
-                    schema: self.physical_plan.output_schema()?,
-                    fragment_id: self.fragment_id,
+            DataExchange::Broadcast(exchange) => Ok(Some(ExchangeParams::BroadcastExchange(
+                BroadcastExchangeParams {
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
-                    destination_ids: exchange.destination_ids.to_owned(),
+                    schema: self.physical_plan.output_schema()?,
+                    exchange_id: exchange.id.clone(),
                     destination_channels: exchange.destination_channels.to_owned(),
-                    shuffle_scatter: exchange_injector
-                        .flight_scatter(&info.query_ctx, data_exchange)?,
-                    allow_adjust_parallelism: true,
                 },
             ))),
             DataExchange::NodeToNodeExchange(exchange) => Ok(Some(

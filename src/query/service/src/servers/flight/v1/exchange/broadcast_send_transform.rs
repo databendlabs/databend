@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Broadcast send processor. Clones each input block to all OutboundChannels.
-//!
-//! Pure synchronous processor — no `async_process` needed.
-//! Uses [`SyncTaskSet`] / [`SyncTaskHandle`] to poll channel sends from `event()`.
+//! Broadcast send sink. Clones each input block to ALL OutboundChannels
+//! (including local). No output port — local data goes through local channels.
 
 use std::any::Any;
 use std::sync::Arc;
+use std::task::Poll;
 
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::ExecutorWaker;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -38,25 +38,33 @@ pub struct BroadcastSendTransform {
     id: NodeIndex,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    local_idx: usize,
-    channels: Vec<Arc<dyn OutboundChannel>>,
+
+    local_pos: usize,
     tasks: SyncTaskSet,
+    channels: Vec<Arc<dyn OutboundChannel>>,
     handle: Option<SyncTaskHandle<'static, Result<Vec<()>>>>,
 }
 
 impl BroadcastSendTransform {
-    pub fn create_item(channels: Vec<Arc<dyn OutboundChannel>>, local_idx: usize) -> PipeItem {
+    pub fn create_item(
+        local_pos: usize,
+        channels: Vec<Arc<dyn OutboundChannel>>,
+        waker: Arc<ExecutorWaker>,
+    ) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
+
         let processor = ProcessorPtr::create(Box::new(Self {
-            id: NodeIndex::default(),
+            channels,
+            local_pos,
             input: input.clone(),
             output: output.clone(),
-            local_idx,
-            channels,
-            tasks: SyncTaskSet::new(ExecutorWaker::create()),
+            tasks: SyncTaskSet::new(waker),
+
             handle: None,
+            id: NodeIndex::default(),
         }));
+
         PipeItem::create(processor, vec![input], vec![output])
     }
 }
@@ -70,77 +78,83 @@ impl Processor for BroadcastSendTransform {
         self
     }
 
-    fn on_id_set(&mut self, id: NodeIndex, waker: &Arc<ExecutorWaker>) {
-        self.id = id;
-        self.tasks = SyncTaskSet::new(waker.clone());
-    }
-
-    fn event(&mut self) -> Result<Event> {
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         // Poll existing handle
-        if let Some(h) = &mut self.handle {
-            match h.poll(true) {
-                std::task::Poll::Ready(result) => {
-                    result?;
-                    self.handle = None;
+        if let Some(mut handle) = self.handle.take() {
+            match handle.poll(matches!(cause, EventCause::Other)) {
+                Poll::Ready(Ok(_)) => {}
+                Poll::Ready(Err(cause)) => {
+                    return Err(cause);
                 }
-                std::task::Poll::Pending => {
+                Poll::Pending => {
+                    self.handle = Some(handle);
                     return Ok(Event::NeedConsume);
                 }
+            };
+        }
+
+        if self.output.is_finished() {
+            if self.channels.iter().all(|ch| ch.is_closed()) {
+                self.input.finish();
+                return Ok(Event::Finished);
             }
         }
 
-        // Downstream finished and all channels closed → done
-        if self.output.is_finished() && self.channels.iter().all(|ch| ch.is_closed()) {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        // Input finished → close channels, finish output
-        if self.input.is_finished() {
-            for ch in &self.channels {
-                ch.close();
-            }
-
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        // Pull data and broadcast
         if self.input.has_data() {
-            let block = self.input.pull_data().unwrap()?;
+            let data_block = self.input.pull_data().unwrap()?;
 
-            // Local channel: push to output port if possible
-            if self.output.can_push() {
-                self.output.push_data(Ok(block.clone()));
-            }
-
-            // Remote channels: collect futures for all non-local channels
             let mut futures = Vec::new();
-            for (idx, ch) in self.channels.iter().enumerate() {
-                if idx == self.local_idx && self.output.can_push() {
-                    self.output.push_data(Ok(block.clone()));
-                    continue;
+
+            for (idx, output_channel) in self.channels.iter().enumerate() {
+                if idx == self.local_pos {
+                    if self.output.is_finished() {
+                        continue;
+                    }
+
+                    if self.output.can_push() {
+                        self.output.push_data(Ok(data_block.clone()));
+                        continue;
+                    }
                 }
 
                 futures.push({
-                    let ch = ch.clone();
-                    let block = block.clone();
-                    async move { ch.add_block(block).await }
+                    let data_block = data_block.clone();
+                    let output_channel = output_channel.clone();
+                    async move { output_channel.add_block(data_block).await }
                 });
             }
 
             if !futures.is_empty() {
                 let joined = Box::pin(futures::future::try_join_all(futures));
-                let handle = self.tasks.spawn(self.id, joined);
-                if !handle.is_done() {
+                let mut handle = self.tasks.spawn(self.id, joined);
+                // TODO:
+                if matches!(handle.poll(false), Poll::Pending) {
                     self.handle = Some(handle);
+                    return Ok(Event::NeedConsume);
                 }
             }
 
-            return Ok(Event::NeedConsume);
+            if !self.output.is_finished() {
+                return Ok(Event::NeedConsume);
+            }
+        }
+
+        // Input finished → close channels
+        if self.input.is_finished() {
+            self.output.finish();
+
+            for ch in &self.channels {
+                ch.close();
+            }
+
+            return Ok(Event::Finished);
         }
 
         self.input.set_need_data();
         Ok(Event::NeedData)
+    }
+
+    fn set_id(&mut self, id: NodeIndex) {
+        self.id = id;
     }
 }

@@ -52,6 +52,12 @@ impl ReceiversStream {
     }
 }
 
+impl Drop for ReceiversStream {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
 impl Stream for ReceiversStream {
     type Item = Result<DataBlock>;
 

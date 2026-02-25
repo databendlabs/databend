@@ -23,14 +23,14 @@ use arrow_flight::FlightData;
 use async_channel::Sender;
 use async_channel::TrySendError;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
 use futures::StreamExt;
 use futures::future::Either;
 use futures::future::select;
+use futures::stream::BoxStream;
 use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 use tonic::Status;
-use tonic::Streaming;
 
 /// Response from a ping-pong exchange.
 pub struct PingPongResponse {
@@ -58,7 +58,7 @@ pub struct PingPongExchangeInner {
 pub struct PingPongExchange {
     pub num_threads: usize,
     inner: Arc<PingPongExchangeInner>,
-    response_stream: Mutex<Option<Streaming<FlightData>>>,
+    response_stream: Mutex<Option<BoxStream<'static, Result<FlightData, Status>>>>,
 }
 
 impl Drop for PingPongExchange {
@@ -118,6 +118,14 @@ impl PingPongExchange {
         send_tx: async_channel::Sender<FlightData>,
         response_stream: tonic::Streaming<FlightData>,
     ) -> Self {
+        Self::from_stream(num_threads, send_tx, response_stream)
+    }
+
+    pub fn from_stream(
+        num_threads: usize,
+        send_tx: async_channel::Sender<FlightData>,
+        stream: impl futures::Stream<Item = Result<FlightData, Status>> + Send + 'static,
+    ) -> Self {
         let inner = Arc::new(PingPongExchangeInner {
             in_flight: AtomicBool::new(false),
             send_time: Mutex::new(None),
@@ -128,7 +136,7 @@ impl PingPongExchange {
         Self {
             inner,
             num_threads,
-            response_stream: Mutex::new(Some(response_stream)),
+            response_stream: Mutex::new(Some(Box::pin(stream))),
         }
     }
 
@@ -138,13 +146,17 @@ impl PingPongExchange {
     /// for each response received from the remote end.
     ///
     /// Returns an error if the receiver has already been started.
-    pub fn start(&self, callback: Arc<dyn PingPongCallback>) -> Result<JoinHandle<()>, Status> {
+    pub fn start(
+        &self,
+        callback: Arc<dyn PingPongCallback>,
+        runtime: &Runtime,
+    ) -> Result<JoinHandle<()>, Status> {
         let Some(mut stream) = self.response_stream.lock().take() else {
             return Err(Status::already_exists("Receiver already started"));
         };
 
         let inner = self.inner.clone();
-        Ok(GlobalIORuntime::instance().spawn(async move {
+        Ok(runtime.spawn(async move {
             let mut shutdown_fut = pin!(inner.shutdown.notified());
 
             loop {
@@ -195,5 +207,84 @@ impl PingPongExchange {
                 }
             }
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use arrow_flight::FlightData;
+    use tonic::Status;
+
+    use super::*;
+
+    fn create_mock_exchange(
+        num_threads: usize,
+    ) -> (
+        PingPongExchange,
+        async_channel::Receiver<FlightData>,
+        async_channel::Sender<Result<FlightData, Status>>,
+    ) {
+        let (send_tx, send_rx) = async_channel::bounded(1);
+        let (pong_tx, pong_rx) = async_channel::unbounded();
+        let exchange = PingPongExchange::from_stream(num_threads, send_tx, pong_rx);
+        (exchange, send_rx, pong_tx)
+    }
+
+    fn make_flight_data(len: usize) -> FlightData {
+        FlightData {
+            data_body: bytes::Bytes::from(vec![0u8; len]),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ping_pong_basic_send_recv() {
+        let (exchange, send_rx, _pong_tx) = create_mock_exchange(2);
+
+        // First send should succeed
+        assert!(exchange.try_send(make_flight_data(10)).unwrap().is_none());
+
+        // Data should arrive on send_rx
+        let received = send_rx.recv().await.unwrap();
+        assert_eq!(received.data_body.len(), 10);
+
+        // Simulate pong by clearing in_flight
+        exchange.ready_send();
+
+        // Second send should succeed
+        assert!(exchange.try_send(make_flight_data(20)).unwrap().is_none());
+        let received = send_rx.recv().await.unwrap();
+        assert_eq!(received.data_body.len(), 20);
+    }
+
+    #[tokio::test]
+    async fn test_ping_pong_in_flight_returns_data() {
+        let (exchange, send_rx, _pong_tx) = create_mock_exchange(2);
+
+        // First send succeeds
+        assert!(exchange.try_send(make_flight_data(1)).unwrap().is_none());
+
+        // Second send returns data back (in-flight)
+        let returned = exchange.try_send(make_flight_data(2)).unwrap();
+        assert!(returned.is_some());
+        assert_eq!(returned.unwrap().data_body.len(), 2);
+
+        // Drain the channel and simulate pong
+        let _ = send_rx.recv().await.unwrap();
+        exchange.ready_send();
+
+        // Now send should succeed again
+        assert!(exchange.try_send(make_flight_data(3)).unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_ping_pong_closed_returns_error() {
+        let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
+
+        // Drop the receiver to close the channel
+        drop(send_rx);
+
+        let result = exchange.try_send(make_flight_data(1));
+        assert!(result.is_err());
     }
 }

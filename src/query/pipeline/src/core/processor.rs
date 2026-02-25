@@ -28,8 +28,6 @@ use futures::future::BoxFuture;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
-use crate::core::ExecutorWaker;
-
 #[derive(Debug)]
 pub enum Event {
     NeedData,
@@ -90,10 +88,9 @@ pub trait Processor: Send {
     }
 
     /// Called after the processor's NodeIndex is assigned during graph construction.
-    /// Processors that need a `std::task::Waker` (e.g., for polling futures in
-    /// synchronous `process()`) can override this to create one via
-    /// `waker.to_waker(id, 0)`.
-    fn on_id_set(&mut self, _id: NodeIndex, _waker: &Arc<ExecutorWaker>) {}
+    /// Processors that need a `std::task::Waker` should obtain the `ExecutorWaker`
+    /// during creation (via `pipeline.get_waker()`) and use it here with the assigned id.
+    fn set_id(&mut self, _id: NodeIndex) {}
 }
 
 // To keep ProcessPtr::async_process taking &self, instead of self,
@@ -150,13 +147,7 @@ impl ProcessorPtr {
     pub unsafe fn set_id(&self, id: NodeIndex) {
         unsafe {
             *self.id.get() = id;
-        }
-    }
-
-    /// # Safety
-    pub unsafe fn on_id_set(&self, id: NodeIndex, waker: &Arc<ExecutorWaker>) {
-        unsafe {
-            (*self.inner.get()).on_id_set(id, waker);
+            (*self.inner.get()).set_id(id);
         }
     }
 
