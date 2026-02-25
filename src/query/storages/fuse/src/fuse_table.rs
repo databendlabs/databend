@@ -91,6 +91,7 @@ use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::VariantEncoding;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
@@ -347,7 +348,20 @@ impl FuseTable {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
+            variant_encoding: VariantEncoding::default(),
         }
+    }
+
+    pub fn get_write_settings_with_variant(&self, ctx: &dyn TableContext) -> WriteSettings {
+        let mut settings = self.get_write_settings();
+        let enable_variant_shredding = ctx
+            .get_settings()
+            .get_enable_experimental_variant_shredding()
+            .unwrap_or_default();
+        if enable_variant_shredding && matches!(self.storage_format, FuseStorageFormat::Parquet) {
+            settings.variant_encoding = VariantEncoding::ParquetVariant;
+        }
+        settings
     }
 
     /// Get max page size.

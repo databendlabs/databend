@@ -117,6 +117,18 @@ static MERGE_INTO_MATCHED_OPERATION_MILLISECONDS: LazyLock<Histogram> = LazyLock
     register_histogram_in_milliseconds("merge_into_matched_operation_milliseconds")
 });
 
+// Variant shredding metrics.
+static VARIANT_SHREDDING_INLINE_COLUMNS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("variant_shredding_inline_columns"));
+static VARIANT_SHREDDING_INLINE_VALUE_ALL_NULL_COLUMNS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("variant_shredding_inline_value_all_null_columns"));
+static VARIANT_SHREDDING_READ_TYPED_VALUE_HITS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("variant_shredding_read_typed_value_hits"));
+static VARIANT_SHREDDING_READ_TYPED_VALUE_MISSES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("variant_shredding_read_typed_value_misses"));
+static VARIANT_SHREDDING_UNSHRED_MILLISECONDS: LazyLock<Histogram> =
+    LazyLock::new(|| register_histogram_in_milliseconds("variant_shredding_unshred_milliseconds"));
+
 // Fuse engine metrics.
 static COMMIT_MUTATION_UNRESOLVABLE_CONFLICT: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_commit_mutation_unresolvable_conflict"));
@@ -936,4 +948,24 @@ pub fn metrics_inc_block_virtual_column_write_bytes(c: u64) {
 
 pub fn metrics_inc_block_virtual_column_write_milliseconds(c: u64) {
     BLOCK_VIRTUAL_COLUMN_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_variant_shredding_inline_columns(c: u64) {
+    VARIANT_SHREDDING_INLINE_COLUMNS.inc_by(c);
+}
+
+pub fn metrics_inc_variant_shredding_inline_value_all_null_columns(c: u64) {
+    VARIANT_SHREDDING_INLINE_VALUE_ALL_NULL_COLUMNS.inc_by(c);
+}
+
+pub fn metrics_inc_variant_shredding_read_typed_value_hits(c: u64) {
+    VARIANT_SHREDDING_READ_TYPED_VALUE_HITS.inc_by(c);
+}
+
+pub fn metrics_inc_variant_shredding_read_typed_value_misses(c: u64) {
+    VARIANT_SHREDDING_READ_TYPED_VALUE_MISSES.inc_by(c);
+}
+
+pub fn metrics_inc_variant_shredding_unshred_milliseconds(c: u64) {
+    VARIANT_SHREDDING_UNSHRED_MILLISECONDS.observe(c as f64);
 }
