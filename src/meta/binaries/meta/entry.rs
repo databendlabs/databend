@@ -237,7 +237,7 @@ async fn do_register<RT: RuntimeApi>(
     println!("Register this node: {{{}}}", node);
     println!();
 
-    let ent = LogEntry::new(Cmd::AddNode {
+    let mut ent = LogEntry::new(Cmd::AddNode {
         node_id,
         node,
         overriding: true,
@@ -245,7 +245,14 @@ async fn do_register<RT: RuntimeApi>(
     info!("Raft log entry for updating node: {:?}", ent);
 
     if meta_handle.id == leader_id {
-        // We are the leader: write directly via raft to avoid stale endpoint lookup
+        // We are the leader: write directly via raft to avoid stale endpoint lookup.
+        // Set timestamp like MetaLeader::write() does.
+        ent.time_ms = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        );
         info!("This node is the leader, writing directly");
         meta_handle
             .request(move |meta_node| {
