@@ -638,6 +638,21 @@ impl Pipeline {
     }
 }
 
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        drop_guard(move || {
+            // An error may have occurred before the executor was created.
+            let cause = Err(ErrorCode::Internal(
+                "Pipeline illegal state: not successfully shutdown.",
+            ));
+
+            let _ = self
+                .on_finished_chain
+                .apply(ExecutionInfo::create(cause, HashMap::new()));
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -681,20 +696,5 @@ mod tests {
         right_waker.wake(NodeIndex::new(7), 0)?;
         assert_eq!(wake_count.load(Ordering::SeqCst), 1);
         Ok(())
-    }
-}
-
-impl Drop for Pipeline {
-    fn drop(&mut self) {
-        drop_guard(move || {
-            // An error may have occurred before the executor was created.
-            let cause = Err(ErrorCode::Internal(
-                "Pipeline illegal state: not successfully shutdown.",
-            ));
-
-            let _ = self
-                .on_finished_chain
-                .apply(ExecutionInfo::create(cause, HashMap::new()));
-        })
     }
 }
