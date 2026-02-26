@@ -29,10 +29,8 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use futures::StreamExt;
 use petgraph::graph::NodeIndex;
 
-use super::receivers_stream::ReceiversStream;
 use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
@@ -43,22 +41,23 @@ pub struct BroadcastRecvTransform {
 
     id: NodeIndex,
     tasks: SyncTaskSet,
-    data_stream: Option<ReceiversStream>,
-    handle: Option<SyncTaskHandle<'static, (ReceiversStream, Option<Result<DataBlock>>)>>,
+    receiver: Arc<dyn InboundChannel>,
+    handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
 }
 
 impl BroadcastRecvTransform {
     pub fn create_item(
-        receivers: Vec<Arc<dyn InboundChannel>>,
+        worker_id: usize,
+        receiver: Arc<dyn InboundChannel>,
         waker: Arc<ExecutorWaker>,
     ) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
         let processor = ProcessorPtr::create(Box::new(Self {
+            receiver,
             input: input.clone(),
             output: output.clone(),
-            tasks: SyncTaskSet::new(waker),
-            data_stream: Some(ReceiversStream::new(receivers)),
+            tasks: SyncTaskSet::new(worker_id, waker),
 
             handle: None,
             id: Default::default(),
@@ -78,10 +77,10 @@ impl Processor for BroadcastRecvTransform {
     }
 
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        log::info!("event_with_cause {:?}, {:?}", self.id, cause);
         if self.output.is_finished() {
             self.input.finish();
-            drop(self.handle.take());
-            drop(self.data_stream.take());
+            self.receiver.close();
 
             return Ok(Event::Finished);
         }
@@ -90,49 +89,43 @@ impl Processor for BroadcastRecvTransform {
             return Ok(Event::NeedConsume);
         }
 
+        if self.handle.is_none() && !self.receiver.is_closed() {
+            let receiver = self.receiver.clone();
+            let recv_fut = Box::pin(async move { receiver.recv().await });
+            self.handle = Some(self.tasks.spawn(self.id, recv_fut));
+        }
+
+        if let Some(mut handle) = self.handle.take() {
+            match handle.poll(matches!(cause, EventCause::Other)) {
+                Poll::Ready(Ok(None)) => {
+                    if self.input.is_finished() {
+                        self.output.finish();
+                        return Ok(Event::Finished);
+                    }
+                }
+                Poll::Ready(Ok(Some(data_block))) => {
+                    self.output.push_data(Ok(data_block));
+                    return Ok(Event::NeedConsume);
+                }
+                Poll::Ready(Err(cause)) => {
+                    self.receiver.close();
+                    return Err(cause);
+                }
+                Poll::Pending => {
+                    self.handle = Some(handle);
+                }
+            };
+        }
+
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(mut stream) = self.data_stream.take() {
-            self.handle = Some(self.tasks.spawn(
-                self.id,
-                Box::pin(async move {
-                    let data_block = stream.next().await;
-                    (stream, data_block)
-                }),
-            ));
-        }
-
-        if let Some(mut handle) = self.handle.take() {
-            return match handle.poll(matches!(cause, EventCause::Other)) {
-                Poll::Ready((_, None)) => {
-                    if self.input.is_finished() {
-                        self.output.finish();
-                        return Ok(Event::Finished);
-                    }
-
-                    self.input.set_need_data();
-                    Ok(Event::NeedData)
-                }
-                Poll::Ready((stream, Some(data_block))) => {
-                    self.data_stream = Some(stream);
-                    self.output.push_data(Ok(data_block?));
-                    Ok(Event::NeedConsume)
-                }
-                Poll::Pending => {
-                    self.handle = Some(handle);
-                    self.input.set_need_data();
-
-                    Ok(Event::NeedData)
-                }
-            };
-        }
-
-        if self.input.is_finished() {
+        if self.input.is_finished() && self.handle.is_none() {
             self.output.finish();
+            self.receiver.close();
             return Ok(Event::Finished);
         }
 

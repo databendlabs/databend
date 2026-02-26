@@ -76,7 +76,6 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
-use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::NetworkInboundChannelSet;
 use crate::servers::flight::v1::network::NetworkInboundSender;
 use crate::servers::flight::v1::network::PingPongExchange;
@@ -639,11 +638,11 @@ impl DataExchangeManager {
     ///
     /// Returns one `Arc<NetworkInboundReceiver>` per tid, for building
     /// `ThreadChannelReader` processors in the pipeline.
-    pub fn get_exchange_source_channel(
+    pub fn get_exchange_channel_set(
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<Vec<Arc<dyn InboundChannel>>> {
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -657,15 +656,7 @@ impl DataExchangeManager {
                     "NetworkInboundChannelSet not found for channel {}",
                     channel_id
                 ))),
-                Some(channel_set) => {
-                    let mut source_channels = Vec::with_capacity(channel_set.channels.len());
-
-                    for idx in 0..channel_set.channels.len() {
-                        source_channels.push(channel_set.create_receiver(idx));
-                    }
-
-                    Ok(source_channels)
-                }
+                Some(channel_set) => Ok(channel_set.clone()),
             },
         }
     }

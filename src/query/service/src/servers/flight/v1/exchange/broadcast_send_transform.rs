@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Broadcast send sink. Clones each input block to ALL OutboundChannels
-//! (including local). No output port — local data goes through local channels.
-
 use std::any::Any;
 use std::sync::Arc;
 use std::task::Poll;
@@ -30,6 +27,7 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::prelude::NodeIndex;
 
+use crate::servers::flight::v1::network::DummyOutboundChannel;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
@@ -47,6 +45,7 @@ pub struct BroadcastSendTransform {
 
 impl BroadcastSendTransform {
     pub fn create_item(
+        worker_id: usize,
         local_pos: usize,
         channels: Vec<Arc<dyn OutboundChannel>>,
         waker: Arc<ExecutorWaker>,
@@ -59,7 +58,7 @@ impl BroadcastSendTransform {
             local_pos,
             input: input.clone(),
             output: output.clone(),
-            tasks: SyncTaskSet::new(waker),
+            tasks: SyncTaskSet::new(worker_id, waker),
 
             handle: None,
             id: NodeIndex::default(),
@@ -127,8 +126,11 @@ impl Processor for BroadcastSendTransform {
             if !futures.is_empty() {
                 let joined = Box::pin(futures::future::try_join_all(futures));
                 let mut handle = self.tasks.spawn(self.id, joined);
-                // TODO:
-                if matches!(handle.poll(false), Poll::Pending) {
+
+                if matches!(
+                    handle.poll(matches!(cause, EventCause::Other)),
+                    Poll::Pending
+                ) {
                     self.handle = Some(handle);
                     return Ok(Event::NeedConsume);
                 }
@@ -143,8 +145,10 @@ impl Processor for BroadcastSendTransform {
         if self.input.is_finished() {
             self.output.finish();
 
-            for ch in &self.channels {
-                ch.close();
+            for idx in 0..self.channels.len() {
+                let mut closed_channel = DummyOutboundChannel::create();
+                std::mem::swap(&mut self.channels[idx], &mut closed_channel);
+                closed_channel.close();
             }
 
             return Ok(Event::Finished);
@@ -152,6 +156,17 @@ impl Processor for BroadcastSendTransform {
 
         self.input.set_need_data();
         Ok(Event::NeedData)
+    }
+
+    fn details_status(&self) -> Option<String> {
+        Some(format!(
+            "BroadcastSendTransform {} {:?}",
+            self.handle.is_some(),
+            self.channels
+                .iter()
+                .map(|x| x.is_closed())
+                .collect::<Vec<_>>()
+        ))
     }
 
     fn set_id(&mut self, id: NodeIndex) {

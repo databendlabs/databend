@@ -17,6 +17,7 @@ databend_common_tracing::register_module_tag!("[PIPELINE-EXECUTOR]");
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::Instant;
 
 use databend_common_base::runtime::ExecutorStatsSnapshot;
@@ -35,12 +36,14 @@ use databend_common_pipeline::core::FinishedCallbackChain;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanProfile;
+use databend_common_pipeline::core::WakeCallback;
 use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
 use log::warn;
 use parking_lot::Mutex;
+use petgraph::graph::NodeIndex;
 use petgraph::matrix_graph::Zero;
 
 use crate::pipelines::executor::ExecutorSettings;
@@ -196,26 +199,43 @@ impl QueryPipelineExecutor {
     fn bind_waker(self: &Arc<Self>) {
         let executor_weak = Arc::downgrade(self);
 
-        self.graph
-            .get_waker()
-            .bind(Box::new(move |processor_id, worker_id| {
-                let executor = executor_weak
+        struct QueryWakeCallback {
+            executor_weak: Weak<QueryPipelineExecutor>,
+        }
+
+        impl WakeCallback for QueryWakeCallback {
+            fn enter_future(&self) -> Result<()> {
+                let executor = self
+                    .executor_weak
+                    .upgrade()
+                    .ok_or_else(|| ErrorCode::Internal("Executor has been dropped"))?;
+                executor.workers_condvar.inc_active_async_worker();
+                Ok(())
+            }
+
+            fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()> {
+                let executor = self
+                    .executor_weak
                     .upgrade()
                     .ok_or_else(|| ErrorCode::Internal("Executor has been dropped"))?;
 
-                let task = CompletedAsyncTask {
-                    id: processor_id,
-                    worker_id,
-                    res: Ok(()),
-                    graph: executor.graph.clone(),
-                };
-
-                executor
-                    .global_tasks_queue
-                    .completed_async_task(executor.workers_condvar.clone(), task);
+                executor.global_tasks_queue.completed_async_task(
+                    executor.workers_condvar.clone(),
+                    CompletedAsyncTask {
+                        id,
+                        worker_id,
+                        res: Ok(()),
+                        graph: executor.graph.clone(),
+                    },
+                );
 
                 Ok(())
-            }));
+            }
+        }
+
+        self.graph
+            .get_waker()
+            .bind(Arc::new(QueryWakeCallback { executor_weak }));
     }
 
     #[fastrace::trace(name = "QueryPipelineExecutor::on_finished")]
@@ -420,7 +440,8 @@ impl QueryPipelineExecutor {
             while !self.global_tasks_queue.is_finished() {
                 // When there are not enough tasks, the thread will be blocked, so we need loop check.
                 while !self.global_tasks_queue.is_finished() && !context.has_task() {
-                    self.global_tasks_queue.steal_task_to_context(&mut context);
+                    self.global_tasks_queue
+                        .steal_task_to_context(&self.graph, &mut context);
                 }
 
                 while !self.global_tasks_queue.is_finished() && context.has_task() {

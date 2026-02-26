@@ -50,3 +50,5 @@ pub use processor::ProcessorPtr;
 pub use profile::PlanProfile;
 pub use profile::PlanScope;
 pub use waker::ExecutorWaker;
+pub use waker::ProxyWakeCallback;
+pub use waker::WakeCallback;

@@ -12,148 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Network inbound channel for do_exchange server side.
-//!
-//! Architecture: per tid, multiple network connections share sub-queues.
-//! The processor prioritizes consuming data from the connection with the
-//! highest memory usage to prevent congestion.
-//!
-//! ```text
-//! Connection A (quota_a) ──▶ SubQueue_A ──┐
-//! Connection B (quota_b) ──▶ SubQueue_B ──┼──▶ Processor (picks max quota)
-//! Connection C (quota_c) ──▶ SubQueue_C ──┘
-//! ```
-//!
-//! Thread safety:
-//! - No multi-atomic coordination. Each atomic is used independently.
-//! - `ConcurrentQueue`'s built-in close mechanism manages lifecycle.
-//! - Processor-side notification uses `event_listener::Event` with
-//!   try-listen-retry pattern (same as async_channel).
-//! - Network-side backpressure uses `event_listener::Event` with
-//!   try-listen-retry pattern.
-
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
 use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_schema::Schema as ArrowSchema;
-use concurrent_queue::ConcurrentQueue;
-use concurrent_queue::PopError;
+use async_channel::Receiver;
+use async_channel::Sender;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_io::prelude::BinaryRead;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
-use event_listener::Event;
-use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 
-use super::inbound_quota::ConnectionQuota;
+use super::inbound_quota::QueueItem;
 use super::inbound_quota::SubQueue;
 
-/// A single tid's inbound channel. Contains per-connection sub-queues.
-///
-/// Single consumer (one processor per tid). Multiple producers (network connections).
 pub struct NetworkInboundChannel {
-    /// Per-connection sub-queues.
-    /// Write: when connection arrives (rare, write lock).
-    /// Read: when processor pops (frequent, read lock).
-    sub_queues: RwLock<Vec<Arc<SubQueue>>>,
+    pub sender: Sender<QueueItem>,
+    pub receiver: Receiver<QueueItem>,
 
-    /// Processor-side notification event.
-    /// Processor creates a listener when queue is empty.
-    /// Network side notifies after push.
-    /// Uses try-listen-retry pattern for correctness.
-    recv_ops: Event,
+    pub sender_count: Arc<AtomicUsize>,
 }
 
 impl NetworkInboundChannel {
     pub fn create() -> Self {
+        let (tx, rx) = async_channel::unbounded();
         Self {
-            recv_ops: Event::new(),
-            sub_queues: RwLock::new(Vec::new()),
+            sender: tx,
+            receiver: rx,
+            sender_count: Arc::new(AtomicUsize::new(0)),
         }
-    }
-
-    /// Add a sub-queue for a new connection. Called from NetworkInboundSender::new.
-    pub fn add_sub_queue(&self, sq: Arc<SubQueue>) {
-        self.sub_queues.write().push(sq);
     }
 
     fn deserialize(&self, flight_data: FlightData) -> Result<DataBlock, ErrorCode> {
         deserialize_flight_data(flight_data)
     }
 
-    /// Non-blocking pop. Prioritizes the connection with highest `quota.current_bytes`.
-    ///
-    /// Single consumer guarantee: `is_empty()=false` → `pop()` succeeds
-    /// (no other consumer can steal the item).
-    pub fn try_pop(&self) -> Result<Result<DataBlock, ErrorCode>, PopError> {
-        let sub_queues = self.sub_queues.read();
-
-        loop {
-            // Find the non-empty sub-queue whose connection has the most memory
-            let mut best_idx: Option<usize> = None;
-            let mut best_bytes: usize = 0;
-
-            for (i, sq) in sub_queues.iter().enumerate() {
-                if !sq.queue.is_empty() {
-                    let bytes = sq.quota.current_bytes();
-                    if best_idx.is_none() || bytes > best_bytes {
-                        best_idx = Some(i);
-                        best_bytes = bytes;
-                    }
-                }
-            }
-
-            return match best_idx {
-                None => Err(PopError::Empty),
-                Some(best_idx) => {
-                    // Single consumer: is_empty()=false guarantees pop() succeeds
-                    // (unless queue was closed between check and pop, which is fine)
-                    return match sub_queues[best_idx].queue.pop() {
-                        Ok(item) => {
-                            sub_queues[best_idx].quota.release(item.size);
-                            Ok(self.deserialize(strip_tid(item.data)))
-                        }
-                        Err(PopError::Empty) => {
-                            continue;
-                        }
-                        Err(PopError::Closed) => {
-                            if !Self::all_closed(&sub_queues) {
-                                continue;
-                            }
-
-                            Err(PopError::Closed)
-                        }
-                    };
-                }
-            };
-        }
-    }
-
-    fn all_closed(sub_queues: &[Arc<SubQueue>]) -> bool {
-        sub_queues.iter().all(|sq| sq.queue.is_closed())
-    }
-
-    /// Close from receiver side (e.g., limit operator finished early).
-    pub fn close_by_receiver(&self) {
-        let sub_queues = self.sub_queues.read();
-        for sq in sub_queues.iter() {
-            sq.queue.close();
-            sq.quota.send_ops.notify(usize::MAX);
+    pub async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
+        if let Ok(item) = self.receiver.try_recv() {
+            return Ok(Some(match item {
+                QueueItem::LocalData(v) => v.into_data(),
+                QueueItem::RemoteData(r) => self.deserialize(strip_tid(r.into_data()))?,
+            }));
         }
 
-        self.recv_ops.notify(usize::MAX);
-    }
-
-    pub fn is_closed(&self) -> bool {
-        let sub_queues = self.sub_queues.read();
-        Self::all_closed(&sub_queues)
+        match self.receiver.recv().await {
+            Err(_) => Ok(None),
+            Ok(item) => Ok(Some(match item {
+                QueueItem::LocalData(v) => v.into_data(),
+                QueueItem::RemoteData(r) => self.deserialize(strip_tid(r.into_data()))?,
+            })),
+        }
     }
 }
 
@@ -183,30 +97,30 @@ impl NetworkInboundChannelSet {
 pub struct NetworkInboundSender {
     /// This connection's sub-queue in each tid's NetworkInboundChannel.
     sub_queues: Vec<Arc<SubQueue>>,
-    /// Reference to channels for notification.
-    channels: Arc<Vec<Arc<NetworkInboundChannel>>>,
 }
 
 impl NetworkInboundSender {
     /// Create a new sender for a connection.
     /// Adds a sub-queue to each NetworkInboundChannel for this connection.
     pub fn new(channel_set: &NetworkInboundChannelSet, max_bytes_per_connection: usize) -> Self {
-        let quota = Arc::new(ConnectionQuota::new(max_bytes_per_connection));
+        let semaphore = Arc::new(Semaphore::new(max_bytes_per_connection));
         let mut sub_queues = Vec::with_capacity(channel_set.channels.len());
 
         for channel in channel_set.channels.iter() {
-            let sq = Arc::new(SubQueue {
-                queue: ConcurrentQueue::unbounded(),
-                quota: quota.clone(),
+            channel.sender_count.fetch_add(1, Ordering::AcqRel);
+
+            let sub_queue = Arc::new(SubQueue {
+                max_bytes_per_connection,
+                sender: channel.sender.clone(),
+                receiver: channel.receiver.clone(),
+                semaphore: semaphore.clone(),
+                sender_count: channel.sender_count.clone(),
             });
-            channel.add_sub_queue(sq.clone());
-            sub_queues.push(sq);
+
+            sub_queues.push(sub_queue);
         }
 
-        Self {
-            sub_queues,
-            channels: channel_set.channels.clone(),
-        }
+        Self { sub_queues }
     }
 
     /// Add data to the inbound channel.
@@ -219,10 +133,7 @@ impl NetworkInboundSender {
     pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
         let tid = extract_tid(&data);
 
-        match self.sub_queues[tid]
-            .send(data, &self.channels[tid].recv_ops)
-            .await
-        {
+        match self.sub_queues[tid].add_data(data).await {
             Ok(()) => Ok(()),
             Err(()) => match self.all_receivers_closed() {
                 true => Err(()),
@@ -233,21 +144,16 @@ impl NetworkInboundSender {
 
     /// Check if all channels are closed by receivers.
     pub fn all_receivers_closed(&self) -> bool {
-        self.sub_queues.iter().all(|q| q.queue.is_closed())
+        self.sub_queues.iter().all(|q| q.sender.is_closed())
     }
 }
 
 impl Drop for NetworkInboundSender {
     fn drop(&mut self) {
-        // Close this connection's sub-queues
-        for sq in &self.sub_queues {
-            sq.queue.close();
-            sq.quota.send_ops.notify(usize::MAX);
-        }
-
-        // Notify all processors so they can detect finished state
-        for channel in self.channels.iter() {
-            channel.recv_ops.notify(usize::MAX);
+        for sub_queue in &self.sub_queues {
+            if sub_queue.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
+                sub_queue.sender.close();
+            }
         }
     }
 }
@@ -262,9 +168,6 @@ pub trait InboundChannel: Send + Sync {
     async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode>;
 }
 
-/// Processor-side handle, bound to a specific tid.
-///
-/// When dropped, closes the channel from receiver side.
 pub struct NetworkInboundReceiver {
     channel: Arc<NetworkInboundChannel>,
 }
@@ -278,80 +181,17 @@ impl NetworkInboundReceiver {
 #[async_trait::async_trait]
 impl InboundChannel for NetworkInboundReceiver {
     fn close(&self) {
-        self.channel.close_by_receiver();
+        self.channel.receiver.close();
+
+        while self.channel.receiver.try_recv().is_ok() {}
     }
 
     fn is_closed(&self) -> bool {
-        self.channel.is_closed()
+        self.channel.receiver.is_closed()
     }
 
     async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
-        let future = RecvFuture {
-            channel: self.channel.clone(),
-            listener: None,
-        };
-        match future.await {
-            Some(Ok(block)) => Ok(Some(block)),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }
-    }
-}
-
-impl Drop for NetworkInboundReceiver {
-    fn drop(&mut self) {
-        self.channel.close_by_receiver();
-    }
-}
-
-/// Future that receives one item from a `NetworkInboundChannel`.
-///
-/// Encapsulates the try-listen-retry pattern (same as async_channel's `Recv`):
-/// 1. Try pop → if data or finished, return Ready
-/// 2. If no listener, create one and continue (retry)
-/// 3. Poll listener → if Pending, return Pending; if Ready, loop back to 1
-///
-/// This future is `Unpin` because all fields are either `Arc` or `Option<Pin<Box<...>>>`.
-struct RecvFuture {
-    channel: Arc<NetworkInboundChannel>,
-    listener: Option<Pin<Box<event_listener::EventListener>>>,
-}
-
-impl Future for RecvFuture {
-    type Output = Option<Result<DataBlock, ErrorCode>>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-
-        loop {
-            // Try pop (handles both Data and Finished)
-            match this.channel.try_pop() {
-                Err(PopError::Empty) => {}
-                Err(PopError::Closed) => {
-                    return Poll::Ready(None);
-                }
-                Ok(flight_data) => {
-                    this.listener = None;
-                    return Poll::Ready(Some(flight_data));
-                }
-            }
-
-            // Create listener if we don't have one, then retry
-            if this.listener.is_none() {
-                this.listener = Some(Box::pin(this.channel.recv_ops.listen()));
-                // Continue to retry (catches race between try_pop and listen)
-                continue;
-            }
-
-            // Poll the listener
-            match this.listener.as_mut().unwrap().as_mut().poll(cx) {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(()) => {
-                    this.listener = None;
-                    // Notified, loop back to try_pop
-                }
-            }
-        }
+        self.channel.recv().await
     }
 }
 

@@ -99,12 +99,16 @@ impl Deref for FlaggedWaker {
 /// Synchronous task scheduler. Wraps an `ExecutorWaker` and provides `spawn`
 /// to create [`SyncTaskHandle`]s that can be polled from `event()`.
 pub struct SyncTaskSet {
+    worker_id: usize,
     executor_waker: Arc<ExecutorWaker>,
 }
 
 impl SyncTaskSet {
-    pub fn new(executor_waker: Arc<ExecutorWaker>) -> Self {
-        Self { executor_waker }
+    pub fn new(worker_id: usize, executor_waker: Arc<ExecutorWaker>) -> Self {
+        Self {
+            worker_id,
+            executor_waker,
+        }
     }
 
     /// Spawn an async future, returning a [`SyncTaskHandle`].
@@ -112,7 +116,7 @@ impl SyncTaskSet {
     /// The future is polled once immediately. If it completes, the value
     /// is stored in the handle. Otherwise the future is stored for later polling.
     pub fn spawn<'a, T>(&self, id: NodeIndex, future: BoxFuture<'a, T>) -> SyncTaskHandle<'a, T> {
-        let waker = FlaggedWaker::create(self.executor_waker.to_waker(id, 0));
+        let waker = self.executor_waker.to_waker(id, self.worker_id);
         let mut future = future;
         let mut cx = Context::from_waker(&waker);
         match Pin::new(&mut future).poll(&mut cx) {
@@ -133,7 +137,7 @@ impl SyncTaskSet {
 /// Handle for a spawned async task. Held as `Option<SyncTaskHandle<T>>` in a
 /// processor and polled from `event()`.
 pub struct SyncTaskHandle<'a, T> {
-    waker: FlaggedWaker,
+    waker: Waker,
     future: Option<BoxFuture<'a, T>>,
     value: Option<T>,
 }
@@ -147,10 +151,10 @@ impl<'a, T> SyncTaskHandle<'a, T> {
     /// - Returns `Poll::Pending` when the future is still in progress.
     ///
     /// Panics if called after the value has already been consumed.
-    pub fn poll(&mut self, reset: bool) -> Poll<T> {
-        if reset {
-            self.waker.reset();
-        }
+    pub fn poll(&mut self, _reset: bool) -> Poll<T> {
+        // if reset {
+        //     self.waker.reset();
+        // }
 
         if let Some(value) = self.value.take() {
             return Poll::Ready(value);

@@ -253,6 +253,27 @@ impl OutboundChannel for BroadcastChannel {
     }
 }
 
+pub struct DummyOutboundChannel;
+
+impl DummyOutboundChannel {
+    pub fn create() -> Arc<dyn OutboundChannel> {
+        Arc::new(Self)
+    }
+}
+
+#[async_trait::async_trait]
+impl OutboundChannel for DummyOutboundChannel {
+    fn close(&self) {}
+
+    fn is_closed(&self) -> bool {
+        true
+    }
+
+    async fn add_block(&self, _block: DataBlock) -> Result<()> {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

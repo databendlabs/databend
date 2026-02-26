@@ -131,16 +131,25 @@ impl ExchangeTransform {
         let compression = ctx.get_settings().get_query_flight_compression()?;
         let waker = pipeline.get_waker();
 
-        let max_bytes = 20 * 1024 * 1024;
-        let (local_outbound, local_inbound) = create_local_channels(local_threads, max_bytes);
-        let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
-
         pipeline.resize(local_threads, false)?;
+
+        let query_id = &params.query_id;
+        let exchange_id = &params.exchange_id;
+        let exchange_manager = DataExchangeManager::instance();
+
+        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+
+        assert_eq!(channel_set.channels.len(), local_threads);
+
+        let max_bytes = 20 * 1024 * 1024;
+        let local_outbound = create_local_channels(&channel_set, max_bytes);
+        let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
 
         let mut items = Vec::with_capacity(local_threads);
 
-        for _idx in 0..local_threads {
+        for idx in 0..local_threads {
             items.push(BroadcastSendTransform::create_item(
+                idx,
                 local_pos,
                 channels.clone(),
                 waker.clone(),
@@ -149,19 +158,11 @@ impl ExchangeTransform {
 
         pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
 
-        let query_id = &params.query_id;
-        let exchange_id = &params.exchange_id;
-        let exchange_manager = DataExchangeManager::instance();
-
-        let remotes = exchange_manager.get_exchange_source_channel(query_id, exchange_id)?;
-
-        assert_eq!(remotes.len(), local_threads);
-        assert_eq!(local_inbound.len(), local_threads);
-
         let mut items = Vec::with_capacity(local_threads);
-        for (remote, local) in remotes.into_iter().zip(local_inbound.into_iter()) {
+        for idx in 0..channel_set.channels.len() {
             items.push(BroadcastRecvTransform::create_item(
-                vec![remote, local],
+                idx,
+                channel_set.create_receiver(idx),
                 waker.clone(),
             ));
         }

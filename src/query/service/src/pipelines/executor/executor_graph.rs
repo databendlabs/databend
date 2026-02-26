@@ -46,6 +46,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::ProxyWakeCallback;
 use databend_common_pipeline::core::port::connect;
 use databend_common_pipeline::core::port_trigger::DirectedEdge;
 use databend_common_pipeline::core::port_trigger::UpdateList;
@@ -231,10 +232,9 @@ impl ExecutingGraph {
 
         // Proxy each pipeline's waker to the graph_waker
         for pipeline in &pipelines {
-            let proxy_target = graph_waker.clone();
-            pipeline
-                .get_waker()
-                .bind(Box::new(move |pid, wid| proxy_target.wake(pid, wid)));
+            let proxy_target = ProxyWakeCallback::create(graph_waker.clone());
+
+            pipeline.get_waker().bind(proxy_target);
         }
 
         let mut graph = StableGraph::new();

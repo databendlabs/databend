@@ -21,7 +21,31 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use petgraph::stable_graph::NodeIndex;
 
-type WakeCallback = Box<dyn Fn(NodeIndex, usize) -> Result<()> + Send + Sync>;
+// type WakeCallback = Box<dyn Fn(NodeIndex, usize) -> Result<()> + Send + Sync>;
+
+pub trait WakeCallback: Send + Sync {
+    fn enter_future(&self) -> Result<()>;
+
+    fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()>;
+}
+
+pub struct ProxyWakeCallback(Arc<dyn WakeCallback>);
+
+impl ProxyWakeCallback {
+    pub fn create(callback: Arc<dyn WakeCallback>) -> Arc<dyn WakeCallback> {
+        Arc::new(ProxyWakeCallback(callback))
+    }
+}
+
+impl WakeCallback for ProxyWakeCallback {
+    fn enter_future(&self) -> Result<()> {
+        self.0.enter_future()
+    }
+
+    fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()> {
+        self.0.wake(id, worker_id)
+    }
+}
 
 /// Waker for waking up processors from outside the executor.
 ///
@@ -34,7 +58,7 @@ type WakeCallback = Box<dyn Fn(NodeIndex, usize) -> Result<()> + Send + Sync>;
 /// # Note
 /// The callback passed to bind should not hold any strong references to avoid circular references
 pub struct ExecutorWaker {
-    callback: OnceLock<WakeCallback>,
+    callback: OnceLock<Arc<dyn WakeCallback>>,
 }
 
 impl ExecutorWaker {
@@ -48,25 +72,8 @@ impl ExecutorWaker {
     ///
     /// # Note
     /// The callback should use weak references internally to avoid circular references
-    pub fn bind(&self, callback: WakeCallback) {
+    pub fn bind(&self, callback: Arc<dyn WakeCallback>) {
         let _ = self.callback.set(callback);
-    }
-
-    /// Wake up the specified processor
-    ///
-    /// # Arguments
-    /// * `processor_id` - The NodeIndex of the processor in the graph
-    /// * `expect_worker_id` - The expected worker id to handle this task
-    ///
-    /// # Errors
-    /// - If the waker is not bound (executor not created yet)
-    /// - If the executor has been dropped (weak reference upgrade failed)
-    #[inline]
-    pub fn wake(&self, processor_id: NodeIndex, expect_worker_id: usize) -> Result<()> {
-        match self.callback.get() {
-            Some(cb) => cb(processor_id, expect_worker_id),
-            None => Err(ErrorCode::Internal("ExecutorWaker is not bound")),
-        }
     }
 
     /// Check if the waker is bound
@@ -86,6 +93,22 @@ impl ExecutorWaker {
     }
 }
 
+impl WakeCallback for ExecutorWaker {
+    fn enter_future(&self) -> Result<()> {
+        match self.callback.get() {
+            Some(cb) => cb.enter_future(),
+            None => Err(ErrorCode::Internal("ExecutorWaker is not bound")),
+        }
+    }
+
+    fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()> {
+        match self.callback.get() {
+            Some(cb) => cb.wake(id, worker_id),
+            None => Err(ErrorCode::Internal("ExecutorWaker is not bound")),
+        }
+    }
+}
+
 struct ExecutorWakerAdapter {
     executor_waker: Arc<ExecutorWaker>,
     processor_id: NodeIndex,
@@ -94,6 +117,8 @@ struct ExecutorWakerAdapter {
 
 impl Wake for ExecutorWakerAdapter {
     fn wake(self: Arc<Self>) {
-        let _ = self.executor_waker.wake(self.processor_id, self.worker_id);
+        if let Err(cause) = self.executor_waker.wake(self.processor_id, self.worker_id) {
+            log::error!("PipelineExecutor waker failed: {:?}", cause);
+        }
     }
 }
