@@ -1290,3 +1290,13 @@ error:
                 [ copyOptions ]`
 
 
+---------- Input ----------
+/*SELECT * FROM t; /* old query */more code here*/ select 1;
+---------- Output ---------
+error: 
+  --> SQL:1:35
+  |
+1 | /*SELECT * FROM t; /* old query */more code here*/ select 1;
+  |                                   ^^^^ expecting SQL statement
+
+

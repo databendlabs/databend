@@ -26326,6 +26326,198 @@ Query(
 
 
 ---------- Input ----------
+/**/ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            5..13,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    5..13,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                12..13,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+/***不正常，注释后面多了个星号**/ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            47..55,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    47..55,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                54..55,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+/* outer /* inner */ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            21..29,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    21..29,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                28..29,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+/* outer /* inner **/ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            22..30,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    22..30,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                29..30,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 REMOVE @t;
 ---------- Output ---------
 REMOVE @t

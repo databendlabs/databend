@@ -18,6 +18,7 @@ fastrace = { workspace = true }
 indent = { workspace = true }
 itertools = { workspace = true }
 logos = { workspace = true }
+memchr = { workspace = true }
 nom = { workspace = true }
 nom-rule = { workspace = true }
 ordered-float = { workspace = true }

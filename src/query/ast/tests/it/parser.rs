@@ -862,6 +862,10 @@ SELECT * from s;"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
+        r#"/**/ select 1;"#,
+        r#"/***不正常，注释后面多了个星号**/ select 1;"#,
+        r#"/* outer /* inner */ select 1;"#,
+        r#"/* outer /* inner **/ select 1;"#,
         r#"REMOVE @t;"#,
         r#"SELECT sum(d) OVER (w) FROM e;"#,
         r#"SELECT first_value(d) OVER (w) FROM e;"#,
@@ -1194,6 +1198,7 @@ fn test_statement_error() {
             END;
             $$;"#,
         r#"copy into t1 from (select a from @data/not_exists where a = 1)"#,
+        "/*SELECT * FROM t; /* old query */more code here*/ select 1;",
     ];
 
     for case in cases {
