@@ -74,6 +74,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
+use opendal::ErrorKind;
 use opendal::Operator;
 
 // Refresh virtual columns in two phases:
@@ -408,9 +409,10 @@ pub async fn do_vacuum_virtual_column(
         return Ok(0);
     };
 
-    let (mut mutation_entries, rebuilt_virtual_schema, legacy_virtual_files) =
+    let (mut mutation_entries, rebuilt_virtual_schema) =
         prepare_vacuum_virtual_column_mutations(fuse_table, latest_snapshot.clone()).await?;
 
+    let mut removed_files = mutation_entries.len() as u64;
     let schema_changed = fuse_table.get_table_info().meta.virtual_schema != rebuilt_virtual_schema;
     let need_commit = !mutation_entries.is_empty() || schema_changed;
 
@@ -465,22 +467,14 @@ pub async fn do_vacuum_virtual_column(
         execute_complete_pipeline(ctx.clone(), build_res)?;
     }
 
-    let mut removed_files = 0_u64;
-
-    if !legacy_virtual_files.is_empty() {
-        let op = Files::create(ctx.clone(), fuse_table.get_operator());
-        let files_to_remove = legacy_virtual_files.iter().cloned().collect::<Vec<_>>();
-        op.remove_file_in_batch(&files_to_remove).await?;
-        removed_files += files_to_remove.len() as u64;
-    }
+    remove_legacy_virtual_column_files(fuse_table).await?;
 
     let orphan_removed = if need_commit {
         let latest_table = fuse_table.refresh(ctx.as_ref()).await?;
         let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
-        remove_orphan_virtual_column_files(ctx.clone(), latest_fuse_table, &legacy_virtual_files)
-            .await?
+        remove_orphan_virtual_column_files(ctx.clone(), latest_fuse_table).await?
     } else {
-        remove_orphan_virtual_column_files(ctx.clone(), fuse_table, &legacy_virtual_files).await?
+        remove_orphan_virtual_column_files(ctx.clone(), fuse_table).await?
     };
     removed_files += orphan_removed;
 
@@ -497,17 +491,12 @@ pub async fn do_vacuum_virtual_column(
 async fn prepare_vacuum_virtual_column_mutations(
     fuse_table: &FuseTable,
     latest_snapshot: Arc<TableSnapshot>,
-) -> Result<(
-    Vec<MutationLogEntry>,
-    Option<VirtualDataSchema>,
-    HashSet<String>,
-)> {
+) -> Result<(Vec<MutationLogEntry>, Option<VirtualDataSchema>)> {
     let table_schema = fuse_table.schema();
     let segment_reader =
         MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
 
     let mut mutation_entries = Vec::new();
-    let mut legacy_virtual_files = HashSet::new();
     let mut referenced_column_ids = HashSet::new();
     let mut number_of_remaining_virtual_blocks = 0_u64;
 
@@ -535,39 +524,34 @@ async fn prepare_vacuum_virtual_column_mutations(
             }
 
             if TableMetaLocationGenerator::is_legacy_virtual_block_location(virtual_location) {
-                legacy_virtual_files.insert(virtual_location.clone());
-
                 let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
                 new_block_meta.virtual_block_meta = None;
 
-                if new_block_meta != *block_meta {
-                    if segment_stats.is_none() {
-                        segment_stats = match additional_stats_loc.clone() {
-                            Some(loc) => Some(
-                                read_segment_stats(fuse_table.get_operator_ref().clone(), loc)
-                                    .await?,
-                            ),
-                            None => None,
-                        };
-                    }
-
-                    let column_hlls = segment_stats
-                        .as_ref()
-                        .and_then(|v| v.block_hlls.get(block_idx))
-                        .cloned();
-
-                    mutation_entries.push(MutationLogEntry::ReplacedBlock {
-                        index: BlockMetaIndex {
-                            segment_idx,
-                            block_idx,
-                        },
-                        block_meta: Arc::new(ExtendedBlockMeta {
-                            block_meta: new_block_meta,
-                            draft_virtual_block_meta: None,
-                            column_hlls: column_hlls.map(BlockHLLState::Serialized),
-                        }),
-                    });
+                if segment_stats.is_none() {
+                    segment_stats = match additional_stats_loc.clone() {
+                        Some(loc) => Some(
+                            read_segment_stats(fuse_table.get_operator_ref().clone(), loc).await?,
+                        ),
+                        None => None,
+                    };
                 }
+
+                let column_hlls = segment_stats
+                    .as_ref()
+                    .and_then(|v| v.block_hlls.get(block_idx))
+                    .cloned();
+
+                mutation_entries.push(MutationLogEntry::ReplacedBlock {
+                    index: BlockMetaIndex {
+                        segment_idx,
+                        block_idx,
+                    },
+                    block_meta: Arc::new(ExtendedBlockMeta {
+                        block_meta: new_block_meta,
+                        draft_virtual_block_meta: None,
+                        column_hlls: column_hlls.map(BlockHLLState::Serialized),
+                    }),
+                });
 
                 continue;
             }
@@ -585,11 +569,7 @@ async fn prepare_vacuum_virtual_column_mutations(
         number_of_remaining_virtual_blocks,
     );
 
-    Ok((
-        mutation_entries,
-        rebuilt_virtual_schema,
-        legacy_virtual_files,
-    ))
+    Ok((mutation_entries, rebuilt_virtual_schema))
 }
 
 fn prune_virtual_schema(
@@ -640,10 +620,28 @@ fn execute_complete_pipeline(
 }
 
 #[async_backtrace::framed]
+async fn remove_legacy_virtual_column_files(fuse_table: &FuseTable) -> Result<()> {
+    let operator = fuse_table.get_operator();
+    let table_data_prefix = fuse_table
+        .meta_location_generator()
+        .prefix()
+        .trim_start_matches('/');
+
+    // remove legacy virtual column dir
+    let v1_prefix = format!(
+        "{}/{}/",
+        table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1
+    );
+    if operator.exists(&v1_prefix).await? {
+        operator.remove_all(&v1_prefix).await?;
+    }
+    Ok(())
+}
+
+#[async_backtrace::framed]
 async fn remove_orphan_virtual_column_files(
     ctx: Arc<dyn TableContext>,
     fuse_table: &FuseTable,
-    ignored_locations: &HashSet<String>,
 ) -> Result<u64> {
     let Some(snapshot_referenced_segments) = fuse_table
         .get_snapshot_referenced_segments(ctx.clone(), |status| ctx.set_status_info(&status))
@@ -677,19 +675,16 @@ async fn remove_orphan_virtual_column_files(
     }
 
     let mut all_virtual_locations = Vec::new();
-    collect_virtual_locations(
-        fuse_table,
-        &mut all_virtual_locations,
-        fuse_table
-            .meta_location_generator()
-            .prefix()
-            .trim_start_matches('/'),
-    )
-    .await?;
+    let operator = fuse_table.get_operator();
+    let table_data_prefix = fuse_table
+        .meta_location_generator()
+        .prefix()
+        .trim_start_matches('/');
+    let v2_prefix = format!("{}/{}/", table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX);
+    collect_virtual_locations(&operator, &v2_prefix, &mut all_virtual_locations).await?;
 
     let files_to_remove: Vec<_> = all_virtual_locations
         .into_iter()
-        .filter(|location| !ignored_locations.contains(location))
         .filter(|location| !referenced_virtual_locations.contains(location))
         .collect();
 
@@ -705,32 +700,16 @@ async fn remove_orphan_virtual_column_files(
 
 #[async_backtrace::framed]
 async fn collect_virtual_locations(
-    fuse_table: &FuseTable,
-    files: &mut Vec<String>,
-    table_data_prefix: &str,
-) -> Result<()> {
-    let operator = fuse_table.get_operator();
-    for virtual_prefix in [
-        FUSE_TBL_VIRTUAL_BLOCK_PREFIX,
-        FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1,
-    ] {
-        let prefix = format!("{}/{}/", table_data_prefix, virtual_prefix);
-        if !operator.exists(&prefix).await? {
-            continue;
-        }
-        collect_virtual_locations_once(&operator, &prefix, files).await?;
-    }
-
-    Ok(())
-}
-
-#[async_backtrace::framed]
-async fn collect_virtual_locations_once(
     operator: &Operator,
     prefix: &str,
     files: &mut Vec<String>,
 ) -> Result<()> {
-    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut lister = match operator.lister_with(prefix).recursive(true).await {
+        Ok(lister) => lister,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+
     while let Some(entry) = lister.try_next().await? {
         if entry.metadata().is_dir() {
             continue;

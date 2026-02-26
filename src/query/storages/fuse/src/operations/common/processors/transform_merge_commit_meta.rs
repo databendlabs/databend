@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
@@ -196,25 +197,25 @@ impl TransformMergeCommitMeta {
         l: CommitMeta,
         r: CommitMeta,
         default_cluster_key_id: Option<u32>,
-    ) -> CommitMeta {
+    ) -> Result<CommitMeta> {
         assert_eq!(l.table_id, r.table_id, "table id mismatch");
+
         let (virtual_schema, virtual_schema_mode) =
             match (l.virtual_schema_mode, r.virtual_schema_mode) {
-                (_, VirtualSchemaMode::Replace) => (
-                    r.virtual_schema.or(l.virtual_schema),
-                    VirtualSchemaMode::Replace,
-                ),
-                (VirtualSchemaMode::Replace, _) => (
-                    l.virtual_schema.or(r.virtual_schema),
-                    VirtualSchemaMode::Replace,
-                ),
+                (VirtualSchemaMode::Replace, VirtualSchemaMode::Replace) => {
+                    return Err(ErrorCode::Internal(
+                        "multiple VirtualSchemaMode::Replace mutations in one commit".to_string(),
+                    ));
+                }
+                (_, VirtualSchemaMode::Replace) => (r.virtual_schema, VirtualSchemaMode::Replace),
+                (VirtualSchemaMode::Replace, _) => (l.virtual_schema, VirtualSchemaMode::Replace),
                 (VirtualSchemaMode::Merge, VirtualSchemaMode::Merge) => (
                     Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
                     VirtualSchemaMode::Merge,
                 ),
             };
 
-        CommitMeta {
+        Ok(CommitMeta {
             conflict_resolve_context: Self::merge_conflict_resolve_context(
                 l.conflict_resolve_context,
                 r.conflict_resolve_context,
@@ -229,7 +230,7 @@ impl TransformMergeCommitMeta {
             virtual_schema,
             virtual_schema_mode,
             hll: merge_column_hll(l.hll, r.hll),
-        }
+        })
     }
 }
 
@@ -253,9 +254,9 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
         let table_id = to_merged[0].table_id;
         let merged = to_merged
             .into_iter()
-            .fold(CommitMeta::empty(table_id), |acc, x| {
+            .try_fold(CommitMeta::empty(table_id), |acc, x| {
                 Self::merge_commit_meta(acc, x, self.default_cluster_key_id)
-            });
+            })?;
         Ok(vec![merged.into()])
     }
 }
@@ -308,5 +309,98 @@ mod tests {
             merged.fields.last().unwrap().column_id,
             VIRTUAL_COLUMNS_LIMIT as u32 - 1
         );
+    }
+
+    fn schema_with_column_ids(ids: &[u32]) -> VirtualDataSchema {
+        VirtualDataSchema {
+            fields: ids
+                .iter()
+                .map(|column_id| VirtualDataField {
+                    name: format!("v['{column_id}']"),
+                    data_types: vec![VariantDataType::String],
+                    source_column_id: 0,
+                    column_id: *column_id,
+                })
+                .collect(),
+            metadata: BTreeMap::new(),
+            next_column_id: ids.iter().max().map(|v| v + 1).unwrap_or(1),
+            number_of_blocks: 1,
+        }
+    }
+
+    fn commit_meta_with_virtual_schema(
+        table_id: u64,
+        mode: VirtualSchemaMode,
+        virtual_schema: Option<VirtualDataSchema>,
+    ) -> CommitMeta {
+        let mut meta = CommitMeta::empty(table_id);
+        meta.virtual_schema_mode = mode;
+        meta.virtual_schema = virtual_schema;
+        meta
+    }
+
+    #[test]
+    fn test_merge_commit_meta_error_on_double_replace() {
+        let l = commit_meta_with_virtual_schema(
+            1,
+            VirtualSchemaMode::Replace,
+            Some(schema_with_column_ids(&[1])),
+        );
+        let r = commit_meta_with_virtual_schema(
+            1,
+            VirtualSchemaMode::Replace,
+            Some(schema_with_column_ids(&[2])),
+        );
+
+        let err = TransformMergeCommitMeta::merge_commit_meta(l, r, None).unwrap_err();
+        assert!(
+            err.message()
+                .contains("multiple VirtualSchemaMode::Replace mutations"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_merge_commit_meta_replace_clears_virtual_schema() {
+        let l = commit_meta_with_virtual_schema(
+            1,
+            VirtualSchemaMode::Merge,
+            Some(schema_with_column_ids(&[1, 2])),
+        );
+        let r = commit_meta_with_virtual_schema(1, VirtualSchemaMode::Replace, None);
+
+        let merged = TransformMergeCommitMeta::merge_commit_meta(l, r, None)
+            .expect("merge commit meta should succeed");
+
+        assert_eq!(merged.virtual_schema_mode, VirtualSchemaMode::Replace);
+        assert!(merged.virtual_schema.is_none());
+    }
+
+    #[test]
+    fn test_merge_commit_meta_replace_then_merge() {
+        let l = commit_meta_with_virtual_schema(
+            1,
+            VirtualSchemaMode::Replace,
+            Some(schema_with_column_ids(&[1])),
+        );
+        let r = commit_meta_with_virtual_schema(
+            1,
+            VirtualSchemaMode::Merge,
+            Some(schema_with_column_ids(&[2])),
+        );
+
+        let merged = TransformMergeCommitMeta::merge_commit_meta(l, r, None)
+            .expect("merge commit meta should succeed");
+
+        assert_eq!(merged.virtual_schema_mode, VirtualSchemaMode::Replace);
+        let virtual_schema = merged
+            .virtual_schema
+            .expect("merged virtual schema should exist");
+        let merged_column_ids = virtual_schema
+            .fields
+            .iter()
+            .map(|f| f.column_id)
+            .collect::<Vec<_>>();
+        assert_eq!(merged_column_ids, vec![1]);
     }
 }
