@@ -467,7 +467,9 @@ pub async fn do_vacuum_virtual_column(
         execute_complete_pipeline(ctx.clone(), build_res)?;
     }
 
-    remove_legacy_virtual_column_files(fuse_table).await?;
+    if removed_files > 0 {
+        remove_legacy_virtual_column_files(fuse_table).await?;
+    }
 
     let orphan_removed = if need_commit {
         let latest_table = fuse_table.refresh(ctx.as_ref()).await?;
@@ -632,9 +634,7 @@ async fn remove_legacy_virtual_column_files(fuse_table: &FuseTable) -> Result<()
         "{}/{}/",
         table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1
     );
-    if operator.exists(&v1_prefix).await? {
-        operator.remove_all(&v1_prefix).await?;
-    }
+    operator.remove_all(&v1_prefix).await?;
     Ok(())
 }
 
