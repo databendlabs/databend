@@ -19,14 +19,21 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BooleanType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -34,6 +41,7 @@ use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_sql::IndexType;
 use databend_storages_common_io::ReadSettings;
+use roaring::RoaringTreemap;
 
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
@@ -55,7 +63,10 @@ pub struct ReadVortexDataTransform {
     context: Arc<dyn TableContext>,
     read_settings: ReadSettings,
     scan_progress: Arc<Progress>,
+    src_schema: DataSchema,
     output_schema: DataSchema,
+    prewhere_input_columns: Vec<usize>,
+    prewhere_filter: Option<Expr>,
     base_block_ids: Option<databend_common_expression::Scalar>,
     need_reserve_block_info: bool,
 }
@@ -72,9 +83,12 @@ impl ReadVortexDataTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
+        let src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
+        let (prewhere_input_columns, prewhere_filter) =
+            Self::build_prewhere_filter(plan, table_schema.as_ref(), &src_schema)?;
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         let func_ctx = ctx.get_function_context()?;
 
@@ -90,11 +104,65 @@ impl ReadVortexDataTransform {
                 context: ctx.clone(),
                 read_settings: ReadSettings::from_ctx(&ctx)?,
                 scan_progress: ctx.get_scan_progress(),
+                src_schema,
                 output_schema,
+                prewhere_input_columns,
+                prewhere_filter,
                 base_block_ids: plan.base_block_ids.clone(),
                 need_reserve_block_info,
             },
         )))
+    }
+
+    fn build_prewhere_filter(
+        plan: &DataSourcePlan,
+        table_schema: &TableSchema,
+        src_schema: &DataSchema,
+    ) -> Result<(Vec<usize>, Option<Expr>)> {
+        let Some(prewhere) = PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()) else {
+            return Ok((Vec::new(), None));
+        };
+
+        let prewhere_schema = prewhere.prewhere_columns.project_schema(table_schema);
+        let prewhere_schema: DataSchema = (&prewhere_schema).into();
+        let prewhere_input_columns = prewhere_schema
+            .fields()
+            .iter()
+            .map(|field| src_schema.index_of(field.name()))
+            .collect::<Result<Vec<_>>>()?;
+        let prewhere_filter = prewhere
+            .filter
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .project_column_ref(|name| {
+                prewhere_schema
+                    .column_with_name(name)
+                    .map(|(index, _)| index)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Unable to find prewhere column '{name}' in vortex read schema"
+                        ))
+                    })
+            })?;
+
+        Ok((prewhere_input_columns, Some(prewhere_filter)))
+    }
+
+    fn build_prewhere_input_block(&self, data_block: &DataBlock) -> DataBlock {
+        let entries = self
+            .prewhere_input_columns
+            .iter()
+            .map(|&index| data_block.get_by_offset(index).clone())
+            .collect();
+        DataBlock::new(entries, data_block.num_rows())
+    }
+
+    fn offsets_from_bitmap(bitmap: &Bitmap) -> RoaringTreemap {
+        RoaringTreemap::from_sorted_iter(
+            (0..bitmap.len())
+                .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                .map(|i| i as u64),
+        )
+        .unwrap()
     }
 }
 
@@ -154,6 +222,7 @@ impl AsyncTransform for ReadVortexDataTransform {
 
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
+        let mut from_agg_index = false;
         let mut data_block = if let Some(index_reader) = self.index_reader.as_ref() {
             let loc = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                 &fuse_part.location,
@@ -163,6 +232,7 @@ impl AsyncTransform for ReadVortexDataTransform {
                 .read_parquet_data_by_merge_io(&self.read_settings, &loc)
                 .await
             {
+                from_agg_index = true;
                 index_reader.deserialize_parquet_data(actual_part, data)?
             } else {
                 let data = self.block_reader.operator.read(&fuse_part.location).await?;
@@ -179,6 +249,33 @@ impl AsyncTransform for ReadVortexDataTransform {
             )?
         };
 
+        let mut offsets = None;
+        if !from_agg_index {
+            let mut bitmap_selection = None;
+            if let Some(prewhere_filter) = &self.prewhere_filter {
+                let prewhere_block = self.build_prewhere_input_block(&data_block);
+                let num_rows = prewhere_block.num_rows();
+                let evaluator = Evaluator::new(&prewhere_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let filter = evaluator
+                    .run(prewhere_filter)?
+                    .try_downcast::<BooleanType>()
+                    .unwrap();
+                let bitmap: Bitmap = FilterHelpers::filter_to_bitmap(filter, num_rows).into();
+                data_block = data_block.filter_with_bitmap(&bitmap)?;
+                bitmap_selection = Some(bitmap);
+            }
+
+            data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+
+            offsets = if self.block_reader.query_internal_columns() {
+                bitmap_selection
+                    .as_ref()
+                    .map(Self::offsets_from_bitmap)
+            } else {
+                None
+            };
+        }
+
         let progress_values = ProgressValues {
             rows: data_block.num_rows(),
             bytes: data_block.memory_size(),
@@ -189,7 +286,7 @@ impl AsyncTransform for ReadVortexDataTransform {
         data_block = add_data_block_meta(
             data_block,
             fuse_part,
-            None,
+            offsets,
             self.base_block_ids.clone(),
             self.block_reader.update_stream_columns(),
             self.block_reader.query_internal_columns(),

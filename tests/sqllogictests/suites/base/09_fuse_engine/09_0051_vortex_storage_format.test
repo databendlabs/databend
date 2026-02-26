@@ -57,4 +57,37 @@ SELECT sum(id) FROM t_vortex
 15
 
 statement ok
+CREATE TABLE t_vortex_prewhere (
+    l_returnflag VARCHAR NOT NULL,
+    l_linestatus VARCHAR NOT NULL,
+    l_extendedprice DECIMAL(15, 2) NOT NULL,
+    l_discount DECIMAL(15, 2) NOT NULL,
+    l_tax DECIMAL(15, 2) NOT NULL,
+    l_shipdate DATE NOT NULL
+) STORAGE_FORMAT = 'vortex'
+
+statement ok
+INSERT INTO t_vortex_prewhere VALUES
+    ('A', 'F', 100.00, 0.05, 0.00, '1998-08-15'),
+    ('A', 'F', 200.00, 0.10, 0.05, '1998-09-15'),
+    ('N', 'O', 150.00, 0.00, 0.00, '1998-08-30'),
+    ('N', 'O', 50.00, 0.20, 0.00, '1998-07-01'),
+    ('R', 'F', 80.00, 0.15, 0.02, '1998-12-31')
+
+query TTIII rowsort
+SELECT
+    l_returnflag,
+    l_linestatus,
+    CAST(sum(l_extendedprice * (1 - l_discount)) AS BIGINT),
+    CAST(sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS BIGINT),
+    count(*)
+FROM t_vortex_prewhere
+WHERE l_shipdate <= add_days(to_date('1998-12-01'), -90)
+GROUP BY l_returnflag, l_linestatus
+ORDER BY l_returnflag, l_linestatus
+----
+A F 95 95 1
+N O 190 190 2
+
+statement ok
 DROP DATABASE db_09_0051
