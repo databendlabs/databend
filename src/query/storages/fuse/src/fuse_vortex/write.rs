@@ -21,7 +21,6 @@ use databend_common_expression::TableSchema;
 use vortex::VortexSessionDefault;
 use vortex::array::ArrayRef;
 use vortex::array::arrow::FromArrowArray;
-use vortex::expr::stats::Stat;
 use vortex::file::WriteOptionsSessionExt;
 use vortex::io::runtime::BlockingRuntime;
 use vortex::io::runtime::current::CurrentThreadRuntime;
@@ -37,8 +36,6 @@ use vortex::layout::layouts::flat::writer::FlatLayoutStrategy;
 use vortex::layout::layouts::repartition::RepartitionStrategy;
 use vortex::layout::layouts::repartition::RepartitionWriterOptions;
 use vortex::layout::layouts::struct_::writer::StructStrategy;
-use vortex::layout::layouts::zoned::writer::ZonedLayoutOptions;
-use vortex::layout::layouts::zoned::writer::ZonedStrategy;
 use vortex::session::VortexSession;
 
 pub fn write_vortex(
@@ -53,8 +50,7 @@ pub fn write_vortex(
     // ---- Constants ----
     const ONE_MEG: u64 = 1 << 20;
 
-    // Row block size: controls zone map granularity and repartition row multiples.
-    // Smaller = finer-grained pruning but more metadata overhead.
+    // Row block size: controls repartition row multiples.
     let row_block_size: usize = 8192;
 
     // ---- Build Layout Strategy Pipeline (bottom-up) ----
@@ -111,30 +107,8 @@ pub fn write_vortex(
         },
     );
 
-    // Step 2: Calculate statistics (zone maps) for each row group.
-    let zoned = ZonedStrategy::new(dict, compress_then_flat.clone(), ZonedLayoutOptions {
-        // Zone map block size in rows. Each zone covers this many rows.
-        block_size: row_block_size,
-        // Which statistics to compute per zone.
-        stats: vec![
-            Stat::Min,
-            Stat::Max,
-            Stat::Sum,
-            Stat::NullCount,
-            Stat::NaNCount,
-        ]
-        .into(),
-        // Max byte length for variable-length stats (e.g. min/max of strings).
-        // Longer values are truncated.
-        max_variable_length_statistics_size: 64,
-        // Concurrency for stats computation.
-        concurrency: std::thread::available_parallelism()
-            .map(|p| p.get())
-            .unwrap_or(1),
-    });
-
-    // Step 1: Repartition each column to fixed row counts.
-    let repartition = RepartitionStrategy::new(zoned, RepartitionWriterOptions {
+    // Step 2: Repartition each column to fixed row counts.
+    let repartition = RepartitionStrategy::new(dict, RepartitionWriterOptions {
         // No minimum block size in bytes for initial repartition.
         block_size_minimum: 0,
         // Always repartition into row_block_size row blocks.
@@ -143,7 +117,7 @@ pub fn write_vortex(
         canonicalize: false,
     });
 
-    // Step 0: Split struct columns, with a validity collection strategy.
+    // Step 1: Split struct columns, with a validity collection strategy.
     let validity_strategy = CollectStrategy::new(compress_then_flat);
     let strategy = Arc::new(StructStrategy::new(repartition, validity_strategy));
 
@@ -154,15 +128,8 @@ pub fn write_vortex(
         .write_options()
         // Layout strategy built above.
         .with_strategy(strategy)
-        // File-level statistics written into the footer for pruning.
-        // These are computed over the entire file (not per-zone).
-        .with_file_statistics(vec![
-            Stat::Min,
-            Stat::Max,
-            Stat::Sum,
-            Stat::NullCount,
-            Stat::NaNCount,
-        ]);
+        // Disable file-level statistics in the footer.
+        .with_file_statistics(vec![]);
     // Other available options on VortexWriteOptions:
     //   .exclude_dtype()  — omit DType from file; caller must supply it at read time.
     // Note: max_variable_length_statistics_size (default 64) is not configurable via public API.
