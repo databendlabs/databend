@@ -174,6 +174,7 @@ pub enum StageFileFormatType {
     Avro,
     Orc,
     Parquet,
+    Lance,
     Xml,
     None,
 }
@@ -192,12 +193,13 @@ impl FromStr for StageFileFormatType {
             "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Tsv),
             "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
+            "LANCE" => Ok(StageFileFormatType::Lance),
             "XML" => Ok(StageFileFormatType::Xml),
             "JSON" => Ok(StageFileFormatType::Json),
             "ORC" => Ok(StageFileFormatType::Orc),
             "AVRO" => Ok(StageFileFormatType::Avro),
             _ => Err(format!(
-                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET | ORC | AVRO | JSON )"
+                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET | LANCE | ORC | AVRO | JSON )"
             )),
         }
     }
@@ -213,6 +215,7 @@ impl Display for StageFileFormatType {
             StageFileFormatType::Avro => write!(f, "AVRO"),
             StageFileFormatType::Orc => write!(f, "ORC"),
             StageFileFormatType::Parquet => write!(f, "PARQUET"),
+            StageFileFormatType::Lance => write!(f, "LANCE"),
             StageFileFormatType::Xml => write!(f, "XML"),
             StageFileFormatType::None => write!(f, "NONE"),
         }

@@ -112,6 +112,11 @@ impl Binder {
         if !file_format_options.is_empty() {
             stage_info.file_format_params =
                 self.try_resolve_file_format(file_format_options).await?;
+            if matches!(stage_info.file_format_params, FileFormatParams::Lance(_)) {
+                return Err(ErrorCode::IllegalStageFileFormat(
+                    "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                ));
+            }
         }
 
         Ok(Plan::CreateStage(Box::new(CreateStagePlan {
@@ -165,8 +170,14 @@ impl Binder {
                 };
                 if let Some(file_format) = options.file_format.as_ref() {
                     if !file_format.is_empty() {
-                        set_plan.file_format =
-                            Some(self.try_resolve_file_format(file_format).await?);
+                        let file_format_params = self.try_resolve_file_format(file_format).await?;
+                        if matches!(file_format_params, FileFormatParams::Lance(_)) {
+                            return Err(ErrorCode::IllegalStageFileFormat(
+                                "LANCE file format is only supported in COPY INTO <location>"
+                                    .to_string(),
+                            ));
+                        }
+                        set_plan.file_format = Some(file_format_params);
                     }
                 }
 
