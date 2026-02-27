@@ -185,6 +185,7 @@ async fn test_fuse_do_vacuum_virtual_column_removes_legacy_prefix() -> anyhow::R
         .prefix()
         .trim_start_matches('/');
     let v1_prefix = format!("{}/{}/", prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1);
+    dal.create_dir(&v1_prefix).await?;
     let legacy_file = format!("{}legacy-file", v1_prefix);
     dal.write(&legacy_file, "legacy").await?;
     assert!(dal.exists(&legacy_file).await?);
