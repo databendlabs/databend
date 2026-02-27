@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod lance_dataset;
-mod output;
-mod parquet_file;
-mod partition;
-mod path;
-mod row_based_file;
-mod stage_sink_table;
+mod committer_processor;
+mod pipeline;
+mod writer_processor;
 
-pub(crate) use lance_dataset::append_data_to_lance_dataset;
-pub use output::UnloadOutput;
-pub use stage_sink_table::StageSinkTable;
+pub(crate) use pipeline::append_data_to_lance_dataset;

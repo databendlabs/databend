@@ -45,6 +45,7 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             pb::StageFileFormatType::Orc => Ok(mt::principal::StageFileFormatType::Orc),
             pb::StageFileFormatType::Parquet => Ok(mt::principal::StageFileFormatType::Parquet),
             pb::StageFileFormatType::Xml => Ok(mt::principal::StageFileFormatType::Xml),
+            pb::StageFileFormatType::Lance => Ok(mt::principal::StageFileFormatType::Lance),
         }
     }
 
@@ -58,6 +59,7 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             mt::principal::StageFileFormatType::Orc => Ok(pb::StageFileFormatType::Orc),
             mt::principal::StageFileFormatType::Parquet => Ok(pb::StageFileFormatType::Parquet),
             mt::principal::StageFileFormatType::Xml => Ok(pb::StageFileFormatType::Xml),
+            mt::principal::StageFileFormatType::Lance => Ok(pb::StageFileFormatType::Lance),
             mt::principal::StageFileFormatType::None => Err(Incompatible::new(
                 "StageFileFormatType::None cannot be converted to protobuf".to_string(),
             )),
@@ -255,6 +257,11 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::AvroFileFormatParams::from_pb(p)?,
                 ))
             }
+            Some(pb::file_format_params::Format::Lance(p)) => {
+                Ok(mt::principal::FileFormatParams::Lance(
+                    mt::principal::LanceFileFormatParams::from_pb(p)?,
+                ))
+            }
             None => Err(Incompatible::new(
                 "FileFormatParams.format cannot be None".to_string(),
             )),
@@ -303,6 +310,11 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::OrcFileFormatParams::to_pb(p)?,
                 )),
             }),
+            Self::Lance(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Lance(
+                    mt::principal::LanceFileFormatParams::to_pb(p)?,
+                )),
+            }),
         }
     }
 }
@@ -325,6 +337,26 @@ impl FromToProto for mt::principal::OrcFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             missing_field_as: Some(self.missing_field_as.to_string()),
+        })
+    }
+}
+
+impl FromToProto for mt::principal::LanceFileFormatParams {
+    type PB = pb::LanceFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(mt::principal::LanceFileFormatParams::default())
+    }
+
+    fn to_pb(&self) -> Result<pb::LanceFileFormatParams, Incompatible> {
+        Ok(pb::LanceFileFormatParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
         })
     }
 }
