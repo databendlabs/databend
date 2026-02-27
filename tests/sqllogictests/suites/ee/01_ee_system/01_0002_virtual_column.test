@@ -788,88 +788,103 @@ FROM test2;
 10 "Lisa" 26 "Chicago" NULL NULL "10.10"
 
 ## -------------------------------------------------------
-## Vacuum virtual column tests
+## Vacuum virtual column test
 ##
-## VACUUM VIRTUAL COLUMN cleans up obsolete virtual column data:
-## 1. Removes legacy _vb (v1) virtual parquet files
-## 2. Detaches virtual_block_meta from blocks that reference legacy files
-## 3. Prunes virtual_schema by removing fields not referenced by any _vb_v2 block
-## 4. Removes orphan _vb_v2 files not referenced by any snapshot
+## Verifies schema pruning and orphan _vb_v2 file cleanup.
+## Uses fs:// storage + list_stage to observe _vb_v2 files on disk.
+##
+## Other vacuum behaviors (legacy _vb cleanup, detaching legacy block metas)
+## are covered by integration tests in
+## src/query/ee/tests/it/storages/fuse/operations/virtual_columns.rs.
 ## -------------------------------------------------------
 
-# Vacuum prunes unreferenced virtual schema fields.
-# Setup: insert two batches with different variant shapes, refresh to build virtual columns.
-# Then delete the batch with extra fields and compact to remove those blocks.
-# After compact+refresh, the schema still lists all fields, but only a and b are
-# referenced by _vb_v2 blocks. Vacuum should prune the unreferenced fields c and d.
+statement ok
+set data_retention_time_in_days = 0;
 
 statement ok
-CREATE OR REPLACE TABLE prune_test (id INT, v VARIANT);
+CREATE TABLE vacuum_test (id INT, v VARIANT) 'fs:///tmp/test_vacuum_virtual_column/';
+
+statement ok
+CREATE OR REPLACE STAGE vb_stage url = 'fs:///tmp/test_vacuum_virtual_column/';
 
 # Batch 1: rows with fields a, b
 statement ok
-INSERT INTO prune_test VALUES (1, '{"a":1, "b":2}'), (2, '{"a":3, "b":4}'), (3, '{"a":5, "b":6}');
+INSERT INTO vacuum_test VALUES (1, '{"a":1, "b":2}'), (2, '{"a":3, "b":4}'), (3, '{"a":5, "b":6}');
 
 # Batch 2: rows with fields a, b, c, d (c and d are unique to this batch)
 statement ok
-INSERT INTO prune_test VALUES (4, '{"a":7, "b":8, "c":9, "d":10}'), (5, '{"a":11, "b":12, "c":13, "d":14}'), (6, '{"a":15, "b":16, "c":17, "d":18}');
+INSERT INTO vacuum_test VALUES (4, '{"a":7, "b":8, "c":9, "d":10}'), (5, '{"a":11, "b":12, "c":13, "d":14}'), (6, '{"a":15, "b":16, "c":17, "d":18}');
 
 statement ok
-REFRESH VIRTUAL COLUMN FOR prune_test;
+REFRESH VIRTUAL COLUMN FOR vacuum_test;
 
-# Before vacuum: schema has 4 fields (a, b, c, d)
+# Schema has 4 fields (a, b, c, d), 2 _vb_v2 files (one per block)
 query TTTITT
-show virtual columns from prune_test;
+show virtual columns from vacuum_test;
 ----
-test_virtual_column prune_test v 3000000000 ['a'] UInt64
-test_virtual_column prune_test v 3000000001 ['b'] UInt64
-test_virtual_column prune_test v 3000000002 ['c'] UInt64
-test_virtual_column prune_test v 3000000003 ['d'] UInt64
+test_virtual_column vacuum_test v 3000000000 ['a'] UInt64
+test_virtual_column vacuum_test v 3000000001 ['b'] UInt64
+test_virtual_column vacuum_test v 3000000002 ['c'] UInt64
+test_virtual_column vacuum_test v 3000000003 ['d'] UInt64
 
-# Delete batch 2 (the rows with c, d)
-statement ok
-DELETE FROM prune_test WHERE id >= 4;
-
-# Compact to remove the deleted blocks
-statement ok
-OPTIMIZE TABLE prune_test COMPACT;
-
-# Refresh to regenerate _vb_v2 for the compacted blocks (only a, b remain in data)
-statement ok
-REFRESH VIRTUAL COLUMN FOR prune_test;
-
-# Schema still has 4 fields (refresh merges, doesn't prune)
-query TTTITT
-show virtual columns from prune_test;
-----
-test_virtual_column prune_test v 3000000000 ['a'] UInt64
-test_virtual_column prune_test v 3000000001 ['b'] UInt64
-test_virtual_column prune_test v 3000000002 ['c'] UInt64
-test_virtual_column prune_test v 3000000003 ['d'] UInt64
-
-# Vacuum prunes c and d from virtual_schema (no _vb_v2 block references them).
-# Returns 0: no files deleted because old snapshots still reference the _vb_v2 files
-# within retention period. Known limitation — need VACUUM TABLE first to purge old
-# snapshots before orphan _vb_v2 files can be cleaned up.
 query I
-VACUUM VIRTUAL COLUMN FROM prune_test;
+select count() from list_stage(location=> '@vb_stage') where name like '%_vb_v2%';
 ----
-0
+2
 
-# After vacuum: only a and b remain
+# Delete batch 2 (the rows with c, d). The block is removed, its _vb_v2 becomes orphan.
+statement ok
+DELETE FROM vacuum_test WHERE id >= 4;
+
+# Refresh rebuilds _vb_v2 for the rewritten blocks (only a, b remain in data).
+# Schema still has 4 fields (refresh merges, doesn't prune).
+statement ok
+REFRESH VIRTUAL COLUMN FOR vacuum_test;
+
 query TTTITT
-show virtual columns from prune_test;
+show virtual columns from vacuum_test;
 ----
-test_virtual_column prune_test v 3000000000 ['a'] UInt64
-test_virtual_column prune_test v 3000000001 ['b'] UInt64
+test_virtual_column vacuum_test v 3000000000 ['a'] UInt64
+test_virtual_column vacuum_test v 3000000001 ['b'] UInt64
+test_virtual_column vacuum_test v 3000000002 ['c'] UInt64
+test_virtual_column vacuum_test v 3000000003 ['d'] UInt64
 
-# Verify data is intact after vacuum
+# Purge old snapshots so orphan _vb_v2 files are no longer referenced.
+statement ok
+select * from fuse_vacuum2('test_virtual_column', 'vacuum_test') ignore_result;
+
+# Vacuum prunes unreferenced fields (c, d) and removes orphan _vb_v2 files.
+query I
+VACUUM VIRTUAL COLUMN FROM vacuum_test;
+----
+1
+
+# After vacuum: only a and b remain in schema
+query TTTITT
+show virtual columns from vacuum_test;
+----
+test_virtual_column vacuum_test v 3000000000 ['a'] UInt64
+test_virtual_column vacuum_test v 3000000001 ['b'] UInt64
+
+# Orphan _vb_v2 file removed, only 1 remains
+query I
+select count() from list_stage(location=> '@vb_stage') where name like '%_vb_v2%';
+----
+1
+
+# Data intact
 query II
-select id, v['a'] from prune_test order by id;
+select id, v['a'] from vacuum_test order by id;
 ----
 1 1
 2 3
 3 5
+
+statement ok
+remove @vb_stage;
+
+statement ok
+drop stage vb_stage;
 
 statement ok
 set enable_experimental_virtual_column = 0;
