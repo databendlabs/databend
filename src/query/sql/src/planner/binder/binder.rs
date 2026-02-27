@@ -573,13 +573,19 @@ impl Binder {
                         "[SQL-BINDER] File format '{name}' is reserved and cannot be used"
                     )));
                 }
+                let file_format_params = FileFormatParams::try_from_reader(
+                    FileFormatOptionsReader::from_ast(file_format_options),
+                    false,
+                )?;
+                if matches!(file_format_params, FileFormatParams::Lance(_)) {
+                    return Err(ErrorCode::IllegalFileFormat(
+                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                    ));
+                }
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: create_option.clone().into(),
                     name: name.clone(),
-                    file_format_params: FileFormatParams::try_from_reader(
-                        FileFormatOptionsReader::from_ast(file_format_options),
-                        false,
-                    )?,
+                    file_format_params,
                 }))
             }
             Statement::DropFileFormat { if_exists, name } => {

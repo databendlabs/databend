@@ -66,6 +66,7 @@ pub enum FileFormatParams {
     Parquet(ParquetFileFormatParams),
     Orc(OrcFileFormatParams),
     Avro(AvroFileFormatParams),
+    Lance(LanceFileFormatParams),
 }
 
 impl FileFormatParams {
@@ -79,6 +80,7 @@ impl FileFormatParams {
             FileFormatParams::Parquet(_) => StageFileFormatType::Parquet,
             FileFormatParams::Orc(_) => StageFileFormatType::Orc,
             FileFormatParams::Avro(_) => StageFileFormatType::Avro,
+            FileFormatParams::Lance(_) => StageFileFormatType::Lance,
         }
     }
 
@@ -92,6 +94,7 @@ impl FileFormatParams {
             FileFormatParams::Parquet(_) => ".parquet",
             FileFormatParams::Orc(_) => ".orc",
             FileFormatParams::Avro(_) => ".avro",
+            FileFormatParams::Lance(_) => ".lance",
         }
     }
 
@@ -122,6 +125,9 @@ impl FileFormatParams {
             StageFileFormatType::Avro => {
                 Ok(FileFormatParams::Avro(AvroFileFormatParams::default()))
             }
+            StageFileFormatType::Lance => {
+                Ok(FileFormatParams::Lance(LanceFileFormatParams::default()))
+            }
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -139,6 +145,7 @@ impl FileFormatParams {
             FileFormatParams::Parquet(v) => v.compression,
             FileFormatParams::Orc(_) => StageFileCompression::None,
             FileFormatParams::Avro(_) => StageFileCompression::None,
+            FileFormatParams::Lance(_) => StageFileCompression::None,
         }
     }
 
@@ -235,6 +242,7 @@ impl FileFormatParams {
                     missing_field_as.as_deref(),
                 )?)
             }
+            StageFileFormatType::Lance => FileFormatParams::Lance(LanceFileFormatParams::default()),
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression_default_none()?;
@@ -883,6 +891,9 @@ impl OrcFileFormatParams {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanceFileFormatParams {}
+
 impl Display for FileFormatParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -959,6 +970,9 @@ impl Display for FileFormatParams {
                     "TYPE = ORC MISSING_FIELD_AS = {}",
                     params.missing_field_as
                 )
+            }
+            FileFormatParams::Lance(_) => {
+                write!(f, "TYPE = LANCE")
             }
         }
     }

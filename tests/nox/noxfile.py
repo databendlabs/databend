@@ -78,7 +78,14 @@ def go_client(session, driver_version):
 # so run it in .github/actions/test_stateful_cluster_linux/action.yml.
 @nox.session
 def test_suites(session):
-    session.install("pytest", "requests", "pytest-asyncio", "pyarrow", "databend-driver")
+    session.install(
+        "pytest",
+        "requests",
+        "pytest-asyncio",
+        "pyarrow",
+        "databend-driver",
+        "pylance",
+    )
     # Usage: nox -s test_suites -- suites/http_handler/test_session.py::test_session
     session.run("pytest", *session.posargs)
 

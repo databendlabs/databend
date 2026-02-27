@@ -555,6 +555,13 @@ SELECT * from s;"#,
                 );
         "#,
         r#"
+            COPY INTO @tmp/test1/
+                FROM (SELECT * FROM numbers(10))
+                FILE_FORMAT = (
+                    type = LANCE
+                )
+        "#,
+        r#"
             COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (
