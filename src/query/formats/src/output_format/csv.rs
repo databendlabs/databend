@@ -25,7 +25,7 @@ use crate::output_format::OutputFormat;
 pub struct CSVOutputFormat {
     schema: TableSchemaRef,
     field_encoder: FieldEncoderCSV,
-    field_delimiter: u8,
+    field_delimiter: Option<u8>,
     record_delimiter: Vec<u8>,
     quote: u8,
 
@@ -42,7 +42,7 @@ impl CSVOutputFormat {
         Self {
             schema,
             field_encoder,
-            field_delimiter: params.field_delimiter.as_bytes()[0],
+            field_delimiter: params.field_delimiter.as_bytes().first().copied(),
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
             quote: params.quote.as_bytes()[0],
             headers,
@@ -51,11 +51,12 @@ impl CSVOutputFormat {
 
     fn serialize_strings(&self, values: Vec<String>) -> Vec<u8> {
         let mut buf = vec![];
-        let fd = self.field_delimiter;
 
         for (col_index, v) in values.iter().enumerate() {
             if col_index != 0 {
-                buf.push(fd);
+                if let Some(fd) = self.field_delimiter {
+                    buf.push(fd);
+                }
             }
             write_csv_string(v.as_bytes(), &mut buf, self.quote);
         }
@@ -83,7 +84,9 @@ impl OutputFormat for CSVOutputFormat {
         for row_index in 0..rows_size {
             for (col_index, column) in columns.iter().enumerate() {
                 if col_index != 0 {
-                    buf.push(fd);
+                    if let Some(fd) = fd {
+                        buf.push(fd);
+                    }
                 }
                 self.field_encoder
                     .write_field(column, row_index, &mut buf)?;

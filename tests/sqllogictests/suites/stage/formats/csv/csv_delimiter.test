@@ -130,3 +130,17 @@ select * from tt2 order by b
 a马 2
 马c 3
 NULL 马4
+
+# field_delimiter = NONE: read entire line as single field
+statement ok
+create or replace table tt2(line string)
+
+statement ok
+copy into tt2 from @data/csv/no_field_delimiter.csv file_format = (type = CSV, field_delimiter = NONE)
+
+query T
+select * from tt2 order by line
+----
+This is line 1 with commas, and more commas
+This is line 2 with tabs	and spaces
+This is line 3 with "quotes" and 'more'

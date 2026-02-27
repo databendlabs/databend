@@ -241,6 +241,12 @@ impl FileFormatParams {
                 let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
                 let field_delimiter =
                     reader.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
+                // Normalize "NONE" keyword to empty string for no-delimiter mode
+                let field_delimiter = if field_delimiter.eq_ignore_ascii_case("NONE") {
+                    "".to_string()
+                } else {
+                    field_delimiter
+                };
                 let record_delimiter =
                     reader.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
@@ -977,12 +983,13 @@ pub fn check_field_delimiter(option: &str) -> std::result::Result<(), String> {
 }
 
 pub fn check_field_delimiter_csv(option: &str) -> std::result::Result<(), String> {
-    if option.len() == 1 && option.as_bytes()[0].is_ascii_alphanumeric() {
+    if option.is_empty() {
+        // field_delimiter = NONE: read entire line as single field
+        Ok(())
+    } else if option.len() == 1 && option.as_bytes()[0].is_ascii_alphanumeric() {
         Err("Expecting a non-alphanumeric character.".into())
     } else if option.len() > 20 {
         Err("Expecting at most 20 bytes.".into())
-    } else if option.is_empty() {
-        Err("Should not be empty.".into())
     } else {
         Ok(())
     }
