@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::CopyIntoLocationOptions;
+use databend_common_ast::ast::CopyIntoLocationOptionsRaw;
 use databend_common_ast::ast::CopyIntoLocationSource;
 use databend_common_ast::ast::CopyIntoLocationStmt;
 use databend_common_ast::ast::Statement;
@@ -42,39 +44,6 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoLocationStmt,
     ) -> Result<Plan> {
-        if stmt.options.use_raw_path && !stmt.options.single {
-            return Err(ErrorCode::InvalidArgument(
-                "use_raw_path=true can only be set when single=true",
-            ));
-        }
-        if stmt.options.overwrite && (!stmt.options.single || !stmt.options.use_raw_path) {
-            return Err(ErrorCode::InvalidArgument(
-                "overwrite=true can only be set when single=true and use_raw_path=true for now",
-            ));
-        }
-        if !stmt.options.include_query_id && !stmt.options.use_raw_path {
-            return Err(ErrorCode::InvalidArgument(
-                "include_query_id=false can only be set when use_raw_path=true",
-            ));
-        }
-        if stmt.partition_by.is_some() {
-            if stmt.options.single {
-                return Err(ErrorCode::InvalidArgument(
-                    "PARTITION BY cannot be used together with SINGLE=TRUE",
-                ));
-            }
-            if stmt.options.overwrite {
-                return Err(ErrorCode::InvalidArgument(
-                    "PARTITION BY cannot be used together with OVERWRITE=TRUE",
-                ));
-            }
-            if !stmt.options.include_query_id {
-                return Err(ErrorCode::InvalidArgument(
-                    "PARTITION BY requires INCLUDE_QUERY_ID=TRUE",
-                ));
-            }
-        }
-
         let query = match &stmt.src {
             CopyIntoLocationSource::Table {
                 catalog,
@@ -142,22 +111,21 @@ impl Binder {
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &stmt.dst).await?;
 
-        let mut copy_options = stmt.options.clone();
-        if stmt.partition_by.is_some() {
-            copy_options.single = false;
-            copy_options.overwrite = false;
-            copy_options.include_query_id = true;
+        if !stmt.file_format.is_empty() {
+            stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
+        let is_lance = matches!(stage_info.file_format_params, FileFormatParams::Lance(_));
+        let options = check_options(&stmt.options, is_lance, stmt.partition_by.is_some())?;
 
-        if copy_options.use_raw_path {
-            if path.ends_with("/") {
+        if options.use_raw_path {
+            if path.ends_with("/") && !is_lance {
                 return Err(ErrorCode::BadArguments(
                     "when use_raw_path is set to true, url path can not end with '/'",
                 ));
             }
 
             let op = init_stage_operator(&stage_info)?;
-            if !copy_options.overwrite {
+            if !options.overwrite {
                 match op.stat(&path).await {
                     Ok(_) => return Err(ErrorCode::BadArguments("file already exists")),
                     Err(e) => {
@@ -167,10 +135,6 @@ impl Binder {
                     }
                 }
             }
-        }
-
-        if !stmt.file_format.is_empty() {
-            stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
 
         if let FileFormatParams::Csv(fmt) = &stage_info.file_format_params {
@@ -190,7 +154,7 @@ impl Binder {
         let info = CopyIntoLocationInfo {
             stage: Box::new(stage_info),
             path,
-            options: copy_options,
+            options,
             is_ordered,
             partition_by: partition_by.as_ref().map(|desc| desc.remote_expr.clone()),
         };
@@ -250,4 +214,82 @@ impl Binder {
             nullable,
         }))
     }
+}
+
+fn check_options(
+    raw_options: &CopyIntoLocationOptionsRaw,
+    is_lance: bool,
+    has_partition: bool,
+) -> Result<CopyIntoLocationOptions> {
+    let mut options = raw_options.with_defaults();
+
+    match (raw_options.include_query_id, raw_options.use_raw_path) {
+        (Some(include_query_id), Some(use_raw_path)) => {
+            if include_query_id == use_raw_path {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "conflict copy_options: include_query_id={} and use_raw_path={}",
+                    include_query_id, use_raw_path
+                )));
+            }
+        }
+        (None, Some(true)) => {
+            options.include_query_id = false;
+        }
+        (Some(false), None) => {
+            return Err(ErrorCode::InvalidArgument(
+                "include_query_id=false can only be set when use_raw_path=true",
+            ));
+        }
+        (_, _) => {}
+    }
+
+    if !is_lance {
+        if options.overwrite && (!options.single || !options.use_raw_path) {
+            return Err(ErrorCode::InvalidArgument(
+                "overwrite=true can only be set when single=true and use_raw_path=true for now",
+            ));
+        }
+
+        if options.use_raw_path && !options.single {
+            return Err(ErrorCode::InvalidArgument(
+                "use_raw_path=true can only be set when single=true",
+            ));
+        }
+    } else {
+        if raw_options.single.is_some() {
+            return Err(ErrorCode::InvalidArgument(
+                "copy option max_file_size can not be used with Lance format",
+            ));
+        }
+        if raw_options.max_file_size.is_some() {
+            return Err(ErrorCode::InvalidArgument(
+                "copy option max_file_size can not be used with Lance format",
+            ));
+        }
+
+        if has_partition {
+            return Err(ErrorCode::InvalidArgument(
+                "PARTITION BY cannot be used together with LANCE file format",
+            ));
+        }
+    }
+
+    if has_partition {
+        if options.single {
+            return Err(ErrorCode::InvalidArgument(
+                "PARTITION BY cannot be used together with SINGLE=TRUE",
+            ));
+        }
+        if options.overwrite {
+            return Err(ErrorCode::InvalidArgument(
+                "PARTITION BY cannot be used together with OVERWRITE=TRUE",
+            ));
+        }
+        if !options.include_query_id {
+            return Err(ErrorCode::InvalidArgument(
+                "PARTITION BY requires INCLUDE_QUERY_ID=TRUE",
+            ));
+        }
+    }
+    Ok(options)
 }
