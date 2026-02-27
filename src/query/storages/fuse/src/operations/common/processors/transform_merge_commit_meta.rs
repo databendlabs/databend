@@ -202,13 +202,11 @@ impl TransformMergeCommitMeta {
 
         let (virtual_schema, virtual_schema_mode) =
             match (l.virtual_schema_mode, r.virtual_schema_mode) {
-                (VirtualSchemaMode::Replace, VirtualSchemaMode::Replace) => {
+                (VirtualSchemaMode::Replace, _) | (_, VirtualSchemaMode::Replace) => {
                     return Err(ErrorCode::Internal(
-                        "multiple VirtualSchemaMode::Replace mutations in one commit".to_string(),
+                        "unexpected VirtualSchemaMode::Replace in merge_commit_meta".to_string(),
                     ));
                 }
-                (_, VirtualSchemaMode::Replace) => (r.virtual_schema, VirtualSchemaMode::Replace),
-                (VirtualSchemaMode::Replace, _) => (l.virtual_schema, VirtualSchemaMode::Replace),
                 (VirtualSchemaMode::Merge, VirtualSchemaMode::Merge) => (
                     Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
                     VirtualSchemaMode::Merge,
@@ -267,6 +265,9 @@ mod tests {
 
     use super::*;
 
+    // Verifies that merging two virtual schemas where the combined field count
+    // exceeds VIRTUAL_COLUMNS_LIMIT results in truncation to exactly the limit.
+    // This prevents TableMeta from growing unboundedly when many variant paths exist.
     #[test]
     fn test_merge_virtual_schema_truncate_to_limit() {
         let l_fields = (0..(VIRTUAL_COLUMNS_LIMIT as u32))
@@ -339,8 +340,11 @@ mod tests {
         meta
     }
 
+    // Replace mode is only used by vacuum's single-source pipeline, which never goes
+    // through TransformMergeCommitMeta. Any Replace in merge_commit_meta is unexpected.
     #[test]
-    fn test_merge_commit_meta_error_on_double_replace() {
+    fn test_merge_commit_meta_error_on_replace() {
+        // Replace + Replace
         let l = commit_meta_with_virtual_schema(
             1,
             VirtualSchemaMode::Replace,
@@ -351,33 +355,18 @@ mod tests {
             VirtualSchemaMode::Replace,
             Some(schema_with_column_ids(&[2])),
         );
+        assert!(TransformMergeCommitMeta::merge_commit_meta(l, r, None).is_err());
 
-        let err = TransformMergeCommitMeta::merge_commit_meta(l, r, None).unwrap_err();
-        assert!(
-            err.message()
-                .contains("multiple VirtualSchemaMode::Replace mutations"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn test_merge_commit_meta_replace_clears_virtual_schema() {
+        // Merge + Replace
         let l = commit_meta_with_virtual_schema(
             1,
             VirtualSchemaMode::Merge,
-            Some(schema_with_column_ids(&[1, 2])),
+            Some(schema_with_column_ids(&[1])),
         );
         let r = commit_meta_with_virtual_schema(1, VirtualSchemaMode::Replace, None);
+        assert!(TransformMergeCommitMeta::merge_commit_meta(l, r, None).is_err());
 
-        let merged = TransformMergeCommitMeta::merge_commit_meta(l, r, None)
-            .expect("merge commit meta should succeed");
-
-        assert_eq!(merged.virtual_schema_mode, VirtualSchemaMode::Replace);
-        assert!(merged.virtual_schema.is_none());
-    }
-
-    #[test]
-    fn test_merge_commit_meta_replace_then_merge() {
+        // Replace + Merge
         let l = commit_meta_with_virtual_schema(
             1,
             VirtualSchemaMode::Replace,
@@ -388,19 +377,6 @@ mod tests {
             VirtualSchemaMode::Merge,
             Some(schema_with_column_ids(&[2])),
         );
-
-        let merged = TransformMergeCommitMeta::merge_commit_meta(l, r, None)
-            .expect("merge commit meta should succeed");
-
-        assert_eq!(merged.virtual_schema_mode, VirtualSchemaMode::Replace);
-        let virtual_schema = merged
-            .virtual_schema
-            .expect("merged virtual schema should exist");
-        let merged_column_ids = virtual_schema
-            .fields
-            .iter()
-            .map(|f| f.column_id)
-            .collect::<Vec<_>>();
-        assert_eq!(merged_column_ids, vec![1]);
+        assert!(TransformMergeCommitMeta::merge_commit_meta(l, r, None).is_err());
     }
 }
