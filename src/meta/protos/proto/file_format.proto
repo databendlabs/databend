@@ -26,6 +26,7 @@ enum StageFileFormatType {
   Xml = 5;
   NdJson = 6;
   Tsv = 7;
+  Lance = 8;
 }
 
 enum StageFileCompression {
@@ -87,6 +88,7 @@ message FileFormatParams {
     XmlFileFormatParams xml = 6;
     OrcFileFormatParams orc = 7;
     AvroFileFormatParams avro = 8;
+    LanceFileFormatParams lance = 9;
   }
 }
 
@@ -170,4 +172,9 @@ message AvroFileFormatParams {
   optional string missing_field_as = 2;
   repeated string null_if = 3;
   optional bool use_logic_type = 4;
+}
+
+message LanceFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
 }

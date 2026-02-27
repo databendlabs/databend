@@ -19,6 +19,7 @@ use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::SelectStageOptions;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::UriLocation;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -52,7 +53,15 @@ impl Binder {
 
             if let Some(f) = &options.file_format {
                 stage_info.file_format_params = match StageFileFormatType::from_str(f) {
-                    Ok(t) => FileFormatParams::default_by_type(t)?,
+                    Ok(t) => {
+                        if matches!(t, StageFileFormatType::Lance) {
+                            return Err(ErrorCode::IllegalFileFormat(
+                                "LANCE file format is only supported in COPY INTO <location>"
+                                    .to_string(),
+                            ));
+                        }
+                        FileFormatParams::default_by_type(t)?
+                    }
                     _ => databend_common_base::runtime::block_on(self.ctx.get_file_format(f))?,
                 }
             }
