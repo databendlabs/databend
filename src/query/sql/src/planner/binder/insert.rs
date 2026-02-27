@@ -203,6 +203,11 @@ impl Binder {
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,
                 )?;
+                if matches!(file_format_params, FileFormatParams::Lance(_)) {
+                    return Err(ErrorCode::IllegalFileFormat(
+                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                    ));
+                }
                 match location.as_str() {
                     STAGE_PLACEHOLDER => {
                         if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
