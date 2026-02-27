@@ -8,6 +8,7 @@ edition = { workspace = true }
 
 [dependencies]
 apache-avro = { workspace = true }
+arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
@@ -33,12 +34,17 @@ databend-common-storages-parquet = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = { workspace = true }
+futures = { workspace = true }
 jsonb = { workspace = true }
+lance = { workspace = true, features = ["protoc"] }
+lance-table = { workspace = true, features = ["protoc"] }
 lexical-core = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
+object_store = { workspace = true }
+object_store_opendal = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
@@ -46,6 +52,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
+url = { workspace = true }
 uuid = { workspace = true }
 
 [lints]
