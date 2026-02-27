@@ -44,10 +44,6 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
     fixture
         .default_session()
         .get_settings()
-        .set_data_retention_time_in_days(1)?;
-    fixture
-        .default_session()
-        .get_settings()
         .set_enable_experimental_virtual_column(0)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
@@ -61,9 +57,6 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         .set_enable_experimental_virtual_column(1)?;
 
     let table_ctx = fixture.new_query_ctx().await?;
-    table_ctx
-        .get_settings()
-        .set_data_retention_time_in_days(1)?;
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -143,6 +136,8 @@ async fn test_fuse_do_vacuum_virtual_column_removes_orphan() -> anyhow::Result<(
     // Vacuum should remove the orphan while keeping referenced files.
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
+    // retention=0 so old snapshots expire immediately; orphan _vb_v2 files
+    // are no longer protected by historical snapshots and can be detected.
     fixture
         .default_session()
         .get_settings()
@@ -254,10 +249,6 @@ async fn test_fuse_do_vacuum_virtual_column_removes_legacy_prefix() -> anyhow::R
     // Create a legacy _vb directory and file; vacuum should remove the whole prefix.
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
-    fixture
-        .default_session()
-        .get_settings()
-        .set_data_retention_time_in_days(0)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
@@ -305,10 +296,6 @@ async fn test_fuse_do_vacuum_virtual_column_replaced_block_keeps_schema() -> any
     // ── Step 1: Setup table with 2 blocks of variant data and refresh virtual columns ──
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
-    fixture
-        .default_session()
-        .get_settings()
-        .set_data_retention_time_in_days(0)?;
     fixture
         .default_session()
         .get_settings()
@@ -429,9 +416,6 @@ async fn test_fuse_do_vacuum_virtual_column_replaced_block_keeps_schema() -> any
     let latest_table = fixture.latest_default_table().await?;
     let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
     let vacuum_ctx = fixture.new_query_ctx().await?;
-    vacuum_ctx
-        .get_settings()
-        .set_data_retention_time_in_days(1)?;
     let removed = do_vacuum_virtual_column(vacuum_ctx.clone(), latest_fuse_table).await?;
     assert!(removed >= 1);
 
