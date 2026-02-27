@@ -448,6 +448,7 @@ pub async fn do_vacuum_virtual_column(
                 )
             });
 
+        let prev_snapshot_id = latest_snapshot.snapshot_id;
         let snapshot_gen = MutationGenerator::new(Some(latest_snapshot), MutationKind::Refresh);
         build_res.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
@@ -458,7 +459,7 @@ pub async fn do_vacuum_virtual_column(
                 snapshot_gen.clone(),
                 input,
                 None,
-                None,
+                Some(prev_snapshot_id),
                 None,
                 table_meta_timestamps,
             )
@@ -595,6 +596,97 @@ fn prune_virtual_schema(
     } else {
         virtual_schema.number_of_blocks = number_of_remaining_virtual_blocks;
         Some(virtual_schema)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use anyhow::Result;
+    use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
+    use databend_common_expression::VariantDataType;
+    use databend_common_expression::VirtualDataField;
+    use databend_common_expression::VirtualDataSchema;
+    use opendal::Operator;
+    use opendal::services::Memory;
+
+    use super::collect_virtual_locations;
+    use super::prune_virtual_schema;
+
+    fn schema_with_ids(ids: &[u32]) -> VirtualDataSchema {
+        VirtualDataSchema {
+            fields: ids
+                .iter()
+                .map(|column_id| VirtualDataField {
+                    name: format!("v['{column_id}']"),
+                    data_types: vec![VariantDataType::String],
+                    source_column_id: 0,
+                    column_id: *column_id,
+                })
+                .collect(),
+            metadata: std::collections::BTreeMap::new(),
+            next_column_id: ids.iter().max().map(|v| v + 1).unwrap_or(1),
+            number_of_blocks: 0,
+        }
+    }
+
+    // Only fields whose column_id appears in referenced_column_ids are kept.
+    // Output is sorted by column_id. number_of_blocks is updated to the given value.
+    #[test]
+    fn test_prune_virtual_schema_keeps_referenced_and_updates_blocks() {
+        let schema = schema_with_ids(&[3, 1, 2]);
+        let referenced = HashSet::from([1_u32, 3_u32]);
+
+        let pruned =
+            prune_virtual_schema(&Some(schema), &referenced, 7).expect("schema should remain");
+
+        let column_ids = pruned
+            .fields
+            .iter()
+            .map(|f| f.column_id)
+            .collect::<Vec<_>>();
+        assert_eq!(column_ids, vec![1, 3]);
+        assert_eq!(pruned.number_of_blocks, 7);
+    }
+
+    // When no fields are referenced, prune returns None (schema cleared).
+    #[test]
+    fn test_prune_virtual_schema_empty_returns_none() {
+        let schema = schema_with_ids(&[1, 2]);
+        let referenced: HashSet<u32> = HashSet::new();
+
+        let pruned = prune_virtual_schema(&Some(schema), &referenced, 0);
+        assert!(pruned.is_none());
+    }
+
+    // Even if all fields are referenced, the result is capped at VIRTUAL_COLUMNS_LIMIT.
+    // This prevents historically oversized schemas from persisting after vacuum.
+    #[test]
+    fn test_prune_virtual_schema_truncates_to_limit() {
+        let ids = (0..(VIRTUAL_COLUMNS_LIMIT as u32 + 5)).collect::<Vec<_>>();
+        let schema = schema_with_ids(&ids);
+        let referenced = ids.iter().copied().collect::<HashSet<_>>();
+
+        let pruned =
+            prune_virtual_schema(&Some(schema), &referenced, 1).expect("schema should remain");
+
+        assert_eq!(pruned.fields.len(), VIRTUAL_COLUMNS_LIMIT);
+        assert_eq!(
+            pruned.fields.last().unwrap().column_id,
+            VIRTUAL_COLUMNS_LIMIT as u32 - 1
+        );
+    }
+
+    // When the _vb_v2 prefix doesn't exist on storage, collect should return
+    // an empty list without error (handles NotFound gracefully).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_collect_virtual_locations_empty_prefix() -> Result<()> {
+        let operator = Operator::new(Memory::default())?.finish();
+        let mut files = Vec::new();
+        collect_virtual_locations(&operator, "missing/_vb_v2/", &mut files).await?;
+        assert!(files.is_empty());
+        Ok(())
     }
 }
 
