@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -21,6 +23,7 @@ use parking_lot::Mutex;
 use crate::runtime::ThreadTracker;
 use crate::runtime::error_info::NodeErrorType;
 use crate::runtime::metrics::ScopedRegistry;
+use crate::runtime::perf::PerfEvent;
 use crate::runtime::profile::ProfileStatisticsName;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -50,6 +53,10 @@ pub struct Profile {
     pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
     pub metrics_registry: Option<Arc<ScopedRegistry>>,
     pub errors: Arc<Mutex<Vec<NodeErrorType>>>,
+    /// Hardware/software perf counter results, only populated during EXPLAIN PERF.
+    pub perf_counters: Mutex<HashMap<PerfEvent, u64>>,
+    /// Whether any perf counter read detected kernel timesharing (multiplexing).
+    pub perf_multiplexed: AtomicBool,
 }
 
 impl Clone for Profile {
@@ -67,6 +74,8 @@ impl Clone for Profile {
                 AtomicUsize::new(self.statistics[idx].load(Ordering::SeqCst))
             }),
             errors: self.errors.clone(),
+            perf_counters: Mutex::new(self.perf_counters.lock().clone()),
+            perf_multiplexed: AtomicBool::new(self.perf_multiplexed.load(Ordering::SeqCst)),
         }
     }
 }
@@ -96,6 +105,8 @@ impl Profile {
             statistics: Self::create_items(),
             metrics_registry,
             errors: Arc::new(Mutex::new(vec![])),
+            perf_counters: Mutex::new(HashMap::new()),
+            perf_multiplexed: AtomicBool::new(false),
         }
     }
 
@@ -104,6 +115,23 @@ impl Profile {
             None => {}
             Some(profile) => {
                 profile.statistics[name as usize].fetch_add(value, Ordering::SeqCst);
+            }
+        });
+    }
+
+    /// Record perf counter values into the current thread's profile.
+    /// Only called during EXPLAIN PERF execution.
+    pub fn record_perf_counters(values: Vec<(PerfEvent, u64)>, multiplexed: bool) {
+        ThreadTracker::with(|x| match x.borrow().payload.profile.as_ref() {
+            None => {}
+            Some(profile) => {
+                let mut counters = profile.perf_counters.lock();
+                for (event, value) in values {
+                    *counters.entry(event).or_insert(0) += value;
+                }
+                if multiplexed {
+                    profile.perf_multiplexed.store(true, Ordering::SeqCst);
+                }
             }
         });
     }

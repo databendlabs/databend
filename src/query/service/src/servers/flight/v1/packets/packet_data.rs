@@ -23,6 +23,7 @@ use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetricValues;
 use databend_common_exception::ErrorCode;
@@ -33,6 +34,13 @@ use databend_common_storage::MutationStatus;
 use log::error;
 
 use crate::servers::flight::v1::packets::ProgressInfo;
+
+/// Per-node hardware performance counter data, collected separately from PlanProfile.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct NodePerfCounters {
+    pub counters: Vec<(String, HashMap<PerfEvent, u64>)>,
+    pub multiplexed: bool,
+}
 
 pub struct FragmentData {
     meta: Bytes,
@@ -67,6 +75,7 @@ pub enum DataPacket {
     DataCacheMetrics(DataCacheMetricValues),
     PartStatistics(HashMap<u32, PartStatistics>),
     QueryPerf(String),
+    QueryPerfCounters(NodePerfCounters),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -86,6 +95,7 @@ impl DataPacket {
             DataPacket::DataCacheMetrics(_) => 0,
             DataPacket::QueryPerf(_) => 0,
             DataPacket::PartStatistics(_) => 0,
+            DataPacket::QueryPerfCounters(_) => 0,
         }
     }
 }
@@ -153,8 +163,14 @@ impl TryFrom<DataPacket> for FlightData {
                 flight_descriptor: None,
             },
             DataPacket::PartStatistics(stat) => FlightData {
-                app_metadata: vec![0x10].into(),
+                app_metadata: vec![0x0a].into(),
                 data_body: serde_json::to_vec(&stat)?.into(),
+                data_header: Default::default(),
+                flight_descriptor: None,
+            },
+            DataPacket::QueryPerfCounters(counters) => FlightData {
+                app_metadata: vec![0x0b].into(),
+                data_body: serde_json::to_vec(&counters)?.into(),
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
@@ -224,10 +240,14 @@ impl TryFrom<FlightData> for DataPacket {
                     .map_err(|_| ErrorCode::BadBytes("Invalid UTF-8 in query performance data."))?;
                 Ok(DataPacket::QueryPerf(query_perf))
             }
-            0x10 => {
+            0x0a => {
                 let stat =
                     serde_json::from_slice::<HashMap<u32, PartStatistics>>(&flight_data.data_body)?;
                 Ok(DataPacket::PartStatistics(stat))
+            }
+            0x0b => {
+                let counters = serde_json::from_slice::<NodePerfCounters>(&flight_data.data_body)?;
+                Ok(DataPacket::QueryPerfCounters(counters))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }

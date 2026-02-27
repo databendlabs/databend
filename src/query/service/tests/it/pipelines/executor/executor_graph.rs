@@ -456,7 +456,7 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
 }
 
 fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -468,7 +468,7 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<Running
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
 }
 
 fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -484,7 +484,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None)
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
 }
 
 fn create_source_pipe(
@@ -562,6 +562,7 @@ async fn create_executor_with_simple_pipeline(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        perf_events: vec![],
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

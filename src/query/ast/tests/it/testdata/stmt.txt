@@ -1452,6 +1452,195 @@ Explain {
 
 
 ---------- Input ----------
+explain perf select a from b;
+---------- Output ---------
+EXPLAIN PERF SELECT a FROM b
+---------- AST ------------
+Explain {
+    kind: Perf {
+        events: [],
+    },
+    options: (
+        None,
+        [],
+    ),
+    query: Query(
+        Query {
+            span: Some(
+                13..28,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        13..28,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    20..21,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                20..21,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                27..28,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        27..28,
+                                    ),
+                                    name: "b",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+explain perf (events='cycles,instructions') select a from b;
+---------- Output ---------
+EXPLAIN PERF(events='cycles,instructions') SELECT a FROM b
+---------- AST ------------
+Explain {
+    kind: Perf {
+        events: [
+            "cycles",
+            "instructions",
+        ],
+    },
+    options: (
+        None,
+        [],
+    ),
+    query: Query(
+        Query {
+            span: Some(
+                44..59,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        44..59,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    51..52,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                51..52,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                58..59,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        58..59,
+                                    ),
+                                    name: "b",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
 describe a;
 ---------- Output ---------
 DESCRIBE a

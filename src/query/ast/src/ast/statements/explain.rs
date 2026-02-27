@@ -43,7 +43,9 @@ pub enum ExplainKind {
 
     Graphical,
 
-    Perf,
+    Perf {
+        events: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]

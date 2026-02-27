@@ -16,6 +16,7 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::ExplainOption;
 use databend_common_ast::ast::Statement;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -156,9 +157,20 @@ impl Binder {
                     plan: Box::new(self.bind_statement(bind_context, inner).await?),
                 })
             }
-            ExplainKind::Perf => Ok(Plan::ExplainPerf {
-                sql: inner.to_string(),
-            }),
+            ExplainKind::Perf { events } => {
+                for name in events {
+                    if PerfEvent::from_name(name).is_none() {
+                        return Err(ErrorCode::SyntaxException(format!(
+                            "Unknown perf event: '{name}'. Valid events: {}",
+                            PerfEvent::all_names().collect::<Vec<_>>().join(", ")
+                        )));
+                    }
+                }
+                Ok(Plan::ExplainPerf {
+                    sql: inner.to_string(),
+                    events: events.clone(),
+                })
+            }
             _ => Ok(Plan::Explain {
                 kind: kind.clone(),
                 config,

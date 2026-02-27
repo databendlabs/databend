@@ -295,8 +295,9 @@ impl InterpreterFactory {
                 *partial,
                 *graphical,
             )?)),
-            Plan::ExplainPerf { sql } => Ok(Arc::new(ExplainPerfInterpreter::try_create(
+            Plan::ExplainPerf { sql, events } => Ok(Arc::new(ExplainPerfInterpreter::try_create(
                 sql.clone(),
+                events.clone(),
                 ctx,
             )?)),
             Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(

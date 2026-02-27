@@ -23,6 +23,7 @@ use std::time::Instant;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
@@ -70,6 +71,7 @@ pub struct QueryPipelineExecutor {
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
     lock_guards: Vec<Arc<LockGuard>>,
+    perf_events: Vec<PerfEvent>,
 }
 
 impl QueryPipelineExecutor {
@@ -87,7 +89,13 @@ impl QueryPipelineExecutor {
         let mut on_finished_chain = pipeline.take_on_finished();
         let lock_guards = pipeline.take_lock_guards();
 
-        match RunningGraph::create(pipeline, 1, settings.query_id.clone(), None) {
+        match RunningGraph::create(
+            pipeline,
+            1,
+            settings.query_id.clone(),
+            None,
+            settings.perf_events.clone(),
+        ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
                 let _ = on_finished_chain.apply(info);
@@ -148,7 +156,13 @@ impl QueryPipelineExecutor {
             .flat_map(|x| x.take_lock_guards())
             .collect::<Vec<_>>();
 
-        match RunningGraph::from_pipelines(pipelines, 1, settings.query_id.clone(), None) {
+        match RunningGraph::from_pipelines(
+            pipelines,
+            1,
+            settings.query_id.clone(),
+            None,
+            settings.perf_events.clone(),
+        ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
                 let _ignore_res = finished_chain.apply(info);
@@ -184,6 +198,7 @@ impl QueryPipelineExecutor {
             on_init_callback,
             on_finished_chain,
             async_runtime: GlobalIORuntime::instance(),
+            perf_events: settings.perf_events.clone(),
             settings,
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
@@ -427,6 +442,7 @@ impl QueryPipelineExecutor {
         unsafe {
             let workers_condvar = self.workers_condvar.clone();
             let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
+            context.init_perf_counters(&self.perf_events);
 
             while !self.global_tasks_queue.is_finished() {
                 // When there are not enough tasks, the thread will be blocked, so we need loop check.

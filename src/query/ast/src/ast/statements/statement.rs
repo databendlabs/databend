@@ -688,7 +688,7 @@ impl Display for Statement {
                             .join(", ")
                     )?;
                 }
-                match *kind {
+                match kind {
                     ExplainKind::Ast(_) => write!(f, " AST")?,
                     ExplainKind::Syntax(_) => write!(f, " SYNTAX")?,
                     ExplainKind::Graph => write!(f, " GRAPH")?,
@@ -702,7 +702,12 @@ impl Display for Statement {
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
-                    ExplainKind::Perf => write!(f, " PERF")?,
+                    ExplainKind::Perf { events } => {
+                        write!(f, " PERF")?;
+                        if !events.is_empty() {
+                            write!(f, "(events='{}')", events.join(","))?;
+                        }
+                    }
                 }
                 write!(f, " {query}")?;
             }
