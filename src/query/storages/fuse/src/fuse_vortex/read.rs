@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
@@ -20,11 +21,17 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
+use futures::FutureExt;
+use opendal::Buffer;
 use vortex::VortexSessionDefault;
 use vortex::array::stream::ArrayStreamExt;
+use vortex::buffer::Alignment;
+use vortex::buffer::ByteBuffer;
+use vortex::error::VortexResult;
 use vortex::expr::root;
 use vortex::expr::select;
 use vortex::file::OpenOptionsSessionExt;
+use vortex::io::VortexReadAt;
 use vortex::io::runtime::BlockingRuntime;
 use vortex::io::runtime::current::CurrentThreadRuntime;
 use vortex::io::session::RuntimeSessionExt;
@@ -39,12 +46,41 @@ pub fn read_vortex(table_schema: &TableSchema, read_buffer: &[u8]) -> Result<Dat
         .map(|f| Arc::<str>::from(f.name().as_str()))
         .collect::<Vec<_>>();
 
-    let array = runtime.block_on(async move {
-        let file = session
-            .open_options()
-            .open_buffer(read_buffer.to_vec())
-            .map_err(|e| ErrorCode::Internal(format!("Failed to open vortex file: {e}")))?;
+    let file = session
+        .open_options()
+        .open_buffer(read_buffer.to_vec())
+        .map_err(|e| ErrorCode::Internal(format!("Failed to open vortex file: {e}")))?;
+    read_vortex_file(table_schema, runtime, file, projection)
+}
 
+pub fn read_vortex_with_ranges(
+    table_schema: &TableSchema,
+    file_size: u64,
+    prefetched_ranges: Vec<(Range<u64>, Buffer)>,
+) -> Result<DataBlock> {
+    let runtime = CurrentThreadRuntime::new();
+    let session = VortexSession::default().with_handle(runtime.handle());
+    let projection = table_schema
+        .fields()
+        .iter()
+        .map(|f| Arc::<str>::from(f.name().as_str()))
+        .collect::<Vec<_>>();
+
+    let read_at = PrefetchedVortexReadAt::new(file_size, prefetched_ranges);
+    let file = runtime
+        .block_on(async move { session.open_options().open_read_at(read_at).await })
+        .map_err(|e| ErrorCode::Internal(format!("Failed to open vortex file: {e}")))?;
+
+    read_vortex_file(table_schema, runtime, file, projection)
+}
+
+fn read_vortex_file(
+    table_schema: &TableSchema,
+    runtime: CurrentThreadRuntime,
+    file: vortex::file::VortexFile,
+    projection: Vec<Arc<str>>,
+) -> Result<DataBlock> {
+    let array = runtime.block_on(async move {
         let mut scan = file
             .scan()
             .map_err(|e| ErrorCode::Internal(format!("Failed to create vortex scan: {e}")))?;
@@ -63,6 +99,72 @@ pub fn read_vortex(table_schema: &TableSchema, read_buffer: &[u8]) -> Result<Dat
     let data_schema: DataSchema = table_schema.into();
     DataBlock::from_record_batch(&data_schema, &batch)
         .map_err(|e| ErrorCode::Internal(format!("Failed to convert record batch: {e}")))
+}
+
+#[derive(Clone)]
+struct PrefetchedChunk {
+    range: Range<u64>,
+    data: ByteBuffer,
+}
+
+#[derive(Clone)]
+struct PrefetchedVortexReadAt {
+    file_size: u64,
+    chunks: Arc<Vec<PrefetchedChunk>>,
+}
+
+impl PrefetchedVortexReadAt {
+    fn new(file_size: u64, mut prefetched_ranges: Vec<(Range<u64>, Buffer)>) -> Self {
+        prefetched_ranges.sort_by_key(|(range, _)| (range.start, range.end));
+        let chunks = prefetched_ranges
+            .into_iter()
+            .map(|(range, data)| PrefetchedChunk {
+                range,
+                data: ByteBuffer::copy_from(data.to_vec()),
+            })
+            .collect();
+
+        Self {
+            file_size,
+            chunks: Arc::new(chunks),
+        }
+    }
+
+    fn find_range(&self, offset: u64, end: u64) -> Option<&PrefetchedChunk> {
+        self.chunks
+            .iter()
+            .find(|chunk| offset >= chunk.range.start && end <= chunk.range.end)
+    }
+}
+
+impl VortexReadAt for PrefetchedVortexReadAt {
+    fn read_at(
+        &self,
+        offset: u64,
+        length: usize,
+        alignment: Alignment,
+    ) -> futures::future::BoxFuture<'static, VortexResult<ByteBuffer>> {
+        let this = self.clone();
+        async move {
+            let end = offset + length as u64;
+            let Some(chunk) = this.find_range(offset, end) else {
+                return Err(vortex::error::vortex_err!(
+                    "Requested vortex range {}..{} is not prefetched",
+                    offset,
+                    end
+                ));
+            };
+            let start = (offset - chunk.range.start) as usize;
+            let stop = start + length;
+            Ok(chunk.data.slice_unaligned(start..stop).aligned(alignment))
+        }
+        .boxed()
+    }
+
+    fn size(&self) -> futures::future::BoxFuture<'static, VortexResult<u64>> {
+        let size = self.file_size;
+        async move { Ok(size) }.boxed()
+    }
 }
 
 #[cfg(test)]
@@ -364,7 +466,7 @@ mod tests {
         block: &DataBlock,
     ) -> DataBlock {
         let mut buffer = Vec::new();
-        write_vortex(write_schema, block.clone(), &mut buffer).unwrap();
+        let _ = write_vortex(write_schema, block.clone(), &mut buffer).unwrap();
         read_vortex(read_schema, &buffer).unwrap()
     }
 

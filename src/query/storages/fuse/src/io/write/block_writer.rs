@@ -51,9 +51,9 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
-use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::VortexColumnMeta;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -146,18 +146,26 @@ pub fn serialize_block_with_column_stats(
         }
         FuseStorageFormat::Vortex => {
             let num_rows = block.num_rows() as u64;
-            write_vortex(schema.as_ref(), block, buf)?;
+            let write_meta = write_vortex(schema.as_ref(), block, buf)?;
+            let field_leaf_column_ids = schema.field_leaf_column_ids();
 
-            let meta = ColumnMeta::Parquet(SingleColumnMeta {
-                offset: 0,
-                len: buf.len() as u64,
-                num_values: num_rows,
-            });
-            let metas = schema
-                .to_leaf_column_ids()
-                .into_iter()
-                .map(|column_id| (column_id, meta.clone()))
-                .collect::<HashMap<_, _>>();
+            let mut metas = HashMap::new();
+            for (field, leaf_column_ids) in schema.fields().iter().zip(field_leaf_column_ids) {
+                let mut ranges = write_meta.shared_ranges.clone();
+                if let Some(field_ranges) = write_meta.field_ranges.get(field.name()) {
+                    ranges.extend(field_ranges.iter().cloned());
+                }
+
+                let meta = ColumnMeta::Vortex(VortexColumnMeta {
+                    segments: ranges,
+                    num_values: num_rows,
+                });
+
+                for column_id in leaf_column_ids {
+                    metas.insert(column_id, meta.clone());
+                }
+            }
+
             Ok(metas)
         }
     }

@@ -32,7 +32,7 @@ use super::BlockReader;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
-use crate::fuse_vortex::read_vortex;
+use crate::fuse_vortex::read_vortex_with_ranges;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 pub enum DeserializedArray<'a> {
@@ -103,8 +103,10 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         match storage_format {
             FuseStorageFormat::Vortex => {
-                let data = self.operator.read(&meta.location.0).await?;
-                read_vortex(self.schema().as_ref(), data.to_bytes().as_ref())
+                let (file_size, prefetched_ranges) = self
+                    .read_vortex_data_by_merge_io(settings, &meta.location.0, &meta.col_metas)
+                    .await?;
+                read_vortex_with_ranges(self.schema().as_ref(), file_size, prefetched_ranges)
             }
             FuseStorageFormat::Parquet | FuseStorageFormat::Native => {
                 // Get the merged IO read result.

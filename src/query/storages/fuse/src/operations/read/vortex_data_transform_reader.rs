@@ -46,7 +46,7 @@ use roaring::RoaringTreemap;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
 use crate::fuse_part::FuseBlockPartInfo;
-use crate::fuse_vortex::read_vortex;
+use crate::fuse_vortex::read_vortex_with_ranges;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
@@ -235,17 +235,33 @@ impl AsyncTransform for ReadVortexDataTransform {
                 from_agg_index = true;
                 index_reader.deserialize_parquet_data(actual_part, data)?
             } else {
-                let data = self.block_reader.operator.read(&fuse_part.location).await?;
-                read_vortex(
+                let (file_size, prefetched_ranges) = self
+                    .block_reader
+                    .read_vortex_data_by_merge_io(
+                        &self.read_settings,
+                        &fuse_part.location,
+                        &fuse_part.columns_meta,
+                    )
+                    .await?;
+                read_vortex_with_ranges(
                     self.block_reader.schema().as_ref(),
-                    data.to_bytes().as_ref(),
+                    file_size,
+                    prefetched_ranges,
                 )?
             }
         } else {
-            let data = self.block_reader.operator.read(&fuse_part.location).await?;
-            read_vortex(
+            let (file_size, prefetched_ranges) = self
+                .block_reader
+                .read_vortex_data_by_merge_io(
+                    &self.read_settings,
+                    &fuse_part.location,
+                    &fuse_part.columns_meta,
+                )
+                .await?;
+            read_vortex_with_ranges(
                 self.block_reader.schema().as_ref(),
-                data.to_bytes().as_ref(),
+                file_size,
+                prefetched_ranges,
             )?
         };
 
@@ -268,9 +284,7 @@ impl AsyncTransform for ReadVortexDataTransform {
             data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
 
             offsets = if self.block_reader.query_internal_columns() {
-                bitmap_selection
-                    .as_ref()
-                    .map(Self::offsets_from_bitmap)
+                bitmap_selection.as_ref().map(Self::offsets_from_bitmap)
             } else {
                 None
             };

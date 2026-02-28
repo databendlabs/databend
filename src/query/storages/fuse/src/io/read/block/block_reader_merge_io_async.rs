@@ -14,9 +14,11 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Range;
 
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
@@ -27,6 +29,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use opendal::Buffer;
 
 use crate::BlockReadResult;
 use crate::io::BlockReader;
@@ -140,6 +143,100 @@ impl BlockReader {
         self.report_cache_metrics(&block_read_res, ranges.iter().map(|(_, r)| r));
 
         Ok(block_read_res)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn read_vortex_data_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+    ) -> Result<(u64, Vec<(Range<u64>, Buffer)>)> {
+        // Perf
+        {
+            metrics_inc_remote_io_read_parts(1);
+        }
+
+        let mut deduped = HashSet::new();
+        let mut ranges = Vec::new();
+
+        let push_column_ranges =
+            |column_id: &ColumnId,
+             ranges: &mut Vec<Range<u64>>,
+             deduped: &mut HashSet<(u64, u64)>| {
+                if let Some(column_meta) = columns_meta.get(column_id) {
+                    for range in column_meta.read_ranges(&None) {
+                        if range.start < range.end && deduped.insert((range.start, range.end)) {
+                            // Perf
+                            {
+                                metrics_inc_remote_io_seeks(1);
+                                metrics_inc_remote_io_read_bytes(range.end - range.start);
+                            }
+                            // Record bytes scanned from remote storage
+                            Profile::record_usize_profile(
+                                ProfileStatisticsName::ScanBytesFromRemote,
+                                (range.end - range.start) as usize,
+                            );
+
+                            ranges.push(range);
+                        }
+                    }
+                }
+            };
+
+        for (_index, (column_id, ..)) in self.project_indices.iter() {
+            push_column_ranges(column_id, &mut ranges, &mut deduped);
+        }
+
+        // Empty projection still needs footer ranges to open the vortex file.
+        if ranges.is_empty() {
+            if let Some(column_id) = columns_meta.keys().next() {
+                push_column_ranges(column_id, &mut ranges, &mut deduped);
+            }
+        }
+
+        ranges.sort_by_key(|range| (range.start, range.end));
+
+        let raw_ranges = ranges
+            .iter()
+            .enumerate()
+            .map(|(idx, range)| {
+                let synthetic_id = u32::try_from(idx).map_err(|_| {
+                    ErrorCode::Internal(format!(
+                        "Too many vortex ranges to merge-io in one request: {}",
+                        ranges.len()
+                    ))
+                })?;
+                Ok((synthetic_id, range.clone()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let merge_io_result =
+            MergeIOReader::merge_io_read(settings, self.operator.clone(), location, &raw_ranges)
+                .await?;
+
+        let mut prefetched = Vec::with_capacity(raw_ranges.len());
+        for (synthetic_id, original_range) in raw_ranges {
+            let Some((chunk_idx, range)) = merge_io_result.columns_chunk_offsets.get(&synthetic_id)
+            else {
+                return Err(ErrorCode::Internal(format!(
+                    "Missing vortex merged range {synthetic_id} for path {}",
+                    merge_io_result.block_path
+                )));
+            };
+            let chunk_data = merge_io_result
+                .owner_memory
+                .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
+            prefetched.push((original_range, chunk_data.slice(range.clone())));
+        }
+
+        let file_size = prefetched
+            .iter()
+            .map(|(range, _)| range.end)
+            .max()
+            .unwrap_or_default();
+
+        Ok((file_size, prefetched))
     }
 }
 
