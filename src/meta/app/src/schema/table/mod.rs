@@ -774,8 +774,6 @@ pub struct UpdateTableMetaReq {
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub base_snapshot_location: Option<String>,
-    /// Optional optimistic LVT check.
-    pub lvt_check: Option<TableLvtCheck>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

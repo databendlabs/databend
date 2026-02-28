@@ -26,6 +26,7 @@ use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::OPT_KEY_BASE_TABLE_ID;
 use databend_common_meta_app::schema::RefNameIdent;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_sql::plans::CreateTableBranchPlan;
@@ -183,6 +184,23 @@ impl RealTableRefHandler {
                 plan.database, plan.table, plan.tag_name
             ))
         })?;
+        let Some(snapshot) = fuse_table
+            .read_table_snapshot_with_location(Some(snapshot_loc.clone()))
+            .await?
+        else {
+            return Err(ErrorCode::TableHistoricalDataNotFound(format!(
+                "Snapshot '{}' not found when creating TAG '{}'",
+                snapshot_loc, plan.tag_name
+            )));
+        };
+        let Some(snapshot_timestamp) = snapshot.timestamp else {
+            return Err(ErrorCode::IllegalReference(format!(
+                "Table {} snapshot lacks required timestamp. This table was created with a significantly outdated version \
+                that is no longer directly supported by the current version and requires migration. \
+                Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com",
+                table_info.ident.table_id
+            )));
+        };
 
         let catalog = ctx.get_catalog(&plan.catalog).await?;
         catalog
@@ -192,6 +210,10 @@ impl RealTableRefHandler {
                 tag_name: plan.tag_name.clone(),
                 snapshot_loc,
                 expire_at: plan.retain.map(|v| Utc::now() + v),
+                lvt_check: Some(TableLvtCheck {
+                    tenant: ctx.get_tenant(),
+                    time: snapshot_timestamp,
+                }),
             })
             .await
     }
@@ -225,9 +247,7 @@ impl RealTableRefHandler {
             None => fuse_table.snapshot_loc(),
         };
 
-        let (new_snapshot, source_snapshot_location) = if let Some(location) =
-            source_snapshot_location
-        {
+        let (new_snapshot, lvt_check) = if let Some(location) = source_snapshot_location {
             let Some(snapshot) = fuse_table
                 .read_table_snapshot_with_location(Some(location.clone()))
                 .await?
@@ -253,7 +273,13 @@ impl RealTableRefHandler {
                 ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
             )?;
             branch_snapshot.prev_snapshot_id = None;
-            (branch_snapshot, Some(location))
+            (
+                branch_snapshot,
+                Some(TableLvtCheck {
+                    tenant: ctx.get_tenant(),
+                    time: snapshot.timestamp.unwrap(),
+                }),
+            )
         } else {
             let branch_snapshot = TableSnapshot::try_new(
                 Some(seq),
@@ -272,11 +298,6 @@ impl RealTableRefHandler {
         branch_table_meta
             .options
             .insert(OPT_KEY_BASE_TABLE_ID.to_string(), table_id.to_string());
-        if let Some(loc) = &source_snapshot_location {
-            branch_table_meta
-                .options
-                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), loc.clone());
-        }
 
         let catalog = ctx.get_catalog(&plan.catalog).await?;
         let name_ident = Self::name_ident(&ctx, &plan.database, &plan.table, &plan.branch_name);
@@ -287,6 +308,7 @@ impl RealTableRefHandler {
                 seq: MatchSeq::Exact(seq),
                 table_meta: branch_table_meta,
                 expire_at: plan.retain.map(|v| Utc::now() + v),
+                lvt_check,
             })
             .await?;
 
@@ -312,7 +334,6 @@ impl RealTableRefHandler {
                     seq: MatchSeq::Exact(branch_table_info.ident.seq),
                     new_table_meta: new_branch_meta,
                     base_snapshot_location: branch_fuse_table.snapshot_loc(),
-                    lvt_check: None,
                 },
                 branch_table_info.as_ref(),
             )

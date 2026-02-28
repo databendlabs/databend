@@ -32,7 +32,6 @@ use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
-use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
@@ -1236,31 +1235,6 @@ where
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
-
-            // Add LVT check if provided
-            if let Some(check) = req.lvt_check.as_ref() {
-                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
-                let res = self.get_pb(&lvt_ident).await?;
-                let (seq, current_lvt) = match res {
-                    Some(v) => (v.seq, Some(v.data)),
-                    None => (0, None),
-                };
-                if let Some(current_lvt) = current_lvt {
-                    if current_lvt.time > check.time {
-                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
-                            TableSnapshotExpired::new(
-                                req.table_id,
-                                format!(
-                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
-                                    check.time, current_lvt.time
-                                ),
-                            ),
-                        )));
-                    }
-                }
-                // no other one has updated LVT since we read it
-                txn.condition.push(txn_cond_seq(&lvt_ident, Eq, seq));
-            }
 
             txn.if_then
                 .push(txn_op_put(&tbid, serialize_struct(&new_table_meta)?));

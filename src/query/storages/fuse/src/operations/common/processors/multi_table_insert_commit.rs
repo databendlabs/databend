@@ -307,7 +307,6 @@ async fn build_update_table_meta_req(
         seq: MatchSeq::Exact(table_version),
         new_table_meta,
         base_snapshot_location: fuse_table.snapshot_loc(),
-        lvt_check: None,
     };
     Ok(req)
 }

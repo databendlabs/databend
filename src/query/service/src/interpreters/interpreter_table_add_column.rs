@@ -318,7 +318,6 @@ pub(crate) async fn update_table_meta(
         seq: MatchSeq::Exact(table_version),
         new_table_meta: new_table_meta.clone(),
         base_snapshot_location: fuse_tbl.snapshot_loc(),
-        lvt_check: None,
     };
     table_info.meta = new_table_meta.clone();
     catalog.update_single_table_meta(req, &table_info).await?;

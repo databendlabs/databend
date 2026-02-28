@@ -127,7 +127,6 @@ use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
@@ -2653,7 +2652,6 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
         let db_name = "db1";
         let tbl_name = "tb2";
 
@@ -2729,7 +2727,6 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
-                    lvt_check: None,
                 };
 
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2755,7 +2752,6 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version + 1),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
-                    lvt_check: None,
                 };
                 let res = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2782,7 +2778,6 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
-                    lvt_check: None,
                 };
                 let res = mt
                     .update_multi_table_meta_with_sender(
@@ -2864,7 +2859,6 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
-                    lvt_check: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
@@ -2915,7 +2909,6 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
-                    lvt_check: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
@@ -2966,7 +2959,6 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
-                    lvt_check: None,
                 };
                 let result = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2978,87 +2970,6 @@ impl SchemaApiTestSuite {
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
                 assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
-            }
-
-            info!("--- update table meta, snapshot_ts must respect LVT");
-            {
-                let table = util.get_table().await.unwrap();
-                let table_id = table.ident.table_id;
-                let small_ts = DateTime::<Utc>::from_timestamp(1_000, 0).unwrap();
-                let lvt_time = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
-                let big_time = DateTime::<Utc>::from_timestamp(3_000, 0).unwrap();
-
-                // LVT no set.
-                let mut new_table_meta = table.meta.clone();
-                new_table_meta.comment = "lvt no set".to_string();
-                let req = UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Exact(table.ident.seq),
-                    new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
-                    lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
-                        time: small_ts,
-                    }),
-                };
-                let result = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
-                        update_table_metas: vec![(req, table.as_ref().clone())],
-                        ..Default::default()
-                    })
-                    .await;
-                assert!(result.is_ok());
-                let table = util.get_table().await.unwrap();
-                assert_eq!(table.meta.comment, "lvt no set");
-
-                let lvt_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
-                mt.set_table_lvt(&lvt_ident, &LeastVisibleTime::new(lvt_time))
-                    .await?;
-
-                // LVT is smaller.
-                let mut new_table_meta = table.meta.clone();
-                new_table_meta.comment = "lvt guard should fail".to_string();
-                let req = UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Exact(table.ident.seq),
-                    new_table_meta: new_table_meta.clone(),
-                    base_snapshot_location: None,
-                    lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
-                        time: small_ts,
-                    }),
-                };
-                let result = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
-                        update_table_metas: vec![(req, table.as_ref().clone())],
-                        ..Default::default()
-                    })
-                    .await;
-                assert!(result.is_err());
-
-                // LVT is large enough.
-                let table = util.get_table().await.unwrap();
-                let mut ok_table_meta = table.meta.clone();
-                ok_table_meta.comment = "lvt guard success".to_string();
-                let req = UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Exact(table.ident.seq),
-                    new_table_meta: ok_table_meta.clone(),
-                    base_snapshot_location: None,
-                    lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
-                        time: big_time,
-                    }),
-                };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
-                    update_table_metas: vec![(req, table.as_ref().clone())],
-                    ..Default::default()
-                })
-                .await?
-                .unwrap();
-
-                let updated = util.get_table().await.unwrap();
-                assert_eq!(updated.meta.comment, "lvt guard success");
             }
         }
         Ok(())
@@ -4395,7 +4306,6 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta.clone(),
                 base_snapshot_location: None,
-                lvt_check: None,
             };
 
             let table = mt
@@ -4537,7 +4447,6 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: create_table_meta.clone(),
                 base_snapshot_location: None,
-                lvt_check: None,
             };
 
             let table = mt
@@ -6326,7 +6235,6 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
-                lvt_check: None,
             };
 
             let table = mt
@@ -6378,7 +6286,6 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
-                lvt_check: None,
             };
 
             let table = mt
@@ -7899,7 +7806,6 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
-                lvt_check: None,
             };
 
             let table = mt
@@ -7959,7 +7865,6 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
-                lvt_check: None,
             };
 
             let table = mt
@@ -8016,7 +7921,6 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
-                lvt_check: None,
             };
 
             let table = mt

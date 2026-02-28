@@ -270,7 +270,6 @@ where MT: kvapi::KVApi<Error = MetaError> + TableApi
             seq: MatchSeq::Any,
             new_table_meta: self.table_meta(),
             base_snapshot_location: None,
-            lvt_check: None,
         };
 
         let req = UpdateMultiTableMetaReq {

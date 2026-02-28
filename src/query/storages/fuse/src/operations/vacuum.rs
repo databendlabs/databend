@@ -459,7 +459,6 @@ impl FuseTable {
                 seq: MatchSeq::Exact(latest_table_info.ident.seq),
                 new_table_meta,
                 base_snapshot_location: self.snapshot_loc(),
-                lvt_check: None,
             };
             match catalog
                 .update_single_table_meta(req, latest_table_info)

@@ -20,6 +20,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_meta_types::MatchSeq;
 
+use super::TableLvtCheck;
 use super::TableMeta;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::tenant::Tenant;
@@ -160,6 +161,8 @@ pub struct CreateTableTagReq {
     pub tag_name: String,
     pub snapshot_loc: String,
     pub expire_at: Option<DateTime<Utc>>,
+    /// Optional optimistic LVT check against the base table.
+    pub lvt_check: Option<TableLvtCheck>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -179,6 +182,8 @@ pub struct CreateTableBranchReq {
     pub seq: MatchSeq,
     pub table_meta: TableMeta,
     pub expire_at: Option<DateTime<Utc>>,
+    /// Optional optimistic LVT check against the base table.
+    pub lvt_check: Option<TableLvtCheck>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

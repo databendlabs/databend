@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UndropTableBranchReq;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_meta_kvapi::kvapi;
 use databend_meta_kvapi::kvapi::DirName;
 use databend_meta_kvapi::kvapi::ListOptions;
@@ -174,15 +175,40 @@ where
                 snapshot_loc: req.snapshot_loc.clone(),
             };
 
-            let txn = TxnRequest::new(
-                vec![
-                    // Table must not change.
-                    txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
-                    // Tag must not already exist.
-                    txn_cond_seq(&key_tag, Eq, 0),
-                ],
-                vec![txn_op_put(&key_tag, serialize_struct(&table_tag)?)],
-            );
+            let mut conditions = vec![
+                // Table must not change.
+                txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
+                // Tag must not already exist.
+                txn_cond_seq(&key_tag, Eq, 0),
+            ];
+
+            if let Some(check) = req.lvt_check.as_ref() {
+                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, table_id);
+                let res = self.get_pb(&lvt_ident).await?;
+                let (lvt_seq, current_lvt) = match res {
+                    Some(v) => (v.seq, Some(v.data)),
+                    None => (0, None),
+                };
+                if let Some(current_lvt) = current_lvt {
+                    if current_lvt.time > check.time {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(
+                                table_id,
+                                format!(
+                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                                    check.time, current_lvt.time
+                                ),
+                            ),
+                        )));
+                    }
+                }
+                conditions.push(txn_cond_seq(&lvt_ident, Eq, lvt_seq));
+            }
+
+            let txn = TxnRequest::new(conditions, vec![txn_op_put(
+                &key_tag,
+                serialize_struct(&table_tag)?,
+            )]);
 
             let (succ, _responses) = send_txn(self, txn).await?;
 
@@ -393,24 +419,46 @@ where
             // 6. Append branch_id to id list.
             id_list.append(branch_id);
 
-            let mut txn = TxnRequest::new(
-                vec![
-                    // Base table must not change during branch creation.
-                    txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
-                    // Branch must not already exist.
-                    txn_cond_seq(&key_branch, Eq, 0),
-                    // Branch id list must not change.
-                    txn_cond_seq(&key_branch_id_list, Eq, id_list_seq),
-                ],
-                vec![
-                    // Write branch record: __fd_table_branch/<table_id>/<branch_name>
-                    txn_op_put(&key_branch, serialize_struct(&table_branch)?),
-                    // Write branch's TableMeta: __fd_table_by_id/<branch_id>
-                    txn_op_put(&key_branch_table_id, serialize_struct(&branch_meta)?),
-                    // Write branch id list: __fd_branch_id_list/<table_id>/<branch_name>
-                    txn_op_put(&key_branch_id_list, serialize_struct(&id_list)?),
-                ],
-            );
+            let mut conditions = vec![
+                // Base table must not change during branch creation.
+                txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
+                // Branch must not already exist.
+                txn_cond_seq(&key_branch, Eq, 0),
+                // Branch id list must not change.
+                txn_cond_seq(&key_branch_id_list, Eq, id_list_seq),
+            ];
+
+            if let Some(check) = req.lvt_check.as_ref() {
+                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, table_id);
+                let res = self.get_pb(&lvt_ident).await?;
+                let (lvt_seq, current_lvt) = match res {
+                    Some(v) => (v.seq, Some(v.data)),
+                    None => (0, None),
+                };
+                if let Some(current_lvt) = current_lvt {
+                    if current_lvt.time > check.time {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(
+                                table_id,
+                                format!(
+                                    "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                                    check.time, current_lvt.time
+                                ),
+                            ),
+                        )));
+                    }
+                }
+                conditions.push(txn_cond_seq(&lvt_ident, Eq, lvt_seq));
+            }
+
+            let mut txn = TxnRequest::new(conditions, vec![
+                // Write branch record: __fd_table_branch/<table_id>/<branch_name>
+                txn_op_put(&key_branch, serialize_struct(&table_branch)?),
+                // Write branch's TableMeta: __fd_table_by_id/<branch_id>
+                txn_op_put(&key_branch_table_id, serialize_struct(&branch_meta)?),
+                // Write branch id list: __fd_branch_id_list/<table_id>/<branch_name>
+                txn_op_put(&key_branch_id_list, serialize_struct(&id_list)?),
+            ]);
 
             // 7. Write column mask policy reference KVs.
             let policy_ids: HashSet<u64> = branch_meta
