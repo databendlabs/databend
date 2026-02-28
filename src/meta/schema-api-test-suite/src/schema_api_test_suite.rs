@@ -41,6 +41,7 @@ use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
+use databend_common_meta_api::TagApi;
 use databend_common_meta_api::deserialize_struct;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
@@ -73,6 +74,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTagReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -131,6 +133,9 @@ use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::TagError;
+use databend_common_meta_app::schema::TagMeta;
+use databend_common_meta_app::schema::TagNameIdent;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
@@ -155,6 +160,7 @@ use databend_meta_kvapi::kvapi::Key;
 use databend_meta_kvapi::kvapi::KvApiExt;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaError;
+use databend_meta_types::UpsertKV;
 use fastrace::func_name;
 use log::debug;
 use log::info;
@@ -194,6 +200,7 @@ impl SchemaApiTestSuite {
             + DatamaskApi
             + SequenceApi
             + RowAccessPolicyApi
+            + TagApi
             + 'static,
     {
         let suite = SchemaApiTestSuite {};
@@ -370,10 +377,12 @@ impl SchemaApiTestSuite {
     async fn run_miscellaneous_tests<B, MT>(&self, b: &B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + 'static,
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + TagApi + 'static,
     {
         self.get_table_name_by_id(&b.build().await).await?;
         self.get_db_name_by_id(&b.build().await).await?;
+        self.tag_unknown_reference_is_tolerated(&b.build().await)
+            .await?;
 
         Ok(())
     }
@@ -6102,6 +6111,63 @@ impl SchemaApiTestSuite {
                 assert_eq!(ErrorCode::UNKNOWN_DATABASE_ID, err.code());
             }
         }
+        Ok(())
+    }
+
+    async fn tag_unknown_reference_is_tolerated<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + TagApi {
+        let tenant = Tenant::new_literal("tenant_tag_unknown_reference_is_tolerated");
+        let tag_name = TagNameIdent::new(&tenant, "unknown_ref_tag");
+
+        info!("--- create tag for unknown reference compatibility test");
+        let create_tag_res = mt
+            .create_tag(CreateTagReq {
+                name_ident: tag_name.clone(),
+                meta: TagMeta {
+                    allowed_values: None,
+                    comment: "unknown ref compatibility test".to_string(),
+                    created_on: Utc::now(),
+                    updated_on: None,
+                    drop_on: None,
+                },
+            })
+            .await?;
+
+        let tag_id = match create_tag_res {
+            Ok(reply) => reply.tag_id,
+            Err(err) => panic!("create_tag failed unexpectedly: {err}"),
+        };
+
+        info!("--- inject unknown tag-object reference key directly into kv");
+        let unknown_ref_key = format!(
+            "__fd_tag_object_ref/{}/{}/stream/stream_1",
+            tenant.tenant_name(),
+            tag_id
+        );
+        mt.upsert_kv(UpsertKV::update(&unknown_ref_key, b"x"))
+            .await?;
+
+        info!("--- list_tag_references should skip unknown object type");
+        let refs = mt.list_tag_references(&tenant, tag_id).await?;
+        assert!(
+            refs.is_empty(),
+            "unknown object type should be skipped by list_tag_references"
+        );
+
+        info!("--- drop_tag should still be blocked by unknown references");
+        let drop_res = mt.drop_tag(&tag_name).await?;
+        match drop_res {
+            Err(TagError::TagHasUnrecognizedReferences {
+                unrecognized_reference_count,
+                ..
+            }) => {
+                assert_eq!(1, unrecognized_reference_count);
+            }
+            other => {
+                panic!("expect TagHasUnrecognizedReferences for unknown ref, got: {other:?}");
+            }
+        }
+
         Ok(())
     }
 

@@ -33,6 +33,14 @@ pub enum TagError {
         reference_count: usize,
         references_display: String,
     },
+
+    #[error(
+        "TAG `{tag_name}` has {unrecognized_reference_count} unrecognized reference key(s). Remove the references before dropping it."
+    )]
+    TagHasUnrecognizedReferences {
+        tag_name: String,
+        unrecognized_reference_count: usize,
+    },
 }
 
 impl TagError {
@@ -52,6 +60,16 @@ impl TagError {
             tag_name,
             reference_count,
             references_display,
+        }
+    }
+
+    pub fn tag_has_unrecognized_references(
+        tag_name: String,
+        unrecognized_reference_count: usize,
+    ) -> Self {
+        Self::TagHasUnrecognizedReferences {
+            tag_name,
+            unrecognized_reference_count,
         }
     }
 }
@@ -114,6 +132,9 @@ impl From<TagError> for ErrorCode {
         match value {
             TagError::TagNotFound { .. } => ErrorCode::UnknownTag(s),
             TagError::TagHasReferences { .. } => ErrorCode::TagHasReferences(s),
+            TagError::TagHasUnrecognizedReferences { .. } => {
+                ErrorCode::TagHasUnrecognizedReferences(s)
+            }
         }
     }
 }

@@ -80,6 +80,47 @@ use crate::txn_core_util::send_txn;
 use crate::txn_op_builder_util::txn_del;
 use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
+/// List tag reference keys under a `__fd_tag_object_ref/<tenant>/<tag_id>/` prefix,
+/// tolerating unknown `TaggableObject` variants that may have been written by a newer version.
+///
+/// During rolling upgrades, a newer binary may write tag references for object types
+/// (e.g. Stream) that the current binary cannot decode. Instead of aborting the entire
+/// operation (as `list_pb` would), this function uses `list_kv` with manual key decoding
+/// so that unrecognized keys are skipped gracefully.
+///
+/// Returns `(decoded, unrecognized)`:
+/// - `decoded`: successfully parsed `TagIdObjectRefIdent` keys
+/// - `unrecognized`: raw key strings that failed to decode (logged as warnings)
+///
+/// Callers decide how to handle `unrecognized`:
+/// - `drop_tag`: blocks deletion with `TagHasUnrecognizedReferences` to preserve
+///   the scene for investigation (e.g. binary upgrade).
+/// - `list_tag_references`: silently skips them (details available in warn logs).
+async fn list_tag_ref_keys_tolerant(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    refs_dir: &DirName<TagIdObjectRefIdent>,
+) -> Result<(Vec<TagIdObjectRefIdent>, Vec<String>), MetaError> {
+    let prefix = refs_dir.dir_name_with_slash();
+    let mut strm = kv_api.list_kv(ListOptions::new(&prefix, None)).await?;
+
+    let mut decoded = Vec::new();
+    let mut unrecognized = Vec::new();
+
+    while let Some(item) = strm.try_next().await? {
+        match TagIdObjectRefIdent::from_str_key(&item.key) {
+            Ok(key) => decoded.push(key),
+            Err(err) => {
+                warn!(
+                    "skipping unrecognized tag reference key: '{}': {}",
+                    item.key, err
+                );
+                unrecognized.push(item.key);
+            }
+        }
+    }
+    Ok((decoded, unrecognized))
+}
+
 /// Returns the meta-service key for a taggable object.
 ///
 /// The key is used to check if the object exists (seq >= 1) before setting tags.
@@ -157,7 +198,8 @@ where
 
     /// Hard-delete a tag by removing all its keys.
     ///
-    /// Returns `Err(TagError::TagHasReferences)` if the tag is still referenced by objects.
+    /// Returns `Err(TagError::TagHasReferences)` if the tag is still referenced by decoded objects.
+    /// Returns `Err(TagError::TagHasUnrecognizedReferences)` if unknown reference keys exist.
     /// Since tags do not support UNDROP, we must prevent deletion when references exist
     /// to avoid orphaned tag-object mappings.
     #[logcall::logcall]
@@ -202,11 +244,18 @@ where
             }
 
             // Transaction failed. Check if it's due to references or concurrent modification.
-            let strm = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
-            let refs: Vec<String> = strm
-                .map_ok(|entry| entry.key.name().object.to_string())
-                .try_collect()
-                .await?;
+            let (decoded, unrecognized) = list_tag_ref_keys_tolerant(self, &refs_dir).await?;
+            if !unrecognized.is_empty() {
+                return Ok(Err(TagError::tag_has_unrecognized_references(
+                    name_ident.tag_name().to_string(),
+                    unrecognized.len(),
+                )));
+            }
+
+            let refs: Vec<String> = decoded
+                .iter()
+                .map(|k| k.name().object.to_string())
+                .collect();
             if !refs.is_empty() {
                 return Ok(Err(TagError::tag_has_references(
                     name_ident.tag_name().to_string(),
@@ -495,24 +544,24 @@ where
     ) -> Result<Vec<TagReferenceInfo>, MetaError> {
         debug!(tenant :? =(tenant), tag_id :? =(tag_id); "SchemaApi: {}", func_name!());
 
-        // Collect all referenced objects
+        // Collect all referenced objects, tolerating unknown TaggableObject variants.
         let refs_dir = DirName::new_with_level(
             TagIdObjectRefIdent::new_generic(tenant, TagIdObjectRef::prefix(tag_id)),
             2,
         );
-        let strm = self.list_pb(ListOptions::unlimited(&refs_dir)).await?;
-        let refs = strm
-            .map_ok(|entry| {
-                let object = entry.key.name().object.clone();
+        let (decoded, _unrecognized) = list_tag_ref_keys_tolerant(self, &refs_dir).await?;
+
+        let (tagged_objects, value_keys): (Vec<_>, Vec<_>) = decoded
+            .into_iter()
+            .map(|key| {
+                let (_, TagIdObjectRef { object, .. }) = key.unpack();
                 let value_key = ObjectTagIdRefIdent::new_generic(
                     tenant,
                     ObjectTagIdRef::new(object.clone(), tag_id),
                 );
                 (object, value_key)
             })
-            .try_collect::<Vec<_>>()
-            .await?;
-        let (tagged_objects, value_keys): (Vec<_>, Vec<_>) = refs.into_iter().unzip();
+            .unzip();
 
         let tag_values = self
             .get_pb_values_vec::<ObjectTagIdRefIdent, _>(value_keys)
