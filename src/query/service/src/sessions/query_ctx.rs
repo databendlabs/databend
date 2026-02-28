@@ -98,7 +98,6 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
@@ -217,7 +216,6 @@ impl QueryContext {
     pub fn build_table_by_table_info(
         &self,
         table_info: &TableInfo,
-        branch_info: &Option<BranchInfo>,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog_name = table_info.catalog();
@@ -555,12 +553,6 @@ impl QueryContext {
                     "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
                 ));
             }
-            // TODO(zhyass): Branch are currently not allowed inside a transaction.
-            if self.txn_mgr().lock().is_active() {
-                return Err(ErrorCode::StorageUnsupported(
-                    "Branch operations are not supported within an active transaction",
-                ));
-            }
             table.with_branch(branch)
         } else {
             Ok(table)
@@ -849,11 +841,9 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(extend_info) => self.build_table_by_table_info(
-                &extend_info.table_info,
-                &extend_info.branch_info,
-                plan.tbl_args.clone(),
-            ),
+            DataSourceInfo::TableSource(table_info) => {
+                self.build_table_by_table_info(&table_info, plan.tbl_args.clone())
+            }
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
             }
@@ -1489,8 +1479,15 @@ impl TableContext for QueryContext {
             .await
     }
 
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
+    fn evict_table_from_cache(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<String>,
+    ) -> Result<()> {
+        self.shared
+            .evict_table_from_cache(catalog, database, table, branch)
     }
 
     #[async_backtrace::framed]
@@ -1867,13 +1864,12 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
-        let table_unique_id = table.get_unique_id();
 
         let cached_table_timestamps = {
             self.shared
                 .table_meta_timestamps
                 .lock()
-                .get(&table_unique_id)
+                .get(&table_id)
                 .copied()
         };
 
@@ -1925,7 +1921,7 @@ impl TableContext for QueryContext {
 
             if txn_mgr.is_active() {
                 // Transaction Timestamp Tracking:
-                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_unique_id);
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
 
                 if let Some(existing_ts) = existing_timestamp {
                     // Defensively check that:
@@ -1943,7 +1939,7 @@ impl TableContext for QueryContext {
                     // When a table is first mutated within an active transaction, record its
                     // segment_block_timestamp as the transaction's begin timestamp for this table.
                     txn_mgr.set_table_txn_begin_timestamp(
-                        table_unique_id,
+                        table_id,
                         table_meta_timestamps.segment_block_timestamp,
                     );
                 }
@@ -1952,7 +1948,7 @@ impl TableContext for QueryContext {
 
         {
             let mut cache = self.shared.table_meta_timestamps.lock();
-            cache.insert(table_unique_id, table_meta_timestamps);
+            cache.insert(table_id, table_meta_timestamps);
         }
 
         Ok(table_meta_timestamps)
@@ -2174,6 +2170,7 @@ impl TableContext for QueryContext {
         catalog_name: &str,
         db_name: &str,
         tbl_name: &str,
+        branch: Option<&str>,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
@@ -2183,7 +2180,7 @@ impl TableContext for QueryContext {
 
         let catalog = self.get_catalog(catalog_name).await?;
         let tbl = catalog
-            .get_table(&self.get_tenant(), db_name, tbl_name)
+            .get_table_with_branch(&self.get_tenant(), db_name, tbl_name, branch)
             .await?;
         if tbl.engine() != "FUSE" || tbl.is_read_only() || tbl.is_temp() {
             return Ok(None);
@@ -2197,7 +2194,12 @@ impl TableContext for QueryContext {
             LockTableOption::NoLock => None,
         };
         if lock_guard.is_some() {
-            self.evict_table_from_cache(catalog_name, db_name, tbl_name)?;
+            self.evict_table_from_cache(
+                catalog_name,
+                db_name,
+                tbl_name,
+                branch.map(str::to_string),
+            )?;
         }
         Ok(lock_guard)
     }
@@ -2288,12 +2290,14 @@ impl TableContext for QueryContext {
         let streams_refs = self.shared.streams_refs.read();
         let tables = self.shared.tables_refs.lock();
         let mut streams_meta = Vec::with_capacity(streams_refs.len());
-        for (stream_key, consume) in streams_refs.iter() {
+        for ((tenant, db, name), consume) in streams_refs.iter() {
             if query && !consume {
                 continue;
             }
+
+            let table_key = (tenant.clone(), db.clone(), name.clone(), None);
             let stream = tables
-                .get(stream_key)
+                .get(&table_key)
                 .ok_or_else(|| ErrorCode::Internal("Stream reference not found in tables cache"))?;
             streams_meta.push(stream.clone());
         }

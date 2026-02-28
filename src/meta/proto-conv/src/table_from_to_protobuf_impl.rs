@@ -16,7 +16,6 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -481,36 +480,6 @@ impl FromToProto for mt::TableIndex {
             version: self.version.clone(),
             options: self.options.clone(),
             index_type: self.index_type.clone() as i32,
-        };
-        Ok(p)
-    }
-}
-
-impl FromToProto for mt::SnapshotRef {
-    type PB = pb::SnapshotRef;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::SnapshotRef) -> Result<Self, Incompatible> {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-        let v = Self {
-            id: p.id,
-            expire_at: p.expire_at.map(DateTime::<Utc>::from_pb).transpose()?,
-            typ: FromPrimitive::from_i32(p.typ)
-                .ok_or_else(|| Incompatible::new(format!("invalid RefType: {}", p.typ)))?,
-            loc: p.loc,
-        };
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<pb::SnapshotRef, Incompatible> {
-        let p = pb::SnapshotRef {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            id: self.id,
-            expire_at: self.expire_at.map(|x| x.to_pb()).transpose()?,
-            typ: self.typ.clone() as i32,
-            loc: self.loc.clone(),
         };
         Ok(p)
     }

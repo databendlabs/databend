@@ -64,7 +64,6 @@ impl FuseSnapshotFunc {
         location_generator: &TableMetaLocationGenerator,
         snapshots: &[TableSnapshotLite],
         latest_snapshot_version: u64,
-        branch_id: Option<u64>,
     ) -> Result<DataBlock> {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<String> = Vec::with_capacity(len);
@@ -86,11 +85,10 @@ impl FuseSnapshotFunc {
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.simple().to_string());
-            snapshot_locations.push(location_generator.gen_snapshot_location(
-                branch_id,
-                &s.snapshot_id,
-                current_snapshot_version,
-            )?);
+            snapshot_locations.push(
+                location_generator
+                    .gen_snapshot_location(&s.snapshot_id, current_snapshot_version)?,
+            );
             let (id, ver) = s
                 .prev_snapshot_id
                 .map_or((None, 0), |(id, v)| (Some(id.simple().to_string()), v));
@@ -209,7 +207,6 @@ impl SimpleTableFunc for FuseSnapshotFunc {
         let table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::StorageOther("Invalid table engine, only FUSE table supports fuse_snapshot")
         })?;
-        let branch_id = table.get_branch_id();
 
         let meta_location_generator = table.meta_location_generator.clone();
         let snapshot_location = table.snapshot_loc();
@@ -245,7 +242,6 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                         table.operator.clone(),
                         meta_location_generator.clone(),
                         snapshot_location,
-                        branch_id,
                         limit,
                     )
                     .await?;
@@ -262,7 +258,6 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                 &meta_location_generator,
                 &snapshot_lite,
                 snapshot_version,
-                branch_id,
             )?));
         }
         Ok(Some(DataBlock::empty_with_schema(&self.schema().into())))

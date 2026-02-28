@@ -12,18 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_source_info;
-mod orc;
-mod parquet;
-mod parquet_read_options;
-mod result_scan;
-mod stage;
+syntax = "proto3";
 
-pub use data_source_info::DataSourceInfo;
-pub use orc::OrcTableInfo;
-pub use parquet::FullParquetMeta;
-pub use parquet::ParquetTableInfo;
-pub use parquet_read_options::ParquetReadOptions;
-pub use result_scan::ResultScanTableInfo;
-pub use stage::StageTableInfo;
-pub use stage::list_stage_files;
+package databend_proto;
+
+message TableBranch {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  optional string expire_at = 1;
+  uint64 branch_id = 2;
+}
+
+message TableTag {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  optional string expire_at = 1;
+  string snapshot_loc = 2;
+}

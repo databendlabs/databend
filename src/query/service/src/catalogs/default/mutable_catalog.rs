@@ -32,6 +32,7 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi;
+use databend_common_meta_api::RefApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
@@ -54,9 +55,11 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
@@ -67,9 +70,11 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -85,8 +90,10 @@ use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::GetTableBranchReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
@@ -115,6 +122,7 @@ use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -624,6 +632,86 @@ impl Catalog for MutableCatalog {
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table(table_name).await
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_branch(&self, req: CreateTableBranchReq) -> Result<Arc<TableInfo>> {
+        self.ctx
+            .meta
+            .create_table_branch(req)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
+        self.ctx
+            .meta
+            .create_table_tag(req)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<()> {
+        self.ctx
+            .meta
+            .drop_table_branch(req)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
+        self.ctx
+            .meta
+            .drop_table_tag(req)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_branch(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let req = GetTableBranchReq {
+            name_ident: databend_common_meta_app::schema::TableNameIdent::new(
+                tenant, db_name, table_name,
+            ),
+            branch_name: branch_name.to_string(),
+        };
+        let info = self
+            .ctx
+            .meta
+            .get_table_branch(req)
+            .await
+            .map_err(meta_service_error)?;
+        self.get_table_by_info(info.as_ref())
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_tag(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        tag_name: &str,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        let req = GetTableTagReq {
+            name_ident: databend_common_meta_app::schema::TableNameIdent::new(
+                tenant, db_name, table_name,
+            ),
+            tag_name: tag_name.to_string(),
+        };
+        self.ctx
+            .meta
+            .get_table_tag(req)
+            .await
+            .map_err(meta_service_error)
     }
 
     #[async_backtrace::framed]

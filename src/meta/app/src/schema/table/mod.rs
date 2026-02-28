@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -160,15 +159,10 @@ pub struct TableMeta {
     /// Deprecated, will be removed later.
     /// Original cluster key as a string. Use `cluster_key_v2` instead.
     pub cluster_key: Option<String>,
-    /// Cluster key for the main branch, including an id.
-    /// The `u32` is the cluster key id of the main branch, uniquely identifying each version.
+    /// Cluster key for the table, including an id.
     pub cluster_key_v2: Option<(u32, String)>,
     /// Global monotonically increasing sequence for cluster key changes, to
     /// ensuring a unique identifier for each version of cluster key.
-    ///
-    /// This sequence is shared across the main branch and all branches, and is
-    /// incremented whenever a cluster key is created or altered on any branch.
-    /// It remains unchanged when the cluster key is dropped.
     pub cluster_key_seq: u32,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,

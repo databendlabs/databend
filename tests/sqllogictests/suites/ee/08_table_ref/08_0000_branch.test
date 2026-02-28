@@ -48,6 +48,9 @@ optimize table t1 compact
 statement ok
 ALTER TABLE t1 CREATE BRANCH dev
 
+statement ok
+ALTER TABLE t1 CREATE TAG v1
+
 query IT
 SELECT * FROM t1/dev ORDER BY a
 ----
@@ -58,9 +61,9 @@ SELECT * FROM t1/dev ORDER BY a
 statement ok
 INSERT INTO t1 VALUES (10, 'x')
 
-## Test branch creation with AT clause - BRANCH
+## Test branch creation with AT clause - TAG
 statement ok
-ALTER TABLE t1 CREATE BRANCH from_dev AT (BRANCH => dev)
+ALTER TABLE t1 CREATE BRANCH from_dev AT (TAG => v1)
 
 query IT
 SELECT * FROM t1/from_dev ORDER BY a

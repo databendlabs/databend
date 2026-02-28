@@ -113,11 +113,7 @@ impl Planner {
                         if tbl.is_temp() || tbl.schema().ne(&ss.0) {
                             return false;
                         }
-                        let snapshot = if let Some(branch) = table.branch() {
-                            tbl.get_table_info().meta.refs.get(branch).map(|v| &v.loc)
-                        } else {
-                            tbl.options().get(OPT_KEY_SNAPSHOT_LOCATION)
-                        };
+                        let snapshot = tbl.options().get(OPT_KEY_SNAPSHOT_LOCATION);
                         snapshot == Some(&ss.1)
                     })
                 }) {
@@ -227,16 +223,7 @@ impl TableRefVisitor {
                         && !table_meta.is_stage_table()
                         && !table_meta.is_stream()
                     {
-                        let snapshot = if let Some(branch) = &branch {
-                            table_meta
-                                .get_table_info()
-                                .meta
-                                .refs
-                                .get(branch)
-                                .map(|v| v.loc.clone())
-                        } else {
-                            table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned()
-                        };
+                        let snapshot = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
                         if let Some(sn) = snapshot {
                             self.schema_snapshots.push((table_meta.schema(), sn));
                             return;

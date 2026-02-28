@@ -151,6 +151,7 @@ impl Binder {
                     &catalog_name,
                     &database_name,
                     &table_name,
+                    None,
                     &LockTableOption::LockWithRetry,
                 )
                 .await

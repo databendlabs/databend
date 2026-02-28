@@ -77,6 +77,7 @@ mod mask_policy_table_id_from_to_protobuf_impl;
 mod owner_from_to_protobuf_impl;
 mod ownership_from_to_protobuf_impl;
 mod procedure_from_to_protobuf_impl;
+mod refs_from_to_protobuf_impl;
 mod role_from_to_protobuf_impl;
 mod row_access_policy_from_to_protobuf_impl;
 mod row_access_policy_table_id_form_to_protobuf_impl;

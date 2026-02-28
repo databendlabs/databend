@@ -27,7 +27,6 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_meta_app::schema as mt;
 use fastrace::func_name;
 use maplit::btreemap;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -225,7 +224,6 @@ fn test_decode_v107_table_meta() -> anyhow::Result<()> {
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
-        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v107.as_slice(), 107, want())?;

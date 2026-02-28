@@ -48,7 +48,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::ComputedExpr;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -61,9 +60,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
-use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -82,8 +79,6 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_index::BloomIndex;
-use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -162,7 +157,6 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
-    pub(crate) branch_info: Option<BranchInfo>,
 
     pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
@@ -172,14 +166,9 @@ type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 impl FuseTable {
     pub fn create_and_refresh_table_info(
         table_info: TableInfo,
-        branch_info: Option<BranchInfo>,
         s3storage_class: S3StorageClass,
-    ) -> Result<Arc<FuseTable>> {
-        let table = Self::try_create(table_info, Some(s3storage_class), false)?;
-        match branch_info {
-            Some(branch_info) => table.with_branch_info(branch_info),
-            None => Ok(table.into()),
-        }
+    ) -> Result<Box<dyn Table>> {
+        Ok(Self::try_create(table_info, Some(s3storage_class), false)?)
     }
 
     pub fn create_without_refresh_table_info(
@@ -295,7 +284,6 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
-            branch_info: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
@@ -448,10 +436,6 @@ impl FuseTable {
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
-        if let Some(branch) = self.branch_info.as_ref() {
-            return Some(branch.info.loc.clone());
-        }
-
         let options = self.table_info.options();
         options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -483,14 +467,6 @@ impl FuseTable {
         &self.operator
     }
 
-    pub fn get_branch_id(&self) -> Option<u64> {
-        self.branch_info.as_ref().map(|v| v.branch_id())
-    }
-
-    pub fn get_branch_name(&self) -> Option<&str> {
-        self.branch_info.as_ref().map(|v| v.branch_name())
-    }
-
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Internal(format!(
@@ -505,22 +481,11 @@ impl FuseTable {
     }
 
     pub fn cluster_key_str(&self) -> Option<&str> {
-        if let Some(branch) = &self.branch_info {
-            branch
-                .cluster_key_meta
-                .as_ref()
-                .map(|(_, key)| key.as_str())
-        } else {
-            self.table_info.meta.cluster_key_str()
-        }
+        self.table_info.meta.cluster_key_str()
     }
 
     pub fn cluster_key_id(&self) -> Option<u32> {
-        if let Some(branch) = &self.branch_info {
-            branch.cluster_key_meta.as_ref().map(|(id, _)| *id)
-        } else {
-            self.table_info.meta.cluster_key_id()
-        }
+        self.table_info.meta.cluster_key_id()
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
@@ -566,11 +531,7 @@ impl FuseTable {
         let Some(ast_exprs) = self.resolve_cluster_keys() else {
             return vec![];
         };
-        let cluster_type = if self.branch_info.is_none() {
-            self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
-        } else {
-            ClusterType::Linear
-        };
+        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
         match cluster_type {
             ClusterType::Hilbert => vec![DataType::Binary],
             ClusterType::Linear => {
@@ -861,71 +822,9 @@ impl FuseTable {
                 .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
     }
 
-    pub fn with_branch_info(&self, branch_info: BranchInfo) -> Result<Arc<FuseTable>> {
-        let mut new_table = self.clone();
-        // Table options like `bloom_index_columns` and `approx_distinct_columns` are stored in
-        // table meta and shared by all branches. If a branch evolves its schema, those options
-        // may reference columns that no longer exist in this branch.
-        //
-        // To avoid failing reads/writes on the branch, apply a schema-aware filter here.
-        let schema = branch_info.schema.clone();
-        new_table.bloom_index_cols = match &new_table.bloom_index_cols {
-            BloomIndexColumns::All => BloomIndexColumns::All,
-            BloomIndexColumns::None => BloomIndexColumns::None,
-            BloomIndexColumns::Specify(cols) => {
-                let mut filtered = Vec::with_capacity(cols.len());
-                for col in cols {
-                    if let Ok(field) = schema.field_with_name(col) {
-                        if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
-                            continue;
-                        }
-                        if BloomIndex::supported_type(field.data_type()) {
-                            filtered.push(col.clone());
-                        }
-                    }
-                }
-                if filtered.is_empty() {
-                    BloomIndexColumns::None
-                } else {
-                    BloomIndexColumns::Specify(filtered)
-                }
-            }
-        };
-
-        new_table.approx_distinct_cols = match &new_table.approx_distinct_cols {
-            ApproxDistinctColumns::All => ApproxDistinctColumns::All,
-            ApproxDistinctColumns::None => ApproxDistinctColumns::None,
-            ApproxDistinctColumns::Specify(cols) => {
-                let mut filtered = Vec::with_capacity(cols.len());
-                for col in cols {
-                    if let Ok(field) = schema.field_with_name(col) {
-                        if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
-                            continue;
-                        }
-                        if RangeIndex::supported_table_type(field.data_type()) {
-                            filtered.push(col.clone());
-                        }
-                    }
-                }
-                if filtered.is_empty() {
-                    ApproxDistinctColumns::None
-                } else {
-                    ApproxDistinctColumns::Specify(filtered)
-                }
-            }
-        };
-
-        new_table.branch_info = Some(branch_info);
-        Ok(Arc::new(new_table))
-    }
-
     pub fn with_schema(&self, schema: Arc<TableSchema>) -> Arc<FuseTable> {
         let mut new_table = self.clone();
-        if let Some(branch) = new_table.branch_info.as_mut() {
-            branch.schema = schema;
-        } else {
-            new_table.table_info.meta.schema = schema;
-        }
+        new_table.table_info.meta.schema = schema;
         Arc::new(new_table)
     }
 }
@@ -942,10 +841,6 @@ impl Table for FuseTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
-    }
-
-    fn get_branch_info(&self) -> Option<&BranchInfo> {
-        self.branch_info.as_ref()
     }
 
     fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
@@ -977,23 +872,7 @@ impl Table for FuseTable {
     }
 
     fn cluster_key_meta(&self) -> Option<ClusterKey> {
-        // NOTE:
-        // For branch tables, cluster key semantics are snapshot-scoped.
-        // If a branch head snapshot has no `cluster_key_meta`, the branch is
-        // intentionally treated as unclustered, even if the base table (main)
-        // defines a cluster key.
-        //
-        // This is by design:
-        // - Branches are allowed to define their own cluster key independently.
-        // - We do NOT fall back to `table_info.cluster_key()` here.
-        // - Older snapshots created before branch-level cluster keys existed may
-        //   have `cluster_key_meta = None`, and such branches are expected to
-        //   explicitly define a cluster key if needed.
-        self.branch_info
-            .as_ref()
-            .map_or(self.table_info.cluster_key(), |v| {
-                v.cluster_key_meta.clone()
-            })
+        self.table_info.cluster_key()
     }
 
     fn change_tracking_enabled(&self) -> bool {
@@ -1152,39 +1031,19 @@ impl Table for FuseTable {
                 }
             }
             _ => {
-                if self.branch_info.is_some() {
-                    let Some(ss) = self.read_table_snapshot().await? else {
-                        return Ok(None);
-                    };
-                    let stats = &ss.summary;
-                    TableStatistics {
-                        num_rows: Some(stats.row_count),
-                        data_size: Some(stats.uncompressed_byte_size),
-                        data_size_compressed: Some(stats.compressed_byte_size),
-                        index_size: Some(stats.index_size),
-                        bloom_index_size: stats.bloom_index_size,
-                        ngram_index_size: stats.ngram_index_size,
-                        inverted_index_size: stats.inverted_index_size,
-                        vector_index_size: stats.vector_index_size,
-                        virtual_column_size: stats.virtual_column_size,
-                        number_of_blocks: Some(stats.block_count),
-                        number_of_segments: Some(ss.segments.len() as u64),
-                    }
-                } else {
-                    let s = &self.table_info.meta.statistics;
-                    TableStatistics {
-                        num_rows: Some(s.number_of_rows),
-                        data_size: Some(s.data_bytes),
-                        data_size_compressed: Some(s.compressed_data_bytes),
-                        index_size: Some(s.index_data_bytes),
-                        bloom_index_size: s.bloom_index_size,
-                        ngram_index_size: s.ngram_index_size,
-                        inverted_index_size: s.inverted_index_size,
-                        vector_index_size: s.vector_index_size,
-                        virtual_column_size: s.virtual_column_size,
-                        number_of_blocks: s.number_of_blocks,
-                        number_of_segments: s.number_of_segments,
-                    }
+                let s = &self.table_info.meta.statistics;
+                TableStatistics {
+                    num_rows: Some(s.number_of_rows),
+                    data_size: Some(s.data_bytes),
+                    data_size_compressed: Some(s.compressed_data_bytes),
+                    index_size: Some(s.index_data_bytes),
+                    bloom_index_size: s.bloom_index_size,
+                    ngram_index_size: s.ngram_index_size,
+                    inverted_index_size: s.inverted_index_size,
+                    vector_index_size: s.vector_index_size,
+                    virtual_column_size: s.virtual_column_size,
+                    number_of_blocks: s.number_of_blocks,
+                    number_of_segments: s.number_of_segments,
                 }
             }
         };
@@ -1344,39 +1203,6 @@ impl Table for FuseTable {
         }
     }
 
-    fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
-        let snapshot_ref = self.table_info.get_table_ref(branch_name)?;
-        // Resolve schema from the branch head snapshot and cache it in the table instance.
-        //
-        // NOTE:
-        // - This should not update persisted table meta.
-        // - We intentionally keep `table_info.meta.schema` unchanged.
-        let (schema, cluster_key_meta) = GlobalIORuntime::instance().block_on(async {
-            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-            let location = snapshot_ref.loc.clone();
-            let ver = self.snapshot_format_version(Some(location.clone()))?;
-            let params = LoadParams {
-                location,
-                len_hint: None,
-                ver,
-                put_cache: true,
-            };
-            let snapshot = reader.read(&params).await?;
-            Ok::<_, ErrorCode>((
-                Arc::new(snapshot.schema.clone()),
-                snapshot.cluster_key_meta.clone(),
-            ))
-        })?;
-
-        let table = self.with_branch_info(BranchInfo {
-            name: branch_name.to_string(),
-            info: snapshot_ref.clone(),
-            schema,
-            cluster_key_meta,
-        })?;
-        Ok(table)
-    }
-
     #[async_backtrace::framed]
     async fn generate_changes_query(
         &self,
@@ -1474,10 +1300,7 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        if matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && !self.is_read_only()
-            && self.branch_info.is_none()
-        {
+        if matches!(self.storage_format, FuseStorageFormat::Parquet) && !self.is_read_only() {
             // ignore persistent system tables {
             if let Ok(database_name) = self.table_info.database_name() {
                 if database_name == "persistent_system" {
@@ -1495,10 +1318,7 @@ impl Table for FuseTable {
     }
 
     fn is_read_only(&self) -> bool {
-        self.branch_info
-            .as_ref()
-            .is_some_and(|v| v.branch_type() == SnapshotRefType::Tag)
-            || self.table_type.is_readonly()
+        self.table_type.is_readonly()
     }
 
     fn use_own_sample_block(&self) -> bool {

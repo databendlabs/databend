@@ -737,13 +737,9 @@ impl Binder {
                 database,
                 name,
             } => self.resolve_stream_data_travel_point(catalog, database, name),
-            TimeTravelPoint::TableRef { typ, name } => {
-                let name = self.normalize_identifier(name).name;
-                Ok(NavigationPoint::TableRef {
-                    typ: typ.into(),
-                    name,
-                })
-            }
+            TimeTravelPoint::TableTag(name) => Ok(NavigationPoint::TableTag(
+                self.normalize_identifier(name).name,
+            )),
         }
     }
 

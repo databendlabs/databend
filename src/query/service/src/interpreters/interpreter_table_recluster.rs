@@ -245,7 +245,7 @@ impl ReclusterTableInterpreter {
                 move |info: &ExecutionInfo| {
                     ctx.clear_written_segment_locations()?;
                     ctx.clear_selected_segment_locations();
-                    ctx.evict_table_from_cache(&catalog, &database, &table)?;
+                    ctx.evict_table_from_cache(&catalog, &database, &table, None)?;
 
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;

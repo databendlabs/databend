@@ -38,7 +38,6 @@ use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
 use maplit::btreemap;
-use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 fn s(ss: impl ToString) -> String {
@@ -173,7 +172,6 @@ fn new_table_meta() -> mt::TableMeta {
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
-        refs: btreemap! {},
     }
 }
 

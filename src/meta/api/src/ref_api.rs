@@ -17,7 +17,10 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TableAlreadyExists;
+use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
+use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableId;
@@ -40,6 +43,7 @@ use databend_common_meta_app::schema::GetTableBranchReq;
 use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::RefNameIdent;
 use databend_common_meta_app::schema::TableBranch;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdBranchName;
@@ -47,7 +51,6 @@ use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableIdTagName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
@@ -55,18 +58,17 @@ use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_meta_kvapi::kvapi;
 use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::Key;
 use databend_meta_kvapi::kvapi::ListOptions;
 use databend_meta_types::ConditionResult::Eq;
 use databend_meta_types::MatchSeqExt;
 use databend_meta_types::MetaError;
 use databend_meta_types::SeqV;
 use databend_meta_types::TxnRequest;
+use databend_meta_types::txn_op_response::Response;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
-use crate::assert_table_exist;
 use crate::database_util::get_db_or_err;
 use crate::fetch_id;
 use crate::get_u64_value;
@@ -82,7 +84,7 @@ use crate::txn_op_builder_util::txn_op_put;
 /// Resolve table_id from TableNameIdent: db_name -> db_id, then (db_id, table_name) -> table_id.
 async fn resolve_table_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &TableNameIdent,
+    name_ident: &RefNameIdent,
     ctx: &str,
 ) -> Result<(u64, u64), KVAppError> {
     let tenant_dbname = name_ident.db_name_ident();
@@ -102,9 +104,13 @@ async fn resolve_table_id(
     };
 
     let (tb_id_seq, table_id) = get_u64_value(kv_api, &dbid_tbname).await?;
-    assert_table_exist(tb_id_seq, name_ident, ctx)?;
-
-    Ok((table_id, db_id))
+    if tb_id_seq > 0 {
+        Ok((table_id, db_id))
+    } else {
+        Err(KVAppError::AppError(AppError::UnknownTable(
+            UnknownTable::new(&name_ident.table_name, ctx),
+        )))
+    }
 }
 
 #[async_trait::async_trait]
@@ -121,10 +127,7 @@ where
     /// Writes: `__fd_table_tag/<table_id>/<tag_name> -> TableTag`
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn create_table_tag(
-        &self,
-        req: CreateTableTagReq,
-    ) -> Result<(), KVAppError> {
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let table_id = req.table_id;
@@ -157,7 +160,14 @@ where
 
             // Check if tag already exists.
             let seq_tag = self.get_pb(&key_tag).await?;
-            let tag_seq = seq_tag.as_ref().map_or(0, |s| s.seq);
+            if seq_tag.is_some() {
+                return Err(KVAppError::AppError(AppError::from(
+                    TableAlreadyExists::new(
+                        format!("table_id={table_id}/tag='{}'", req.tag_name),
+                        "create_table_tag: tag already exists",
+                    ),
+                )));
+            }
 
             let table_tag = TableTag {
                 expire_at: req.expire_at,
@@ -168,12 +178,10 @@ where
                 vec![
                     // Table must not change.
                     txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
-                    // Tag must not already exist (or match current seq for overwrite).
-                    txn_cond_seq(&key_tag, Eq, tag_seq),
+                    // Tag must not already exist.
+                    txn_cond_seq(&key_tag, Eq, 0),
                 ],
-                vec![
-                    txn_op_put(&key_tag, serialize_struct(&table_tag)?),
-                ],
+                vec![txn_op_put(&key_tag, serialize_struct(&table_tag)?)],
             );
 
             let (succ, _responses) = send_txn(self, txn).await?;
@@ -196,15 +204,12 @@ where
     /// Deletes: `__fd_table_tag/<table_id>/<tag_name>`
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn drop_table_tag(
-        &self,
-        req: DropTableTagReq,
-    ) -> Result<(), KVAppError> {
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let (table_id, _db_id) = resolve_table_id(self, &req.name_ident, "drop_table_tag").await?;
-
-        let key_tag = TableIdTagName::new(table_id, &req.tag_name);
+        let tag_name = &req.name_ident.ref_name;
+        let key_tag = TableIdTagName::new(table_id, tag_name);
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
@@ -218,16 +223,15 @@ where
                 return Ok(());
             }
 
-            let txn = TxnRequest::new(
-                vec![txn_cond_seq(&key_tag, Eq, tag_seq)],
-                vec![txn_op_del(&key_tag)],
-            );
+            let txn = TxnRequest::new(vec![txn_cond_seq(&key_tag, Eq, tag_seq)], vec![txn_op_del(
+                &key_tag,
+            )]);
 
             let (succ, _responses) = send_txn(self, txn).await?;
 
             debug!(
                 table_id = table_id,
-                tag_name :% =(&req.tag_name),
+                tag_name :% =(tag_name),
                 succ = succ;
                 "drop_table_tag"
             );
@@ -251,8 +255,22 @@ where
 
         let (table_id, _db_id) = resolve_table_id(self, &req.name_ident, "get_table_tag").await?;
 
-        let key_tag = TableIdTagName::new(table_id, &req.tag_name);
-        Ok(self.get_pb(&key_tag).await?)
+        let tag_name = &req.name_ident.ref_name;
+        let key_tag = TableIdTagName::new(table_id, tag_name);
+        let seq_tag = self.get_pb(&key_tag).await?;
+        if let Some(tag) = &seq_tag {
+            if let Some(expire_at) = tag.data.expire_at.as_ref() {
+                if *expire_at <= Utc::now() {
+                    return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                        TableSnapshotExpired::new(
+                            table_id,
+                            format!("table tag '{}' expired at {}", tag_name, expire_at),
+                        ),
+                    )));
+                }
+            }
+        }
+        Ok(seq_tag)
     }
 
     /// Create a table branch.
@@ -274,15 +292,16 @@ where
     async fn create_table_branch(
         &self,
         req: CreateTableBranchReq,
-    ) -> Result<u64, KVAppError> {
+    ) -> Result<Arc<TableInfo>, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
+        let branch_name = &req.name_ident.ref_name;
         let table_id = req.table_id;
         let key_table_id = TableId { table_id };
-        let key_branch = TableIdBranchName::new(table_id, &req.branch_name);
+        let key_branch = TableIdBranchName::new(table_id, branch_name);
         let key_branch_id_list = BranchIdHistoryIdent {
             table_id,
-            branch_name: req.branch_name.clone(),
+            branch_name: branch_name.clone(),
         };
 
         // Filter out stale policy entries based on the branch's schema.
@@ -296,7 +315,11 @@ where
 
         // Remove row access policy if any of its referenced columns are missing.
         if let Some(policy_map) = &branch_meta.row_access_policy_columns_ids {
-            if policy_map.columns_ids.iter().any(|col_id| schema.is_column_deleted(*col_id)) {
+            if policy_map
+                .columns_ids
+                .iter()
+                .any(|col_id| schema.is_column_deleted(*col_id))
+            {
                 branch_meta.row_access_policy_columns_ids = None;
                 branch_meta.row_access_policy = None;
             }
@@ -330,18 +353,22 @@ where
 
             // 2. Check if branch already exists.
             let seq_branch = self.get_pb(&key_branch).await?;
-            let branch_seq = seq_branch.as_ref().map_or(0, |s| s.seq);
-            if branch_seq > 0 {
-                // Branch already exists, return existing branch_id.
-                return Ok(seq_branch.unwrap().data.branch_id);
+            if seq_branch.is_some() {
+                return Err(KVAppError::AppError(AppError::from(
+                    TableAlreadyExists::new(
+                        format!(
+                            "'{}'.'{}'/'{}'",
+                            req.name_ident.db_name, req.name_ident.table_name, branch_name
+                        ),
+                        "create_table_branch: branch already exists",
+                    ),
+                )));
             }
 
             // 3. Get current branch id list.
             let seq_id_list = self.get_pb(&key_branch_id_list).await?;
             let id_list_seq = seq_id_list.as_ref().map_or(0, |s| s.seq);
-            let mut id_list = seq_id_list
-                .map(|s| s.data)
-                .unwrap_or_else(TableIdList::new);
+            let mut id_list = seq_id_list.map(|s| s.data).unwrap_or_else(TableIdList::new);
 
             // 4. Generate branch_id (only once across retries).
             let branch_id = match maybe_branch_id {
@@ -353,7 +380,9 @@ where
                 }
             };
 
-            let key_branch_table_id = TableId { table_id: branch_id };
+            let key_branch_table_id = TableId {
+                table_id: branch_id,
+            };
 
             // 5. Build TableBranch record.
             let table_branch = TableBranch {
@@ -392,7 +421,7 @@ where
 
             for policy_id in policy_ids {
                 let ident = MaskPolicyTableIdIdent::new_generic(
-                    req.tenant.clone(),
+                    req.name_ident.tenant.clone(),
                     MaskPolicyIdTableId {
                         policy_id,
                         table_id: branch_id,
@@ -405,28 +434,56 @@ where
             // 8. Write row access policy reference KV.
             if let Some(policy_map) = &branch_meta.row_access_policy_columns_ids {
                 let ident = RowAccessPolicyTableIdIdent::new_generic(
-                    req.tenant.clone(),
+                    req.name_ident.tenant.clone(),
                     RowAccessPolicyIdTableId {
                         policy_id: policy_map.policy_id,
                         table_id: branch_id,
                     },
                 );
-                txn.if_then
-                    .push(txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?));
+                txn.if_then.push(txn_op_put(
+                    &ident,
+                    serialize_struct(&RowAccessPolicyTableId {})?,
+                ));
             }
 
-            let (succ, _responses) = send_txn(self, txn).await?;
+            let (succ, responses) = send_txn(self, txn).await?;
 
             debug!(
                 table_id = table_id,
-                branch_name :% =(&req.branch_name),
+                branch_name :% =(branch_name),
                 branch_id = branch_id,
                 succ = succ;
                 "create_table_branch"
             );
 
             if succ {
-                return Ok(branch_id);
+                let branch_seq = responses.last().and_then(|r| match &r.response {
+                    Some(Response::Get(resp)) => resp.value.as_ref().map(|v| v.seq),
+                    _ => None,
+                });
+                let Some(branch_seq) = branch_seq else {
+                    return Err(KVAppError::AppError(AppError::UnknownTableId(
+                        UnknownTableId::new(
+                            branch_id,
+                            "create_table_branch: missing table_id_seq in txn response",
+                        ),
+                    )));
+                };
+
+                return Ok(Arc::new(TableInfo {
+                    ident: TableIdent {
+                        table_id: branch_id,
+                        seq: branch_seq,
+                    },
+                    desc: format!(
+                        "'{}'.'{}'/'{}'",
+                        req.name_ident.db_name, req.name_ident.table_name, branch_name,
+                    ),
+                    name: req.name_ident.table_name.clone(),
+                    meta: branch_meta.clone(),
+                    db_type: DatabaseType::NormalDB,
+                    catalog_info: Default::default(),
+                }));
             }
         }
     }
@@ -441,16 +498,15 @@ where
     /// and tag references associated with the branch.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn drop_table_branch(
-        &self,
-        req: DropTableBranchReq,
-    ) -> Result<(), KVAppError> {
+    async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let tenant = req.name_ident.tenant();
-        let (table_id, db_id) = resolve_table_id(self, &req.name_ident, "drop_table_branch").await?;
+        let tenant = &req.name_ident.tenant;
+        let (table_id, db_id) =
+            resolve_table_id(self, &req.name_ident, "drop_table_branch").await?;
 
-        let key_branch = TableIdBranchName::new(table_id, &req.branch_name);
+        let branch_name = &req.name_ident.ref_name;
+        let key_branch = TableIdBranchName::new(table_id, branch_name);
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
@@ -465,7 +521,9 @@ where
             let branch_id = seq_branch.data.branch_id;
 
             // 2. Get the branch's TableMeta.
-            let key_branch_table_id = TableId { table_id: branch_id };
+            let key_branch_table_id = TableId {
+                table_id: branch_id,
+            };
             let seq_table_meta = self.get_pb(&key_branch_table_id).await?;
             let Some(seq_table_meta) = seq_table_meta else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
@@ -536,7 +594,9 @@ where
             }
 
             // 7. Clean up tag references.
-            let taggable_object = TaggableObject::Table { table_id: branch_id };
+            let taggable_object = TaggableObject::Table {
+                table_id: branch_id,
+            };
             let obj_tag_prefix = ObjectTagIdRefIdent::new_generic(
                 tenant.clone(),
                 ObjectTagIdRef::new(taggable_object.clone(), 0),
@@ -562,7 +622,7 @@ where
 
             debug!(
                 table_id = table_id,
-                branch_name :% =(&req.branch_name),
+                branch_name :% =(branch_name),
                 branch_id = branch_id,
                 succ = succ;
                 "drop_table_branch"
@@ -584,18 +644,17 @@ where
     /// `__fd_branch_id_list/<table_id>/<branch_name>`.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn undrop_table_branch(
-        &self,
-        req: UndropTableBranchReq,
-    ) -> Result<(), KVAppError> {
+    async fn undrop_table_branch(&self, req: UndropTableBranchReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let (table_id, _db_id) = resolve_table_id(self, &req.name_ident, "undrop_table_branch").await?;
+        let (table_id, _db_id) =
+            resolve_table_id(self, &req.name_ident, "undrop_table_branch").await?;
 
-        let key_branch = TableIdBranchName::new(table_id, &req.branch_name);
+        let branch_name = &req.name_ident.ref_name;
+        let key_branch = TableIdBranchName::new(table_id, branch_name);
         let key_branch_id_list = BranchIdHistoryIdent {
             table_id,
-            branch_name: req.branch_name.clone(),
+            branch_name: branch_name.clone(),
         };
 
         let mut trials = txn_backoff(None, func_name!());
@@ -636,7 +695,9 @@ where
             let mut table_meta = seq_dropped_meta.data;
             table_meta.drop_on = None;
 
-            let key_branch_table_id = TableId { table_id: branch_id };
+            let key_branch_table_id = TableId {
+                table_id: branch_id,
+            };
 
             // 5. Re-create the branch record.
             let table_branch = TableBranch {
@@ -667,7 +728,7 @@ where
 
             debug!(
                 table_id = table_id,
-                branch_name :% =(&req.branch_name),
+                branch_name :% =(branch_name),
                 branch_id = branch_id,
                 succ = succ;
                 "undrop_table_branch"
@@ -686,26 +747,40 @@ where
     /// 3. Returns `Arc<TableInfo>` like `get_table`.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_branch(
-        &self,
-        req: GetTableBranchReq,
-    ) -> Result<Arc<TableInfo>, KVAppError> {
+    async fn get_table_branch(&self, req: GetTableBranchReq) -> Result<Arc<TableInfo>, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let (table_id, _db_id) = resolve_table_id(self, &req.name_ident, "get_table_branch").await?;
+        let (table_id, _db_id) =
+            resolve_table_id(self, &req.name_ident, "get_table_branch").await?;
 
         // 1. Get the branch record.
-        let key_branch = TableIdBranchName::new(table_id, &req.branch_name);
+        let branch_name = &req.name_ident.ref_name;
+        let key_branch = TableIdBranchName::new(table_id, branch_name);
         let seq_branch = self.get_pb(&key_branch).await?;
         let Some(seq_branch) = seq_branch else {
             return Err(KVAppError::AppError(AppError::UnknownTableId(
-                UnknownTableId::new(table_id, format!("get_table_branch: branch '{}' not found", req.branch_name)),
+                UnknownTableId::new(
+                    table_id,
+                    format!("get_table_branch: branch '{}' not found", branch_name),
+                ),
             )));
         };
+        if let Some(expire_at) = seq_branch.data.expire_at {
+            if expire_at <= Utc::now() {
+                return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                    TableSnapshotExpired::new(
+                        table_id,
+                        format!("table branch '{}' expired at {}", branch_name, expire_at),
+                    ),
+                )));
+            }
+        }
         let branch_id = seq_branch.data.branch_id;
 
         // 2. Get the branch's TableMeta.
-        let key_branch_table_id = TableId { table_id: branch_id };
+        let key_branch_table_id = TableId {
+            table_id: branch_id,
+        };
         let seq_table_meta = self.get_pb(&key_branch_table_id).await?;
         let Some(seq_table_meta) = seq_table_meta else {
             return Err(KVAppError::AppError(AppError::UnknownTableId(
@@ -720,9 +795,7 @@ where
             },
             desc: format!(
                 "'{}'.'{}'/'{}'",
-                req.name_ident.db_name,
-                req.name_ident.table_name,
-                req.branch_name,
+                req.name_ident.db_name, req.name_ident.table_name, branch_name,
             ),
             name: req.name_ident.table_name.clone(),
             meta: seq_table_meta.data,

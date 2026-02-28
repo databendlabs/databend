@@ -110,8 +110,10 @@ impl Plan {
             Plan::DropAllTableRowAccessPolicies(_) => {
                 Ok("DropAllTableRowAccessPolicies".to_string())
             }
-            Plan::CreateTableRef(_) => Ok("CreateTableRef".to_string()),
-            Plan::DropTableRef(_) => Ok("DropTableRef".to_string()),
+            Plan::CreateTableBranch(_) => Ok("CreateTableBranch".to_string()),
+            Plan::CreateTableTag(_) => Ok("CreateTableTag".to_string()),
+            Plan::DropTableBranch(_) => Ok("DropTableBranch".to_string()),
+            Plan::DropTableTag(_) => Ok("DropTableTag".to_string()),
 
             // Views
             Plan::CreateView(_) => Ok("CreateView".to_string()),

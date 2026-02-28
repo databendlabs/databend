@@ -30,7 +30,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
@@ -598,25 +597,43 @@ pub struct DropAllTableRowAccessPoliciesPlan {
 }
 
 #[derive(Clone, Debug)]
-pub struct CreateTableRefPlan {
+pub struct CreateTableBranchPlan {
     pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
 
-    pub ref_type: SnapshotRefType,
-    pub ref_name: String,
+    pub branch_name: String,
     pub navigation: Option<NavigationPoint>,
     pub retain: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]
-pub struct DropTableRefPlan {
+pub struct CreateTableTagPlan {
     pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
 
-    pub ref_type: SnapshotRefType,
-    pub ref_name: String,
+    pub tag_name: String,
+    pub navigation: Option<NavigationPoint>,
+    pub retain: Option<Duration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTableBranchPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub branch_name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTableTagPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub tag_name: String,
 }

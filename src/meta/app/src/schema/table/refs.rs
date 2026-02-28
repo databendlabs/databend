@@ -18,23 +18,15 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-
 use databend_meta_types::MatchSeq;
 
 use super::TableMeta;
-use super::TableNameIdent;
+use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::tenant::Tenant;
+use crate::tenant::ToTenant;
 
 /// The option key for storing the base table id in a branch's TableMeta.
 pub const OPT_KEY_BASE_TABLE_ID: &str = "base_table_id";
-
-/// Information about a table branch, returned by get_table_branch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BranchInfo {
-    pub branch_name: String,
-    pub branch_id: u64,
-    pub table_meta: TableMeta,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableBranch {
@@ -53,11 +45,31 @@ pub struct TableTag {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct BranchNameIdent {
+pub struct RefNameIdent {
     pub tenant: Tenant,
     pub db_name: String,
     pub table_name: String,
-    pub branch_name: String,
+    pub ref_name: String,
+}
+
+impl RefNameIdent {
+    pub fn new(
+        tenant: impl ToTenant,
+        db_name: impl ToString,
+        table_name: impl ToString,
+        ref_name: impl ToString,
+    ) -> RefNameIdent {
+        RefNameIdent {
+            tenant: tenant.to_tenant(),
+            db_name: db_name.to_string(),
+            table_name: table_name.to_string(),
+            ref_name: ref_name.to_string(),
+        }
+    }
+
+    pub fn db_name_ident(&self) -> DatabaseNameIdent {
+        DatabaseNameIdent::new(&self.tenant, &self.db_name)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -152,48 +164,41 @@ pub struct CreateTableTagReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableTagReq {
-    pub name_ident: TableNameIdent,
-    pub tag_name: String,
+    pub name_ident: RefNameIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableTagReq {
-    pub name_ident: TableNameIdent,
-    pub tag_name: String,
+    pub name_ident: RefNameIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableBranchReq {
-    pub tenant: Tenant,
+    pub name_ident: RefNameIdent,
     pub table_id: u64,
     pub seq: MatchSeq,
-    pub branch_name: String,
     pub table_meta: TableMeta,
     pub expire_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableBranchReq {
-    pub name_ident: TableNameIdent,
-    pub branch_name: String,
+    pub name_ident: RefNameIdent,
     pub catalog_name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTableBranchReq {
-    pub name_ident: TableNameIdent,
-    pub branch_name: String,
+    pub name_ident: RefNameIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableBranchReq {
-    pub name_ident: TableNameIdent,
-    pub branch_name: String,
+    pub name_ident: RefNameIdent,
 }
 
 mod kvapi_key_impl {
     use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::Key;
     use databend_meta_kvapi::kvapi::KeyBuilder;
     use databend_meta_kvapi::kvapi::KeyError;
     use databend_meta_kvapi::kvapi::KeyParser;

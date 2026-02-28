@@ -74,7 +74,6 @@ impl FuseTable {
         num_snapshot_limit: Option<usize>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        debug_assert!(self.branch_info.is_none());
         let mut counter = PurgeCounter::new();
 
         // Step 1: Process snapshot refs (branches and tags) before main purge
@@ -210,11 +209,9 @@ impl FuseTable {
                     continue;
                 }
 
-                if let Ok(loc) = location_gen.gen_snapshot_location(
-                    self.get_branch_id(),
-                    &s.snapshot_id,
-                    s.format_version,
-                ) {
+                if let Ok(loc) =
+                    location_gen.gen_snapshot_location(&s.snapshot_id, s.format_version)
+                {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }
@@ -286,11 +283,9 @@ impl FuseTable {
             let mut segments_to_be_purged = HashSet::new();
             let mut ts_to_be_purged = HashSet::new();
             for s in remain_snapshots {
-                if let Ok(loc) = location_gen.gen_snapshot_location(
-                    self.get_branch_id(),
-                    &s.snapshot_id,
-                    s.format_version,
-                ) {
+                if let Ok(loc) =
+                    location_gen.gen_snapshot_location(&s.snapshot_id, s.format_version)
+                {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }

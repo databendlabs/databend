@@ -39,9 +39,11 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -49,9 +51,11 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -94,6 +98,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -389,6 +394,46 @@ impl Catalog for SessionCatalog {
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
         Ok(table)
+    }
+
+    async fn create_table_branch(&self, req: CreateTableBranchReq) -> Result<Arc<TableInfo>> {
+        self.inner.create_table_branch(req).await
+    }
+
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
+        self.inner.create_table_tag(req).await
+    }
+
+    async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<()> {
+        self.inner.drop_table_branch(req).await
+    }
+
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
+        self.inner.drop_table_tag(req).await
+    }
+
+    async fn get_table_branch(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.inner
+            .get_table_branch(tenant, db_name, table_name, branch_name)
+            .await
+    }
+
+    async fn get_table_tag(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        tag_name: &str,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        self.inner
+            .get_table_tag(tenant, db_name, table_name, tag_name)
+            .await
     }
 
     async fn mget_tables(

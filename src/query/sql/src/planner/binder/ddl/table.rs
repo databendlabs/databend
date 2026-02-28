@@ -23,7 +23,6 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
-use databend_common_ast::ast::ClusterType;
 use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
@@ -133,16 +132,18 @@ use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTablePlan;
-use crate::plans::CreateTableRefPlan;
+use crate::plans::CreateTableTagPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
+use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
-use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -1311,6 +1312,7 @@ impl Binder {
                                 &catalog,
                                 &database,
                                 &table,
+                                branch.as_deref(),
                                 &LockTableOption::LockWithRetry,
                             )
                             .await?
@@ -1380,16 +1382,6 @@ impl Binder {
                     .ctx
                     .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
                     .await?;
-                // Branch tables currently only support LINEAR cluster key.
-                if tbl.get_branch_info().is_some()
-                    && !matches!(cluster_by.cluster_type, ClusterType::Linear)
-                {
-                    return Err(ErrorCode::AlterTableError(format!(
-                        "Cluster key type '{}' is not supported for table branch. Only LINEAR is supported",
-                        cluster_by.cluster_type,
-                    )));
-                }
-
                 let cluster_keys = self.analyze_cluster_keys(cluster_by, tbl.schema()).await?;
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
@@ -1525,9 +1517,8 @@ impl Binder {
                     },
                 )))
             }
-            AlterTableAction::CreateTableRef {
-                ref_type,
-                ref_name,
+            AlterTableAction::CreateTableBranch {
+                branch_name,
                 travel_point,
                 retain,
             } => {
@@ -1536,27 +1527,56 @@ impl Binder {
                 } else {
                     None
                 };
-                let ref_name = self.normalize_identifier(ref_name).name;
-                Ok(Plan::CreateTableRef(Box::new(CreateTableRefPlan {
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::CreateTableBranch(Box::new(CreateTableBranchPlan {
                     tenant,
                     catalog,
                     database,
                     table,
-                    ref_type: ref_type.into(),
-                    ref_name,
+                    branch_name,
                     navigation,
                     retain: *retain,
                 })))
             }
-            AlterTableAction::DropTableRef { ref_type, ref_name } => {
-                let ref_name = self.normalize_identifier(ref_name).name;
-                Ok(Plan::DropTableRef(Box::new(DropTableRefPlan {
+            AlterTableAction::CreateTableTag {
+                tag_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let tag_name = self.normalize_identifier(tag_name).name;
+                Ok(Plan::CreateTableTag(Box::new(CreateTableTagPlan {
                     tenant,
                     catalog,
                     database,
                     table,
-                    ref_type: ref_type.into(),
-                    ref_name,
+                    tag_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
+            AlterTableAction::DropTableBranch { branch_name } => {
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::DropTableBranch(Box::new(DropTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch_name,
+                })))
+            }
+            AlterTableAction::DropTableTag { tag_name } => {
+                let tag_name = self.normalize_identifier(tag_name).name;
+                Ok(Plan::DropTableTag(Box::new(DropTableTagPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    tag_name,
                 })))
             }
         }

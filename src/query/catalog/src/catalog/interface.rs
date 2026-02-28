@@ -35,9 +35,11 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -46,9 +48,11 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -91,6 +95,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -303,11 +308,67 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
         branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
-        let table = self.get_table(tenant, db_name, table_name).await?;
         match branch {
-            Some(v) => table.with_branch(v),
-            None => Ok(table),
+            Some(branch_name) => {
+                self.get_table_branch(tenant, db_name, table_name, branch_name)
+                    .await
+            }
+            None => self.get_table(tenant, db_name, table_name).await,
         }
+    }
+
+    async fn create_table_branch(&self, _req: CreateTableBranchReq) -> Result<Arc<TableInfo>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'create_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn create_table_tag(&self, _req: CreateTableTagReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'create_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn drop_table_branch(&self, _req: DropTableBranchReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'drop_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn drop_table_tag(&self, _req: DropTableTagReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'drop_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn get_table_branch(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+        _branch_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn get_table_tag(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+        _tag_name: &str,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
     }
 
     /// Get multiple tables by db and table names.

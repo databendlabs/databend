@@ -62,7 +62,7 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::StreamInfo(info) => self.navigate_to_stream(ctx, info).await,
-            NavigationPoint::TableRef { .. } => unreachable!(),
+            NavigationPoint::TableTag(_) => unreachable!(),
         }
     }
 
@@ -185,7 +185,6 @@ impl FuseTable {
             location,
             snapshot_version,
             self.meta_location_generator().clone(),
-            self.get_branch_id(),
         );
 
         // Find the instant which matches the given `time_point`.
@@ -220,10 +219,6 @@ impl FuseTable {
         format_version: u64,
         s3_storage_class: S3StorageClass,
     ) -> Result<Arc<FuseTable>> {
-        // The `seq` of ident that we cloned here is JUST a place holder
-        // we should NOT use it other than a pure place holder.
-        let mut table_info = self.table_info.clone();
-
         // There are more to be kept in snapshot, like engine_options, ordering keys...
         // or we could just keep a clone of TableMeta in the snapshot.
         //
@@ -231,34 +226,23 @@ impl FuseTable {
 
         // 1. the table schema
         // 2. the table option `snapshot_location`
-        let loc = self.meta_location_generator.gen_snapshot_location(
-            self.get_branch_id(),
-            &snapshot.snapshot_id,
-            format_version,
-        )?;
+        let loc = self
+            .meta_location_generator
+            .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
+        // The `seq` of ident that we cloned here is JUST a place holder
+        // we should NOT use it other than a pure place holder.
+        let mut table_info = self.table_info.clone();
+        table_info.meta.schema = Arc::new(snapshot.schema.clone());
         // Cluster key will be restored from the snapshot.
         // If the snapshot has no cluster key, means the table is currently unclustered.
         // We do NOT fall back to table-level cluster key metadata here, even if
         // the base table defines one. This is expected and by design.
-        let new_branch = match self.branch_info.as_ref() {
-            Some(branch) => {
-                let mut new_branch = branch.clone();
-                new_branch.info.loc = loc;
-                new_branch.schema = Arc::new(snapshot.schema.clone());
-                new_branch.cluster_key_meta = snapshot.cluster_key_meta.clone();
-                Some(new_branch)
-            }
-            None => {
-                table_info.meta.schema = Arc::new(snapshot.schema.clone());
-                table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
-                table_info
-                    .meta
-                    .options
-                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
-                None
-            }
-        };
+        table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
+        table_info
+            .meta
+            .options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
 
         // 3. The statistics
         let summary = &snapshot.summary;
@@ -277,8 +261,7 @@ impl FuseTable {
         };
 
         // let's instantiate it
-        let mut table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
-        table.branch_info = new_branch;
+        let table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
         Ok(table.into())
     }
 
@@ -315,7 +298,7 @@ impl FuseTable {
                     Some(NavigationPoint::StreamInfo(info)) => {
                         self.list_by_stream(info, time_point).await
                     }
-                    Some(NavigationPoint::TableRef { .. }) => unreachable!(),
+                    Some(NavigationPoint::TableTag(_)) => unreachable!(),
                     None => self.list_by_time_point(time_point).await,
                 }?;
 
@@ -548,21 +531,25 @@ impl FuseTable {
                 }
                 Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
             }
-            NavigationPoint::TableRef { typ, name } => {
-                let table_ref = self.table_info.get_table_ref(name)?;
-                let ref_type = &table_ref.typ;
-                if ref_type != typ {
-                    return Err(ErrorCode::MismatchedReferenceType(format!(
-                        "'{}' is a {}, please use 'AT({} => {})' instead.",
-                        name, ref_type, ref_type, name,
-                    )));
+            NavigationPoint::TableTag(tag_name) => {
+                let tenant = ctx.get_tenant();
+                let database = self.table_info.database_name()?;
+                let table_name = self.table_info.name.as_str();
+                let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
+                let table_tag = catalog
+                    .get_table_tag(&tenant, database, table_name, tag_name)
+                    .await?;
+                match table_tag {
+                    Some(tag) => Ok(Some(tag.data.snapshot_loc)),
+                    None => Err(ErrorCode::UnknownReference(format!(
+                        "Unknown TAG '{}' in table '{}.{}'",
+                        tag_name, database, table_name
+                    ))),
                 }
-                Ok(Some(table_ref.loc.clone()))
             }
         }
     }
 
-    // Only used when the table branch is none.
     #[async_backtrace::framed]
     pub async fn find_location<P>(
         &self,
@@ -582,7 +569,6 @@ impl FuseTable {
             location,
             snapshot_version,
             self.meta_location_generator().clone(),
-            self.get_branch_id(),
         );
 
         // Find the snapshot which matches the given `time_point`.
@@ -591,11 +577,9 @@ impl FuseTable {
                 .try_check_aborting()
                 .with_context(|| "failed to find snapshot")?;
             if pred(snapshot.as_ref()) {
-                let snapshot_location = self.meta_location_generator.gen_snapshot_location(
-                    None,
-                    &snapshot.snapshot_id,
-                    format_version,
-                )?;
+                let snapshot_location = self
+                    .meta_location_generator
+                    .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
                 return Ok(snapshot_location);
             }
         }

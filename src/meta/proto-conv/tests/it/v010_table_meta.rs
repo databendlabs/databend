@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -150,7 +149,6 @@ fn test_decode_v10_table_meta() -> anyhow::Result<()> {
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
-        refs: btreemap! {},
     };
 
     common::test_pb_from_to(func_name!(), want())?;
