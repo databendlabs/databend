@@ -446,16 +446,8 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_tag(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        tag_name: &str,
-    ) -> Result<Option<SeqV<TableTag>>> {
-        self.mutable_catalog
-            .get_table_tag(tenant, db_name, table_name, tag_name)
-            .await
+    async fn get_table_tag(&self, table_id: u64, tag_name: &str) -> Result<Option<SeqV<TableTag>>> {
+        self.mutable_catalog.get_table_tag(table_id, tag_name).await
     }
 
     #[async_backtrace::framed]

@@ -694,17 +694,9 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_tag(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        tag_name: &str,
-    ) -> Result<Option<SeqV<TableTag>>> {
+    async fn get_table_tag(&self, table_id: u64, tag_name: &str) -> Result<Option<SeqV<TableTag>>> {
         let req = GetTableTagReq {
-            name_ident: databend_common_meta_app::schema::TableNameIdent::new(
-                tenant, db_name, table_name,
-            ),
+            table_id,
             tag_name: tag_name.to_string(),
         };
         self.ctx

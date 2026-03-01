@@ -26,8 +26,6 @@ use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
@@ -41,9 +39,12 @@ use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedTableId;
 use databend_common_meta_app::schema::GetTableBranchReq;
 use databend_common_meta_app::schema::GetTableTagReq;
+use databend_common_meta_app::schema::ListDroppedTableBranchesReq;
+use databend_common_meta_app::schema::ListTableBranchMetaItem;
+use databend_common_meta_app::schema::ListTableBranchesReq;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
-use databend_common_meta_app::schema::RefNameIdent;
 use databend_common_meta_app::schema::TableBranch;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdBranchName;
@@ -51,6 +52,7 @@ use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableIdTagName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
@@ -85,7 +87,7 @@ use crate::txn_op_builder_util::txn_op_put;
 /// Resolve table_id from TableNameIdent: db_name -> db_id, then (db_id, table_name) -> table_id.
 async fn resolve_table_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &RefNameIdent,
+    name_ident: &TableNameIdent,
     ctx: &str,
 ) -> Result<(u64, u64), KVAppError> {
     let tenant_dbname = name_ident.db_name_ident();
@@ -233,8 +235,8 @@ where
     async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let (table_id, _db_id) = resolve_table_id(self, &req.name_ident, "drop_table_tag").await?;
-        let tag_name = &req.name_ident.ref_name;
+        let table_id = req.table_id;
+        let tag_name = &req.tag_name;
         let key_tag = TableIdTagName::new(table_id, tag_name);
 
         let mut trials = txn_backoff(None, func_name!());
@@ -279,9 +281,8 @@ where
     ) -> Result<Option<SeqV<TableTag>>, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let (table_id, _db_id) = resolve_table_id(self, &req.name_ident, "get_table_tag").await?;
-
-        let tag_name = &req.name_ident.ref_name;
+        let table_id = req.table_id;
+        let tag_name = &req.tag_name;
         let key_tag = TableIdTagName::new(table_id, tag_name);
         let seq_tag = self.get_pb(&key_tag).await?;
         if let Some(tag) = &seq_tag {
@@ -297,6 +298,40 @@ where
             }
         }
         Ok(seq_tag)
+    }
+
+    /// List table tags.
+    ///
+    /// Reads: `__fd_table_tag/<table_id>/<tag_name> -> TableTag`
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn list_table_tags(
+        &self,
+        req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>, KVAppError> {
+        debug!(req :? =(&req); "RefApi: {}", func_name!());
+
+        let key_prefix = TableIdTagName::new(req.table_id, "");
+        let dir = DirName::new(key_prefix);
+        let entries = self.list_pb_vec(ListOptions::unlimited(&dir)).await?;
+
+        let now = Utc::now();
+        let mut tags = Vec::with_capacity(entries.len());
+        for (key, seq_tag) in entries {
+            if !req.include_expired
+                && seq_tag
+                    .data
+                    .expire_at
+                    .as_ref()
+                    .is_some_and(|expire_at| *expire_at <= now)
+            {
+                continue;
+            }
+
+            tags.push((key.tag_name, seq_tag));
+        }
+
+        Ok(tags)
     }
 
     /// Create a table branch.
@@ -321,7 +356,7 @@ where
     ) -> Result<Arc<TableInfo>, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let branch_name = &req.name_ident.ref_name;
+        let branch_name = &req.branch_name;
         let table_id = req.table_id;
         let key_table_id = TableId { table_id };
         let key_branch = TableIdBranchName::new(table_id, branch_name);
@@ -382,10 +417,7 @@ where
             if seq_branch.is_some() {
                 return Err(KVAppError::AppError(AppError::from(
                     TableAlreadyExists::new(
-                        format!(
-                            "'{}'.'{}'/'{}'",
-                            req.name_ident.db_name, req.name_ident.table_name, branch_name
-                        ),
+                        format!("table_id={table_id}/branch='{}'", branch_name),
                         "create_table_branch: branch already exists",
                     ),
                 )));
@@ -549,11 +581,10 @@ where
     async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let tenant = &req.name_ident.tenant;
-        let (table_id, db_id) =
-            resolve_table_id(self, &req.name_ident, "drop_table_branch").await?;
+        let tenant = &req.tenant;
+        let table_id = req.table_id;
 
-        let branch_name = &req.name_ident.ref_name;
+        let branch_name = &req.branch_name;
         let key_branch = TableIdBranchName::new(table_id, branch_name);
 
         let mut trials = txn_backoff(None, func_name!());
@@ -629,17 +660,7 @@ where
                     )));
             }
 
-            // 6. Clean up ownership.
-            if let Some(catalog_name) = &req.catalog_name {
-                let ownership_object = OwnershipObject::Table {
-                    catalog_name: catalog_name.clone(),
-                    db_id,
-                    table_id: branch_id,
-                };
-                let ownership_key =
-                    TenantOwnershipObjectIdent::new(tenant.clone(), ownership_object);
-                txn.if_then.push(txn_op_del(&ownership_key));
-            }
+            // 6. Todo: Clean up ownership.
 
             // 7. Clean up tag references.
             let taggable_object = TaggableObject::Table {
@@ -695,10 +716,8 @@ where
     async fn undrop_table_branch(&self, req: UndropTableBranchReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let (table_id, _db_id) =
-            resolve_table_id(self, &req.name_ident, "undrop_table_branch").await?;
-
-        let branch_name = &req.name_ident.ref_name;
+        let table_id = req.table_id;
+        let branch_name = &req.branch_name;
         let key_branch = TableIdBranchName::new(table_id, branch_name);
         let key_branch_id_list = BranchIdHistoryIdent {
             table_id,
@@ -798,11 +817,31 @@ where
     async fn get_table_branch(&self, req: GetTableBranchReq) -> Result<Arc<TableInfo>, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let (table_id, _db_id) =
-            resolve_table_id(self, &req.name_ident, "get_table_branch").await?;
+        let tenant_dbname = req.name_ident.db_name_ident();
+
+        let (seq_db_id, _db_meta) = get_db_or_err(
+            self,
+            &tenant_dbname,
+            format!("{}: {}", "get_table_branch", tenant_dbname.display()),
+        )
+        .await?;
+
+        let db_id = *seq_db_id.data;
+
+        let dbid_tbname = DBIdTableName {
+            db_id,
+            table_name: req.name_ident.table_name.clone(),
+        };
+
+        let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+        if tb_id_seq == 0 {
+            return Err(KVAppError::AppError(AppError::UnknownTable(
+                UnknownTable::new(&req.name_ident.table_name, "get_table_branch"),
+            )));
+        }
 
         // 1. Get the branch record.
-        let branch_name = &req.name_ident.ref_name;
+        let branch_name = &req.branch_name;
         let key_branch = TableIdBranchName::new(table_id, branch_name);
         let seq_branch = self.get_pb(&key_branch).await?;
         let Some(seq_branch) = seq_branch else {
@@ -852,6 +891,146 @@ where
         };
 
         Ok(Arc::new(tb_info))
+    }
+
+    /// List table branches.
+    ///
+    /// Reads: `__fd_table_branch/<table_id>/<branch_name> -> TableBranch`
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn list_table_branches(
+        &self,
+        req: ListTableBranchesReq,
+    ) -> Result<Vec<ListTableBranchMetaItem>, KVAppError> {
+        debug!(req :? =(&req); "RefApi: {}", func_name!());
+
+        let key_prefix = TableIdBranchName::new(req.table_id, "");
+        let dir = DirName::new(key_prefix);
+        let entries = self.list_pb_vec(ListOptions::unlimited(&dir)).await?;
+
+        let now = Utc::now();
+        let mut branch_candidates = Vec::with_capacity(entries.len());
+        for (key, seq_branch) in entries {
+            if !req.include_expired
+                && seq_branch
+                    .data
+                    .expire_at
+                    .as_ref()
+                    .is_some_and(|expire_at| *expire_at <= now)
+            {
+                continue;
+            }
+
+            branch_candidates.push((key.branch_name, seq_branch.data.branch_id));
+        }
+
+        if branch_candidates.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let branch_keys = branch_candidates
+            .iter()
+            .map(|(_, branch_id)| TableId {
+                table_id: *branch_id,
+            })
+            .collect::<Vec<_>>();
+        let branch_metas = self.get_pb_values_vec(branch_keys).await?;
+
+        let mut branches = Vec::with_capacity(branch_metas.len());
+        for ((branch_name, branch_id), branch_meta) in
+            branch_candidates.into_iter().zip(branch_metas.into_iter())
+        {
+            let Some(branch_meta) = branch_meta else {
+                continue;
+            };
+            branches.push((
+                branch_name,
+                TableId {
+                    table_id: branch_id,
+                },
+                branch_meta,
+            ));
+        }
+
+        Ok(branches)
+    }
+
+    /// List dropped table branches.
+    ///
+    /// Lists branch history under `__fd_branch_id_list/<table_id>/`, excludes active branches
+    /// from `__fd_table_branch/<table_id>/`, and then loads dropped meta by
+    /// `__fd_dropped_table_by_id/<branch_id>`.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn list_dropped_table_branches(
+        &self,
+        req: ListDroppedTableBranchesReq,
+    ) -> Result<Vec<ListTableBranchMetaItem>, KVAppError> {
+        debug!(req :? =(&req); "RefApi: {}", func_name!());
+
+        let table_id = req.table_id;
+
+        let key_branch_history = BranchIdHistoryIdent {
+            table_id,
+            branch_name: "".to_string(),
+        };
+        let history_dir = DirName::new(key_branch_history);
+        let histories = self
+            .list_pb_vec(ListOptions::unlimited(&history_dir))
+            .await?;
+
+        let key_active_branch = TableIdBranchName::new(table_id, "");
+        let active_dir = DirName::new(key_active_branch);
+        let active_branches = self
+            .list_pb_vec(ListOptions::unlimited(&active_dir))
+            .await?;
+        let active_names = active_branches
+            .into_iter()
+            .map(|(key, _)| key.branch_name)
+            .collect::<HashSet<_>>();
+
+        let mut dropped_candidates = Vec::with_capacity(histories.len());
+        for (key, seq_id_list) in histories {
+            if active_names.contains(&key.branch_name) {
+                continue;
+            }
+
+            let Some(branch_id) = seq_id_list.data.last().copied() else {
+                continue;
+            };
+
+            dropped_candidates.push((key.branch_name, branch_id));
+        }
+
+        if dropped_candidates.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let dropped_keys = dropped_candidates
+            .iter()
+            .map(|(_, branch_id)| DroppedTableId::new(*branch_id))
+            .collect::<Vec<_>>();
+        let dropped_metas = self.get_pb_values_vec(dropped_keys).await?;
+
+        let mut dropped_branches = Vec::with_capacity(dropped_metas.len());
+        for ((branch_name, branch_id), dropped_meta) in dropped_candidates
+            .into_iter()
+            .zip(dropped_metas.into_iter())
+        {
+            let Some(dropped_meta) = dropped_meta else {
+                continue;
+            };
+
+            dropped_branches.push((
+                branch_name,
+                TableId {
+                    table_id: branch_id,
+                },
+                dropped_meta,
+            ));
+        }
+
+        Ok(dropped_branches)
     }
 }
 

@@ -360,9 +360,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn get_table_tag(
         &self,
-        _tenant: &Tenant,
-        _db_name: &str,
-        _table_name: &str,
+        _table_id: u64,
         _tag_name: &str,
     ) -> Result<Option<SeqV<TableTag>>> {
         Err(ErrorCode::Unimplemented(format!(

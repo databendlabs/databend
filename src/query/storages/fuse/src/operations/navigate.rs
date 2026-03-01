@@ -532,12 +532,11 @@ impl FuseTable {
                 Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
             }
             NavigationPoint::TableTag(tag_name) => {
-                let tenant = ctx.get_tenant();
                 let database = self.table_info.database_name()?;
                 let table_name = self.table_info.name.as_str();
                 let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
                 let table_tag = catalog
-                    .get_table_tag(&tenant, database, table_name, tag_name)
+                    .get_table_tag(self.table_info.ident.table_id, tag_name)
                     .await?;
                 match table_tag {
                     Some(tag) => Ok(Some(tag.data.snapshot_loc)),

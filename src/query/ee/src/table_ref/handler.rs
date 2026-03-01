@@ -25,7 +25,6 @@ use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::OPT_KEY_BASE_TABLE_ID;
-use databend_common_meta_app::schema::RefNameIdent;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -107,10 +106,6 @@ impl RealTableRefHandler {
         let wrapper = TableRefHandlerWrapper::new(Box::new(handler));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
-    }
-
-    fn name_ident(ctx: &Arc<dyn TableContext>, db: &str, table: &str, ident: &str) -> RefNameIdent {
-        RefNameIdent::new(&ctx.get_tenant(), db, table, ident)
     }
 
     #[async_backtrace::framed]
@@ -300,11 +295,11 @@ impl RealTableRefHandler {
             .insert(OPT_KEY_BASE_TABLE_ID.to_string(), table_id.to_string());
 
         let catalog = ctx.get_catalog(&plan.catalog).await?;
-        let name_ident = Self::name_ident(&ctx, &plan.database, &plan.table, &plan.branch_name);
         let branch_table_info = catalog
             .create_table_branch(CreateTableBranchReq {
-                name_ident,
+                name_ident: TableNameIdent::new(&ctx.get_tenant(), &plan.database, &plan.table),
                 table_id,
+                branch_name: plan.branch_name.clone(),
                 seq: MatchSeq::Exact(seq),
                 table_meta: branch_table_meta,
                 expire_at: plan.retain.map(|v| Utc::now() + v),
@@ -348,9 +343,17 @@ impl RealTableRefHandler {
         ctx: Arc<dyn TableContext>,
         plan: &DropTableTagPlan,
     ) -> Result<()> {
+        let table = ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await?;
+        let table_id = table.get_table_info().ident.table_id;
         let catalog = ctx.get_catalog(&plan.catalog).await?;
-        let name_ident = Self::name_ident(&ctx, &plan.database, &plan.table, &plan.tag_name);
-        catalog.drop_table_tag(DropTableTagReq { name_ident }).await
+        catalog
+            .drop_table_tag(DropTableTagReq {
+                table_id,
+                tag_name: plan.tag_name.clone(),
+            })
+            .await
     }
 
     #[async_backtrace::framed]
@@ -360,10 +363,14 @@ impl RealTableRefHandler {
         plan: &DropTableBranchPlan,
     ) -> Result<()> {
         let catalog = ctx.get_catalog(&plan.catalog).await?;
-        let name_ident = Self::name_ident(&ctx, &plan.database, &plan.table, &plan.branch_name);
+        let table = catalog
+            .get_table(&ctx.get_tenant(), &plan.database, &plan.table)
+            .await?;
         catalog
             .drop_table_branch(DropTableBranchReq {
-                name_ident,
+                tenant: ctx.get_tenant(),
+                table_id: table.get_table_info().ident.table_id,
+                branch_name: plan.branch_name.clone(),
                 catalog_name: Some(plan.catalog.clone()),
             })
             .await
