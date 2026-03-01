@@ -317,7 +317,7 @@ jaq-std = "2.1.2"
 jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.5"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
-lance = "1.0.4"
+lance = { version = "1.0.4", default-features = false }
 lance-table = "1.0.4"
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
