@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::io::Cursor;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -47,6 +48,7 @@ use geo_index::rtree::RTreeRef;
 use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use opendal::Operator;
+use roaring::RoaringBitmap;
 
 use crate::io::read::load_spatial_index_files;
 use crate::io::read::load_spatial_index_meta;
@@ -132,9 +134,21 @@ impl SpatialIndexPruner {
             {
                 continue;
             }
-            column_id_to_index.insert(*column_id, column_names.len());
+            let column_index = column_names.len();
             column_names.push(column_name);
+            let srid_index = column_names.len();
             column_names.push(srid_name);
+            let invalid_index = {
+                let invalid_name = format!("{}_invalid_rows", column_id);
+                if available_columns.contains(&invalid_name) {
+                    let idx = column_names.len();
+                    column_names.push(invalid_name);
+                    Some(idx)
+                } else {
+                    None
+                }
+            };
+            column_id_to_index.insert(*column_id, (column_index, srid_index, invalid_index));
         }
 
         if column_names.is_empty() {
@@ -151,10 +165,11 @@ impl SpatialIndexPruner {
 
         let mut domains = self.base_domains.clone();
         for predicate in &self.predicates {
-            let Some(column_index) = column_id_to_index.get(&predicate.column_id) else {
+            let Some(&(column_index, srid_index, invalid_index)) =
+                column_id_to_index.get(&predicate.column_id)
+            else {
                 continue;
             };
-            let srid_index = column_index + 1;
             let Some(srid_column) = columns.get(srid_index) else {
                 continue;
             };
@@ -164,7 +179,20 @@ impl SpatialIndexPruner {
             if srid != predicate.query_srid {
                 continue;
             }
-            let Some(column) = columns.get(*column_index) else {
+            let has_null = match invalid_index.and_then(|idx| columns.get(idx)) {
+                Some(invalid_rows_column) => match invalid_rows_column.index(0) {
+                    Some(ScalarRef::Binary(buffer)) => {
+                        let mut cursor = Cursor::new(buffer);
+                        let bitmap = RoaringBitmap::deserialize_from(&mut cursor).map_err(|e| {
+                            ErrorCode::Internal(format!("Invalid invalid-rows bitmap: {e}"))
+                        })?;
+                        !bitmap.is_empty()
+                    }
+                    _ => false,
+                },
+                None => false,
+            };
+            let Some(column) = columns.get(column_index) else {
                 continue;
             };
             let Some(ScalarRef::Binary(buffer)) = column.index(0) else {
@@ -179,7 +207,7 @@ impl SpatialIndexPruner {
             if !spatial_intersects(&tree, &predicate.query_rect) {
                 domains.insert(
                     predicate.placeholder.clone(),
-                    spatial_false_domain(&predicate.return_type),
+                    spatial_false_domain(&predicate.return_type, has_null),
                 );
             }
         }
@@ -331,14 +359,14 @@ fn spatial_intersects(tree: &RTreeRef<'_, f64>, query_rect: &Rect<f64>) -> bool 
     !tree.search_rect(query_rect).is_empty()
 }
 
-fn spatial_false_domain(return_type: &DataType) -> Domain {
+fn spatial_false_domain(return_type: &DataType, has_null: bool) -> Domain {
     let bool_domain = Domain::Boolean(BooleanDomain {
         has_false: true,
         has_true: false,
     });
     if return_type.is_nullable() {
         Domain::Nullable(NullableDomain {
-            has_null: false,
+            has_null,
             value: Some(Box::new(bool_domain)),
         })
     } else {

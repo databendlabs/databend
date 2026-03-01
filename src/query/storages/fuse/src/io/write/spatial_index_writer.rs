@@ -350,8 +350,9 @@ impl SpatialIndexBuilder {
 
                 let mut column_srid = None;
                 let mut srid_mixed = false;
-                let mut builder = RTreeBuilder::<f64>::new(column.len() as u32);
-                let mut empty_rows_rb = RoaringBitmap::new();
+                let mut rects = Vec::with_capacity(column.len());
+                // Track rows that cannot be indexed (null, empty, or invalid geometry).
+                let mut invalid_rows_rb = RoaringBitmap::new();
                 for (row_idx, value) in column.iter().enumerate() {
                     let (geo, srid) = match value {
                         ScalarRef::Geometry(v) => {
@@ -365,7 +366,7 @@ impl SpatialIndexBuilder {
                             (geo, 4326)
                         }
                         _ => {
-                            empty_rows_rb.insert(row_idx as u32);
+                            invalid_rows_rb.insert(row_idx as u32);
                             continue;
                         }
                     };
@@ -381,9 +382,9 @@ impl SpatialIndexBuilder {
                     if let Some(rec) = geo.bounding_rect() {
                         let min = rec.min();
                         let max = rec.max();
-                        builder.add(min.x, min.y, max.x, max.y);
+                        rects.push((min.x, min.y, max.x, max.y));
                     } else {
-                        empty_rows_rb.insert(row_idx as u32);
+                        invalid_rows_rb.insert(row_idx as u32);
                     }
                 }
                 // Don't build index if the column SRID is mixed,
@@ -393,6 +394,10 @@ impl SpatialIndexBuilder {
                 let Some(srid) = column_srid else {
                     continue;
                 };
+                let mut builder = RTreeBuilder::<f64>::new(rects.len() as u32);
+                for (min_x, min_y, max_x, max_y) in rects {
+                    builder.add(min_x, min_y, max_x, max_y);
+                }
                 let tree = builder.finish::<HilbertSort>();
                 let buffer = tree.into_inner();
 
@@ -416,19 +421,20 @@ impl SpatialIndexBuilder {
                     Scalar::Number(NumberScalar::Int32(srid)),
                     1,
                 ));
-                if !empty_rows_rb.is_empty() {
-                    let mut empty_rows_buffer = vec![];
-                    empty_rows_rb
-                        .serialize_into(&mut empty_rows_buffer)
+                // Rows not indexed by the RTree (null, empty geometry, or invalid data).
+                if !invalid_rows_rb.is_empty() {
+                    let mut invalid_rows_buffer = vec![];
+                    invalid_rows_rb
+                        .serialize_into(&mut invalid_rows_buffer)
                         .unwrap();
 
                     index_fields.push(TableField::new(
-                        &format!("{}_empty_rows", column_id),
+                        &format!("{}_invalid_rows", column_id),
                         TableDataType::Binary,
                     ));
                     index_columns.push(BlockEntry::new_const_column(
                         DataType::Binary,
-                        Scalar::Binary(empty_rows_buffer),
+                        Scalar::Binary(invalid_rows_buffer),
                         1,
                     ));
                 }

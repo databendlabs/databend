@@ -52,8 +52,32 @@ TableScan
 └── estimated rows: 4.00
 
 statement ok
+CREATE TABLE t_nullable (id INT, category String, loaction Nullable(Geometry), SPATIAL INDEX idx (loaction)) row_per_block=2 block_per_segment=1
+
+statement ok
+INSERT INTO t_nullable VALUES
+(1, 'coffee', NULL),
+(2, 'coffee', TO_GEOMETRY('POINT(10 10)')),
+(3, 'tea', TO_GEOMETRY('POINT(50 50)')),
+(4, 'coffee', NULL)
+
+query T
+EXPLAIN SELECT id, category FROM t_nullable WHERE st_within(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee';
+----
+TableScan
+├── table: default.test_spatial_index_db.t_nullable
+├── scan id: 0
+├── output columns: [id (#0), category (#1)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, spatial pruning: 2 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [st_within(t_nullable.loaction (#2), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and t_nullable.category (#1) = 'coffee'], limit: NONE]
+└── estimated rows: 0.80
+
+statement ok
 USE default
 
 statement ok
 DROP DATABASE test_spatial_index_db
-
