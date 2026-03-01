@@ -66,6 +66,7 @@ fn test_geometry() {
     test_st_equals(file);
     test_st_area(file);
     test_st_convexhull(file);
+    test_st_hilbert(file);
 }
 
 fn test_haversine(file: &mut impl Write) {
@@ -807,6 +808,27 @@ fn test_st_convexhull(file: &mut impl Write) {
     run_ast(
         file,
         "ST_CONVEXHULL(TO_GEOMETRY('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1, 2 2), POLYGON((3 0, 3 3, 6 3, 6 0, 3 0)))'))",
+        &[],
+    );
+}
+
+fn test_st_hilbert(file: &mut impl Write) {
+    run_ast(file, "ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)'))", &[]);
+    run_ast(file, "ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)'))", &[]);
+    run_ast(file, "ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'))", &[]);
+    run_ast(
+        file,
+        "ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)'), [0, 0, 1, 1])",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)'), [0, 0, 1, 1])",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'), [0, 0, 1, 1])",
         &[],
     );
 }

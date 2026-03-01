@@ -16,6 +16,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::hilbert_index_from_bounds_slice;
+use databend_common_expression::hilbert_index_from_point;
+use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::F64;
@@ -24,6 +27,7 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::geometry::GeometryType;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -39,6 +43,7 @@ use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::geometry::count_points;
+use databend_common_io::geometry::geometry_bbox_center;
 use databend_common_io::geometry::geometry_from_str;
 use databend_common_io::geometry::point_to_geohash;
 use databend_common_io::geometry::st_extreme;
@@ -1667,6 +1672,78 @@ pub fn register(registry: &mut FunctionRegistry) {
                 },
             ),
         );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, UInt64Type, _, _>(
+        "st_hilbert",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<UInt64Type>>(
+            |ewkb, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                match Ewkb(ewkb).to_geo() {
+                    Ok(geo) => match geometry_bbox_center(&geo) {
+                        Some((x, y)) => match hilbert_index_from_point(x, y) {
+                            Ok(index) => builder.push(index),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e.to_string());
+                                builder.push_null();
+                            }
+                        },
+                        None => builder.push_null(),
+                    },
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<
+        GeometryType,
+        ArrayType<NumberType<F64>>,
+        UInt64Type,
+        _,
+        _,
+    >(
+        "st_hilbert",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<
+            GeometryType,
+            ArrayType<NumberType<F64>>,
+            NullableType<UInt64Type>,
+        >(|ewkb, bounds, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.push_null();
+                    return;
+                }
+            }
+
+            match Ewkb(ewkb).to_geo() {
+                Ok(geo) => match geometry_bbox_center(&geo) {
+                    Some((x, y)) => match hilbert_index_from_bounds_slice(x, y, &bounds) {
+                        Ok(index) => builder.push(index),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                            builder.push_null();
+                        }
+                    },
+                    None => builder.push_null(),
+                },
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                    builder.push_null();
+                }
+            }
+        }),
+    );
 }
 
 fn st_transform_impl(
