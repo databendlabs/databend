@@ -109,12 +109,10 @@ pub fn serialize_block(
         return Ok(vec![]);
     }
 
-    // Build metadata (row count + block meta + schema) before moving block
-    let schema = block.infer_schema();
+    // Build metadata (row count + block meta) before moving block
     let mut meta = vec![];
     meta.write_scalar_own(block.num_rows() as u32)?;
     bincode_serialize_into_buf(&mut meta, &block.get_meta())?;
-    bincode_serialize_into_buf(&mut meta, &schema)?;
 
     let (dict_data, value_data) = serialize_to_batches(block, ipc_options)?;
 
@@ -278,6 +276,7 @@ mod tests {
     use std::time::Duration;
 
     use arrow_flight::FlightData;
+    use arrow_schema::Schema as ArrowSchema;
     use databend_common_base::runtime::Runtime;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
@@ -441,7 +440,9 @@ mod tests {
         // Receive, strip tid, deserialize
         let flight_data = send_rx.recv().await.unwrap();
         let stripped = strip_tid(flight_data);
-        let decoded = deserialize_flight_data(stripped).unwrap();
+        let schema = Arc::new(original.infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let decoded = deserialize_flight_data(stripped, &schema, &arrow_schema).unwrap();
 
         assert_eq!(decoded.num_rows(), 5);
         assert_eq!(decoded.num_columns(), 1);

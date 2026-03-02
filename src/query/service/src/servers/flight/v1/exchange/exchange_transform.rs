@@ -162,7 +162,7 @@ impl ExchangeTransform {
         for idx in 0..channel_set.channels.len() {
             items.push(BroadcastRecvTransform::create_item(
                 idx,
-                channel_set.create_receiver(idx),
+                channel_set.create_receiver(idx, &params.schema),
                 waker.clone(),
             ));
         }

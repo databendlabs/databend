@@ -24,7 +24,7 @@ use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::BinaryRead;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
 use tokio::sync::Semaphore;
@@ -49,25 +49,12 @@ impl NetworkInboundChannel {
         }
     }
 
-    fn deserialize(&self, flight_data: FlightData) -> Result<DataBlock, ErrorCode> {
-        deserialize_flight_data(flight_data)
-    }
-
-    pub async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
+    pub async fn recv_raw(&self) -> Option<QueueItem> {
         if let Ok(item) = self.receiver.try_recv() {
-            return Ok(Some(match item {
-                QueueItem::LocalData(v) => v.into_data(),
-                QueueItem::RemoteData(r) => self.deserialize(strip_tid(r.into_data()))?,
-            }));
+            return Some(item);
         }
 
-        match self.receiver.recv().await {
-            Err(_) => Ok(None),
-            Ok(item) => Ok(Some(match item {
-                QueueItem::LocalData(v) => v.into_data(),
-                QueueItem::RemoteData(r) => self.deserialize(strip_tid(r.into_data()))?,
-            })),
-        }
+        self.receiver.recv().await.ok()
     }
 }
 
@@ -86,8 +73,8 @@ impl NetworkInboundChannelSet {
         }
     }
 
-    pub fn create_receiver(&self, thread_idx: usize) -> Arc<dyn InboundChannel> {
-        NetworkInboundReceiver::create(self.channels[thread_idx].clone())
+    pub fn create_receiver(&self, t_idx: usize, schema: &DataSchemaRef) -> Arc<dyn InboundChannel> {
+        NetworkInboundReceiver::create(schema, self.channels[t_idx].clone())
     }
 }
 
@@ -170,11 +157,20 @@ pub trait InboundChannel: Send + Sync {
 
 pub struct NetworkInboundReceiver {
     channel: Arc<NetworkInboundChannel>,
+    schema: DataSchemaRef,
+    arrow_schema: Arc<ArrowSchema>,
 }
 
 impl NetworkInboundReceiver {
-    pub fn create(channel: Arc<NetworkInboundChannel>) -> Arc<dyn InboundChannel> {
-        Arc::new(Self { channel })
+    pub fn create(
+        schema: &DataSchemaRef,
+        channel: Arc<NetworkInboundChannel>,
+    ) -> Arc<dyn InboundChannel> {
+        Arc::new(Self {
+            channel,
+            arrow_schema: Arc::new(ArrowSchema::from(schema.as_ref())),
+            schema: schema.clone(),
+        })
     }
 }
 
@@ -191,7 +187,18 @@ impl InboundChannel for NetworkInboundReceiver {
     }
 
     async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
-        self.channel.recv().await
+        match self.channel.recv_raw().await {
+            None => Ok(None),
+            Some(QueueItem::LocalData(v)) => Ok(Some(v.into_data())),
+            Some(QueueItem::RemoteData(r)) => {
+                let flight_data = strip_tid(r.into_data());
+                Ok(Some(deserialize_flight_data(
+                    flight_data,
+                    &self.schema,
+                    &self.arrow_schema,
+                )?))
+            }
+        }
     }
 }
 
@@ -221,9 +228,13 @@ pub fn strip_tid(mut data: FlightData) -> FlightData {
 /// Deserialize a FlightData (after tid stripping) back into a DataBlock.
 ///
 /// Format of `app_metadata`:
-/// - Fragment (last byte 0x01): `[row_count: u32][block_meta: bincode][schema: bincode][0x01]`
+/// - Fragment (last byte 0x01): `[row_count: u32][block_meta: bincode][0x01]`
 /// - Dictionary (last byte 0x05): dictionary IPC data (currently unsupported)
-pub(crate) fn deserialize_flight_data(flight_data: FlightData) -> Result<DataBlock, ErrorCode> {
+pub(crate) fn deserialize_flight_data(
+    flight_data: FlightData,
+    schema: &DataSchemaRef,
+    arrow_schema: &Arc<ArrowSchema>,
+) -> Result<DataBlock, ErrorCode> {
     let meta_bytes = &flight_data.app_metadata;
     if meta_bytes.is_empty() {
         return Err(ErrorCode::BadBytes("empty app_metadata in FlightData"));
@@ -257,14 +268,20 @@ pub(crate) fn deserialize_flight_data(flight_data: FlightData) -> Result<DataBlo
         bincode_deserialize_from_stream(&mut remaining)
             .map_err(|e| ErrorCode::BadBytes(format!("failed to deserialize block_meta: {}", e)))?;
 
-    let schema: DataSchema = bincode_deserialize_from_stream(&mut remaining)
-        .map_err(|e| ErrorCode::BadBytes(format!("failed to deserialize schema: {}", e)))?;
-
     if row_count == 0 {
         return Ok(DataBlock::new_with_meta(vec![], 0, block_meta));
     }
 
-    let arrow_schema = Arc::new(ArrowSchema::from(&schema));
+    let mut schema = schema.clone();
+    let mut arrow_schema = arrow_schema.clone();
+
+    if let Some(meta) = &block_meta {
+        if let Some(dynamic_schema) = meta.override_block_schema() {
+            arrow_schema = Arc::new(ArrowSchema::from(dynamic_schema.as_ref()));
+            schema = dynamic_schema;
+        }
+    }
+
     let batch = flight_data_to_arrow_batch(&flight_data, arrow_schema, &HashMap::new())
         .map_err(|e| ErrorCode::BadBytes(format!("failed to decode arrow batch: {}", e)))?;
 
