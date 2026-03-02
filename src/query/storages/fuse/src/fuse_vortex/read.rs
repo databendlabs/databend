@@ -16,7 +16,6 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -46,10 +45,7 @@ pub fn read_vortex(table_schema: &TableSchema, read_buffer: &[u8]) -> Result<Dat
         .map(|f| Arc::<str>::from(f.name().as_str()))
         .collect::<Vec<_>>();
 
-    let file = session
-        .open_options()
-        .open_buffer(read_buffer.to_vec())
-        .map_err(|e| ErrorCode::Internal(format!("Failed to open vortex file: {e}")))?;
+    let file = session.open_options().open_buffer(read_buffer.to_vec())?;
     read_vortex_file(table_schema, runtime, file, projection)
 }
 
@@ -67,9 +63,8 @@ pub fn read_vortex_with_ranges(
         .collect::<Vec<_>>();
 
     let read_at = PrefetchedVortexReadAt::new(file_size, prefetched_ranges);
-    let file = runtime
-        .block_on(async move { session.open_options().open_read_at(read_at).await })
-        .map_err(|e| ErrorCode::Internal(format!("Failed to open vortex file: {e}")))?;
+    let file =
+        runtime.block_on(async move { session.open_options().open_read_at(read_at).await })?;
 
     read_vortex_file(table_schema, runtime, file, projection)
 }
@@ -81,24 +76,16 @@ fn read_vortex_file(
     projection: Vec<Arc<str>>,
 ) -> Result<DataBlock> {
     let array = runtime.block_on(async move {
-        let mut scan = file
-            .scan()
-            .map_err(|e| ErrorCode::Internal(format!("Failed to create vortex scan: {e}")))?;
+        let mut scan = file.scan()?;
         scan = scan.with_projection(select(projection, root()));
 
-        scan.into_array_stream()
-            .map_err(|e| ErrorCode::Internal(format!("Failed to create vortex array stream: {e}")))?
-            .read_all()
-            .await
-            .map_err(|e| ErrorCode::Internal(format!("Failed to read vortex array stream: {e}")))
+        scan.into_array_stream()?.read_all().await
     })?;
 
-    let batch = RecordBatch::try_from(array.as_ref())
-        .map_err(|e| ErrorCode::Internal(format!("Failed to convert vortex array: {e}")))?;
+    let batch = RecordBatch::try_from(array.as_ref())?;
 
     let data_schema: DataSchema = table_schema.into();
     DataBlock::from_record_batch(&data_schema, &batch)
-        .map_err(|e| ErrorCode::Internal(format!("Failed to convert record batch: {e}")))
 }
 
 #[derive(Clone)]
@@ -513,6 +500,6 @@ mod tests {
         let err = read_vortex(&schema, b"not-a-vortex-file").unwrap_err();
 
         assert_eq!(err.code(), ErrorCode::INTERNAL);
-        assert!(err.message().contains("Failed to"));
+        assert!(!err.message().is_empty());
     }
 }

@@ -38,6 +38,7 @@ tantivy = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
+vortex = { workspace = true }
 
 [lints]
 workspace = true

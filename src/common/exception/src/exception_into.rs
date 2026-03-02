@@ -452,3 +452,9 @@ impl From<tokio::task::JoinError> for ErrorCode {
         }
     }
 }
+
+impl From<vortex::error::VortexError> for ErrorCode {
+    fn from(error: vortex::error::VortexError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}

@@ -16,7 +16,6 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
@@ -147,8 +146,7 @@ pub fn write_vortex(
 
     let write_summary = write_options
         .blocking(&runtime)
-        .write(&mut *write_buffer, array.to_array_iterator())
-        .map_err(|e| ErrorCode::Internal(format!("Failed to write vortex file: {e}")))?;
+        .write(&mut *write_buffer, array.to_array_iterator())?;
 
     build_vortex_write_meta(write_summary.size(), write_summary.footer())
 }
@@ -209,9 +207,7 @@ fn collect_segment_ids(
     }
 
     for idx in 0..layout.nchildren() {
-        let child = layout.child(idx).map_err(|e| {
-            ErrorCode::Internal(format!("Failed to access vortex layout child: {e}"))
-        })?;
+        let child = layout.child(idx)?;
         let child_field = if current_field.is_some() {
             current_field.clone()
         } else {
