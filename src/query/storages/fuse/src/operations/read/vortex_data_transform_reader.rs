@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::BitAnd;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -51,6 +53,7 @@ use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
+use crate::pruning::ExprBloomFilter;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
 
@@ -192,10 +195,10 @@ impl AsyncTransform for ReadVortexDataTransform {
         }
 
         let part = block_part_meta.part_ptr[0].clone();
+        let runtime_filter_entries = self.context.get_runtime_filters(self.scan_id);
         let runtime_filter = ExprRuntimePruner::new(
-            self.context
-                .get_runtime_filters(self.scan_id)
-                .into_iter()
+            runtime_filter_entries
+                .iter()
                 .flat_map(|entry| {
                     let mut exprs = Vec::new();
                     if let Some(expr) = entry.inlist.clone() {
@@ -267,7 +270,34 @@ impl AsyncTransform for ReadVortexDataTransform {
 
         let mut offsets = None;
         if !from_agg_index {
-            let mut bitmap_selection = None;
+            let mut bitmap_selection: Option<Bitmap> = None;
+
+            for entry in runtime_filter_entries.iter() {
+                let Some(bloom) = entry.bloom.as_ref() else {
+                    continue;
+                };
+                let Ok(column_index) = self.src_schema.index_of(bloom.column_name.as_str()) else {
+                    continue;
+                };
+
+                let start = Instant::now();
+                let probe_column = data_block.get_by_offset(column_index).to_column();
+                let bitmap = ExprBloomFilter::new(&bloom.filter).apply(probe_column)?;
+                let unset_bits = bitmap.null_count();
+                entry
+                    .stats
+                    .record_bloom(start.elapsed().as_nanos() as u64, unset_bits as u64);
+
+                if unset_bits != 0 {
+                    let bitmap: Bitmap = bitmap.into();
+                    bitmap_selection = Some(if let Some(current) = bitmap_selection.take() {
+                        current.bitand(&bitmap)
+                    } else {
+                        bitmap
+                    });
+                }
+            }
+
             if let Some(prewhere_filter) = &self.prewhere_filter {
                 let prewhere_block = self.build_prewhere_input_block(&data_block);
                 let num_rows = prewhere_block.num_rows();
@@ -277,8 +307,15 @@ impl AsyncTransform for ReadVortexDataTransform {
                     .try_downcast::<BooleanType>()
                     .unwrap();
                 let bitmap: Bitmap = FilterHelpers::filter_to_bitmap(filter, num_rows).into();
-                data_block = data_block.filter_with_bitmap(&bitmap)?;
-                bitmap_selection = Some(bitmap);
+                bitmap_selection = Some(if let Some(current) = bitmap_selection.take() {
+                    current.bitand(&bitmap)
+                } else {
+                    bitmap
+                });
+            }
+
+            if let Some(bitmap) = bitmap_selection.as_ref() {
+                data_block = data_block.filter_with_bitmap(bitmap)?;
             }
 
             data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
