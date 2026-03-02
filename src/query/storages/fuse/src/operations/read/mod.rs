@@ -23,6 +23,7 @@ mod parquet_data_transform_reader;
 mod parquet_rows_fetcher;
 mod read_state;
 mod runtime_filter_wait;
+mod vortex_data_transform_reader;
 
 mod block_partition_meta;
 mod block_partition_receiver_source;

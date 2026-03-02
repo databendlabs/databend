@@ -242,6 +242,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     )
                     .await?;
                 }
+                FuseStorageFormat::Vortex => {}
             }
         }
 

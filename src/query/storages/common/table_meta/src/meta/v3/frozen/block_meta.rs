@@ -101,6 +101,7 @@ impl From<Compression> for crate::meta::Compression {
 pub enum ColumnMeta {
     Parquet(ParquetColumnMeta),
     Native(NativeColumnMeta),
+    Vortex(VortexColumnMeta),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -140,6 +141,7 @@ impl From<ColumnMeta> for crate::meta::ColumnMeta {
         match value {
             ColumnMeta::Parquet(v) => Self::Parquet(v.into()),
             ColumnMeta::Native(v) => Self::Native(v.into()),
+            ColumnMeta::Vortex(v) => Self::Vortex(v.into()),
         }
     }
 }
@@ -159,6 +161,36 @@ impl From<ParquetColumnMeta> for crate::meta::v0::ColumnMeta {
         Self {
             offset: value.offset,
             len: value.len,
+            num_values: value.num_values,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct VortexSegmentMeta {
+    pub offset: u64,
+    pub len: u64,
+}
+
+impl From<VortexSegmentMeta> for crate::meta::VortexSegmentMeta {
+    fn from(value: VortexSegmentMeta) -> Self {
+        Self {
+            offset: value.offset,
+            len: value.len,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct VortexColumnMeta {
+    pub segments: Vec<VortexSegmentMeta>,
+    pub num_values: u64,
+}
+
+impl From<VortexColumnMeta> for crate::meta::VortexColumnMeta {
+    fn from(value: VortexColumnMeta) -> Self {
+        Self {
+            segments: value.segments.into_iter().map(Into::into).collect(),
             num_values: value.num_values,
         }
     }

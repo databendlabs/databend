@@ -487,6 +487,7 @@ unindent = "0.2"
 url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
+vortex = { git = "https://github.com/spiraldb/vortex.git", rev = "062d9a1994c72f7ac1785ff91f216107e80d67ce" }
 walkdir = "2.3.2"
 wiremock = "0.6"
 wkt = "0.14.0"

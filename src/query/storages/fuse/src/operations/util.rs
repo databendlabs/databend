@@ -32,6 +32,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
 use crate::FuseStorageFormat;
+use crate::fuse_vortex::read_vortex_with_ranges;
 use crate::io::BlockReader;
 
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
@@ -136,6 +137,17 @@ pub async fn read_block(
     block_meta: &BlockMeta,
     read_settings: &ReadSettings,
 ) -> Result<DataBlock> {
+    if matches!(storage_format, FuseStorageFormat::Vortex) {
+        let (file_size, prefetched_ranges) = reader
+            .read_vortex_data_by_merge_io(
+                read_settings,
+                &block_meta.location.0,
+                &block_meta.col_metas,
+            )
+            .await?;
+        return read_vortex_with_ranges(reader.schema().as_ref(), file_size, prefetched_ranges);
+    }
+
     let merged_io_read_result = reader
         .read_columns_data_by_merge_io(
             read_settings,

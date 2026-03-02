@@ -78,6 +78,7 @@ thrift = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
+vortex = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

@@ -25,6 +25,8 @@ pub use v2::SegmentStatistics;
 pub use v2::Statistics;
 pub use v2::VirtualBlockMeta;
 pub use v2::VirtualColumnMeta;
+pub use v2::VortexColumnMeta;
+pub use v2::VortexSegmentMeta;
 pub use v4::CompactSegmentInfo;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;

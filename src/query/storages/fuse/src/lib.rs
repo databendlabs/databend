@@ -37,6 +37,7 @@ mod fuse_table;
 mod fuse_type;
 mod retry;
 
+pub mod fuse_vortex;
 pub mod io;
 pub mod operations;
 pub mod pruning;

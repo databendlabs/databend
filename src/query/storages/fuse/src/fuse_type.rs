@@ -47,6 +47,7 @@ impl FuseTableType {
 pub enum FuseStorageFormat {
     Parquet,
     Native,
+    Vortex,
 }
 
 impl Display for FuseStorageFormat {
@@ -54,6 +55,7 @@ impl Display for FuseStorageFormat {
         match self {
             FuseStorageFormat::Parquet => write!(f, "Parquet"),
             FuseStorageFormat::Native => write!(f, "Native"),
+            FuseStorageFormat::Vortex => write!(f, "Vortex"),
         }
     }
 }
@@ -65,6 +67,7 @@ impl FromStr for FuseStorageFormat {
         match s.to_lowercase().as_str() {
             "" | "parquet" => Ok(FuseStorageFormat::Parquet),
             "native" => Ok(FuseStorageFormat::Native),
+            "vortex" => Ok(FuseStorageFormat::Vortex),
             other => Err(ErrorCode::UnknownFormat(format!(
                 "unknown fuse storage_format {}",
                 other

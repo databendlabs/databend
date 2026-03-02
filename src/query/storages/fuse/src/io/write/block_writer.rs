@@ -53,11 +53,13 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::VortexColumnMeta;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
+use crate::fuse_vortex::write_vortex;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::build_column_hlls;
@@ -138,6 +140,30 @@ pub fn serialize_block_with_column_stats(
                 // use column id as key instead of index
                 let column_id = leaf_column_ids.get(idx).unwrap();
                 metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
+            }
+
+            Ok(metas)
+        }
+        FuseStorageFormat::Vortex => {
+            let num_rows = block.num_rows() as u64;
+            let write_meta = write_vortex(schema.as_ref(), block, buf)?;
+            let field_leaf_column_ids = schema.field_leaf_column_ids();
+
+            let mut metas = HashMap::new();
+            for (field, leaf_column_ids) in schema.fields().iter().zip(field_leaf_column_ids) {
+                let mut ranges = write_meta.shared_ranges.clone();
+                if let Some(field_ranges) = write_meta.field_ranges.get(field.name()) {
+                    ranges.extend(field_ranges.iter().cloned());
+                }
+
+                let meta = ColumnMeta::Vortex(VortexColumnMeta {
+                    segments: ranges,
+                    num_values: num_rows,
+                });
+
+                for column_id in leaf_column_ids {
+                    metas.insert(column_id, meta.clone());
+                }
             }
 
             Ok(metas)
