@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::pin::pin;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -40,6 +39,7 @@ pub struct PingPongResponse {
 
 /// Callback trait for handling ping-pong responses.
 pub trait PingPongCallback: Send + Sync + 'static {
+    fn has_pending(&self) -> bool;
     fn on_response(&self, response: PingPongResponse);
 }
 
@@ -47,7 +47,7 @@ pub struct PingPongExchangeInner {
     in_flight: AtomicBool,
     send_time: Mutex<Option<Instant>>,
     send_tx: Sender<FlightData>,
-    shutdown: WatchNotify,
+    pub shutdown: WatchNotify,
 }
 
 /// A non-blocking ping-pong style flight exchange.
@@ -76,6 +76,13 @@ impl std::ops::Deref for PingPongExchange {
 }
 
 impl PingPongExchangeInner {
+    pub fn get_rtt(&self) -> Duration {
+        self.send_time
+            .lock()
+            .take()
+            .map(|t| t.elapsed())
+            .unwrap_or_default()
+    }
     /// Try to send data through the exchange.
     ///
     /// Returns:
@@ -157,46 +164,32 @@ impl PingPongExchange {
 
         let inner = self.inner.clone();
         Ok(runtime.spawn(async move {
-            let mut shutdown_fut = pin!(inner.shutdown.notified());
+            let mut finished = false;
+            let mut shutdown_fut = Box::pin(inner.shutdown.notified());
 
             loop {
+                if finished && !callback.has_pending() {
+                    inner.send_tx.close();
+                }
+
                 match select(shutdown_fut, stream.next()).await {
                     Either::Left(_) => {
-                        break;
+                        finished = true;
+                        shutdown_fut = Box::pin(inner.shutdown.notified());
                     }
                     Either::Right((None, _)) => {
-                        let rtt = inner
-                            .send_time
-                            .lock()
-                            .take()
-                            .map(|t| t.elapsed())
-                            .unwrap_or_default();
-                        callback.on_response(PingPongResponse {
-                            data: Err(Status::ok("Stream ended")),
-                            rtt,
-                        });
                         break;
                     }
                     Either::Right((Some(Ok(data)), next_shutdown)) => {
                         shutdown_fut = next_shutdown;
-                        let rtt = inner
-                            .send_time
-                            .lock()
-                            .take()
-                            .map(|t| t.elapsed())
-                            .unwrap_or_default();
+                        let rtt = inner.get_rtt();
                         callback.on_response(PingPongResponse {
                             data: Ok(data),
                             rtt,
                         });
                     }
                     Either::Right((Some(Err(status)), _)) => {
-                        let rtt = inner
-                            .send_time
-                            .lock()
-                            .take()
-                            .map(|t| t.elapsed())
-                            .unwrap_or_default();
+                        let rtt = inner.get_rtt();
                         callback.on_response(PingPongResponse {
                             data: Err(status),
                             rtt,

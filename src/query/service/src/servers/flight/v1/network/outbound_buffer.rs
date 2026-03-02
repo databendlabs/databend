@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::Weak;
 
 use arrow_flight::FlightData;
 use concurrent_queue::ConcurrentQueue;
@@ -96,14 +95,27 @@ impl RemoteInstance {
 }
 
 /// Inner state of ExchangeSinkBuffer, shared with callbacks.
-struct ExchangeSinkBufferInner {
+struct ExchangeSinkBufferSharedState {
     config: ExchangeBufferConfig,
 
     /// Pre-allocated remote instances, indexed by destination index
     remotes: Vec<Arc<RemoteInstance>>,
 }
 
-impl ExchangeSinkBufferInner {
+/// Inner state of ExchangeSinkBuffer, shared with callbacks.
+struct ExchangeSinkBufferInner {
+    state: Arc<ExchangeSinkBufferSharedState>,
+}
+
+impl Drop for ExchangeSinkBufferInner {
+    fn drop(&mut self) {
+        for remote in &self.state.remotes {
+            remote.exchange.shutdown.notify_waiters();
+        }
+    }
+}
+
+impl ExchangeSinkBufferSharedState {
     fn try_flush_remote(&self, dest_idx: usize, status: Option<Status>) {
         let remote = &self.remotes[dest_idx];
         let mut state = remote.state.lock();
@@ -139,16 +151,18 @@ impl ExchangeSinkBufferInner {
 /// Callback for handling PingPong responses.
 struct SinkBufferCallback {
     dest_idx: usize,
-    buffer: Weak<ExchangeSinkBufferInner>,
+    buffer: Arc<ExchangeSinkBufferSharedState>,
 }
 
 impl PingPongCallback for SinkBufferCallback {
-    fn on_response(&self, response: PingPongResponse) {
-        let Some(buffer) = self.buffer.upgrade() else {
-            return;
-        };
+    fn has_pending(&self) -> bool {
+        let state = self.buffer.remotes[self.dest_idx].state.lock();
+        state.channels.iter().any(|x| !x.pending_queue.is_empty())
+    }
 
-        buffer.try_flush_remote(self.dest_idx, response.data.err());
+    fn on_response(&self, response: PingPongResponse) {
+        self.buffer
+            .try_flush_remote(self.dest_idx, response.data.err());
     }
 }
 
@@ -170,32 +184,38 @@ impl ExchangeSinkBuffer {
     ) -> Result<Self> {
         let queue_capacity = config.queue_capacity_factor * exchanges.len().max(1);
 
+        let remotes = Vec::with_capacity(exchanges.len());
+
         let semaphore = Arc::new(Semaphore::new(queue_capacity));
+        let mut shared_state = ExchangeSinkBufferSharedState { config, remotes };
+
+        for exchange in exchanges.into_iter() {
+            let num_threads = exchange.num_threads;
+            let remote_instance = Arc::new(RemoteInstance::new(num_threads, exchange));
+            shared_state.remotes.push(remote_instance);
+        }
+
+        let shared_state = Arc::new(shared_state);
+        for (dest_idx, remote) in shared_state.remotes.iter().enumerate() {
+            let _ = remote.exchange.start(
+                Arc::new(SinkBufferCallback {
+                    dest_idx,
+                    buffer: shared_state.clone(),
+                }),
+                runtime,
+            );
+        }
+
         Ok(Self {
             semaphore,
-            inner: Arc::new_cyclic(|weak_inner| {
-                let mut remotes = Vec::with_capacity(exchanges.len());
-
-                for (dest_idx, exchange) in exchanges.into_iter().enumerate() {
-                    let _ = exchange.start(
-                        Arc::new(SinkBufferCallback {
-                            dest_idx,
-                            buffer: weak_inner.clone(),
-                        }),
-                        runtime,
-                    );
-
-                    let num_threads = exchange.num_threads;
-                    remotes.push(Arc::new(RemoteInstance::new(num_threads, exchange)));
-                }
-
-                ExchangeSinkBufferInner { config, remotes }
+            inner: Arc::new(ExchangeSinkBufferInner {
+                state: shared_state,
             }),
         })
     }
 
     pub async fn add_data(&self, tid: usize, dest_idx: usize, data: FlightData) -> Result<()> {
-        let remote = &self.inner.remotes[dest_idx];
+        let remote = &self.inner.state.remotes[dest_idx];
 
         // Try to send directly first
         if let Some(data) = remote.exchange.try_send(data)? {
