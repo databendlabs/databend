@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_infer_tsv_schema_header_names() {
-        let mut params = TsvFileFormatParams {
+        let params = TsvFileFormatParams {
             headers: 1,
             ..Default::default()
         };
