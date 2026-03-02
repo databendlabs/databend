@@ -20,6 +20,8 @@ mod read_pipeline;
 mod utils;
 
 pub use batch::BytesBatch;
+pub use formats::normalize_tsv_for_infer_schema;
+pub use formats::parse_tsv_records_for_infer_schema;
 pub use processors::BytesReader;
 pub use processors::Decompressor;
 pub use read_pipeline::RowBasedReadPipelineBuilder;
