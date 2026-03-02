@@ -184,17 +184,13 @@ impl OutboundChannel for RemoteChannel {
 
     async fn add_block(&self, block: DataBlock) -> Result<()> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
+        Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
 
         let flight_data_list = serialize_block(block, &self.ipc_options, None)?;
 
         let tid_prefix = (self.channel_id as u16).to_le_bytes();
 
         for flight_data in flight_data_list {
-            let bytes = flight_data.data_body.len()
-                + flight_data.data_header.len()
-                + flight_data.app_metadata.len();
-            Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, bytes);
-
             let mut metadata = tid_prefix.to_vec();
             metadata.extend_from_slice(&flight_data.app_metadata);
             let flight_data = FlightData {

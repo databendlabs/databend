@@ -185,7 +185,6 @@ impl PingPongExchange {
                             .take()
                             .map(|t| t.elapsed())
                             .unwrap_or_default();
-                        inner.in_flight.store(false, Ordering::SeqCst);
                         callback.on_response(PingPongResponse {
                             data: Ok(data),
                             rtt,

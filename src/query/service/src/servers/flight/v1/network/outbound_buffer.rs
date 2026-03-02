@@ -19,15 +19,19 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
+use concurrent_queue::ConcurrentQueue;
+use concurrent_queue::PopError;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
 use event_listener::Event;
 use parking_lot::Mutex;
+use tokio::sync::Semaphore;
 use tonic::Status;
 
 use super::outbound_transport::PingPongCallback;
 use super::outbound_transport::PingPongExchange;
 use super::outbound_transport::PingPongResponse;
+use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
 
 /// Configuration for ExchangeSinkBuffer.
 #[derive(Clone)]
@@ -42,20 +46,20 @@ impl Default for ExchangeBufferConfig {
     fn default() -> Self {
         Self {
             queue_capacity_factor: 64,
-            max_batch_bytes: 256 * 1024, // 256KB, same as Doris
+            max_batch_bytes: 256 * 1024,
         }
     }
 }
 
 /// Per-sink channel containing its own pending queue.
 struct Channel {
-    pending_queue: VecDeque<FlightData>,
+    pending_queue: ConcurrentQueue<RemoteQueueItem>,
 }
 
 impl Channel {
     fn new() -> Self {
         Self {
-            pending_queue: VecDeque::new(),
+            pending_queue: ConcurrentQueue::unbounded(),
         }
     }
 
@@ -63,8 +67,8 @@ impl Channel {
         self.pending_queue.len()
     }
 
-    fn pop_front(&mut self, _max_batch_bytes: usize) -> Option<(usize, FlightData)> {
-        self.pending_queue.pop_front().map(|x| (1, x))
+    fn pop_front(&mut self, _max_batch_bytes: usize) -> Option<FlightData> {
+        self.pending_queue.pop().ok().map(|x| x.into_data())
     }
 }
 
@@ -102,10 +106,6 @@ struct ExchangeSinkBufferInner {
 
     /// Pre-allocated remote instances, indexed by destination index
     remotes: Vec<Arc<RemoteInstance>>,
-    queue_capacity: usize,
-    queue_size: AtomicUsize,
-    /// Blocked sender event
-    send_event: Event,
 }
 
 impl ExchangeSinkBufferInner {
@@ -113,44 +113,38 @@ impl ExchangeSinkBufferInner {
         let remote = &self.remotes[dest_idx];
         let mut state = remote.state.lock();
 
-        if let Some(status) = status {
-            state.last_error = Some(status);
+        let Some(status) = status else {
+            let Some(channel) = state.channels.iter_mut().max_by_key(|x| x.remaining()) else {
+                return remote.exchange.ready_send();
+            };
 
-            let remaining = state.channels.iter().map(|x| x.remaining()).sum::<usize>();
-            self.queue_size.fetch_sub(remaining, Ordering::SeqCst);
-            return self.wake_blocked();
-        }
-
-        // Find channel with max queue size
-        if let Some(channel) = state.channels.iter_mut().max_by_key(|x| x.remaining()) {
-            let Some((batch, flight)) = channel.pop_front(self.config.max_batch_bytes) else {
+            let Some(flight) = channel.pop_front(self.config.max_batch_bytes) else {
                 return remote.exchange.ready_send();
             };
 
             let Ok(_) = remote.exchange.force_send(flight) else {
                 state.last_error = Some(Status::aborted("Exchange closed"));
-                return;
+                return remote.exchange.ready_send();
             };
 
-            // Sent successfully
-            self.queue_size.fetch_sub(batch, Ordering::SeqCst);
-            self.wake_blocked();
+            return;
+        };
+
+        state.last_error = Some(status);
+        for channel in &state.channels {
+            channel.pending_queue.close();
         }
-    }
 
-    fn wake_blocked(&self) {
-        self.send_event.notify(usize::MAX);
-    }
-
-    fn backpressure_cleared(&self) -> bool {
-        self.queue_size.load(Ordering::SeqCst) <= self.queue_capacity
+        for channel in &state.channels {
+            while channel.pending_queue.pop().is_ok() {}
+        }
     }
 }
 
 /// Callback for handling PingPong responses.
 struct SinkBufferCallback {
-    buffer: Weak<ExchangeSinkBufferInner>,
     dest_idx: usize,
+    buffer: Weak<ExchangeSinkBufferInner>,
 }
 
 impl PingPongCallback for SinkBufferCallback {
@@ -163,13 +157,8 @@ impl PingPongCallback for SinkBufferCallback {
     }
 }
 
-/// Exchange sink buffer for controlling backpressure in distributed data exchange.
-///
-/// This buffer manages multiple remote instances (one per destination node) and uses
-/// ping-pong mode to ensure at most one request is in-flight per instance at any time.
-///
-/// Uses `event_listener::Event` for backpressure signaling.
 pub struct ExchangeSinkBuffer {
+    semaphore: Arc<Semaphore>,
     inner: Arc<ExchangeSinkBufferInner>,
 }
 
@@ -186,7 +175,9 @@ impl ExchangeSinkBuffer {
     ) -> Result<Self> {
         let queue_capacity = config.queue_capacity_factor * exchanges.len().max(1);
 
+        let semaphore = Arc::new(Semaphore::new(queue_capacity));
         Ok(Self {
+            semaphore,
             inner: Arc::new_cyclic(|weak_inner| {
                 let mut remotes = Vec::with_capacity(exchanges.len());
 
@@ -203,13 +194,7 @@ impl ExchangeSinkBuffer {
                     remotes.push(Arc::new(RemoteInstance::new(num_threads, exchange)));
                 }
 
-                ExchangeSinkBufferInner {
-                    config,
-                    remotes,
-                    queue_capacity,
-                    queue_size: AtomicUsize::new(0),
-                    send_event: Event::new(),
-                }
+                ExchangeSinkBufferInner { config, remotes }
             }),
         })
     }
@@ -220,26 +205,20 @@ impl ExchangeSinkBuffer {
         // Try to send directly first
         if let Some(data) = remote.exchange.try_send(data)? {
             // Failed to send (in-flight or channel full), queue the data
-            {
-                let mut state = remote.state.lock();
+            let semaphore = self.semaphore.clone();
+            let owned_semaphore_permit = semaphore.acquire_owned().await.unwrap();
 
-                // Check for previous error
-                if let Some(status) = state.last_error.take() {
-                    return Err(status.into());
-                }
+            let mut state = remote.state.lock();
 
-                state.channels[tid].pending_queue.push_back(data);
+            // Check for previous error
+            if let Some(status) = state.last_error.clone().take() {
+                return Err(status.into());
             }
 
-            // Check backpressure with try-listen-retry
-            if self.inner.queue_size.fetch_add(1, Ordering::SeqCst) >= self.inner.queue_capacity {
-                while !self.inner.backpressure_cleared() {
-                    let listener = self.inner.send_event.listen();
-                    if self.inner.backpressure_cleared() {
-                        break;
-                    }
-                    listener.await;
-                }
+            // Try to send again
+            if let Some(data) = remote.exchange.try_send(data)? {
+                let item = RemoteQueueItem::new(data, owned_semaphore_permit);
+                let _ = state.channels[tid].pending_queue.push(item);
             }
         }
 

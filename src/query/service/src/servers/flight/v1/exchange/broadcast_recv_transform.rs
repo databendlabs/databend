@@ -77,7 +77,6 @@ impl Processor for BroadcastRecvTransform {
     }
 
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
-        log::info!("event_with_cause {:?}, {:?}", self.id, cause);
         if self.output.is_finished() {
             self.input.finish();
             self.receiver.close();

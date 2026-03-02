@@ -36,6 +36,13 @@ pub enum QueueItem {
 }
 
 impl RemoteQueueItem {
+    pub fn new(data: FlightData, owned_semaphore_permit: OwnedSemaphorePermit) -> Self {
+        Self {
+            data,
+            owned_semaphore_permit,
+        }
+    }
+
     pub fn create(data: FlightData, owned_semaphore_permit: OwnedSemaphorePermit) -> QueueItem {
         QueueItem::RemoteData(RemoteQueueItem {
             data,
