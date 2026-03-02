@@ -24,7 +24,6 @@ use databend_storages_common_table_meta::meta::VortexSegmentMeta;
 use vortex::VortexSessionDefault;
 use vortex::array::ArrayRef;
 use vortex::array::arrow::FromArrowArray;
-use vortex::file::OpenOptionsSessionExt;
 use vortex::file::WriteOptionsSessionExt;
 use vortex::io::runtime::BlockingRuntime;
 use vortex::io::runtime::current::CurrentThreadRuntime;
@@ -46,7 +45,6 @@ use vortex::session::VortexSession;
 
 #[derive(Debug, Clone)]
 pub struct VortexWriteMeta {
-    pub file_size: u64,
     pub shared_ranges: Vec<VortexSegmentMeta>,
     pub field_ranges: HashMap<String, Vec<VortexSegmentMeta>>,
 }
@@ -80,7 +78,7 @@ pub fn write_vortex(
     // Step 5: Compress each chunk.
     // Compressor choices:
     //   - BtrBlocksCompressor: adaptive cascading compression, balances size vs decode speed.
-    //     Automatically selects from: ALP, BitPacked, Delta, Dict, FSST, FoR, RLE, RunEnd, etc.
+    //     Automatically selects from: ALP, BitPacked, Delta, Dict, FSST, FOR, RLE, RunEnd, etc.
     //     `exclude_int_dict_encoding`: when true, skips dictionary encoding for integers.
     //   - CompactCompressor: size-optimized, uses PCO for numerics + Zstd for the rest.
     //     Configure with .with_pco_level() / .with_zstd_level() / .with_values_per_page().
@@ -147,24 +145,18 @@ pub fn write_vortex(
     //   .exclude_dtype()  — omit DType from file; caller must supply it at read time.
     // Note: max_variable_length_statistics_size (default 64) is not configurable via public API.
 
-    write_options
+    let write_summary = write_options
         .blocking(&runtime)
         .write(&mut *write_buffer, array.to_array_iterator())
         .map_err(|e| ErrorCode::Internal(format!("Failed to write vortex file: {e}")))?;
 
-    build_vortex_write_meta(write_buffer)
+    build_vortex_write_meta(write_summary.size(), write_summary.footer())
 }
 
-fn build_vortex_write_meta(write_buffer: &[u8]) -> Result<VortexWriteMeta> {
-    let runtime = CurrentThreadRuntime::new();
-    let session = VortexSession::default().with_handle(runtime.handle());
-    let file = session
-        .open_options()
-        .open_buffer(write_buffer.to_vec())
-        .map_err(|e| ErrorCode::Internal(format!("Failed to open vortex file: {e}")))?;
-    let footer = file.footer();
-
-    let file_size = write_buffer.len() as u64;
+fn build_vortex_write_meta(
+    file_size: u64,
+    footer: &vortex::file::Footer,
+) -> Result<VortexWriteMeta> {
     let segment_map = footer.segment_map();
 
     let mut shared_segment_ids = BTreeSet::new();
@@ -194,7 +186,6 @@ fn build_vortex_write_meta(write_buffer: &[u8]) -> Result<VortexWriteMeta> {
     shared_ranges_with_tail.push(vortex_footer_tail_range(file_size));
 
     Ok(VortexWriteMeta {
-        file_size,
         shared_ranges: normalize_ranges(shared_ranges_with_tail),
         field_ranges,
     })
