@@ -447,8 +447,10 @@ mod tests {
 
     #[test]
     fn test_infer_tsv_schema_header_names() {
-        let mut params = TsvFileFormatParams::default();
-        params.headers = 1;
+        let mut params = TsvFileFormatParams {
+            headers: 1,
+            ..Default::default()
+        };
         let schema = InferSchemaSeparator::infer_tsv_schema(
             b"c_bool\tc_int\tc_float\tc_date\tc_ts_s\tc_ts_ms\tc_ts_us\tc_ts_ns\tc_str\ntrue\t42\t3.14\t2024-01-02\t2024-01-02 03:04:05\t2024-01-02 03:04:05.123\t2024-01-02 03:04:05.123456\t2024-01-02 03:04:05.123456789\thello\n",
             &params,
