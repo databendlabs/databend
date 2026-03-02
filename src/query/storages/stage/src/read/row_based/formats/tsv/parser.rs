@@ -20,6 +20,9 @@ use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 
 use crate::read::row_based::batch::BytesBatch;
+use crate::read::row_based::batch::NdJsonRowBatchIter;
+use crate::read::row_based::batch::NdjsonRowBatch;
+use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::SeparatorState;
 use crate::read::row_based::formats::tsv::separator::TsvRowSeparator;
 
@@ -71,56 +74,81 @@ pub fn decode_tsv_field(col_data: &[u8], output: &mut Vec<u8>) -> Result<()> {
         .map_err(|e| ErrorCode::BadBytes(e.to_string()))
 }
 
-pub fn normalize_tsv_for_infer_schema(
-    input: &[u8],
-    params: &TsvFileFormatParams,
-    is_eof: bool,
-) -> Result<Vec<u8>> {
-    let record_delimiter = *params.record_delimiter.as_bytes().last().ok_or_else(|| {
-        ErrorCode::BadBytes("empty TSV record delimiter when infer schema".to_string())
-    })?;
-    let field_delimiter = params
-        .field_delimiter
-        .as_bytes()
-        .first()
-        .copied()
-        .ok_or_else(|| {
-            ErrorCode::BadBytes("empty TSV field delimiter when infer schema".to_string())
-        })?;
+struct InferSchemaIter {
+    batches: std::vec::IntoIter<RowBatchWithPosition>,
+    current_rows: Option<NdJsonRowBatchIter<'static>>,
+    current_data: Option<Box<NdjsonRowBatch>>,
+    current_fields: Option<std::iter::Enumerate<TsvFieldReader<'static>>>,
+    field_buf: Vec<u8>,
+    record_delimiter: u8,
+    field_delimiter: u8,
+    trim_cr: bool,
+}
 
-    let mut separator = TsvRowSeparator::try_create("infer_schema", record_delimiter, 0)?;
-    let batch = BytesBatch {
-        data: input.to_vec(),
-        path: "infer_schema".to_string(),
-        offset: 0,
-        is_eof,
-    };
-    let (batches, _) = separator.append(batch)?;
+impl Drop for InferSchemaIter {
+    fn drop(&mut self) {
+        self.current_rows = None;
+        self.current_data = None;
+    }
+}
 
-    let mut normalized = Vec::with_capacity(input.len());
-    let mut field_buffer = Vec::new();
-    let trim_cr = params.record_delimiter.len() > 1;
-    for row_batch in batches {
-        let data = row_batch
-            .data
-            .into_nd_json()
-            .map_err(|_| ErrorCode::BadBytes("expected NDJson row batch for TSV".to_string()))?;
-        for mut row in data.iter() {
-            row = trim_record_delimiter(row, record_delimiter, trim_cr);
-            if row.is_empty() {
-                continue;
+impl Iterator for InferSchemaIter {
+    type Item = Result<(usize, String)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(fields) = &mut self.current_fields {
+                if let Some((i, field)) = fields.next() {
+                    return Some(
+                        decode_tsv_field(field, &mut self.field_buf)
+                            .map(|_| (i, String::from_utf8_lossy(&self.field_buf).to_string())),
+                    );
+                } else {
+                    self.current_fields = None;
+                }
             }
-            normalize_row(row, field_delimiter, &mut normalized, &mut field_buffer)?;
+
+            if let Some(rows) = &mut self.current_rows {
+                if let Some(row) = rows.next() {
+                    let row = trim_record_delimiter(row, self.record_delimiter, self.trim_cr);
+
+                    let reader = TsvFieldReader::new(row, self.field_delimiter).enumerate();
+
+                    self.current_fields = Some(reader);
+                    continue;
+                } else {
+                    self.current_rows = None;
+                }
+            }
+
+            let batch = self.batches.next()?;
+            match batch.data.into_nd_json() {
+                Ok(data) => {
+                    let boxed = Box::new(data);
+                    let ptr: *const NdjsonRowBatch = &*boxed;
+                    let iter = unsafe { (*ptr).iter() };
+                    let iter_static: NdJsonRowBatchIter<'static> =
+                        unsafe { std::mem::transmute(iter) };
+
+                    self.current_data = Some(boxed);
+                    self.current_rows = Some(iter_static);
+                    continue;
+                }
+                Err(_) => {
+                    return Some(Err(ErrorCode::BadBytes(
+                        "expected NDJson row batch for TSV".to_string(),
+                    )));
+                }
+            }
         }
     }
-    Ok(normalized)
 }
 
 pub fn parse_tsv_records_for_infer_schema(
     input: &[u8],
     params: &TsvFileFormatParams,
     is_eof: bool,
-) -> Result<Vec<Vec<Vec<u8>>>> {
+) -> Result<impl Iterator<Item = Result<(usize, String)>>> {
     let record_delimiter = *params.record_delimiter.as_bytes().last().ok_or_else(|| {
         ErrorCode::BadBytes("empty TSV record delimiter when infer schema".to_string())
     })?;
@@ -142,28 +170,21 @@ pub fn parse_tsv_records_for_infer_schema(
     };
     let (batches, _) = separator.append(batch)?;
 
-    let trim_cr = params.record_delimiter.len() > 1;
-    let mut field_buffer = Vec::new();
-    let mut records = Vec::new();
-    for row_batch in batches {
-        let data = row_batch
-            .data
-            .into_nd_json()
-            .map_err(|_| ErrorCode::BadBytes("expected NDJson row batch for TSV".to_string()))?;
-        for mut row in data.iter() {
-            row = trim_record_delimiter(row, record_delimiter, trim_cr);
-            if row.is_empty() {
-                continue;
-            }
-            let mut columns = Vec::new();
-            for field in TsvFieldReader::new(row, field_delimiter) {
-                decode_tsv_field(field, &mut field_buffer)?;
-                columns.push(field_buffer.clone());
-            }
-            records.push(columns);
-        }
-    }
-    Ok(records)
+    let trim_cr: bool = params.record_delimiter.len() > 1;
+    let iter = InferSchemaIter {
+        batches: batches.into_iter(),
+
+        current_rows: None,
+        current_data: None,
+        current_fields: None,
+
+        field_buf: Vec::new(),
+
+        record_delimiter,
+        field_delimiter,
+        trim_cr,
+    };
+    Ok(iter)
 }
 
 fn trim_record_delimiter(mut row: &[u8], record_delimiter: u8, trim_cr: bool) -> &[u8] {
@@ -177,64 +198,9 @@ fn trim_record_delimiter(mut row: &[u8], record_delimiter: u8, trim_cr: bool) ->
     row
 }
 
-fn normalize_row(
-    row: &[u8],
-    field_delimiter: u8,
-    output: &mut Vec<u8>,
-    field_buffer: &mut Vec<u8>,
-) -> Result<()> {
-    let mut is_first = true;
-
-    for field in TsvFieldReader::new(row, field_delimiter) {
-        if !is_first {
-            output.push(b',');
-        }
-        append_field_as_csv(field, output, field_buffer)?;
-        is_first = false;
-    }
-
-    output.push(b'\n');
-    Ok(())
-}
-
-fn append_field_as_csv(
-    field: &[u8],
-    output: &mut Vec<u8>,
-    field_buffer: &mut Vec<u8>,
-) -> Result<()> {
-    decode_tsv_field(field, field_buffer)?;
-
-    output.push(b'"');
-    for b in field_buffer.iter() {
-        if *b == b'"' {
-            output.extend_from_slice(b"\"\"");
-        } else {
-            output.push(*b);
-        }
-    }
-    output.push(b'"');
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_normalize_tsv_for_infer_schema() -> Result<()> {
-        let params = TsvFileFormatParams::default();
-        let normalized = normalize_tsv_for_infer_schema(b"1\\t2\t3\\n4\n", &params, true)?;
-        assert_eq!(normalized, b"\"1\t2\",\"3\n4\"\n");
-        Ok(())
-    }
-
-    #[test]
-    fn test_normalize_tsv_for_infer_schema_non_eof() -> Result<()> {
-        let params = TsvFileFormatParams::default();
-        let normalized = normalize_tsv_for_infer_schema(b"1\t2\n3\t4", &params, false)?;
-        assert_eq!(normalized, b"\"1\",\"2\"\n");
-        Ok(())
-    }
 
     #[test]
     fn test_tsv_field_reader() {
@@ -251,10 +217,13 @@ mod tests {
     #[test]
     fn test_parse_tsv_records_for_infer_schema() -> Result<()> {
         let params = TsvFileFormatParams::default();
-        let records = parse_tsv_records_for_infer_schema(b"1\\t2\t3\\n4\n5\t6\n", &params, true)?;
+        let records = parse_tsv_records_for_infer_schema(b"1\\t2\t3\\n4\n5\t6\n", &params, true)?
+            .collect::<Result<Vec<_>>>()?;
         assert_eq!(records, vec![
-            vec![b"1\t2".to_vec(), b"3\n4".to_vec()],
-            vec![b"5".to_vec(), b"6".to_vec()]
+            (0, "1\t2".to_string()),
+            (1, "3\n4".to_string()),
+            (0, "5".to_string()),
+            (1, "6".to_string()),
         ]);
         Ok(())
     }

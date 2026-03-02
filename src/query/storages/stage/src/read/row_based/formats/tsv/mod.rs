@@ -18,5 +18,4 @@ mod parser;
 mod separator;
 
 pub use format::TsvInputFormat;
-pub use parser::normalize_tsv_for_infer_schema;
 pub use parser::parse_tsv_records_for_infer_schema;

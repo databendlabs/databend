@@ -140,38 +140,87 @@ impl InferSchemaSeparator {
         is_eof: bool,
         max_records: Option<usize>,
     ) -> std::result::Result<Schema, Option<ArrowError>> {
-        let records = parse_tsv_records_for_infer_schema(bytes, params, is_eof)
+        let mut fields = parse_tsv_records_for_infer_schema(bytes, params, is_eof)
             .map_err(|e| Some(ArrowError::ParseError(e.message())))?;
 
-        if records.is_empty() {
-            return Err(None);
-        }
+        let mut next_row_head: Option<(usize, String)> = None;
+        let mut next_row = || -> std::result::Result<Option<Vec<String>>, ArrowError> {
+            let first = if let Some(head) = next_row_head.take() {
+                head
+            } else {
+                match fields.next() {
+                    Some(item) => item.map_err(|e| ArrowError::ParseError(e.message()))?,
+                    None => return Ok(None),
+                }
+            };
 
-        let (headers, data_start) = if params.headers != 0 {
-            (
-                records[0]
-                    .iter()
-                    .map(|f| String::from_utf8_lossy(f).to_string())
-                    .collect::<Vec<_>>(),
-                1usize,
-            )
+            let (first_idx, first_field) = first;
+            if first_idx != 0 {
+                return Err(ArrowError::ParseError(
+                    "invalid TSV field index stream when inferring schema".to_string(),
+                ));
+            }
+
+            let mut row = vec![first_field];
+            loop {
+                match fields.next() {
+                    Some(Ok((0, field))) => {
+                        next_row_head = Some((0, field));
+                        return Ok(Some(row));
+                    }
+                    Some(Ok((idx, field))) => {
+                        if idx == row.len() {
+                            row.push(field);
+                        } else if idx < row.len() {
+                            row[idx] = field;
+                        } else {
+                            row.resize(idx, String::new());
+                            row.push(field);
+                        }
+                    }
+                    Some(Err(e)) => return Err(ArrowError::ParseError(e.message())),
+                    None => return Ok(Some(row)),
+                }
+            }
+        };
+
+        let first_record = next_row().map_err(Some)?.ok_or(None)?;
+        let mut rows_seen = 0;
+        let headers = if params.headers != 0 {
+            first_record
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
         } else {
-            (
-                (0..records[0].len())
-                    .map(|i| format!("column_{}", i + 1))
-                    .collect::<Vec<_>>(),
-                0usize,
-            )
+            (0..first_record.len())
+                .map(|i| format!("column_{}", i + 1))
+                .collect::<Vec<_>>()
         };
 
         let mut column_types = vec![TsvInferredDataType::default(); headers.len()];
         let max_records = max_records.unwrap_or(usize::MAX);
-        for record in records.iter().skip(data_start).take(max_records) {
+        if params.headers == 0 && rows_seen < max_records {
             for (idx, t) in column_types.iter_mut().enumerate().take(headers.len()) {
-                if let Some(field) = record.get(idx) {
-                    t.update(field);
+                if let Some(field) = first_record.get(idx) {
+                    t.update(field.as_bytes());
                 }
             }
+            rows_seen += 1;
+        }
+
+        while rows_seen < max_records {
+            let Some(record) = next_row().map_err(Some)? else {
+                break;
+            };
+            if rows_seen >= max_records {
+                break;
+            }
+            for (idx, t) in column_types.iter_mut().enumerate().take(headers.len()) {
+                if let Some(field) = record.get(idx) {
+                    t.update(field.as_bytes());
+                }
+            }
+            rows_seen += 1;
         }
 
         let fields: Fields = column_types
