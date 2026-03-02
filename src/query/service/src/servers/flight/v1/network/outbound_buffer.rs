@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Weak;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
 use concurrent_queue::ConcurrentQueue;
-use concurrent_queue::PopError;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
-use event_listener::Event;
 use parking_lot::Mutex;
 use tokio::sync::Semaphore;
 use tonic::Status;
@@ -208,10 +203,10 @@ impl ExchangeSinkBuffer {
             let semaphore = self.semaphore.clone();
             let owned_semaphore_permit = semaphore.acquire_owned().await.unwrap();
 
-            let mut state = remote.state.lock();
+            let state = remote.state.lock();
 
             // Check for previous error
-            if let Some(status) = state.last_error.clone().take() {
+            if let Some(status) = state.last_error.clone() {
                 return Err(status.into());
             }
 
