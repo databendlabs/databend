@@ -49,6 +49,7 @@ use url::Url;
 use crate::append::output::DataSummary;
 
 const STAGING_MOVE_CONCURRENCY: usize = 8;
+const STAGING_MOVE_CHUNK_SIZE: u64 = 8 * 1024 * 1024;
 
 struct DatasetWriteTask {
     batches: Vec<RecordBatch>,
@@ -339,7 +340,7 @@ impl LanceDatasetWriter {
                 async move {
                     let source =
                         Self::data_file_path(source_dataset_path.as_str(), relative_path.as_str());
-                    source_accessor.stat(source.as_str()).await.map_err(|err| {
+                    let metadata = source_accessor.stat(source.as_str()).await.map_err(|err| {
                         ErrorCode::StorageOther(format!(
                             "cannot locate staging lance data file for '{}', expected='{}': {}",
                             relative_path, source, err
@@ -354,9 +355,21 @@ impl LanceDatasetWriter {
                         source, destination
                     );
 
-                    let content = source_accessor.read(source.as_str()).await?;
-                    let mut writer = target_accessor.writer(destination.as_str()).await?;
-                    writer.write(content.to_vec()).await?;
+                    let mut writer = target_accessor
+                        .writer_with(destination.as_str())
+                        .chunk(STAGING_MOVE_CHUNK_SIZE as usize)
+                        .await?;
+                    let mut offset = 0_u64;
+                    let total_size = metadata.content_length();
+                    while offset < total_size {
+                        let end = (offset + STAGING_MOVE_CHUNK_SIZE).min(total_size);
+                        let chunk = source_accessor
+                            .read_with(source.as_str())
+                            .range(offset..end)
+                            .await?;
+                        writer.write(chunk).await?;
+                        offset = end;
+                    }
                     writer.close().await?;
                     source_accessor.delete(source.as_str()).await?;
 
