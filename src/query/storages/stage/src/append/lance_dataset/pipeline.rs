@@ -75,6 +75,7 @@ pub(crate) fn append_data_to_lance_dataset(
         LanceDatasetCommitter::try_create(
             input,
             output,
+            info.clone(),
             op.clone(),
             target_dataset_path.clone(),
             schema.clone(),

@@ -177,8 +177,8 @@ def test_copy_into_lance_default_path_with_query_id_directory():
         assert any("_versions/" in path for path in files)
 
         dataset_root = _infer_dataset_root(files)
-        assert dataset_root.startswith(f"{base_path}/")
-        assert dataset_root != f"base_path"
+        assert dataset_root.startswith(base_path)
+        assert dataset_root != base_path
 
         dataset_uri = _lance_dataset_uri(stage, dataset_root)
         ds = lance.dataset(dataset_uri, storage_options=_build_lance_storage_options())
@@ -186,6 +186,47 @@ def test_copy_into_lance_default_path_with_query_id_directory():
         assert table.num_rows == 128
         assert pc.min(table["number"]).as_py() == 0
         assert pc.max(table["number"]).as_py() == 127
+    finally:
+        conn.exec(f"remove @{stage}")
+        conn.exec(f"drop stage if exists {stage}")
+
+
+def test_copy_into_lance_detailed_output_is_aggregated_once():
+    client = databend_driver.BlockingDatabendClient(DATABEND_DSL)
+    conn = client.get_conn()
+
+    suffix = uuid.uuid4().hex[:8]
+    stage = f"test_lance_detail_{suffix}"
+    dataset = f"ds_detail_{suffix}"
+    location = f"@{stage}/{dataset}"
+
+    conn.exec(f"create or replace stage {stage}")
+    conn.exec("set max_threads=8")
+
+    try:
+        conn.exec(f"remove {location}")
+
+        copy_sql = (
+            f"copy into {location} "
+            "from (select number, number + 1 from numbers(200000)) "
+            "file_format=(type=lance) "
+            "max_file_size=8192 "
+            "use_raw_path=true "
+            "detailed_output=true"
+        )
+        rows = list(conn.query_iter(copy_sql))
+        assert len(rows) == 1
+
+        values = rows[0].values()
+        assert len(values) == 3
+        assert dataset in str(values[0])
+        assert values[1] > 0
+        assert values[2] == 200000
+
+        dataset_uri = _lance_dataset_uri(stage, dataset)
+        ds = lance.dataset(dataset_uri, storage_options=_build_lance_storage_options())
+        table = ds.to_table()
+        assert table.num_rows == 200000
     finally:
         conn.exec(f"remove @{stage}")
         conn.exec(f"drop stage if exists {stage}")

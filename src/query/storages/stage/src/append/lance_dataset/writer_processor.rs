@@ -46,7 +46,6 @@ use opendal::Operator;
 use tokio::sync::Mutex;
 use url::Url;
 
-use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
 
 const STAGING_MOVE_CONCURRENCY: usize = 8;
@@ -96,7 +95,6 @@ impl SharedFragmentState {
 pub struct LanceDatasetWriter {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    info: CopyIntoLocationInfo,
     schema: TableSchemaRef,
     arrow_schema: Arc<Schema>,
 
@@ -166,7 +164,6 @@ impl LanceDatasetWriter {
         Ok(ProcessorPtr::create(Box::new(LanceDatasetWriter {
             input,
             output,
-            info,
             schema,
             arrow_schema,
             target_accessor,
@@ -191,19 +188,7 @@ impl LanceDatasetWriter {
             return None;
         }
 
-        let mut unload_output = UnloadOutput::create(self.info.options.detailed_output);
-        unload_output.add_file(&self.target_dataset_path, self.written_summary);
-
-        if unload_output.is_empty() {
-            None
-        } else {
-            let mut blocks = unload_output.to_block_partial();
-            debug_assert!(
-                blocks.len() <= 1,
-                "Lance dataset output should emit at most one block"
-            );
-            blocks.pop()
-        }
+        Some(self.written_summary.to_block())
     }
 
     fn need_flush(&self) -> bool {

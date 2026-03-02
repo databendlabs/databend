@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::mem;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
@@ -28,6 +27,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 use lance::dataset::CommitBuilder;
 use lance::dataset::transaction::Operation as LanceOperation;
 use lance::dataset::transaction::TransactionBuilder;
@@ -40,6 +40,8 @@ use opendal::Operator;
 
 use super::writer_processor::LanceDatasetWriter;
 use super::writer_processor::SharedFragmentState;
+use crate::append::UnloadOutput;
+use crate::append::output::DataSummary;
 
 async fn commit_fragments_to_target_dataset(
     target_dataset_path: &str,
@@ -92,8 +94,9 @@ pub struct LanceDatasetCommitter {
     fragment_state: Arc<SharedFragmentState>,
 
     input_data: Option<DataBlock>,
-    pending_blocks: VecDeque<DataBlock>,
     output_blocks: Option<VecDeque<DataBlock>>,
+    aggregated_summary: DataSummary,
+    detailed_output: bool,
     committed: bool,
 }
 
@@ -101,6 +104,7 @@ impl LanceDatasetCommitter {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        info: CopyIntoLocationInfo,
         target_accessor: Operator,
         target_dataset_path: String,
         schema: TableSchemaRef,
@@ -117,8 +121,9 @@ impl LanceDatasetCommitter {
             schema,
             fragment_state,
             input_data: None,
-            pending_blocks: VecDeque::new(),
             output_blocks: None,
+            aggregated_summary: DataSummary::default(),
+            detailed_output: info.options.detailed_output,
             committed: false,
         })))
     }
@@ -174,7 +179,8 @@ impl Processor for LanceDatasetCommitter {
 
     fn process(&mut self) -> Result<()> {
         if let Some(block) = self.input_data.take() {
-            self.pending_blocks.push_back(block);
+            let summary = DataSummary::from_block(&block);
+            self.aggregated_summary.add(&summary);
         }
         Ok(())
     }
@@ -194,7 +200,13 @@ impl Processor for LanceDatasetCommitter {
         )
         .await?;
 
-        self.output_blocks = Some(mem::take(&mut self.pending_blocks));
+        if self.aggregated_summary.is_empty() {
+            self.output_blocks = None;
+        } else {
+            let mut unload_output = UnloadOutput::create(self.detailed_output);
+            unload_output.add_file(&self.target_dataset_path, self.aggregated_summary);
+            self.output_blocks = Some(unload_output.to_block_partial().into());
+        }
         self.committed = true;
         Ok(())
     }
