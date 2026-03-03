@@ -241,7 +241,7 @@ impl PrefetchedVortexReadAt {
             .into_iter()
             .map(|(range, data)| PrefetchedChunk {
                 range,
-                data: ByteBuffer::copy_from(data.to_vec()),
+                data: ByteBuffer::from(data.to_bytes()),
             })
             .collect();
 
