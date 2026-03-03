@@ -20,15 +20,15 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 
 use super::RowConverter;
 use super::Rows;
+use super::SortKeyDescription;
 
 /// Rows structure for single simple types. (numbers, date, timestamp)
 #[derive(Clone, Debug)]
@@ -47,6 +47,7 @@ where
     where Self: 'a;
 
     type Type = T;
+    type Converter = SimpleRowConverter<T>;
 
     fn len(&self) -> usize {
         T::column_len(&self.inner)
@@ -100,6 +101,7 @@ where
     where Self: 'a;
 
     type Type = T;
+    type Converter = SimpleRowConverter<T>;
 
     fn len(&self) -> usize {
         T::column_len(&self.inner)
@@ -141,6 +143,7 @@ where
 /// use this converter.
 #[derive(Debug)]
 pub struct SimpleRowConverter<T> {
+    sort_offset: usize,
     _t: PhantomData<T>,
 }
 
@@ -149,17 +152,16 @@ where
     T: ArgType,
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
-    fn create(
-        sort_columns_descriptions: &[SortColumnDescription],
-        _: DataSchemaRef,
-    ) -> Result<Self> {
-        assert!(sort_columns_descriptions.len() == 1);
-        assert!(sort_columns_descriptions[0].asc);
-        Ok(Self { _t: PhantomData })
+    fn new(desc: SortKeyDescription) -> Result<Self> {
+        let sort_offset = desc.into_single_sort_offset(true);
+        Ok(Self {
+            sort_offset,
+            _t: PhantomData,
+        })
     }
 
-    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsAsc<T>> {
-        self.convert_rows(columns, num_rows, true)
+    fn convert(&self, data_block: &DataBlock) -> Result<SimpleRowsAsc<T>> {
+        self.convert_rows(data_block.get_by_offset(self.sort_offset), true)
     }
 
     fn support_data_type(d: &DataType) -> bool {
@@ -172,17 +174,16 @@ where
     T: ArgType,
     for<'a> T::ScalarRef<'a>: Ord + Send,
 {
-    fn create(
-        sort_columns_descriptions: &[SortColumnDescription],
-        _: DataSchemaRef,
-    ) -> Result<Self> {
-        assert!(sort_columns_descriptions.len() == 1);
-        assert!(!sort_columns_descriptions[0].asc);
-        Ok(Self { _t: PhantomData })
+    fn new(desc: SortKeyDescription) -> Result<Self> {
+        let sort_offset = desc.into_single_sort_offset(false);
+        Ok(Self {
+            sort_offset,
+            _t: PhantomData,
+        })
     }
 
-    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsDesc<T>> {
-        self.convert_rows(columns, num_rows, false)
+    fn convert(&self, data_block: &DataBlock) -> Result<SimpleRowsDesc<T>> {
+        self.convert_rows(data_block.get_by_offset(self.sort_offset), false)
     }
 
     fn support_data_type(d: &DataType) -> bool {
@@ -191,15 +192,8 @@ where
 }
 
 impl<T: ArgType> SimpleRowConverter<T> {
-    fn convert_rows<R: Rows>(
-        &self,
-        columns: &[BlockEntry],
-        _num_rows: usize,
-        asc: bool,
-    ) -> Result<R> {
+    fn convert_rows<R: Rows>(&self, entry: &BlockEntry, asc: bool) -> Result<R> {
         assert!(asc == R::IS_ASC_COLUMN);
-        assert!(columns.len() == 1);
-        let entry = &columns[0];
         if entry.data_type() != T::data_type() {
             return Err(ErrorCode::Internal(format!(
                 "Cannot convert simple column. Expect data type {:?}, found {:?}",
