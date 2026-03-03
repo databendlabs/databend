@@ -14,6 +14,12 @@ statement ok
 DROP PROCEDURE IF EXISTS test_tag_proc(DECIMAL(10,2))
 
 statement ok
+DROP USER IF EXISTS 'test_tag_user'
+
+statement ok
+DROP ROLE IF EXISTS test_tag_role
+
+statement ok
 DROP TAG IF EXISTS test_env_tag
 
 statement ok
@@ -57,6 +63,12 @@ BEGIN
     RETURN 1;
 END;
 $$;
+
+statement ok
+CREATE USER 'test_tag_user' IDENTIFIED BY 'password'
+
+statement ok
+CREATE ROLE test_tag_role
 
 ## Test TAG_REFERENCES with valid database - should return empty (no tags set yet)
 query TTTTT
@@ -187,6 +199,56 @@ SELECT count(*) FROM TAG_REFERENCES('test_tag_stage', 'STAGE')
 ----
 2
 
+## IF EXISTS should be no-op for unknown user/role
+statement ok
+ALTER USER IF EXISTS 'test_not_exists_user' SET TAG test_env_tag = 'dev'
+
+statement ok
+ALTER ROLE IF EXISTS test_not_exists_role UNSET TAG test_env_tag
+
+## Test TAG_REFERENCES with user - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_user', 'USER')
+----
+
+## Set tags on user
+statement ok
+ALTER USER 'test_tag_user' SET TAG test_env_tag = 'dev', test_owner_tag = 'security_team'
+
+## Verify TAG_REFERENCES returns tags for user
+query TTTTT rowsort
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_user', 'USER')
+----
+test_env_tag dev NULL 'test_tag_user'@'%' USER
+test_owner_tag security_team NULL 'test_tag_user'@'%' USER
+
+## Verify object_id is NULL for user
+query B
+SELECT object_id IS NULL FROM TAG_REFERENCES('test_tag_user', 'USER') LIMIT 1
+----
+1
+
+## Test TAG_REFERENCES with role - should return empty (no tags set yet)
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_role', 'ROLE')
+----
+
+## Set tags on role
+statement ok
+ALTER ROLE test_tag_role SET TAG test_env_tag = 'prod'
+
+## Verify TAG_REFERENCES returns tags for role
+query TTTTT
+SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_role', 'ROLE')
+----
+test_env_tag prod NULL test_tag_role ROLE
+
+## Verify object_id is NULL for role
+query B
+SELECT object_id IS NULL FROM TAG_REFERENCES('test_tag_role', 'ROLE') LIMIT 1
+----
+1
+
 ## Test TAG_REFERENCES with connection - should return empty (no tags set yet)
 query TTTTT
 SELECT * exclude(object_id) FROM TAG_REFERENCES('test_tag_conn', 'CONNECTION')
@@ -278,6 +340,14 @@ SELECT * FROM TAG_REFERENCES('non_existent_stage', 'STAGE')
 statement error 2510
 SELECT * FROM TAG_REFERENCES('non_existent_conn', 'CONNECTION')
 
+## Test TAG_REFERENCES with non-existent user
+statement error
+SELECT * FROM TAG_REFERENCES('non_existent_user', 'USER')
+
+## Test TAG_REFERENCES with non-existent role
+statement error
+SELECT * FROM TAG_REFERENCES('non_existent_role', 'ROLE')
+
 ## Test TAG_REFERENCES with wrong number of arguments
 statement error 1006
 SELECT * FROM TAG_REFERENCES('test_tag_ref_db')
@@ -293,6 +363,12 @@ ALTER TABLE test_tag_ref_db.test_table UNSET TAG test_env_tag
 
 statement ok
 ALTER STAGE test_tag_stage UNSET TAG test_env_tag, test_owner_tag
+
+statement ok
+ALTER USER 'test_tag_user' UNSET TAG test_env_tag, test_owner_tag
+
+statement ok
+ALTER ROLE test_tag_role UNSET TAG test_env_tag
 
 statement ok
 ALTER CONNECTION test_tag_conn UNSET TAG test_env_tag, test_owner_tag
@@ -326,6 +402,12 @@ DROP STAGE test_tag_stage
 
 statement ok
 DROP CONNECTION test_tag_conn
+
+statement ok
+DROP USER 'test_tag_user'
+
+statement ok
+DROP ROLE test_tag_role
 
 statement ok
 DROP TAG test_env_tag

@@ -3392,6 +3392,7 @@ dependencies = [
  "indent",
  "itertools 0.13.0",
  "logos",
+ "memchr",
  "nom 8.0.0",
  "nom-rule",
  "ordered-float 5.1.0",

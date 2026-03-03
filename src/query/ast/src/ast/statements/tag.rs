@@ -22,6 +22,7 @@ use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Literal;
 use crate::ast::TypeName;
+use crate::ast::UserIdentity;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
@@ -143,6 +144,14 @@ pub enum AlterObjectTagTarget {
         if_exists: bool,
         stage_name: String,
     },
+    User {
+        if_exists: bool,
+        user: UserIdentity,
+    },
+    Role {
+        if_exists: bool,
+        role_name: String,
+    },
     Connection {
         if_exists: bool,
         connection_name: Identifier,
@@ -152,6 +161,12 @@ pub enum AlterObjectTagTarget {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         view: Identifier,
+    },
+    Stream {
+        if_exists: bool,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        stream: Identifier,
     },
     Function {
         if_exists: bool,
@@ -203,6 +218,23 @@ impl Display for AlterObjectTagTarget {
                 }
                 write!(f, "{stage_name}")?;
             }
+            AlterObjectTagTarget::User { if_exists, user } => {
+                write!(f, "USER ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{user}")?;
+            }
+            AlterObjectTagTarget::Role {
+                if_exists,
+                role_name,
+            } => {
+                write!(f, "ROLE ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write!(f, "{}", QuotedString(role_name, '\''))?;
+            }
             AlterObjectTagTarget::Connection {
                 if_exists,
                 connection_name,
@@ -226,6 +258,21 @@ impl Display for AlterObjectTagTarget {
                 write_dot_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(view)),
+                )?;
+            }
+            AlterObjectTagTarget::Stream {
+                if_exists,
+                catalog,
+                database,
+                stream,
+            } => {
+                write!(f, "STREAM ")?;
+                if *if_exists {
+                    write!(f, "IF EXISTS ")?;
+                }
+                write_dot_separated_list(
+                    f,
+                    catalog.iter().chain(database.iter()).chain(Some(stream)),
                 )?;
             }
             AlterObjectTagTarget::Function {

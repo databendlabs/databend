@@ -27,11 +27,10 @@ use crate::kv_pb_api::errors::PbDecodeError;
 use crate::kv_pb_api::errors::PbEncodeError;
 
 /// Encode a `FromToProto` value to protobuf bytes, with transparent zstd compression.
+///
+/// Delegates to [`compress::GLOBAL_ENCODER`].
 pub fn encode_pb<T: FromToProto>(value: &T) -> Result<Vec<u8>, PbEncodeError> {
-    let p = value.to_pb()?;
-    let mut buf = vec![];
-    prost::Message::encode(&p, &mut buf)?;
-    Ok(compress::encode_value(buf))
+    compress::GLOBAL_ENCODER.encode_pb(value)
 }
 
 /// Decode protobuf bytes (possibly zstd-compressed) to a `FromToProto` value.
@@ -43,15 +42,11 @@ pub fn decode_pb<T: FromToProto>(buf: &[u8]) -> Result<T, PbDecodeError> {
 }
 
 /// Encode an upsert Operation of T into protobuf encoded value.
+///
+/// Delegates to [`compress::GLOBAL_ENCODER`].
 pub fn encode_operation<T>(value: &Operation<T>) -> Result<Operation<Vec<u8>>, PbEncodeError>
 where T: FromToProto {
-    match value {
-        Operation::Update(t) => Ok(Operation::Update(encode_pb(t)?)),
-        Operation::Delete => Ok(Operation::Delete),
-        _ => {
-            unreachable!("Operation::AsIs is not supported")
-        }
-    }
+    compress::GLOBAL_ENCODER.encode_operation(value)
 }
 
 /// Decode Change<Vec<u8>> into Change<T>, with FromToProto.
@@ -133,12 +128,12 @@ mod tests {
 
     use super::*;
     use crate::kv_pb_api::compress::COMPRESS_THRESHOLD;
+    use crate::kv_pb_api::compress::Encoder;
 
-    /// Large values written via `encode_pb` (the path used by `upsert_pb`) must be
-    /// stored with the `[0x0F, FLAG_ZSTD, 0x00, 0x00]` header so that the metaservice
-    /// holds them in compressed form.
+    /// Tests that `Encoder` gates compression for large values.
+    /// Uses local `Encoder` instances — no global state, no test races.
     #[test]
-    fn test_large_value_is_stored_compressed() {
+    fn test_large_value_compression_gating() {
         let large_address = "x".repeat(COMPRESS_THRESHOLD + 1024);
         let meta = CatalogMeta {
             catalog_option: CatalogOption::Hive(HiveCatalogOption {
@@ -148,20 +143,19 @@ mod tests {
             created_on: DateTime::<Utc>::MIN_UTC,
         };
 
-        let encoded = encode_pb(&meta).unwrap();
+        // Disabled: raw protobuf, no header.
+        let encoded_off = Encoder::new(false).encode_pb(&meta).unwrap();
+        assert_ne!(encoded_off.first().copied(), Some(0x0F));
+        assert_eq!(decode_pb::<CatalogMeta>(&encoded_off).unwrap(), meta);
 
-        assert!(encoded.len() >= 4, "encoded value must be at least 4 bytes");
-        assert_eq!(
-            &encoded[..4],
-            &[0x0F, 0x01, 0x00, 0x00],
-            "large values must start with the zstd compression header [0x0F, FLAG_ZSTD, 0, 0]"
-        );
-
-        let decoded: CatalogMeta = decode_pb(&encoded).unwrap();
-        assert_eq!(decoded, meta, "round-trip must recover the original value");
+        // Enabled: zstd header.
+        let encoded_on = Encoder::new(true).encode_pb(&meta).unwrap();
+        assert_eq!(&encoded_on[..4], &[0x0F, 0x01, 0x00, 0x00]);
+        assert_eq!(decode_pb::<CatalogMeta>(&encoded_on).unwrap(), meta);
     }
 
-    /// Small values must be stored as raw protobuf (no compression header).
+    /// Small values must be stored as raw protobuf (no compression header),
+    /// even when compression is enabled.
     #[test]
     fn test_small_value_is_not_compressed() {
         let meta = CatalogMeta {
@@ -172,7 +166,7 @@ mod tests {
             created_on: DateTime::<Utc>::MIN_UTC,
         };
 
-        let encoded = encode_pb(&meta).unwrap();
+        let encoded = Encoder::new(true).encode_pb(&meta).unwrap();
 
         assert_ne!(
             encoded.first().copied(),

@@ -3039,7 +3039,7 @@ AS
             | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...] | SET <key> = '<value>' [, ...] | UNSET <key> [, ...] | SUSPEND | RESUME`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
-            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
@@ -4515,6 +4515,24 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
         ),
         map(
             rule! {
+                USER ~ ( IF ~ ^EXISTS )? ~ #user_identity
+            },
+            |(_, opt_if_exists, user)| AlterObjectTagTarget::User {
+                if_exists: opt_if_exists.is_some(),
+                user,
+            },
+        ),
+        map(
+            rule! {
+                ROLE ~ ( IF ~ ^EXISTS )? ~ #role_name
+            },
+            |(_, opt_if_exists, role_name)| AlterObjectTagTarget::Role {
+                if_exists: opt_if_exists.is_some(),
+                role_name,
+            },
+        ),
+        map(
+            rule! {
                 CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
             },
             |(_, opt_if_exists, connection_name)| AlterObjectTagTarget::Connection {
@@ -4531,6 +4549,17 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
                 catalog,
                 database,
                 view,
+            },
+        ),
+        map(
+            rule! {
+                STREAM ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, stream))| AlterObjectTagTarget::Stream {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                stream,
             },
         ),
         map(

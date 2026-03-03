@@ -628,6 +628,10 @@ impl PrivilegeAccess {
                     }
                 }
             }
+            TagSetObject::User(_) | TagSetObject::Role(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await
+            }
             TagSetObject::Connection(target) => {
                 self.validate_connection_access(
                     target.connection_name.clone(),
@@ -640,6 +644,17 @@ impl PrivilegeAccess {
                     &target.catalog,
                     &target.database,
                     &target.view,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::Stream(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.stream,
                     UserPrivilegeType::Alter,
                     target.if_exists,
                     false,

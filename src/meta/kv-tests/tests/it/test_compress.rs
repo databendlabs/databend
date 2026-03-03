@@ -14,6 +14,7 @@
 
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_api::kv_pb_api::compress;
 use databend_common_meta_api::kv_pb_api::compress::COMPRESS_THRESHOLD;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -45,68 +46,61 @@ fn small_catalog_meta() -> CatalogMeta {
     }
 }
 
-/// Large values written via `upsert_pb` must be stored with the
-/// `[0x0F, 0x01, 0x00, 0x00]` zstd compression header in the raw KV store.
+/// Integration test for the full upsert_pb → raw KV → get_pb path with compression.
 #[tokio::test]
-async fn test_large_value_stored_with_compression_header() -> anyhow::Result<()> {
+async fn test_compress() -> anyhow::Result<()> {
+    compress::GLOBAL_ENCODER.set_compress(true);
+
     let store = MetaStore::new_local_testing::<TokioRuntime>().await;
     let tenant = Tenant::new_literal("dummy");
-    let key = CatalogIdIdent::new(&tenant, 1);
 
-    store
-        .upsert_pb(&UpsertPB::update(key.clone(), large_catalog_meta()))
-        .await?;
+    // Large values must be stored with the zstd compression header.
+    {
+        let key = CatalogIdIdent::new(&tenant, 1);
 
-    let raw_bytes: Vec<u8> = store.get_kv(&key.to_string_key()).await?.unwrap().data;
+        store
+            .upsert_pb(&UpsertPB::update(key.clone(), large_catalog_meta()))
+            .await?;
 
-    println!("stored value length: {}", raw_bytes.len());
+        let raw_bytes: Vec<u8> = store.get_kv(&key.to_string_key()).await?.unwrap().data;
 
-    assert_eq!(
-        &raw_bytes[..4],
-        &[0x0F, 0x01, 0x00, 0x00],
-        "large values must start with the zstd compression header [0x0F, FLAG_ZSTD, 0, 0]"
-    );
+        assert_eq!(
+            &raw_bytes[..4],
+            &[0x0F, 0x01, 0x00, 0x00],
+            "large values must start with the zstd compression header [0x0F, FLAG_ZSTD, 0, 0]"
+        );
+    }
 
-    Ok(())
-}
+    // Small values must be stored as raw protobuf (no compression header).
+    {
+        let key = CatalogIdIdent::new(&tenant, 2);
 
-/// Small values written via `upsert_pb` must be stored as raw protobuf (no compression header).
-#[tokio::test]
-async fn test_small_value_stored_without_compression_header() -> anyhow::Result<()> {
-    let store = MetaStore::new_local_testing::<TokioRuntime>().await;
-    let tenant = Tenant::new_literal("dummy");
-    let key = CatalogIdIdent::new(&tenant, 2);
+        store
+            .upsert_pb(&UpsertPB::update(key.clone(), small_catalog_meta()))
+            .await?;
 
-    store
-        .upsert_pb(&UpsertPB::update(key.clone(), small_catalog_meta()))
-        .await?;
+        let raw_bytes: Vec<u8> = store.get_kv(&key.to_string_key()).await?.unwrap().data;
 
-    let raw_bytes: Vec<u8> = store.get_kv(&key.to_string_key()).await?.unwrap().data;
+        assert_ne!(
+            raw_bytes.first().copied(),
+            Some(0x0F),
+            "small values must not have the compression header"
+        );
+    }
 
-    assert_ne!(
-        raw_bytes.first().copied(),
-        Some(0x0F),
-        "small values must not have the compression header"
-    );
+    // Large values must round-trip correctly through get_pb.
+    {
+        let key = CatalogIdIdent::new(&tenant, 3);
+        let meta = large_catalog_meta();
 
-    Ok(())
-}
+        store
+            .upsert_pb(&UpsertPB::update(key.clone(), meta.clone()))
+            .await?;
 
-/// A large value written via `upsert_pb` must round-trip correctly through `get_pb`.
-#[tokio::test]
-async fn test_large_value_round_trips_correctly() -> anyhow::Result<()> {
-    let store = MetaStore::new_local_testing::<TokioRuntime>().await;
-    let tenant = Tenant::new_literal("dummy");
-    let key = CatalogIdIdent::new(&tenant, 3);
-    let meta = large_catalog_meta();
+        let got = store.get_pb(&key).await?.unwrap();
 
-    store
-        .upsert_pb(&UpsertPB::update(key.clone(), meta.clone()))
-        .await?;
-
-    let got = store.get_pb(&key).await?.unwrap();
-
-    assert_eq!(got.data, meta, "round-trip must recover the original value");
+        assert_eq!(got.data, meta, "round-trip must recover the original value");
+    }
 
     Ok(())
 }

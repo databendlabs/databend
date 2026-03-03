@@ -24,20 +24,18 @@ use databend_common_expression::DataBlockVec;
 use super::Rows;
 use super::algorithm::*;
 
-#[async_trait::async_trait]
 pub trait SortedStream {
     /// Returns the next block with the order column and if it is pending.
     ///
     /// If the block is [None] and it's not pending, it means the stream is finished.
     /// If the block is [None] but it's pending, it means the stream is not finished yet.
-    fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
-        Ok((None, false))
-    }
+    fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)>;
+}
 
-    /// The async version of `next`.
-    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
-        self.next()
-    }
+#[async_trait::async_trait]
+pub trait AsyncSortedStream {
+    /// The async version of [`SortedStream::next`].
+    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)>;
 }
 
 struct BufferState {
@@ -120,9 +118,7 @@ impl BufferState {
 
 /// A merge sort operator to merge multiple sorted streams and output one sorted stream.
 pub struct Merger<A, S>
-where
-    A: SortAlgorithm,
-    S: SortedStream,
+where A: SortAlgorithm
 {
     batch_rows: usize,
     limit: Option<usize>,
@@ -134,9 +130,7 @@ where
 }
 
 impl<A, S> Merger<A, S>
-where
-    A: SortAlgorithm,
-    S: SortedStream + Send,
+where A: SortAlgorithm
 {
     pub fn new(streams: Vec<S>, batch_rows: usize, limit: Option<usize>) -> Self {
         // We only create a merger when there are at least two streams.
@@ -165,50 +159,6 @@ where
     #[inline(always)]
     pub fn has_pending_stream(&self) -> bool {
         !self.pending_streams.is_empty()
-    }
-
-    // This method can only be called when there is no data of the stream in the sorted_cursors.
-    pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
-        let mut continue_pendings = Vec::new();
-        while let Some(i) = self.pending_streams.pop_front() {
-            debug_assert!(self.buffers.stream_to_buffer[i].is_none());
-            let (input, pending) = self.unsorted_streams[i].async_next().await?;
-            if pending {
-                continue_pendings.push(i);
-                continue;
-            }
-            if let Some((block, col)) = input {
-                let rows = A::Rows::from_column(&col)?;
-                self.buffers.attach_stream_block(i, block)?;
-                let cursor = Cursor::new(i, rows);
-                self.sorted_cursors.push(i, Reverse(cursor));
-            }
-        }
-        self.sorted_cursors.rebuild();
-        self.pending_streams.extend(continue_pendings);
-        Ok(())
-    }
-
-    #[inline]
-    pub fn poll_pending_stream(&mut self) -> Result<()> {
-        let mut continue_pendings = Vec::new();
-        while let Some(i) = self.pending_streams.pop_front() {
-            debug_assert!(self.buffers.stream_to_buffer[i].is_none());
-            let (input, pending) = self.unsorted_streams[i].next()?;
-            if pending {
-                continue_pendings.push(i);
-                continue;
-            }
-            if let Some((block, col)) = input {
-                let rows = A::Rows::from_column(&col)?;
-                self.buffers.attach_stream_block(i, block)?;
-                let cursor = Cursor::new(i, rows);
-                self.sorted_cursors.push(i, Reverse(cursor));
-            }
-        }
-        self.sorted_cursors.rebuild();
-        self.pending_streams.extend(continue_pendings);
-        Ok(())
     }
 
     /// To evaluate the current cursor, and update the top of the sorted_cursors if necessary.
@@ -298,6 +248,38 @@ where
         Ok(block)
     }
 
+    pub fn streams(self) -> Vec<S> {
+        self.unsorted_streams
+    }
+}
+
+impl<A, S> Merger<A, S>
+where
+    A: SortAlgorithm,
+    S: SortedStream + Send,
+{
+    #[inline]
+    pub fn poll_pending_stream(&mut self) -> Result<()> {
+        let mut continue_pendings = Vec::new();
+        while let Some(i) = self.pending_streams.pop_front() {
+            debug_assert!(self.buffers.stream_to_buffer[i].is_none());
+            let (input, pending) = self.unsorted_streams[i].next()?;
+            if pending {
+                continue_pendings.push(i);
+                continue;
+            }
+            if let Some((block, col)) = input {
+                let rows = A::Rows::from_column(&col)?;
+                self.buffers.attach_stream_block(i, block)?;
+                let cursor = Cursor::new(i, rows);
+                self.sorted_cursors.push(i, Reverse(cursor));
+            }
+        }
+        self.sorted_cursors.rebuild();
+        self.pending_streams.extend(continue_pendings);
+        Ok(())
+    }
+
     /// Returns the next sorted block and if it is pending.
     ///
     /// If the block is [None], it means the merger is finished or pending (has pending streams).
@@ -333,6 +315,34 @@ where
 
         Ok(Some(self.build_output()?))
     }
+}
+
+impl<A, S> Merger<A, S>
+where
+    A: SortAlgorithm,
+    S: AsyncSortedStream + Send,
+{
+    // This method can only be called when there is no data of the stream in the sorted_cursors.
+    pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
+        let mut continue_pendings = Vec::new();
+        while let Some(i) = self.pending_streams.pop_front() {
+            debug_assert!(self.buffers.stream_to_buffer[i].is_none());
+            let (input, pending) = self.unsorted_streams[i].async_next().await?;
+            if pending {
+                continue_pendings.push(i);
+                continue;
+            }
+            if let Some((block, col)) = input {
+                let rows = A::Rows::from_column(&col)?;
+                self.buffers.attach_stream_block(i, block)?;
+                let cursor = Cursor::new(i, rows);
+                self.sorted_cursors.push(i, Reverse(cursor));
+            }
+        }
+        self.sorted_cursors.rebuild();
+        self.pending_streams.extend(continue_pendings);
+        Ok(())
+    }
 
     /// The async version of `next_block`.
     pub async fn async_next_block(&mut self) -> Result<Option<DataBlock>> {
@@ -366,10 +376,6 @@ where
         }
 
         Ok(Some(self.build_output()?))
-    }
-
-    pub fn streams(self) -> Vec<S> {
-        self.unsorted_streams
     }
 }
 

@@ -2853,6 +2853,12 @@ pub struct MetaConfig {
     /// Maximum message size for gRPC communication (in bytes).
     #[clap(long = "meta-grpc-max-message-size", value_name = "VALUE")]
     pub grpc_max_message_size: Option<usize>,
+
+    /// Enable zstd compression for values written to meta-service.
+    /// Default is false for backward compatibility: older query nodes
+    /// cannot read compressed values.
+    #[clap(long = "meta-compress-values", value_name = "VALUE")]
+    pub compress_values: Option<bool>,
 }
 
 impl Default for MetaConfig {
@@ -2876,6 +2882,7 @@ impl Default for MetaConfig {
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
             grpc_max_message_size: None,
+            compress_values: None,
         }
     }
 }
@@ -2906,6 +2913,10 @@ impl MetaConfig {
 
         Ok(())
     }
+
+    pub fn compress_values(&self) -> bool {
+        self.compress_values.unwrap_or(false)
+    }
 }
 
 impl Debug for MetaConfig {
@@ -2929,6 +2940,7 @@ impl Debug for MetaConfig {
                 "rpc_tls_meta_service_domain_name",
                 &self.rpc_tls_meta_service_domain_name,
             )
+            .field("compress_values", &self.compress_values)
             .finish()
     }
 }

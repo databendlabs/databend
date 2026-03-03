@@ -80,3 +80,54 @@ mod dummy {
         divan::black_box(expr);
     }
 }
+
+#[divan::bench_group(max_time = 0.5)]
+mod comment_heavy {
+    use std::sync::OnceLock;
+
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_sql;
+    use databend_common_ast::parser::tokenize_sql;
+
+    fn comment_heavy_sql(extra_closing_star: bool) -> String {
+        let mut sql = String::from("SELECT 1");
+        for i in 0..200 {
+            if extra_closing_star {
+                sql.push_str(&format!(" /***comment_{i}**/"));
+            } else {
+                sql.push_str(&format!(" /*comment_{i}*/"));
+            }
+        }
+        sql.push_str(" FROM numbers(1000) WHERE number > 10;");
+        sql
+    }
+
+    fn normal_comment_case() -> &'static str {
+        static CASE: OnceLock<String> = OnceLock::new();
+        CASE.get_or_init(|| comment_heavy_sql(false)).as_str()
+    }
+
+    fn extra_star_comment_case() -> &'static str {
+        static CASE: OnceLock<String> = OnceLock::new();
+        CASE.get_or_init(|| comment_heavy_sql(true)).as_str()
+    }
+
+    #[divan::bench]
+    fn tokenize_normal_comment_block() {
+        let tokens = tokenize_sql(normal_comment_case()).unwrap();
+        divan::black_box(tokens.len());
+    }
+
+    #[divan::bench]
+    fn tokenize_extra_star_comment_block() {
+        let tokens = tokenize_sql(extra_star_comment_case()).unwrap();
+        divan::black_box(tokens.len());
+    }
+
+    #[divan::bench]
+    fn parse_extra_star_comment_block() {
+        let tokens = tokenize_sql(extra_star_comment_case()).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        divan::black_box(stmt);
+    }
+}
