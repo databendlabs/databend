@@ -38,10 +38,10 @@ RowFetch
         ├── sort keys: [a DESC NULLS LAST]
         ├── estimated rows: 300.00
         └── Exchange
-            ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), #_order_col]
+            ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
             ├── exchange type: Merge
             └── Sort(Partial)
-                ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), #_order_col]
+                ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
                 ├── sort keys: [a DESC NULLS LAST]
                 ├── estimated rows: 300.00
                 └── TableScan
@@ -104,10 +104,10 @@ Limit
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 300.00
     └── Exchange
-        ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6), #_order_col]
+        ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
         ├── exchange type: Merge
         └── Sort(Partial)
-            ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6), #_order_col]
+            ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
             ├── sort keys: [a DESC NULLS LAST]
             ├── estimated rows: 300.00
             └── TableScan
