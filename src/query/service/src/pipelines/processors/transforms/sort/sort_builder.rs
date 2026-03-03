@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
@@ -39,12 +37,11 @@ use databend_common_pipeline_transforms::sorts::TransformSortRoute;
 use databend_common_pipeline_transforms::sorts::core::RowConverter;
 use databend_common_pipeline_transforms::sorts::core::Rows;
 use databend_common_pipeline_transforms::sorts::core::RowsTypeVisitor;
+use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::algorithm::HeapSort;
 use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeSort;
 use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
-use databend_common_pipeline_transforms::sorts::utils::ORDER_COL_NAME;
-use databend_common_pipeline_transforms::sorts::utils::add_order_field;
 use databend_common_pipeline_transforms::traits::SortSpiller;
 
 use super::*;
@@ -68,9 +65,8 @@ enum SortType {
 }
 
 pub struct TransformSortBuilder<S: SortSpiller> {
-    schema: DataSchemaRef,
+    key_desc: SortKeyDescription,
     block_size: usize,
-    sort_desc: Arc<[SortColumnDescription]>,
     order_col_generated: bool,
     output_order_col: bool,
     spiller: Option<S>,
@@ -82,15 +78,13 @@ pub struct TransformSortBuilder<S: SortSpiller> {
 
 impl<S: SortSpiller> TransformSortBuilder<S> {
     pub fn new(
-        schema: DataSchemaRef,
-        sort_desc: Arc<[SortColumnDescription]>,
+        key_desc: SortKeyDescription,
         block_size: usize,
         enable_fixed_rows: bool,
     ) -> TransformSortBuilder<S> {
         TransformSortBuilder {
+            key_desc,
             block_size,
-            schema,
-            sort_desc,
             spiller: None,
             order_col_generated: false,
             output_order_col: false,
@@ -132,8 +126,6 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        self.check();
-
         let mut build = Build {
             params: self,
             output,
@@ -149,8 +141,6 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         output: Arc<OutputPort>,
         default_num_merge: usize,
     ) -> Result<Box<dyn Processor>> {
-        self.check();
-
         let mut build = Build {
             params: self,
             output,
@@ -169,8 +159,6 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         output: Arc<OutputPort>,
         state: SortSampleState<ContextChannel>,
     ) -> Result<Box<dyn Processor>> {
-        self.check();
-
         let mut build = Build {
             params: self,
             output,
@@ -185,8 +173,6 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        self.check();
-
         let mut build = Build {
             params: self,
             output,
@@ -201,8 +187,6 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        self.check();
-
         Ok(Box::new(SortBoundEdge::new(input, output)))
     }
 
@@ -211,8 +195,6 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
     ) -> Result<Box<dyn Processor>> {
-        self.check();
-
         let mut build = Build {
             params: self,
             output,
@@ -226,23 +208,12 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         self.limit.map(|limit| limit < 10000).unwrap_or_default()
     }
 
-    fn check(&self) {
-        assert_eq!(self.schema.has_field(ORDER_COL_NAME), self.output_order_col)
-    }
-
     fn new_base(&self) -> Base<S> {
-        let schema = self.inner_schema();
-        let sort_row_offset = schema.fields().len() - 1;
         Base {
-            sort_row_offset,
-            schema,
+            sort_row_offset: self.key_desc.sort_row_offset(),
             spiller: self.spiller.clone().unwrap(),
             limit: self.limit,
         }
-    }
-
-    fn inner_schema(&self) -> DataSchemaRef {
-        add_order_field(self.schema.clone(), &self.sort_desc, self.enable_fixed_rows)
     }
 
     pub fn add_bound_broadcast(
@@ -285,7 +256,7 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
     }
 
     pub fn build_dummy_route() -> SortDummyRoute {
-        SortDummyRoute {}
+        SortDummyRoute
     }
 
     pub fn exchange_injector() -> Arc<dyn ExchangeInjector> {
@@ -300,35 +271,34 @@ struct Build<'a, S: SortSpiller> {
 }
 
 impl<S: SortSpiller> Build<'_, S> {
-    fn build_sort<A, C>(
+    fn build_sort<A>(
         &mut self,
         sort_limit: bool,
         input: Arc<InputPort>,
     ) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
-        C: RowConverter<A::Rows> + Send + 'static,
+        <A::Rows as Rows>::Converter: Send + 'static,
     {
-        let schema = add_order_field(
-            self.params.schema.clone(),
-            &self.params.sort_desc,
-            self.params.enable_fixed_rows,
-        );
-        Ok(Box::new(TransformSort::<A, C, S>::new(
+        let base_row_converter = self.params.key_desc.clone();
+        let uses_source_sort_col = base_row_converter.uses_source_sort_col();
+        let sort_row_offset = base_row_converter.sort_row_offset();
+        let row_converter = <A::Rows as Rows>::Converter::new(base_row_converter)?;
+        Ok(Box::new(TransformSort::<A, S>::new(
             input,
             self.output.clone(),
-            schema,
-            self.params.sort_desc.clone(),
+            sort_row_offset,
+            row_converter,
             self.params.block_size,
             self.params.limit.map(|limit| (limit, sort_limit)),
             self.params.spiller.clone().unwrap(),
-            self.params.output_order_col,
-            self.params.order_col_generated,
+            self.params.output_order_col || uses_source_sort_col,
+            self.params.order_col_generated || uses_source_sort_col,
             self.params.enable_restore_prefetch,
         )?))
     }
 
-    fn build_sort_collect<A, C>(
+    fn build_sort_collect<A>(
         &mut self,
         input: Arc<InputPort>,
         sort_limit: bool,
@@ -336,28 +306,35 @@ impl<S: SortSpiller> Build<'_, S> {
     ) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
-        C: RowConverter<A::Rows> + Send + 'static,
+        <A::Rows as Rows>::Converter: Send + 'static,
     {
-        Ok(Box::new(TransformSortCollect::<A, C, S>::new(
+        assert!(!self.params.order_col_generated);
+        let uses_source_sort_col = self.params.key_desc.uses_source_sort_col();
+        let row_converter = <A::Rows as Rows>::Converter::new(self.params.key_desc.clone())?;
+        Ok(Box::new(TransformSortCollect::<A, S>::new(
             input,
             self.output.clone(),
             self.params.new_base(),
-            self.params.sort_desc.clone(),
             self.params.block_size,
             default_num_merge,
             sort_limit,
-            self.params.order_col_generated,
+            if uses_source_sort_col {
+                None
+            } else {
+                Some(row_converter)
+            },
             self.params.enable_restore_prefetch,
         )?))
     }
 
     fn build_sort_restore<A>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
+        let uses_source_sort_col = self.params.key_desc.uses_source_sort_col();
         Ok(Box::new(TransformSortRestore::<A, S>::create(
             input,
             self.output.clone(),
             self.params.new_base(),
-            self.params.output_order_col,
+            self.params.output_order_col || uses_source_sort_col,
         )?))
     }
 
@@ -387,7 +364,7 @@ impl<S: SortSpiller> Build<'_, S> {
         Ok(Box::new(BoundedMultiSortMergeProcessor::<A>::new(
             inputs,
             self.output.clone(),
-            self.params.schema.clone(),
+            self.params.key_desc.clone(),
             self.params.block_size,
         )?))
     }
@@ -395,37 +372,33 @@ impl<S: SortSpiller> Build<'_, S> {
 
 impl<S: SortSpiller> RowsTypeVisitor for Build<'_, S> {
     type Result = Result<Box<dyn Processor>>;
-    fn schema(&self) -> DataSchemaRef {
-        self.params.schema.clone()
+    fn sort_key_desc(&self) -> SortKeyDescription {
+        self.params.key_desc.clone()
     }
 
-    fn sort_desc(&self) -> &[SortColumnDescription] {
-        &self.params.sort_desc
-    }
-
-    fn visit_type<R, C>(&mut self) -> Self::Result
+    fn visit_type<R>(&mut self) -> Self::Result
     where
         R: Rows + 'static,
-        C: RowConverter<R> + Send + 'static,
+        <R as Rows>::Converter: Send + 'static,
     {
         let sort_limit = self.params.should_use_sort_limit();
         match self.typ.take().unwrap() {
             SortType::Sort(input) => match self.params.enable_loser_tree {
-                true => self.build_sort::<LoserTreeSort<R>, C>(sort_limit, input),
-                false => self.build_sort::<HeapSort<R>, C>(sort_limit, input),
+                true => self.build_sort::<LoserTreeSort<R>>(sort_limit, input),
+                false => self.build_sort::<HeapSort<R>>(sort_limit, input),
             },
 
             SortType::Collect {
                 input,
                 default_num_merge,
             } => match self.params.enable_loser_tree {
-                true => self.build_sort_collect::<LoserTreeSort<R>, C>(
+                true => self.build_sort_collect::<LoserTreeSort<R>>(
                     input,
                     sort_limit,
                     default_num_merge,
                 ),
                 false => {
-                    self.build_sort_collect::<HeapSort<R>, C>(input, sort_limit, default_num_merge)
+                    self.build_sort_collect::<HeapSort<R>>(input, sort_limit, default_num_merge)
                 }
             },
             SortType::BoundBroadcast { input, state } => {

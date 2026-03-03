@@ -27,9 +27,10 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
 use super::core::Merger;
+use super::core::RowConverter;
 use super::core::Rows;
+use super::core::SortKeyDescription;
 use super::core::SortedStream;
-use super::core::VariableRowConverter;
 use super::core::VariableRows;
 use super::core::algorithm::HeapSort;
 use super::core::algorithm::LoserTreeSort;
@@ -192,19 +193,29 @@ pub fn sort_merge(
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: Vec<DataBlock>,
-    _sort_spilling_batch_bytes: usize,
+    enable_fixed_rows: bool,
     enable_loser_tree: bool,
     have_order_col: bool,
 ) -> Result<Vec<DataBlock>> {
     debug_assert!(have_order_col == has_order_field(&schema));
 
     type MergeSortCommonImpl = TransformSortMerge<VariableRows>;
-    type MergeSortCommon =
-        TransformSortMergeBase<MergeSortCommonImpl, VariableRows, VariableRowConverter>;
+    type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, VariableRows>;
+
+    let sort_desc: Arc<[_]> = sort_desc.into();
+
+    let schema = if have_order_col {
+        SortKeyDescription::strip_order_col_schema(sort_desc.clone(), schema, enable_fixed_rows)?
+    } else {
+        schema
+    };
+    let key_desc = SortKeyDescription::new(sort_desc, schema, enable_fixed_rows)?;
+    let sort_row_offset = key_desc.sort_row_offset();
+    let row_converter = <VariableRows as Rows>::Converter::new(key_desc)?;
 
     let mut processor = MergeSortCommon::try_create(
-        schema.clone(),
-        sort_desc.into(),
+        sort_row_offset,
+        row_converter,
         have_order_col,
         false,
         MergeSortCommonImpl::create(block_size, enable_loser_tree, None),

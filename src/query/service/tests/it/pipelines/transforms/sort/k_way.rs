@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
+use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 
 use super::*;
 
@@ -38,11 +39,10 @@ fn create_pipeline(
     }];
     add_k_way_merge_sort(
         &mut pipeline,
-        schema,
+        SortKeyDescription::new(sort_desc.into(), schema, enable_fixed_rows_sort)?,
         worker,
         block_size,
         limit,
-        &sort_desc,
         false,
         true,
         enable_fixed_rows_sort,
