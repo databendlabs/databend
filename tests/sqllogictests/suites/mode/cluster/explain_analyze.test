@@ -176,7 +176,8 @@ Exchange
 └── HashJoin
     ├── cpu time: <slt:ignore>
     ├── wait time: <slt:ignore>
-    ├── exchange bytes: 1.09 KiB
+    ├── exchange rows: <slt:ignore>
+    ├── exchange bytes: <slt:ignore>
     ├── output rows: 1
     ├── output bytes: 42.00 B
     ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
