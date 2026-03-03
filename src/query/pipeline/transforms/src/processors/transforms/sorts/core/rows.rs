@@ -21,6 +21,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 
+use super::RowConverter;
+
 /// Rows can be compared.
 pub trait Rows
 where Self: Sized + Clone + Debug + Send
@@ -29,6 +31,7 @@ where Self: Sized + Clone + Debug + Send
     type Item<'a>: Ord + Debug
     where Self: 'a;
     type Type: ArgType;
+    type Converter: RowConverter<Self>;
 
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
