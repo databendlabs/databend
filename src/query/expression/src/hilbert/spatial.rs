@@ -141,8 +141,9 @@ fn hilbert_normalize_bounds(
     let max_hilbert = u16::MAX as f64;
     let hilbert_width = max_hilbert / span_x;
     let hilbert_height = max_hilbert / span_y;
-    let hilbert_x = ((x - xmin) * hilbert_width) as u32;
-    let hilbert_y = ((y - ymin) * hilbert_height) as u32;
+    // Clamp to the 16-bit Hilbert grid for out-of-bounds coordinates.
+    let hilbert_x = ((x - xmin) * hilbert_width).clamp(0.0, max_hilbert) as u32;
+    let hilbert_y = ((y - ymin) * hilbert_height).clamp(0.0, max_hilbert) as u32;
     Ok((hilbert_x, hilbert_y))
 }
 
