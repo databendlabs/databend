@@ -206,17 +206,17 @@ impl OutboundChannel for RemoteChannel {
 }
 
 // ---------------------------------------------------------------------------
-// BroadcastChannel — round-robin across multiple RemoteChannels for one node
+// RoundRobinChannel — round-robin across multiple RemoteChannels for one node
 // ---------------------------------------------------------------------------
 
 /// Wraps multiple OutboundChannels (one per thread on a remote node)
 /// and distributes blocks across them in round-robin fashion.
-pub struct BroadcastChannel {
+pub struct RoundRobinChannel {
     channels: Vec<Arc<dyn OutboundChannel>>,
     next_idx: AtomicUsize,
 }
 
-impl BroadcastChannel {
+impl RoundRobinChannel {
     pub fn create(channels: Vec<Arc<dyn OutboundChannel>>) -> Arc<dyn OutboundChannel> {
         Arc::new(Self {
             channels,
@@ -226,7 +226,7 @@ impl BroadcastChannel {
 }
 
 #[async_trait::async_trait]
-impl OutboundChannel for BroadcastChannel {
+impl OutboundChannel for RoundRobinChannel {
     fn close(&self) {
         for ch in &self.channels {
             ch.close();
@@ -373,7 +373,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
-    // --- BroadcastChannel tests ---
+    // --- RoundRobinChannel tests ---
 
     struct CountingChannel {
         count: AtomicUsize,
@@ -410,7 +410,7 @@ mod tests {
         let ch1 = CountingChannel::create();
         let ch2 = CountingChannel::create();
         let channels = vec![ch0.clone(), ch1.clone(), ch2.clone()];
-        let broadcast = BroadcastChannel::create(channels);
+        let broadcast = RoundRobinChannel::create(channels);
 
         // Send 6 blocks — should distribute 2 to each
         for _ in 0..6 {

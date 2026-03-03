@@ -33,7 +33,7 @@ use super::exchange_transform_shuffle::exchange_shuffle;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
-use crate::servers::flight::v1::network::BroadcastChannel;
+use crate::servers::flight::v1::network::RoundRobinChannel;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::RemoteChannel;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
@@ -149,7 +149,7 @@ impl ExchangeSorting for SinkExchangeSorting {
 
 /// Build OutboundChannels for broadcast exchange using PingPongExchange.
 /// Local destination uses a LocalOutboundChannel; remote destinations
-/// use BroadcastChannel wrapping multiple RemoteChannels (one per thread).
+/// use RoundRobinChannel wrapping multiple RemoteChannels (one per thread).
 pub(super) fn build_broadcast_outbound_channels(
     params: &BroadcastExchangeParams,
     local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
@@ -183,7 +183,7 @@ pub(super) fn build_broadcast_outbound_channels(
         &GlobalIORuntime::instance(),
     )?);
 
-    let local_channel = BroadcastChannel::create(local_outbound_channels);
+    let local_channel = RoundRobinChannel::create(local_outbound_channels);
     let mut remote_idx = 0;
     let mut channels = vec![];
     for (target_id, threads) in &params.destination_channels {
@@ -202,7 +202,7 @@ pub(super) fn build_broadcast_outbound_channels(
             )?);
         }
 
-        channels.push(BroadcastChannel::create(remote_channels));
+        channels.push(RoundRobinChannel::create(remote_channels));
         remote_idx += 1;
     }
 

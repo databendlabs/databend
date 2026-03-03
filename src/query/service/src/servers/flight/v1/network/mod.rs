@@ -31,7 +31,7 @@ pub use local_channel::LocalOutboundChannel;
 pub use local_channel::create_local_channels;
 pub use outbound_buffer::ExchangeBufferConfig;
 pub use outbound_buffer::ExchangeSinkBuffer;
-pub use outbound_channel::BroadcastChannel;
+pub use outbound_channel::RoundRobinChannel;
 pub use outbound_channel::DummyOutboundChannel;
 pub use outbound_channel::OutboundChannel;
 pub use outbound_channel::RemoteChannel;
