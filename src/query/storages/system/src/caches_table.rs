@@ -87,6 +87,8 @@ impl SyncSystemTable for CachesTable {
         let inverted_index_file_cache = cache_manager.get_inverted_index_file_cache();
         let vector_index_meta_cache = cache_manager.get_vector_index_meta_cache();
         let vector_index_file_cache = cache_manager.get_vector_index_file_cache();
+        let spatial_index_meta_cache = cache_manager.get_spatial_index_meta_cache();
+        let spatial_index_file_cache = cache_manager.get_spatial_index_file_cache();
         let virtual_column_meta_cache = cache_manager.get_virtual_column_meta_cache();
         let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
         let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
@@ -161,6 +163,14 @@ impl SyncSystemTable for CachesTable {
 
         if let Some(vector_index_file_cache) = vector_index_file_cache {
             Self::append_rows_of_hybrid_cache(&vector_index_file_cache, &local_node, &mut columns);
+        }
+
+        if let Some(spatial_index_meta_cache) = spatial_index_meta_cache {
+            Self::append_rows_of_hybrid_cache(&spatial_index_meta_cache, &local_node, &mut columns);
+        }
+
+        if let Some(spatial_index_file_cache) = spatial_index_file_cache {
+            Self::append_rows_of_hybrid_cache(&spatial_index_file_cache, &local_node, &mut columns);
         }
 
         if let Some(virtual_column_meta_cache) = virtual_column_meta_cache {

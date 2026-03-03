@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -79,6 +80,7 @@ async fn apply_snapshot_pruning(
         push_down,
         bloom_index_cols,
         vec![],
+        HashSet::new(),
         None,
     )?);
 

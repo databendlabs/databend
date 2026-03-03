@@ -513,10 +513,10 @@ output         : 1234
 ast            : st_srid(st_makegeompoint(37.5, 45.5))
 raw expr       : st_srid(st_makegeompoint(37.5, 45.5))
 checked expr   : st_srid<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(3, 1)>(37.5_d64(3,1) AS Float64), CAST<Decimal(3, 1)>(45.5_d64(3,1) AS Float64)))
-optimized expr : 4326_i32
+optimized expr : 0_i32
 output type    : Int32
-output domain  : {4326..=4326}
-output         : 4326
+output domain  : {0..=0}
+output         : 0
 
 
 ast            : st_srid(st_makegeompoint(NULL, NULL))

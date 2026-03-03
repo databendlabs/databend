@@ -48,6 +48,11 @@ pub struct FusePruningStatistics {
     pub blocks_vector_index_pruning_after: AtomicU64,
     pub blocks_vector_index_pruning_cost: AtomicU64,
 
+    /// Block spatial index filter pruning stats.
+    pub blocks_spatial_index_pruning_before: AtomicU64,
+    pub blocks_spatial_index_pruning_after: AtomicU64,
+    pub blocks_spatial_index_pruning_cost: AtomicU64,
+
     /// Block topn pruning stats.
     pub blocks_topn_pruning_before: AtomicU64,
     pub blocks_topn_pruning_after: AtomicU64,
@@ -196,6 +201,36 @@ impl FusePruningStatistics {
             .load(Ordering::Relaxed)
     }
 
+    pub fn set_blocks_spatial_index_pruning_before(&self, v: u64) {
+        self.blocks_spatial_index_pruning_before
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_spatial_index_pruning_before(&self) -> u64 {
+        self.blocks_spatial_index_pruning_before
+            .load(Ordering::Relaxed)
+    }
+
+    pub fn set_blocks_spatial_index_pruning_after(&self, v: u64) {
+        self.blocks_spatial_index_pruning_after
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_spatial_index_pruning_after(&self) -> u64 {
+        self.blocks_spatial_index_pruning_after
+            .load(Ordering::Relaxed)
+    }
+
+    pub fn add_blocks_spatial_index_pruning_cost(&self, duration: Duration) {
+        self.blocks_spatial_index_pruning_cost
+            .fetch_add(duration_to_micros(duration), Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_spatial_index_pruning_cost(&self) -> u64 {
+        self.blocks_spatial_index_pruning_cost
+            .load(Ordering::Relaxed)
+    }
+
     pub fn set_blocks_topn_pruning_before(&self, v: u64) {
         self.blocks_topn_pruning_before
             .fetch_add(v, Ordering::Relaxed);
@@ -285,10 +320,11 @@ pub enum PruningCostKind {
     BlocksBloom,
     BlocksInverted,
     BlocksVector,
+    BlocksSpatial,
     BlocksTopN,
 }
 
-const PRUNING_COST_KIND_COUNT: usize = 6;
+const PRUNING_COST_KIND_COUNT: usize = 7;
 
 impl PruningCostKind {
     const fn as_index(self) -> usize {
@@ -298,7 +334,8 @@ impl PruningCostKind {
             PruningCostKind::BlocksBloom => 2,
             PruningCostKind::BlocksInverted => 3,
             PruningCostKind::BlocksVector => 4,
-            PruningCostKind::BlocksTopN => 5,
+            PruningCostKind::BlocksSpatial => 5,
+            PruningCostKind::BlocksTopN => 6,
         }
     }
 }
@@ -342,6 +379,9 @@ impl PruningCostGuardToken {
             }
             PruningCostKind::BlocksVector => {
                 stats.add_blocks_vector_index_pruning_cost(elapsed);
+            }
+            PruningCostKind::BlocksSpatial => {
+                stats.add_blocks_spatial_index_pruning_cost(elapsed);
             }
             PruningCostKind::BlocksTopN => {
                 stats.add_blocks_topn_pruning_cost(elapsed);

@@ -1,4 +1,3 @@
-// Copyright Qdrant
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,24 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod entry_points;
-mod graph_layers;
-mod graph_layers_builder;
-mod graph_links;
-mod hnsw;
-mod point_scorer;
-mod quantization;
-mod search_context;
-mod visited_pool;
-
-pub use common::fixed_length_priority_queue::FixedLengthPriorityQueue;
-pub use common::types::ScoredPointOffset;
-pub use hnsw::HNSWIndex;
-pub use quantization::DistanceType;
-
-use crate::IndexFile;
-use crate::IndexMeta;
-
-pub type VectorIndexMeta = IndexMeta;
-pub type VectorIndexFile = IndexFile;
+mod spatial_index_loader;
+pub use spatial_index_loader::load_spatial_index_files;
+pub use spatial_index_loader::load_spatial_index_meta;

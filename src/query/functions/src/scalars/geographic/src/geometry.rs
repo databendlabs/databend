@@ -1204,7 +1204,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let srid = read_srid(&mut Ewkb(ewkb)).unwrap_or(4326);
+            let srid = read_srid(&mut Ewkb(ewkb)).unwrap_or_default();
             output.push(srid);
         }),
     );
@@ -1933,15 +1933,10 @@ fn check_incompatible_srid(
     len: usize,
     ctx: &mut EvalContext,
 ) -> bool {
+    let l_srid = l_srid.unwrap_or_default();
+    let r_srid = r_srid.unwrap_or_default();
     if !l_srid.eq(&r_srid) {
-        ctx.set_error(
-            len,
-            format!(
-                "Incompatible SRID: {} and {}",
-                l_srid.unwrap_or_default(),
-                r_srid.unwrap_or_default()
-            ),
-        );
+        ctx.set_error(len, format!("Incompatible SRID: {} and {}", l_srid, r_srid));
         false
     } else {
         true
