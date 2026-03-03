@@ -224,6 +224,12 @@ impl AsyncTransform for ReadVortexDataTransform {
         }
 
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
+        let vortex_footer = fuse_part.vortex_footer.as_ref().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Vortex block missing footer in part metadata: {}",
+                fuse_part.location
+            ))
+        })?;
 
         let mut from_agg_index = false;
         let mut data_block = if let Some(index_reader) = self.index_reader.as_ref() {
@@ -243,13 +249,15 @@ impl AsyncTransform for ReadVortexDataTransform {
                     .read_vortex_data_by_merge_io(
                         &self.read_settings,
                         &fuse_part.location,
-                        &fuse_part.columns_meta,
+                        vortex_footer,
+                        fuse_part.file_size,
                     )
                     .await?;
                 read_vortex_with_ranges(
                     self.block_reader.schema().as_ref(),
                     file_size,
                     prefetched_ranges,
+                    vortex_footer,
                 )?
             }
         } else {
@@ -258,13 +266,15 @@ impl AsyncTransform for ReadVortexDataTransform {
                 .read_vortex_data_by_merge_io(
                     &self.read_settings,
                     &fuse_part.location,
-                    &fuse_part.columns_meta,
+                    vortex_footer,
+                    fuse_part.file_size,
                 )
                 .await?;
             read_vortex_with_ranges(
                 self.block_reader.schema().as_ref(),
                 file_size,
                 prefetched_ranges,
+                vortex_footer,
             )?
         };
 

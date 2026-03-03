@@ -191,6 +191,8 @@ pub struct BlockMeta {
     pub ngram_filter_index_size: Option<u64>,
     pub vector_index_size: Option<u64>,
     pub vector_index_location: Option<Location>,
+    #[serde(default)]
+    pub vortex_footer: Option<Vec<u8>>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
@@ -233,6 +235,7 @@ impl BlockMeta {
             ngram_filter_index_size,
             vector_index_size,
             vector_index_location,
+            vortex_footer: None,
             virtual_block_meta,
             compression,
             create_on,
@@ -324,23 +327,6 @@ impl SegmentInfo {
 pub enum ColumnMeta {
     Parquet(v0::ColumnMeta),
     Native(NativeColumnMeta),
-    Vortex(VortexColumnMeta),
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
-pub struct VortexSegmentMeta {
-    /// where the segment starts in the file
-    pub offset: u64,
-    /// the segment length in bytes
-    pub len: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
-pub struct VortexColumnMeta {
-    /// The byte ranges required to decode this column.
-    pub segments: Vec<VortexSegmentMeta>,
-    /// num of "rows"
-    pub num_values: u64,
 }
 
 impl ColumnMeta {
@@ -348,7 +334,6 @@ impl ColumnMeta {
         match self {
             ColumnMeta::Parquet(v) => v.num_values as usize,
             ColumnMeta::Native(v) => v.pages.iter().map(|page| page.num_values as usize).sum(),
-            ColumnMeta::Vortex(v) => v.num_values as usize,
         }
     }
 
@@ -356,18 +341,6 @@ impl ColumnMeta {
         match self {
             ColumnMeta::Parquet(v) => (v.offset, v.len),
             ColumnMeta::Native(v) => (v.offset, v.pages.iter().map(|page| page.length).sum()),
-            ColumnMeta::Vortex(v) => {
-                let Some(min_offset) = v.segments.iter().map(|seg| seg.offset).min() else {
-                    return (0, 0);
-                };
-                let max_end = v
-                    .segments
-                    .iter()
-                    .map(|seg| seg.offset + seg.len)
-                    .max()
-                    .unwrap_or(min_offset);
-                (min_offset, max_end.saturating_sub(min_offset))
-            }
         }
     }
 
@@ -384,7 +357,6 @@ impl ColumnMeta {
                     .sum(),
                 None => v.pages.iter().map(|page| page.num_values).sum(),
             },
-            ColumnMeta::Vortex(v) => v.num_values,
         }
     }
 
@@ -401,7 +373,6 @@ impl ColumnMeta {
                     .sum(),
                 None => v.pages.iter().map(|page| page.length).sum(),
             },
-            ColumnMeta::Vortex(v) => v.segments.iter().map(|seg| seg.len).sum(),
         }
     }
 
@@ -428,11 +399,6 @@ impl ColumnMeta {
                 )
                 .collect(),
             },
-            ColumnMeta::Vortex(v) => v
-                .segments
-                .iter()
-                .map(|seg| seg.offset..(seg.offset + seg.len))
-                .collect(),
         }
     }
 }
@@ -461,6 +427,7 @@ impl BlockMeta {
             inverted_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            vortex_footer: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -489,6 +456,7 @@ impl BlockMeta {
             inverted_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            vortex_footer: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

@@ -496,6 +496,7 @@ impl StreamBlockBuilder {
             inverted_index_size,
             vector_index_size,
             vector_index_location,
+            vortex_footer: None,
             create_on: Some(Utc::now()),
             ngram_filter_index_size: bloom_index_state
                 .as_ref()

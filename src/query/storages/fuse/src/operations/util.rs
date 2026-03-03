@@ -138,14 +138,26 @@ pub async fn read_block(
     read_settings: &ReadSettings,
 ) -> Result<DataBlock> {
     if matches!(storage_format, FuseStorageFormat::Vortex) {
+        let vortex_footer = block_meta.vortex_footer.as_ref().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Vortex block missing footer in BlockMeta: {}",
+                block_meta.location.0
+            ))
+        })?;
         let (file_size, prefetched_ranges) = reader
             .read_vortex_data_by_merge_io(
                 read_settings,
                 &block_meta.location.0,
-                &block_meta.col_metas,
+                vortex_footer,
+                block_meta.file_size,
             )
             .await?;
-        return read_vortex_with_ranges(reader.schema().as_ref(), file_size, prefetched_ranges);
+        return read_vortex_with_ranges(
+            reader.schema().as_ref(),
+            file_size,
+            prefetched_ranges,
+            vortex_footer,
+        );
     }
 
     let merged_io_read_result = reader

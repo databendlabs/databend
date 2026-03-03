@@ -338,6 +338,7 @@ fn build_test_segment_info(
         ngram_filter_index_size: None,
         vector_index_size: None,
         vector_index_location: None,
+        vortex_footer: None,
         virtual_block_meta: None,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),

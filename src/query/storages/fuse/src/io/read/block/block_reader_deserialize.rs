@@ -103,10 +103,26 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         match storage_format {
             FuseStorageFormat::Vortex => {
+                let vortex_footer = meta.vortex_footer.as_ref().ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Vortex block missing footer in BlockMeta: {}",
+                        meta.location.0
+                    ))
+                })?;
                 let (file_size, prefetched_ranges) = self
-                    .read_vortex_data_by_merge_io(settings, &meta.location.0, &meta.col_metas)
+                    .read_vortex_data_by_merge_io(
+                        settings,
+                        &meta.location.0,
+                        vortex_footer,
+                        meta.file_size,
+                    )
                     .await?;
-                read_vortex_with_ranges(self.schema().as_ref(), file_size, prefetched_ranges)
+                read_vortex_with_ranges(
+                    self.schema().as_ref(),
+                    file_size,
+                    prefetched_ranges,
+                    vortex_footer,
+                )
             }
             FuseStorageFormat::Parquet | FuseStorageFormat::Native => {
                 // Get the merged IO read result.

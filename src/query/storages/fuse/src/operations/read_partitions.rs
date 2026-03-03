@@ -1072,7 +1072,9 @@ impl FuseTable {
         FuseBlockPartInfo::create(
             location,
             rows_count,
+            meta.file_size,
             columns_meta,
+            meta.vortex_footer.clone(),
             Some(columns_stats),
             meta.compression(),
             sort_min_max,
@@ -1120,7 +1122,9 @@ impl FuseTable {
         FuseBlockPartInfo::create(
             location,
             rows_count,
+            meta.file_size,
             columns_meta,
+            meta.vortex_footer.clone(),
             Some(columns_stat),
             meta.compression(),
             sort_min_max,

@@ -53,7 +53,6 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::VortexColumnMeta;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -74,6 +73,8 @@ use crate::operations::column_parquet_metas;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::gen_columns_statistics;
 
+type SerializedBlockResult = (HashMap<ColumnId, ColumnMeta>, Option<Vec<u8>>);
+
 pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
@@ -90,6 +91,23 @@ pub fn serialize_block_with_column_stats(
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
+    let (col_metas, _) = serialize_block_with_column_stats_internal(
+        write_settings,
+        schema,
+        column_stats,
+        block,
+        buf,
+    )?;
+    Ok(col_metas)
+}
+
+fn serialize_block_with_column_stats_internal(
+    write_settings: &WriteSettings,
+    schema: &TableSchemaRef,
+    column_stats: Option<&StatisticsOfColumns>,
+    block: DataBlock,
+    buf: &mut Vec<u8>,
+) -> Result<SerializedBlockResult> {
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
@@ -103,7 +121,7 @@ pub fn serialize_block_with_column_stats(
                 column_stats,
             )?;
             let meta = column_parquet_metas(&result, &schema)?;
-            Ok(meta)
+            Ok((meta, None))
         }
         FuseStorageFormat::Native => {
             let leaf_column_ids = schema.to_leaf_column_ids();
@@ -142,31 +160,11 @@ pub fn serialize_block_with_column_stats(
                 metas.insert(*column_id, ColumnMeta::Native(meta.clone()));
             }
 
-            Ok(metas)
+            Ok((metas, None))
         }
         FuseStorageFormat::Vortex => {
-            let num_rows = block.num_rows() as u64;
-            let write_meta = write_vortex(schema.as_ref(), block, buf)?;
-            let field_leaf_column_ids = schema.field_leaf_column_ids();
-
-            let mut metas = HashMap::new();
-            for (field, leaf_column_ids) in schema.fields().iter().zip(field_leaf_column_ids) {
-                let mut ranges = write_meta.shared_ranges.clone();
-                if let Some(field_ranges) = write_meta.field_ranges.get(field.name()) {
-                    ranges.extend(field_ranges.iter().cloned());
-                }
-
-                let meta = ColumnMeta::Vortex(VortexColumnMeta {
-                    segments: ranges,
-                    num_values: num_rows,
-                });
-
-                for column_id in leaf_column_ids {
-                    metas.insert(column_id, meta.clone());
-                }
-            }
-
-            Ok(metas)
+            let vortex_footer = write_vortex(schema.as_ref(), block, buf)?;
+            Ok((HashMap::new(), Some(vortex_footer)))
         }
     }
 }
@@ -286,7 +284,7 @@ impl BlockBuilder {
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_size = data_block.estimate_block_size() as u64;
-        let col_metas = serialize_block_with_column_stats(
+        let (col_metas, vortex_footer) = serialize_block_with_column_stats_internal(
             &self.write_settings,
             &self.source_schema,
             Some(&col_stats),
@@ -319,6 +317,7 @@ impl BlockBuilder {
                 .unwrap_or_default(),
             vector_index_size: vector_index_state.as_ref().map(|v| v.size),
             vector_index_location: vector_index_state.as_ref().map(|v| v.location.clone()),
+            vortex_footer,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,

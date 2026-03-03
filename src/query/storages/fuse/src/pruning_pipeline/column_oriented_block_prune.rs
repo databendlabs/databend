@@ -264,7 +264,9 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                     let part_info = FuseBlockPartInfo::create(
                         location_path,
                         row_count,
+                        0,
                         columns_meta,
+                        None,
                         Some(columns_stat),
                         compression,
                         None, // TODO(Sky): sort_min_max

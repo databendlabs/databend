@@ -42,7 +42,9 @@ pub struct FuseBlockPartInfo {
 
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
+    pub file_size: u64,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub vortex_footer: Option<Vec<u8>>,
     pub columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub compression: Compression,
 
@@ -78,7 +80,9 @@ impl FuseBlockPartInfo {
     pub fn create(
         location: String,
         rows_count: u64,
+        file_size: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
+        vortex_footer: Option<Vec<u8>>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
@@ -89,7 +93,9 @@ impl FuseBlockPartInfo {
             location,
             create_on,
             columns_meta,
+            vortex_footer,
             nums_rows: rows_count as usize,
+            file_size,
             compression,
             sort_min_max,
             block_meta_index,

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -53,6 +55,7 @@ pub fn read_vortex_with_ranges(
     table_schema: &TableSchema,
     file_size: u64,
     prefetched_ranges: Vec<(Range<u64>, Buffer)>,
+    footer_bytes: &[u8],
 ) -> Result<DataBlock> {
     let runtime = CurrentThreadRuntime::new();
     let session = VortexSession::default().with_handle(runtime.handle());
@@ -61,12 +64,143 @@ pub fn read_vortex_with_ranges(
         .iter()
         .map(|f| Arc::<str>::from(f.name().as_str()))
         .collect::<Vec<_>>();
+    let footer = deserialize_footer_from_bytes(&session, footer_bytes)?;
 
     let read_at = PrefetchedVortexReadAt::new(file_size, prefetched_ranges);
-    let file =
-        runtime.block_on(async move { session.open_options().open_read_at(read_at).await })?;
+    let file = runtime.block_on(async move {
+        session
+            .open_options()
+            .with_footer(footer)
+            .with_file_size(file_size)
+            .open_read_at(read_at)
+            .await
+    })?;
 
     read_vortex_file(table_schema, runtime, file, projection)
+}
+
+pub fn collect_vortex_ranges_for_schema(
+    table_schema: &TableSchema,
+    footer_bytes: &[u8],
+) -> Result<Vec<Range<u64>>> {
+    let session = VortexSession::default();
+    let footer = deserialize_footer_from_bytes(&session, footer_bytes)?;
+    let projection = table_schema
+        .fields()
+        .iter()
+        .map(|f| f.name().to_string())
+        .collect::<BTreeSet<_>>();
+
+    let mut shared_segment_ids = BTreeSet::new();
+    let mut field_segment_ids: HashMap<String, BTreeSet<u32>> = HashMap::new();
+    collect_segment_ids(
+        footer.layout(),
+        None,
+        &mut shared_segment_ids,
+        &mut field_segment_ids,
+    )?;
+
+    let mut selected_segment_ids = shared_segment_ids;
+    for field in projection {
+        if let Some(ids) = field_segment_ids.get(&field) {
+            selected_segment_ids.extend(ids.iter().copied());
+        }
+    }
+
+    Ok(normalize_ranges(segment_ids_to_ranges(
+        footer.segment_map().as_ref(),
+        &selected_segment_ids,
+    )))
+}
+
+fn deserialize_footer_from_bytes(
+    session: &VortexSession,
+    footer_bytes: &[u8],
+) -> Result<vortex::file::Footer> {
+    let mut deserializer =
+        vortex::file::Footer::deserializer(ByteBuffer::copy_from(footer_bytes), session.clone())
+            .with_size(footer_bytes.len() as u64);
+
+    match deserializer.deserialize()? {
+        vortex::file::DeserializeStep::Done(footer) => Ok(footer),
+        vortex::file::DeserializeStep::NeedMoreData { .. } => {
+            Err(databend_common_exception::ErrorCode::Internal(
+                "Serialized vortex footer requires external data".to_string(),
+            ))
+        }
+        vortex::file::DeserializeStep::NeedFileSize => {
+            Err(databend_common_exception::ErrorCode::Internal(
+                "Serialized vortex footer missing file size".to_string(),
+            ))
+        }
+    }
+}
+
+fn collect_segment_ids(
+    layout: &vortex::layout::LayoutRef,
+    current_field: Option<String>,
+    shared_segment_ids: &mut BTreeSet<u32>,
+    field_segment_ids: &mut HashMap<String, BTreeSet<u32>>,
+) -> Result<()> {
+    for segment_id in layout.segment_ids() {
+        if let Some(field) = current_field.as_ref() {
+            field_segment_ids
+                .entry(field.clone())
+                .or_default()
+                .insert(*segment_id);
+        } else {
+            shared_segment_ids.insert(*segment_id);
+        }
+    }
+
+    for idx in 0..layout.nchildren() {
+        let child = layout.child(idx)?;
+        let child_field = if current_field.is_some() {
+            current_field.clone()
+        } else {
+            match layout.child_type(idx) {
+                vortex::layout::LayoutChildType::Field(name) => Some(name.to_string()),
+                _ => None,
+            }
+        };
+
+        collect_segment_ids(&child, child_field, shared_segment_ids, field_segment_ids)?;
+    }
+
+    Ok(())
+}
+
+fn segment_ids_to_ranges(
+    segment_map: &[vortex::file::SegmentSpec],
+    ids: &BTreeSet<u32>,
+) -> Vec<Range<u64>> {
+    ids.iter()
+        .filter_map(|id| segment_map.get(*id as usize))
+        .map(|seg| seg.offset..(seg.offset + u64::from(seg.length)))
+        .collect()
+}
+
+fn normalize_ranges(mut ranges: Vec<Range<u64>>) -> Vec<Range<u64>> {
+    if ranges.is_empty() {
+        return ranges;
+    }
+
+    ranges.sort_by_key(|r| (r.start, r.end));
+    let mut merged: Vec<Range<u64>> = Vec::with_capacity(ranges.len());
+
+    for range in ranges {
+        if let Some(last) = merged.last_mut() {
+            if range.start <= last.end {
+                if range.end > last.end {
+                    last.end = range.end;
+                }
+                continue;
+            }
+        }
+        merged.push(range);
+    }
+
+    merged
 }
 
 fn read_vortex_file(

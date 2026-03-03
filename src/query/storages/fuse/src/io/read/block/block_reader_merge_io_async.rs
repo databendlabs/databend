@@ -32,6 +32,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Buffer;
 
 use crate::BlockReadResult;
+use crate::fuse_vortex::collect_vortex_ranges_for_schema;
 use crate::io::BlockReader;
 
 impl BlockReader {
@@ -150,7 +151,8 @@ impl BlockReader {
         &self,
         settings: &ReadSettings,
         location: &str,
-        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        footer_bytes: &[u8],
+        file_size: u64,
     ) -> Result<(u64, Vec<(Range<u64>, Buffer)>)> {
         // Perf
         {
@@ -159,39 +161,20 @@ impl BlockReader {
 
         let mut deduped = HashSet::new();
         let mut ranges = Vec::new();
-
-        let push_column_ranges =
-            |column_id: &ColumnId,
-             ranges: &mut Vec<Range<u64>>,
-             deduped: &mut HashSet<(u64, u64)>| {
-                if let Some(column_meta) = columns_meta.get(column_id) {
-                    for range in column_meta.read_ranges(&None) {
-                        if range.start < range.end && deduped.insert((range.start, range.end)) {
-                            // Perf
-                            {
-                                metrics_inc_remote_io_seeks(1);
-                                metrics_inc_remote_io_read_bytes(range.end - range.start);
-                            }
-                            // Record bytes scanned from remote storage
-                            Profile::record_usize_profile(
-                                ProfileStatisticsName::ScanBytesFromRemote,
-                                (range.end - range.start) as usize,
-                            );
-
-                            ranges.push(range);
-                        }
-                    }
+        for range in collect_vortex_ranges_for_schema(self.schema().as_ref(), footer_bytes)? {
+            if range.start < range.end && deduped.insert((range.start, range.end)) {
+                // Perf
+                {
+                    metrics_inc_remote_io_seeks(1);
+                    metrics_inc_remote_io_read_bytes(range.end - range.start);
                 }
-            };
+                // Record bytes scanned from remote storage
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::ScanBytesFromRemote,
+                    (range.end - range.start) as usize,
+                );
 
-        for (_index, (column_id, ..)) in self.project_indices.iter() {
-            push_column_ranges(column_id, &mut ranges, &mut deduped);
-        }
-
-        // Empty projection still needs footer ranges to open the vortex file.
-        if ranges.is_empty() {
-            if let Some(column_id) = columns_meta.keys().next() {
-                push_column_ranges(column_id, &mut ranges, &mut deduped);
+                ranges.push(range);
             }
         }
 
@@ -229,12 +212,6 @@ impl BlockReader {
                 .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
             prefetched.push((original_range, chunk_data.slice(range.clone())));
         }
-
-        let file_size = prefetched
-            .iter()
-            .map(|(range, _)| range.end)
-            .max()
-            .unwrap_or_default();
 
         Ok((file_size, prefetched))
     }
