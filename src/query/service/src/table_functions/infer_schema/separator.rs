@@ -14,11 +14,15 @@
 
 use std::collections::HashMap;
 use std::io::Cursor;
+use std::sync::LazyLock;
 
 use arrow_csv::reader::Format;
 use arrow_json::reader::ValueIter;
 use arrow_json::reader::infer_json_schema_from_iterator;
 use arrow_schema::ArrowError;
+use arrow_schema::DataType;
+use arrow_schema::Field;
+use arrow_schema::Fields;
 use arrow_schema::Schema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,13 +34,78 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::TsvFileFormatParams;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_storages_stage::BytesBatch;
+use databend_common_storages_stage::parse_tsv_records_for_infer_schema;
 use itertools::Itertools;
+use regex::RegexSet;
 
 use crate::table_functions::infer_schema::merge::merge_schema;
 
 const MAX_SINGLE_FILE_BYTES: usize = 100 * 1024 * 1024;
+static TSV_INFER_REGEX_SET: LazyLock<RegexSet> = LazyLock::new(|| {
+    RegexSet::new([
+        r"(?i)^(true)$|^(false)$(?-i)", // BOOLEAN
+        r"^-?(\d+)$",                   // INTEGER
+        r"^-?((\d*\.\d+|\d+\.\d*)([eE][-+]?\d+)?|\d+([eE][-+]?\d+))$", // DECIMAL
+        r"^\d{4}-\d\d-\d\d$",           // DATE32
+        r"^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(?:[^\d\.].*)?$", // Timestamp(Second)
+        r"^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d\.\d{1,3}(?:[^\d].*)?$", // Timestamp(Millisecond)
+        r"^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d\.\d{1,6}(?:[^\d].*)?$", // Timestamp(Microsecond)
+        r"^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d\.\d{1,9}(?:[^\d].*)?$", // Timestamp(Nanosecond)
+    ])
+    .expect("failed to build tsv infer regex set")
+});
+
+#[derive(Default, Copy, Clone)]
+struct TsvInferredDataType {
+    // 0:Boolean,1:Integer,2:Float64,3:Date32,4:TsS,5:TsMS,6:TsUS,7:TsNS,8:Utf8
+    packed: u16,
+}
+
+impl TsvInferredDataType {
+    fn get(&self) -> DataType {
+        match self.packed {
+            0 => DataType::Null,
+            1 => DataType::Boolean,
+            2 => DataType::Int64,
+            4 | 6 => DataType::Float64,
+            b if b != 0 && (b & !0b11111000) == 0 => match b.leading_zeros() {
+                8 => DataType::Timestamp(arrow_schema::TimeUnit::Nanosecond, None),
+                9 => DataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
+                10 => DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None),
+                11 => DataType::Timestamp(arrow_schema::TimeUnit::Second, None),
+                12 => DataType::Date32,
+                _ => unreachable!(),
+            },
+            _ => DataType::Utf8,
+        }
+    }
+
+    fn update(&mut self, field: &[u8]) {
+        if field.is_empty() {
+            return;
+        }
+
+        let Ok(string) = std::str::from_utf8(field) else {
+            self.packed |= 1 << 8;
+            return;
+        };
+
+        self.packed |= if let Some(m) = TSV_INFER_REGEX_SET.matches(string).into_iter().next() {
+            if m == 1 && string.len() >= 19 && string.parse::<i64>().is_err() {
+                1 << 8
+            } else {
+                1 << m
+            }
+        } else if string == "NaN" || string == "nan" || string == "inf" || string == "-inf" {
+            1 << 2
+        } else {
+            1 << 8
+        };
+    }
+}
 
 pub struct InferSchemaSeparator {
     pub file_format_params: FileFormatParams,
@@ -63,6 +132,103 @@ impl InferSchemaSeparator {
             filenames: Vec::with_capacity(files_len),
             is_finished: false,
         }
+    }
+
+    fn infer_tsv_schema(
+        bytes: &[u8],
+        params: &TsvFileFormatParams,
+        is_eof: bool,
+        max_records: Option<usize>,
+    ) -> std::result::Result<Schema, Option<ArrowError>> {
+        let mut fields = parse_tsv_records_for_infer_schema(bytes, params, is_eof)
+            .map_err(|e| Some(ArrowError::ParseError(e.message())))?;
+
+        let mut next_row_head: Option<(usize, String)> = None;
+        let mut next_row = || -> std::result::Result<Option<Vec<String>>, ArrowError> {
+            let first = if let Some(head) = next_row_head.take() {
+                head
+            } else {
+                match fields.next() {
+                    Some(item) => item.map_err(|e| ArrowError::ParseError(e.message()))?,
+                    None => return Ok(None),
+                }
+            };
+
+            let (first_idx, first_field) = first;
+            if first_idx != 0 {
+                return Err(ArrowError::ParseError(
+                    "invalid TSV field index stream when inferring schema".to_string(),
+                ));
+            }
+
+            let mut row = vec![first_field];
+            loop {
+                match fields.next() {
+                    Some(Ok((0, field))) => {
+                        next_row_head = Some((0, field));
+                        return Ok(Some(row));
+                    }
+                    Some(Ok((idx, field))) => {
+                        if idx == row.len() {
+                            row.push(field);
+                        } else if idx < row.len() {
+                            row[idx] = field;
+                        } else {
+                            row.resize(idx, String::new());
+                            row.push(field);
+                        }
+                    }
+                    Some(Err(e)) => return Err(ArrowError::ParseError(e.message())),
+                    None => return Ok(Some(row)),
+                }
+            }
+        };
+
+        let first_record = next_row().map_err(Some)?.ok_or(None)?;
+        let mut rows_seen = 0;
+        let headers = if params.headers != 0 {
+            first_record
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+        } else {
+            (0..first_record.len())
+                .map(|i| format!("column_{}", i + 1))
+                .collect::<Vec<_>>()
+        };
+
+        let mut column_types = vec![TsvInferredDataType::default(); headers.len()];
+        let max_records = max_records.unwrap_or(usize::MAX);
+        if params.headers == 0 && rows_seen < max_records {
+            for (idx, t) in column_types.iter_mut().enumerate().take(headers.len()) {
+                if let Some(field) = first_record.get(idx) {
+                    t.update(field.as_bytes());
+                }
+            }
+            rows_seen += 1;
+        }
+
+        while rows_seen < max_records {
+            let Some(record) = next_row().map_err(Some)? else {
+                break;
+            };
+            if rows_seen >= max_records {
+                break;
+            }
+            for (idx, t) in column_types.iter_mut().enumerate().take(headers.len()) {
+                if let Some(field) = record.get(idx) {
+                    t.update(field.as_bytes());
+                }
+            }
+            rows_seen += 1;
+        }
+
+        let fields: Fields = column_types
+            .iter()
+            .zip(headers.iter())
+            .map(|(inferred, field_name)| Field::new(field_name, inferred.get(), true))
+            .collect();
+        Ok(Schema::new(fields))
     }
 }
 
@@ -93,7 +259,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
         if self.max_records.is_none() && !batch.is_eof {
             return Ok(vec![DataBlock::empty()]);
         }
-        let bytes = Cursor::new(bytes);
+        let file_bytes = bytes.as_slice();
         let result = match &self.file_format_params {
             FileFormatParams::Csv(params) => {
                 let escape = if params.escape.is_empty() {
@@ -110,12 +276,15 @@ impl AccumulatingTransform for InferSchemaSeparator {
                     format = format.with_escape(escape);
                 }
                 format
-                    .infer_schema(bytes, self.max_records)
+                    .infer_schema(Cursor::new(file_bytes), self.max_records)
                     .map(|(schema, _)| schema)
                     .map_err(Some)
             }
+            FileFormatParams::Tsv(params) => {
+                Self::infer_tsv_schema(file_bytes, params, batch.is_eof, self.max_records)
+            }
             FileFormatParams::NdJson(_) => {
-                let mut records = ValueIter::new(bytes, self.max_records);
+                let mut records = ValueIter::new(Cursor::new(file_bytes), self.max_records);
                 let fn_ndjson = |max_records| -> std::result::Result<Schema, Option<ArrowError>> {
                     if let Some(max_record) = max_records {
                         let mut tmp: Vec<std::result::Result<_, ArrowError>> =
@@ -133,7 +302,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "InferSchemaSeparator is currently limited to format CSV and NDJSON",
+                    "InferSchemaSeparator is currently limited to format CSV, TSV and NDJSON",
                 ));
             }
         };
@@ -209,5 +378,137 @@ fn human_readable_size(bytes: usize) -> String {
         format!("{:.2} KB", b / KB)
     } else {
         format!("{} B", bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::principal::TsvFileFormatParams;
+
+    use super::*;
+
+    #[test]
+    fn test_infer_tsv_schema_with_custom_record_delimiter() {
+        let params = TsvFileFormatParams {
+            record_delimiter: "|".to_string(),
+            ..TsvFileFormatParams::default()
+        };
+        let schema =
+            InferSchemaSeparator::infer_tsv_schema("1\t2|3\t4|".as_bytes(), &params, true, None)
+                .unwrap();
+
+        assert_eq!(schema.fields().len(), 2);
+    }
+
+    #[test]
+    fn test_infer_tsv_schema_with_escaped_delimiters() {
+        let params = TsvFileFormatParams::default();
+        let schema =
+            InferSchemaSeparator::infer_tsv_schema(b"1\\t2\t3\\n4\n5\t6\n", &params, true, None)
+                .unwrap();
+
+        assert_eq!(schema.fields().len(), 2);
+    }
+
+    #[test]
+    fn test_infer_tsv_schema_all_supported_types() {
+        let params = TsvFileFormatParams::default();
+        let schema = InferSchemaSeparator::infer_tsv_schema(
+            b"true\t42\t3.14\t2024-01-02\t2024-01-02 03:04:05\t2024-01-02 03:04:05.123\t2024-01-02 03:04:05.123456\t2024-01-02 03:04:05.123456789\thello\n",
+            &params,
+            true,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(schema.fields().len(), 9);
+        assert_eq!(schema.field(0).data_type(), &DataType::Boolean);
+        assert_eq!(schema.field(1).data_type(), &DataType::Int64);
+        assert_eq!(schema.field(2).data_type(), &DataType::Float64);
+        assert_eq!(schema.field(3).data_type(), &DataType::Date32);
+        assert_eq!(
+            schema.field(4).data_type(),
+            &DataType::Timestamp(arrow_schema::TimeUnit::Second, None)
+        );
+        assert_eq!(
+            schema.field(5).data_type(),
+            &DataType::Timestamp(arrow_schema::TimeUnit::Millisecond, None)
+        );
+        assert_eq!(
+            schema.field(6).data_type(),
+            &DataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None)
+        );
+        assert_eq!(
+            schema.field(7).data_type(),
+            &DataType::Timestamp(arrow_schema::TimeUnit::Nanosecond, None)
+        );
+        assert_eq!(schema.field(8).data_type(), &DataType::Utf8);
+    }
+
+    #[test]
+    fn test_infer_tsv_schema_header_names() {
+        let params = TsvFileFormatParams {
+            headers: 1,
+            ..Default::default()
+        };
+        let schema = InferSchemaSeparator::infer_tsv_schema(
+            b"c_bool\tc_int\tc_float\tc_date\tc_ts_s\tc_ts_ms\tc_ts_us\tc_ts_ns\tc_str\ntrue\t42\t3.14\t2024-01-02\t2024-01-02 03:04:05\t2024-01-02 03:04:05.123\t2024-01-02 03:04:05.123456\t2024-01-02 03:04:05.123456789\thello\n",
+            &params,
+            true,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(schema.field(0).name(), "c_bool");
+        assert_eq!(schema.field(1).name(), "c_int");
+        assert_eq!(schema.field(2).name(), "c_float");
+        assert_eq!(schema.field(8).name(), "c_str");
+    }
+
+    #[test]
+    fn test_infer_tsv_schema_max_records() {
+        let params = TsvFileFormatParams::default();
+        let schema =
+            InferSchemaSeparator::infer_tsv_schema(b"1\ntext\n", &params, true, Some(1)).unwrap();
+        assert_eq!(schema.field(0).data_type(), &DataType::Int64);
+
+        let schema =
+            InferSchemaSeparator::infer_tsv_schema(b"1\ntext\n", &params, true, None).unwrap();
+        assert_eq!(schema.field(0).data_type(), &DataType::Utf8);
+    }
+
+    #[test]
+    fn test_infer_tsv_table_schema_type_conversion() {
+        let params = TsvFileFormatParams::default();
+        let arrow_schema = InferSchemaSeparator::infer_tsv_schema(
+            b"true\t42\t3.14\t2024-01-02\t2024-01-02 03:04:05\t2024-01-02 03:04:05.123\t2024-01-02 03:04:05.123456\t2024-01-02 03:04:05.123456789\thello\n",
+            &params,
+            true,
+            None,
+        )
+        .unwrap();
+        let table_schema = TableSchema::try_from(&arrow_schema).unwrap();
+
+        assert_eq!(table_schema.field(0).data_type().sql_name(), "BOOLEAN NULL");
+        assert_eq!(table_schema.field(1).data_type().sql_name(), "BIGINT NULL");
+        assert_eq!(table_schema.field(2).data_type().sql_name(), "DOUBLE NULL");
+        assert_eq!(table_schema.field(3).data_type().sql_name(), "DATE NULL");
+        assert_eq!(
+            table_schema.field(4).data_type().sql_name(),
+            "TIMESTAMP NULL"
+        );
+        assert_eq!(
+            table_schema.field(5).data_type().sql_name(),
+            "TIMESTAMP NULL"
+        );
+        assert_eq!(
+            table_schema.field(6).data_type().sql_name(),
+            "TIMESTAMP NULL"
+        );
+        assert_eq!(
+            table_schema.field(7).data_type().sql_name(),
+            "TIMESTAMP NULL"
+        );
+        assert_eq!(table_schema.field(8).data_type().sql_name(), "VARCHAR NULL");
     }
 }
