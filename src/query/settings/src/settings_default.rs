@@ -1176,7 +1176,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                // The settings have been deprecated and are retained to prevent errors.
+                // This setting has been deprecated, retained to prevent set errors.
                 ("enable_geo_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Create and alter table with geometry/geography type",

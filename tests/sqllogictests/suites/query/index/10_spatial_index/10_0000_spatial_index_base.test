@@ -33,7 +33,7 @@ statement error
 DROP INVERTED INDEX idx2 ON t;
 
 statement ok
-CREATE TABLE spatial_stores (store_id INT, category String, store_name String, status String, loaction Geometry, SPATIAL INDEX idx (loaction)) row_per_block=2
+CREATE TABLE spatial_stores (store_id INT, category String, store_name String, status String, location Geometry, SPATIAL INDEX idx (location)) row_per_block=2
 
 statement ok
 INSERT INTO spatial_stores VALUES
@@ -57,31 +57,31 @@ INSERT INTO spatial_stores VALUES
 (18, 'bookstore', 'Barnes & Noble', 'inactive', TO_GEOMETRY('POINT(-50 -50)'))
 
 query ITT
-SELECT store_id, store_name, category FROM spatial_stores WHERE st_intersects(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) ORDER BY store_id;
+SELECT store_id, store_name, category FROM spatial_stores WHERE st_intersects(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) ORDER BY store_id;
 ----
 1 Starbucks coffee
 2 Costa coffee
 
 query ITT
-SELECT store_id, store_name, category FROM spatial_stores WHERE category = 'coffee' AND status = 'active' AND st_within(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) ORDER BY store_id;
+SELECT store_id, store_name, category FROM spatial_stores WHERE category = 'coffee' AND status = 'active' AND st_within(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) ORDER BY store_id;
 ----
 1 Starbucks coffee
 2 Costa coffee
 
 query ITT
-SELECT store_id, store_name, category FROM spatial_stores WHERE category = 'restaurant' AND status = 'active' AND st_within(loaction, to_geometry('POLYGON((25 25, 25 65, 65 65, 65 25, 25 25))')) ORDER BY store_id;
+SELECT store_id, store_name, category FROM spatial_stores WHERE category = 'restaurant' AND status = 'active' AND st_within(location, to_geometry('POLYGON((25 25, 25 65, 65 65, 65 25, 25 25))')) ORDER BY store_id;
 ----
 7 McDonald restaurant
 13 Burger King restaurant
 
 query ITT
-SELECT store_id, store_name, status FROM spatial_stores WHERE category = 'hotel' AND status = 'inactive' AND st_intersects(loaction, to_geometry('POLYGON((-50 -50, -50 -25, -25 -25, -25 -50, -50 -50))')) ORDER BY store_id;
+SELECT store_id, store_name, status FROM spatial_stores WHERE category = 'hotel' AND status = 'inactive' AND st_intersects(location, to_geometry('POLYGON((-50 -50, -50 -25, -25 -25, -25 -50, -50 -50))')) ORDER BY store_id;
 ----
 11 Marriott inactive
 14 Hyatt inactive
 
 query ITT
-SELECT store_id, store_name, category FROM spatial_stores WHERE category IN ('restaurant', 'hotel') AND status = 'active' AND st_intersects(loaction, to_geometry('POLYGON((25 25, 25 65, 65 65, 65 25, 25 25))')) ORDER BY store_id;
+SELECT store_id, store_name, category FROM spatial_stores WHERE category IN ('restaurant', 'hotel') AND status = 'active' AND st_intersects(location, to_geometry('POLYGON((25 25, 25 65, 65 65, 65 25, 25 25))')) ORDER BY store_id;
 ----
 7 McDonald restaurant
 8 Hilton hotel

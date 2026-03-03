@@ -179,19 +179,25 @@ impl SpatialIndexPruner {
             if srid != predicate.query_srid {
                 continue;
             }
-            let has_null = match invalid_index.and_then(|idx| columns.get(idx)) {
+            let invalid_rows_rb = match invalid_index.and_then(|idx| columns.get(idx)) {
                 Some(invalid_rows_column) => match invalid_rows_column.index(0) {
                     Some(ScalarRef::Binary(buffer)) => {
                         let mut cursor = Cursor::new(buffer);
-                        let bitmap = RoaringBitmap::deserialize_from(&mut cursor).map_err(|e| {
-                            ErrorCode::Internal(format!("Invalid invalid-rows bitmap: {e}"))
-                        })?;
-                        !bitmap.is_empty()
+                        let invalid_rows_rb = RoaringBitmap::deserialize_from(&mut cursor)
+                            .map_err(|e| {
+                                ErrorCode::Internal(format!("Invalid invalid-rows bitmap: {e}"))
+                            })?;
+                        Some(invalid_rows_rb)
                     }
-                    _ => false,
+                    _ => None,
                 },
-                None => false,
+                None => None,
             };
+
+            let has_null = invalid_rows_rb
+                .as_ref()
+                .is_some_and(|bitmap| !bitmap.is_empty());
+
             let Some(column) = columns.get(column_index) else {
                 continue;
             };
@@ -204,7 +210,7 @@ impl SpatialIndexPruner {
                     return Err(ErrorCode::Internal(format!("Invalid spatial index: {e}")));
                 }
             };
-            if !spatial_intersects(&tree, &predicate.query_rect) {
+            if !spatial_intersects(&tree, &predicate.query_rect, invalid_rows_rb.as_ref()) {
                 domains.insert(
                     predicate.placeholder.clone(),
                     spatial_false_domain(&predicate.return_type, has_null),
@@ -355,8 +361,19 @@ fn query_rect_from_wkb(wkb: &[u8]) -> Result<Option<Rect<f64>>> {
     Ok(geo.bounding_rect())
 }
 
-fn spatial_intersects(tree: &RTreeRef<'_, f64>, query_rect: &Rect<f64>) -> bool {
-    !tree.search_rect(query_rect).is_empty()
+fn spatial_intersects(
+    tree: &RTreeRef<'_, f64>,
+    query_rect: &Rect<f64>,
+    invalid_rows_rb: Option<&RoaringBitmap>,
+) -> bool {
+    let hits = tree.search_rect(query_rect);
+    if hits.is_empty() {
+        return false;
+    }
+    let Some(invalid_rows_rb) = invalid_rows_rb else {
+        return true;
+    };
+    hits.into_iter().any(|row| !invalid_rows_rb.contains(row))
 }
 
 fn spatial_false_domain(return_type: &DataType, has_null: bool) -> Domain {

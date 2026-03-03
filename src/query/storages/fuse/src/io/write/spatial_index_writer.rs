@@ -37,9 +37,7 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
 use databend_storages_common_blocks::blocks_to_parquet;
-use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::table::TableCompression;
 use geo::algorithm::bounding_rect::BoundingRect;
 use geo_index::rtree::RTreeBuilder;
@@ -48,11 +46,8 @@ use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use log::debug;
 use log::info;
-use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 use roaring::RoaringBitmap;
-
-use crate::io::read::load_spatial_index_files;
 
 #[derive(Debug, Clone)]
 pub struct SpatialIndexState {
@@ -207,119 +202,6 @@ impl SpatialIndexBuilder {
         Ok(Some(state))
     }
 
-    #[async_backtrace::framed]
-    pub async fn finalize_with_existing(
-        &mut self,
-        operator: Operator,
-        settings: &ReadSettings,
-        location: &Location,
-        existing_location: Option<&Location>,
-        existing_column_metas: Option<Vec<(String, SingleColumnMeta)>>,
-        existing_index_meta: Option<BTreeMap<String, String>>,
-    ) -> Result<Option<SpatialIndexState>> {
-        // If there's no existing spatial index, just use the regular finalize method
-        if existing_location.is_none() || existing_column_metas.is_none() {
-            return self.finalize(location);
-        }
-
-        // Process new spatial index data
-        let start = Instant::now();
-        info!(
-            "Start build merged spatial index for location: {}",
-            location.0
-        );
-
-        let existing_location = existing_location.unwrap();
-        let existing_column_metas = existing_column_metas.unwrap();
-
-        let existing_column_names = existing_column_metas
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
-
-        let existing_columns = load_spatial_index_files(
-            operator,
-            settings,
-            &existing_column_names,
-            &existing_location.0,
-        )
-        .await?;
-
-        info!(
-            "Read existing spatial index at location={} in {} ms",
-            existing_location.0,
-            start.elapsed().as_millis() as u64
-        );
-
-        let Some(result) = self.build_spatial_index()? else {
-            return Ok(None);
-        };
-        let SpatialIndexResult {
-            mut index_fields,
-            mut index_columns,
-            mut metadata,
-        } = result;
-
-        for (name, _) in existing_column_metas.into_iter() {
-            let data_type = if name.ends_with("_srid") {
-                TableDataType::Number(NumberDataType::Int32)
-            } else {
-                TableDataType::Binary
-            };
-            let existing_field = TableField::new(&name, data_type);
-            index_fields.push(existing_field);
-        }
-        for existing_column in existing_columns.into_iter() {
-            index_columns.push(BlockEntry::Column(existing_column));
-        }
-
-        if let Some(existing_index_meta) = existing_index_meta {
-            for (key, value) in &existing_index_meta {
-                let version_meta = KeyValue {
-                    key: key.clone(),
-                    value: Some(value.clone()),
-                };
-                metadata.push(version_meta);
-            }
-        }
-
-        // Create merged index
-        let index_schema = TableSchemaRefExt::create(index_fields);
-        let index_block = DataBlock::new(index_columns, 1);
-
-        // Serialize to parquet
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            &mut data,
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for spatial index
-            false,
-            Some(metadata),
-        )?;
-
-        let size = data.len() as u64;
-        let state = SpatialIndexState {
-            location: location.clone(),
-            size,
-            data,
-        };
-
-        // Perf.
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_spatial_index_generate_milliseconds(elapsed_ms);
-        }
-        info!(
-            "Finish build merged spatial index: location={}, size={} bytes in {} ms",
-            location.0, size, elapsed_ms
-        );
-
-        Ok(Some(state))
-    }
-
     fn build_spatial_index(&mut self) -> Result<Option<SpatialIndexResult>> {
         let mut columns = BTreeMap::new();
         for offset in &self.field_offsets_set {
@@ -350,7 +232,7 @@ impl SpatialIndexBuilder {
 
                 let mut column_srid = None;
                 let mut srid_mixed = false;
-                let mut rects = Vec::with_capacity(column.len());
+                let mut builder = RTreeBuilder::<f64>::new(column.len() as u32);
                 // Track rows that cannot be indexed (null, empty, or invalid geometry).
                 let mut invalid_rows_rb = RoaringBitmap::new();
                 for (row_idx, value) in column.iter().enumerate() {
@@ -367,6 +249,7 @@ impl SpatialIndexBuilder {
                         }
                         _ => {
                             invalid_rows_rb.insert(row_idx as u32);
+                            builder.add(0.0, 0.0, 0.0, 0.0);
                             continue;
                         }
                     };
@@ -382,9 +265,10 @@ impl SpatialIndexBuilder {
                     if let Some(rec) = geo.bounding_rect() {
                         let min = rec.min();
                         let max = rec.max();
-                        rects.push((min.x, min.y, max.x, max.y));
+                        builder.add(min.x, min.y, max.x, max.y);
                     } else {
                         invalid_rows_rb.insert(row_idx as u32);
+                        builder.add(0.0, 0.0, 0.0, 0.0);
                     }
                 }
                 // Don't build index if the column SRID is mixed,
@@ -394,10 +278,6 @@ impl SpatialIndexBuilder {
                 let Some(srid) = column_srid else {
                     continue;
                 };
-                let mut builder = RTreeBuilder::<f64>::new(rects.len() as u32);
-                for (min_x, min_y, max_x, max_y) in rects {
-                    builder.add(min_x, min_y, max_x, max_y);
-                }
                 let tree = builder.finish::<HilbertSort>();
                 let buffer = tree.into_inner();
 

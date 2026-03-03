@@ -8,7 +8,7 @@ statement ok
 USE test_spatial_index_db
 
 statement ok
-CREATE TABLE t (store_id INT, category String, store_name String, status String, loaction Geometry, SPATIAL INDEX idx (loaction)) row_per_block=2 block_per_segment=1
+CREATE TABLE t (store_id INT, category String, store_name String, status String, location Geometry, SPATIAL INDEX idx (location)) row_per_block=2 block_per_segment=1
 
 statement ok
 INSERT INTO t VALUES
@@ -22,7 +22,7 @@ INSERT INTO t VALUES
 (8, 'tea', 'Theta', 'active', TO_GEOMETRY('POINT(101 101)'))
 
 query T
-EXPLAIN SELECT store_id, store_name, category FROM t WHERE st_within(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee' AND status = 'active';
+EXPLAIN SELECT store_id, store_name, category FROM t WHERE st_within(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee' AND status = 'active';
 ----
 TableScan
 ├── table: default.test_spatial_index_db.t
@@ -33,11 +33,11 @@ TableScan
 ├── partitions total: 4
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
-├── push downs: [filters: [st_within(t.loaction (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and t.category (#1) = 'coffee' and t.status (#3) = 'active'], limit: NONE]
+├── push downs: [filters: [st_within(t.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and t.category (#1) = 'coffee' and t.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 1.60
 
 query T
-EXPLAIN SELECT store_id, store_name, category FROM t WHERE st_intersects(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) OR category = 'coffee';
+EXPLAIN SELECT store_id, store_name, category FROM t WHERE st_intersects(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) OR category = 'coffee';
 ----
 TableScan
 ├── table: default.test_spatial_index_db.t
@@ -48,11 +48,11 @@ TableScan
 ├── partitions total: 4
 ├── partitions scanned: 4
 ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 4 cost: <slt:ignore>>]
-├── push downs: [filters: [st_intersects(t.loaction (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') or t.category (#1) = 'coffee'], limit: NONE]
+├── push downs: [filters: [st_intersects(t.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') or t.category (#1) = 'coffee'], limit: NONE]
 └── estimated rows: 4.00
 
 statement ok
-CREATE TABLE t_nullable (id INT, category String, loaction Nullable(Geometry), SPATIAL INDEX idx (loaction)) row_per_block=2 block_per_segment=1
+CREATE TABLE t_nullable (id INT, category String, location Nullable(Geometry), SPATIAL INDEX idx (location)) row_per_block=2 block_per_segment=1
 
 statement ok
 INSERT INTO t_nullable VALUES
@@ -62,7 +62,7 @@ INSERT INTO t_nullable VALUES
 (4, 'coffee', NULL)
 
 query T
-EXPLAIN SELECT id, category FROM t_nullable WHERE st_within(loaction, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee';
+EXPLAIN SELECT id, category FROM t_nullable WHERE st_within(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee';
 ----
 TableScan
 ├── table: default.test_spatial_index_db.t_nullable
@@ -73,7 +73,7 @@ TableScan
 ├── partitions total: 2
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, spatial pruning: 2 to 1 cost: <slt:ignore>>]
-├── push downs: [filters: [st_within(t_nullable.loaction (#2), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and t_nullable.category (#1) = 'coffee'], limit: NONE]
+├── push downs: [filters: [st_within(t_nullable.location (#2), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and t_nullable.category (#1) = 'coffee'], limit: NONE]
 └── estimated rows: 0.80
 
 statement ok
