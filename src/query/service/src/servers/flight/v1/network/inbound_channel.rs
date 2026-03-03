@@ -183,7 +183,7 @@ impl InboundChannel for NetworkInboundReceiver {
     }
 
     fn is_closed(&self) -> bool {
-        self.channel.receiver.is_closed()
+        self.channel.receiver.is_empty() && self.channel.receiver.is_closed()
     }
 
     async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
