@@ -17,6 +17,7 @@ databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
+databend-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
@@ -31,6 +32,8 @@ cbordata = { workspace = true }
 crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
+geo = { workspace = true }
+geozero = { workspace = true }
 goldenfile = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
@@ -56,6 +59,8 @@ xorfilter-rs = { workspace = true }
 zerocopy = { workspace = true }
 
 [dev-dependencies]
+databend-common-base = { workspace = true }
+
 anyhow = { workspace = true }
 divan = { workspace = true }
 rand = { workspace = true }

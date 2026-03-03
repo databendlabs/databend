@@ -23,8 +23,10 @@ use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 
 const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
@@ -196,6 +198,72 @@ pub fn reduce_virtual_column_statistics<T: Borrow<Option<StatisticsOfColumns>>>(
     Some(reduced_stats_of_columns)
 }
 
+pub fn reduce_spatial_statistics<T: Borrow<Option<StatisticsOfSpatialColumns>>>(
+    stats_of_columns: &[T],
+) -> Option<StatisticsOfSpatialColumns> {
+    if stats_of_columns.is_empty() {
+        return None;
+    }
+    for stat in stats_of_columns {
+        if stat.borrow().is_none() {
+            return None;
+        }
+    }
+
+    let mut col_to_stats = HashMap::new();
+    for stat in stats_of_columns {
+        for (col_id, spatial_stat) in stat.borrow().as_ref().unwrap() {
+            col_to_stats
+                .entry(*col_id)
+                .or_insert_with(Vec::new)
+                .push(spatial_stat);
+        }
+    }
+
+    let block_count = stats_of_columns.len();
+    let mut merged = HashMap::with_capacity(col_to_stats.len());
+    for (col_id, stats) in col_to_stats {
+        if stats.len() != block_count {
+            continue;
+        }
+        let first = stats[0];
+        let mut min_x = first.min_x;
+        let mut min_y = first.min_y;
+        let mut max_x = first.max_x;
+        let mut max_y = first.max_y;
+        let srid = first.srid;
+        let mut has_null = first.has_null;
+        let mut srid_mixed = false;
+
+        for stat in stats.iter().skip(1) {
+            if stat.srid != srid {
+                srid_mixed = true;
+                break;
+            }
+            min_x = min_x.min(stat.min_x);
+            min_y = min_y.min(stat.min_y);
+            max_x = max_x.max(stat.max_x);
+            max_y = max_y.max(stat.max_y);
+            has_null |= stat.has_null;
+        }
+
+        if srid_mixed {
+            continue;
+        }
+
+        merged.insert(col_id, SpatialStatistics {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+            srid,
+            has_null,
+        });
+    }
+
+    (!merged.is_empty()).then_some(merged)
+}
+
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
     blocks_cluster_stats: &[T],
     default_cluster_key_id: Option<u32>,
@@ -269,11 +337,13 @@ pub fn merge_statistics_mut(
     if l.row_count == 0 {
         l.col_stats = r.col_stats.clone();
         l.virtual_col_stats = r.virtual_col_stats.clone();
+        l.spatial_stats = r.spatial_stats.clone();
         l.cluster_stats = r.cluster_stats.clone();
     } else {
         l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
         l.virtual_col_stats =
             reduce_virtual_column_statistics(&[&l.virtual_col_stats, &r.virtual_col_stats]);
+        l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
         l.cluster_stats = reduce_cluster_statistics(
             &[&l.cluster_stats, &r.cluster_stats],
             default_cluster_key_id,
@@ -337,6 +407,7 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
                 };
         }
     }
+    l.spatial_stats = None;
 
     let bloom_index_size =
         l.bloom_index_size.unwrap_or_default() - r.bloom_index_size.unwrap_or_default();
@@ -386,6 +457,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     let mut col_stats = Vec::with_capacity(len);
     let mut cluster_stats = Vec::with_capacity(len);
     let mut virtual_col_stats = Vec::with_capacity(len);
+    let mut spatial_col_stats = Vec::with_capacity(len);
 
     block_metas.iter().for_each(|b| {
         let b = b.borrow();
@@ -428,9 +500,11 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         }
         col_stats.push(&b.col_stats);
         cluster_stats.push(&b.cluster_stats);
+        spatial_col_stats.push(&b.spatial_stats);
     });
 
     let merged_col_stats = reduce_block_statistics(&col_stats);
+    let merged_spatial_stats = reduce_spatial_statistics(&spatial_col_stats);
     let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, default_cluster_key_id);
     let merged_virtual_col_stats = if block_count > 0 && virtual_block_count == block_count {
         let virtual_col_stats = generate_virtual_column_statistics(&virtual_col_stats);
@@ -462,6 +536,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         virtual_column_size,
         col_stats: merged_col_stats,
         virtual_col_stats: merged_virtual_col_stats,
+        spatial_stats: merged_spatial_stats,
         cluster_stats: merged_cluster_stats,
         virtual_block_count: merged_virtual_block_count,
         additional_stats_meta: None,

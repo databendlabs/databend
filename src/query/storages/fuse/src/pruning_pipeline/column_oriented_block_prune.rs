@@ -31,6 +31,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -167,7 +168,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
-                    if !range_pruner.should_keep(&columns_stat, None) {
+                    let range_input = RangeIndexInput::from_columns(&columns_stat);
+                    if !range_pruner.should_keep(&range_input, None) {
                         return Ok::<_, ()>(());
                     }
 
