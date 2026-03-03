@@ -21,12 +21,10 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_pipeline_transforms::sorts::core::order_field_type;
-use databend_common_pipeline_transforms::sorts::utils::ORDER_COL_NAME;
+use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::evaluator::BlockOperator;
@@ -116,58 +114,23 @@ impl IPhysicalPlan for Sort {
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         match self.step {
-            SortStep::Final | SortStep::Shuffled => {
-                let mut fields = input_schema.fields().clone();
-                // If the plan is after exchange plan in cluster mode,
-                // the order column is at the last of the input schema.
-                debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
-                debug_assert_eq!(
-                    fields.last().unwrap().data_type(),
-                    &order_field_type(
-                        &input_schema,
-                        &self.sort_desc(&input_schema)?,
-                        self.enable_fixed_rows
-                    ),
-                );
-                fields.pop();
-                Ok(DataSchemaRefExt::create(fields))
-            }
+            SortStep::Final | SortStep::Shuffled => SortKeyDescription::strip_order_col_schema(
+                self.sort_desc(&input_schema)?.into(),
+                input_schema,
+                self.enable_fixed_rows,
+            ),
             SortStep::Single | SortStep::Partial | SortStep::Sample => {
-                let mut fields = self
-                    .pre_projection
-                    .as_ref()
-                    .and_then(|proj| {
-                        let fileted_fields = proj
-                            .iter()
-                            .map(|index| {
-                                input_schema
-                                    .field_with_name(&index.to_string())
-                                    .unwrap()
-                                    .clone()
-                            })
-                            .collect::<Vec<_>>();
-
-                        if fileted_fields.len() < input_schema.fields().len() {
-                            // Only if the projection is not a full projection, we need to add a projection transform.
-                            Some(fileted_fields)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| input_schema.fields().clone());
-                if self.step != SortStep::Single {
-                    // If the plan is before exchange plan in cluster mode,
-                    // the order column should be added to the output schema.
-                    fields.push(DataField::new(
-                        ORDER_COL_NAME,
-                        order_field_type(
-                            &input_schema,
-                            &self.sort_desc(&input_schema)?,
-                            self.enable_fixed_rows,
-                        ),
-                    ));
+                let projected_schema =
+                    DataSchema::new_ref(self.fields_after_projection(&input_schema));
+                if self.step == SortStep::Single {
+                    return Ok(projected_schema);
                 }
-                Ok(DataSchemaRefExt::create(fields))
+                let key_desc = SortKeyDescription::new(
+                    self.sort_desc(&projected_schema)?.into(),
+                    projected_schema,
+                    self.enable_fixed_rows,
+                )?;
+                Ok(key_desc.schema_with_order_col())
             }
             SortStep::Route => Ok(input_schema),
         }
@@ -222,20 +185,8 @@ impl IPhysicalPlan for Sort {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let output_schema = self.output_schema()?;
-        let sort_desc = self
-            .order_by
-            .iter()
-            .map(|desc| {
-                let offset = output_schema.index_of(&desc.order_by.to_string())?;
-                Ok(SortColumnDescription {
-                    offset,
-                    asc: desc.asc,
-                    nulls_first: desc.nulls_first,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let sort_desc = sort_desc.into();
+        let sort_schema = self.sort_pipeline_schema()?;
+        let sort_desc = self.sort_desc(&sort_schema)?.into();
 
         if self.step != SortStep::Shuffled {
             self.input.build_pipeline(builder)?;
@@ -267,7 +218,7 @@ impl IPhysicalPlan for Sort {
 
         let sort_builder = SortPipelineBuilder::create(
             builder.ctx.clone(),
-            output_schema,
+            sort_schema,
             sort_desc,
             self.broadcast_id,
             self.enable_fixed_rows,
@@ -282,9 +233,7 @@ impl IPhysicalPlan for Sort {
                 if builder.main_pipeline.output_len() == 1 || max_threads == 1 {
                     builder.main_pipeline.try_resize(max_threads)?;
                 }
-                sort_builder
-                    .remove_order_col_at_last()
-                    .build_full_sort_pipeline(&mut builder.main_pipeline)
+                sort_builder.build_full_sort_pipeline(&mut builder.main_pipeline, false)
             }
 
             SortStep::Partial => {
@@ -294,24 +243,24 @@ impl IPhysicalPlan for Sort {
                 if builder.main_pipeline.output_len() == 1 || max_threads == 1 {
                     builder.main_pipeline.try_resize(max_threads)?;
                 }
-                sort_builder.build_full_sort_pipeline(&mut builder.main_pipeline)
+                sort_builder.build_full_sort_pipeline(&mut builder.main_pipeline, true)
             }
             SortStep::Final => {
                 // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
                 if max_threads == 1 && builder.main_pipeline.output_len() > 1 {
                     builder.main_pipeline.try_resize(1)?;
-                    return sort_builder
-                        .remove_order_col_at_last()
-                        .build_merge_sort_pipeline(&mut builder.main_pipeline, true);
+                    return sort_builder.build_merge_sort_pipeline(
+                        &mut builder.main_pipeline,
+                        true,
+                        false,
+                    );
                 }
 
                 // Build for the coordinator node.
                 // We only build a `MultiSortMergeTransform`,
                 // as the data is already sorted in each cluster node.
                 // The input number of the transform is equal to the number of cluster nodes.
-                sort_builder
-                    .remove_order_col_at_last()
-                    .build_multi_merge(&mut builder.main_pipeline)
+                sort_builder.build_multi_merge(&mut builder.main_pipeline, true)
             }
 
             SortStep::Sample => {
@@ -340,9 +289,7 @@ impl IPhysicalPlan for Sort {
                     // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
                     unimplemented!();
                 }
-                sort_builder
-                    .remove_order_col_at_last()
-                    .build_bounded_merge_sort(&mut builder.main_pipeline)
+                sort_builder.build_bounded_merge_sort(&mut builder.main_pipeline)
             }
             SortStep::Route => {
                 if builder.main_pipeline.output_len() == 1 {
@@ -359,6 +306,49 @@ impl IPhysicalPlan for Sort {
 }
 
 impl Sort {
+    fn sort_pipeline_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        match self.step {
+            SortStep::Single | SortStep::Partial | SortStep::Sample => Ok(DataSchema::new_ref(
+                self.fields_after_projection(&input_schema),
+            )),
+            SortStep::Final | SortStep::Shuffled => SortKeyDescription::strip_order_col_schema(
+                self.sort_desc(&input_schema)?.into(),
+                input_schema,
+                self.enable_fixed_rows,
+            ),
+            SortStep::Route => Ok(input_schema),
+        }
+    }
+
+    fn fields_after_projection(&self, input_schema: &DataSchema) -> Vec<DataField> {
+        debug_assert_matches!(
+            self.step,
+            SortStep::Single | SortStep::Partial | SortStep::Sample
+        );
+        self.pre_projection
+            .as_ref()
+            .and_then(|proj| {
+                let fileted_fields = proj
+                    .iter()
+                    .map(|index| {
+                        input_schema
+                            .field_with_name(&index.to_string())
+                            .unwrap()
+                            .clone()
+                    })
+                    .collect::<Vec<_>>();
+
+                if fileted_fields.len() < input_schema.fields().len() {
+                    // Only if the projection is not a full projection, we need to add a projection transform.
+                    Some(fileted_fields)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| input_schema.fields().clone())
+    }
+
     fn sort_desc(&self, schema: &DataSchema) -> Result<Vec<SortColumnDescription>> {
         self.order_by
             .iter()

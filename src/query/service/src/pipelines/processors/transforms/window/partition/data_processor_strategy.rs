@@ -88,7 +88,7 @@ pub struct SortStrategy {
     sort_desc: Vec<SortColumnDescription>,
     schema: DataSchemaRef,
     max_block_size: usize,
-    sort_spilling_batch_bytes: usize,
+    enable_fixed_rows: bool,
     enable_loser_tree: bool,
     have_order_col: bool,
 }
@@ -100,15 +100,12 @@ impl SortStrategy {
         schema: DataSchemaRef,
         have_order_col: bool,
     ) -> Result<Self> {
-        let max_block_size = settings.get_max_block_size()? as usize;
-        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
-        let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
         Ok(Self {
             sort_desc,
             schema,
-            max_block_size,
-            sort_spilling_batch_bytes,
-            enable_loser_tree,
+            max_block_size: settings.get_max_block_size()? as usize,
+            enable_fixed_rows: settings.get_enable_fixed_rows_sort()?,
+            enable_loser_tree: settings.get_enable_loser_tree_merge_sort()?,
             have_order_col,
         })
     }
@@ -128,7 +125,7 @@ impl DataProcessorStrategy for SortStrategy {
             self.max_block_size,
             self.sort_desc.clone(),
             data_blocks,
-            self.sort_spilling_batch_bytes,
+            self.enable_fixed_rows,
             self.enable_loser_tree,
             self.have_order_col,
         )

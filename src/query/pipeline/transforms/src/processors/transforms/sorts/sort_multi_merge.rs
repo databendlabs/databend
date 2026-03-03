@@ -19,8 +19,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -31,28 +29,24 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
 use super::core::Merger;
-use super::core::RowConverter;
 use super::core::Rows;
 use super::core::RowsTypeVisitor;
+use super::core::SortKeyDescription;
 use super::core::SortedStream;
 use super::core::algorithm::HeapSort;
 use super::core::algorithm::LoserTreeSort;
 use super::core::algorithm::SortAlgorithm;
 use super::core::select_row_type;
-use super::utils::ORDER_COL_NAME;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,
-    schema: DataSchemaRef,
+    key_desc: SortKeyDescription,
     block_size: usize,
     limit: Option<usize>,
-    sort_desc: &[SortColumnDescription],
     remove_order_col: bool,
     enable_loser_tree: bool,
     enable_fixed_rows_sort: bool,
 ) -> Result<()> {
-    debug_assert!(remove_order_col != schema.has_field(ORDER_COL_NAME));
-
     match pipeline.output_len() {
         0 => panic!("Cannot resize empty pipe."),
         1 => Ok(()),
@@ -66,10 +60,9 @@ pub fn try_add_multi_sort_merge(
             let mut builder = MultiSortMergeBuilder {
                 inputs: inputs_port.clone(),
                 output: output_port.clone(),
-                schema,
+                key_desc,
                 block_size,
                 limit,
-                sort_desc,
                 remove_order_col,
                 enable_loser_tree,
             };
@@ -83,32 +76,27 @@ pub fn try_add_multi_sort_merge(
     }
 }
 
-struct MultiSortMergeBuilder<'a> {
+struct MultiSortMergeBuilder {
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
-    schema: DataSchemaRef,
+    key_desc: SortKeyDescription,
     block_size: usize,
     limit: Option<usize>,
-    sort_desc: &'a [SortColumnDescription],
     remove_order_col: bool,
     enable_loser_tree: bool,
 }
 
-impl RowsTypeVisitor for MultiSortMergeBuilder<'_> {
+impl RowsTypeVisitor for MultiSortMergeBuilder {
     type Result = Result<Box<dyn Processor>>;
 
-    fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+    fn sort_key_desc(&self) -> SortKeyDescription {
+        self.key_desc.clone()
     }
 
-    fn sort_desc(&self) -> &[SortColumnDescription] {
-        self.sort_desc
-    }
-
-    fn visit_type<R, C>(&mut self) -> Self::Result
+    fn visit_type<R>(&mut self) -> Self::Result
     where
         R: Rows + 'static,
-        C: RowConverter<R> + Send + 'static,
+        R::Converter: Send + 'static,
     {
         if self.enable_loser_tree {
             self.create_processor::<LoserTreeSort<R>>()
@@ -118,13 +106,15 @@ impl RowsTypeVisitor for MultiSortMergeBuilder<'_> {
     }
 }
 
-impl MultiSortMergeBuilder<'_> {
+impl MultiSortMergeBuilder {
     fn create_processor<A>(&self) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
+        let remove_order_col = self.remove_order_col && !self.key_desc.uses_source_sort_col();
+        let sort_row_offset = self.key_desc.sort_row_offset();
         let streams = self
             .inputs
             .iter()
-            .map(|i| InputBlockStream::new(i.clone(), self.remove_order_col))
+            .map(|i| InputBlockStream::new(i.clone(), remove_order_col, sort_row_offset))
             .collect::<Vec<_>>();
         let merger = Merger::<A, _>::new(streams, self.block_size, self.limit);
 
@@ -140,13 +130,15 @@ impl MultiSortMergeBuilder<'_> {
 pub struct InputBlockStream {
     input: Arc<InputPort>,
     remove_order_col: bool,
+    sort_row_offset: usize,
 }
 
 impl InputBlockStream {
-    pub fn new(input: Arc<InputPort>, remove_order_col: bool) -> Self {
+    pub fn new(input: Arc<InputPort>, remove_order_col: bool, sort_row_offset: usize) -> Self {
         Self {
             input,
             remove_order_col,
+            sort_row_offset,
         }
     }
 }
@@ -155,9 +147,9 @@ impl SortedStream for InputBlockStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.input.has_data() {
             let mut block = self.input.pull_data().unwrap()?;
-            let col = block.get_last_column().clone();
+            let col = block.get_by_offset(self.sort_row_offset).to_column();
             if self.remove_order_col {
-                block.pop_columns(1);
+                block.remove_column(self.sort_row_offset);
             }
             self.input.set_need_data();
             Ok((Some((block, col)), false))

@@ -22,8 +22,6 @@ use std::sync::atomic::AtomicBool;
 use bytesize::ByteSize;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -61,15 +59,14 @@ enum Inner<A: SortAlgorithm, S: SortSpiller> {
     Spill(Vec<DataBlock>, SortSpill<A, S>),
 }
 
-pub struct TransformSort<A: SortAlgorithm, C, S: SortSpiller> {
+pub struct TransformSort<A: SortAlgorithm, S: SortSpiller> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: VecDeque<DataBlock>,
     state: State,
 
-    row_converter: C,
-    sort_desc: Arc<[SortColumnDescription]>,
+    row_converter: <A::Rows as Rows>::Converter,
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
     /// we can generate and output the order column to avoid the extra converting in the next transform.
     remove_order_col: bool,
@@ -88,18 +85,16 @@ pub struct TransformSort<A: SortAlgorithm, C, S: SortSpiller> {
     enable_restore_prefetch: bool,
 }
 
-impl<A, C, S> TransformSort<A, C, S>
+impl<A, S> TransformSort<A, S>
 where
     A: SortAlgorithm,
-    C: RowConverter<A::Rows>,
     S: SortSpiller,
 {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
-        sort_desc: Arc<[SortColumnDescription]>,
+        sort_row_offset: usize,
+        row_converter: <A::Rows as Rows>::Converter,
         max_block_size: usize,
         limit: Option<(usize, bool)>,
         spiller: S,
@@ -108,8 +103,6 @@ where
         enable_restore_prefetch: bool,
     ) -> Result<Self> {
         assert!(max_block_size > 0);
-        let sort_row_offset = schema.fields().len() - 1;
-        let row_converter = C::create(&sort_desc, schema.clone())?;
         let (name, inner, limit) = match limit {
             Some((limit, true)) => (
                 "TransformSortMergeLimit",
@@ -126,11 +119,9 @@ where
             state: State::Collect,
             row_converter,
             output_data: VecDeque::new(),
-            sort_desc,
             remove_order_col: !output_order_col,
             order_col_generated,
             base: Base {
-                schema,
                 spiller,
                 sort_row_offset,
                 limit,
@@ -143,9 +134,7 @@ where
     }
 
     fn generate_order_column(&self, mut block: DataBlock) -> Result<(A::Rows, DataBlock)> {
-        let rows = self
-            .row_converter
-            .convert_data_block(&self.sort_desc, &block)?;
+        let rows = self.row_converter.convert(&block)?;
         let order_col = rows.to_column();
         block.add_column(order_col);
         Ok((rows, block))
@@ -204,7 +193,9 @@ where
         if self.order_col_generated {
             return match &mut self.inner {
                 Inner::Limit(limit_sort) => {
-                    let rows = A::Rows::from_column(block.get_last_column())?;
+                    let rows = A::Rows::from_column(
+                        &block.get_by_offset(self.base.sort_row_offset).to_column(),
+                    )?;
                     limit_sort.add_block(block, rows)
                 }
                 Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
@@ -298,11 +289,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<A, C, S> Processor for TransformSort<A, C, S>
+impl<A, S> Processor for TransformSort<A, S>
 where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
-    C: RowConverter<A::Rows> + Send + 'static,
+    <A::Rows as Rows>::Converter: Send + 'static,
     S: SortSpiller,
 {
     fn name(&self) -> String {

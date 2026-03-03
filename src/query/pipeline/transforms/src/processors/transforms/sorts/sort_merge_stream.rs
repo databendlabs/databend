@@ -31,6 +31,7 @@ use super::SortBound;
 use super::SortBoundNext;
 use super::core::Merger;
 use super::core::Rows;
+use super::core::SortKeyDescription;
 use super::core::SortedStream;
 use super::core::algorithm::SortAlgorithm;
 
@@ -56,19 +57,22 @@ where A: SortAlgorithm
     pub fn new(
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
+        key_desc: SortKeyDescription,
         block_size: usize,
     ) -> Result<Self> {
         assert!(inputs.len() != 1);
+        let schema = key_desc.schema();
+        let remove_order_col = !key_desc.uses_source_sort_col();
+        let sort_row_offset = key_desc.sort_row_offset();
 
         let streams = inputs
             .iter()
             .map(|input| BoundedInputStream {
                 data: None,
                 input: input.clone(),
-                remove_order_col: true,
+                remove_order_col,
                 bound: None,
-                sort_row_offset: schema.fields().len(),
+                sort_row_offset,
                 _r: PhantomData,
             })
             .collect();
@@ -212,7 +216,7 @@ impl<R: Rows> SortedStream for BoundedInputStream<R> {
                 if block.is_empty() {
                     return Ok((None, true));
                 }
-                let col = sort_column(&block, self.sort_row_offset).clone();
+                let col = sort_column(&block, self.sort_row_offset);
                 if self.remove_order_col {
                     block.remove_column(self.sort_row_offset);
                 }
@@ -222,8 +226,8 @@ impl<R: Rows> SortedStream for BoundedInputStream<R> {
     }
 }
 
-fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
-    data.get_by_offset(sort_row_offset).as_column().unwrap()
+fn sort_column(data: &DataBlock, sort_row_offset: usize) -> Column {
+    data.get_by_offset(sort_row_offset).to_column()
 }
 
 impl<R: Rows> BoundedInputStream<R> {
@@ -288,12 +292,19 @@ impl<R: Rows> BoundedInputStream<R> {
 mod tests {
     use std::sync::Arc;
 
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
+    use databend_common_expression::SortColumnDescription;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_pipeline::core::port::connect;
 
     use super::*;
     use crate::sorts::core::SimpleRowsAsc;
+    use crate::sorts::core::VariableRows;
+    use crate::sorts::core::algorithm::HeapSort;
 
     fn create_block(empty: bool, index: u32, next: u32) -> DataBlock {
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]);
@@ -381,5 +392,74 @@ mod tests {
             assert!(!stream.bound.unwrap().more);
             assert!(!pending);
         }
+    }
+
+    #[test]
+    fn test_bounded_merge_processor_uses_source_sort_col_offset() {
+        let key_desc = SortKeyDescription::new(
+            vec![SortColumnDescription {
+                offset: 1,
+                asc: true,
+                nulls_first: true,
+            }]
+            .into(),
+            DataSchemaRefExt::create(vec![
+                DataField::new("c0", DataType::Number(NumberDataType::Int32)),
+                DataField::new("c1", DataType::Number(NumberDataType::Int32)),
+            ]),
+            true,
+        )
+        .unwrap();
+        assert!(key_desc.uses_source_sort_col());
+
+        let processor = BoundedMultiSortMergeProcessor::<HeapSort<SimpleRowsAsc<Int32Type>>>::new(
+            vec![InputPort::create(), InputPort::create()],
+            OutputPort::create(),
+            key_desc,
+            1024,
+        )
+        .unwrap();
+
+        let streams = processor.inner.err().unwrap();
+        assert!(streams.iter().all(|s| s.sort_row_offset == 1));
+        assert!(streams.iter().all(|s| !s.remove_order_col));
+    }
+
+    #[test]
+    fn test_bounded_merge_processor_uses_appended_order_col_offset() {
+        let key_desc = SortKeyDescription::new(
+            vec![
+                SortColumnDescription {
+                    offset: 0,
+                    asc: true,
+                    nulls_first: true,
+                },
+                SortColumnDescription {
+                    offset: 1,
+                    asc: true,
+                    nulls_first: true,
+                },
+            ]
+            .into(),
+            DataSchemaRefExt::create(vec![
+                DataField::new("c0", DataType::Number(NumberDataType::Int32)),
+                DataField::new("c1", DataType::Number(NumberDataType::Int32)),
+            ]),
+            true,
+        )
+        .unwrap();
+        assert!(!key_desc.uses_source_sort_col());
+
+        let processor = BoundedMultiSortMergeProcessor::<HeapSort<VariableRows>>::new(
+            vec![InputPort::create(), InputPort::create()],
+            OutputPort::create(),
+            key_desc,
+            1024,
+        )
+        .unwrap();
+
+        let streams = processor.inner.err().unwrap();
+        assert!(streams.iter().all(|s| s.sort_row_offset == 2));
+        assert!(streams.iter().all(|s| s.remove_order_col));
     }
 }
