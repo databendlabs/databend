@@ -1460,3 +1460,57 @@ output domain  : Undefined
 output         : 'POLYGON((6 0,6 3,3 3,0 0,6 0))'
 
 
+ast            : ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)'))
+raw expr       : ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)'))
+checked expr   : st_hilbert<Geometry>(CAST<String>("POINT(0.25 0.25)" AS Geometry))
+optimized expr : 134217728_u64
+output type    : UInt64 NULL
+output domain  : {134217728..=134217728}
+output         : 134217728
+
+
+ast            : ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)'))
+raw expr       : ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)'))
+checked expr   : st_hilbert<Geometry>(CAST<String>("POINT(0.50 0.50)" AS Geometry))
+optimized expr : 2684354560_u64
+output type    : UInt64 NULL
+output domain  : {2684354560..=2684354560}
+output         : 2684354560
+
+
+ast            : ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'))
+raw expr       : ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'))
+checked expr   : st_hilbert<Geometry>(CAST<String>("POINT(0.75 0.75)" AS Geometry))
+optimized expr : 2181038080_u64
+output type    : UInt64 NULL
+output domain  : {2181038080..=2181038080}
+output         : 2181038080
+
+
+ast            : ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)'), [0, 0, 1, 1])
+raw expr       : ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)'), array(0, 0, 1, 1))
+checked expr   : st_hilbert<Geometry, Array(Float64)>(CAST<String>("POINT(0.25 0.25)" AS Geometry), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 0_u8, 1_u8, 1_u8) AS Array(Float64)))
+optimized expr : 178956970_u64
+output type    : UInt64 NULL
+output domain  : {178956970..=178956970}
+output         : 178956970
+
+
+ast            : ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)'), [0, 0, 1, 1])
+raw expr       : ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)'), array(0, 0, 1, 1))
+checked expr   : st_hilbert<Geometry, Array(Float64)>(CAST<String>("POINT(0.50 0.50)" AS Geometry), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 0_u8, 1_u8, 1_u8) AS Array(Float64)))
+optimized expr : 715827882_u64
+output type    : UInt64 NULL
+output domain  : {715827882..=715827882}
+output         : 715827882
+
+
+ast            : ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'), [0, 0, 1, 1])
+raw expr       : ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'), array(0, 0, 1, 1))
+checked expr   : st_hilbert<Geometry, Array(Float64)>(CAST<String>("POINT(0.75 0.75)" AS Geometry), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0>(0_u8, 0_u8, 1_u8, 1_u8) AS Array(Float64)))
+optimized expr : 2326440618_u64
+output type    : UInt64 NULL
+output domain  : {2326440618..=2326440618}
+output         : 2326440618
+
+
