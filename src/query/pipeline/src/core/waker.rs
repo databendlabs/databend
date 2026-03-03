@@ -24,8 +24,6 @@ use petgraph::stable_graph::NodeIndex;
 // type WakeCallback = Box<dyn Fn(NodeIndex, usize) -> Result<()> + Send + Sync>;
 
 pub trait WakeCallback: Send + Sync {
-    fn enter_future(&self) -> Result<()>;
-
     fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()>;
 }
 
@@ -38,10 +36,6 @@ impl ProxyWakeCallback {
 }
 
 impl WakeCallback for ProxyWakeCallback {
-    fn enter_future(&self) -> Result<()> {
-        self.0.enter_future()
-    }
-
     fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()> {
         self.0.wake(id, worker_id)
     }
@@ -94,13 +88,6 @@ impl ExecutorWaker {
 }
 
 impl WakeCallback for ExecutorWaker {
-    fn enter_future(&self) -> Result<()> {
-        match self.callback.get() {
-            Some(cb) => cb.enter_future(),
-            None => Err(ErrorCode::Internal("ExecutorWaker is not bound")),
-        }
-    }
-
     fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()> {
         match self.callback.get() {
             Some(cb) => cb.wake(id, worker_id),

@@ -204,15 +204,6 @@ impl QueryPipelineExecutor {
         }
 
         impl WakeCallback for QueryWakeCallback {
-            fn enter_future(&self) -> Result<()> {
-                let executor = self
-                    .executor_weak
-                    .upgrade()
-                    .ok_or_else(|| ErrorCode::Internal("Executor has been dropped"))?;
-                executor.workers_condvar.inc_active_async_worker();
-                Ok(())
-            }
-
             fn wake(&self, id: NodeIndex, worker_id: usize) -> Result<()> {
                 let executor = self
                     .executor_weak

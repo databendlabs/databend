@@ -682,10 +682,6 @@ mod tests {
         struct TestWakeCallback(Arc<AtomicUsize>);
 
         impl WakeCallback for TestWakeCallback {
-            fn enter_future(&self) -> Result<()> {
-                Ok(())
-            }
-
             fn wake(&self, _id: NodeIndex, _worker_id: usize) -> Result<()> {
                 self.0.fetch_add(1, Ordering::SeqCst);
                 Ok(())
