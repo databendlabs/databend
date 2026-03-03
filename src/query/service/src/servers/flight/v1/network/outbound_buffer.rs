@@ -15,6 +15,9 @@
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
@@ -61,8 +64,59 @@ impl Channel {
         self.pending_queue.len()
     }
 
-    fn pop_front(&mut self, _max_batch_bytes: usize) -> Option<FlightData> {
-        self.pending_queue.pop().ok().map(|x| x.into_data())
+    fn pop_front(&mut self, max_batch_bytes: usize) -> Option<FlightData> {
+        let mut items = Vec::new();
+        let mut total = 0usize;
+
+        while let Ok(next) = self.pending_queue.pop() {
+            let data = next.into_data();
+            total += data.data_body.len();
+            items.push(data);
+            if total >= max_batch_bytes {
+                break;
+            }
+        }
+
+        match items.len() {
+            0 => None,
+            1 => Some(items.into_iter().next().unwrap()),
+            _ => {
+                let tid_bytes: [u8; 2] = [items[0].app_metadata[0], items[0].app_metadata[1]];
+                Some(merge_flight_data_batch(tid_bytes, items))
+            }
+        }
+    }
+}
+
+const BATCH_MARKER: u8 = 0x02;
+
+fn merge_flight_data_batch(tid_bytes: [u8; 2], items: Vec<FlightData>) -> FlightData {
+    let mut app_metadata = BytesMut::with_capacity(5);
+    app_metadata.put_slice(&tid_bytes);
+    app_metadata.put_u16_le(items.len() as u16);
+    app_metadata.put_u8(BATCH_MARKER);
+
+    let estimated: usize = items
+        .iter()
+        .map(|i| 12 + (i.app_metadata.len() - 2) + i.data_header.len() + i.data_body.len())
+        .sum();
+
+    let mut body = BytesMut::with_capacity(estimated);
+    for item in items {
+        let inner_meta = &item.app_metadata[2..]; // strip tid
+        body.put_u32_le(inner_meta.len() as u32);
+        body.put_slice(inner_meta);
+        body.put_u32_le(item.data_header.len() as u32);
+        body.put_slice(&item.data_header);
+        body.put_u32_le(item.data_body.len() as u32);
+        body.put_slice(&item.data_body);
+    }
+
+    FlightData {
+        flight_descriptor: None,
+        app_metadata: app_metadata.freeze(),
+        data_header: Bytes::new(),
+        data_body: body.freeze(),
     }
 }
 
@@ -276,6 +330,91 @@ mod tests {
             data_body: bytes::Bytes::from(vec![0u8; len]),
             ..Default::default()
         }
+    }
+
+    fn make_flight_data_with_tid(tid: u16, meta: &[u8], body_len: usize) -> FlightData {
+        let mut app_metadata = BytesMut::with_capacity(2 + meta.len());
+        app_metadata.put_u16_le(tid);
+        app_metadata.put_slice(meta);
+        FlightData {
+            flight_descriptor: None,
+            app_metadata: app_metadata.freeze(),
+            data_header: Bytes::new(),
+            data_body: Bytes::from(vec![0xABu8; body_len]),
+        }
+    }
+
+    #[test]
+    fn test_pop_front_single_item_no_batch() {
+        let mut channel = Channel::new();
+        let data = make_flight_data_with_tid(3, &[0x01], 100);
+        let permit = Arc::new(Semaphore::new(1));
+        let permit = permit.try_acquire_many_owned(1).unwrap();
+        let _ = channel
+            .pending_queue
+            .push(RemoteQueueItem::new(data, permit));
+
+        let result = channel.pop_front(256 * 1024).unwrap();
+        // Single item: no batch wrapping, original data returned as-is
+        assert_eq!(result.data_body.len(), 100);
+        assert_eq!(result.app_metadata.len(), 3); // 2 tid + 1 marker
+        assert_eq!(result.app_metadata[2], 0x01);
+    }
+
+    #[test]
+    fn test_pop_front_multi_item_batch() {
+        let mut channel = Channel::new();
+        let permit = Arc::new(Semaphore::new(10));
+
+        for i in 0..3 {
+            let data = make_flight_data_with_tid(5, &[i, 0x01], 50);
+            let p = permit.clone().try_acquire_many_owned(1).unwrap();
+            let _ = channel.pending_queue.push(RemoteQueueItem::new(data, p));
+        }
+
+        let result = channel.pop_front(256 * 1024).unwrap();
+        // Should be a batch
+        assert_eq!(result.app_metadata.len(), 5);
+        assert_eq!(result.app_metadata[4], BATCH_MARKER);
+        // tid preserved
+        assert_eq!(
+            u16::from_le_bytes([result.app_metadata[0], result.app_metadata[1]]),
+            5
+        );
+        // num_items = 3
+        assert_eq!(
+            u16::from_le_bytes([result.app_metadata[2], result.app_metadata[3]]),
+            3
+        );
+    }
+
+    #[test]
+    fn test_pop_front_budget_control() {
+        let mut channel = Channel::new();
+        let permit = Arc::new(Semaphore::new(100));
+
+        // Push 10 items of 100 bytes each
+        for _ in 0..10 {
+            let data = make_flight_data_with_tid(0, &[0x01], 100);
+            let p = permit.clone().try_acquire_many_owned(1).unwrap();
+            let _ = channel.pending_queue.push(RemoteQueueItem::new(data, p));
+        }
+
+        // Budget of 250 bytes: should pop 3 items (100+100+100 >= 250)
+        let result = channel.pop_front(250).unwrap();
+        assert_eq!(result.app_metadata[4], BATCH_MARKER);
+        assert_eq!(
+            u16::from_le_bytes([result.app_metadata[2], result.app_metadata[3]]),
+            3
+        );
+        // 7 items remain
+        assert_eq!(channel.remaining(), 7);
+    }
+
+    #[test]
+    fn test_pop_front_empty_queue() {
+        let mut channel = Channel::new();
+        assert!(channel.pop_front(256 * 1024).is_none());
     }
 
     #[tokio::test(flavor = "multi_thread")]

@@ -22,6 +22,9 @@ use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_schema::Schema as ArrowSchema;
 use async_channel::Receiver;
 use async_channel::Sender;
+use bytes::Buf;
+use bytes::BufMut;
+use bytes::BytesMut;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -118,6 +121,10 @@ impl NetworkInboundSender {
     /// Returns `Err(())` only when ALL receivers are closed (network should disconnect).
     /// If only the target tid's receiver is closed, discards the data and returns `Ok(())`.
     pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
+        if is_batch(&data) {
+            return self.add_batch_data(data).await;
+        }
+
         let tid = extract_tid(&data);
 
         match self.sub_queues[tid].add_data(data).await {
@@ -127,6 +134,22 @@ impl NetworkInboundSender {
                 false => Ok(()),
             },
         }
+    }
+
+    async fn add_batch_data(&self, data: FlightData) -> Result<(), ()> {
+        let items = split_batch_flight_data(data);
+        for item in items {
+            let tid = extract_tid(&item);
+            match self.sub_queues[tid].add_data(item).await {
+                Ok(()) => {}
+                Err(()) => {
+                    if self.all_receivers_closed() {
+                        return Err(());
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Check if all channels are closed by receivers.
@@ -225,6 +248,48 @@ pub fn strip_tid(mut data: FlightData) -> FlightData {
     data
 }
 
+/// Detect a batch FlightData by checking for the BATCH_MARKER (0x02) as the last byte.
+fn is_batch(data: &FlightData) -> bool {
+    const BATCH_MARKER: u8 = 0x02;
+    data.app_metadata.len() >= 5 && data.app_metadata[data.app_metadata.len() - 1] == BATCH_MARKER
+}
+
+/// Split a batch FlightData back into individual FlightData items.
+/// Uses zero-copy `Bytes::split_to()` for the large data_header and data_body fields.
+fn split_batch_flight_data(data: FlightData) -> Vec<FlightData> {
+    let meta = &data.app_metadata;
+    let tid_bytes: [u8; 2] = [meta[0], meta[1]];
+    let num_items = u16::from_le_bytes([meta[2], meta[3]]) as usize;
+
+    let mut buf = data.data_body; // Bytes implements Buf
+    let mut items = Vec::with_capacity(num_items);
+
+    for _ in 0..num_items {
+        let meta_len = buf.get_u32_le() as usize;
+        let inner_meta = buf.split_to(meta_len);
+
+        let header_len = buf.get_u32_le() as usize;
+        let data_header = buf.split_to(header_len);
+
+        let body_len = buf.get_u32_le() as usize;
+        let data_body = buf.split_to(body_len);
+
+        // Only app_metadata needs a small copy to prepend tid
+        let mut app_metadata = BytesMut::with_capacity(2 + meta_len);
+        app_metadata.put_slice(&tid_bytes);
+        app_metadata.extend_from_slice(&inner_meta);
+
+        items.push(FlightData {
+            flight_descriptor: None,
+            app_metadata: app_metadata.freeze(),
+            data_header,
+            data_body,
+        });
+    }
+
+    items
+}
+
 /// Deserialize a FlightData (after tid stripping) back into a DataBlock.
 ///
 /// Format of `app_metadata`:
@@ -296,4 +361,121 @@ pub(crate) fn deserialize_flight_data(
     }
 
     block.add_meta(block_meta)
+}
+
+#[cfg(test)]
+mod tests {
+    use arrow_flight::FlightData;
+    use bytes::BufMut;
+    use bytes::Bytes;
+    use bytes::BytesMut;
+
+    use super::*;
+
+    const BATCH_MARKER: u8 = 0x02;
+
+    /// Build a FlightData with tid prefix in app_metadata.
+    fn make_item(tid: u16, inner_meta: &[u8], header: &[u8], body: &[u8]) -> FlightData {
+        let mut app_metadata = BytesMut::with_capacity(2 + inner_meta.len());
+        app_metadata.put_u16_le(tid);
+        app_metadata.put_slice(inner_meta);
+        FlightData {
+            flight_descriptor: None,
+            app_metadata: app_metadata.freeze(),
+            data_header: Bytes::copy_from_slice(header),
+            data_body: Bytes::copy_from_slice(body),
+        }
+    }
+
+    /// Build a batch FlightData by hand (mirrors merge_flight_data_batch logic).
+    fn build_batch(tid: u16, items: &[FlightData]) -> FlightData {
+        let mut app_metadata = BytesMut::with_capacity(5);
+        app_metadata.put_u16_le(tid);
+        app_metadata.put_u16_le(items.len() as u16);
+        app_metadata.put_u8(BATCH_MARKER);
+
+        let mut body = BytesMut::new();
+        for item in items {
+            let inner_meta = &item.app_metadata[2..];
+            body.put_u32_le(inner_meta.len() as u32);
+            body.put_slice(inner_meta);
+            body.put_u32_le(item.data_header.len() as u32);
+            body.put_slice(&item.data_header);
+            body.put_u32_le(item.data_body.len() as u32);
+            body.put_slice(&item.data_body);
+        }
+
+        FlightData {
+            flight_descriptor: None,
+            app_metadata: app_metadata.freeze(),
+            data_header: Bytes::new(),
+            data_body: body.freeze(),
+        }
+    }
+
+    #[test]
+    fn test_is_batch_detection() {
+        // A proper batch: 5 bytes with BATCH_MARKER at end
+        let batch = build_batch(0, &[make_item(0, &[0x01], &[], &[1, 2, 3])]);
+        assert!(is_batch(&batch));
+
+        // A normal single item (3 bytes, marker 0x01)
+        let single = make_item(0, &[0x01], &[], &[1, 2, 3]);
+        assert!(!is_batch(&single));
+
+        // Too short to be a batch
+        let short = FlightData {
+            app_metadata: Bytes::from_static(&[0x00, 0x00, 0x02]),
+            ..Default::default()
+        };
+        assert!(!is_batch(&short));
+    }
+
+    #[test]
+    fn test_split_batch_roundtrip() {
+        let items = vec![
+            make_item(7, &[0xAA, 0x01], &[10, 20], &[1, 2, 3, 4, 5]),
+            make_item(7, &[0xBB, 0x01], &[], &[6, 7, 8]),
+            make_item(7, &[0xCC, 0x01], &[30], &[]),
+        ];
+
+        let batch = build_batch(7, &items);
+        assert!(is_batch(&batch));
+
+        let split = split_batch_flight_data(batch);
+        assert_eq!(split.len(), 3);
+
+        for (original, restored) in items.iter().zip(split.iter()) {
+            assert_eq!(restored.app_metadata, original.app_metadata);
+            assert_eq!(restored.data_header, original.data_header);
+            assert_eq!(restored.data_body, original.data_body);
+        }
+    }
+
+    #[test]
+    fn test_split_batch_single_item() {
+        let items = vec![make_item(0, &[0x01], &[1, 2], &[3, 4, 5])];
+        let batch = build_batch(0, &items);
+        let split = split_batch_flight_data(batch);
+        assert_eq!(split.len(), 1);
+        assert_eq!(split[0].app_metadata, items[0].app_metadata);
+        assert_eq!(split[0].data_header, items[0].data_header);
+        assert_eq!(split[0].data_body, items[0].data_body);
+    }
+
+    #[test]
+    fn test_split_preserves_tid() {
+        let tid: u16 = 42;
+        let items = vec![
+            make_item(tid, &[0x01], &[], &[1]),
+            make_item(tid, &[0x02], &[], &[2]),
+        ];
+        let batch = build_batch(tid, &items);
+        let split = split_batch_flight_data(batch);
+
+        for item in &split {
+            let restored_tid = u16::from_le_bytes([item.app_metadata[0], item.app_metadata[1]]);
+            assert_eq!(restored_tid, tid);
+        }
+    }
 }
