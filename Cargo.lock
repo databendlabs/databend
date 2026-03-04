@@ -3146,7 +3146,7 @@ dependencies = [
 [[package]]
 name = "csv-core"
 version = "0.1.13"
-source = "git+https://github.com/KKould/rust-csv.git?rev=9ce1992#9ce19921a1c7e2fcaed8f74e2d693dc0677408cb"
+source = "git+https://github.com/youngsofun/rust-csv.git?rev=44a0b3c#44a0b3c174bd6feb373676580993d1ac06cfcbb6"
 dependencies = [
  "memchr",
 ]
