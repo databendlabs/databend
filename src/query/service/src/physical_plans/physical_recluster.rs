@@ -225,10 +225,10 @@ impl IPhysicalPlan for Recluster {
                     None,
                     settings.get_enable_fixed_rows_sort()?,
                 )?
-                .with_block_size_hit(sort_block_size)
-                .remove_order_col_at_last();
+                .with_block_size_hit(sort_block_size);
                 // Todo(zhyass): Recluster will no longer perform sort in the near future.
-                sort_pipeline_builder.build_full_sort_pipeline(&mut builder.main_pipeline)?;
+                sort_pipeline_builder
+                    .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
 
                 // Compact after merge sort.
                 let max_threads = settings.get_max_threads()? as usize;

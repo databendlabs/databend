@@ -15,7 +15,6 @@
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::local_block_meta_serde;
 use enum_as_inner::EnumAsInner;
 pub use sort_broadcast::*;
@@ -49,10 +48,10 @@ mod sort_partial;
 mod sort_restore;
 mod sort_route;
 mod sort_spill;
+mod sort_spill_regroup;
 
 #[derive(Clone)]
 pub struct Base<S: Send + Clone> {
-    pub schema: DataSchemaRef,
     pub spiller: S,
     pub sort_row_offset: usize,
     pub limit: Option<usize>,

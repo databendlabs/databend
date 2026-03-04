@@ -21,11 +21,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataBlock;
 use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::Scalar;
-use databend_common_expression::SortColumnDescription;
-use databend_common_expression::SortField;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
@@ -48,11 +46,13 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 
 use super::RowConverter;
+use super::RowSortField;
 use super::Rows;
+use super::SortKeyDescription;
 use super::fixed_encode::fixed_encode;
 use super::fixed_encode::fixed_encode_const;
 
-pub fn choose_encode_method(fields: &[SortField]) -> Option<usize> {
+pub(super) fn choose_encode_method(fields: &[RowSortField]) -> Option<usize> {
     let mut total_len = 0;
     for field in fields {
         match field.data_type.remove_nullable() {
@@ -88,6 +88,7 @@ impl<const N: usize> Rows for FixedRows<N> {
     where Self: 'a;
 
     type Type = OpaqueType<N>;
+    type Converter = FixedRowConverter<N>;
 
     fn len(&self) -> usize {
         self.0.len()
@@ -122,19 +123,15 @@ impl<const N: usize> Rows for FixedRows<N> {
 }
 
 impl<const N: usize> RowConverter<FixedRows<N>> for FixedRowConverter<N> {
-    fn create(sort_desc: &[SortColumnDescription], output_schema: DataSchemaRef) -> Result<Self> {
-        let sort_fields = sort_desc
-            .iter()
-            .map(|d| {
-                let data_type = output_schema.field(d.offset).data_type();
-                SortField::new_with_options(data_type.clone(), d.asc, d.nulls_first)
-            })
-            .collect::<Vec<_>>();
-        FixedRowConverter::new(sort_fields)
+    fn new(desc: SortKeyDescription) -> Result<Self> {
+        let sort_fields = desc.into_checked_sort_fields(Self::support_data_type)?;
+
+        Ok(Self { sort_fields })
     }
 
-    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<FixedRows<N>> {
-        Ok(self.convert_columns(columns, num_rows))
+    fn convert(&self, data_block: &DataBlock) -> Result<FixedRows<N>> {
+        let entries = SortKeyDescription::collect_sort_entries(&self.sort_fields, data_block);
+        Ok(self.convert_entries(&entries, data_block.num_rows()))
     }
 
     fn support_data_type(d: &DataType) -> bool {
@@ -154,35 +151,22 @@ impl<const N: usize> RowConverter<FixedRows<N>> for FixedRowConverter<N> {
 
 #[derive(Debug)]
 pub struct FixedRowConverter<const N: usize> {
-    fields: Box<[SortField]>,
+    sort_fields: Box<[RowSortField]>,
 }
 
 impl<const N: usize> FixedRowConverter<N> {
-    fn new(fields: Vec<SortField>) -> Result<Self> {
-        if !fields.iter().all(|f| Self::support_data_type(&f.data_type)) {
-            return Err(ErrorCode::Unimplemented(format!(
-                "Row format is not yet support for {:?}",
-                fields
-            )));
-        }
-
-        Ok(Self {
-            fields: fields.into(),
-        })
-    }
-
     /// Convert columns into fixed-size row format.
-    fn convert_columns(&self, entries: &[BlockEntry], num_rows: usize) -> FixedRows<N> {
-        debug_assert_eq!(entries.len(), self.fields.len());
+    fn convert_entries(&self, entries: &[BlockEntry], num_rows: usize) -> FixedRows<N> {
+        debug_assert_eq!(entries.len(), self.sort_fields.len());
         debug_assert!(
             entries
                 .iter()
-                .zip(self.fields.iter())
+                .zip(self.sort_fields.iter())
                 .all(|(entry, f)| entry.len() == num_rows && entry.data_type() == f.data_type)
         );
 
         let (mut buffer, mut offsets) = self.new_empty_rows(num_rows);
-        for (entry, field) in entries.iter().zip(self.fields.iter()) {
+        for (entry, field) in entries.iter().zip(self.sort_fields.iter()) {
             match entry {
                 BlockEntry::Const(scalar, data_type, _) => {
                     let mut visitor = EncodeVisitor {
@@ -236,7 +220,7 @@ struct EncodeVisitor<'a, const N: usize> {
     buffer: &'a mut Vec<[u64; N]>,
     offsets: &'a mut Vec<u64>,
     validity: (bool, Option<&'a Bitmap>),
-    field: &'a SortField,
+    field: &'a RowSortField,
 }
 
 fn buffer_to_bytes<const N: usize>(buffer: &mut Vec<[u64; N]>) -> &mut [u8] {
@@ -479,6 +463,12 @@ impl<const N: usize> ValueVisitor for EncodeVisitor<'_, N> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRef;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::SortColumnDescription;
     use databend_common_expression::SortField;
     use proptest::prelude::*;
     use proptest::strategy::Strategy;
@@ -503,8 +493,15 @@ mod tests {
 
             let comparator = create_arrow_comparator(&entries, &sort_options);
             let fields = create_sort_fields(&entries, &sort_options);
+            let row_fields = fields
+                .iter()
+                .enumerate()
+                .map(|(offset, f)| {
+                    RowSortField::new(offset, f.data_type.clone(), f.asc, f.nulls_first)
+                })
+                .collect::<Vec<_>>();
 
-            let length = choose_encode_method(&fields).unwrap();
+            let length = choose_encode_method(&row_fields).unwrap();
             match length.div_ceil(8) {
                 1 => test_fixed_converter::<1>(
                     &entries,
@@ -586,6 +583,28 @@ mod tests {
             })
     }
 
+    fn build_schema(fields: &[SortField]) -> DataSchemaRef {
+        DataSchemaRefExt::create(
+            fields
+                .iter()
+                .map(|f| DataField::new("order_col", f.data_type.clone()))
+                .collect(),
+        )
+    }
+
+    fn build_sort_desc(fields: &[SortField]) -> Arc<[SortColumnDescription]> {
+        fields
+            .iter()
+            .enumerate()
+            .map(|(offset, field)| SortColumnDescription {
+                offset,
+                asc: field.asc,
+                nulls_first: field.nulls_first,
+            })
+            .collect::<Vec<_>>()
+            .into()
+    }
+
     fn test_fixed_converter<const N: usize>(
         entries: &[BlockEntry],
         fields: &[SortField],
@@ -593,8 +612,11 @@ mod tests {
         comparator: &arrow_ord::sort::LexicographicalComparator,
         sort_options: &[(bool, bool)],
     ) {
-        let converter = FixedRowConverter::<N>::new(fields.to_vec()).unwrap();
-        let rows = converter.convert_columns(entries, num_rows);
+        let converter = FixedRowConverter::<N>::new(
+            SortKeyDescription::new(build_sort_desc(fields), build_schema(fields), true).unwrap(),
+        )
+        .unwrap();
+        let rows = converter.convert_entries(entries, num_rows);
 
         for i in 0..num_rows {
             for j in 0..num_rows {

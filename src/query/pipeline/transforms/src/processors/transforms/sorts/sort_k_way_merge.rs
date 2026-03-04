@@ -24,7 +24,6 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -38,9 +37,9 @@ use super::InputBlockStream;
 use super::SortTaskMeta;
 use super::core::KWaySortPartitioner;
 use super::core::Merger;
-use super::core::RowConverter;
 use super::core::Rows;
 use super::core::RowsTypeVisitor;
+use super::core::SortKeyDescription;
 use super::core::SortedStream;
 use super::core::algorithm::HeapSort;
 use super::core::algorithm::LoserTreeSort;
@@ -49,11 +48,10 @@ use super::core::select_row_type;
 
 pub fn add_k_way_merge_sort(
     pipeline: &mut Pipeline,
-    schema: DataSchemaRef,
+    key_desc: SortKeyDescription,
     worker: usize,
     block_size: usize,
     limit: Option<usize>,
-    sort_desc: &[SortColumnDescription],
     remove_order_col: bool,
     enable_loser_tree: bool,
     enable_fixed_rows: bool,
@@ -67,14 +65,13 @@ pub fn add_k_way_merge_sort(
         1 => Ok(()),
         stream_size => {
             let mut builder = Builder {
-                schema,
+                key_desc,
                 stream_size,
                 worker,
                 block_size,
                 limit,
                 remove_order_col,
                 enable_loser_tree,
-                sort_desc,
                 pipeline,
             };
             select_row_type(&mut builder, enable_fixed_rows)
@@ -83,32 +80,27 @@ pub fn add_k_way_merge_sort(
 }
 
 struct Builder<'a> {
-    schema: DataSchemaRef,
+    key_desc: SortKeyDescription,
     stream_size: usize,
     worker: usize,
     block_size: usize,
     limit: Option<usize>,
     remove_order_col: bool,
     enable_loser_tree: bool,
-    sort_desc: &'a [SortColumnDescription],
     pipeline: &'a mut Pipeline,
 }
 
 impl RowsTypeVisitor for Builder<'_> {
     type Result = Result<()>;
 
-    fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+    fn sort_key_desc(&self) -> SortKeyDescription {
+        self.key_desc.clone()
     }
 
-    fn sort_desc(&self) -> &[SortColumnDescription] {
-        self.sort_desc
-    }
-
-    fn visit_type<R, C>(&mut self) -> Self::Result
+    fn visit_type<R>(&mut self) -> Self::Result
     where
         R: Rows + 'static,
-        C: RowConverter<R> + Send + 'static,
+        R::Converter: Send + 'static,
     {
         if self.enable_loser_tree {
             self.build::<LoserTreeSort<R>>()
@@ -124,8 +116,11 @@ impl Builder<'_> {
         A: SortAlgorithm + Send + 'static,
         A::Rows: 'static,
     {
+        let remove_order_col = self.remove_order_col && !self.key_desc.uses_source_sort_col();
+        let sort_row_offset = self.key_desc.sort_row_offset();
+
         self.pipeline
-            .add_pipe(self.create_partitioner::<A>(self.stream_size));
+            .add_pipe(self.create_partitioner::<A>(self.stream_size, sort_row_offset));
 
         self.pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(Box::new(
@@ -134,7 +129,8 @@ impl Builder<'_> {
                     self.stream_size,
                     output,
                     self.block_size,
-                    self.remove_order_col,
+                    remove_order_col,
+                    sort_row_offset,
                 ),
             )))
         })?;
@@ -143,7 +139,7 @@ impl Builder<'_> {
         Ok(())
     }
 
-    fn create_partitioner<A>(&self, input: usize) -> Pipe
+    fn create_partitioner<A>(&self, input: usize, sort_row_offset: usize) -> Pipe
     where
         A: SortAlgorithm + Send + 'static,
         A::Rows: 'static,
@@ -155,9 +151,10 @@ impl Builder<'_> {
             ProcessorPtr::create(Box::new(KWayMergePartitionerProcessor::<A::Rows>::new(
                 inputs_port.clone(),
                 outputs_port.clone(),
-                self.schema.clone(),
+                self.key_desc.schema_with_order_col(),
                 self.block_size,
                 self.limit,
+                sort_row_offset,
             )));
 
         Pipe::create(inputs_port.len(), self.worker, vec![PipeItem::create(
@@ -204,10 +201,11 @@ impl<R: Rows> KWayMergePartitionerProcessor<R> {
         schema: DataSchemaRef,
         batch_rows: usize,
         limit: Option<usize>,
+        sort_row_offset: usize,
     ) -> Self {
         let streams = inputs
             .iter()
-            .map(|i| InputBlockStream::new(i.clone(), false))
+            .map(|i| InputBlockStream::new(i.clone(), false, sort_row_offset))
             .collect::<Vec<_>>();
 
         Self {
@@ -308,6 +306,7 @@ where A: SortAlgorithm
     stream_size: usize,
     batch_rows: usize,
     remove_order_col: bool,
+    sort_row_offset: usize,
 
     buffer: Vec<DataBlock>,
     task: Option<TaskState>,
@@ -324,6 +323,7 @@ where A: SortAlgorithm
         output: Arc<OutputPort>,
         batch_rows: usize,
         remove_order_col: bool,
+        sort_row_offset: usize,
     ) -> Self {
         Self {
             input,
@@ -332,6 +332,7 @@ where A: SortAlgorithm
             stream_size,
             batch_rows,
             remove_order_col,
+            sort_row_offset,
             buffer: Vec::new(),
             task: None,
             _a: Default::default(),
@@ -378,7 +379,7 @@ where A: SortAlgorithm
             }
             None if incoming.total == rows => {
                 if self.remove_order_col {
-                    block.pop_columns(1);
+                    block.remove_column(self.sort_row_offset);
                 }
 
                 self.output_data.push_back(block);
@@ -403,9 +404,9 @@ where A: SortAlgorithm
         for mut block in self.buffer.drain(..) {
             let meta = SortTaskMeta::downcast_from(block.take_meta().unwrap()).unwrap();
 
-            let sort_col = block.get_last_column().clone();
+            let sort_col = block.get_by_offset(self.sort_row_offset).to_column();
             if self.remove_order_col {
-                block.pop_columns(1);
+                block.remove_column(self.sort_row_offset);
             }
 
             streams[meta.input].push_back((block, sort_col));

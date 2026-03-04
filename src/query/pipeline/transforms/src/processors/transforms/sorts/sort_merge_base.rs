@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-use std::sync::Arc;
-
 use bytesize::ByteSize;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 
-use super::core::RowConverter;
 use super::core::Rows;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -32,6 +26,7 @@ pub struct SortSpillParams {
     pub num_merge: usize,
 
     pub prefetch: bool,
+    pub stream_regroup: bool,
 }
 
 impl SortSpillParams {
@@ -45,6 +40,7 @@ impl SortSpillParams {
         spill_unit_size: ByteSize,
         max_block_rows: usize,
         prefetch: bool,
+        stream_regroup: bool,
     ) -> Self {
         // We use the first memory calculation to estimate the batch size and the number of merge.
         let block = usize::max(
@@ -61,6 +57,7 @@ impl SortSpillParams {
             batch_rows,
             num_merge,
             prefetch,
+            stream_regroup,
         }
     }
 }
@@ -88,82 +85,4 @@ pub trait MergeSort<R: Rows> {
     fn on_finish(&mut self, all_in_one_block: bool) -> Result<Vec<DataBlock>>;
 
     fn interrupt(&self) {}
-}
-
-/// The base struct for merging sorted blocks from a single thread.
-pub struct TransformSortMergeBase<M, R, Converter> {
-    inner: M,
-
-    row_converter: Converter,
-    sort_desc: Arc<[SortColumnDescription]>,
-    /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
-    /// we can generate and output the order column to avoid the extra converting in the next transform.
-    output_order_col: bool,
-    /// If this transform is after an Exchange transform,
-    /// it means it will compact the data from cluster nodes.
-    /// And the order column is already generated in each cluster node,
-    /// so we don't need to generate the order column again.
-    order_col_generated: bool,
-
-    _r: PhantomData<R>,
-}
-
-impl<M, R, C> TransformSortMergeBase<M, R, C>
-where
-    M: MergeSort<R>,
-    R: Rows,
-    C: RowConverter<R>,
-{
-    pub fn try_create(
-        schema: DataSchemaRef,
-        sort_desc: Arc<[SortColumnDescription]>,
-        order_col_generated: bool,
-        output_order_col: bool,
-        inner: M,
-    ) -> Result<Self> {
-        let row_converter = C::create(&sort_desc, schema)?;
-
-        Ok(Self {
-            inner,
-            row_converter,
-            sort_desc,
-            output_order_col,
-            order_col_generated,
-            _r: PhantomData,
-        })
-    }
-
-    pub fn transform(&mut self, mut block: DataBlock) -> Result<()> {
-        let rows = if self.order_col_generated {
-            let rows = R::from_column(block.get_last_column())?;
-            if !self.output_order_col {
-                // The next processor could be a sort spill processor which need order column.
-                // And the order column will be removed in that processor.
-                block.pop_columns(1);
-            }
-            rows
-        } else {
-            let order_by_cols = self
-                .sort_desc
-                .iter()
-                .map(|d| block.get_by_offset(d.offset).clone())
-                .collect::<Vec<_>>();
-            let rows = self
-                .row_converter
-                .convert(&order_by_cols, block.num_rows())?;
-            if self.output_order_col {
-                let order_col = rows.to_column();
-                block.add_column(order_col);
-            }
-            rows
-        };
-
-        self.inner.add_block(block, rows)?;
-
-        Ok(())
-    }
-
-    pub fn on_finish(&mut self) -> Result<Vec<DataBlock>> {
-        self.inner.on_finish(false)
-    }
 }

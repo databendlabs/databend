@@ -28,6 +28,7 @@ use databend_common_base::runtime::spawn;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -45,6 +46,8 @@ use super::core::Merger;
 use super::core::Rows;
 use super::core::SortedStream;
 use super::core::algorithm::SortAlgorithm;
+use super::sort_spill_regroup::IntervalGroupingPayload;
+use super::sort_spill_regroup::regroup_min_interval_groups;
 use crate::MemorySettings;
 use crate::traits::Location;
 use crate::traits::SortSpiller;
@@ -166,6 +169,12 @@ where
 
         while sort.current.is_empty() {
             sort.choice_streams_by_bound();
+        }
+
+        if sort.params.stream_regroup && sort.current.len() >= 2 {
+            let before = sort.current.len();
+            BoundBlockStream::compact_streams_by_domain(&mut sort.current);
+            log::debug!(before, current_len = sort.current.len(); "compact streams by domain");
         }
 
         let num_merge = sort.prepare_merge(memory_settings).await?;
@@ -450,14 +459,17 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
             return;
         }
 
-        (self.current, self.subsequent) = self
-            .subsequent
-            .drain(..)
-            .map(|mut s| {
-                s.bound = self.cur_bound.clone();
-                s
-            })
-            .partition(|s| s.should_include_first());
+        self.current
+            .extend(self.subsequent.extract_if(.., |stream| {
+                stream.bound = self.cur_bound.clone();
+                stream.should_include_first()
+            }));
+
+        for stream in &mut self.current {
+            if let Some(tail) = stream.split_head_tail_by_bound() {
+                self.subsequent.push(tail);
+            }
+        }
     }
 
     #[fastrace::trace(name = "StepSort::prepare_merge")]
@@ -656,7 +668,7 @@ impl SpillableBlock {
             location: None,
             processed: 0,
             rows: data.num_rows(),
-            domain: get_domain(sort_column(&data, sort_row_offset)),
+            domain: get_domain(data.get_by_offset(sort_row_offset)),
             data: Some(data),
         }
     }
@@ -667,7 +679,7 @@ impl SpillableBlock {
         let left = data.slice(0..pos);
         let right = data.slice(pos..data.num_rows());
 
-        self.domain = get_domain(sort_column(&right, sort_row_offset));
+        self.domain = get_domain(right.get_by_offset(sort_row_offset));
         self.rows = right.num_rows();
         self.data = Some(right);
         if self.location.is_some() {
@@ -702,8 +714,33 @@ impl Debug for SpillableBlock {
     }
 }
 
-fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
-    data.get_by_offset(sort_row_offset).as_column().unwrap()
+fn sort_column(data: &DataBlock, sort_row_offset: usize) -> Column {
+    data.get_by_offset(sort_row_offset).to_column()
+}
+
+struct BlockGroupingPayload<R: Rows> {
+    block: SpillableBlock,
+    domain: R,
+}
+
+impl<R: Rows> IntervalGroupingPayload for BlockGroupingPayload<R> {
+    type Key<'a>
+        = R::Item<'a>
+    where Self: 'a;
+
+    fn start(&self) -> Self::Key<'_> {
+        self.domain.first()
+    }
+
+    fn end(&self) -> Self::Key<'_> {
+        self.domain.last()
+    }
+}
+
+impl<R: Rows> From<BlockGroupingPayload<R>> for SpillableBlock {
+    fn from(value: BlockGroupingPayload<R>) -> Self {
+        value.block
+    }
 }
 
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
@@ -734,7 +771,7 @@ impl<R: Rows, S: SortSpiller> AsyncSortedStream for BoundBlockStream<R, S> {
         if self.should_include_first() {
             self.restore_first().await?;
             let data = self.take_next_block();
-            let col = sort_column(&data, self.sort_row_offset).clone();
+            let col = sort_column(&data, self.sort_row_offset);
             Ok((Some((data, col)), false))
         } else {
             Ok((None, false))
@@ -743,6 +780,71 @@ impl<R: Rows, S: SortSpiller> AsyncSortedStream for BoundBlockStream<R, S> {
 }
 
 impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
+    fn compact_streams_by_domain(streams: &mut Vec<Self>) {
+        if streams.len() < 2 {
+            return;
+        }
+
+        let bound = streams[0].bound.clone();
+        let sort_row_offset = streams[0].sort_row_offset;
+        let spiller = streams[0].spiller.clone();
+
+        debug_assert!(
+            streams.iter().all(|s| s.bound == bound),
+            "compact_streams_by_domain expects same bound for all streams"
+        );
+        debug_assert!(
+            streams.iter().all(|s| s.sort_row_offset == sort_row_offset),
+            "all streams in compact_current_by_domain should have same sort row offset"
+        );
+        debug_assert!(
+            streams.iter().all(|s| s.fetch.is_empty()),
+            "compact path assumes no pending fetch tasks"
+        );
+
+        let mut items = Vec::with_capacity(streams.iter().map(|s| s.blocks.len()).sum());
+        for mut stream in streams.drain(..) {
+            for block in stream.blocks.drain(..) {
+                let domain = block.domain::<R>();
+                items.push(BlockGroupingPayload { block, domain });
+            }
+        }
+
+        streams.extend(regroup_min_interval_groups(items).into_iter().map(|group| {
+            debug_assert!(!group.is_empty());
+            Self {
+                blocks: group.into(),
+                bound: bound.clone(),
+                sort_row_offset,
+                spiller: spiller.clone(),
+                prefetch: 0,
+                fetch: HashMap::new(),
+                _r: Default::default(),
+            }
+        }));
+    }
+
+    fn split_head_tail_by_bound(&mut self) -> Option<Self> {
+        self.fetch.clear();
+
+        let split_index = self.blocks.iter().position(|b| !self.should_include(b))?;
+
+        assert!(
+            split_index != 0,
+            "stream in current should have at least one block included by bound"
+        );
+
+        Some(Self {
+            blocks: self.blocks.split_off(split_index),
+            bound: self.bound.clone(),
+            sort_row_offset: self.sort_row_offset,
+            spiller: self.spiller.clone(),
+            prefetch: self.prefetch,
+            fetch: HashMap::new(),
+            _r: Default::default(),
+        })
+    }
+
     fn should_include_first(&self) -> bool {
         let Some(block) = self.blocks.front() else {
             return false;
@@ -857,10 +959,13 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
         });
         debug_assert_eq!(
             block.domain,
-            get_domain(sort_column(
-                block.data.as_ref().unwrap(),
-                self.sort_row_offset
-            ))
+            get_domain(
+                block
+                    .data
+                    .as_ref()
+                    .unwrap()
+                    .get_by_offset(self.sort_row_offset)
+            )
         );
         Ok(())
     }
@@ -915,7 +1020,7 @@ pub fn block_split_off_position<R: Rows>(
     bound: &Scalar,
     sort_row_offset: usize,
 ) -> Option<usize> {
-    let rows = R::from_column(sort_column(data, sort_row_offset)).unwrap();
+    let rows = R::from_column(&sort_column(data, sort_row_offset)).unwrap();
     debug_assert!(rows.len() > 0);
     let bound = R::scalar_as_item(bound);
     partition_point(&rows, &bound)
@@ -952,7 +1057,7 @@ impl SortedStream for DataBlockStream {
 
 impl DataBlockStream {
     pub(super) fn new(data: DataBlock, sort_row_offset: usize) -> Self {
-        let col = sort_column(&data, sort_row_offset).clone();
+        let col = sort_column(&data, sort_row_offset);
         Self(Some((data, col)))
     }
 }
@@ -972,18 +1077,25 @@ pub fn create_memory_merger<A: SortAlgorithm>(
     Merger::<A, _>::new(streams, batch_rows, limit)
 }
 
-fn get_domain(col: &Column) -> Column {
-    match col.len() {
-        0 => unreachable!(),
-        1 | 2 => col.clone(),
-        n => {
-            let mut bitmap = MutableBitmap::with_capacity(n);
-            bitmap.push(true);
-            bitmap.extend_constant(n - 2, false);
-            bitmap.push(true);
+fn get_domain(entry: &BlockEntry) -> Column {
+    match entry {
+        BlockEntry::Column(col) => match col.len() {
+            0 => unreachable!(),
+            1 | 2 => col.clone(),
+            n => {
+                let mut bitmap = MutableBitmap::with_capacity(n);
+                bitmap.push(true);
+                bitmap.extend_constant(n - 2, false);
+                bitmap.push(true);
 
-            col.filter(&bitmap.freeze())
-        }
+                col.filter(&bitmap.freeze())
+            }
+        },
+        BlockEntry::Const(scalar, data_type, n) => match n {
+            0 => unreachable!(),
+            1 => BlockEntry::new_const_column(data_type.clone(), scalar.clone(), 1).to_column(),
+            _ => BlockEntry::new_const_column(data_type.clone(), scalar.clone(), 2).to_column(),
+        },
     }
 }
 
@@ -1011,6 +1123,7 @@ mod tests {
     use super::*;
     use crate::sorts::core::SimpleRowsAsc;
     use crate::sorts::core::SimpleRowsDesc;
+    use crate::sorts::core::algorithm::HeapSort;
     use crate::sorts::core::convert_rows;
 
     fn test_data() -> (DataSchemaRef, DataBlock) {
@@ -1063,7 +1176,7 @@ mod tests {
         };
 
         let data = stream.take_next_bounded_block();
-        let got = sort_column(&data, stream.sort_row_offset).clone();
+        let got = sort_column(&data, stream.sort_row_offset);
         assert_eq!(want, got);
 
         Ok(())
@@ -1217,7 +1330,7 @@ mod tests {
             }
 
             let data = block.data.unwrap();
-            let col = sort_column(&data, stream.sort_row_offset).clone();
+            let col = sort_column(&data, stream.sort_row_offset);
             result_blocks.push(col);
         }
 
@@ -1450,6 +1563,192 @@ mod tests {
             .await?;
         }
 
+        Ok(())
+    }
+
+    async fn create_int_stream_asc(
+        spiller: MockSpiller,
+        parts: Vec<Vec<i32>>,
+        bound: Option<Scalar>,
+        spill: bool,
+    ) -> Result<BoundBlockStream<SimpleRowsAsc<Int32Type>, MockSpiller>> {
+        let mut blocks = VecDeque::with_capacity(parts.len());
+        for part in parts {
+            let col = Int32Type::from_data(part);
+            let mut data = DataBlock::new_from_columns(vec![col.clone()]);
+            data.add_column(col);
+
+            let mut block = SpillableBlock::new(data, 1);
+            if spill {
+                block.spill(&spiller).await?;
+            }
+            blocks.push_back(block);
+        }
+
+        Ok(BoundBlockStream {
+            blocks,
+            bound,
+            sort_row_offset: 1,
+            spiller,
+            prefetch: 0,
+            fetch: HashMap::new(),
+            _r: Default::default(),
+        })
+    }
+
+    async fn create_int_stream_desc(
+        spiller: MockSpiller,
+        parts: Vec<Vec<i32>>,
+        bound: Option<Scalar>,
+    ) -> Result<BoundBlockStream<SimpleRowsDesc<Int32Type>, MockSpiller>> {
+        let mut blocks = VecDeque::with_capacity(parts.len());
+        for part in parts {
+            let col = Int32Type::from_data(part);
+            let mut data = DataBlock::new_from_columns(vec![col.clone()]);
+            data.add_column(col);
+            blocks.push_back(SpillableBlock::new(data, 1));
+        }
+
+        Ok(BoundBlockStream {
+            blocks,
+            bound,
+            sort_row_offset: 1,
+            spiller,
+            prefetch: 0,
+            fetch: HashMap::new(),
+            _r: Default::default(),
+        })
+    }
+
+    #[tokio::test]
+    async fn test_compact_streams_by_domain() -> Result<()> {
+        let spiller = MockSpiller {
+            map: Arc::new(Mutex::new(HashMap::new())),
+            memory_settings: MemorySettings::builder().build(),
+        };
+
+        let stream_1 = create_int_stream_asc(
+            spiller.clone(),
+            vec![vec![1, 2], vec![3]],
+            Some(Scalar::Number(NumberScalar::Int32(10))),
+            true,
+        )
+        .await?;
+        let stream_2 = create_int_stream_asc(
+            spiller.clone(),
+            vec![vec![4], vec![5, 6]],
+            Some(Scalar::Number(NumberScalar::Int32(10))),
+            true,
+        )
+        .await?;
+        let mut stream_1 = stream_1;
+        let mut stream_2 = stream_2;
+        stream_1.prefetch = 3;
+        stream_2.prefetch = 2;
+
+        let mut streams = vec![stream_2, stream_1];
+        BoundBlockStream::<SimpleRowsAsc<Int32Type>, _>::compact_streams_by_domain(&mut streams);
+        assert_eq!(streams.len(), 1);
+        assert_eq!(streams[0].total_rows(), 6);
+        assert_eq!(streams[0].prefetch, 0);
+        assert!(streams[0].blocks.iter().all(|b| b.data.is_none()));
+
+        let overlap_1 =
+            create_int_stream_asc(spiller.clone(), vec![vec![1, 4]], None, true).await?;
+        let overlap_2 =
+            create_int_stream_asc(spiller.clone(), vec![vec![3, 5]], None, true).await?;
+        let mut streams = vec![overlap_1, overlap_2];
+        BoundBlockStream::<SimpleRowsAsc<Int32Type>, _>::compact_streams_by_domain(&mut streams);
+        assert_eq!(streams.len(), 2);
+        assert!(
+            streams
+                .iter()
+                .all(|s| s.blocks.iter().all(|b| b.data.is_none()))
+        );
+
+        // This layout would produce 3 groups with append-to-last greedy strategy.
+        // Optimal interval grouping should compact it to 2 streams.
+        let min_group_1 =
+            create_int_stream_asc(spiller.clone(), vec![vec![1, 4]], None, true).await?;
+        let min_group_2 =
+            create_int_stream_asc(spiller.clone(), vec![vec![2, 6]], None, true).await?;
+        let min_group_3 =
+            create_int_stream_asc(spiller.clone(), vec![vec![5, 7]], None, true).await?;
+        let mut streams = vec![min_group_1, min_group_2, min_group_3];
+        BoundBlockStream::<SimpleRowsAsc<Int32Type>, _>::compact_streams_by_domain(&mut streams);
+        assert_eq!(streams.len(), 2);
+        assert!(streams.iter().any(|s| s.total_rows() == 4));
+        assert!(
+            streams
+                .iter()
+                .all(|s| s.blocks.iter().all(|b| b.data.is_none()))
+        );
+
+        let mut streams = vec![
+            create_int_stream_desc(spiller.clone(), vec![vec![9, 8]], None).await?,
+            create_int_stream_desc(spiller.clone(), vec![vec![7, 6]], None).await?,
+        ];
+        BoundBlockStream::<SimpleRowsDesc<Int32Type>, _>::compact_streams_by_domain(&mut streams);
+        assert_eq!(streams.len(), 1);
+        assert_eq!(streams[0].total_rows(), 4);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_choice_streams_by_bound_split_tail_to_subsequent() -> Result<()> {
+        let spiller = MockSpiller {
+            map: Arc::new(Mutex::new(HashMap::new())),
+            memory_settings: MemorySettings::builder().build(),
+        };
+
+        let stream_1 =
+            create_int_stream_asc(spiller.clone(), vec![vec![1, 2], vec![7, 8]], None, true)
+                .await?;
+        let stream_2 = create_int_stream_asc(spiller.clone(), vec![vec![3, 4]], None, true).await?;
+        let existed_subsequent =
+            create_int_stream_asc(spiller.clone(), vec![vec![10, 11]], None, true).await?;
+
+        let mut sort = StepSort::<HeapSort<SimpleRowsAsc<Int32Type>>, _> {
+            params: SortSpillParams {
+                batch_rows: 2,
+                num_merge: 2,
+                prefetch: false,
+                stream_regroup: true,
+            },
+            bounds: Bounds::new_unchecked(Int32Type::from_data(vec![5])),
+            cur_bound: None,
+            bound_index: -1,
+            current: vec![],
+            subsequent: vec![stream_1, stream_2, existed_subsequent],
+            output_merger: None,
+        };
+
+        sort.choice_streams_by_bound();
+        assert_eq!(sort.current.len(), 2);
+        assert_eq!(sort.current.total_rows(), 4);
+        assert_eq!(sort.subsequent.len(), 2);
+        assert_eq!(sort.subsequent.total_rows(), 4);
+        assert!(
+            sort.current
+                .iter()
+                .all(|s| s.blocks.iter().all(|b| b.data.is_none()))
+        );
+        assert!(
+            sort.subsequent
+                .iter()
+                .all(|s| s.blocks.iter().all(|b| b.data.is_none()))
+        );
+
+        let before = sort.current.len();
+        BoundBlockStream::compact_streams_by_domain(&mut sort.current);
+        let compressed = before - sort.current.len();
+        assert_eq!(compressed, 1);
+        assert_eq!(sort.current.len(), 1);
+        assert_eq!(sort.current[0].total_rows(), 4);
+        assert!(sort.current[0].blocks.iter().all(|b| b.data.is_none()));
+        assert_eq!(sort.subsequent.len(), 2);
+        assert_eq!(sort.subsequent.total_rows(), 4);
         Ok(())
     }
 

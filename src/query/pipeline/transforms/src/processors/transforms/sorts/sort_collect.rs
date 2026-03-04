@@ -20,7 +20,6 @@ use std::sync::atomic::AtomicBool;
 use bytesize::ByteSize;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -45,7 +44,7 @@ enum Inner<A: SortAlgorithm, S: SortSpiller> {
     None,
 }
 
-pub struct TransformSortCollect<A: SortAlgorithm, C, S: SortSpiller> {
+pub struct TransformSortCollect<A: SortAlgorithm, S: SortSpiller> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -53,13 +52,7 @@ pub struct TransformSortCollect<A: SortAlgorithm, C, S: SortSpiller> {
 
     max_block_size: usize,
     default_num_merge: usize,
-    row_converter: C,
-    sort_desc: Arc<[SortColumnDescription]>,
-    /// If this transform is after an Exchange transform,
-    /// it means it will compact the data from cluster nodes.
-    /// And the order column is already generated in each cluster node,
-    /// so we don't need to generate the order column again.
-    order_col_generated: bool,
+    order_col_converter: Option<<A::Rows as Rows>::Converter>,
 
     base: Base<S>,
     inner: Inner<A, S>,
@@ -67,26 +60,25 @@ pub struct TransformSortCollect<A: SortAlgorithm, C, S: SortSpiller> {
     aborting: AtomicBool,
 
     enable_restore_prefetch: bool,
+    enable_sort_spill_stream_regroup: bool,
 }
 
-impl<A, C, S> TransformSortCollect<A, C, S>
+impl<A, S> TransformSortCollect<A, S>
 where
     A: SortAlgorithm,
-    C: RowConverter<A::Rows>,
     S: SortSpiller,
 {
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         base: Base<S>,
-        sort_desc: Arc<[SortColumnDescription]>,
         max_block_size: usize,
         default_num_merge: usize,
         sort_limit: bool,
-        order_col_generated: bool,
+        order_col_converter: Option<<A::Rows as Rows>::Converter>,
         enable_restore_prefetch: bool,
+        enable_sort_spill_stream_regroup: bool,
     ) -> Result<Self> {
-        let row_converter = C::create(&sort_desc, base.schema.clone())?;
         let (name, inner) = match base.limit {
             Some(limit) if sort_limit => (
                 "TransformSortMergeCollectLimit",
@@ -98,25 +90,16 @@ where
             input,
             output,
             name,
-            row_converter,
             output_data: None,
-            sort_desc,
-            order_col_generated,
+            order_col_converter,
             base,
             inner,
             aborting: AtomicBool::new(false),
             max_block_size,
             default_num_merge,
             enable_restore_prefetch,
+            enable_sort_spill_stream_regroup,
         })
-    }
-
-    fn generate_order_column(&self, mut block: DataBlock) -> Result<(A::Rows, DataBlock)> {
-        let rows = self
-            .row_converter
-            .convert_data_block(&self.sort_desc, &block)?;
-        block.add_column(rows.to_column());
-        Ok((rows, block))
     }
 
     fn limit_trans_to_spill(&mut self, no_spill: bool) -> Result<()> {
@@ -129,6 +112,7 @@ where
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
                 prefetch: false,
+                stream_regroup: self.enable_sort_spill_stream_regroup,
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -155,6 +139,7 @@ where
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
                 prefetch: false,
+                stream_regroup: self.enable_sort_spill_stream_regroup,
             }
         } else {
             self.determine_params(num_bytes, num_rows)
@@ -183,14 +168,29 @@ where
             ByteSize(self.base.spiller.memory_settings().spill_unit_size as _),
             self.max_block_size,
             self.enable_restore_prefetch,
+            self.enable_sort_spill_stream_regroup,
         )
     }
 
-    fn collect_block(&mut self, block: DataBlock) -> Result<()> {
-        if self.order_col_generated {
-            return match &mut self.inner {
+    fn collect_block(&mut self, mut block: DataBlock) -> Result<()> {
+        match &self.order_col_converter {
+            Some(converter) => {
+                let rows = converter.convert(&block)?;
+                block.add_column(rows.to_column());
+                match &mut self.inner {
+                    Inner::Limit(limit_sort) => limit_sort.add_block(block, rows),
+                    Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
+                        input_data.push(block);
+                        Ok(())
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            None => match &mut self.inner {
                 Inner::Limit(limit_sort) => {
-                    let rows = A::Rows::from_column(block.get_last_column())?;
+                    let rows = A::Rows::from_column(
+                        &block.get_by_offset(self.base.sort_row_offset).to_column(),
+                    )?;
                     limit_sort.add_block(block, rows)
                 }
                 Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
@@ -198,17 +198,7 @@ where
                     Ok(())
                 }
                 _ => unreachable!(),
-            };
-        }
-
-        let (rows, block) = self.generate_order_column(block)?;
-        match &mut self.inner {
-            Inner::Limit(limit_sort) => limit_sort.add_block(block, rows),
-            Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
-                input_data.push(block);
-                Ok(())
-            }
-            _ => unreachable!(),
+            },
         }
     }
 
@@ -249,11 +239,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<A, C, S> Processor for TransformSortCollect<A, C, S>
+impl<A, S> Processor for TransformSortCollect<A, S>
 where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
-    C: RowConverter<A::Rows> + Send + 'static,
+    <A::Rows as Rows>::Converter: Send + 'static,
     S: SortSpiller,
 {
     fn name(&self) -> String {
