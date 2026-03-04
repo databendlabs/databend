@@ -6,49 +6,49 @@ select * from @data/parquet/tuple.parquet;
 3 (3,'c')
 
 query 
-select * from @data/parquet/tuple.parquet where t:a = 1;
+select * from @data/parquet/tuple.parquet where t:A = 1;
 ----
 1 (1,'a')
 
 query 
-select * from @data/parquet/tuple.parquet where t:a = id;
+select * from @data/parquet/tuple.parquet where t:A = id;
 ----
 1 (1,'a')
 3 (3,'c')
 
 query 
-select * from @data/parquet/tuple.parquet where t:a >= 2;
+select * from @data/parquet/tuple.parquet where t:A >= 2;
 ----
 2 (3,'b')
 3 (3,'c')
 
 query 
-select t:b from @data/parquet/tuple.parquet where t:a >= 2;
+select t:B from @data/parquet/tuple.parquet where t:A >= 2;
 ----
 b
 c
 
 query 
-select t:b from @data/parquet/tuple.parquet
+select t:B from @data/parquet/tuple.parquet
 ----
 a
 b
 c
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet
+select id, t:A, t from @data/parquet/tuple.parquet
 ----
 1 1 (1,'a')
 2 3 (3,'b')
 3 3 (3,'c')
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet where id > 2
+select id, t:A, t from @data/parquet/tuple.parquet where id > 2
 ----
 3 3 (3,'c')
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet where to_string(t:b) < 'c'
+select id, t:A, t from @data/parquet/tuple.parquet where to_string(t:B) < 'c'
 ----
 1 1 (1,'a')
 2 3 (3,'b')
