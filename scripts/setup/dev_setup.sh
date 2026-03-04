@@ -662,18 +662,18 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg graphviz "$PACKAGE_MANAGER"
 		install_pkg graphviz-dev "$PACKAGE_MANAGER"
 	fi
-	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
+	PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers
-	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
+	PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
-	python3 -m pip install --quiet mysql-connector-python==8.0.30
+	PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install --quiet mysql-connector-python==8.0.30
 fi
 
 if [[ "$INSTALL_CODEGEN" == "true" ]]; then
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
-	"${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
+	PIP_BREAK_SYSTEM_PACKAGES=1 "${PRE_COMMAND[@]}" python3 -m pip install --quiet coscmd PyYAML
 fi
 
 if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
