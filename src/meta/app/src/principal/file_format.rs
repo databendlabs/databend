@@ -353,7 +353,13 @@ impl FileFormatParams {
 
         match self {
             FileFormatParams::Tsv(p) => {
-                check_option!(p, field_delimiter)?;
+                check_field_delimiter_tsv(&p.field_delimiter).map_err(|msg| {
+                    format!(
+                        "{} is currently set to '{}'. {msg}",
+                        OPT_FIELD_DELIMITER.to_ascii_uppercase(),
+                        p.field_delimiter
+                    )
+                })?;
                 check_option!(p, record_delimiter)?;
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
@@ -976,6 +982,14 @@ pub fn check_field_delimiter(option: &str) -> std::result::Result<(), String> {
     }
 }
 
+pub fn check_field_delimiter_tsv(option: &str) -> std::result::Result<(), String> {
+    if option.is_empty() {
+        Ok(())
+    } else {
+        check_field_delimiter(option)
+    }
+}
+
 pub fn check_field_delimiter_csv(option: &str) -> std::result::Result<(), String> {
     if option.len() == 1 && option.as_bytes()[0].is_ascii_alphanumeric() {
         Err("Expecting a non-alphanumeric character.".into())
@@ -1031,5 +1045,30 @@ fn parse_null_if(null_if: Option<String>) -> Result<Vec<String>> {
                 )))?;
             Ok(values)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_tsv_params(options: BTreeMap<String, String>) -> TsvFileFormatParams {
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .expect("tsv file format options should parse");
+        match params {
+            FileFormatParams::Tsv(v) => v,
+            _ => unreachable!("expected tsv params"),
+        }
+    }
+
+    #[test]
+    fn test_tsv_field_delimiter_empty_string() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TSV".to_string());
+        options.insert("field_delimiter".to_string(), "".to_string());
+
+        let params = get_tsv_params(options);
+        assert_eq!(params.field_delimiter, "".to_string());
     }
 }
