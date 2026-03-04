@@ -180,6 +180,13 @@ impl Binder {
                 ));
             };
         }
+        if let FileFormatParams::Tsv(fmt) = &stage_info.file_format_params {
+            if fmt.field_delimiter.is_empty() {
+                return Err(ErrorCode::BadArguments(
+                    "It is not supported to unload TSV file when FIELD_DELIMITER is ''",
+                ));
+            };
+        }
 
         let partition_by = if let Some(expr) = &stmt.partition_by {
             self.bind_partition_by(expr, &query)?
