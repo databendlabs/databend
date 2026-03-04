@@ -6,49 +6,49 @@ select * from @data/parquet/tuple.parquet;
 3 (3,"c")
 
 query ??
-select * from @data/parquet/tuple.parquet where t:A = 1;
+select * from @data/parquet/tuple.parquet where t.1 = 1;
 ----
 1 (1,"a")
 
 query ??
-select * from @data/parquet/tuple.parquet where t:A = id;
+select * from @data/parquet/tuple.parquet where t.1 = id;
 ----
 1 (1,"a")
 3 (3,"c")
 
 query ??
-select * from @data/parquet/tuple.parquet where t:A >= 2;
+select * from @data/parquet/tuple.parquet where t.1 >= 2;
 ----
 2 (3,"b")
 3 (3,"c")
 
 query ?
-select t:B from @data/parquet/tuple.parquet where t:A >= 2;
+select t.2 from @data/parquet/tuple.parquet where t.1 >= 2;
 ----
 b
 c
 
 query ?
-select t:B from @data/parquet/tuple.parquet
+select t.2 from @data/parquet/tuple.parquet
 ----
 a
 b
 c
 
 query ???
-select id, t:A, t from @data/parquet/tuple.parquet
+select id, t.1, t from @data/parquet/tuple.parquet
 ----
 1 1 (1,"a")
 2 3 (3,"b")
 3 3 (3,"c")
 
 query ???
-select id, t:A, t from @data/parquet/tuple.parquet where id > 2
+select id, t.1, t from @data/parquet/tuple.parquet where id > 2
 ----
 3 3 (3,"c")
 
 query ???
-select id, t:A, t from @data/parquet/tuple.parquet where to_string(t:B) < 'c'
+select id, t.1, t from @data/parquet/tuple.parquet where to_string(t.2) < 'c'
 ----
 1 1 (1,"a")
 2 3 (3,"b")
