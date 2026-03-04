@@ -1,5 +1,5 @@
 query 
-select tail_number from @data/ontime_200.parquet where dayofmonth=1
+select `Tail_Number` from @data/ontime_200.parquet where `DayofMonth`=1
 ----
 N315PQ
 N835AY
@@ -12,7 +12,7 @@ N901XJ
 N909XJ
 
 query 
-select tail_number from @data/ontime_200.parquet where dayofmonth > 15 order by tail_number limit 5
+select `Tail_Number` from @data/ontime_200.parquet where `DayofMonth` > 15 order by `Tail_Number` limit 5
 ----
 N132EV
 N132EV
@@ -21,7 +21,7 @@ N137EV
 N137EV
 
 query 
-select tail_number from @data/ontime_200.parquet where dayofmonth=1
+select `Tail_Number` from @data/ontime_200.parquet where `DayofMonth`=1
 ----
 N315PQ
 N835AY
@@ -34,7 +34,7 @@ N901XJ
 N909XJ
 
 query 
-select tail_number from @data/ontime_200.parquet where dayofmonth > 15 order by tail_number limit 5
+select `Tail_Number` from @data/ontime_200.parquet where `DayofMonth` > 15 order by `Tail_Number` limit 5
 ----
 N132EV
 N132EV
@@ -43,7 +43,7 @@ N137EV
 N137EV
 
 query 
-select tail_number from @data/ontime_200.parquet where dayofmonth > 15 order by tail_number desc limit 5
+select `Tail_Number` from @data/ontime_200.parquet where `DayofMonth` > 15 order by `Tail_Number` desc limit 5
 ----
 N937XJ
 N937XJ
@@ -52,7 +52,7 @@ N929XJ
 N929XJ
 
 query 
-select month from @data/ontime_200.parquet where dayofmonth > 15 order by tail_number limit 5
+select `Month` from @data/ontime_200.parquet where `DayofMonth` > 15 order by `Tail_Number` limit 5
 ----
 12
 12
@@ -61,7 +61,7 @@ select month from @data/ontime_200.parquet where dayofmonth > 15 order by tail_n
 12
 
 query 
-select month from @data/ontime_200.parquet where dayofmonth > 15 order by tail_number desc limit 5
+select `Month` from @data/ontime_200.parquet where `DayofMonth` > 15 order by `Tail_Number` desc limit 5
 ----
 12
 12
