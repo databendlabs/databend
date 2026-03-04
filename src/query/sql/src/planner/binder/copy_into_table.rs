@@ -474,11 +474,12 @@ impl Binder {
         if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
-        let case_sensitive = plan
-            .stage_table_info
-            .copy_into_table_options
-            .column_match_mode
-            == Some(ColumnMatchMode::CaseSensitive);
+        let case_sensitive = plan.is_transform
+            || plan
+                .stage_table_info
+                .copy_into_table_options
+                .column_match_mode
+                == Some(ColumnMatchMode::CaseSensitive);
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
