@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod broadcast_recv_transform;
+mod broadcast_send_transform;
 mod data_exchange;
 mod exchange_injector;
 mod exchange_manager;
@@ -29,6 +31,8 @@ mod statistics_sender;
 
 pub mod serde;
 
+pub use broadcast_recv_transform::BroadcastRecvTransform;
+pub use broadcast_send_transform::BroadcastSendTransform;
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
 pub use data_exchange::MergeExchange;

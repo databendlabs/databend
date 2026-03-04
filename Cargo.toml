@@ -258,6 +258,7 @@ enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.2", features = ["serde", "macros"] }
+event-listener = "5.4.0"
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
 feistel-permutation-rs = "0.1.1"

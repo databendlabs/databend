@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -23,6 +24,7 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 
+use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_sink_writer::create_writer_item;
 use super::exchange_sorting::ExchangeSorting;
@@ -30,6 +32,12 @@ use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::network::OutboundChannel;
+use crate::servers::flight::v1::network::RemoteChannel;
+use crate::servers::flight::v1::network::RoundRobinChannel;
+use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
+use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -41,9 +49,6 @@ impl ExchangeSink {
         params: &ExchangeParams,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let exchange_manager = ctx.get_exchange_manager();
-        let senders = exchange_manager.get_flight_sender(params)?;
-
         match params {
             ExchangeParams::MergeExchange(params) => {
                 if params.destination_id == ctx.get_cluster().local_id() {
@@ -77,6 +82,10 @@ impl ExchangeSink {
                     )]));
                 }
 
+                let exchange_manager = ctx.get_exchange_manager();
+                let senders = exchange_manager
+                    .get_flight_sender(&ExchangeParams::MergeExchange(params.clone()))?;
+
                 let output = senders.len();
                 pipeline.try_resize(output)?;
 
@@ -88,9 +97,15 @@ impl ExchangeSink {
                 pipeline.add_pipe(Pipe::create(output, 0, items));
                 Ok(())
             }
-            ExchangeParams::BroadcastExchange(_params) => Ok(()),
+            ExchangeParams::BroadcastExchange(_) => Err(ErrorCode::Internal(
+                "BroadcastExchange should not appear on the sink side",
+            )),
             ExchangeParams::NodeShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
+
+                let exchange_manager = ctx.get_exchange_manager();
+                let senders = exchange_manager
+                    .get_flight_sender(&ExchangeParams::NodeShuffleExchange(params.clone()))?;
 
                 // exchange writer sink
                 let len = pipeline.output_len();
@@ -130,4 +145,66 @@ impl ExchangeSorting for SinkExchangeSorting {
 
         Ok(shuffle_meta.block_number)
     }
+}
+
+/// Build OutboundChannels for broadcast exchange using PingPongExchange.
+/// Local destination uses a LocalOutboundChannel; remote destinations
+/// use RoundRobinChannel wrapping multiple RemoteChannels (one per thread).
+pub(super) fn build_broadcast_outbound_channels(
+    params: &BroadcastExchangeParams,
+    local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
+    compression: Option<databend_common_settings::FlightCompression>,
+) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+    let query_id = &params.query_id;
+    let exchange_id = &params.exchange_id;
+    let exchange_manager = DataExchangeManager::instance();
+    let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+
+    let mut exchanges_seq = Vec::with_capacity(exchanges.len());
+
+    for (target_id, threads) in &params.destination_channels {
+        if target_id != &params.executor_id {
+            let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "PingPongExchange not found for target {}",
+                    target_id
+                ))
+            })?;
+            assert_eq!(threads.len(), exchange.num_threads);
+            exchanges_seq.push(exchange);
+        }
+    }
+
+    // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong, N channels each
+    let config = ExchangeBufferConfig::default();
+    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+        exchanges_seq,
+        config,
+        &GlobalIORuntime::instance(),
+    )?);
+
+    let local_channel = RoundRobinChannel::create(local_outbound_channels);
+    let mut remote_idx = 0;
+    let mut channels = vec![];
+    for (target_id, threads) in &params.destination_channels {
+        if target_id == &params.executor_id {
+            channels.push(local_channel.clone());
+            continue;
+        }
+
+        let mut remote_channels = Vec::with_capacity(threads.len());
+        for thread_idx in 0..threads.len() {
+            remote_channels.push(RemoteChannel::create(
+                remote_idx,
+                thread_idx,
+                shared_buffer.clone(),
+                compression,
+            )?);
+        }
+
+        channels.push(RoundRobinChannel::create(remote_channels));
+        remote_idx += 1;
+    }
+
+    Ok(channels)
 }
