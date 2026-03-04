@@ -81,7 +81,7 @@ async fn commit_fragments_to_target_dataset(
 
     let (object_store, base_path) = LanceObjectStore::from_uri_and_params(
         Arc::new(ObjectStoreRegistry::default()),
-        &target_dataset_path,
+        target_dataset_path,
         &store_params,
     )
     .await
