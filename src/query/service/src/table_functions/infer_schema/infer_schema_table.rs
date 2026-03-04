@@ -190,7 +190,7 @@ impl Table for InferSchemaTable {
             None => stage_info.file_format_params.clone(),
         };
         if let FileFormatParams::Csv(fmt) = &file_format_params {
-            if fmt.field_delimiter.len() > 1 {
+            if fmt.field_delimiter.len() != 1 {
                 return Err(ErrorCode::BadArguments(
                     "It is not supported to infer CSV file with multi-bytes FIELD_DELIMITER",
                 ));

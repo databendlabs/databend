@@ -101,11 +101,6 @@ impl AccumulatingTransform for InferSchemaSeparator {
                 } else {
                     Some(params.escape.as_bytes()[0])
                 };
-                if params.field_delimiter.is_empty() {
-                    return Err(ErrorCode::InvalidArgument(
-                        "infer_schema()'s field_delimiter cannot be ''".to_string(),
-                    ));
-                }
 
                 let mut format = Format::default()
                     .with_delimiter(params.field_delimiter.as_bytes()[0])
