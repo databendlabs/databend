@@ -43,11 +43,20 @@ pub(crate) fn lower_field_name(field: &ArrowField) -> ArrowField {
     }
 }
 
-pub(crate) fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
+pub(crate) fn arrow_to_table_schema(
+    schema: &ArrowSchema,
+    case_sensitive: bool,
+) -> Result<TableSchema> {
     let fields = schema
         .fields
         .iter()
-        .map(|f| Arc::new(lower_field_name(f)))
+        .map(|f| {
+            if case_sensitive {
+                f.clone()
+            } else {
+                Arc::new(lower_field_name(f))
+            }
+        })
         .collect::<Vec<_>>();
     let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
     TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)

@@ -78,7 +78,7 @@ impl RowGroupReaderForCopy {
     ) -> Result<RowGroupReaderForCopy> {
         let arrow_schema = infer_schema_with_extension(file_metadata)?;
         let schema_descr = file_metadata.schema_descr_ptr();
-        let parquet_table_schema = Arc::new(arrow_to_table_schema(&arrow_schema)?);
+        let parquet_table_schema = Arc::new(arrow_to_table_schema(&arrow_schema, false)?);
 
         let (mut output_projection, mut pushdown_columns) = project_columnar(
             &parquet_table_schema,
