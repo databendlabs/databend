@@ -64,6 +64,7 @@ pub struct GlobalExchangeParams {
     pub query_id: String,
     pub executor_id: String,
     pub schema: DataSchemaRef,
+    pub exchange_id: String,
     pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
 }

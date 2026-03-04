@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Broadcast receive source. Reads data from InboundChannels only (no input port).
-//! Uses async_process to await data from ReceiversStream.
-
 use std::any::Any;
 use std::sync::Arc;
 use std::task::Poll;
@@ -24,7 +21,6 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::ExecutorWaker;
-use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
@@ -35,41 +31,36 @@ use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
 
-pub struct ExchangeRecvTransform {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-
+pub struct HashSendSource {
     id: NodeIndex,
+    output: Arc<OutputPort>,
     tasks: SyncTaskSet,
     receiver: Arc<dyn InboundChannel>,
     handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
 }
 
-impl ExchangeRecvTransform {
+impl HashSendSource {
     pub fn create_item(
         worker_id: usize,
         receiver: Arc<dyn InboundChannel>,
         waker: Arc<ExecutorWaker>,
     ) -> PipeItem {
-        let input = InputPort::create();
         let output = OutputPort::create();
         let processor = ProcessorPtr::create(Box::new(Self {
             receiver,
-            input: input.clone(),
             output: output.clone(),
             tasks: SyncTaskSet::new(worker_id, waker),
-
             handle: None,
-            id: Default::default(),
+            id: NodeIndex::default(),
         }));
 
-        PipeItem::create(processor, vec![input], vec![output])
+        PipeItem::create(processor, vec![], vec![output])
     }
 }
 
-impl Processor for ExchangeRecvTransform {
+impl Processor for HashSendSource {
     fn name(&self) -> String {
-        String::from("ExchangeRecvTransform")
+        String::from("HashSendSource")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -78,9 +69,7 @@ impl Processor for ExchangeRecvTransform {
 
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         if self.output.is_finished() {
-            self.input.finish();
             self.receiver.close();
-
             return Ok(Event::Finished);
         }
 
@@ -97,10 +86,8 @@ impl Processor for ExchangeRecvTransform {
         if let Some(mut handle) = self.handle.take() {
             match handle.poll(matches!(cause, EventCause::Other)) {
                 Poll::Ready(Ok(None)) => {
-                    if self.input.is_finished() {
-                        self.output.finish();
-                        return Ok(Event::Finished);
-                    }
+                    self.output.finish();
+                    return Ok(Event::Finished);
                 }
                 Poll::Ready(Ok(Some(data_block))) => {
                     self.output.push_data(Ok(data_block));
@@ -116,20 +103,7 @@ impl Processor for ExchangeRecvTransform {
             };
         }
 
-        if self.input.has_data() {
-            let data_block = self.input.pull_data().unwrap()?;
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input.is_finished() && self.handle.is_none() {
-            self.output.finish();
-            self.receiver.close();
-            return Ok(Event::Finished);
-        }
-
-        self.input.set_need_data();
-        Ok(Event::NeedData)
+        Ok(Event::NeedConsume)
     }
 
     fn set_id(&mut self, id: NodeIndex) {

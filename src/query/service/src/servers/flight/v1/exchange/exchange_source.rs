@@ -25,9 +25,12 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 
 use super::exchange_params::ExchangeParams;
+use super::exchange_params::GlobalExchangeParams;
 use super::exchange_params::MergeExchangeParams;
 use super::exchange_source_reader::ExchangeSourceReader;
+use super::hash_send_source::HashSendSource;
 use crate::clusters::ClusterHelper;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 
@@ -88,4 +91,47 @@ pub fn via_exchange_source(
     }
 
     injector.apply_merge_deserializer(params, pipeline)
+}
+
+/// Add HashSendSource receivers to the pipeline for hash exchange source-only path.
+/// Existing pipeline outputs pass through as DummyTransforms; remote InboundChannels
+/// are added as HashSendSource processors.
+#[allow(dead_code)]
+pub fn via_hash_exchange_source(
+    _ctx: &Arc<QueryContext>,
+    params: &GlobalExchangeParams,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
+    let query_id = &params.query_id;
+    let exchange_id = &params.exchange_id;
+    let exchange_manager = DataExchangeManager::instance();
+
+    let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+    let waker = pipeline.get_waker();
+
+    let last_output_len = pipeline.output_len();
+    let num_receivers = channel_set.channels.len();
+    let mut items = Vec::with_capacity(last_output_len + num_receivers);
+
+    for _index in 0..last_output_len {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+
+        items.push(PipeItem::create(
+            TransformDummy::create(input.clone(), output.clone()),
+            vec![input],
+            vec![output],
+        ));
+    }
+
+    for idx in 0..num_receivers {
+        items.push(HashSendSource::create_item(
+            idx,
+            channel_set.create_receiver(idx, &params.schema),
+            waker.clone(),
+        ));
+    }
+
+    pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
+    Ok(())
 }
