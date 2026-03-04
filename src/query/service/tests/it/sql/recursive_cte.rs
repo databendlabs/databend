@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
@@ -40,6 +41,7 @@ use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::rcte_hooks::RcteHookRegistry;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
+use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 
 fn extract_u64(blocks: Vec<DataBlock>, col: usize) -> u64 {
@@ -56,6 +58,36 @@ fn extract_u64(blocks: Vec<DataBlock>, col: usize) -> u64 {
     }
 }
 
+fn extract_two_u64(blocks: Vec<DataBlock>) -> (u64, u64) {
+    let block = DataBlock::concat(&blocks).expect("concat blocks");
+    assert_eq!(block.num_rows(), 1, "unexpected rows: {}", block.num_rows());
+    assert!(
+        block.num_columns() >= 2,
+        "expected at least two columns, got {}",
+        block.num_columns()
+    );
+
+    let first = block
+        .get_by_offset(0)
+        .index(0)
+        .expect("scalar at row 0, col 0");
+    let second = block
+        .get_by_offset(1)
+        .index(0)
+        .expect("scalar at row 0, col 1");
+
+    let to_u64 = |v: ScalarRef<'_>, col: usize| -> u64 {
+        match v {
+            ScalarRef::Number(NumberScalar::UInt64(v)) => v,
+            ScalarRef::Number(NumberScalar::UInt32(v)) => v as u64,
+            ScalarRef::Number(NumberScalar::Int64(v)) => v as u64,
+            other => panic!("unexpected scalar type for col {col}: {other:?}"),
+        }
+    };
+
+    (to_u64(first, 0), to_u64(second, 1))
+}
+
 async fn run_query_single_u64(ctx: Arc<QueryContext>, sql: &str) -> Result<u64> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
@@ -65,11 +97,21 @@ async fn run_query_single_u64(ctx: Arc<QueryContext>, sql: &str) -> Result<u64> 
     Ok(extract_u64(blocks, 0))
 }
 
-/// Deterministically reproduce *wrong results* caused by recursive CTE internal table name reuse.
+async fn run_query_two_u64(ctx: Arc<QueryContext>, sql: &str) -> Result<(u64, u64)> {
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(sql).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let stream = executor.execute(ctx).await?;
+    let blocks: Vec<DataBlock> = stream.try_collect().await?;
+    Ok(extract_two_u64(blocks))
+}
+
+/// Deterministically reproduce wrong results when recursive CTE internal table names are not
+/// unique per recursive source instance.
 ///
-/// This is a stable (non-flaky) repro: it forces the internal MEMORY table (`lines`) to be
-/// corrupted between recursive step=0 and step=1, so step=1 reads no prepared blocks and the
-/// recursion stops early.
+/// This is a stable (non-flaky) repro: it targets the legacy shared internal table name layout
+/// (`__rcte_<query_id>_0_lines`) between recursive step=0 and step=1, so step=1 reads no prepared
+/// blocks and recursion stops early.
 #[test]
 fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
     let outer_rt = tokio::runtime::Builder::new_current_thread()
@@ -118,11 +160,13 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
         // Wait until the query reaches step=1 and is blocked.
         gate.wait_arrived_at_least(1).await;
 
-        // Deterministic interference: drop and recreate the internal recursive MEMORY table between
+        // Deterministic interference: drop and recreate the legacy shared internal recursive
+        // MEMORY table name between
         // step=0 (write prepared blocks) and step=1 (read prepared blocks).
         //
         // Important: QueryContext caches tables for consistency within a query. To make the query observe
         // the recreated table, we also evict it from *the query's* table cache before resuming.
+        let legacy_shared_name = format!("__rcte_{}_0_lines", ctx.get_id());
         let ctx_ddl = fixture.new_query_ctx().await?;
         ctx_ddl.set_current_database(db.clone()).await?;
 
@@ -133,7 +177,7 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
             },
             catalog: ctx_ddl.get_current_catalog(),
             database: db.clone(),
-            table: "lines".to_string(),
+            table: legacy_shared_name.clone(),
             all: true,
         };
         let drop_table_interpreter =
@@ -156,7 +200,7 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
             },
             catalog: ctx_ddl.get_current_catalog(),
             database: db.clone(),
-            table: "lines".to_string(),
+            table: legacy_shared_name.clone(),
             engine: Engine::Memory,
             engine_options: Default::default(),
             table_properties: Default::default(),
@@ -175,7 +219,7 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
         let _ = create_table_interpreter.execute(ctx_ddl.clone()).await?;
 
         // Evict in the *query* context so the resumed recursive step re-fetches the table.
-        ctx.evict_table_from_cache(&ctx.get_current_catalog(), &db, "lines")?;
+        ctx.evict_table_from_cache(&ctx.get_current_catalog(), &db, &legacy_shared_name)?;
         // Allow the query to continue step=1.
         gate.release(1);
 
@@ -186,6 +230,116 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
             return Err(ErrorCode::Internal(format!(
                 "deterministic wrong-result repro: expected 1000, got {got}"
             )));
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}
+
+/// Stress repro for flaky mismatch reported in issue #19498.
+///
+/// This test is intentionally ignored by default.
+/// Run it manually:
+///
+/// ```bash
+/// cargo test -p databend-query recursive_cte_issue_19498_stress_repro -- --ignored --nocapture
+/// ```
+///
+/// Optional env vars:
+/// - `RCTE_REPRO_ROUNDS` (default: 200)
+/// - `RCTE_REPRO_CONCURRENCY` (default: 16)
+/// - `RCTE_REPRO_SLEEP_MS` (default: 0)
+#[test]
+#[ignore = "manual stress repro for flaky CI issue #19498"]
+fn recursive_cte_issue_19498_stress_repro() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        use databend_common_base::runtime::Runtime;
+
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("create database if not exists {db}"))
+            .await?;
+        let runtime = Runtime::with_worker_threads(8, None)?;
+
+        let rounds = std::env::var("RCTE_REPRO_ROUNDS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(200);
+        let concurrency = std::env::var("RCTE_REPRO_CONCURRENCY")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(16)
+            .max(1);
+        let sleep_ms = std::env::var("RCTE_REPRO_SLEEP_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(0);
+
+        let sql = "WITH RECURSIVE aoc10_input(i) AS (SELECT '\\n89010123\\n78121874\\n87430965\\n96549874\\n45678903\\n32019012\\n01329801\\n10456732\\n'), \
+                   lines(y, line, rest) AS (SELECT 0::UInt64, substr(i, 1, position('\\n' IN i) - 1), substr(i, position('\\n' IN i) + 1) \
+                   FROM aoc10_input UNION ALL SELECT y + 1::UInt64, substr(rest, 1, position('\\n' IN rest) - 1), substr(rest, position('\\n' IN rest) + 1) \
+                   FROM lines WHERE position('\\n' IN rest) > 0), \
+                   field(x, y, v) AS (SELECT x::UInt64 AS x, y, (ascii(substr(line, x::Int64, 1)) - 48)::UInt64 AS v \
+                   FROM (SELECT * FROM lines l WHERE line <> '') s, LATERAL generate_series(1, length(line)) g(x)), \
+                   paths(x, y, v, sx, sy) AS (SELECT x, y, 9::UInt64, x, y FROM field WHERE v = 9 \
+                   UNION ALL \
+                   SELECT f.x, f.y, f.v, p.sx, p.sy FROM field f JOIN paths p ON f.v = p.v - 1 AND p.v > 0 \
+                   AND ((f.x = p.x AND abs(f.y - p.y) = 1) OR (f.y = p.y AND abs(f.x - p.x) = 1))), \
+                   results AS (SELECT * FROM paths WHERE v = 0), part1 AS (SELECT DISTINCT * FROM results) \
+                   SELECT (SELECT count(*) FROM part1) AS part1, (SELECT count(*) FROM results) AS part2";
+
+        let expected = (36_u64, 81_u64);
+        let mut in_flight = futures_util::stream::FuturesUnordered::new();
+
+        let mut launched = 0usize;
+        let mut completed = 0usize;
+        while launched < rounds && in_flight.len() < concurrency {
+            launched += 1;
+            let ctx = fixture.new_query_ctx().await?;
+            ctx.set_current_database(db.clone()).await?;
+            ctx.get_settings().set_max_threads(8)?;
+            let sql = sql.to_string();
+            in_flight.push(runtime.spawn(async move {
+                if sleep_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
+                }
+                let got = run_query_two_u64(ctx, &sql).await?;
+                Ok::<(usize, (u64, u64)), ErrorCode>((launched, got))
+            }));
+        }
+
+        while let Some(joined) = in_flight.next().await {
+            let (idx, got) = joined.map_err(|e| ErrorCode::Internal(e.to_string()))??;
+            completed += 1;
+            if got != expected {
+                return Err(ErrorCode::Internal(format!(
+                    "reproduced issue #19498 at run #{idx} (completed={completed}): expected {:?}, got {:?}",
+                    expected, got
+                )));
+            }
+
+            if launched < rounds {
+                launched += 1;
+                let ctx = fixture.new_query_ctx().await?;
+                ctx.set_current_database(db.clone()).await?;
+                ctx.get_settings().set_max_threads(8)?;
+                let sql = sql.to_string();
+                in_flight.push(runtime.spawn(async move {
+                    if sleep_ms > 0 {
+                        tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
+                    }
+                    let got = run_query_two_u64(ctx, &sql).await?;
+                    Ok::<(usize, (u64, u64)), ErrorCode>((launched, got))
+                }));
+            }
         }
 
         Ok::<(), ErrorCode>(())
