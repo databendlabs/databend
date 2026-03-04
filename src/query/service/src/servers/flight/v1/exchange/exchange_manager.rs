@@ -1314,18 +1314,16 @@ impl FragmentCoordinator {
                     allow_adjust_parallelism: exchange.allow_adjust_parallelism,
                 }),
             )),
-            DataExchange::GlobalShuffleExchange(exchange) => {
-                Ok(Some(ExchangeParams::GlobalShuffleExchange(
-                    GlobalExchangeParams {
-                        query_id: info.query_id.to_string(),
-                        executor_id: info.current_executor.to_string(),
-                        schema: self.physical_plan.output_schema()?,
-                        exchange_id: exchange.id.clone(),
-                        shuffle_keys: exchange.shuffle_keys.clone(),
-                        destination_channels: exchange.destination_channels.clone(),
-                    },
-                )))
-            }
+            DataExchange::GlobalShuffleExchange(exchange) => Ok(Some(
+                ExchangeParams::GlobalShuffleExchange(GlobalExchangeParams {
+                    query_id: info.query_id.to_string(),
+                    executor_id: info.current_executor.to_string(),
+                    schema: self.physical_plan.output_schema()?,
+                    exchange_id: exchange.id.clone(),
+                    shuffle_keys: exchange.shuffle_keys.clone(),
+                    destination_channels: exchange.destination_channels.clone(),
+                }),
+            )),
         }
     }
 
