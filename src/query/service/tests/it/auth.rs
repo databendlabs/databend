@@ -77,8 +77,8 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> anyhow::Result<()> {
     let mut conf = ConfigBuilder::create().config();
     let first_url = format!("http://{}{}", server.address(), json_path);
     let second_url = format!("http://{}{}", server.address(), second_path);
-    conf.query.jwt_key_file = first_url.clone();
-    conf.query.jwt_key_files = vec![second_url];
+    conf.query.common.jwt_key_file = first_url.clone();
+    conf.query.common.jwt_key_files = vec![second_url];
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
@@ -235,7 +235,7 @@ async fn test_auth_mgr_with_jwt() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
@@ -361,7 +361,8 @@ async fn test_auth_mgr_with_jwt() -> anyhow::Result<()> {
             )
             .await?;
         let user_info = session.get_current_user()?;
-        assert_eq!(user_info.grants.roles(), &["role1"]);
+        assert!(user_info.grants.roles().contains("role1"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and grant roles
@@ -389,7 +390,8 @@ async fn test_auth_mgr_with_jwt() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        assert_eq!(user_info.grants.roles(), &["test-role"]);
+        assert!(user_info.grants.roles().contains("test-role"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and auth role
@@ -475,7 +477,7 @@ async fn test_auth_mgr_with_jwt_es256() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
@@ -600,7 +602,8 @@ async fn test_auth_mgr_with_jwt_es256() -> anyhow::Result<()> {
             )
             .await?;
         let user_info = session.get_current_user()?;
-        assert_eq!(user_info.grants.roles(), &["role1"]);
+        assert!(user_info.grants.roles().contains("role1"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and grant roles
@@ -627,7 +630,8 @@ async fn test_auth_mgr_with_jwt_es256() -> anyhow::Result<()> {
             .await?;
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        assert_eq!(user_info.grants.roles(), &["test-role"]);
+        assert!(user_info.grants.roles().contains("test-role"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // with create user and auth role
@@ -711,7 +715,7 @@ async fn test_jwt_auth_mgr_with_management() -> anyhow::Result<()> {
         .await;
 
     let mut conf = ConfigBuilder::create().with_management_mode().config();
-    conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
+    conf.query.common.jwt_key_file = format!("http://{}{}", server.address(), json_path);
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
@@ -769,7 +773,7 @@ async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
@@ -800,7 +804,8 @@ async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        assert_eq!(user_info.grants.roles(), &["existing-role"]);
+        assert!(user_info.grants.roles().contains("existing-role"));
+        assert_eq!(user_info.grants.roles().len(), 1);
     }
 
     // Now test ensure roles - add new roles to existing user
@@ -830,7 +835,7 @@ async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles = user_info.grants.roles().to_vec();
+        let roles: Vec<String> = user_info.grants.roles_vec();
         assert!(roles.contains(&"existing-role".to_string()));
         assert!(roles.contains(&"new-role-1".to_string()));
         assert!(roles.contains(&"new-role-2".to_string()));
@@ -862,7 +867,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
     let mut conf = ConfigBuilder::create().config();
-    conf.query.jwt_key_file = jwks_url.clone();
+    conf.query.common.jwt_key_file = jwks_url.clone();
 
     let _fixture = TestFixture::setup_with_config(&conf).await?;
 
@@ -893,7 +898,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles = user_info.grants.roles().to_vec();
+        let roles: Vec<String> = user_info.grants.roles_vec();
         assert!(roles.contains(&"role1".to_string()));
         assert!(roles.contains(&"role2".to_string()));
         assert!(user_info.option.default_role().is_none());
@@ -1000,7 +1005,7 @@ async fn test_auth_mgr_ensure_default_role() -> anyhow::Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles = user_info.grants.roles().to_vec();
+        let roles: Vec<String> = user_info.grants.roles_vec();
         assert!(roles.contains(&"role1".to_string()));
         assert!(roles.contains(&"role2".to_string()));
         assert!(roles.contains(&"role3".to_string()));

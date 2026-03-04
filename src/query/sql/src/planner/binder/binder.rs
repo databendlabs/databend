@@ -362,6 +362,7 @@ impl Binder {
 
             // Virtual Columns
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
+            Statement::VacuumVirtualColumn(stmt) => self.bind_vacuum_virtual_column(stmt).await?,
             Statement::ShowVirtualColumns(stmt) => {
                 self.bind_show_virtual_columns(bind_context, stmt).await?
             }
@@ -375,7 +376,7 @@ impl Binder {
             Statement::ShowUsers { show_options } => {
                 let (show_limit, limit_str) = get_show_options(show_options, None);
                 let query = format!(
-                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
+                    "SELECT name, hostname, auth_type, is_configured, default_role, default_warehouse, roles, disabled, network_policy, password_policy, must_change_password FROM default.system.users {} ORDER BY name {}",
                     show_limit, limit_str
                 );
                 self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowUsers)
@@ -841,6 +842,10 @@ impl Binder {
             Statement::RenameWarehouseCluster(v) => self.bind_rename_warehouse_cluster(v)?,
             Statement::AssignWarehouseNodes(v) => self.bind_assign_warehouse_nodes(v)?,
             Statement::UnassignWarehouseNodes(v) => self.bind_unassign_warehouse_nodes(v)?,
+            Statement::ShowWorkers(v) => self.bind_show_workers(v)?,
+            Statement::CreateWorker(v) => self.bind_create_worker(v)?,
+            Statement::AlterWorker(v) => self.bind_alter_worker(v)?,
+            Statement::DropWorker(v) => self.bind_drop_worker(v)?,
             Statement::ShowWorkloadGroups(v) => self.bind_show_workload_groups(v)?,
             Statement::CreateWorkloadGroup(v) => self.bind_create_workload_group(v)?,
             Statement::DropWorkloadGroup(v) => self.bind_drop_workload_group(v)?,

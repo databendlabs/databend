@@ -87,32 +87,32 @@ impl CustomClaims {
 
 impl JwtAuthenticator {
     pub fn create(cfg: &QueryConfig, version: BuildInfoRef) -> Option<Self> {
-        if cfg.jwt_key_file.is_empty() && cfg.jwt_key_files.is_empty() {
+        if cfg.common.jwt_key_file.is_empty() && cfg.common.jwt_key_files.is_empty() {
             return None;
         }
         let user_agent = format!(
             "Databend/{}/{}/{}",
             version.semantic,
             cfg.tenant_id.tenant_name(),
-            cfg.cluster_id
+            cfg.common.cluster_id
         );
 
         // init a vec of key store
         let mut key_stores = vec![];
-        if !cfg.jwt_key_file.is_empty() {
+        if !cfg.common.jwt_key_file.is_empty() {
             key_stores.push(
-                jwk::JwkKeyStore::new(cfg.jwt_key_file.clone(), version)
+                jwk::JwkKeyStore::new(cfg.common.jwt_key_file.clone(), version)
                     .with_user_agent(&user_agent)
-                    .with_refresh_interval(cfg.jwks_refresh_interval)
-                    .with_refresh_timeout(cfg.jwks_refresh_timeout),
+                    .with_refresh_interval(cfg.common.jwks_refresh_interval)
+                    .with_refresh_timeout(cfg.common.jwks_refresh_timeout),
             );
         }
-        for u in &cfg.jwt_key_files {
+        for u in &cfg.common.jwt_key_files {
             key_stores.push(
                 jwk::JwkKeyStore::new(u.clone(), version)
                     .with_user_agent(&user_agent)
-                    .with_refresh_interval(cfg.jwks_refresh_interval)
-                    .with_refresh_timeout(cfg.jwks_refresh_timeout),
+                    .with_refresh_interval(cfg.common.jwks_refresh_interval)
+                    .with_refresh_timeout(cfg.common.jwks_refresh_timeout),
             );
         }
         Some(JwtAuthenticator { key_stores })

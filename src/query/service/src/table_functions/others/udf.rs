@@ -80,7 +80,8 @@ impl UdfEchoTable {
                     format!("udf server address '{address}' is invalid, please check the address",)
                 })?;
 
-            let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
+            let udf_server_allow_list =
+                &GlobalConfig::instance().query.common.udf_server_allow_list;
             if udf_server_allow_list.iter().all(|allow_url| {
                 if let Ok(allow_url) = Url::parse(allow_url) {
                     allow_url.host_str() != url_addr.host_str()

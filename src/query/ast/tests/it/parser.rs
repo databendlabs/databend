@@ -146,6 +146,18 @@ fn test_statement() {
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
+        r#"CREATE WORKER read_env"#,
+        r#"CREATE WORKER IF NOT EXISTS read_env"#,
+        r#"CREATE WORKER read_env WITH size='small', auto_suspend='300', auto_resume='true', max_cluster_count='3', min_cluster_count='1'"#,
+        r#"ALTER WORKER read_env SET size='medium', auto_suspend='600'"#,
+        r#"ALTER WORKER read_env UNSET size, auto_suspend"#,
+        r#"ALTER WORKER read_env SET TAG purpose='sandbox', owner='ci'"#,
+        r#"ALTER WORKER read_env UNSET TAG purpose, owner"#,
+        r#"SHOW WORKERS"#,
+        r#"ALTER WORKER read_env SUSPEND"#,
+        r#"ALTER WORKER read_env RESUME"#,
+        r#"DROP WORKER read_env"#,
+        r#"DROP WORKER IF EXISTS read_env"#,
         r#"truncate table a;"#,
         r#"truncate table "a".b;"#,
         r#"drop table a;"#,
@@ -342,6 +354,18 @@ SELECT * from s;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE c set tag tag1='a';"#,
+        r#"ALTER VIEW v SET TAG tag1 = 'val1';"#,
+        r#"ALTER VIEW IF EXISTS db.v UNSET TAG tag1;"#,
+        r#"ALTER USER 'u1' SET TAG tag1 = 'val1';"#,
+        r#"ALTER USER IF EXISTS 'u1' UNSET TAG tag1;"#,
+        r#"ALTER ROLE r1 SET TAG tag1 = 'val1';"#,
+        r#"ALTER ROLE IF EXISTS r1 UNSET TAG tag1;"#,
+        r#"ALTER STREAM s1 SET TAG tag1 = 'val1';"#,
+        r#"ALTER STREAM IF EXISTS db.s1 UNSET TAG tag1;"#,
+        r#"ALTER FUNCTION my_udf SET TAG tag1 = 'val1';"#,
+        r#"ALTER FUNCTION IF EXISTS my_udf UNSET TAG tag1;"#,
+        r#"ALTER PROCEDURE my_proc(INT, STRING) SET TAG tag1 = 'val1';"#,
+        r#"ALTER PROCEDURE IF EXISTS my_proc() UNSET TAG tag1;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c refresh cache;"#,
         r#"VACUUM TABLE t;"#,
@@ -476,6 +500,12 @@ SELECT * from s;"#,
                     record_delimiter = '\n'
                     skip_header = 1
                 );
+        "#,
+        r#"
+            COPY INTO @my_stage/partitioned
+                FROM mytable
+                PARTITION BY (concat('p=', to_varchar(id)))
+                FILE_FORMAT = (type = PARQUET);
         "#,
         r#"
             COPY INTO mytable
@@ -693,6 +723,7 @@ SELECT * from s;"#,
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"REFRESH VIRTUAL COLUMN FOR t"#,
+        r#"VACUUM VIRTUAL COLUMN FROM t"#,
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
@@ -837,6 +868,10 @@ SELECT * from s;"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
+        r#"/**/ select 1;"#,
+        r#"/***不正常，注释后面多了个星号**/ select 1;"#,
+        r#"/* outer /* inner */ select 1;"#,
+        r#"/* outer /* inner **/ select 1;"#,
         r#"REMOVE @t;"#,
         r#"SELECT sum(d) OVER (w) FROM e;"#,
         r#"SELECT first_value(d) OVER (w) FROM e;"#,
@@ -1077,6 +1112,7 @@ fn test_statement_error() {
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
         r#"COPY INTO mytable FROM 's3://bucket' CONECTION= ();"#, // typos:disable-line
         r#"COPY INTO mytable FROM @mystage CONNECTION = ();"#,
+        r#"COPY INTO @stage/path FROM mytable PARTITION BY concat('p=', id);"#,
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
@@ -1168,6 +1204,7 @@ fn test_statement_error() {
             END;
             $$;"#,
         r#"copy into t1 from (select a from @data/not_exists where a = 1)"#,
+        "/*SELECT * FROM t; /* old query */more code here*/ select 1;",
     ];
 
     for case in cases {

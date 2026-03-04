@@ -19,12 +19,14 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::DropProcedureReq;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropProcedurePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -92,6 +94,14 @@ impl Interpreter for DropProcedureInterpreter {
                 }
             }
         }
+
+        // Clean up tag references unconditionally (must be after drop for concurrency safety)
+        let proc_identity = drop_procedure_req.name_ident.procedure_name();
+        cleanup_object_tags(&tenant, TaggableObject::Procedure {
+            name: proc_identity.name.clone(),
+            args: proc_identity.args.clone(),
+        })
+        .await?;
 
         Ok(PipelineBuildResult::create())
     }

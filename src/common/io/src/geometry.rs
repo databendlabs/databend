@@ -404,142 +404,23 @@ pub fn geometry_type_name(geo: &Geometry) -> &'static str {
 }
 
 pub fn st_extreme(geometry: &Geometry<f64>, axis: Axis, extremum: Extremum) -> Option<f64> {
-    match geometry {
-        Geometry::Point(point) => {
-            let coord = match axis {
-                Axis::X => point.x(),
-                Axis::Y => point.y(),
-            };
-            Some(coord)
-        }
-        Geometry::MultiPoint(multi_point) => {
-            let mut extreme_coord: Option<f64> = None;
-            for point in multi_point {
-                if let Some(coord) = st_extreme(&Geometry::Point(*point), axis, extremum) {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::Line(line) => {
-            let bounding_rect = line.bounding_rect();
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => bounding_rect.max().x,
-                    Extremum::Min => bounding_rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => bounding_rect.max().y,
-                    Extremum::Min => bounding_rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-        Geometry::MultiLineString(multi_line) => {
-            let mut extreme_coord: Option<f64> = None;
-            for line in multi_line {
-                if let Some(coord) = st_extreme(&Geometry::LineString(line.clone()), axis, extremum)
-                {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::Polygon(polygon) => {
-            let bounding_rect = polygon.bounding_rect()?;
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => bounding_rect.max().x,
-                    Extremum::Min => bounding_rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => bounding_rect.max().y,
-                    Extremum::Min => bounding_rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-        Geometry::MultiPolygon(multi_polygon) => {
-            let mut extreme_coord: Option<f64> = None;
-            for polygon in multi_polygon {
-                if let Some(coord) = st_extreme(&Geometry::Polygon(polygon.clone()), axis, extremum)
-                {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::GeometryCollection(geometry_collection) => {
-            let mut extreme_coord: Option<f64> = None;
-            for geometry in geometry_collection {
-                if let Some(coord) = st_extreme(geometry, axis, extremum) {
-                    extreme_coord = match extreme_coord {
-                        Some(existing) => match extremum {
-                            Extremum::Max => Some(existing.max(coord)),
-                            Extremum::Min => Some(existing.min(coord)),
-                        },
-                        None => Some(coord),
-                    };
-                }
-            }
-            extreme_coord
-        }
-        Geometry::LineString(line_string) => line_string.bounding_rect().map(|rect| match axis {
-            Axis::X => match extremum {
-                Extremum::Max => rect.max().x,
-                Extremum::Min => rect.min().x,
-            },
-            Axis::Y => match extremum {
-                Extremum::Max => rect.max().y,
-                Extremum::Min => rect.min().y,
-            },
-        }),
-        Geometry::Rect(rect) => {
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => rect.max().x,
-                    Extremum::Min => rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => rect.max().y,
-                    Extremum::Min => rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-        Geometry::Triangle(triangle) => {
-            let bounding_rect = triangle.bounding_rect();
-            let coord = match axis {
-                Axis::X => match extremum {
-                    Extremum::Max => bounding_rect.max().x,
-                    Extremum::Min => bounding_rect.min().x,
-                },
-                Axis::Y => match extremum {
-                    Extremum::Max => bounding_rect.max().y,
-                    Extremum::Min => bounding_rect.min().y,
-                },
-            };
-            Some(coord)
-        }
-    }
+    geometry.bounding_rect().map(|rect| match axis {
+        Axis::X => match extremum {
+            Extremum::Max => rect.max().x,
+            Extremum::Min => rect.min().x,
+        },
+        Axis::Y => match extremum {
+            Extremum::Max => rect.max().y,
+            Extremum::Min => rect.min().y,
+        },
+    })
+}
+
+pub fn geometry_bbox_center(geometry: &Geometry<f64>) -> Option<(f64, f64)> {
+    let bbox = geometry.bounding_rect()?;
+    let x = bbox.min().x + (bbox.max().x - bbox.min().x) / 2.0;
+    let y = bbox.min().y + (bbox.max().y - bbox.min().y) / 2.0;
+    Some((x, y))
 }
 
 pub fn count_points(geom: &Geometry) -> usize {

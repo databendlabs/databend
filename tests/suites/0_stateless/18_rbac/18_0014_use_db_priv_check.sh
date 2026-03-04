@@ -7,27 +7,26 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export TEST_USER_PASSWORD="password"
 export USER_TEST_CONNECT="bendsql -A --user=test --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-
-echo "drop user if exists test" | $BENDSQL_CLIENT_CONNECT
-echo "create user test identified by '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
-
-echo "create or replace database a" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace database b" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace database c" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace table a.t(ida int)" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace table a.t1(ida1 int)" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace table b.t(idb int)" | $BENDSQL_CLIENT_CONNECT
-echo "create or replace table b.t1(idb1 int)" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists test_role1" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists test_role2" | $BENDSQL_CLIENT_CONNECT
-echo "create role test_role1" | $BENDSQL_CLIENT_CONNECT
-echo "create role test_role2" | $BENDSQL_CLIENT_CONNECT
-echo "grant usage on a.* to role test_role1" | $BENDSQL_CLIENT_CONNECT
-echo "grant usage on b.* to role test_role1" | $BENDSQL_CLIENT_CONNECT
-echo "grant ownership on b.t to role test_role1" | $BENDSQL_CLIENT_CONNECT
-
-echo "grant role test_role1 to test" | $BENDSQL_CLIENT_CONNECT
-echo "grant select on a.t1 to test" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists test;
+create user test identified by '$TEST_USER_PASSWORD';
+create or replace database a;
+create or replace database b;
+create or replace database c;
+create or replace table a.t(ida int);
+create or replace table a.t1(ida1 int);
+create or replace table b.t(idb int);
+create or replace table b.t1(idb1 int);
+drop role if exists test_role1;
+drop role if exists test_role2;
+create role test_role1;
+create role test_role2;
+grant usage on a.* to role test_role1;
+grant usage on b.* to role test_role1;
+grant ownership on b.t to role test_role1;
+grant role test_role1 to test;
+grant select on a.t1 to test;
+"
 
 echo "=== show db ==="
 echo "show databases" | $USER_TEST_CONNECT
@@ -48,9 +47,11 @@ echo "show columns from t1 from a" | $USER_TEST_CONNECT
 echo "show columns from t from b" | $USER_TEST_CONNECT
 echo "show columns from t1 from b" | $USER_TEST_CONNECT
 
-echo "drop user if exists test" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists test_role1" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists test_role2" | $BENDSQL_CLIENT_CONNECT
-echo "drop database a" | $BENDSQL_CLIENT_CONNECT
-echo "drop database b" | $BENDSQL_CLIENT_CONNECT
-echo "drop database c" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists test;
+drop role if exists test_role1;
+drop role if exists test_role2;
+drop database a;
+drop database b;
+drop database c;
+"

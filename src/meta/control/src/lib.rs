@@ -16,6 +16,7 @@
 
 pub mod admin;
 pub mod args;
+pub mod dump_raft_log_wal;
 pub mod export_from_disk;
 pub mod export_from_grpc;
 pub mod import;

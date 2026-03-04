@@ -87,5 +87,238 @@ statement ok
 drop table if EXISTS world
 
 statement ok
-DROP DATABASE db1
+CREATE TABLE stage_partition_src(dt DATE, ts TIMESTAMP, val INT)
 
+statement ok
+INSERT INTO stage_partition_src VALUES
+    ('2020-01-28', '2020-01-28 18:00:00', 1),
+    ('2020-01-28', '2020-01-28 22:00:00', 2),
+    ('2020-01-29', '2020-01-29 02:00:00', 3),
+    (NULL, NULL, 4)
+
+statement ok
+DROP STAGE IF EXISTS hello_partition
+
+statement ok
+CREATE STAGE hello_partition
+
+statement ok
+COPY INTO @hello_partition
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+
+query I
+select count() from @hello_partition;
+----
+4
+
+query IIII
+SELECT
+    count_if(name LIKE 'date=2020-01-28/hour=18/%'),
+    count_if(name LIKE 'date=2020-01-28/hour=22/%'),
+    count_if(name LIKE 'date=2020-01-29/hour=02/%'),
+    count_if(name LIKE '_NULL_/%')
+FROM list_stage(location=>'@hello_partition')
+----
+1 1 1 1
+
+statement ok
+remove @hello_partition
+
+statement ok
+COPY INTO @hello_partition/foo/data_
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+
+query I
+select count() from @hello_partition;
+----
+4
+
+query IIII
+SELECT
+    count_if(name LIKE 'foo/date=2020-01-28/hour=18/data_%'),
+    count_if(name LIKE 'foo/date=2020-01-28/hour=22/data_%'),
+    count_if(name LIKE 'foo/date=2020-01-29/hour=02/data_%'),
+    count_if(name LIKE 'foo/_NULL_/data_%')
+FROM list_stage(location=>'@hello_partition')
+----
+1 1 1 1
+
+statement ok
+DROP STAGE hello_partition
+
+statement ok
+DROP STAGE IF EXISTS hello_partition_sanitize
+
+statement ok
+CREATE STAGE hello_partition_sanitize
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT '' AS part_key
+            UNION ALL SELECT 'foo/bar'
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+query II
+SELECT
+    count_if(name LIKE 'foo/%'),
+    count_if(name NOT LIKE '%/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+1 1
+
+
+statement ok
+remove @hello_partition_sanitize
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT '' AS part_key
+            UNION ALL SELECT 'foo/bar'
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = CSV)
+
+query II
+SELECT
+    count_if(name LIKE 'foo/%'),
+    count_if(name NOT LIKE '%/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+1 1
+
+
+statement ok
+remove @hello_partition_sanitize
+
+
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT (number % 10)::String || '_v1' AS part_key from numbers(10000)
+            UNION ALL SELECT (number % 10)::String || '_v2' AS part_key from numbers(10000)
+            UNION ALL SELECT NULL AS part_key from numbers(10000)
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = CSV)
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT (number % 10)::String || '_v1' AS part_key from numbers(10000)
+            UNION ALL SELECT (number % 10)::String || '_v2' AS part_key from numbers(10000)
+            UNION ALL SELECT NULL AS part_key from numbers(10000)
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = JSON)
+
+query III
+SELECT
+    count_if(name LIKE '%_v1/%'),
+    count_if(name LIKE '%_v2/%'),
+    count_if(name LIKE '%NULL_/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+20 20 2
+
+
+statement ok
+remove @hello_partition_sanitize
+
+statement ok
+COPY INTO @hello_partition_sanitize
+    FROM (
+        SELECT part_key
+        FROM (
+            SELECT (number % 10)::String || '_v1' AS part_key from numbers(10000)
+            UNION ALL SELECT (number % 10)::String || '_v2' AS part_key from numbers(10000)
+            UNION ALL SELECT NULL AS part_key from numbers(10000)
+        )
+    )
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+
+query I
+select count() from @hello_partition_sanitize;
+----
+30000
+
+query III
+SELECT
+    count_if(name LIKE '%_v1/%'),
+    count_if(name LIKE '%_v2/%'),
+    count_if(name LIKE '%NULL_/%')
+FROM list_stage(location=>'@hello_partition_sanitize')
+----
+10 10 1
+
+
+statement error 2004
+COPY INTO @hello_partition_sanitize
+    FROM (SELECT '../escape' AS part_key)
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+statement error 2004
+COPY INTO @hello_partition_sanitize
+    FROM (SELECT './foo/../bar' AS part_key)
+    PARTITION BY (part_key)
+    FILE_FORMAT = (type = PARQUET)
+
+statement ok
+DROP STAGE hello_partition_sanitize
+
+statement ok
+DROP STAGE IF EXISTS hello_partition_conflict
+
+statement ok
+CREATE STAGE hello_partition_conflict
+
+statement error 2004
+COPY INTO @hello_partition_conflict
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+    SINGLE = TRUE
+
+statement error 2004
+COPY INTO @hello_partition_conflict
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+    OVERWRITE = TRUE
+
+statement error 2004
+COPY INTO @hello_partition_conflict
+    FROM stage_partition_src
+    PARTITION BY ('date=' || to_varchar(dt, 'YYYY-MM-DD') || '/hour=' || lpad(to_varchar(date_part('hour', ts)), 2, '0'))
+    FILE_FORMAT = (type = PARQUET)
+    INCLUDE_QUERY_ID = FALSE
+
+statement ok
+DROP STAGE hello_partition_conflict
+
+
+statement ok
+DROP DATABASE db1

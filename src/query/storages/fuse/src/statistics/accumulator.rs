@@ -23,6 +23,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature;
@@ -87,13 +88,9 @@ impl VirtualColumnAccumulator {
         schema: &Arc<TableSchema>,
         virtual_schema: &Option<VirtualDataSchema>,
     ) -> Option<VirtualColumnAccumulator> {
-        if !ctx
-            .get_settings()
-            .get_enable_experimental_virtual_column()
-            .unwrap_or_default()
-            || LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
-                .is_err()
+        if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::VirtualColumn)
+            .is_err()
         {
             return None;
         }
@@ -106,16 +103,21 @@ impl VirtualColumnAccumulator {
             return None;
         }
 
-        let mut virtual_fields = BTreeMap::new();
-        let virtual_schema = if let Some(virtual_schema) = virtual_schema {
-            for (i, virtual_field) in virtual_schema.fields.iter().enumerate() {
-                let key = (virtual_field.source_column_id, virtual_field.name.clone());
-                virtual_fields.insert(key, i);
-            }
+        let mut virtual_schema = if let Some(virtual_schema) = virtual_schema {
             virtual_schema.clone()
         } else {
             VirtualDataSchema::empty()
         };
+
+        if virtual_schema.fields.len() > VIRTUAL_COLUMNS_LIMIT {
+            virtual_schema.fields.truncate(VIRTUAL_COLUMNS_LIMIT);
+        }
+
+        let mut virtual_fields = BTreeMap::new();
+        for (i, virtual_field) in virtual_schema.fields.iter().enumerate() {
+            let key = (virtual_field.source_column_id, virtual_field.name.clone());
+            virtual_fields.insert(key, i);
+        }
 
         Some(VirtualColumnAccumulator {
             virtual_fields,

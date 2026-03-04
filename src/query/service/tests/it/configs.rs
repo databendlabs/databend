@@ -136,7 +136,7 @@ fn test_env_config_s3() -> anyhow::Result<()> {
             assert_eq!("us.bucket", configured.storage.s3.bucket);
 
             assert!(configured.cache.enable_table_meta_cache);
-            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_index_bloom);
             assert_eq!(10240, configured.cache.table_meta_segment_bytes);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
@@ -261,7 +261,7 @@ fn test_env_config_fs() -> anyhow::Result<()> {
             assert_eq!("", configured.storage.gcs.gcs_root);
             assert_eq!("", configured.storage.gcs.credential);
 
-            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_index_bloom);
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
@@ -395,7 +395,7 @@ fn test_env_config_gcs() -> anyhow::Result<()> {
             assert_eq!("", configured.storage.oss.oss_access_key_secret);
 
             assert!(configured.cache.enable_table_meta_cache);
-            assert!(configured.cache.enable_table_bloom_index_cache);
+            assert!(configured.cache.enable_table_index_bloom);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
             assert_eq!(10240, configured.cache.table_meta_segment_bytes);
@@ -868,15 +868,13 @@ path = "_cache"
             // config in `catalogs` field, with name of "my_hive"
             assert!(cfg.catalogs.contains_key("my_hive"), "catalogs is none!");
 
-            let inner = cfg.catalogs["my_hive"].clone().try_into();
-            assert!(inner.is_ok(), "casting must success");
-            let cfg = inner.unwrap();
-            match cfg {
-                CatalogConfig::Hive(cfg) => {
-                    assert_eq!("127.0.0.1:9083", cfg.metastore_address, "address incorrect");
-                    assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
-                }
-            }
+            let inner: CatalogConfig = cfg.catalogs["my_hive"].clone();
+            assert_eq!("hive", inner.ty);
+            assert_eq!(
+                "127.0.0.1:9083", inner.hive.metastore_address,
+                "address incorrect"
+            );
+            assert_eq!("binary", inner.hive.protocol, "protocol incorrect");
         },
     );
 
@@ -909,13 +907,14 @@ protocol = "binary"
         || {
             let cfg = InnerConfig::load_for_test().expect("config load success");
 
-            assert_eq!(
-                cfg.catalogs["hive"],
-                CatalogConfig::Hive(CatalogHiveConfig {
+            assert_eq!(cfg.catalogs["hive"], CatalogConfig {
+                ty: "hive".to_string(),
+                hive: CatalogHiveConfig {
                     metastore_address: "1.1.1.1:10000".to_string(),
-                    protocol: ThriftProtocol::Binary,
-                })
-            );
+                    meta_store_address: None,
+                    protocol: ThriftProtocol::Binary.to_string(),
+                },
+            });
         },
     );
 
@@ -981,13 +980,14 @@ protocol = "binary"
         || {
             let cfg = InnerConfig::load_for_test().expect("config load success");
 
-            assert_eq!(
-                cfg.catalogs["my_hive"],
-                CatalogConfig::Hive(CatalogHiveConfig {
+            assert_eq!(cfg.catalogs["my_hive"], CatalogConfig {
+                ty: "hive".to_string(),
+                hive: CatalogHiveConfig {
                     metastore_address: "1.1.1.1:12000".to_string(),
-                    protocol: ThriftProtocol::Binary,
-                })
-            );
+                    meta_store_address: None,
+                    protocol: ThriftProtocol::Binary.to_string(),
+                },
+            });
         },
     );
 

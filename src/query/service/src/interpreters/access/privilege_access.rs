@@ -266,7 +266,11 @@ impl PrivilegeAccess {
         }
 
         let user_api = UserApiProvider::instance();
-        let ownerships = user_api.role_api(tenant).list_ownerships().await?;
+        let ownerships = user_api
+            .role_api(tenant)
+            .list_ownerships()
+            .await
+            .map_err(meta_service_error)?;
         Ok((roles_name, ownerships))
     }
 
@@ -624,12 +628,42 @@ impl PrivilegeAccess {
                     }
                 }
             }
+            TagSetObject::User(_) | TagSetObject::Role(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await
+            }
             TagSetObject::Connection(target) => {
                 self.validate_connection_access(
                     target.connection_name.clone(),
                     UserPrivilegeType::AccessConnection,
                 )
                 .await
+            }
+            TagSetObject::View(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.view,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::Stream(target) => {
+                self.validate_table_access(
+                    &target.catalog,
+                    &target.database,
+                    &target.stream,
+                    UserPrivilegeType::Alter,
+                    target.if_exists,
+                    false,
+                )
+                .await
+            }
+            TagSetObject::UDF(_) | TagSetObject::Procedure(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
+                    .await
             }
         }
     }
@@ -1467,6 +1501,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RefreshVirtualColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
+            Plan::VacuumVirtualColumn(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            }
 
             // Table.
             Plan::ShowCreateTable(plan) => {
@@ -1952,7 +1989,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_) => {
+            | Plan::AlterTask(_)
+            | Plan::CreateWorker(_)
+            | Plan::AlterWorker(_)
+            | Plan::DropWorker(_)
+            | Plan::ShowWorkers => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -2232,8 +2273,9 @@ async fn has_priv(
         }
     }
 
+    let grant_set_roles: Vec<String> = grant_set.roles_vec();
     Ok(RoleCacheManager::instance()
-        .find_related_roles(tenant, &grant_set.roles())
+        .find_related_roles(tenant, &grant_set_roles)
         .await?
         .into_iter()
         .map(|role| role.grants)

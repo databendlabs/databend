@@ -285,6 +285,9 @@ impl DefaultExprBinder {
                     AsyncFunctionArgument::DictGetFunction(_) => {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
+                    AsyncFunctionArgument::ReadFile(_) => {
+                        unreachable!("expect AsyncFunctionArgument::SequenceFunction")
+                    }
                 };
                 RemoteDefaultExpr::Sequence(name)
             } else {

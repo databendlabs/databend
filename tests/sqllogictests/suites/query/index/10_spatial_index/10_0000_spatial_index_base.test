@@ -1,11 +1,11 @@
 statement ok
-drop database if exists test_spatial_index
+DROP DATABASE if exists test_spatial_index
 
 statement ok
-create database test_spatial_index
+CREATE DATABASE test_spatial_index
 
 statement ok
-use test_spatial_index
+USE test_spatial_index
 
 statement ok
 CREATE TABLE IF NOT EXISTS t(id Int, geom Geometry, geog Geography, SPATIAL INDEX idx (geom, geog)) Engine = Fuse
@@ -33,8 +33,62 @@ statement error
 DROP INVERTED INDEX idx2 ON t;
 
 statement ok
-use default
+CREATE TABLE spatial_stores (store_id INT, category String, store_name String, status String, location Geometry, SPATIAL INDEX idx (location)) row_per_block=2
 
 statement ok
-drop database test_spatial_index
+INSERT INTO spatial_stores VALUES
+(1, 'coffee', 'Starbucks', 'active', TO_GEOMETRY('POINT(10 10)')),
+(2, 'coffee', 'Costa', 'active', TO_GEOMETRY('POINT(11 11)')),
+(3, 'tea', 'Gong Cha', 'inactive', TO_GEOMETRY('POINT(20 20)')),
+(4, 'coffee', 'Dunkin', 'inactive', TO_GEOMETRY('POINT(-10 -10)')),
+(5, 'coffee', 'Peets Coffee', 'active', TO_GEOMETRY('POINT(100 100)')),
+(6, 'tea', 'Lipton', 'active', TO_GEOMETRY('POINT(101 101)')),
+(7, 'restaurant', 'McDonald', 'active', TO_GEOMETRY('POINT(30 30)')),
+(8, 'hotel', 'Hilton', 'active', TO_GEOMETRY('POINT(40 40)')),
+(9, 'park', 'Central Park', 'active', TO_GEOMETRY('POINT(200 200)')),
+(10, 'restaurant', 'KFC', 'inactive', TO_GEOMETRY('POINT(-20 -20)')),
+(11, 'hotel', 'Marriott', 'inactive', TO_GEOMETRY('POINT(-30 -30)')),
+(12, 'park', 'Golden Gate Park', 'active', TO_GEOMETRY('POINT(300 300)')),
+(13, 'restaurant', 'Burger King', 'active', TO_GEOMETRY('POINT(60 60)')),
+(14, 'hotel', 'Hyatt', 'inactive', TO_GEOMETRY('POINT(-40 -40)')),
+(15, 'park', 'Hyde Park', 'active', TO_GEOMETRY('POINT(220 220)')),
+(16, 'grocery', 'Walmart', 'active', TO_GEOMETRY('POINT(500 500)')),
+(17, 'museum', 'Louvre', 'active', TO_GEOMETRY('POINT(600 600)')),
+(18, 'bookstore', 'Barnes & Noble', 'inactive', TO_GEOMETRY('POINT(-50 -50)'))
 
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE st_intersects(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) ORDER BY store_id;
+----
+1 Starbucks coffee
+2 Costa coffee
+
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE category = 'coffee' AND status = 'active' AND st_within(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) ORDER BY store_id;
+----
+1 Starbucks coffee
+2 Costa coffee
+
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE category = 'restaurant' AND status = 'active' AND st_within(location, to_geometry('POLYGON((25 25, 25 65, 65 65, 65 25, 25 25))')) ORDER BY store_id;
+----
+7 McDonald restaurant
+13 Burger King restaurant
+
+query ITT
+SELECT store_id, store_name, status FROM spatial_stores WHERE category = 'hotel' AND status = 'inactive' AND st_intersects(location, to_geometry('POLYGON((-50 -50, -50 -25, -25 -25, -25 -50, -50 -50))')) ORDER BY store_id;
+----
+11 Marriott inactive
+14 Hyatt inactive
+
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE category IN ('restaurant', 'hotel') AND status = 'active' AND st_intersects(location, to_geometry('POLYGON((25 25, 25 65, 65 65, 65 25, 25 25))')) ORDER BY store_id;
+----
+7 McDonald restaurant
+8 Hilton hotel
+13 Burger King restaurant
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE test_spatial_index

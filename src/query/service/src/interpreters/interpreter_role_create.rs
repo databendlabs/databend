@@ -70,7 +70,7 @@ impl Interpreter for CreateRoleInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
         user_mgr
-            .add_role(
+            .create_role(
                 &tenant,
                 RoleInfo::new(&role_name, plan.comment),
                 &plan.create_option,

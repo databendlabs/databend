@@ -254,6 +254,18 @@ SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.va
 statement ok
 REFRESH VIRTUAL COLUMN FOR t2;
 
+query I
+VACUUM VIRTUAL COLUMN FROM t2;
+----
+0
+
+query TTTITT
+show virtual columns from t2
+----
+test_virtual_column t2 val 3000000000 ['a'] UInt64
+test_virtual_column t2 val 3000000001 ['b'] UInt64
+test_virtual_column t2 val 3000000002 ['c'] String
+
 statement ok
 create or replace table tweets (id int, data json);
 
@@ -502,9 +514,6 @@ query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
 27
-
-statement error
-REFRESH VIRTUAL COLUMN FOR tweets;
 
 statement ok
 set enable_experimental_virtual_column = 1;
@@ -777,6 +786,105 @@ FROM test2;
 8 "Jennifer" 29 "San Francisco" "Marina" 108 "10.8"
 9 "Richard" 33 "Austin" NULL "109" "10.9"
 10 "Lisa" 26 "Chicago" NULL NULL "10.10"
+
+## -------------------------------------------------------
+## Vacuum virtual column test
+##
+## Verifies schema pruning and orphan _vb_v2 file cleanup.
+## Uses fs:// storage + list_stage to observe _vb_v2 files on disk.
+##
+## Other vacuum behaviors (legacy _vb cleanup, detaching legacy block metas)
+## are covered by integration tests in
+## src/query/ee/tests/it/storages/fuse/operations/virtual_columns.rs.
+## -------------------------------------------------------
+
+statement ok
+set data_retention_time_in_days = 0;
+
+statement ok
+CREATE TABLE vacuum_test (id INT, v VARIANT) 'fs:///tmp/test_vacuum_virtual_column/';
+
+statement ok
+CREATE OR REPLACE STAGE vb_stage url = 'fs:///tmp/test_vacuum_virtual_column/';
+
+# Batch 1: rows with fields a, b
+statement ok
+INSERT INTO vacuum_test VALUES (1, '{"a":1, "b":2}'), (2, '{"a":3, "b":4}'), (3, '{"a":5, "b":6}');
+
+# Batch 2: rows with fields a, b, c, d (c and d are unique to this batch)
+statement ok
+INSERT INTO vacuum_test VALUES (4, '{"a":7, "b":8, "c":9, "d":10}'), (5, '{"a":11, "b":12, "c":13, "d":14}'), (6, '{"a":15, "b":16, "c":17, "d":18}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR vacuum_test;
+
+# Schema has 4 fields (a, b, c, d), 2 _vb_v2 files (one per block)
+query TTTITT
+show virtual columns from vacuum_test;
+----
+test_virtual_column vacuum_test v 3000000000 ['a'] UInt64
+test_virtual_column vacuum_test v 3000000001 ['b'] UInt64
+test_virtual_column vacuum_test v 3000000002 ['c'] UInt64
+test_virtual_column vacuum_test v 3000000003 ['d'] UInt64
+
+query I
+select count() from list_stage(location=> '@vb_stage') where name like '%_vb_v2%';
+----
+2
+
+# Delete batch 2 (the rows with c, d). The block is removed, its _vb_v2 becomes orphan.
+statement ok
+DELETE FROM vacuum_test WHERE id >= 4;
+
+# Refresh rebuilds _vb_v2 for the rewritten blocks (only a, b remain in data).
+# Schema still has 4 fields (refresh merges, doesn't prune).
+statement ok
+REFRESH VIRTUAL COLUMN FOR vacuum_test;
+
+query TTTITT
+show virtual columns from vacuum_test;
+----
+test_virtual_column vacuum_test v 3000000000 ['a'] UInt64
+test_virtual_column vacuum_test v 3000000001 ['b'] UInt64
+test_virtual_column vacuum_test v 3000000002 ['c'] UInt64
+test_virtual_column vacuum_test v 3000000003 ['d'] UInt64
+
+# Purge old snapshots so orphan _vb_v2 files are no longer referenced.
+statement ok
+select * from fuse_vacuum2('test_virtual_column', 'vacuum_test') ignore_result;
+
+# Vacuum prunes unreferenced fields (c, d) and removes orphan _vb_v2 files.
+query I
+VACUUM VIRTUAL COLUMN FROM vacuum_test;
+----
+1
+
+# After vacuum: only a and b remain in schema
+query TTTITT
+show virtual columns from vacuum_test;
+----
+test_virtual_column vacuum_test v 3000000000 ['a'] UInt64
+test_virtual_column vacuum_test v 3000000001 ['b'] UInt64
+
+# Orphan _vb_v2 file removed, only 1 remains
+query I
+select count() from list_stage(location=> '@vb_stage') where name like '%_vb_v2%';
+----
+1
+
+# Data intact
+query II
+select id, v['a'] from vacuum_test order by id;
+----
+1 1
+2 3
+3 5
+
+statement ok
+remove @vb_stage;
+
+statement ok
+drop stage vb_stage;
 
 statement ok
 set enable_experimental_virtual_column = 0;

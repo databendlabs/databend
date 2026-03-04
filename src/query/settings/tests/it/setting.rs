@@ -192,7 +192,7 @@ async fn test_set_data_retention_time_in_days_from_config() {
     // Change default value.
     {
         let mut conf = InnerConfig::default();
-        conf.query.data_retention_time_in_days_max = 33;
+        conf.query.common.data_retention_time_in_days_max = 33;
         GlobalConfig::init(&conf, &BUILD_INFO).unwrap();
     }
 

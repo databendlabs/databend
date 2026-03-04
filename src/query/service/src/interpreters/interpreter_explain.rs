@@ -29,7 +29,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
-use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::always_callback;
@@ -50,7 +49,7 @@ use serde_json;
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use crate::interpreters::Interpreter;
-use crate::interpreters::interpreter::on_execution_finished;
+use crate::interpreters::QueryFinishHooks;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::physical_plans::FormatContext;
@@ -541,11 +540,9 @@ impl ExplainInterpreter {
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
         let ctx = self.ctx.clone();
-        build_res
-            .main_pipeline
-            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
-                on_execution_finished(info, ctx)
-            }));
+        build_res.main_pipeline.set_on_finished(always_callback(
+            QueryFinishHooks::nested_with_hooks().into_callback(ctx.clone()),
+        ));
         match build_res.main_pipeline.is_complete_pipeline()? {
             true => {
                 let mut pipelines = build_res.sources_pipelines;

@@ -110,7 +110,10 @@ impl UserApiProvider {
             }
         };
 
-        let whitelist = &GlobalConfig::instance().query.network_policy_whitelist;
+        let whitelist = &GlobalConfig::instance()
+            .query
+            .common
+            .network_policy_whitelist;
         for whitelist_ip in whitelist {
             let cidr: Ipv4Cidr = whitelist_ip.parse()?;
             if cidr.contains(&ip_addr) {

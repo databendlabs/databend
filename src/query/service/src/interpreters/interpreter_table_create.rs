@@ -324,7 +324,7 @@ impl CreateTableInterpreter {
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let mut stat = None;
-        if !GlobalConfig::instance().query.management_mode {
+        if !GlobalConfig::instance().query.common.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
                 // using application level data operator is a temp workaround
                 // please see discussions https://github.com/datafuselabs/databend/pull/10424

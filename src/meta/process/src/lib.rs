@@ -53,6 +53,7 @@
 
 pub mod examples;
 pub mod kv_processor;
+pub mod pb_value_decoder;
 pub mod process;
 pub mod process_meta_dir;
 pub mod rewrite_kv;

@@ -254,3 +254,10 @@ from infer_schema(location => '@data/ndjson/max_file_count/', file_format => 'ND
 ----
 Y
 Y
+
+# TSV
+query TTBTI
+select * from infer_schema(location => '@data/tsv/no_newline.tsv', file_format => 'TSV');
+----
+column_1 BIGINT 1 tsv/no_newline.tsv 0
+column_2 BIGINT 1 tsv/no_newline.tsv 1

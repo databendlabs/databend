@@ -239,6 +239,7 @@ impl UserPrivilegeSet {
         let wh_privs_without_ownership = Self::available_privileges_on_warehouse(false);
         let connection_privs_without_ownership = Self::available_privileges_on_connection(false);
         let seq_privs_without_ownership = Self::available_privileges_on_sequence(false);
+        let procedure_privs_without_ownership = Self::available_privileges_on_procedure(false);
         let mask_privs = Self::available_privileges_on_masking_policy(false);
         let row_access_privs = Self::available_privileges_on_row_access_policy(false);
         let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateMaskingPolicy | CreateRowAccessPolicy | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
@@ -248,6 +249,7 @@ impl UserPrivilegeSet {
             | wh_privs_without_ownership.privileges
             | connection_privs_without_ownership.privileges
             | seq_privs_without_ownership.privileges
+            | procedure_privs_without_ownership.privileges
             | udf_privs_without_ownership.privileges
             | mask_privs.privileges
             | row_access_privs.privileges)

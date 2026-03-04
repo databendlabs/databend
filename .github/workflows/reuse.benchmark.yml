@@ -249,7 +249,7 @@ jobs:
           - "hits"
           - "tpch100"
           - "tpch1000"
-          # - "internal"
+          - "internal"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

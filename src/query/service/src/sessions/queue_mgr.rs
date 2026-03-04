@@ -43,8 +43,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_semaphore::errors::AcquireError;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_metrics::session::dec_session_running_acquired_queries;
@@ -59,6 +57,8 @@ use databend_common_sql::PlanExtras;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
+use databend_meta_plugin_semaphore::acquirer::Permit;
+use databend_meta_plugin_semaphore::errors::AcquireError;
 use databend_meta_runtime::DatabendRuntime;
 use futures_util::future::Either;
 use log::info;
@@ -131,7 +131,7 @@ impl<Data: QueueData> QueueManager<Data> {
         GlobalInstance::set(Self::create(
             permits,
             metastore,
-            conf.query.global_statement_queue,
+            conf.query.common.global_statement_queue,
         ));
         Ok(())
     }

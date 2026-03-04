@@ -59,46 +59,19 @@
 //! - `reader.MIN_MSG_VER` is the minimal message version this program can read.
 //! - `message.MIN_READER_VER` is the minimal reader(program) version that can read this message.
 
-mod catalog_from_to_protobuf_impl;
-mod client_session_from_to_protobuf_impl;
-mod config_from_to_protobuf_impl;
-mod connection_from_to_protobuf_impl;
-mod data_mask_from_to_protobuf_impl;
-mod database_from_to_protobuf_impl;
-mod datetime_from_to_protobuf_impl;
-mod dictionary_from_to_protobuf_impl;
-mod file_format_from_to_protobuf_impl;
-mod from_to_protobuf;
-mod id_from_to_protobuf_impl;
-mod index_from_to_protobuf_impl;
-mod least_visible_time_from_to_protobuf_impl;
-mod lock_from_to_protobuf_impl;
-mod mask_policy_table_id_from_to_protobuf_impl;
-mod owner_from_to_protobuf_impl;
-mod ownership_from_to_protobuf_impl;
-mod procedure_from_to_protobuf_impl;
-mod role_from_to_protobuf_impl;
-mod row_access_policy_from_to_protobuf_impl;
-mod row_access_policy_table_id_form_to_protobuf_impl;
-mod schema_from_to_protobuf_impl;
-mod sequence_from_to_protobuf_impl;
-mod stage_from_to_protobuf_impl;
-mod table_from_to_protobuf_impl;
-mod tag_from_to_protobuf_impl;
-mod task_from_to_protobuf_impl;
-mod tenant_quota_from_to_protobuf_impl;
-mod tident_from_to_protobuf_impl;
-mod token_from_to_protobuf_impl;
-mod udf_from_to_protobuf_impl;
-mod user_from_to_protobuf_impl;
+mod error;
+mod impls;
+mod traits;
 mod util;
-mod vacuum_watermark_from_to_protobuf_impl;
 
-pub use from_to_protobuf::FromToProto;
-pub use from_to_protobuf::FromToProtoEnum;
-pub use from_to_protobuf::Incompatible;
+pub use error::Incompatible;
+pub use traits::FromProtoOptionExt;
+pub use traits::FromToProto;
+pub use traits::FromToProtoEnum;
+pub use traits::ToProtoOptionExt;
 pub use util::MIN_MSG_VER;
 pub use util::MIN_READER_VER;
 pub use util::VER;
+pub use util::convert_field;
 pub use util::missing;
 pub use util::reader_check_msg;

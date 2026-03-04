@@ -49,6 +49,7 @@ use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
+use crate::plans::AlterWorkerPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CallProcedurePlan;
@@ -78,6 +79,7 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateWarehousePlan;
+use crate::plans::CreateWorkerPlan;
 use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
@@ -121,6 +123,7 @@ use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropWarehouseClusterPlan;
 use crate::plans::DropWarehousePlan;
+use crate::plans::DropWorkerPlan;
 use crate::plans::DropWorkloadGroupPlan;
 use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
@@ -187,8 +190,10 @@ use crate::plans::UseWarehousePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
+use crate::plans::VacuumVirtualColumnPlan;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
+use crate::plans::worker_schema;
 
 #[derive(Educe)]
 #[educe(
@@ -252,6 +257,12 @@ pub enum Plan {
     RenameWarehouseCluster(Box<RenameWarehouseClusterPlan>),
     AssignWarehouseNodes(Box<AssignWarehouseNodesPlan>),
     UnassignWarehouseNodes(Box<UnassignWarehouseNodesPlan>),
+
+    // Workers
+    ShowWorkers,
+    CreateWorker(Box<CreateWorkerPlan>),
+    AlterWorker(Box<AlterWorkerPlan>),
+    DropWorker(Box<DropWorkerPlan>),
 
     // Workloads
     ShowWorkloadGroups,
@@ -325,7 +336,7 @@ pub enum Plan {
     },
 
     CopyIntoTable(Box<CopyIntoTablePlan>),
-    CopyIntoLocation(CopyIntoLocationPlan),
+    CopyIntoLocation(Box<CopyIntoLocationPlan>),
 
     // Views
     CreateView(Box<CreateViewPlan>),
@@ -347,6 +358,7 @@ pub enum Plan {
 
     // Virtual Columns
     RefreshVirtualColumn(Box<RefreshVirtualColumnPlan>),
+    VacuumVirtualColumn(Box<VacuumVirtualColumnPlan>),
 
     // Account
     AlterUser(Box<AlterUserPlan>),
@@ -579,6 +591,7 @@ impl Plan {
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::RefreshVirtualColumn(plan) => plan.schema(),
+            Plan::VacuumVirtualColumn(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
             Plan::DescRowAccessPolicy(plan) => plan.schema(),
@@ -596,6 +609,7 @@ impl Plan {
                 DataField::new("type", DataType::String),
                 DataField::new("status", DataType::String),
             ]),
+            Plan::ShowWorkers => worker_schema(),
             Plan::ShowOnlineNodes => DataSchemaRefExt::create(vec![
                 DataField::new("id", DataType::String),
                 DataField::new("type", DataType::String),

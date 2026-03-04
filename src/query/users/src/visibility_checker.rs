@@ -38,7 +38,34 @@ pub enum Object {
     Warehouse,
     Connection,
     Sequence,
+    Procedure,
     All,
+}
+
+impl Object {
+    /// Convert to an `OwnershipObject` for prefix-based listing.
+    ///
+    /// Only the enum variant is used to derive the key prefix;
+    /// field values are placeholders. Returns `None` for `All`.
+    pub fn to_ownership_object(&self) -> Option<OwnershipObject> {
+        match self {
+            Object::Stage => Some(OwnershipObject::Stage {
+                name: String::new(),
+            }),
+            Object::UDF => Some(OwnershipObject::UDF {
+                name: String::new(),
+            }),
+            Object::Warehouse => Some(OwnershipObject::Warehouse { id: String::new() }),
+            Object::Connection => Some(OwnershipObject::Connection {
+                name: String::new(),
+            }),
+            Object::Sequence => Some(OwnershipObject::Sequence {
+                name: String::new(),
+            }),
+            Object::Procedure => Some(OwnershipObject::Procedure { procedure_id: 0 }),
+            Object::All => None,
+        }
+    }
 }
 
 struct CatalogIdPool {
@@ -196,12 +223,12 @@ pub fn check_table_visibility_with_roles(
                     }
                 }
                 GrantObject::DatabaseById(cat, id) if cat == catalog && *id == db_id => {
-                    if !is_usage_only(&grant_entry) {
+                    if !is_usage_only(grant_entry) {
                         return true;
                     }
                 }
                 GrantObject::Database(cat, db) if cat == catalog && db == db_name => {
-                    if !is_usage_only(&grant_entry) {
+                    if !is_usage_only(grant_entry) {
                         return true;
                     }
                 }
@@ -617,7 +644,7 @@ impl GrantObjectVisibilityChecker {
 
     #[inline(always)]
     pub fn check_database_visibility_by_id(&self, catalog_id: u32, db_id: u64) -> bool {
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -643,8 +670,13 @@ impl GrantObjectVisibilityChecker {
     }
 
     #[inline(always)]
+    pub fn has_global_db_table_privilege(&self) -> bool {
+        self.granted_global_db_table
+    }
+
+    #[inline(always)]
     pub fn check_table_visibility_by_id(&self, catalog_id: u32, db_id: u64, table_id: u64) -> bool {
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -671,7 +703,7 @@ impl GrantObjectVisibilityChecker {
     #[inline]
     pub fn check_database_visibility(&self, catalog: &str, db: &str, db_id: u64) -> bool {
         // Fast path: global privileges
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -723,7 +755,7 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
 
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return true;
         }
 
@@ -855,7 +887,7 @@ impl GrantObjectVisibilityChecker {
     pub fn get_visibility_database(
         &self,
     ) -> Option<HashMap<&str, HashSet<(Option<&str>, Option<&u64>)>>> {
-        if self.granted_global_db_table {
+        if self.has_global_db_table_privilege() {
             return None;
         }
 

@@ -387,7 +387,7 @@ build_exceptions! {
     IndexColumnIdNotFound(2726),
 }
 
-// Tag Errors [2750-2753]
+// Tag Errors [2750-2754]
 build_exceptions! {
     /// Tag already exists
     TagAlreadyExists(2750),
@@ -397,6 +397,8 @@ build_exceptions! {
     NotAllowedTagValue(2752),
     /// Tag still has references
     TagHasReferences(2753),
+    /// Tag has unrecognized references
+    TagHasUnrecognizedReferences(2754),
 }
 
 // Cloud and Integration Errors [1701-1703]

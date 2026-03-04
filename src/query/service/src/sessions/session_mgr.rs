@@ -69,7 +69,7 @@ impl SessionManager {
     }
 
     pub fn create(conf: &InnerConfig) -> Arc<SessionManager> {
-        let max_sessions = conf.query.max_active_sessions as usize;
+        let max_sessions = conf.query.common.max_active_sessions as usize;
         let mgr = Arc::new(SessionManager {
             max_sessions,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le()),

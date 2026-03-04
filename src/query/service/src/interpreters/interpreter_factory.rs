@@ -117,6 +117,10 @@ use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouse
 use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
+use crate::interpreters::interpreter_worker_alter::AlterWorkerInterpreter;
+use crate::interpreters::interpreter_worker_create::CreateWorkerInterpreter;
+use crate::interpreters::interpreter_worker_drop::DropWorkerInterpreter;
+use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -150,6 +154,7 @@ impl InterpreterFactory {
             Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(
                 ctx.clone(),
             )?)),
+            Plan::ShowWorkers => Ok(Arc::new(ShowWorkersInterpreter::try_create(ctx.clone())?)),
             Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(
                 ctx.clone(),
             )?)),
@@ -161,7 +166,15 @@ impl InterpreterFactory {
                 ctx.clone(),
                 *v.clone(),
             )?)),
+            Plan::CreateWorker(v) => Ok(Arc::new(CreateWorkerInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
             Plan::DropWarehouse(v) => Ok(Arc::new(DropWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::DropWorker(v) => Ok(Arc::new(DropWorkerInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),
@@ -174,6 +187,10 @@ impl InterpreterFactory {
                 *v.clone(),
             )?)),
             Plan::RenameWarehouse(v) => Ok(Arc::new(RenameWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::AlterWorker(v) => Ok(Arc::new(AlterWorkerInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),
@@ -291,7 +308,7 @@ impl InterpreterFactory {
                 *copy_plan.clone(),
             )?)),
             Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(
-                CopyIntoLocationInterpreter::try_create(ctx, copy_plan.clone())?,
+                CopyIntoLocationInterpreter::try_create(ctx, *copy_plan.clone())?,
             )),
             // catalogs
             Plan::ShowCreateCatalog(plan) => Ok(Arc::new(
@@ -513,6 +530,9 @@ impl InterpreterFactory {
             // Virtual columns
             Plan::RefreshVirtualColumn(refresh_virtual_column) => Ok(Arc::new(
                 RefreshVirtualColumnInterpreter::try_create(ctx, *refresh_virtual_column.clone())?,
+            )),
+            Plan::VacuumVirtualColumn(vacuum_virtual_column) => Ok(Arc::new(
+                VacuumVirtualColumnInterpreter::try_create(ctx, *vacuum_virtual_column.clone())?,
             )),
             // Users
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(

@@ -56,7 +56,7 @@ pub enum CreateDatabaseOption {
     Options(Vec<SQLProperty>),
 }
 
-fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
+pub fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
     let procedure_type_names = map(
         rule! {
             "(" ~ #comma_separated_list1(type_name) ~ ")"
@@ -583,6 +583,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
     );
 
+    let show_workers = map(
+        rule! {
+            SHOW ~ WORKERS
+        },
+        |(_, _)| Statement::ShowWorkers(ShowWorkersStmt {}),
+    );
+
     let use_warehouse = map(
         rule! {
             USE ~ WAREHOUSE ~ #ident
@@ -603,11 +610,36 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let create_worker = map(
+        rule! {
+            CREATE ~ WORKER ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, opt_if_not_exists, name, options)| {
+            Statement::CreateWorker(CreateWorkerStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name,
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
     let drop_warehouse = map(
         rule! {
             DROP ~ WAREHOUSE ~ #ident
         },
         |(_, _, warehouse)| Statement::DropWarehouse(DropWarehouseStmt { warehouse }),
+    );
+
+    let drop_worker = map(
+        rule! {
+            DROP ~ WORKER ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, name)| {
+            Statement::DropWorker(DropWorkerStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+            })
+        },
     );
 
     let rename_warehouse = map(
@@ -641,6 +673,50 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             INSPECT ~ WAREHOUSE ~ #ident
         },
         |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let alter_worker_action = map(
+        rule! {
+            SET ~ TAG ~ #tag_set_items
+        },
+        |(_, _, tags)| AlterWorkerAction::SetTag { tags },
+    )
+    .or(map(
+        rule! {
+            UNSET ~ TAG ~ #tag_unset_items
+        },
+        |(_, _, tags)| AlterWorkerAction::UnsetTag { tags },
+    ))
+    .or(map(
+        rule! {
+            SET ~ #warehouse_cluster_option
+        },
+        |(_, options)| AlterWorkerAction::SetOptions { options },
+    ))
+    .or(map(
+        rule! {
+            UNSET ~ #tag_unset_items
+        },
+        |(_, options)| AlterWorkerAction::UnsetOptions { options },
+    ))
+    .or(map(
+        rule! {
+            SUSPEND
+        },
+        |_| AlterWorkerAction::Suspend,
+    ))
+    .or(map(
+        rule! {
+            RESUME
+        },
+        |_| AlterWorkerAction::Resume,
+    ));
+
+    let alter_worker = map(
+        rule! {
+            ALTER ~ WORKER ~ #ident ~ #alter_worker_action
+        },
+        |(_, _, name, action)| Statement::AlterWorker(AlterWorkerStmt { name, action }),
     );
 
     let add_warehouse_cluster = map(
@@ -1208,6 +1284,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 option,
+            })
+        },
+    );
+    let vacuum_virtual_column = map(
+        rule! {
+            VACUUM ~ VIRTUAL ~ ^COLUMN ~ ^FROM ~ ^#dot_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::VacuumVirtualColumn(VacuumVirtualColumnStmt {
+                catalog,
+                database,
+                table,
             })
         },
     );
@@ -2719,6 +2807,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
                 | #show_online_nodes: "`SHOW ONLINE NODES`"
                 | #show_warehouses: "`SHOW WAREHOUSES`"
+                | #show_workers: "`SHOW WORKERS`"
                 | #show_workload_groups: "`SHOW WORKLOAD GROUPS`"
                 | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
                 | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
@@ -2792,6 +2881,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
             | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
@@ -2861,6 +2951,7 @@ AS
   <sql>`"
                 | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
                 | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
+                | #create_worker: "`CREATE WORKER [IF NOT EXISTS] <name> [WITH <key>=<value> [, ...]]`"
                 | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
                 | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
                 | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
@@ -2907,6 +2998,7 @@ AS
                 #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
                 | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
                 | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+                | #drop_worker: "`DROP WORKER [IF EXISTS] <name>`"
                 | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
                 | #drop_workload_group: "`DROP WORKLOAD GROUP [ IF EXISTS ] <name>`"
                 | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
@@ -2944,9 +3036,10 @@ AS
             | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
             | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
             | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...] | SET <key> = '<value>' [, ...] | UNSET <key> [, ...] | SUSPEND | RESUME`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
-            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
@@ -2965,10 +3058,8 @@ AS
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
         ).parse(i),
-        RESUME => rule!(#resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
-            ).parse(i),
-        SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
-            ).parse(i),
+        RESUME => rule!(#resume_warehouse: "`RESUME WAREHOUSE <warehouse>`").parse(i),
+        SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`").parse(i),
         INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
             ).parse(i),
     );
@@ -4424,11 +4515,70 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
         ),
         map(
             rule! {
+                USER ~ ( IF ~ ^EXISTS )? ~ #user_identity
+            },
+            |(_, opt_if_exists, user)| AlterObjectTagTarget::User {
+                if_exists: opt_if_exists.is_some(),
+                user,
+            },
+        ),
+        map(
+            rule! {
+                ROLE ~ ( IF ~ ^EXISTS )? ~ #role_name
+            },
+            |(_, opt_if_exists, role_name)| AlterObjectTagTarget::Role {
+                if_exists: opt_if_exists.is_some(),
+                role_name,
+            },
+        ),
+        map(
+            rule! {
                 CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
             },
             |(_, opt_if_exists, connection_name)| AlterObjectTagTarget::Connection {
                 if_exists: opt_if_exists.is_some(),
                 connection_name,
+            },
+        ),
+        map(
+            rule! {
+                VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, view))| AlterObjectTagTarget::View {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                view,
+            },
+        ),
+        map(
+            rule! {
+                STREAM ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, stream))| AlterObjectTagTarget::Stream {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                stream,
+            },
+        ),
+        map(
+            rule! {
+                FUNCTION ~ ( IF ~ ^EXISTS )? ~ #ident
+            },
+            |(_, opt_if_exists, udf_name)| AlterObjectTagTarget::Function {
+                if_exists: opt_if_exists.is_some(),
+                udf_name,
+            },
+        ),
+        map(
+            rule! {
+                PROCEDURE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #procedure_type_name
+            },
+            |(_, opt_if_exists, name, arg_types)| AlterObjectTagTarget::Procedure {
+                if_exists: opt_if_exists.is_some(),
+                name,
+                arg_types,
             },
         ),
     ))
@@ -5531,6 +5681,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, role)| UserOptionItem::DefaultRole(role),
     );
+    let default_warehouse_option = map(
+        rule! {
+            DEFAULT_WAREHOUSE ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, warehouse)| UserOptionItem::DefaultWarehouse(warehouse),
+    );
     let set_network_policy = map(
         rule! {
             SET ~ NETWORK ~ POLICY ~ ^"=" ~ ^#literal_string
@@ -5584,6 +5740,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         #tenant_setting
         | #no_tenant_setting
         | #default_role_option
+        | #default_warehouse_option
         | #set_network_policy
         | #unset_network_policy
         | #set_password_policy

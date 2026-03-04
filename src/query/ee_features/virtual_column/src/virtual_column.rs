@@ -48,6 +48,12 @@ pub trait VirtualColumnHandler: Sync + Send {
         pipeline: &mut Pipeline,
         results: Vec<VirtualColumnRefreshResult>,
     ) -> Result<u64>;
+
+    async fn do_vacuum_virtual_column(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        fuse_table: &FuseTable,
+    ) -> Result<u64>;
 }
 
 pub struct VirtualColumnHandlerWrapper {
@@ -83,6 +89,14 @@ impl VirtualColumnHandlerWrapper {
         self.handler
             .commit_refresh_virtual_column(ctx, fuse_table, pipeline, results)
             .await
+    }
+
+    pub async fn do_vacuum_virtual_column(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        fuse_table: &FuseTable,
+    ) -> Result<u64> {
+        self.handler.do_vacuum_virtual_column(ctx, fuse_table).await
     }
 }
 

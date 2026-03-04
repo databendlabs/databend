@@ -7,30 +7,36 @@ export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql -A --user=testuser1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo '-- reset user, roles, and tables'
-echo "DROP USER IF EXISTS 'testuser1'" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS 'testrole1'" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS 'testrole2'" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS 'testrole3'" | $BENDSQL_CLIENT_CONNECT
-echo "DROP ROLE IF EXISTS 'testrole4'" | $BENDSQL_CLIENT_CONNECT
-echo "DROP TABLE IF EXISTS t20_0015_table1" | $BENDSQL_CLIENT_CONNECT   
-echo "DROP TABLE IF EXISTS t20_0015_table2" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+DROP USER IF EXISTS 'testuser1';
+DROP ROLE IF EXISTS 'testrole1';
+DROP ROLE IF EXISTS 'testrole2';
+DROP ROLE IF EXISTS 'testrole3';
+DROP ROLE IF EXISTS 'testrole4';
+DROP TABLE IF EXISTS t20_0015_table1;
+DROP TABLE IF EXISTS t20_0015_table2;
+"
 
 echo '-- prepare user, roles, and tables for tests'
-echo "CREATE USER 'testuser1' IDENTIFIED BY '$TEST_USER_PASSWORD'" | $BENDSQL_CLIENT_CONNECT
-echo 'CREATE ROLE `testrole1`' | $BENDSQL_CLIENT_CONNECT
-echo 'CREATE ROLE `testrole2`' | $BENDSQL_CLIENT_CONNECT
-echo 'CREATE ROLE `testrole3`' | $BENDSQL_CLIENT_CONNECT
-echo 'CREATE ROLE `testrole4`' | $BENDSQL_CLIENT_CONNECT # not granted to testuser1
-echo 'GRANT ROLE testrole2 to ROLE testrole3' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT ROLE testrole1 to testuser1' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT ROLE testrole2 to testuser1' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT ROLE testrole3 to testuser1' | $BENDSQL_CLIENT_CONNECT
-echo "CREATE TABLE t20_0015_table1(c int not null) ENGINE = MEMORY" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE TABLE t20_0015_table2(c int not null) ENGINE = MEMORY" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+CREATE USER 'testuser1' IDENTIFIED BY '$TEST_USER_PASSWORD';
+CREATE ROLE \`testrole1\`;
+CREATE ROLE \`testrole2\`;
+CREATE ROLE \`testrole3\`;
+CREATE ROLE \`testrole4\`;
+GRANT ROLE testrole2 to ROLE testrole3;
+GRANT ROLE testrole1 to testuser1;
+GRANT ROLE testrole2 to testuser1;
+GRANT ROLE testrole3 to testuser1;
+CREATE TABLE t20_0015_table1(c int not null) ENGINE = MEMORY;
+CREATE TABLE t20_0015_table2(c int not null) ENGINE = MEMORY;
+"
 
 echo '-- grant privilege to roles'
-echo 'GRANT SELECT, INSERT ON default.t20_0015_table1 TO ROLE testrole1' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT SELECT, INSERT ON default.t20_0015_table2 TO ROLE testrole2' | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+GRANT SELECT, INSERT ON default.t20_0015_table1 TO ROLE testrole1;
+GRANT SELECT, INSERT ON default.t20_0015_table2 TO ROLE testrole2;
+"
 
 echo '-- test 1: set role as testrole1, then SELECT current_role()'
 echo "SET ROLE testrole1; SELECT current_role();" | $TEST_USER_CONNECT
@@ -83,36 +89,44 @@ echo '-- test 10: set default role as nonexisting_role, will fail'
 echo "SET DEFAULT ROLE nonexistedrole;" | $TEST_USER_CONNECT || true
 
 echo '-- test 11: set secondary All | None, create object only check current role'
-echo "DROP USER if exists 'test_c';" | $BENDSQL_CLIENT_CONNECT
-echo "DROP role if exists 'role_c';" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE USER 'test_c' IDENTIFIED BY '123'" | $BENDSQL_CLIENT_CONNECT
-echo 'CREATE ROLE `role_c`' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT ALL ON *.* TO ROLE `role_c`' | $BENDSQL_CLIENT_CONNECT
-echo 'GRANT ROLE `role_c` to test_c' | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+DROP USER if exists 'test_c';
+DROP role if exists 'role_c';
+CREATE USER 'test_c' IDENTIFIED BY '123';
+CREATE ROLE \`role_c\`;
+GRANT ALL ON *.* TO ROLE \`role_c\`;
+GRANT ROLE \`role_c\` to test_c;
+"
 
 export TEST_C_CONNECT="bendsql -A --user=test_c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-echo 'drop database if exists db_c' | $BENDSQL_CLIENT_CONNECT
-echo 'drop database if exists db_d' | $BENDSQL_CLIENT_CONNECT
-echo 'drop database if exists db_e' | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop database if exists db_c;
+drop database if exists db_d;
+drop database if exists db_e;
+"
 echo 'SET SECONDARY ROLES ALL;create database db_c' | $TEST_C_CONNECT
 echo 'SET SECONDARY ROLES NONE;create database db_c' | $TEST_C_CONNECT
 echo 'SET ROLE role_c;SET SECONDARY ROLES NONE;create database db_c' | $TEST_C_CONNECT
 echo 'SET ROLE role_c;SET SECONDARY ROLES ALL;create database db_d' | $TEST_C_CONNECT
 echo "show grants for role role_c where object_name in ('db_c', 'db_d')" | $TEST_C_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
-echo 'revoke ROLE `role_c` from test_c' | $BENDSQL_CLIENT_CONNECT
-echo 'drop ROLE if exists `role_test`' | $BENDSQL_CLIENT_CONNECT
-echo 'create ROLE `role_test`' | $BENDSQL_CLIENT_CONNECT
-echo 'grant all on *.* to role `role_test`' | $BENDSQL_CLIENT_CONNECT
-echo 'grant ROLE `role_test` to test_c' | $BENDSQL_CLIENT_CONNECT
-echo "alter user test_c with default_role='role_test'" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+revoke ROLE \`role_c\` from test_c;
+drop ROLE if exists \`role_test\`;
+create ROLE \`role_test\`;
+grant all on *.* to role \`role_test\`;
+grant ROLE \`role_test\` to test_c;
+alter user test_c with default_role='role_test';
+"
 
 echo 'create database db_e' | $TEST_C_CONNECT
 echo "show grants for role public where object_name in ('db_e')" | $TEST_C_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
-echo 'drop database if exists db_c' | $BENDSQL_CLIENT_CONNECT
-echo 'drop database if exists db_d' | $BENDSQL_CLIENT_CONNECT
-echo 'drop database if exists db_e' | $BENDSQL_CLIENT_CONNECT
-echo "DROP USER if exists 'test_c';" | $BENDSQL_CLIENT_CONNECT
-echo "DROP role if exists 'role_c';" | $BENDSQL_CLIENT_CONNECT
-echo 'drop ROLE if exists `role_test`' | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop database if exists db_c;
+drop database if exists db_d;
+drop database if exists db_e;
+DROP USER if exists 'test_c';
+DROP role if exists 'role_c';
+drop ROLE if exists \`role_test\`;
+"

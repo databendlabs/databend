@@ -156,13 +156,11 @@ impl App {
     async fn bench_client_num_conn(&self, args: &BenchArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
         println!(
-            "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection",
-            addr
+            "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection, num={}",
+            addr, args.num
         );
         let mut clients = vec![];
-        let mut i = 0;
-        loop {
-            i += 1;
+        for i in 1..=args.num {
             let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                 vec![addr.clone()],
                 "root",
@@ -176,6 +174,8 @@ impl App {
             println!("{}-th: get_kv(foo): {:?}", i, res);
             clients.push(client);
         }
+        println!("bench completed: {} connections created", args.num);
+        Ok(())
     }
 
     async fn transfer_leader(&self, args: &TransferLeaderArgs) -> anyhow::Result<()> {
@@ -317,28 +317,6 @@ return metrics, nil
         addresses: Vec<String>,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
         lua_support::new_grpc_client(addresses)
-    }
-
-    async fn dump_raft_log_wal(&self, args: &DumpRaftLogWalArgs) -> anyhow::Result<()> {
-        use std::path::PathBuf;
-
-        use raft_log::Config;
-        use raft_log::DumpApi;
-
-        let mut wal_dir = PathBuf::from(&args.raft_dir);
-        wal_dir.push("df_meta");
-        wal_dir.push("V004");
-        wal_dir.push("log");
-
-        let config = Arc::new(Config {
-            dir: wal_dir.to_string_lossy().to_string(),
-            ..Default::default()
-        });
-
-        let dump =
-            raft_log::Dump::<databend_meta_raft_store::raft_log_v004::RaftLogTypes>::new(config)?;
-        dump.write_display(io::stdout())?;
-        Ok(())
     }
 }
 
@@ -683,7 +661,7 @@ async fn main() -> anyhow::Result<()> {
                 app.get_metrics(args).await?;
             }
             CtlCommand::DumpRaftLogWal(args) => {
-                app.dump_raft_log_wal(args).await?;
+                databend_common_meta_control::dump_raft_log_wal::dump_raft_log_wal(args)?;
             }
         },
         // for backward compatibility

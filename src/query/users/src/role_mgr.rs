@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -26,7 +25,6 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_meta_types::MatchSeq;
 
 use crate::UserApiProvider;
 use crate::meta_service_error;
@@ -42,7 +40,12 @@ impl UserApiProvider {
         }
 
         let client = self.role_api(tenant);
-        let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
+        let role_data = client
+            .get_role(&role)
+            .await
+            .map_err(meta_service_error)?
+            .ok_or_else(|| ErrorCode::UnknownRole(format!("Role '{}' does not exist.", role)))?
+            .data;
         Ok(role_data)
     }
 
@@ -54,7 +57,7 @@ impl UserApiProvider {
             .role_api(tenant)
             .get_meta_roles()
             .await
-            .map_err(|e| e.add_message_back("(while get roles)."))?;
+            .map_err(meta_service_error)?;
         // overwrite the builtin roles.
         let mut roles = seq_roles
             .into_iter()
@@ -93,7 +96,7 @@ impl UserApiProvider {
             .role_api(tenant)
             .list_ownerships()
             .await
-            .map_err(|e| e.add_message_back("(while get ownerships)."))?;
+            .map_err(meta_service_error)?;
 
         let roles: HashMap<OwnershipObject, String> = seq_owns
             .into_iter()
@@ -104,16 +107,20 @@ impl UserApiProvider {
 
     #[async_backtrace::framed]
     pub async fn exists_role(&self, tenant: &Tenant, role: String) -> Result<bool> {
+        if self.builtin_roles().contains_key(&role) {
+            return Ok(true);
+        }
         Ok(self
-            .get_role(tenant, role)
+            .role_api(tenant)
+            .get_role(&role)
             .await
-            .or_unknown_role()?
+            .map_err(meta_service_error)?
             .is_some())
     }
 
     // Add a new role info.
     #[async_backtrace::framed]
-    pub async fn add_role(
+    pub async fn create_role(
         &self,
         tenant: &Tenant,
         role_info: RoleInfo,
@@ -121,22 +128,18 @@ impl UserApiProvider {
     ) -> Result<()> {
         let can_replace = create_option.is_overriding();
         let client = self.role_api(tenant);
-        let name = role_info.identity().to_string();
-        if let Err(_e) = client
-            .add_role(role_info, can_replace)
+        let role_name = role_info.name.clone();
+        let created = client
+            .create_role(role_info, can_replace)
             .await
-            .map_err(meta_service_error)?
-        {
-            return if create_option.if_not_exist() {
-                Ok(())
-            } else {
-                Err(ErrorCode::RoleAlreadyExists(format!(
-                    "Role {} already exists",
-                    name
-                )))
-            };
+            .map_err(meta_service_error)?;
+        if !created && !create_option.if_not_exist() {
+            return Err(ErrorCode::RoleAlreadyExists(format!(
+                "Role '{}' already exists",
+                role_name
+            )));
         }
-        return Ok(());
+        Ok(())
     }
 
     // Update role comment.
@@ -150,19 +153,13 @@ impl UserApiProvider {
         let client = self.role_api(tenant);
 
         client
-            .update_role_with(role_name, MatchSeq::GE(0), |role_info| {
+            .update_role_with(role_name, |role_info| {
                 role_info.comment = comment.clone();
             })
             .await
-            .and_then(|opt| {
-                opt.map(|_| Ok(())).unwrap_or_else(|| {
-                    Err(ErrorCode::UnknownRole(format!(
-                        "Role '{}' does not exist",
-                        role_name
-                    )))
-                })
-            })
-            .map_err(|e| e.add_message_back("(while updating role comment)"))
+            .map_err(meta_service_error)?
+            .map_err(|e| ErrorCode::from(e).add_message_back("(while updating role comment)"))?;
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -179,7 +176,7 @@ impl UserApiProvider {
         client
             .grant_ownership(object, new_role)
             .await
-            .map_err(|e| e.add_message_back("(while set role ownership)"))
+            .map_err(|e| ErrorCode::from(e).add_message_back("(while set role ownership)"))
     }
 
     #[async_backtrace::framed]
@@ -192,7 +189,7 @@ impl UserApiProvider {
         let ownership = client
             .get_ownership(object)
             .await
-            .map_err(|e| e.add_message_back("(while get ownership)"))?;
+            .map_err(meta_service_error)?;
         if let Some(owner) = ownership {
             // if object has ownership, but the owner role is not exists, set owner role to ACCOUNT_ADMIN,
             // only account_admin can access this object.
@@ -227,7 +224,7 @@ impl UserApiProvider {
         client
             .mget_ownerships(objects)
             .await
-            .map_err(|e| e.add_message_back("(while mget ownerships)"))
+            .map_err(meta_service_error)
     }
 
     #[async_backtrace::framed]
@@ -237,15 +234,17 @@ impl UserApiProvider {
         role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let client = self.role_api(tenant);
         client
-            .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+            .update_role_with(role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.grant_privileges(&object, privileges)
             })
             .await
-            .map_err(|e| e.add_message_back("(while set role privileges)"))
+            .map_err(meta_service_error)?
+            .map_err(|e| ErrorCode::from(e).add_message_back("(while set role privileges)"))?;
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -255,15 +254,17 @@ impl UserApiProvider {
         role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let client = self.role_api(tenant);
         client
-            .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+            .update_role_with(role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.revoke_privileges(&object, privileges)
             })
             .await
-            .map_err(|e| e.add_message_back("(while revoke role privileges)"))
+            .map_err(meta_service_error)?
+            .map_err(|e| ErrorCode::from(e).add_message_back("(while revoke role privileges)"))?;
+        Ok(())
     }
 
     // the grant_role can not have cycle with target_role.
@@ -273,7 +274,7 @@ impl UserApiProvider {
         tenant: &Tenant,
         target_role: &String,
         grant_role: String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let related_roles = self
             .find_related_roles(tenant, &[grant_role.clone()])
             .await?;
@@ -287,12 +288,14 @@ impl UserApiProvider {
 
         let client = self.role_api(tenant);
         client
-            .update_role_with(target_role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+            .update_role_with(target_role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.grant_role(grant_role)
             })
             .await
-            .map_err(|e| e.add_message_back("(while grant role to role)"))
+            .map_err(meta_service_error)?
+            .map_err(|e| ErrorCode::from(e).add_message_back("(while grant role to role)"))?;
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -301,15 +304,17 @@ impl UserApiProvider {
         tenant: &Tenant,
         role: &str,
         revoke_role: &String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<()> {
         let client = self.role_api(tenant);
         client
-            .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
+            .update_role_with(role, |ri: &mut RoleInfo| {
                 ri.update_role_time();
                 ri.grants.revoke_role(revoke_role)
             })
             .await
-            .map_err(|e| e.add_message_back("(while revoke role from role)"))
+            .map_err(meta_service_error)?
+            .map_err(|e| ErrorCode::from(e).add_message_back("(while revoke role from role)"))?;
+        Ok(())
     }
 
     // Drop a role by name
@@ -317,19 +322,21 @@ impl UserApiProvider {
     pub async fn drop_role(&self, tenant: &Tenant, role: String, if_exists: bool) -> Result<()> {
         let client = self.role_api(tenant);
         // If the dropped role owns objects, transfer objects owner to account_admin role.
-        client.transfer_ownership_to_admin(&role).await?;
+        client
+            .transfer_ownership_to_admin(&role)
+            .await
+            .map_err(|e| {
+                ErrorCode::from(e).add_message_back("(while transfer_ownership_to_admin)")
+            })?;
 
-        let drop_role = client.drop_role(role, MatchSeq::GE(1));
-        match drop_role.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_exists && e.code() == ErrorCode::UNKNOWN_ROLE {
-                    Ok(())
-                } else {
-                    Err(e.add_message_back("(while set drop role)"))
-                }
-            }
+        let dropped = client.drop_role(&role).await.map_err(meta_service_error)?;
+        if !dropped && !if_exists {
+            return Err(ErrorCode::UnknownRole(format!(
+                "Role '{}' does not exist (while drop role)",
+                role
+            )));
         }
+        Ok(())
     }
 
     // Find all related roles by role names. Every role have a PUBLIC role, and ACCOUNT_ADMIN

@@ -14,6 +14,7 @@
 
 use logos::Lexer;
 use logos::Logos;
+use memchr::memchr_iter;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -136,6 +137,19 @@ impl<'a> Iterator for Tokenizer<'a> {
     }
 }
 
+fn lex_comment_block(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    let remainder = lex.remainder().as_bytes();
+
+    for idx in memchr_iter(b'*', remainder) {
+        if remainder.get(idx + 1) == Some(&b'/') {
+            lex.bump(idx + 2);
+            return logos::FilterResult::Skip;
+        }
+    }
+
+    logos::FilterResult::Error
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Logos, EnumIter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
@@ -150,7 +164,7 @@ pub enum TokenKind {
     #[regex(r"--[^\n\f]*", logos::skip)]
     Comment,
 
-    #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
+    #[token("/*", lex_comment_block)]
     CommentBlock,
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
@@ -919,6 +933,8 @@ pub enum TokenKind {
     NOTENANTSETTING,
     #[token("DEFAULT_ROLE", ignore(ascii_case))]
     DEFAULT_ROLE,
+    #[token("DEFAULT_WAREHOUSE", ignore(ascii_case))]
+    DEFAULT_WAREHOUSE,
     #[token("NULL", ignore(ascii_case))]
     NULL,
     #[token("NULLABLE", ignore(ascii_case))]
@@ -1435,6 +1451,8 @@ pub enum TokenKind {
     TOP,
     #[token("WAREHOUSE", ignore(ascii_case))]
     WAREHOUSE,
+    #[token("WORKER", ignore(ascii_case))]
+    WORKER,
     #[token("SCHEDULE", ignore(ascii_case))]
     SCHEDULE,
     #[token("SUSPEND_TASK_AFTER_NUM_FAILURES", ignore(ascii_case))]
@@ -1503,6 +1521,8 @@ pub enum TokenKind {
     SUNDAY,
     #[token("WAREHOUSES", ignore(ascii_case))]
     WAREHOUSES,
+    #[token("WORKERS", ignore(ascii_case))]
+    WORKERS,
     #[token("INSPECT", ignore(ascii_case))]
     INSPECT,
     #[token("ASSIGN", ignore(ascii_case))]

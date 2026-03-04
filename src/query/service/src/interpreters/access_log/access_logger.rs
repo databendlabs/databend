@@ -427,7 +427,21 @@ impl AccessLogger {
                 format!("{}.{}.{}", target.catalog, target.database, target.table),
             ),
             TagSetObject::Stage(target) => (ObjectDomain::Stage, target.stage_name.clone()),
-            TagSetObject::Connection(_) => return,
+            TagSetObject::User(_)
+            | TagSetObject::Role(_)
+            | TagSetObject::Connection(_)
+            | TagSetObject::UDF(_)
+            | TagSetObject::Procedure(_) => {
+                return;
+            }
+            TagSetObject::View(target) => (
+                ObjectDomain::Table,
+                format!("{}.{}.{}", target.catalog, target.database, target.view),
+            ),
+            TagSetObject::Stream(target) => (
+                ObjectDomain::Table,
+                format!("{}.{}.{}", target.catalog, target.database, target.stream),
+            ),
         };
         self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
             object_domain,
@@ -514,11 +528,16 @@ impl AccessLogger {
     }
 
     fn log_copy_into_location(&mut self, plan: &CopyIntoLocationPlan) {
+        let partition_columns = plan.partition_by.as_ref().map(|desc| {
+            vec![AccessObjectColumn {
+                column_name: format!("PARTITION BY ({})", desc.display),
+            }]
+        });
         let modified_object = AccessObject {
             object_domain: ObjectDomain::Stage,
             object_name: plan.info.stage.stage_name.clone(),
             stage_type: Some(plan.info.stage.stage_type.clone()),
-            columns: None,
+            columns: partition_columns,
         };
         self.entry.objects_modified.push(modified_object);
 

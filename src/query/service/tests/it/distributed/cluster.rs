@@ -56,7 +56,7 @@ fn test_simple_cluster() -> anyhow::Result<()> {
                     let fixture = TestFixture::setup_with_config(&conf_clone).await?;
 
                     let mut srv = FlightService::create(conf_clone.clone())?;
-                    srv.start(conf_clone.query.flight_api_address.parse()?)
+                    srv.start(conf_clone.query.common.flight_api_address.parse()?)
                         .await?;
 
                     if is_check_node {
@@ -117,9 +117,9 @@ fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
         .enumerate()
         .map(|(i, address)| {
             let mut conf = ConfigBuilder::create().build();
-            conf.query.flight_api_address = address.to_string();
-            conf.query.cluster_id = format!("node{}", i + 1);
-            conf.query.warehouse_id = format!("node{}", i + 1);
+            conf.query.common.flight_api_address = address.to_string();
+            conf.query.common.cluster_id = format!("node{}", i + 1);
+            conf.query.common.warehouse_id = format!("node{}", i + 1);
             conf
         })
         .collect()
@@ -129,8 +129,10 @@ fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
 fn setup_cluster(configs: &[InnerConfig]) -> ClusterDescriptor {
     let mut cluster_desc = ClusterDescriptor::new();
     for conf in configs.iter() {
-        cluster_desc =
-            cluster_desc.with_node(&conf.query.cluster_id, &conf.query.flight_api_address);
+        cluster_desc = cluster_desc.with_node(
+            &conf.query.common.cluster_id,
+            &conf.query.common.flight_api_address,
+        );
     }
     cluster_desc
 }

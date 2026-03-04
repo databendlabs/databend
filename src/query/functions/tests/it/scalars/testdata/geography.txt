@@ -480,3 +480,57 @@ output domain  : Undefined
 output         : 'POINT(-122.35 37.55)'
 
 
+ast            : ST_HILBERT(TO_GEOGRAPHY('POINT(113.15 23.06)'))
+raw expr       : ST_HILBERT(TO_GEOGRAPHY('POINT(113.15 23.06)'))
+checked expr   : st_hilbert<Geography>(CAST<String>("POINT(113.15 23.06)" AS Geography))
+optimized expr : 3070259060_u64
+output type    : UInt64 NULL
+output domain  : {3070259060..=3070259060}
+output         : 3070259060
+
+
+ast            : ST_HILBERT(TO_GEOGRAPHY('POINT(116.25 39.54)'))
+raw expr       : ST_HILBERT(TO_GEOGRAPHY('POINT(116.25 39.54)'))
+checked expr   : st_hilbert<Geography>(CAST<String>("POINT(116.25 39.54)" AS Geography))
+optimized expr : 3033451300_u64
+output type    : UInt64 NULL
+output domain  : {3033451300..=3033451300}
+output         : 3033451300
+
+
+ast            : ST_HILBERT(TO_GEOGRAPHY('POINT(107.40 33.42)'))
+raw expr       : ST_HILBERT(TO_GEOGRAPHY('POINT(107.40 33.42)'))
+checked expr   : st_hilbert<Geography>(CAST<String>("POINT(107.40 33.42)" AS Geography))
+optimized expr : 3053810027_u64
+output type    : UInt64 NULL
+output domain  : {3053810027..=3053810027}
+output         : 3053810027
+
+
+ast            : ST_HILBERT(TO_GEOGRAPHY('POINT(113.15 23.06)'), [73, 4, 135, 53])
+raw expr       : ST_HILBERT(TO_GEOGRAPHY('POINT(113.15 23.06)'), array(73, 4, 135, 53))
+checked expr   : st_hilbert<Geography, Array(Float64)>(CAST<String>("POINT(113.15 23.06)" AS Geography), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0>(73_u8, 4_u8, 135_u8, 53_u8) AS Array(Float64)))
+optimized expr : 3533607194_u64
+output type    : UInt64 NULL
+output domain  : {3533607194..=3533607194}
+output         : 3533607194
+
+
+ast            : ST_HILBERT(TO_GEOGRAPHY('POINT(116.25 39.54)'), [73, 4, 135, 53])
+raw expr       : ST_HILBERT(TO_GEOGRAPHY('POINT(116.25 39.54)'), array(73, 4, 135, 53))
+checked expr   : st_hilbert<Geography, Array(Float64)>(CAST<String>("POINT(116.25 39.54)" AS Geography), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0>(73_u8, 4_u8, 135_u8, 53_u8) AS Array(Float64)))
+optimized expr : 2330429279_u64
+output type    : UInt64 NULL
+output domain  : {2330429279..=2330429279}
+output         : 2330429279
+
+
+ast            : ST_HILBERT(TO_GEOGRAPHY('POINT(107.40 33.42)'), [73, 4, 135, 53])
+raw expr       : ST_HILBERT(TO_GEOGRAPHY('POINT(107.40 33.42)'), array(73, 4, 135, 53))
+checked expr   : st_hilbert<Geography, Array(Float64)>(CAST<String>("POINT(107.40 33.42)" AS Geography), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0>(73_u8, 4_u8, 135_u8, 53_u8) AS Array(Float64)))
+optimized expr : 2176667462_u64
+output type    : UInt64 NULL
+output domain  : {2176667462..=2176667462}
+output         : 2176667462
+
+

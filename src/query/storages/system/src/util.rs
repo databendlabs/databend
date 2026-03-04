@@ -34,6 +34,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::is_role_owner;
+use log::trace;
 use log::warn;
 
 pub fn generate_default_catalog_meta() -> CatalogMeta {
@@ -161,6 +162,27 @@ pub struct DatabaseWithTables {
 /// Example: 4 dbs * 5 tables = 20 (OK), 5 dbs * 5 tables = 25 (too many)
 pub const MAX_OPTIMIZED_PATH_CHECKS: usize = 20;
 
+/// Returns whether the filtered query should use the optimized visibility path.
+///
+/// Optimized path is only used when the ownership check count is bounded:
+/// - tables only (no db filter): table_count <= MAX_OPTIMIZED_PATH_CHECKS
+/// - tables + dbs: db_count * table_count <= MAX_OPTIMIZED_PATH_CHECKS
+///
+/// Note: the two branches are intentionally split so the tables-only case never
+/// falls through to `0 * table_count`, which would always be true.
+#[inline]
+pub fn should_use_optimized_visibility_path(db_count: usize, table_count: usize) -> bool {
+    if table_count == 0 {
+        return false;
+    }
+
+    if db_count == 0 {
+        table_count <= MAX_OPTIMIZED_PATH_CHECKS
+    } else {
+        db_count.saturating_mul(table_count) <= MAX_OPTIMIZED_PATH_CHECKS
+    }
+}
+
 /// Unified visibility checker strategy.
 enum VisibilityStrategy {
     /// No permission check (external catalogs)
@@ -202,18 +224,22 @@ pub async fn collect_visible_tables(
     // Determine visibility strategy
     let strategy = if catalog.is_external() {
         VisibilityStrategy::NoCheck
-    } else if !filtered_db_names.is_empty()
-        && !filtered_table_names.is_empty()
-        && filtered_db_names.len() * filtered_table_names.len() <= MAX_OPTIMIZED_PATH_CHECKS
-    {
+    } else if should_use_optimized_visibility_path(
+        filtered_db_names.len(),
+        filtered_table_names.len(),
+    ) {
         // Precise filters within reasonable size: use optimized path to avoid loading all ownerships
         let grants_checker = ctx.get_visibility_checker(true, Object::All).await?;
-        let effective_roles = ctx.get_all_effective_roles().await?;
-        VisibilityStrategy::Optimized {
-            grants_checker,
-            effective_roles,
-            catalog_name: catalog.name().to_string(),
-            tenant: tenant.clone(),
+        if grants_checker.has_global_db_table_privilege() {
+            VisibilityStrategy::NoCheck
+        } else {
+            let effective_roles = ctx.get_all_effective_roles().await?;
+            VisibilityStrategy::Optimized {
+                grants_checker,
+                effective_roles,
+                catalog_name: catalog.name().to_string(),
+                tenant: tenant.clone(),
+            }
         }
     } else {
         // No filters, partial filters, or too many combinations: preload all ownerships
@@ -224,19 +250,24 @@ pub async fn collect_visible_tables(
     let catalog_name = catalog.name();
 
     // Get databases and tables
+    let t = std::time::Instant::now();
     let databases = get_databases(catalog, &tenant, filtered_db_names).await?;
+    trace!(
+        "collect_visible_tables: get_databases({}) took {:?}",
+        databases.len(),
+        t.elapsed()
+    );
 
     let mut result = Vec::with_capacity(databases.len());
     for db in databases {
         let db_name = db.name().to_string();
         let db_id = db.get_db_info().database_id.db_id;
 
-        // Check database visibility
         if !is_database_visible(&strategy, &catalog_name, &db_name, db_id) {
             continue;
         }
 
-        // Get tables
+        let t = std::time::Instant::now();
         let tables = match get_tables(catalog, &tenant, &db_name, filtered_table_names).await {
             Ok(tables) => tables,
             Err(err) => {
@@ -244,8 +275,13 @@ pub async fn collect_visible_tables(
                 continue;
             }
         };
+        trace!(
+            "collect_visible_tables: get_tables('{}', {}) took {:?}",
+            db_name,
+            tables.len(),
+            t.elapsed()
+        );
 
-        // Filter visible tables
         let visible_tables =
             filter_visible_tables(&strategy, &catalog_name, &db_name, db_id, tables).await?;
 
@@ -331,9 +367,9 @@ async fn filter_visible_tables(
 /// This only loads ownerships for tables that need it.
 ///
 /// Logic:
-/// 1. Check database ownership - if user owns db, all tables visible
-/// 2. Otherwise, check each table's grants first, then ownership if needed
-///    (defensive against edge cases where db-level visibility is absent)
+/// 1. Check table grants first and short-circuit when all tables are visible.
+/// 2. If unresolved tables remain, check database ownership.
+/// 3. If still unresolved, check ownership for the remaining tables only.
 async fn filter_tables_with_optimized_path(
     grants_checker: &GrantObjectVisibilityChecker,
     effective_roles: &[databend_common_meta_app::principal::RoleInfo],
@@ -344,47 +380,10 @@ async fn filter_tables_with_optimized_path(
     tables: Vec<Arc<dyn Table>>,
 ) -> Result<Vec<Arc<dyn Table>>> {
     let user_api = UserApiProvider::instance();
-
-    // Check database ownership first: db owner can see all tables regardless of grants.
-    let db_ownership = user_api
-        .get_ownership(tenant, &OwnershipObject::Database {
-            catalog_name: catalog_name.to_string(),
-            db_id,
-        })
-        .await?;
-    if let Some(db_owner_info) = db_ownership {
-        if is_role_owner(Some(&db_owner_info.role), effective_roles) {
-            return Ok(tables);
-        }
-    }
-
-    // Check table grants first, then ownership (defensive).
-    filter_tables_with_grants_and_ownership(
-        user_api.as_ref(),
-        grants_checker,
-        effective_roles,
-        catalog_name,
-        tenant,
-        db_name,
-        db_id,
-        tables,
-    )
-    .await
-}
-
-async fn filter_tables_with_grants_and_ownership(
-    user_api: &UserApiProvider,
-    grants_checker: &GrantObjectVisibilityChecker,
-    effective_roles: &[databend_common_meta_app::principal::RoleInfo],
-    catalog_name: &str,
-    tenant: &Tenant,
-    db_name: &str,
-    db_id: u64,
-    tables: Vec<Arc<dyn Table>>,
-) -> Result<Vec<Arc<dyn Table>>> {
-    let mut visible = Vec::new();
+    let mut visible = Vec::with_capacity(tables.len());
     let mut need_ownership_check = Vec::new();
 
+    // Check grants first so global grants can return without any ownership I/O.
     for table in tables {
         if grants_checker.check_table_visibility(
             catalog_name,
@@ -399,23 +398,52 @@ async fn filter_tables_with_grants_and_ownership(
         }
     }
 
-    if !need_ownership_check.is_empty() {
-        let ownership_objects: Vec<OwnershipObject> = need_ownership_check
-            .iter()
-            .map(|t| OwnershipObject::Table {
-                catalog_name: catalog_name.to_string(),
-                db_id,
-                table_id: t.get_id(),
-            })
-            .collect();
+    if need_ownership_check.is_empty() {
+        return Ok(visible);
+    }
 
-        let ownerships = user_api.mget_ownerships(tenant, &ownership_objects).await?;
+    // Database owner can see all tables in that database.
+    let t = std::time::Instant::now();
+    let db_ownership = user_api
+        .get_ownership(tenant, &OwnershipObject::Database {
+            catalog_name: catalog_name.to_string(),
+            db_id,
+        })
+        .await?;
+    trace!(
+        "filter_tables_optimized: get_ownership(db '{}') took {:?}",
+        db_name,
+        t.elapsed()
+    );
 
-        for (table, ownership) in need_ownership_check.into_iter().zip(ownerships) {
-            if let Some(owner_info) = ownership {
-                if is_role_owner(Some(&owner_info.role), effective_roles) {
-                    visible.push(table);
-                }
+    if let Some(db_owner_info) = db_ownership {
+        if is_role_owner(Some(&db_owner_info.role), effective_roles) {
+            visible.extend(need_ownership_check);
+            return Ok(visible);
+        }
+    }
+
+    let ownership_objects: Vec<OwnershipObject> = need_ownership_check
+        .iter()
+        .map(|t| OwnershipObject::Table {
+            catalog_name: catalog_name.to_string(),
+            db_id,
+            table_id: t.get_id(),
+        })
+        .collect();
+
+    let t = std::time::Instant::now();
+    let ownerships = user_api.mget_ownerships(tenant, &ownership_objects).await?;
+    trace!(
+        "filter_tables_optimized: mget_ownerships({}) took {:?}",
+        ownership_objects.len(),
+        t.elapsed()
+    );
+
+    for (table, ownership) in need_ownership_check.into_iter().zip(ownerships) {
+        if let Some(owner_info) = ownership {
+            if is_role_owner(Some(&owner_info.role), effective_roles) {
+                visible.push(table);
             }
         }
     }

@@ -16,7 +16,9 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_ast::parser::parse_database_ref;
+use databend_common_ast::parser::parse_procedure_ref;
 use databend_common_ast::parser::parse_table_ref;
+use databend_common_ast::parser::parse_udf_ref;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -40,7 +42,12 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::tag_api::TagApi;
+use databend_common_meta_app::principal::GetProcedureReq;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -54,6 +61,8 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::planner::NameResolutionContext;
 use databend_common_sql::planner::normalize_identifier;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
@@ -307,6 +316,69 @@ async fn collect_tag_references(
                 stage_name.to_string(),
             )
         }
+        "USER" => {
+            let user_name = object_name.trim();
+            if user_name.is_empty() {
+                return Err(ErrorCode::BadArguments("object_name must not be empty"));
+            }
+
+            let user_identity = UserIdentity::new(user_name, "%");
+            let current_user = ctx.get_current_user()?;
+            let has_grant_priv = ctx
+                .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
+                .await
+                .is_ok();
+            if current_user.identity().username != user_name && !has_grant_priv {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege [Grant] is required on *.* for user {}",
+                    current_user.identity().display(),
+                )));
+            }
+            let user = UserApiProvider::instance()
+                .get_user(&tenant, user_identity)
+                .await?;
+            let object_name = user.identity().display().to_string();
+            (
+                TaggableObject::User {
+                    user: user.identity(),
+                },
+                None,
+                None,
+                object_name,
+            )
+        }
+        "ROLE" => {
+            let role_name = object_name.trim();
+            if role_name.is_empty() {
+                return Err(ErrorCode::BadArguments("object_name must not be empty"));
+            }
+            let current_user = ctx.get_current_user()?;
+            let has_grant_priv = ctx
+                .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
+                .await
+                .is_ok();
+            let effective_roles = ctx.get_all_effective_roles().await?;
+            let has_role = effective_roles
+                .iter()
+                .any(|role| role.name.eq_ignore_ascii_case(role_name));
+            if !has_role && !has_grant_priv {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege [Grant] is required on *.* for user {}",
+                    current_user.identity().display(),
+                )));
+            }
+            let role_info = UserApiProvider::instance()
+                .get_role(&tenant, role_name.to_string())
+                .await?;
+            (
+                TaggableObject::Role {
+                    name: role_info.name.clone(),
+                },
+                None,
+                None,
+                role_info.name,
+            )
+        }
         "CONNECTION" => {
             let conn_name = object_name.trim();
             // Check connection visibility
@@ -338,9 +410,166 @@ async fn collect_tag_references(
                 conn_name.to_string(),
             )
         }
+        "VIEW" => {
+            let (catalog_name, db_name, view_name) = parse_table_name(&ctx, &object_name)?;
+            let catalog = ctx.get_catalog(&catalog_name).await?;
+            let db = catalog.get_database(&tenant, &db_name).await?;
+            let db_id = db.get_db_info().database_id.db_id;
+            let table = catalog.get_table(&tenant, &db_name, &view_name).await?;
+            if table.engine() != VIEW_ENGINE {
+                return Err(ErrorCode::UnknownView(format!(
+                    "'{}' is not a view",
+                    view_name
+                )));
+            }
+            let table_id = table.get_table_info().ident.table_id;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
+            if !visibility_checker.check_table_visibility(
+                &catalog_name,
+                &db_name,
+                &view_name,
+                db_id,
+                table_id,
+            ) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: No privilege on view '{}' for user '{}'",
+                    view_name,
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
+            (
+                TaggableObject::Table { table_id },
+                Some(db_name),
+                Some(table_id),
+                view_name,
+            )
+        }
+        "STREAM" => {
+            let (catalog_name, db_name, stream_name) = parse_table_name(&ctx, &object_name)?;
+            let catalog = ctx.get_catalog(&catalog_name).await?;
+            let db = catalog.get_database(&tenant, &db_name).await?;
+            let db_id = db.get_db_info().database_id.db_id;
+            let table = catalog.get_table(&tenant, &db_name, &stream_name).await?;
+            if table.engine() != STREAM_ENGINE {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "'{}' is not a stream",
+                    stream_name
+                )));
+            }
+            let table_id = table.get_table_info().ident.table_id;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
+            if !visibility_checker.check_table_visibility(
+                &catalog_name,
+                &db_name,
+                &stream_name,
+                db_id,
+                table_id,
+            ) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: No privilege on stream '{}' for user '{}'",
+                    stream_name,
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
+            (
+                TaggableObject::Table { table_id },
+                Some(db_name),
+                Some(table_id),
+                stream_name,
+            )
+        }
+        "UDF" => {
+            let trimmed = object_name.trim();
+            if trimmed.is_empty() {
+                return Err(ErrorCode::BadArguments("object_name must not be empty"));
+            }
+
+            let settings = ctx.get_settings();
+            let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+            let dialect = settings.get_sql_dialect().unwrap_or_default();
+            let udf_ident = parse_udf_ref(trimmed, dialect).map_err(|e| {
+                ErrorCode::BadArguments(format!("Invalid UDF name '{}': {}", object_name, e.1))
+            })?;
+            let udf_name = normalize_identifier(&udf_ident, &name_resolution_ctx).name;
+            let _udf = UserApiProvider::instance()
+                .get_udf(&tenant, &udf_name)
+                .await
+                .map_err(|e| ErrorCode::from_std_error(e))?
+                .ok_or_else(|| ErrorCode::UnknownFunction(format!("Unknown UDF '{}'", udf_name)))?;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::UDF).await?;
+            if !visibility_checker.check_udf_visibility(&udf_name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege USAGE is required on udf '{}' for user '{}'",
+                    udf_name,
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
+            (
+                TaggableObject::UDF {
+                    name: udf_name.to_string(),
+                },
+                None,
+                None,
+                udf_name.to_string(),
+            )
+        }
+        "PROCEDURE" => {
+            let proc_input = object_name.trim();
+            let settings = ctx.get_settings();
+            let dialect = settings.get_sql_dialect().unwrap_or_default();
+            let ast_identity = parse_procedure_ref(proc_input, dialect).map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid procedure reference '{}': {}",
+                    proc_input, e.1
+                ))
+            })?;
+            // Resolve type names to normalized DataType strings (e.g. INT -> Int32)
+            let args_str = if ast_identity.args_type.is_empty() {
+                String::new()
+            } else {
+                ast_identity
+                    .args_type
+                    .iter()
+                    .map(|t| {
+                        databend_common_sql::resolve_type_name(t, true).map(|dt| {
+                            databend_common_expression::types::DataType::from(&dt).to_string()
+                        })
+                    })
+                    .collect::<databend_common_exception::Result<Vec<_>>>()?
+                    .join(",")
+            };
+            let name = ast_identity.name;
+            let req =
+                GetProcedureReq::new(tenant.clone(), ProcedureIdentity::new(&name, &args_str));
+            let procedure = UserApiProvider::instance()
+                .procedure_api(&tenant)
+                .get_procedure(&req)
+                .await
+                .map_err(|e| ErrorCode::from_std_error(e))?
+                .ok_or_else(|| {
+                    ErrorCode::UnknownProcedure(format!("Unknown procedure '{}'", proc_input))
+                })?;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
+            if !visibility_checker.check_procedure_visibility(&procedure.id) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS PROCEDURE is required on procedure '{}' for user '{}'",
+                    proc_input,
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
+            (
+                TaggableObject::Procedure {
+                    name,
+                    args: args_str,
+                },
+                None,
+                None,
+                proc_input.to_string(),
+            )
+        }
         _ => {
             return Err(ErrorCode::BadArguments(format!(
-                "Invalid object_domain '{}'. Supported values: DATABASE, TABLE, STAGE, CONNECTION",
+                "Invalid object_domain '{}'. Supported values: DATABASE, TABLE, STAGE, USER, ROLE, CONNECTION, VIEW, STREAM, UDF, PROCEDURE",
                 object_domain
             )));
         }

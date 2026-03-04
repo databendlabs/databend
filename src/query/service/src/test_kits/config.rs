@@ -33,8 +33,8 @@ impl ConfigBuilder {
         let mut conf = InnerConfig::default();
         conf.query.tenant_id = Tenant::new_literal("test");
         conf.log = databend_common_tracing::Config::new_testing();
-        conf.query.cluster_id = String::from("test_cluster");
-        conf.query.warehouse_id = String::from("test_warehouse");
+        conf.query.common.cluster_id = String::from("test_cluster");
+        conf.query.common.warehouse_id = String::from("test_warehouse");
 
         // add builtin users for test
         let users = vec![UserConfig {
@@ -71,42 +71,42 @@ ADDRESS = 'https://databend.com';"
 
     pub fn with_management_mode(&self) -> ConfigBuilder {
         let mut conf = self.conf.clone();
-        conf.query.management_mode = true;
+        conf.query.common.management_mode = true;
         ConfigBuilder { conf }
     }
 
     pub fn api_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.api_tls_server_key = value.into();
+        self.conf.query.common.api_tls_server_key = value.into();
         self
     }
 
     pub fn api_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.api_tls_server_cert = value.into();
+        self.conf.query.common.api_tls_server_cert = value.into();
         self
     }
 
     pub fn api_tls_server_root_ca_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.api_tls_server_root_ca_cert = value.into();
+        self.conf.query.common.api_tls_server_root_ca_cert = value.into();
         self
     }
 
     pub fn max_active_sessions(mut self, value: u64) -> ConfigBuilder {
-        self.conf.query.max_active_sessions = value;
+        self.conf.query.common.max_active_sessions = value;
         self
     }
 
     pub fn parquet_fast_read_bytes(mut self, value: u64) -> ConfigBuilder {
-        self.conf.query.parquet_fast_read_bytes = Some(value);
+        self.conf.query.common.parquet_fast_read_bytes = Some(value);
         self
     }
 
     pub fn max_storage_io_requests(mut self, value: u64) -> ConfigBuilder {
-        self.conf.query.max_storage_io_requests = Some(value);
+        self.conf.query.common.max_storage_io_requests = Some(value);
         self
     }
 
     pub fn jwt_key_file(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.jwt_key_file = value.into();
+        self.conf.query.common.jwt_key_file = value.into();
         self
     }
 
@@ -120,17 +120,17 @@ ADDRESS = 'https://databend.com';"
     }
 
     pub fn http_handler_result_timeout(mut self, value: impl Into<u64>) -> ConfigBuilder {
-        self.conf.query.http_handler_result_timeout_secs = value.into();
+        self.conf.query.common.http_handler_result_timeout_secs = value.into();
         self
     }
 
     pub fn http_handler_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.http_handler_tls_server_key = value.into();
+        self.conf.query.common.http_handler_tls_server_key = value.into();
         self
     }
 
     pub fn http_handler_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.http_handler_tls_server_cert = value.into();
+        self.conf.query.common.http_handler_tls_server_cert = value.into();
         self
     }
 
@@ -138,22 +138,22 @@ ADDRESS = 'https://databend.com';"
         mut self,
         value: impl Into<String>,
     ) -> ConfigBuilder {
-        self.conf.query.http_handler_tls_server_root_ca_cert = value.into();
+        self.conf.query.common.http_handler_tls_server_root_ca_cert = value.into();
         self
     }
 
     pub fn rpc_tls_server_key(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.rpc_tls_server_key = value.into();
+        self.conf.query.common.rpc_tls_server_key = value.into();
         self
     }
 
     pub fn rpc_tls_server_cert(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.rpc_tls_server_cert = value.into();
+        self.conf.query.common.rpc_tls_server_cert = value.into();
         self
     }
 
     pub fn query_flight_address(mut self, value: impl Into<String>) -> ConfigBuilder {
-        self.conf.query.flight_api_address = value.into();
+        self.conf.query.common.flight_api_address = value.into();
         self
     }
 

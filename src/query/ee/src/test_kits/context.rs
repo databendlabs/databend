@@ -51,7 +51,7 @@ impl EESetup {
         let public_key = key_pair.public_key().to_pem().unwrap();
 
         let mut conf = ConfigBuilder::create().config();
-        conf.query.databend_enterprise_license = Some(token);
+        conf.query.common.databend_enterprise_license = Some(token);
         conf.storage.allow_insecure = true;
 
         let tmp_dir = TempDir::new().expect("create tmp dir failed");

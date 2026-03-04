@@ -847,6 +847,7 @@ async fn test_user_apis() -> anyhow::Result<()> {
         auth_type: Some("double_sha1_password".to_string()),
         auth_string: Some("test_password".to_string()),
         default_role: None,
+        default_warehouse: None,
         roles: None,
         grant_all: Some(true),
     };

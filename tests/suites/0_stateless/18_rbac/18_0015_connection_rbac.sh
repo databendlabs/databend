@@ -10,20 +10,22 @@ export USER_C_CONNECT="bendsql -A --user=c --password=123 --host=${QUERY_MYSQL_H
 
 echo "=== OLD LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=0 ==="
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
-echo "set global enable_experimental_connection_privilege_check=0;" | $BENDSQL_CLIENT_CONNECT
-echo "drop stage if exists c1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop stage if exists c2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop stage if exists c3;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists c;" | $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by '123';" | $BENDSQL_CLIENT_CONNECT
-echo "grant super on *.* to a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop connection if exists c1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop connection if exists c2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop connection if exists c3;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+set global enable_experimental_connection_privilege_check=0;
+drop stage if exists c1;
+drop stage if exists c2;
+drop stage if exists c3;
+drop role if exists role1;
+drop role if exists role2;
+drop user if exists a;
+drop user if exists b;
+drop user if exists c;
+create user a identified by '123';
+grant super on *.* to a;
+drop connection if exists c1;
+drop connection if exists c2;
+drop connection if exists c3;
+"
 
 echo "CREATE CONNECTION c1 STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';" | $USER_A_CONNECT
 echo "create CONNECTION c2 STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900/' region='auto';" | $USER_A_CONNECT
@@ -54,15 +56,17 @@ echo "drop connection if exists c3;" | $USER_A_CONNECT
 
 echo "=== TEST USER B, C WITH OWNERSHIP OR CREATE/ACCESS PRIVILEGES PRIVILEGES ==="
 
-echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
-echo "create user b identified by '123';" | $BENDSQL_CLIENT_CONNECT
-echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "create role role2;" | $BENDSQL_CLIENT_CONNECT
-echo "create role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create connection on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
-echo "grant role role1 to b;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop role if exists role1;
+drop role if exists role2;
+drop role if exists role3;
+create user b identified by '123';
+create role role1;
+create role role2;
+create role role3;
+grant create connection on *.* to role role1;
+grant role role1 to b;
+"
 echo "--- USER b failed to create conn c1 because current role is public, can not create ---"
 echo "CREATE CONNECTION c1 STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';" | $USER_B_CONNECT
 
@@ -129,15 +133,15 @@ echo "show grants on connection c2;" | $USER_C_CONNECT
 echo "drop connection if exists c2;" | $USER_C_CONNECT
 echo "show grants for role role2;" | $USER_C_CONNECT
 
-echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
-echo "drop user if exists c;" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop stage if exists c1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop stage if exists c2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop stage if exists c3;" | $BENDSQL_CLIENT_CONNECT
-
-echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
-echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
-echo "unset global enable_experimental_connection_privilege_check;" | $BENDSQL_CLIENT_CONNECT
+run_root_sql "
+drop user if exists a;
+drop user if exists b;
+drop user if exists c;
+drop stage if exists c1;
+drop stage if exists c2;
+drop stage if exists c3;
+drop role if exists role1;
+drop role if exists role2;
+drop role if exists role3;
+unset global enable_experimental_connection_privilege_check;
+"

@@ -18,7 +18,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
-use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -107,10 +106,18 @@ impl CatalogManager {
         // init external catalogs.
         let mut external_catalogs = HashMap::default();
         for (name, ctl_cfg) in conf.catalogs.iter() {
-            let CatalogConfig::Hive(hive_ctl_cfg) = ctl_cfg;
             let creator = catalog_creators.get(&CatalogType::Hive).ok_or_else(|| {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
+
+            if ctl_cfg.ty.as_str() != "hive" {
+                return Err(ErrorCode::CatalogNotSupported(format!(
+                    "got unsupported catalog type in config: {}",
+                    ctl_cfg.ty
+                )));
+            }
+
+            let hive_ctl_cfg = &ctl_cfg.hive;
 
             let ctl_info = CatalogInfo {
                 id: CatalogIdIdent::new(&tenant, 0).into(),

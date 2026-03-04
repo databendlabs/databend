@@ -30,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_exception::StackTrace;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_management::WorkloadMgr;
+use databend_common_meta_api::kv_pb_api::compress;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
@@ -79,11 +80,13 @@ impl GlobalServices {
         StackTrace::pre_load_symbol();
 
         // app name format: node_id[0..7]@cluster_id
-        let app_name_shuffle = format!("databend-query-{}", config.query.cluster_id);
+        let app_name_shuffle = format!("databend-query-{}", config.query.common.cluster_id);
 
         // The order of initialization is very important
         // 1. global config init.
         GlobalConfig::init(config, version)?;
+
+        compress::GLOBAL_ENCODER.set_compress(config.meta.compress_values());
 
         // 2. log init.
         let mut log_labels = BTreeMap::new();
@@ -94,9 +97,12 @@ impl GlobalServices {
         );
         log_labels.insert(
             "warehouse_id".to_string(),
-            config.query.warehouse_id.clone(),
+            config.query.common.warehouse_id.clone(),
         );
-        log_labels.insert("cluster_id".to_string(), config.query.cluster_id.clone());
+        log_labels.insert(
+            "cluster_id".to_string(),
+            config.query.common.cluster_id.clone(),
+        );
         log_labels.insert("node_id".to_string(), config.query.node_id.clone());
         GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);
 
@@ -128,7 +134,7 @@ impl GlobalServices {
                 .await?;
         }
 
-        QueriesQueueManager::init(config.query.max_running_queries as usize, config).await?;
+        QueriesQueueManager::init(config.query.common.max_running_queries as usize, config).await?;
         HttpQueryManager::init(config).await?;
         ClientSessionManager::init(config).await?;
         DataExchangeManager::init()?;
@@ -160,27 +166,33 @@ impl GlobalServices {
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(
-            &config.query.share_endpoint_address,
-            &config.query.share_endpoint_auth_token_file,
+            &config.query.common.share_endpoint_address,
+            &config.query.common.share_endpoint_auth_token_file,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
         CacheManager::init(
             &config.cache,
-            &config.query.max_server_memory_usage,
+            &config.query.common.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
-        if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
-            CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
+        if let Some(addr) = config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .clone()
+        {
+            CloudControlApiProvider::init(addr, config.query.common.cloud_control_grpc_timeout)
+                .await?;
         }
 
         if !ee_mode {
             DummyResourcesManagement::init()?;
         }
 
-        if config.query.enable_queries_executor {
+        if config.query.common.enable_queries_executor {
             GlobalQueriesExecutor::init()?;
         }
 
@@ -190,7 +202,12 @@ impl GlobalServices {
             GlobalHistoryLog::init(config, version).await?;
         }
         if config.task.on {
-            if config.query.cloud_control_grpc_server_address.is_some() {
+            if config
+                .query
+                .common
+                .cloud_control_grpc_server_address
+                .is_some()
+            {
                 return Err(ErrorCode::InvalidConfig(
                     "Private Task is enabled but `cloud_control_grpc_server_address` is not empty",
                 ));

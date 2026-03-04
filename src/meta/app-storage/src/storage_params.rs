@@ -59,24 +59,24 @@ impl Default for StorageParams {
 
 impl StorageParams {
     /// Get the storage type as a string.
-    pub fn storage_type(&self) -> String {
+    pub fn storage_type(&self) -> &'static str {
         match self {
-            StorageParams::Azblob(_) => "azblob".to_string(),
-            StorageParams::Fs(_) => "fs".to_string(),
-            StorageParams::Ftp(_) => "ftp".to_string(),
-            StorageParams::Gcs(_) => "gcs".to_string(),
-            StorageParams::Hdfs(_) => "hdfs".to_string(),
-            StorageParams::Http(_) => "http".to_string(),
-            StorageParams::Ipfs(_) => "ipfs".to_string(),
-            StorageParams::Memory => "memory".to_string(),
-            StorageParams::Moka(_) => "moka".to_string(),
-            StorageParams::Obs(_) => "obs".to_string(),
-            StorageParams::Oss(_) => "oss".to_string(),
-            StorageParams::S3(_) => "s3".to_string(),
-            StorageParams::Webhdfs(_) => "webhdfs".to_string(),
-            StorageParams::Cos(_) => "cos".to_string(),
-            StorageParams::Huggingface(_) => "huggingface".to_string(),
-            StorageParams::None => "none".to_string(),
+            StorageParams::Azblob(_) => "azblob",
+            StorageParams::Fs(_) => "fs",
+            StorageParams::Ftp(_) => "ftp",
+            StorageParams::Gcs(_) => "gcs",
+            StorageParams::Hdfs(_) => "hdfs",
+            StorageParams::Http(_) => "http",
+            StorageParams::Ipfs(_) => "ipfs",
+            StorageParams::Memory => "memory",
+            StorageParams::Moka(_) => "moka",
+            StorageParams::Obs(_) => "obs",
+            StorageParams::Oss(_) => "oss",
+            StorageParams::S3(_) => "s3",
+            StorageParams::Webhdfs(_) => "webhdfs",
+            StorageParams::Cos(_) => "cos",
+            StorageParams::Huggingface(_) => "huggingface",
+            StorageParams::None => "none",
         }
     }
 

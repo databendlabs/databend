@@ -88,7 +88,12 @@ impl Interpreter for AlterNotificationInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_none()
+        {
             return Err(ErrorCode::CloudControlNotEnabled(
                 "cannot create notification without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));

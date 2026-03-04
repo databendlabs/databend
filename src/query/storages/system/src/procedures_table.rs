@@ -36,6 +36,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
@@ -84,13 +85,25 @@ impl AsyncSystemTable for ProceduresTable {
         let tenant = ctx.get_tenant();
         let user_api = UserApiProvider::instance();
         let mgr = user_api.procedure_api(&tenant);
-        let procedures = mgr
+        let all_procedures = mgr
             .list_procedures(ListProcedureReq {
                 tenant,
                 filter: None,
             })
             .await
             .map_err(meta_service_error)?;
+
+        let enable_experimental_rbac_check =
+            ctx.get_settings().get_enable_experimental_rbac_check()?;
+        let procedures = if enable_experimental_rbac_check {
+            let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
+            all_procedures
+                .into_iter()
+                .filter(|p| visibility_checker.check_procedure_visibility(&p.ident.procedure_id()))
+                .collect::<Vec<_>>()
+        } else {
+            all_procedures
+        };
 
         let mut names = Vec::with_capacity(procedures.len());
         let mut procedure_ids = Vec::with_capacity(procedures.len());

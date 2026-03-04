@@ -84,7 +84,7 @@ impl AdminService {
             .at("/debug/async_tasks/dump", get(debug_dump_stack));
 
         // Multiple tenants admin api
-        if self.config.query.management_mode {
+        if self.config.query.common.management_mode {
             route = route
                 .at(
                     "/v1/tenants/:tenant/tables",
@@ -147,8 +147,8 @@ impl AdminService {
 
     fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
         let cfg = OpensslTlsConfig::new()
-            .cert_from_file(config.query.api_tls_server_cert.as_str())
-            .key_from_file(config.query.api_tls_server_key.as_str());
+            .cert_from_file(config.query.common.api_tls_server_cert.as_str())
+            .key_from_file(config.query.common.api_tls_server_key.as_str());
 
         // if Path::new(&config.query.api_tls_server_root_ca_cert).exists() {
         //     cfg = cfg.client_auth_required(std::fs::read(
@@ -205,7 +205,7 @@ impl Server for AdminService {
 
     #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr, ErrorCode> {
-        let config = &self.config.query;
+        let config = &self.config.query.common;
         let res =
             match config.api_tls_server_key.is_empty() || config.api_tls_server_cert.is_empty() {
                 true => self.start_without_tls(listening).await,

@@ -80,15 +80,15 @@ impl Settings {
 
     fn load_config_changes(&self) -> Result<()> {
         let query_config = &GlobalConfig::instance().query;
-        if let Some(val) = query_config.parquet_fast_read_bytes {
+        if let Some(val) = query_config.common.parquet_fast_read_bytes {
             self.apply_local_config("parquet_fast_read_bytes", val.to_string())?;
         }
 
-        if let Some(val) = query_config.max_storage_io_requests {
+        if let Some(val) = query_config.common.max_storage_io_requests {
             self.apply_local_config("max_storage_io_requests", val.to_string())?;
         }
 
-        if let Some(val) = query_config.databend_enterprise_license.clone() {
+        if let Some(val) = query_config.common.databend_enterprise_license.clone() {
             self.apply_local_config("enterprise_license", val)?;
         }
         Ok(())

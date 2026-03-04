@@ -1,0 +1,20 @@
+statement ok
+drop role if exists 'role1';
+
+statement ok
+create role 'role1';
+
+statement ok
+grant select on default.* to role 'role1';
+
+statement ok
+create function a as (a) -> (a+1);
+
+statement ok
+drop role if exists 'role2';
+
+statement ok
+create role 'role2';
+
+statement ok
+GRANT OWNERSHIP on udf a to role 'role1';

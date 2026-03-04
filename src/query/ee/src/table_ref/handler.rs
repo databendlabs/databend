@@ -161,7 +161,7 @@ impl TableRefHandler for RealTableRefHandler {
             .insert(plan.ref_name.clone(), SnapshotRef {
                 id: seq,
                 expire_at,
-                typ: plan.ref_type.clone(),
+                typ: plan.ref_type,
                 loc: new_snapshot_location,
             });
 

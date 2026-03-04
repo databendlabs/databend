@@ -56,6 +56,7 @@ fn test_geography() {
     test_to_string(file);
     test_to_geography(file);
     test_try_to_geography(file);
+    test_st_hilbert(file);
 }
 
 fn test_st_makepoint(file: &mut impl Write) {
@@ -375,6 +376,27 @@ fn test_try_to_geography(file: &mut impl Write) {
     run_ast(
         file,
         "try_to_geography(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))",
+        &[],
+    );
+}
+
+fn test_st_hilbert(file: &mut impl Write) {
+    run_ast(file, "ST_HILBERT(TO_GEOGRAPHY('POINT(113.15 23.06)'))", &[]);
+    run_ast(file, "ST_HILBERT(TO_GEOGRAPHY('POINT(116.25 39.54)'))", &[]);
+    run_ast(file, "ST_HILBERT(TO_GEOGRAPHY('POINT(107.40 33.42)'))", &[]);
+    run_ast(
+        file,
+        "ST_HILBERT(TO_GEOGRAPHY('POINT(113.15 23.06)'), [73, 4, 135, 53])",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_HILBERT(TO_GEOGRAPHY('POINT(116.25 39.54)'), [73, 4, 135, 53])",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_HILBERT(TO_GEOGRAPHY('POINT(107.40 33.42)'), [73, 4, 135, 53])",
         &[],
     );
 }

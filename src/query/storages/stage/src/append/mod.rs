@@ -14,6 +14,7 @@
 
 mod output;
 mod parquet_file;
+mod partition;
 mod path;
 mod row_based_file;
 mod stage_sink_table;

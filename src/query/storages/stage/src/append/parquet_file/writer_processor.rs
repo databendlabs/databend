@@ -45,6 +45,7 @@ use parquet::schema::types::ColumnPath;
 use super::block_batch::BlockBatch;
 use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
+use crate::append::partition::partition_from_block;
 use crate::append::path::unload_path;
 
 pub struct ParquetFileWriter {
@@ -63,7 +64,7 @@ pub struct ParquetFileWriter {
     row_counts: usize,
     writer: ArrowWriter<Vec<u8>>,
 
-    file_to_write: Option<(Vec<u8>, DataSummary)>,
+    file_to_write: Option<(Vec<u8>, DataSummary, Option<Arc<str>>)>,
     data_accessor: Operator,
 
     // the result of statement
@@ -75,6 +76,7 @@ pub struct ParquetFileWriter {
     batch_id: usize,
 
     targe_file_size: Option<usize>,
+    current_partition: Option<Option<Arc<str>>>,
 }
 
 const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
@@ -170,6 +172,7 @@ impl ParquetFileWriter {
             batch_id: 0,
             targe_file_size,
             row_counts: 0,
+            current_partition: None,
         })))
     }
     pub fn reinit_writer(&mut self) -> Result<()> {
@@ -184,16 +187,23 @@ impl ParquetFileWriter {
         Ok(())
     }
 
-    fn flush(&mut self) -> Result<()> {
+    fn flush_stream_writer(&mut self) -> Result<()> {
         self.writer.finish().ok();
         let buf = mem::take(self.writer.inner_mut());
         let output_bytes = buf.len();
-        self.file_to_write = Some((buf, DataSummary {
-            row_counts: self.row_counts,
-            input_bytes: self.input_bytes,
-            output_bytes,
-        }));
+        self.file_to_write = Some((
+            buf,
+            DataSummary {
+                row_counts: self.row_counts,
+                input_bytes: self.input_bytes,
+                output_bytes,
+            },
+            self.current_partition.clone().flatten(),
+        ));
         self.reinit_writer()?;
+        self.row_counts = 0;
+        self.input_bytes = 0;
+        self.current_partition = None;
         Ok(())
     }
 }
@@ -244,10 +254,14 @@ impl Processor for ParquetFileWriter {
             let block = self.input.pull_data().unwrap()?;
             if self.targe_file_size.is_none() {
                 self.input_data.push_back(block);
-            } else {
+            } else if block.get_meta().is_some() {
                 let block_meta = block.get_owned_meta().unwrap();
-                let blocks = BlockBatch::downcast_from(block_meta).unwrap();
-                self.input_data.extend(blocks.blocks);
+                let block_batch = BlockBatch::downcast_from(block_meta).unwrap();
+                for b in block_batch.blocks {
+                    self.input_data.push_back(b);
+                }
+            } else {
+                self.input_data.push_back(block);
             }
 
             self.input.set_not_need_data();
@@ -259,28 +273,37 @@ impl Processor for ParquetFileWriter {
     }
 
     fn process(&mut self) -> Result<()> {
-        while let Some(b) = self.input_data.pop_front() {
-            self.input_bytes += b.memory_size();
-            self.row_counts += b.num_rows();
-            let batch = b.to_record_batch(&self.schema)?;
+        while let Some(block) = self.input_data.pop_front() {
+            let partition = partition_from_block(&block);
+            if self.current_partition.as_ref() != Some(&partition) {
+                if self.row_counts > 0 {
+                    self.flush_stream_writer()?;
+                    self.input_data.push_front(block);
+                    return Ok(());
+                }
+                self.current_partition = Some(partition.clone());
+            }
+
+            self.input_bytes += block.memory_size();
+            self.row_counts += block.num_rows();
+            let batch = block.to_record_batch(&self.schema)?;
             self.writer.write(&batch)?;
 
             if let Some(target) = self.targe_file_size {
                 if self.row_counts > 0 {
-                    // written row groups: compressed, controlled by MAX_ROW_GROUP_SIZE
                     let file_size = self.writer.bytes_written();
-                    // in_progress row group: each column leaf has an at most 1MB uncompressed buffer and multi compressed pages
-                    // may result in small file for schema with many columns
                     let in_progress = self.writer.in_progress_size();
                     if file_size + in_progress >= target {
-                        self.flush()?;
+                        self.flush_stream_writer()?;
                         return Ok(());
                     }
                 }
             }
         }
+
         if self.input.is_finished() && self.row_counts > 0 {
-            self.flush()?;
+            self.flush_stream_writer()?;
+            return Ok(());
         }
         Ok(())
     }
@@ -288,14 +311,15 @@ impl Processor for ParquetFileWriter {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         assert!(self.file_to_write.is_some());
+        let (data, summary, partition) = mem::take(&mut self.file_to_write).unwrap();
         let path = unload_path(
             &self.info,
             &self.query_id,
             self.group_id,
             self.batch_id,
             None,
+            partition.as_deref(),
         );
-        let (data, summary) = mem::take(&mut self.file_to_write).unwrap();
         self.unload_output.add_file(&path, summary);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;

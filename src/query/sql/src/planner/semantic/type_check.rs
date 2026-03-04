@@ -63,7 +63,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::ApplyResourceRequest;
+use databend_common_cloud_control::pb::CreateWorkerRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
@@ -166,6 +166,7 @@ use crate::binder::InternalColumnBinding;
 use crate::binder::NameResolutionResult;
 use crate::binder::VirtualColumnName;
 use crate::binder::bind_values;
+use crate::binder::parse_stage_name;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
@@ -192,6 +193,7 @@ use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
+use crate::plans::ReadFileFunctionArgument;
 use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -5679,11 +5681,13 @@ impl<'a> TypeChecker<'a> {
 
     fn apply_udf_cloud_resource(
         &self,
+        resource_name: &str,
         resource_type: &str,
         script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
         let Some(_) = &GlobalConfig::instance()
             .query
+            .common
             .cloud_control_grpc_server_address
         else {
             return Err(ErrorCode::Unimplemented(
@@ -5706,17 +5710,22 @@ impl<'a> TypeChecker<'a> {
             query_id,
             provider.get_timeout(),
         );
-        cfg.add_resource_version_info();
+        cfg.add_worker_version_info();
 
-        let req = ApplyResourceRequest {
+        let req = CreateWorkerRequest {
+            tenant_id: tenant.tenant_name().to_string(),
+            name: resource_name.to_string(),
+            if_not_exists: true,
+            tags: Default::default(),
+            options: Default::default(),
             r#type: resource_type.to_string(),
             script,
         };
 
         let resp = databend_common_base::runtime::block_on(
             provider
-                .get_resource_client()
-                .apply_resource(make_request(req, cfg)),
+                .get_worker_client()
+                .create_worker(make_request(req, cfg)),
         )?;
 
         let endpoint = resp.endpoint;
@@ -5902,7 +5911,7 @@ impl<'a> TypeChecker<'a> {
 
         let language = language.parse()?;
         let use_cloud = matches!(language, UDFLanguage::Python)
-            && GlobalConfig::instance().query.enable_udf_sandbox;
+            && GlobalConfig::instance().query.common.enable_udf_sandbox;
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed(&language)?;
         } else {
@@ -5939,7 +5948,7 @@ impl<'a> TypeChecker<'a> {
                 &arg_types,
                 &return_type,
             )?;
-            let (endpoint, headers) = self.apply_udf_cloud_resource("udf", script)?;
+            let (endpoint, headers) = self.apply_udf_cloud_resource(&name, "udf", script)?;
             let udf_definition = UDFServer {
                 address: endpoint,
                 handler,
@@ -6191,6 +6200,7 @@ impl<'a> TypeChecker<'a> {
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
             "dict_get" => self.resolve_dict_get_async_function(span, func_name, arguments)?,
+            "read_file" => self.resolve_read_file_async_function(span, func_name, arguments)?,
             _ => {
                 return Err(ErrorCode::SemanticError(format!(
                     "cannot find async function {}",
@@ -6453,6 +6463,115 @@ impl<'a> TypeChecker<'a> {
             }),
             attr_type,
         )))
+    }
+
+    fn resolve_read_file_async_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if args.len() != 1 && args.len() != 2 {
+            return Err(ErrorCode::SemanticError(format!(
+                "read_file function need one or two arguments but got {}",
+                args.len()
+            ))
+            .set_span(span));
+        }
+
+        let mut resolved_args = Vec::with_capacity(args.len());
+        let mut arg_types = Vec::with_capacity(args.len());
+        for arg in args {
+            let box (arg_scalar, arg_type) = self.resolve(arg)?;
+            let arg_scalar = if arg_type.remove_nullable() != DataType::String {
+                wrap_cast(&arg_scalar, &DataType::String)
+            } else {
+                arg_scalar
+            };
+            resolved_args.push(arg_scalar);
+            arg_types.push(arg_type);
+        }
+
+        let mut read_file_arg = ReadFileFunctionArgument {
+            stage_name: None,
+            stage_info: None,
+        };
+
+        if args.len() == 1 {
+            if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
+                if let Some(location) = constant.value.as_string() {
+                    if !location.starts_with('@') {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "stage path must start with @, but got {}",
+                            location
+                        ))
+                        .set_span(span));
+                    }
+                }
+            }
+        } else if let ScalarExpr::ConstantExpr(constant) = &resolved_args[0] {
+            if let Some(stage) = constant.value.as_string() {
+                let stage_name = parse_stage_name(stage).map_err(|err| {
+                    ErrorCode::SemanticError(err.message().to_string()).set_span(span)
+                })?;
+                let stage_info =
+                    Self::resolve_stage_info_for_read_file(self.ctx.as_ref(), span, &stage_name)?;
+                read_file_arg.stage_name = Some(stage_name);
+                read_file_arg.stage_info = Some(Box::new(stage_info));
+            }
+        }
+
+        let return_type = if arg_types
+            .iter()
+            .any(|arg_type| arg_type.is_nullable_or_null())
+        {
+            DataType::Nullable(Box::new(DataType::Binary))
+        } else {
+            DataType::Binary
+        };
+
+        let display_name = if args.len() == 1 {
+            format!("{}({})", func_name, args[0])
+        } else {
+            format!("{}({}, {})", func_name, args[0], args[1])
+        };
+        Ok(Box::new((
+            ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+                span,
+                func_name: func_name.to_string(),
+                display_name,
+                return_type: Box::new(return_type.clone()),
+                arguments: resolved_args,
+                func_arg: AsyncFunctionArgument::ReadFile(read_file_arg),
+            }),
+            return_type,
+        )))
+    }
+
+    fn resolve_stage_info_for_read_file(
+        ctx: &dyn TableContext,
+        span: Span,
+        stage_name: &str,
+    ) -> Result<StageInfo> {
+        databend_common_base::runtime::block_on(async move {
+            let (stage_info, _) = resolve_stage_location(ctx, stage_name).await?;
+            if ctx.get_settings().get_enable_experimental_rbac_check()? {
+                let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+                if !(stage_info.is_temporary
+                    || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                    || stage_info.stage_type == StageType::User
+                        && stage_info.stage_name == ctx.get_current_user()?.name)
+                {
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege READ is required on stage {} for user {}",
+                        stage_info.stage_name.clone(),
+                        &ctx.get_current_user()?.identity().display(),
+                    ))
+                    .set_span(span));
+                }
+            }
+            Ok(stage_info)
+        })
     }
 
     fn resolve_cast_to_variant(

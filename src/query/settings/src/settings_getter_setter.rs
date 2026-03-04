@@ -871,10 +871,6 @@ impl Settings {
         self.try_get_u64("cost_factor_network_per_row")
     }
 
-    pub fn get_enable_geo_create_table(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_geo_create_table")? != 0)
-    }
-
     pub fn get_idle_transaction_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("idle_transaction_timeout_secs")
     }
@@ -924,6 +920,10 @@ impl Settings {
 
     pub fn get_enable_fixed_rows_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_fixed_rows_sort")? == 1)
+    }
+
+    pub fn get_enable_sort_spill_prefetch(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_sort_spill_prefetch")? == 1)
     }
 
     pub fn get_format_null_as_str(&self) -> Result<bool> {
@@ -1173,5 +1173,13 @@ impl Settings {
 
     pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("force_aggregate_shuffle_mode")
+    }
+
+    pub fn get_enable_experiment_hash_index(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experiment_hash_index")? != 0)
+    }
+
+    pub fn get_system_tables_count_db_concurrency(&self) -> Result<u64> {
+        self.try_get_u64("system_tables_count_db_concurrency")
     }
 }

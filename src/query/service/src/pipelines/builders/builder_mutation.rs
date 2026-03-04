@@ -41,6 +41,7 @@ use databend_common_storages_fuse::operations::UnMatchedExprs;
 
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::AsyncFunctionBranch;
+use crate::pipelines::processors::transforms::ReadFileContext;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformBranchedAsyncFunction;
 use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
@@ -125,6 +126,7 @@ impl PipelineBuilder {
                         Ok(TransformBranchedAsyncFunction {
                             ctx: self.ctx.clone(),
                             branches: branches.clone(),
+                            read_file_ctx: ReadFileContext::try_new(&self.ctx)?,
                         })
                     },
                     transform_len,

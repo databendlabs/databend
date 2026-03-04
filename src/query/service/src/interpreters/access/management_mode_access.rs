@@ -38,7 +38,7 @@ impl AccessChecker for ManagementModeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
-        if GlobalConfig::instance().query.management_mode {
+        if GlobalConfig::instance().query.common.management_mode {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
                     use databend_common_sql::plans::RewriteKind;

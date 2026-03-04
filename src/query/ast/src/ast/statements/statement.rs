@@ -35,6 +35,7 @@ use crate::ast::statements::role::AlterRoleStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
+use crate::ast::statements::worker::ShowWorkersStmt;
 use crate::ast::statements::workload::CreateWorkloadGroupStmt;
 use crate::ast::statements::workload::DropWorkloadGroupStmt;
 use crate::ast::statements::workload::RenameWorkloadGroupStmt;
@@ -153,6 +154,12 @@ pub enum Statement {
     AssignWarehouseNodes(AssignWarehouseNodesStmt),
     UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
 
+    // Workers
+    ShowWorkers(ShowWorkersStmt),
+    CreateWorker(CreateWorkerStmt),
+    AlterWorker(AlterWorkerStmt),
+    DropWorker(DropWorkerStmt),
+
     // Workloads
     ShowWorkloadGroups(ShowWorkloadGroupsStmt),
     CreateWorkloadGroup(CreateWorkloadGroupStmt),
@@ -190,6 +197,7 @@ pub enum Statement {
     VacuumTable(VacuumTableStmt),
     VacuumDropTable(VacuumDropTableStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
+    VacuumVirtualColumn(VacuumVirtualColumnStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     ShowStatistics(ShowStatisticsStmt),
@@ -496,6 +504,7 @@ impl Statement {
             | Statement::VacuumTable(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
+            | Statement::VacuumVirtualColumn(..)
             | Statement::AnalyzeTable(..)
             | Statement::ExistsTable(..)
             | Statement::ShowCreateDictionary(..)
@@ -545,6 +554,7 @@ impl Statement {
             | Statement::DescProcedure(..)
             | Statement::CallProcedure(..)
             | Statement::ShowWarehouses(..)
+            | Statement::ShowWorkers(..)
             | Statement::ShowOnlineNodes(..)
             | Statement::InspectWarehouse(..) => true,
 
@@ -628,6 +638,9 @@ impl Statement {
             | Statement::UnassignWarehouseNodes(..)
             | Statement::ResumeWarehouse(..)
             | Statement::SuspendWarehouse(..)
+            | Statement::CreateWorker(..)
+            | Statement::AlterWorker(..)
+            | Statement::DropWorker(..)
             | Statement::ShowWorkloadGroups(..)
             | Statement::CreateWorkloadGroup(..)
             | Statement::DropWorkloadGroup(..)
@@ -856,6 +869,7 @@ impl Display for Statement {
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDictionary(stmt) => write!(f, "{stmt}")?,
@@ -1109,6 +1123,10 @@ impl Display for Statement {
             Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
             Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
             Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowWorkers(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateWorker(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterWorker(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWorker(stmt) => write!(f, "{stmt}")?,
             Statement::ShowWorkloadGroups(stmt) => write!(f, "{stmt}")?,
             Statement::CreateWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::DropWorkloadGroup(stmt) => write!(f, "{stmt}")?,

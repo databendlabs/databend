@@ -3450,6 +3450,313 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE WORKER read_env
+---------- Output ---------
+CREATE WORKER read_env
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: false,
+        name: Identifier {
+            span: Some(
+                14..22,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        options: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE WORKER IF NOT EXISTS read_env
+---------- Output ---------
+CREATE WORKER IF NOT EXISTS read_env
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: true,
+        name: Identifier {
+            span: Some(
+                28..36,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        options: {},
+    },
+)
+
+
+---------- Input ----------
+CREATE WORKER read_env WITH size='small', auto_suspend='300', auto_resume='true', max_cluster_count='3', min_cluster_count='1'
+---------- Output ---------
+CREATE WORKER read_env WITH  auto_resume = 'true', auto_suspend = '300', max_cluster_count = '3', min_cluster_count = '1', size = 'small'
+---------- AST ------------
+CreateWorker(
+    CreateWorkerStmt {
+        if_not_exists: false,
+        name: Identifier {
+            span: Some(
+                14..22,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        options: {
+            "auto_resume": "true",
+            "auto_suspend": "300",
+            "max_cluster_count": "3",
+            "min_cluster_count": "1",
+            "size": "small",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SET size='medium', auto_suspend='600'
+---------- Output ---------
+ALTER WORKER read_env SET auto_suspend = '600',size = 'medium'
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: SetOptions {
+            options: {
+                "auto_suspend": "600",
+                "size": "medium",
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env UNSET size, auto_suspend
+---------- Output ---------
+ALTER WORKER read_env UNSET size, auto_suspend
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: UnsetOptions {
+            options: [
+                Identifier {
+                    span: Some(
+                        28..32,
+                    ),
+                    name: "size",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        34..46,
+                    ),
+                    name: "auto_suspend",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SET TAG purpose='sandbox', owner='ci'
+---------- Output ---------
+ALTER WORKER read_env SET TAG purpose = 'sandbox', owner = 'ci'
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: SetTag {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            30..37,
+                        ),
+                        name: "purpose",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "sandbox",
+                },
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            49..54,
+                        ),
+                        name: "owner",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "ci",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env UNSET TAG purpose, owner
+---------- Output ---------
+ALTER WORKER read_env UNSET TAG purpose, owner
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: UnsetTag {
+            tags: [
+                Identifier {
+                    span: Some(
+                        32..39,
+                    ),
+                    name: "purpose",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        41..46,
+                    ),
+                    name: "owner",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+SHOW WORKERS
+---------- Output ---------
+SHOW WORKERS
+---------- AST ------------
+ShowWorkers(
+    ShowWorkersStmt,
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env SUSPEND
+---------- Output ---------
+ALTER WORKER read_env SUSPEND
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: Suspend,
+    },
+)
+
+
+---------- Input ----------
+ALTER WORKER read_env RESUME
+---------- Output ---------
+ALTER WORKER read_env RESUME
+---------- AST ------------
+AlterWorker(
+    AlterWorkerStmt {
+        name: Identifier {
+            span: Some(
+                13..21,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+        action: Resume,
+    },
+)
+
+
+---------- Input ----------
+DROP WORKER read_env
+---------- Output ---------
+DROP WORKER read_env
+---------- AST ------------
+DropWorker(
+    DropWorkerStmt {
+        if_exists: false,
+        name: Identifier {
+            span: Some(
+                12..20,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP WORKER IF EXISTS read_env
+---------- Output ---------
+DROP WORKER IF EXISTS read_env
+---------- AST ------------
+DropWorker(
+    DropWorkerStmt {
+        if_exists: true,
+        name: Identifier {
+            span: Some(
+                22..30,
+            ),
+            name: "read_env",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 truncate table a;
 ---------- Output ---------
 TRUNCATE TABLE a
@@ -16222,6 +16529,441 @@ AlterObjectTag(
 
 
 ---------- Input ----------
+ALTER VIEW v SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER VIEW v SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: View {
+            if_exists: false,
+            catalog: None,
+            database: None,
+            view: Identifier {
+                span: Some(
+                    11..12,
+                ),
+                name: "v",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            21..25,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER VIEW IF EXISTS db.v UNSET TAG tag1;
+---------- Output ---------
+ALTER VIEW IF EXISTS db.v UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: View {
+            if_exists: true,
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        21..23,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            view: Identifier {
+                span: Some(
+                    24..25,
+                ),
+                name: "v",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        36..40,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER USER 'u1' SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER USER 'u1'@'%' SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: User {
+            if_exists: false,
+            user: UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            24..28,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER USER IF EXISTS 'u1' UNSET TAG tag1;
+---------- Output ---------
+ALTER USER IF EXISTS 'u1'@'%' UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: User {
+            if_exists: true,
+            user: UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        36..40,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER ROLE r1 SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER ROLE 'r1' SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Role {
+            if_exists: false,
+            role_name: "r1",
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            22..26,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER ROLE IF EXISTS r1 UNSET TAG tag1;
+---------- Output ---------
+ALTER ROLE IF EXISTS 'r1' UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Role {
+            if_exists: true,
+            role_name: "r1",
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        34..38,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER STREAM s1 SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER STREAM s1 SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Stream {
+            if_exists: false,
+            catalog: None,
+            database: None,
+            stream: Identifier {
+                span: Some(
+                    13..15,
+                ),
+                name: "s1",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            24..28,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER STREAM IF EXISTS db.s1 UNSET TAG tag1;
+---------- Output ---------
+ALTER STREAM IF EXISTS db.s1 UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Stream {
+            if_exists: true,
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        23..25,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            stream: Identifier {
+                span: Some(
+                    26..28,
+                ),
+                name: "s1",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        39..43,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION my_udf SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER FUNCTION my_udf SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Function {
+            if_exists: false,
+            udf_name: Identifier {
+                span: Some(
+                    15..21,
+                ),
+                name: "my_udf",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            30..34,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION IF EXISTS my_udf UNSET TAG tag1;
+---------- Output ---------
+ALTER FUNCTION IF EXISTS my_udf UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Function {
+            if_exists: true,
+            udf_name: Identifier {
+                span: Some(
+                    25..31,
+                ),
+                name: "my_udf",
+                quote: None,
+                ident_type: None,
+            },
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        42..46,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PROCEDURE my_proc(INT, STRING) SET TAG tag1 = 'val1';
+---------- Output ---------
+ALTER PROCEDURE my_proc(Int32, STRING) SET TAG tag1 = 'val1'
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Procedure {
+            if_exists: false,
+            name: Identifier {
+                span: Some(
+                    16..23,
+                ),
+                name: "my_proc",
+                quote: None,
+                ident_type: None,
+            },
+            arg_types: [
+                Int32,
+                String,
+            ],
+        },
+        action: Set {
+            tags: [
+                TagSetItem {
+                    tag_name: Identifier {
+                        span: Some(
+                            45..49,
+                        ),
+                        name: "tag1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    tag_value: "val1",
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER PROCEDURE IF EXISTS my_proc() UNSET TAG tag1;
+---------- Output ---------
+ALTER PROCEDURE IF EXISTS my_proc() UNSET TAG tag1
+---------- AST ------------
+AlterObjectTag(
+    AlterObjectTagStmt {
+        object: Procedure {
+            if_exists: true,
+            name: Identifier {
+                span: Some(
+                    26..33,
+                ),
+                name: "my_proc",
+                quote: None,
+                ident_type: None,
+            },
+            arg_types: [],
+        },
+        action: Unset {
+            tags: [
+                Identifier {
+                    span: Some(
+                        46..50,
+                    ),
+                    name: "tag1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE ctl.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE ctl.c RENAME TO a
@@ -18277,6 +19019,126 @@ CopyIntoTable(
 
 
 ---------- Input ----------
+COPY INTO @my_stage/partitioned
+    FROM mytable
+    PARTITION BY (concat('p=', to_varchar(id)))
+    FILE_FORMAT = (type = PARQUET);
+---------- Output ---------
+COPY INTO '@my_stage/partitioned' FROM mytable PARTITION BY (concat('p=', to_varchar(id))) FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
+---------- AST ------------
+CopyIntoLocation(
+    CopyIntoLocationStmt {
+        with: None,
+        hints: None,
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    41..48,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            with_options: None,
+        },
+        dst: Stage(
+            "my_stage/partitioned",
+        ),
+        partition_by: Some(
+            FunctionCall {
+                span: Some(
+                    67..95,
+                ),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier {
+                        span: Some(
+                            67..73,
+                        ),
+                        name: "concat",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    args: [
+                        Literal {
+                            span: Some(
+                                74..78,
+                            ),
+                            value: String(
+                                "p=",
+                            ),
+                        },
+                        FunctionCall {
+                            span: Some(
+                                80..94,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        80..90,
+                                    ),
+                                    name: "to_varchar",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            91..93,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        91..93,
+                                                    ),
+                                                    name: "id",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                    ],
+                    params: [],
+                    order_by: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+        ),
+        file_format: FileFormatOptions {
+            options: {
+                "type": Keyword(
+                    "PARQUET",
+                ),
+            },
+        },
+        options: CopyIntoLocationOptions {
+            single: false,
+            max_file_size: 0,
+            detailed_output: false,
+            use_raw_path: false,
+            include_query_id: true,
+            overwrite: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 COPY INTO mytable
     FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
@@ -18503,6 +19365,7 @@ CopyIntoLocation(
                 },
             },
         ),
+        partition_by: None,
         file_format: FileFormatOptions {
             options: {
                 "field_delimiter": String(
@@ -18557,6 +19420,7 @@ CopyIntoLocation(
         dst: Stage(
             "my_stage/my data",
         ),
+        partition_by: None,
         file_format: FileFormatOptions {
             options: {},
         },
@@ -18604,6 +19468,7 @@ CopyIntoLocation(
         dst: Stage(
             "my_stage",
         ),
+        partition_by: None,
         file_format: FileFormatOptions {
             options: {
                 "field_delimiter": String(
@@ -23068,6 +23933,27 @@ RefreshVirtualColumn(
 
 
 ---------- Input ----------
+VACUUM VIRTUAL COLUMN FROM t
+---------- Output ---------
+VACUUM VIRTUAL COLUMN FROM t
+---------- AST ------------
+VacuumVirtualColumn(
+    VacuumVirtualColumnStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                27..28,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
 ---------- Output ---------
 CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
@@ -25622,6 +26508,198 @@ Query(
                             ),
                             value: UInt64(
                                 34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+/**/ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            5..13,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    5..13,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                12..13,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+/***不正常，注释后面多了个星号**/ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            47..55,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    47..55,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                54..55,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+/* outer /* inner */ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            21..29,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    21..29,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                28..29,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+/* outer /* inner **/ select 1;
+---------- Output ---------
+SELECT 1
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            22..30,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    22..30,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                29..30,
+                            ),
+                            value: UInt64(
+                                1,
                             ),
                         },
                         alias: None,

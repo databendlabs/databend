@@ -18,16 +18,27 @@ use std::fmt::Formatter;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 
 use crate::plans::Plan;
+use crate::plans::ScalarExpr;
 
 #[derive(Clone)]
 pub struct CopyIntoLocationPlan {
     pub info: CopyIntoLocationInfo,
     pub from: Box<Plan>,
+    pub partition_by: Option<PartitionByDesc>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PartitionByDesc {
+    pub display: String,
+    pub expr: ScalarExpr,
+    pub remote_expr: RemoteExpr,
+    pub nullable: bool,
 }
 
 impl CopyIntoLocationPlan {
@@ -55,6 +66,9 @@ impl Debug for CopyIntoLocationPlan {
             "Copy into {:?}/{} from {:?}",
             self.info.stage, self.info.path, self.from
         )?;
+        if let Some(partition_by) = &self.partition_by {
+            write!(f, " partition_by={}", partition_by.display)?;
+        }
         Ok(())
     }
 }

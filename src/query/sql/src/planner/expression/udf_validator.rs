@@ -96,16 +96,23 @@ impl UDFValidator {
 
     pub fn is_udf_script_allowed(lang: &UDFLanguage) -> Result<()> {
         match lang {
-            UDFLanguage::JavaScript if GlobalConfig::instance().query.enable_udf_js_script => {
-                Ok(())
-            }
-            UDFLanguage::Python
-                if GlobalConfig::instance().query.enable_udf_python_script
-                    || GlobalConfig::instance().query.enable_udf_sandbox =>
+            UDFLanguage::JavaScript
+                if GlobalConfig::instance().query.common.enable_udf_js_script =>
             {
                 Ok(())
             }
-            UDFLanguage::WebAssembly if GlobalConfig::instance().query.enable_udf_wasm_script => {
+            UDFLanguage::Python
+                if GlobalConfig::instance()
+                    .query
+                    .common
+                    .enable_udf_python_script
+                    || GlobalConfig::instance().query.common.enable_udf_sandbox =>
+            {
+                Ok(())
+            }
+            UDFLanguage::WebAssembly
+                if GlobalConfig::instance().query.common.enable_udf_wasm_script =>
+            {
                 Ok(())
             }
             other => Err(ErrorCode::Unimplemented(format!(
@@ -116,7 +123,7 @@ impl UDFValidator {
     }
 
     pub fn is_udf_cloud_script_allowed(lang: &UDFLanguage) -> Result<()> {
-        if !GlobalConfig::instance().query.enable_udf_sandbox {
+        if !GlobalConfig::instance().query.common.enable_udf_sandbox {
             return Err(ErrorCode::Unimplemented(
                 "SandboxUDF is not enabled, you can enable it by setting 'enable_udf_sandbox = true' in query node config",
             ));
@@ -131,7 +138,7 @@ impl UDFValidator {
     }
 
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {
-        if !GlobalConfig::instance().query.enable_udf_server {
+        if !GlobalConfig::instance().query.common.enable_udf_server {
             return Err(ErrorCode::Unimplemented(
                 "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
             ));
@@ -142,14 +149,17 @@ impl UDFValidator {
                 format!("udf server address '{address}' is invalid, please check the address",)
             })?;
 
-        let udf_server_allow_insecure = GlobalConfig::instance().query.udf_server_allow_insecure;
+        let udf_server_allow_insecure = GlobalConfig::instance()
+            .query
+            .common
+            .udf_server_allow_insecure;
         if !udf_server_allow_insecure && url_addr.scheme() != "https" {
             return Err(ErrorCode::Unimplemented(
                 "Insecure UDF server is not allowed, you can enable it by setting 'udf_server_allow_insecure = true' in query node config",
             ));
         }
 
-        let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
+        let udf_server_allow_list = &GlobalConfig::instance().query.common.udf_server_allow_list;
         if udf_server_allow_list.iter().all(|allow_url| {
             if let Ok(allow_url) = url::Url::parse(allow_url) {
                 allow_url.host_str() != url_addr.host_str()

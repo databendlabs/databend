@@ -40,6 +40,7 @@ pub use ref_ident::TagIdObjectRefIdent;
 pub use ref_ident::TagIdObjectRefIdentRaw;
 
 use crate::data_id::DataId;
+use crate::principal::UserIdentity;
 use crate::schema::tag::id_ident::Resource;
 use crate::tenant::Tenant;
 
@@ -100,7 +101,11 @@ pub enum TaggableObject {
     Database { db_id: u64 },
     Table { table_id: u64 },
     Stage { name: String },
+    User { user: UserIdentity },
+    Role { name: String },
     Connection { name: String },
+    UDF { name: String },
+    Procedure { name: String, args: String },
 }
 
 impl std::fmt::Display for TaggableObject {
@@ -109,7 +114,13 @@ impl std::fmt::Display for TaggableObject {
             TaggableObject::Database { db_id } => write!(f, "database(id={})", db_id),
             TaggableObject::Table { table_id } => write!(f, "table(id={})", table_id),
             TaggableObject::Stage { name } => write!(f, "stage({})", name),
+            TaggableObject::User { user } => write!(f, "user({})", user.display()),
+            TaggableObject::Role { name } => write!(f, "role({})", name),
             TaggableObject::Connection { name } => write!(f, "connection({})", name),
+            TaggableObject::UDF { name } => write!(f, "udf({})", name),
+            TaggableObject::Procedure { name, args } => {
+                write!(f, "procedure({}({}))", name, args)
+            }
         }
     }
 }
@@ -120,7 +131,11 @@ impl TaggableObject {
             TaggableObject::Database { .. } => "database",
             TaggableObject::Table { .. } => "table",
             TaggableObject::Stage { .. } => "stage",
+            TaggableObject::User { .. } => "user",
+            TaggableObject::Role { .. } => "role",
             TaggableObject::Connection { .. } => "connection",
+            TaggableObject::UDF { .. } => "udf",
+            TaggableObject::Procedure { .. } => "procedure",
         }
     }
 
@@ -130,7 +145,11 @@ impl TaggableObject {
             TaggableObject::Database { db_id } => b.push_u64(*db_id),
             TaggableObject::Table { table_id } => b.push_u64(*table_id),
             TaggableObject::Stage { name } => b.push_str(name),
+            TaggableObject::User { user } => b.push_str(&user.encode()),
+            TaggableObject::Role { name } => b.push_str(name),
             TaggableObject::Connection { name } => b.push_str(name),
+            TaggableObject::UDF { name } => b.push_str(name),
+            TaggableObject::Procedure { name, args } => b.push_str(name).push_str(args),
         }
     }
 
@@ -146,12 +165,25 @@ impl TaggableObject {
             "stage" => Ok(TaggableObject::Stage {
                 name: parser.next_str()?,
             }),
+            "user" => Ok(TaggableObject::User {
+                user: UserIdentity::parse(&parser.next_str()?)?,
+            }),
+            "role" => Ok(TaggableObject::Role {
+                name: parser.next_str()?,
+            }),
             "connection" => Ok(TaggableObject::Connection {
                 name: parser.next_str()?,
             }),
+            "udf" => Ok(TaggableObject::UDF {
+                name: parser.next_str()?,
+            }),
+            "procedure" => Ok(TaggableObject::Procedure {
+                name: parser.next_str()?,
+                args: parser.next_str()?,
+            }),
             _ => Err(KeyError::InvalidSegment {
                 i: parser.index(),
-                expect: "database|table|stage|connection".to_string(),
+                expect: "database|table|stage|user|role|connection|udf|procedure".to_string(),
                 got: type_str.to_string(),
             }),
         }

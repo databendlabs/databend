@@ -55,7 +55,6 @@ use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
-use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
@@ -697,21 +696,6 @@ impl Binder {
             }
         };
 
-        // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns { columns, .. }) = &source {
-            if columns
-                .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
-                && !self.ctx.get_settings().get_enable_geo_create_table()?
-            {
-                return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry/geography type is an experimental feature. \
-                    You can `set enable_geo_create_table=1` to use this feature. \
-                    We do not guarantee its compatibility until we doc this feature.",
-                ));
-            }
-        }
-
         // Build table schema
         let (
             AnalyzeCreateTableResult {
@@ -860,16 +844,17 @@ impl Binder {
 
             // we should persist the storage format and compression type instead of using the default value in fuse table
             if !options.contains_key(OPT_KEY_STORAGE_FORMAT) {
-                let default_storage_format = match config.query.default_storage_format.as_str() {
-                    "" | "auto" => {
-                        if is_blocking_fs {
-                            "native"
-                        } else {
-                            "parquet"
+                let default_storage_format =
+                    match config.query.common.default_storage_format.as_str() {
+                        "" | "auto" => {
+                            if is_blocking_fs {
+                                "native"
+                            } else {
+                                "parquet"
+                            }
                         }
-                    }
-                    _ => config.query.default_storage_format.as_str(),
-                };
+                        _ => config.query.common.default_storage_format.as_str(),
+                    };
                 options.insert(
                     OPT_KEY_STORAGE_FORMAT.to_owned(),
                     default_storage_format.to_owned(),
@@ -877,7 +862,7 @@ impl Binder {
             }
 
             if !options.contains_key(OPT_KEY_TABLE_COMPRESSION) {
-                let default_compression = match config.query.default_compression.as_str() {
+                let default_compression = match config.query.common.default_compression.as_str() {
                     "" | "auto" => {
                         if is_blocking_fs {
                             "lz4"
@@ -885,7 +870,7 @@ impl Binder {
                             "zstd"
                         }
                     }
-                    _ => config.query.default_compression.as_str(),
+                    _ => config.query.common.default_compression.as_str(),
                 };
                 options.insert(
                     OPT_KEY_TABLE_COMPRESSION.to_owned(),

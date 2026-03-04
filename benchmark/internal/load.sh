@@ -4,7 +4,7 @@
 echo "drop database if exists test" | bendsql
 echo "drop database if exists test2" | bendsql
 echo "create database test" | bendsql
-for((i=1;i<=10000;i++));
+for((i=1;i<=5000;i++));
 do
   if ((i%1000==0)); then
     echo "load $i tables in test"

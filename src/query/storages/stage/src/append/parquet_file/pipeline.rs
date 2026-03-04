@@ -20,7 +20,6 @@ use opendal::Operator;
 
 use super::limit_file_size_processor::LimitFileSizeProcessor;
 use super::writer_processor::ParquetFileWriter;
-
 /// - LimitFileSizeProcessor * 1: slice/group block to batches (as a block meta) to avoid files being too small when there are many threads.
 /// - ParquetFileSink * N:  serialize incoming blocks to Vec to reduce memory, and flush when they are large enough.
 #[allow(clippy::too_many_arguments)]
