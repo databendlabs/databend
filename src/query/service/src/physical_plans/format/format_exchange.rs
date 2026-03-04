@@ -59,6 +59,15 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
                 ),
                 FragmentKind::Expansive => "Broadcast".to_string(),
                 FragmentKind::Merge => "Merge".to_string(),
+                FragmentKind::GlobalShuffle => format!(
+                    "GlobalShuffle({})",
+                    self.inner
+                        .keys
+                        .iter()
+                        .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
             })),
         ];
 

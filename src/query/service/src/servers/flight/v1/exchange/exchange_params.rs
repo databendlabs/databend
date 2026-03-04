@@ -104,7 +104,7 @@ impl ExchangeParams {
             ExchangeParams::MergeExchange(params) => params.take_flight_sender(senders),
             ExchangeParams::BroadcastExchange(params) => params.take_flight_sender(senders),
             ExchangeParams::NodeShuffleExchange(params) => params.take_flight_sender(senders),
-            ExchangeParams::GlobalShuffleExchange(_params) => unimplemented!(),
+            ExchangeParams::GlobalShuffleExchange(_params) => Ok(vec![]),
         }
     }
 
@@ -116,7 +116,7 @@ impl ExchangeParams {
             ExchangeParams::MergeExchange(params) => params.take_flight_receiver(receivers),
             ExchangeParams::BroadcastExchange(params) => params.take_flight_receiver(receivers),
             ExchangeParams::NodeShuffleExchange(params) => params.take_flight_receiver(receivers),
-            ExchangeParams::GlobalShuffleExchange(_params) => unimplemented!(),
+            ExchangeParams::GlobalShuffleExchange(_params) => Ok(vec![]),
         }
     }
 }

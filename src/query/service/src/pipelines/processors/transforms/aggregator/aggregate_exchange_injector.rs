@@ -107,6 +107,7 @@ impl ExchangeInjector for AggregateInjector<false> {
         match exchange {
             DataExchange::Merge(_) => unreachable!(),
             DataExchange::Broadcast(_) => unreachable!(),
+            DataExchange::GlobalShuffleExchange(_) => unreachable!(),
             DataExchange::NodeToNodeExchange(exchange) => {
                 Ok(Arc::new(Box::new(AggregateRowScatter {
                     buckets: exchange.destination_ids.len(),
@@ -214,6 +215,7 @@ impl ExchangeInjector for AggregateInjector<true> {
         match exchange {
             DataExchange::Merge(_) => unreachable!(),
             DataExchange::Broadcast(_) => unreachable!(),
+            DataExchange::GlobalShuffleExchange(_) => unreachable!(),
             DataExchange::NodeToNodeExchange(exchange) => match self.shuffle_mode {
                 AggregateShuffleMode::Row => Ok(Arc::new(Box::new(AggregateRowScatter {
                     buckets: exchange.destination_ids.len(),

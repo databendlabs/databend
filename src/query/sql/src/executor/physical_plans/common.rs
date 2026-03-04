@@ -71,6 +71,8 @@ pub enum FragmentKind {
     // Broadcast
     Expansive,
     Merge,
+    // Ping-pong based hash shuffle (used by hash join)
+    GlobalShuffle,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]

@@ -49,6 +49,7 @@ use tonic::Status;
 
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
+use super::exchange_params::GlobalExchangeParams;
 use super::exchange_params::MergeExchangeParams;
 use super::exchange_params::ShuffleExchangeParams;
 use super::exchange_sink::ExchangeSink;
@@ -1313,6 +1314,18 @@ impl FragmentCoordinator {
                     allow_adjust_parallelism: exchange.allow_adjust_parallelism,
                 }),
             )),
+            DataExchange::GlobalShuffleExchange(exchange) => {
+                Ok(Some(ExchangeParams::GlobalShuffleExchange(
+                    GlobalExchangeParams {
+                        query_id: info.query_id.to_string(),
+                        executor_id: info.current_executor.to_string(),
+                        schema: self.physical_plan.output_schema()?,
+                        exchange_id: exchange.id.clone(),
+                        shuffle_keys: exchange.shuffle_keys.clone(),
+                        destination_channels: exchange.destination_channels.clone(),
+                    },
+                )))
+            }
         }
     }
 
