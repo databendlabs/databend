@@ -63,6 +63,18 @@ fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema
     ))
 }
 
+fn unquote_path_segment(name: &str) -> &str {
+    if name.len() >= 2 {
+        let bytes = name.as_bytes();
+        let first = bytes[0];
+        let last = bytes[name.len() - 1];
+        if (first == b'"' && last == b'"') || (first == b'`' && last == b'`') {
+            return &name[1..name.len() - 1];
+        }
+    }
+    name
+}
+
 /// Transform a [`RecordBatch`] to [`DataBlock`].
 ///
 /// `field_paths` is used to traverse nested columns in `batch`.
@@ -139,6 +151,7 @@ pub fn compute_output_field_paths(
         let mut path = Vec::with_capacity(name_path.len());
         let mut ty = parquet_schema;
         for name in name_path {
+            let name = unquote_path_segment(name);
             match ty {
                 parquet::schema::types::Type::GroupType { fields, .. } => {
                     let idx = fields
@@ -163,4 +176,18 @@ pub fn error_cannot_find_field(name: &str, schema: &parquet::schema::types::Type
         "Cannot find field {} in the parquet schema {:?}",
         name, schema
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unquote_path_segment;
+
+    #[test]
+    fn test_unquote_path_segment() {
+        assert_eq!(unquote_path_segment("A"), "A");
+        assert_eq!(unquote_path_segment("\"A\""), "A");
+        assert_eq!(unquote_path_segment("`A`"), "A");
+        assert_eq!(unquote_path_segment("\"A"), "\"A");
+        assert_eq!(unquote_path_segment("A\""), "A\"");
+    }
 }
