@@ -5,6 +5,16 @@ select * from @data/parquet/tuple.parquet;
 2 (3,"b")
 3 (3,"c")
 
+# NOTE:
+# `t:A`/`t:B` is an internal tuple-field access path currently supported by
+# planner/executor. We cover it here for regression protection only, and do
+# not guarantee it as a stable SQL interface.
+query ??
+select id, t:B from @data/parquet/tuple.parquet where t:A = id order by id;
+----
+1 a
+3 c
+
 query ??
 select * from @data/parquet/tuple.parquet where t.1 = 1;
 ----
