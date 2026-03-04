@@ -171,9 +171,10 @@ where
             sort.choice_streams_by_bound();
         }
 
-        let compressed = sort.compact_current_by_domain();
-        if compressed > 0 {
-            log::debug!(compressed, current_len = sort.current.len(); "compact streams by domain");
+        if sort.params.stream_regroup && sort.current.len() >= 2 {
+            let before = sort.current.len();
+            BoundBlockStream::compact_streams_by_domain(&mut sort.current);
+            log::debug!(before, current_len = sort.current.len(); "compact streams by domain");
         }
 
         let num_merge = sort.prepare_merge(memory_settings).await?;
@@ -317,16 +318,6 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
             None => self.cur_bound = None,
         }
         self.bound_index += 1;
-    }
-
-    fn compact_current_by_domain(&mut self) -> usize {
-        if self.current.len() < 2 {
-            return 0;
-        }
-
-        let before = self.current.len();
-        BoundBlockStream::compact_streams_by_domain(&mut self.current);
-        before - self.current.len()
     }
 
     #[fastrace::trace(name = "StepSort::merge_current")]
@@ -1723,6 +1714,7 @@ mod tests {
                 batch_rows: 2,
                 num_merge: 2,
                 prefetch: false,
+                stream_regroup: true,
             },
             bounds: Bounds::new_unchecked(Int32Type::from_data(vec![5])),
             cur_bound: None,
@@ -1748,7 +1740,9 @@ mod tests {
                 .all(|s| s.blocks.iter().all(|b| b.data.is_none()))
         );
 
-        let compressed = sort.compact_current_by_domain();
+        let before = sort.current.len();
+        BoundBlockStream::compact_streams_by_domain(&mut sort.current);
+        let compressed = before - sort.current.len();
         assert_eq!(compressed, 1);
         assert_eq!(sort.current.len(), 1);
         assert_eq!(sort.current[0].total_rows(), 4);

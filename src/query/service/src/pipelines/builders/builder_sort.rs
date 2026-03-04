@@ -52,6 +52,7 @@ pub struct SortPipelineBuilder {
     broadcast_id: Option<u32>,
     enable_fixed_rows: bool,
     enable_sort_spill_prefetch: bool,
+    enable_sort_spill_stream_regroup: bool,
 }
 
 impl SortPipelineBuilder {
@@ -66,6 +67,7 @@ impl SortPipelineBuilder {
         let block_size = settings.get_max_block_size()? as usize;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
         let enable_sort_spill_prefetch = settings.get_enable_sort_spill_prefetch()?;
+        let enable_sort_spill_stream_regroup = settings.get_enable_sort_spill_stream_regroup()?;
         Ok(Self {
             ctx,
             key_desc: SortKeyDescription::new(sort_desc, schema, enable_fixed_rows)?,
@@ -75,6 +77,7 @@ impl SortPipelineBuilder {
             broadcast_id,
             enable_fixed_rows,
             enable_sort_spill_prefetch,
+            enable_sort_spill_stream_regroup,
         })
     }
 
@@ -150,6 +153,7 @@ impl SortPipelineBuilder {
             .with_limit(self.limit)
             .with_order_column(input_has_order_col, keep_order_col)
             .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
+            .with_enable_sort_spill_stream_regroup(self.enable_sort_spill_stream_regroup)
             .with_enable_loser_tree(enable_loser_tree);
 
             Ok(ProcessorPtr::create(builder.build(input, output)?))
@@ -236,6 +240,7 @@ impl SortPipelineBuilder {
         .with_limit(self.limit)
         .with_order_column(false, true)
         .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
+        .with_enable_sort_spill_stream_regroup(self.enable_sort_spill_stream_regroup)
         .with_enable_loser_tree(enable_loser_tree);
 
         let default_num_merge = settings.get_max_threads()?.max(2);
@@ -276,6 +281,7 @@ impl SortPipelineBuilder {
         .with_limit(self.limit)
         .with_order_column(true, false)
         .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
+        .with_enable_sort_spill_stream_regroup(self.enable_sort_spill_stream_regroup)
         .with_enable_loser_tree(self.enable_loser_tree);
 
         let inputs_port: Vec<_> = (0..pipeline.output_len())

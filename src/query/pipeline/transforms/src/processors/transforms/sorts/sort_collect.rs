@@ -60,6 +60,7 @@ pub struct TransformSortCollect<A: SortAlgorithm, S: SortSpiller> {
     aborting: AtomicBool,
 
     enable_restore_prefetch: bool,
+    enable_sort_spill_stream_regroup: bool,
 }
 
 impl<A, S> TransformSortCollect<A, S>
@@ -76,6 +77,7 @@ where
         sort_limit: bool,
         order_col_converter: Option<<A::Rows as Rows>::Converter>,
         enable_restore_prefetch: bool,
+        enable_sort_spill_stream_regroup: bool,
     ) -> Result<Self> {
         let (name, inner) = match base.limit {
             Some(limit) if sort_limit => (
@@ -96,6 +98,7 @@ where
             max_block_size,
             default_num_merge,
             enable_restore_prefetch,
+            enable_sort_spill_stream_regroup,
         })
     }
 
@@ -109,6 +112,7 @@ where
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
                 prefetch: false,
+                stream_regroup: self.enable_sort_spill_stream_regroup,
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -135,6 +139,7 @@ where
                 batch_rows: self.max_block_size,
                 num_merge: self.default_num_merge,
                 prefetch: false,
+                stream_regroup: self.enable_sort_spill_stream_regroup,
             }
         } else {
             self.determine_params(num_bytes, num_rows)
@@ -163,6 +168,7 @@ where
             ByteSize(self.base.spiller.memory_settings().spill_unit_size as _),
             self.max_block_size,
             self.enable_restore_prefetch,
+            self.enable_sort_spill_stream_regroup,
         )
     }
 

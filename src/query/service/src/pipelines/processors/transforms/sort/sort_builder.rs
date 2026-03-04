@@ -74,6 +74,7 @@ pub struct TransformSortBuilder<S: SortSpiller> {
     limit: Option<usize>,
     enable_fixed_rows: bool,
     enable_restore_prefetch: bool,
+    enable_sort_spill_stream_regroup: bool,
 }
 
 impl<S: SortSpiller> TransformSortBuilder<S> {
@@ -92,6 +93,7 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
             limit: None,
             enable_fixed_rows,
             enable_restore_prefetch: false,
+            enable_sort_spill_stream_regroup: false,
         }
     }
 
@@ -113,6 +115,11 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
 
     pub fn with_enable_restore_prefetch(mut self, enabled: bool) -> Self {
         self.enable_restore_prefetch = enabled;
+        self
+    }
+
+    pub fn with_enable_sort_spill_stream_regroup(mut self, enabled: bool) -> Self {
+        self.enable_sort_spill_stream_regroup = enabled;
         self
     }
 
@@ -297,6 +304,7 @@ impl<S: SortSpiller> Build<'_, S> {
             !self.params.keep_order_col && !uses_source_sort_col,
             self.params.input_has_order_col || uses_source_sort_col,
             self.params.enable_restore_prefetch,
+            self.params.enable_sort_spill_stream_regroup,
         )?))
     }
 
@@ -325,6 +333,7 @@ impl<S: SortSpiller> Build<'_, S> {
                 Some(row_converter)
             },
             self.params.enable_restore_prefetch,
+            self.params.enable_sort_spill_stream_regroup,
         )?))
     }
 

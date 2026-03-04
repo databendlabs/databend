@@ -26,6 +26,7 @@ pub struct SortSpillParams {
     pub num_merge: usize,
 
     pub prefetch: bool,
+    pub stream_regroup: bool,
 }
 
 impl SortSpillParams {
@@ -39,6 +40,7 @@ impl SortSpillParams {
         spill_unit_size: ByteSize,
         max_block_rows: usize,
         prefetch: bool,
+        stream_regroup: bool,
     ) -> Self {
         // We use the first memory calculation to estimate the batch size and the number of merge.
         let block = usize::max(
@@ -55,6 +57,7 @@ impl SortSpillParams {
             batch_rows,
             num_merge,
             prefetch,
+            stream_regroup,
         }
     }
 }

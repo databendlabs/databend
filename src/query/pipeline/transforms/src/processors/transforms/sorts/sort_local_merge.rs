@@ -83,6 +83,7 @@ pub struct TransformSort<A: SortAlgorithm, S: SortSpiller> {
 
     max_block_size: usize,
     enable_restore_prefetch: bool,
+    enable_sort_spill_stream_regroup: bool,
 }
 
 impl<A, S> TransformSort<A, S>
@@ -90,6 +91,7 @@ where
     A: SortAlgorithm,
     S: SortSpiller,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -101,6 +103,7 @@ where
         remove_order_col: bool,
         input_has_order_col: bool,
         enable_restore_prefetch: bool,
+        enable_sort_spill_stream_regroup: bool,
     ) -> Result<Self> {
         assert!(max_block_size > 0);
         let (name, inner, limit) = match limit {
@@ -130,6 +133,7 @@ where
             max_block_size,
             aborting: AtomicBool::new(false),
             enable_restore_prefetch,
+            enable_sort_spill_stream_regroup,
         })
     }
 
@@ -179,6 +183,7 @@ where
             ByteSize(self.base.spiller.memory_settings().spill_unit_size as _),
             self.max_block_size,
             self.enable_restore_prefetch,
+            self.enable_sort_spill_stream_regroup,
         )
     }
 
