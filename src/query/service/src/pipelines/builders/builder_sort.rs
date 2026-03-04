@@ -92,7 +92,7 @@ impl SortPipelineBuilder {
     pub fn build_full_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
-        output_order_col: bool,
+        keep_order_col: bool,
     ) -> Result<()> {
         // Partial sort
         pipeline.add_transformer(|| {
@@ -102,18 +102,19 @@ impl SortPipelineBuilder {
             )
         });
 
-        self.build_merge_sort_pipeline(pipeline, false, output_order_col)
+        self.build_merge_sort_pipeline(pipeline, false, keep_order_col)
     }
 
     fn build_merge_sort(
         &self,
         pipeline: &mut Pipeline,
-        order_col_generated: bool,
-        output_order_col: bool,
+        input_has_order_col: bool,
+        keep_order_col: bool,
     ) -> Result<()> {
         debug_assert!(
-            // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
-            !order_col_generated || !output_order_col
+            // If input already has order column, this stage is the last local merge in
+            // distributed sort and should drop order column after merge.
+            !input_has_order_col || !keep_order_col
         );
 
         let settings = self.ctx.get_settings();
@@ -147,7 +148,7 @@ impl SortPipelineBuilder {
             )
             .with_spiller(spiller.clone())
             .with_limit(self.limit)
-            .with_order_column(order_col_generated, output_order_col)
+            .with_order_column(input_has_order_col, keep_order_col)
             .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
             .with_enable_loser_tree(enable_loser_tree);
 
@@ -158,18 +159,18 @@ impl SortPipelineBuilder {
     pub fn build_merge_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
-        order_col_generated: bool,
-        output_order_col: bool,
+        input_has_order_col: bool,
+        keep_order_col: bool,
     ) -> Result<()> {
         let need_multi_merge = pipeline.output_len() > 1;
-        let local_output_order_col = need_multi_merge || output_order_col;
-        self.build_merge_sort(pipeline, order_col_generated, local_output_order_col)?;
+        let local_keep_order_col = need_multi_merge || keep_order_col;
+        self.build_merge_sort(pipeline, input_has_order_col, local_keep_order_col)?;
 
         if !need_multi_merge {
             return Ok(());
         }
 
-        self.build_multi_merge(pipeline, !output_order_col)
+        self.build_multi_merge(pipeline, !keep_order_col)
     }
 
     pub fn build_multi_merge(self, pipeline: &mut Pipeline, remove_order_col: bool) -> Result<()> {

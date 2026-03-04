@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
 use bytesize::ByteSize;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
-use super::core::RowConverter;
 use super::core::Rows;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -85,72 +82,4 @@ pub trait MergeSort<R: Rows> {
     fn on_finish(&mut self, all_in_one_block: bool) -> Result<Vec<DataBlock>>;
 
     fn interrupt(&self) {}
-}
-
-/// The base struct for merging sorted blocks from a single thread.
-pub struct TransformSortMergeBase<M, R: Rows> {
-    inner: M,
-
-    sort_row_offset: usize,
-    row_converter: R::Converter,
-    /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
-    /// we can generate and output the order column to avoid the extra converting in the next transform.
-    output_order_col: bool,
-    /// If this transform is after an Exchange transform,
-    /// it means it will compact the data from cluster nodes.
-    /// And the order column is already generated in each cluster node,
-    /// so we don't need to generate the order column again.
-    order_col_generated: bool,
-
-    _r: PhantomData<R>,
-}
-
-impl<M, R> TransformSortMergeBase<M, R>
-where
-    M: MergeSort<R>,
-    R: Rows,
-{
-    pub fn try_create(
-        sort_row_offset: usize,
-        row_converter: R::Converter,
-        order_col_generated: bool,
-        output_order_col: bool,
-        inner: M,
-    ) -> Result<Self> {
-        Ok(Self {
-            inner,
-            sort_row_offset,
-            row_converter,
-            output_order_col,
-            order_col_generated,
-            _r: PhantomData,
-        })
-    }
-
-    pub fn transform(&mut self, mut block: DataBlock) -> Result<()> {
-        let rows = if self.order_col_generated {
-            let rows = R::from_column(&block.get_by_offset(self.sort_row_offset).to_column())?;
-            if !self.output_order_col {
-                // The next processor could be a sort spill processor which need order column.
-                // And the order column will be removed in that processor.
-                block.remove_column(self.sort_row_offset);
-            }
-            rows
-        } else {
-            let rows = self.row_converter.convert(&block)?;
-            if self.output_order_col {
-                let order_col = rows.to_column();
-                block.add_column(order_col);
-            }
-            rows
-        };
-
-        self.inner.add_block(block, rows)?;
-
-        Ok(())
-    }
-
-    pub fn on_finish(&mut self) -> Result<Vec<DataBlock>> {
-        self.inner.on_finish(false)
-    }
 }

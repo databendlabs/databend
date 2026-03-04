@@ -51,16 +51,16 @@ where
     A: SortAlgorithm + Send + 'static,
     S: SortSpiller,
 {
-    pub fn create(
+    pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         base: Base<S>,
-        output_order_col: bool,
+        remove_order_col: bool,
     ) -> Result<HookTransformer<Self>> {
         Ok(HookTransformer::new(input, output, Self {
             input: Vec::new(),
             output: None,
-            remove_order_col: !output_order_col,
+            remove_order_col,
             base,
             inner: None,
         }))

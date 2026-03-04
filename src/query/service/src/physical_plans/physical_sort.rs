@@ -402,11 +402,7 @@ impl PhysicalPlanBuilder {
                 .map(|v| v.index)
                 .collect::<Vec<_>>();
 
-            let sort_step = match sort.after_exchange {
-                Some(false) => SortStep::Partial,
-                Some(true) => SortStep::Final,
-                None => SortStep::Single,
-            };
+            assert!(sort.after_exchange.is_none());
 
             let input_plan = self.build(s_expr.unary_child(), required).await?;
 
@@ -415,7 +411,6 @@ impl PhysicalPlanBuilder {
                 input: input_plan,
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
-                sort_step,
                 top_n: window.top.map(|top| WindowPartitionTopN {
                     func: match window.func {
                         WindowFuncType::RowNumber => WindowPartitionTopNFunc::RowNumber,

@@ -29,15 +29,14 @@ use databend_common_expression::SortColumnDescription;
 use super::core::Merger;
 use super::core::RowConverter;
 use super::core::Rows;
+use super::core::RowsTypeVisitor;
 use super::core::SortKeyDescription;
 use super::core::SortedStream;
-use super::core::VariableRows;
 use super::core::algorithm::HeapSort;
 use super::core::algorithm::LoserTreeSort;
 use super::core::algorithm::SortAlgorithm;
+use super::core::select_row_type;
 use super::sort_merge_base::MergeSort;
-use super::sort_merge_base::TransformSortMergeBase;
-use super::utils::has_order_field;
 
 /// Merge sort blocks without limit.
 ///
@@ -195,34 +194,46 @@ pub fn sort_merge(
     data_blocks: Vec<DataBlock>,
     enable_fixed_rows: bool,
     enable_loser_tree: bool,
-    have_order_col: bool,
 ) -> Result<Vec<DataBlock>> {
-    debug_assert!(have_order_col == has_order_field(&schema));
-
-    type MergeSortCommonImpl = TransformSortMerge<VariableRows>;
-    type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, VariableRows>;
-
     let sort_desc: Arc<[_]> = sort_desc.into();
-
-    let schema = if have_order_col {
-        SortKeyDescription::strip_order_col_schema(sort_desc.clone(), schema, enable_fixed_rows)?
-    } else {
-        schema
-    };
     let key_desc = SortKeyDescription::new(sort_desc, schema, enable_fixed_rows)?;
-    let sort_row_offset = key_desc.sort_row_offset();
-    let row_converter = <VariableRows as Rows>::Converter::new(key_desc)?;
+    let mut visitor = SortMergeVisitor {
+        key_desc,
+        block_size,
+        enable_loser_tree,
+        data_blocks,
+    };
+    select_row_type(&mut visitor, enable_fixed_rows)
+}
 
-    let mut processor = MergeSortCommon::try_create(
-        sort_row_offset,
-        row_converter,
-        have_order_col,
-        false,
-        MergeSortCommonImpl::create(block_size, enable_loser_tree, None),
-    )?;
-    for block in data_blocks {
-        processor.transform(block)?;
+struct SortMergeVisitor {
+    key_desc: SortKeyDescription,
+    block_size: usize,
+    enable_loser_tree: bool,
+    data_blocks: Vec<DataBlock>,
+}
+
+impl RowsTypeVisitor for SortMergeVisitor {
+    type Result = Result<Vec<DataBlock>>;
+
+    fn sort_key_desc(&self) -> SortKeyDescription {
+        self.key_desc.clone()
     }
 
-    processor.on_finish()
+    fn visit_type<R>(&mut self) -> Self::Result
+    where
+        R: Rows + 'static,
+        R::Converter: Send + 'static,
+    {
+        let row_converter = <R as Rows>::Converter::new(self.key_desc.clone())?;
+        let mut merger =
+            TransformSortMerge::<R>::create(self.block_size, self.enable_loser_tree, None);
+
+        for block in &self.data_blocks {
+            let rows = row_converter.convert(block)?;
+            merger.add_block(block.clone(), rows)?;
+        }
+
+        merger.on_finish(false)
+    }
 }

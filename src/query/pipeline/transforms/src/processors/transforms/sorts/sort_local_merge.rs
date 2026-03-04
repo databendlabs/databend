@@ -74,7 +74,7 @@ pub struct TransformSort<A: SortAlgorithm, S: SortSpiller> {
     /// it means it will compact the data from cluster nodes.
     /// And the order column is already generated in each cluster node,
     /// so we don't need to generate the order column again.
-    order_col_generated: bool,
+    input_has_order_col: bool,
 
     base: Base<S>,
     inner: Inner<A, S>,
@@ -98,8 +98,8 @@ where
         max_block_size: usize,
         limit: Option<(usize, bool)>,
         spiller: S,
-        output_order_col: bool,
-        order_col_generated: bool,
+        remove_order_col: bool,
+        input_has_order_col: bool,
         enable_restore_prefetch: bool,
     ) -> Result<Self> {
         assert!(max_block_size > 0);
@@ -119,8 +119,8 @@ where
             state: State::Collect,
             row_converter,
             output_data: VecDeque::new(),
-            remove_order_col: !output_order_col,
-            order_col_generated,
+            remove_order_col,
+            input_has_order_col,
             base: Base {
                 spiller,
                 sort_row_offset,
@@ -131,13 +131,6 @@ where
             aborting: AtomicBool::new(false),
             enable_restore_prefetch,
         })
-    }
-
-    fn generate_order_column(&self, mut block: DataBlock) -> Result<(A::Rows, DataBlock)> {
-        let rows = self.row_converter.convert(&block)?;
-        let order_col = rows.to_column();
-        block.add_column(order_col);
-        Ok((rows, block))
     }
 
     fn limit_trans_to_spill(&mut self) -> Result<()> {
@@ -190,8 +183,8 @@ where
     }
 
     fn collect_block(&mut self, block: DataBlock) -> Result<()> {
-        if self.order_col_generated {
-            return match &mut self.inner {
+        if self.input_has_order_col {
+            match &mut self.inner {
                 Inner::Limit(limit_sort) => {
                     let rows = A::Rows::from_column(
                         &block.get_by_offset(self.base.sort_row_offset).to_column(),
@@ -203,17 +196,19 @@ where
                     Ok(())
                 }
                 _ => unreachable!(),
-            };
-        }
-
-        let (rows, block) = self.generate_order_column(block)?;
-        match &mut self.inner {
-            Inner::Limit(limit_sort) => limit_sort.add_block(block, rows),
-            Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
-                input_data.push(block);
-                Ok(())
             }
-            _ => unreachable!(),
+        } else {
+            let rows = self.row_converter.convert(&block)?;
+            let mut block = block;
+            block.add_column(rows.to_column());
+            match &mut self.inner {
+                Inner::Limit(limit_sort) => limit_sort.add_block(block, rows),
+                Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
+                    input_data.push(block);
+                    Ok(())
+                }
+                _ => unreachable!(),
+            }
         }
     }
 

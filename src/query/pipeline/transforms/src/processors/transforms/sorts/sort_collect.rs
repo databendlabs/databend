@@ -52,7 +52,7 @@ pub struct TransformSortCollect<A: SortAlgorithm, S: SortSpiller> {
 
     max_block_size: usize,
     default_num_merge: usize,
-    order_col_generated: Option<<A::Rows as Rows>::Converter>,
+    order_col_converter: Option<<A::Rows as Rows>::Converter>,
 
     base: Base<S>,
     inner: Inner<A, S>,
@@ -74,7 +74,7 @@ where
         max_block_size: usize,
         default_num_merge: usize,
         sort_limit: bool,
-        order_col_generated: Option<<A::Rows as Rows>::Converter>,
+        order_col_converter: Option<<A::Rows as Rows>::Converter>,
         enable_restore_prefetch: bool,
     ) -> Result<Self> {
         let (name, inner) = match base.limit {
@@ -89,7 +89,7 @@ where
             output,
             name,
             output_data: None,
-            order_col_generated,
+            order_col_converter,
             base,
             inner,
             aborting: AtomicBool::new(false),
@@ -167,7 +167,7 @@ where
     }
 
     fn collect_block(&mut self, mut block: DataBlock) -> Result<()> {
-        match &self.order_col_generated {
+        match &self.order_col_converter {
             Some(converter) => {
                 let rows = converter.convert(&block)?;
                 block.add_column(rows.to_column());

@@ -67,8 +67,8 @@ enum SortType {
 pub struct TransformSortBuilder<S: SortSpiller> {
     key_desc: SortKeyDescription,
     block_size: usize,
-    order_col_generated: bool,
-    output_order_col: bool,
+    input_has_order_col: bool,
+    keep_order_col: bool,
     spiller: Option<S>,
     enable_loser_tree: bool,
     limit: Option<usize>,
@@ -86,8 +86,8 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
             key_desc,
             block_size,
             spiller: None,
-            order_col_generated: false,
-            output_order_col: false,
+            input_has_order_col: false,
+            keep_order_col: false,
             enable_loser_tree: false,
             limit: None,
             enable_fixed_rows,
@@ -100,9 +100,9 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
         self
     }
 
-    pub fn with_order_column(mut self, generated: bool, output: bool) -> Self {
-        self.order_col_generated = generated;
-        self.output_order_col = output;
+    pub fn with_order_column(mut self, input_has_order_col: bool, keep_order_col: bool) -> Self {
+        self.input_has_order_col = input_has_order_col;
+        self.keep_order_col = keep_order_col;
         self
     }
 
@@ -280,10 +280,10 @@ impl<S: SortSpiller> Build<'_, S> {
         A: SortAlgorithm + 'static,
         <A::Rows as Rows>::Converter: Send + 'static,
     {
-        let base_row_converter = self.params.key_desc.clone();
-        let uses_source_sort_col = base_row_converter.uses_source_sort_col();
-        let sort_row_offset = base_row_converter.sort_row_offset();
-        let row_converter = <A::Rows as Rows>::Converter::new(base_row_converter)?;
+        let key_desc = self.params.key_desc.clone();
+        let uses_source_sort_col = key_desc.uses_source_sort_col();
+        let sort_row_offset = key_desc.sort_row_offset();
+        let row_converter = <A::Rows as Rows>::Converter::new(key_desc)?;
         Ok(Box::new(TransformSort::<A, S>::new(
             input,
             self.output.clone(),
@@ -292,8 +292,10 @@ impl<S: SortSpiller> Build<'_, S> {
             self.params.block_size,
             self.params.limit.map(|limit| (limit, sort_limit)),
             self.params.spiller.clone().unwrap(),
-            self.params.output_order_col || uses_source_sort_col,
-            self.params.order_col_generated || uses_source_sort_col,
+            // Source sort columns are part of the input block, so they are always available
+            // and cannot be dropped by a trailing `pop_columns(1)`.
+            !self.params.keep_order_col && !uses_source_sort_col,
+            self.params.input_has_order_col || uses_source_sort_col,
             self.params.enable_restore_prefetch,
         )?))
     }
@@ -308,8 +310,7 @@ impl<S: SortSpiller> Build<'_, S> {
         A: SortAlgorithm + 'static,
         <A::Rows as Rows>::Converter: Send + 'static,
     {
-        assert!(!self.params.order_col_generated);
-        let uses_source_sort_col = self.params.key_desc.uses_source_sort_col();
+        assert!(!self.params.input_has_order_col);
         let row_converter = <A::Rows as Rows>::Converter::new(self.params.key_desc.clone())?;
         Ok(Box::new(TransformSortCollect::<A, S>::new(
             input,
@@ -318,7 +319,7 @@ impl<S: SortSpiller> Build<'_, S> {
             self.params.block_size,
             default_num_merge,
             sort_limit,
-            if uses_source_sort_col {
+            if self.params.key_desc.uses_source_sort_col() {
                 None
             } else {
                 Some(row_converter)
@@ -329,12 +330,11 @@ impl<S: SortSpiller> Build<'_, S> {
 
     fn build_sort_restore<A>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
-        let uses_source_sort_col = self.params.key_desc.uses_source_sort_col();
-        Ok(Box::new(TransformSortRestore::<A, S>::create(
+        Ok(Box::new(TransformSortRestore::<A, S>::new(
             input,
             self.output.clone(),
             self.params.new_base(),
-            self.params.output_order_col || uses_source_sort_col,
+            !self.params.keep_order_col && !self.params.key_desc.uses_source_sort_col(),
         )?))
     }
 

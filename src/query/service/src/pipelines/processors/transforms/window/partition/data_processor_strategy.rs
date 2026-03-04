@@ -90,7 +90,6 @@ pub struct SortStrategy {
     max_block_size: usize,
     enable_fixed_rows: bool,
     enable_loser_tree: bool,
-    have_order_col: bool,
 }
 
 impl SortStrategy {
@@ -98,7 +97,6 @@ impl SortStrategy {
         settings: &Settings,
         sort_desc: Vec<SortColumnDescription>,
         schema: DataSchemaRef,
-        have_order_col: bool,
     ) -> Result<Self> {
         Ok(Self {
             sort_desc,
@@ -106,7 +104,6 @@ impl SortStrategy {
             max_block_size: settings.get_max_block_size()? as usize,
             enable_fixed_rows: settings.get_enable_fixed_rows_sort()?,
             enable_loser_tree: settings.get_enable_loser_tree_merge_sort()?,
-            have_order_col,
         })
     }
 }
@@ -127,7 +124,6 @@ impl DataProcessorStrategy for SortStrategy {
             data_blocks,
             self.enable_fixed_rows,
             self.enable_loser_tree,
-            self.have_order_col,
         )
     }
 }
