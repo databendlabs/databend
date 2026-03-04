@@ -121,6 +121,7 @@ impl ParquetRSTable {
         files_to_read: Option<Vec<StageFileInfo>>,
         settings: Arc<Settings>,
         query_kind: QueryKind,
+        is_transform: bool,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
@@ -131,7 +132,8 @@ impl ParquetRSTable {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(&arrow_schema, &stage_info)?;
+        let case_sensitive = is_transform || QueryKind::CopyIntoTable != query_kind;
+        let table_info = create_parquet_table_info(&arrow_schema, &stage_info, case_sensitive)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 
         // If the query is `COPY`, we don't need to collect column statistics.
@@ -332,13 +334,17 @@ impl Table for ParquetRSTable {
     }
 }
 
-fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {
+fn create_parquet_table_info(
+    schema: &ArrowSchema,
+    stage_info: &StageInfo,
+    case_sensitive: bool,
+) -> Result<TableInfo> {
     Ok(TableInfo {
         ident: TableIdent::new(0, 0),
         desc: "''.'read_parquet'".to_string(),
         name: format!("read_parquet({})", stage_info.stage_name),
         meta: TableMeta {
-            schema: arrow_to_table_schema(schema)?.into(),
+            schema: arrow_to_table_schema(schema, case_sensitive)?.into(),
             engine: "SystemReadParquet".to_string(),
             created_on: DateTime::from_timestamp(0, 0).unwrap(),
             updated_on: DateTime::from_timestamp(0, 0).unwrap(),

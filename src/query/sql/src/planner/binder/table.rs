@@ -116,11 +116,18 @@ impl Binder {
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
+        is_transform: bool,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
         let max_column_position = self.metadata.read().get_max_column_position();
         let table = table_ctx
-            .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
+            .create_stage_table(
+                stage_info,
+                files_info,
+                files_to_copy,
+                max_column_position,
+                is_transform,
+            )
             .await?;
 
         let table_alias_name = if let Some(table_alias) = alias {

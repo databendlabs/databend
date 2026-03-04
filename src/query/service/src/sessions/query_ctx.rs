@@ -1272,6 +1272,7 @@ impl TableContext for QueryContext {
         files_info: StageFilesInfo,
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
+        is_transform: bool,
     ) -> Result<Arc<dyn Table>> {
         match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
@@ -1296,6 +1297,7 @@ impl TableContext for QueryContext {
                     files_to_copy,
                     self.get_settings(),
                     self.get_query_kind(),
+                    is_transform,
                 )
                 .await
             }
