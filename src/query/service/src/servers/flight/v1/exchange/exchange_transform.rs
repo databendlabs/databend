@@ -209,11 +209,10 @@ impl ExchangeTransform {
         let local_outbound = create_local_channels(&channel_set);
         let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
 
-        let scatter_size = params.destination_channels.len();
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
             params.shuffle_keys.clone(),
-            scatter_size,
+            remote_outbound.len(),
             local_pos,
         )?);
 

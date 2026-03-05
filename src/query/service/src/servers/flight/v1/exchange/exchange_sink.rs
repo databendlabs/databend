@@ -133,12 +133,15 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
         params: &GlobalExchangeParams,
     ) -> Result<()> {
+        let mut local_pos = 0;
         let mut local_threads = 0;
 
         for (dest, threads) in &params.destination_channels {
             if dest == &params.executor_id {
                 local_threads = threads.len();
             }
+
+            local_pos += threads.len();
         }
 
         let compression = ctx.get_settings().get_query_flight_compression()?;
@@ -156,16 +159,10 @@ impl ExchangeSink {
         let local_outbound = create_local_channels(&channel_set);
         let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
 
-        let scatter_size = params.destination_channels.len();
-        let local_pos = params
-            .destination_channels
-            .iter()
-            .position(|(dest, _)| dest == &params.executor_id)
-            .unwrap_or(0);
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
             params.shuffle_keys.clone(),
-            scatter_size,
+            remote_outbound.len(),
             local_pos,
         )?);
 

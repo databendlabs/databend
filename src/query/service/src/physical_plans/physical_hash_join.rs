@@ -40,7 +40,6 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
-use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
@@ -657,10 +656,6 @@ impl PhysicalPlanBuilder {
         let Some(build_exchange) = Exchange::from_mut_physical_plan(build_side) else {
             return Ok(());
         };
-
-        // Route hash join exchanges through GlobalShuffle (ping-pong do_exchange)
-        probe_exchange.kind = FragmentKind::GlobalShuffle;
-        build_exchange.kind = FragmentKind::GlobalShuffle;
 
         let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for (probe_key, build_key) in probe_exchange

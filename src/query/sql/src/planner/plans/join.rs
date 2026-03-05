@@ -645,6 +645,10 @@ impl Operator for Join {
                 })
             }
 
+            (Distribution::GlobalHash(_), Distribution::GlobalHash(_)) => Ok(PhysicalProperty {
+                distribution: probe_prop.distribution.clone(),
+            }),
+
             // Otherwise use random distribution.
             _ => Ok(PhysicalProperty {
                 distribution: Distribution::Random,
@@ -728,14 +732,14 @@ impl Operator for Join {
                 .iter()
                 .map(|condition| condition.left.clone())
                 .collect();
-            required.distribution = Distribution::NodeToNodeHash(left_conditions);
+            required.distribution = Distribution::GlobalHash(left_conditions);
         } else {
             let right_conditions = self
                 .equi_conditions
                 .iter()
                 .map(|condition| condition.right.clone())
                 .collect();
-            required.distribution = Distribution::NodeToNodeHash(right_conditions);
+            required.distribution = Distribution::GlobalHash(right_conditions);
         }
 
         Ok(required)
@@ -767,7 +771,7 @@ impl Operator for Join {
                         distribution: Distribution::Broadcast,
                     },
                     RequiredProperty {
-                        distribution: Distribution::NodeToNodeHash(conditions),
+                        distribution: Distribution::GlobalHash(conditions),
                     },
                 ]);
             } else {
@@ -780,7 +784,7 @@ impl Operator for Join {
 
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: Distribution::NodeToNodeHash(conditions),
+                        distribution: Distribution::GlobalHash(conditions),
                     },
                     RequiredProperty {
                         distribution: Distribution::Broadcast,
@@ -807,10 +811,10 @@ impl Operator for Join {
             if !left_keys.is_empty() {
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: Distribution::NodeToNodeHash(left_keys),
+                        distribution: Distribution::GlobalHash(left_keys),
                     },
                     RequiredProperty {
-                        distribution: Distribution::NodeToNodeHash(right_keys),
+                        distribution: Distribution::GlobalHash(right_keys),
                     },
                 ]);
             }

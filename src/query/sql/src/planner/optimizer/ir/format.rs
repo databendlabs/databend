@@ -64,6 +64,14 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
                         .collect::<Vec<_>>()
                         .join(",")
                 ),
+                Exchange::GlobalHash(scalars) => format!(
+                    "GlobalHash({})",
+                    scalars
+                        .iter()
+                        .map(|s| s.as_raw_expr().to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
                 Exchange::Broadcast => "Broadcast".to_string(),
                 Exchange::Merge => "Merge".to_string(),
                 Exchange::MergeSort => "MergeSort".to_string(),
