@@ -327,7 +327,13 @@ impl Processor for TransformHashJoinBuild {
                     .swap(true, Ordering::AcqRel)
                 {
                     let packets = self.build_state.take_runtime_filter_packets();
-                    let packet = merge_join_runtime_filter_packets(packets)?;
+                    let settings = self.build_state.ctx.get_settings();
+                    let packet = merge_join_runtime_filter_packets(
+                        packets,
+                        settings.get_inlist_runtime_filter_threshold()? as usize,
+                        settings.get_bloom_runtime_filter_threshold()? as usize,
+                        settings.get_min_max_runtime_filter_threshold()? as usize,
+                    )?;
                     build_and_push_down_runtime_filter(packet, &self.build_state).await?;
                 }
                 self.build_state.barrier.wait().await;

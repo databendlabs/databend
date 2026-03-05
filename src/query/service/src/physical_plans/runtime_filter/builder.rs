@@ -61,6 +61,7 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
     matches!(
         join_type,
         JoinType::Inner
+            | JoinType::LeftSemi
             | JoinType::Right
             | JoinType::RightSemi
             | JoinType::RightAnti
