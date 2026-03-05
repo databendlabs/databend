@@ -1,0 +1,64 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# CREATE TABLE
+statement ok
+CREATE TABLE test(
+	i INTEGER,
+	j INTEGER
+)
+
+# start two transactions
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION
+
+# rename column in first transaction
+
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+# first transaction should see the new name
+
+statement error
+SELECT i FROM test
+
+statement ok
+SELECT k FROM test
+
+# second transaction should still consider old name
+
+# TODO: unsupported feature
+# statement ok
+# SELECT i FROM test
+
+# TODO: result differs
+# statement error
+# SELECT k FROM test
+
+statement ok
+COMMIT
+
+# second transaction should still see old name
+
+# TODO: unsupported feature
+# statement ok
+# SELECT i FROM test
+
+# TODO: result differs
+# statement error
+# SELECT k FROM test
+
+statement ok
+COMMIT
+
+statement error
+SELECT i FROM test
+
+statement ok
+SELECT k FROM test

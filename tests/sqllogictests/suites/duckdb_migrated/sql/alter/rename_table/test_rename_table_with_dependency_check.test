@@ -1,0 +1,31 @@
+statement ok
+DROP TABLE IF EXISTS t0
+
+statement ok
+DROP TABLE IF EXISTS t3
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX i1 ON t0 (c0);
+
+# TODO: result differs
+# statement error
+# ALTER TABLE t0 RENAME TO t3;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t3 (c0 INT);
+
+# TODO: result differs
+# statement error
+# ALTER TABLE t0 RENAME TO t4;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t0;
+
+statement error
+ANALYZE t4;

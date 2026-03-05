@@ -1,0 +1,104 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+DROP TABLE IF EXISTS user_causes
+
+statement ok
+CREATE TABLE integers(grp INTEGER, i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 10), (2, 15), (1, 30), (2, 20)
+
+# TODO: unsupported feature
+# query I
+# SELECT FIRST(i ORDER BY i) FROM integers
+# ----
+# 10
+
+# ordering by the same aggregate multiple times has no effect
+
+# TODO: unsupported feature
+# query I
+# SELECT FIRST(i ORDER BY i, i, i) FROM integers
+# ----
+# 10
+
+# TODO: unsupported feature
+# query I
+# SELECT FIRST(i ORDER BY i, i DESC, i) FROM integers
+# ----
+# 10
+
+# TODO: unsupported feature
+# query I
+# SELECT FIRST(i ORDER BY i DESC) FROM integers
+# ----
+# 30
+
+# TODO: unsupported feature
+# query I
+# SELECT FIRST(i ORDER BY i DESC, i ASC) FROM integers
+# ----
+# 30
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(i ORDER BY i), FIRST(i ORDER BY i DESC) FROM integers
+# ----
+# 10	30
+
+# TODO: unsupported feature
+# query II
+# SELECT grp, FIRST(i ORDER BY i) FROM integers GROUP BY grp ORDER BY ALL
+# ----
+# 1	10
+# 2	15
+
+# ordering by the group has no effect
+
+# TODO: unsupported feature
+# query II
+# SELECT grp, FIRST(i ORDER BY grp, i, grp DESC, i DESC) FROM integers GROUP BY grp ORDER BY ALL
+# ----
+# 1	10
+# 2	15
+
+# TODO: unsupported feature
+# query II
+# SELECT grp, FIRST(i ORDER BY i DESC) FROM integers GROUP BY grp ORDER BY ALL
+# ----
+# 1	30
+# 2	20
+
+statement ok
+CREATE TABLE user_causes (
+    user_id INT,
+    cause VARCHAR,
+    "date" DATE
+);
+
+statement ok
+INSERT INTO user_causes (user_id, cause, "date") VALUES
+(1, 'Environmental', '2024-03-18'),
+(1, 'Environmental', '2024-02-18'),
+(1, 'Health', '2024-01-18'),
+(1, 'Social', '2023-12-18'),
+(1, NULL, '2023-11-19');
+
+statement error
+SELECT 
+    user_id, 
+    list(DISTINCT cause ORDER BY "date" DESC) FILTER(cause IS NOT NULL) AS causes
+FROM user_causes 
+GROUP BY user_id;
+
+# TODO: unsupported feature
+# query II
+# SELECT 
+#     user_id, 
+#     list(DISTINCT cause ORDER BY cause DESC) FILTER(cause IS NOT NULL) AS causes
+# FROM user_causes 
+# GROUP BY user_id;
+# ----
+# 1	[Social, Health, Environmental]

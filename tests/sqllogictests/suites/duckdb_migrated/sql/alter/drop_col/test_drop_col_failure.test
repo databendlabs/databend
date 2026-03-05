@@ -1,0 +1,38 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+DROP TABLE IF EXISTS test2
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# cannot drop column which does not exist
+
+statement error
+ALTER TABLE test DROP COLUMN blabla
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN IF EXISTS blabla
+
+#  cannot drop ALL columns of a table
+
+statement ok
+ALTER TABLE test DROP COLUMN i
+
+statement error
+ALTER TABLE test DROP COLUMN j
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test2 (id INT PRIMARY KEY, name TEXT, surname TEXT, age INT, UNIQUE(surname, age))
+
+statement error
+ALTER TABLE test2 DROP COLUMN surname
+
+statement error
+ALTER TABLE test2 DROP COLUMN age

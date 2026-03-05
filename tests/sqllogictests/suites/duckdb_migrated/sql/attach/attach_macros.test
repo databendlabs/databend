@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS db1.tbl
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db1;
+
+statement ok
+CREATE TABLE db1.tbl AS SELECT 42 AS x, 3 AS y;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO db1.two_x_plus_y(x, y) AS 2 * x + y;
+
+# TODO: unsupported feature
+# query I
+# SELECT db1.two_x_plus_y(x, y) FROM db1.tbl;
+# ----
+# 87
+
+# TODO: unsupported feature
+# query I
+# SELECT db1.main.two_x_plus_y(x, y) FROM db1.tbl;
+# ----
+# 87
+
+statement ok
+USE db1
+
+# TODO: unknown function
+# query I
+# SELECT two_x_plus_y(x, y) FROM db1.tbl;
+# ----
+# 87

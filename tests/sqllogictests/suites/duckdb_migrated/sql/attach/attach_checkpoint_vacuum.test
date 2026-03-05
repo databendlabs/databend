@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS db1.integers
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT db1
+
+# TODO: unsupported feature
+# statement ok
+# VACUUM db1.integers

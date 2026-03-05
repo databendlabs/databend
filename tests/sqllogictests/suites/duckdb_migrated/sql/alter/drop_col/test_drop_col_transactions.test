@@ -1,0 +1,147 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Only one pending table alter can be active at a time
+
+statement ok
+BEGIN TRANSACTION
+
+# con removes a column to test
+
+statement ok
+ALTER TABLE test DROP COLUMN j
+
+# con2 cannot add a new column now!
+
+# TODO: result differs
+# statement error
+# ALTER TABLE test ADD COLUMN k INTEGER
+
+statement ok
+COMMIT
+
+# we can add the column after the commit
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN k INTEGER
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Can only append to newest table
+
+statement ok
+BEGIN TRANSACTION
+
+# con removes a column from test
+
+statement ok
+ALTER TABLE test DROP COLUMN i
+
+# con2 cannot append now!
+
+statement error
+INSERT INTO test (i, j) VALUES (3, 3)
+
+statement error
+DELETE FROM test WHERE i=1
+
+query I
+SELECT * FROM test
+----
+1
+2
+
+query I
+SELECT * FROM test
+----
+1
+2
+
+# we can't update on tables that have been altered
+
+# TODO: result differs
+# statement error
+# UPDATE test SET j=100
+
+query I
+SELECT * FROM test
+----
+1
+2
+
+statement ok
+UPDATE test SET j=100
+
+statement ok
+COMMIT
+
+query I
+SELECT * FROM test
+----
+100
+100
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Alter table while other transaction still has pending appends
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (3, 3)
+
+# now con adds a column
+
+statement ok
+ALTER TABLE test DROP COLUMN i
+
+# cannot commit con2! conflict on append
+
+# TODO: result differs
+# statement error
+# COMMIT
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Create index on column that has been removed by other transaction
+# con2 removes a column
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE test DROP COLUMN j
+
+# now con tries to add an index to that column: this should fail
+
+statement error
+CREATE INDEX i_index ON test(j)

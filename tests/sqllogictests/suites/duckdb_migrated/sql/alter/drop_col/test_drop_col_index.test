@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON test(j)
+
+# cannot drop indexed column
+
+# TODO: result differs
+# statement error
+# ALTER TABLE test DROP COLUMN j
+
+# TODO: result differs
+# statement error
+# ALTER TABLE test DROP COLUMN i

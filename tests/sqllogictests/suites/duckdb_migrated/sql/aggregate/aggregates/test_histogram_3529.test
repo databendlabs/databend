@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS tmp
+
+statement ok
+create table tmp (c0 integer, c1 integer);
+
+statement ok
+insert into tmp values
+(0,	0),
+(1,	1),
+(2,	0),
+(0,	1),
+(1,	0),
+(2,	1),
+(0,	0),
+(1,	1),
+(2,	0),
+(0,	1);
+
+# TODO: unsupported feature
+# query II
+# SELECT c0, histogram(c1) FROM tmp GROUP BY c0 ORDER BY ALL
+# ----
+# 0	{0=2, 1=2}
+# 1	{0=1, 1=2}
+# 2	{0=2, 1=1}

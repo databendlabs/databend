@@ -1,0 +1,25 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD PRIMARY KEY (j)
+
+statement ok
+INSERT INTO test VALUES (1, 1)
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD PRIMARY KEY (j)

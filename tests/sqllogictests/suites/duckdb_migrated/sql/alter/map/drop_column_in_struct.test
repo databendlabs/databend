@@ -1,0 +1,108 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(
+# 	s MAP(
+# 		STRUCT(
+# 			n INTEGER,
+# 			m INTEGER
+# 		),
+# 		STRUCT(
+# 			i INTEGER,
+# 			j INTEGER
+# 		)
+# 	)
+# )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES
+# 	(MAP {ROW(3,3): ROW(1, 1)}),
+# 	(MAP {ROW(4,4): ROW(2, 2)})
+
+# attempt to drop 'key' from the map
+
+statement error
+ALTER TABLE test DROP COLUMN s.key
+
+statement error
+ALTER TABLE test DROP COLUMN s.value
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN s.value.j
+
+# TODO: unsupported feature
+# query I
+# select * from test;
+# ----
+# {{'n': 3, 'm': 3}={'i': 1}}
+# {{'n': 4, 'm': 4}={'i': 2}}
+
+# drop a column from the struct inside the 'key'
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN s.key.n
+
+# TODO: unsupported feature
+# query I
+# select * from test;
+# ----
+# {{'m': 3}={'i': 1}}
+# {{'m': 4}={'i': 2}}
+
+# TODO: unsupported feature
+# statement ok
+# drop table test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(
+# 	s STRUCT(
+# 		a MAP(
+# 			STRUCT(
+# 				n INTEGER,
+# 				m INTEGER
+# 			),
+# 			STRUCT(
+# 				i INTEGER,
+# 				j INTEGER
+# 			)
+# 		)
+# 	)
+# )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES
+# 	(ROW(MAP {ROW(3,3): ROW(1, 1)})),
+# 	(ROW(MAP {ROW(4,4): ROW(2, 2)}))
+
+# drop a column from the struct in the 'key'
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN s.a.key.m
+
+# TODO: unsupported feature
+# query I
+# select * from test;
+# ----
+# {'a': {{'n': 3}={'i': 1, 'j': 1}}}
+# {'a': {{'n': 4}={'i': 2, 'j': 2}}}
+
+# drop a column from the struct in the 'value'
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN s.a.value.j
+
+# TODO: unsupported feature
+# query I
+# select * from test;
+# ----
+# {'a': {{'n': 3}={'i': 1}}}
+# {'a': {{'n': 4}={'i': 2}}}

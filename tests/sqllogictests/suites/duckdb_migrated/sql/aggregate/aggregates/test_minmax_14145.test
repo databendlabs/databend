@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query IIIIII
+# DESCRIBE SELECT max(l) from (select unnest( [{'a':1}::JSON, [2]::JSON ]) as l);
+# ----
+# max(l)	JSON	YES	NULL	NULL	NULL

@@ -1,0 +1,35 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+DROP TABLE IF EXISTS uniq
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (i_do_not_exist)
+
+statement error
+ALTER TABLE i_do_not_exist ADD PRIMARY KEY (i, j)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE uniq (i INTEGER UNIQUE, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO uniq VALUES (1, 10), (2, 20), (3, 30)
+
+statement error
+INSERT INTO uniq VALUES (1, 100)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE uniq ADD PRIMARY KEY (i)
+
+statement error
+INSERT INTO uniq VALUES (1, 101)
+
+statement error
+INSERT INTO uniq VALUES (NULL, 100)

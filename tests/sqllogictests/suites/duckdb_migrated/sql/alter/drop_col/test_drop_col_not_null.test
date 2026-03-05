@@ -1,0 +1,27 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER NOT NULL)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+query II
+SELECT * FROM test
+----
+1 1
+2 2
+
+statement ok
+ALTER TABLE test DROP COLUMN j
+
+statement ok
+INSERT INTO test VALUES (3)
+
+query I
+SELECT * FROM test
+----
+1
+2
+3

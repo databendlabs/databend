@@ -1,0 +1,27 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+create table test (id int, provider int, record_key int, record_rank int, record_date int)
+
+# this subquery was fast, we select only record_key from it so it's equivalent to the next query
+
+# TODO: unsupported feature
+# query II
+# explain select record_key from (
+#     select distinct on (id, provider) id, provider, record_key from test order by id, provider, record_rank desc, record_date
+# )
+# ----
+# TODO: special result marker
+
+
+# this query was slow, but should be equivalent to the first query
+
+# TODO: unsupported feature
+# query II
+# explain select distinct on (id, provider) record_key from test order by id, provider, record_rank desc, record_date
+# ----
+# TODO: special result marker
+
+# the problem was that our aggregate became way too big in the second case because we didn't de-duplicate columns
+# this regex checks that they both have the same 'minimal' aggregate (this test is a bit fragile to binder changes tho)

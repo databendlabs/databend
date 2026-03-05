@@ -1,0 +1,40 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (3, 3)
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+statement ok
+ALTER TABLE test ADD COLUMN l INTEGER
+
+statement ok
+ALTER TABLE test ADD COLUMN m INTEGER DEFAULT 3
+
+query IIIII
+SELECT * FROM test
+----
+1 1 NULL NULL 3
+2 2 NULL NULL 3
+3 3 NULL NULL 3
+
+statement ok
+ROLLBACK
+
+query IIIII
+SELECT * FROM test
+----
+3 3 NULL NULL 3
+1 1 NULL NULL 3
+2 2 NULL NULL 3

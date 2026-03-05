@@ -1,0 +1,39 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test AS SELECT {'t': 42} t
+
+query I
+SELECT * FROM test
+----
+{"t":42}
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ALTER t TYPE ROW(t VARCHAR) USING {'t': concat('hello', (test.t.t + 42)::varchar)}
+
+query I
+SELECT * FROM test
+----
+{"t":42}
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test AS SELECT {'t': 42} t
+
+query I
+SELECT * FROM test
+----
+{"t":42}
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ALTER t TYPE ROW(t VARCHAR) USING {'t': concat('hello', (t.t + 42)::varchar)}
+
+query I
+SELECT * FROM test
+----
+{"t":42}

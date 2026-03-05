@@ -1,0 +1,39 @@
+statement ok
+DROP TABLE IF EXISTS db1.integers
+
+statement ok
+DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+statement error
+CREATE TABLE db1.integers(i INTEGER DEFAULT nextval('seq'))
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE db1.seq
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.integers(i INTEGER DEFAULT nextval('db1.seq'))
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('db1.seq')
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq')
+# ----
+# 1
+
+statement error
+CREATE TABLE integers(i INTEGER DEFAULT nextval('db1.seq'))
+
+# TODO: unsupported feature
+# statement ok
+# detach db1;

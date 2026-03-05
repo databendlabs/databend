@@ -1,0 +1,626 @@
+statement ok
+DROP TABLE IF EXISTS t1_BIGINT
+
+statement ok
+DROP TABLE IF EXISTS t1_DOUBLE
+
+statement ok
+DROP TABLE IF EXISTS t1_HUGEINT
+
+statement ok
+DROP TABLE IF EXISTS t1_INTEGER
+
+statement ok
+DROP TABLE IF EXISTS t1_SMALLINT
+
+statement ok
+DROP TABLE IF EXISTS t2_count_int
+
+statement ok
+DROP TABLE IF EXISTS t3_product
+
+statement ok
+DROP TABLE IF EXISTS t_regr_count
+
+# We know that forward compatibility won't be preserved
+# avg() has the new get_state_type callback
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(1.0::DOUBLE) EXPORT_STATE) = 'AGGREGATE_STATE<avg(DOUBLE)::DOUBLE, STRUCT(count UBIGINT, "value" DOUBLE)>';
+# ----
+# 1
+
+# Works in a table
+# (Forward compatability tests are covered because of this statement) 
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1_DOUBLE AS SELECT avg(range::DOUBLE) EXPORT_STATE as state FROM range(0, 10);
+
+# Test reading from the table
+# We cannot run in force storage mode, as this configuration still uses the old serialization version
+
+# TODO: unsupported feature
+# query T
+# SELECT column_type='AGGREGATE_STATE<avg(DOUBLE)::DOUBLE, STRUCT(count UBIGINT, "value" DOUBLE)>' FROM (DESCRIBE t1_DOUBLE) WHERE column_name = 'state';
+# ----
+# 1
+
+# Test combine and finalize
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_DOUBLE;
+# ----
+# 4.500000
+
+# Test that state typing is independent of input expressions
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1_DOUBLE SELECT avg((range::DOUBLE + 10.0)::DOUBLE) EXPORT_STATE FROM range(0, 10);
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(state) FROM t1_DOUBLE ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+# Test combine with multiple states
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_DOUBLE ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+
+# avg() has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(1.0::INTEGER) EXPORT_STATE) = 'AGGREGATE_STATE<avg(INTEGER)::DOUBLE, STRUCT(count UBIGINT, "value" INTEGER)>';
+# ----
+# 1
+
+# Works in a table
+# (Forward compatability tests are covered because of this statement) 
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1_INTEGER AS SELECT avg(range::INTEGER) EXPORT_STATE as state FROM range(0, 10);
+
+# Test reading from the table
+# We cannot run in force storage mode, as this configuration still uses the old serialization version
+
+# TODO: unsupported feature
+# query T
+# SELECT column_type='AGGREGATE_STATE<avg(INTEGER)::DOUBLE, STRUCT(count UBIGINT, "value" INTEGER)>' FROM (DESCRIBE t1_INTEGER) WHERE column_name = 'state';
+# ----
+# 1
+
+# Test combine and finalize
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_INTEGER;
+# ----
+# 4.500000
+
+# Test that state typing is independent of input expressions
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1_INTEGER SELECT avg((range::INTEGER + 10.0)::INTEGER) EXPORT_STATE FROM range(0, 10);
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(state) FROM t1_INTEGER ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+# Test combine with multiple states
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_INTEGER ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+
+# avg() has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(1.0::BIGINT) EXPORT_STATE) = 'AGGREGATE_STATE<avg(BIGINT)::DOUBLE, STRUCT(count UBIGINT, "value" BIGINT)>';
+# ----
+# 1
+
+# Works in a table
+# (Forward compatability tests are covered because of this statement) 
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1_BIGINT AS SELECT avg(range::BIGINT) EXPORT_STATE as state FROM range(0, 10);
+
+# Test reading from the table
+# We cannot run in force storage mode, as this configuration still uses the old serialization version
+
+# TODO: unsupported feature
+# query T
+# SELECT column_type='AGGREGATE_STATE<avg(BIGINT)::DOUBLE, STRUCT(count UBIGINT, "value" BIGINT)>' FROM (DESCRIBE t1_BIGINT) WHERE column_name = 'state';
+# ----
+# 1
+
+# Test combine and finalize
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_BIGINT;
+# ----
+# 4.500000
+
+# Test that state typing is independent of input expressions
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1_BIGINT SELECT avg((range::BIGINT + 10.0)::BIGINT) EXPORT_STATE FROM range(0, 10);
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(state) FROM t1_BIGINT ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+# Test combine with multiple states
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_BIGINT ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+
+# avg() has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(1.0::SMALLINT) EXPORT_STATE) = 'AGGREGATE_STATE<avg(SMALLINT)::DOUBLE, STRUCT(count UBIGINT, "value" SMALLINT)>';
+# ----
+# 1
+
+# Works in a table
+# (Forward compatability tests are covered because of this statement) 
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1_SMALLINT AS SELECT avg(range::SMALLINT) EXPORT_STATE as state FROM range(0, 10);
+
+# Test reading from the table
+# We cannot run in force storage mode, as this configuration still uses the old serialization version
+
+# TODO: unsupported feature
+# query T
+# SELECT column_type='AGGREGATE_STATE<avg(SMALLINT)::DOUBLE, STRUCT(count UBIGINT, "value" SMALLINT)>' FROM (DESCRIBE t1_SMALLINT) WHERE column_name = 'state';
+# ----
+# 1
+
+# Test combine and finalize
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_SMALLINT;
+# ----
+# 4.500000
+
+# Test that state typing is independent of input expressions
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1_SMALLINT SELECT avg((range::SMALLINT + 10.0)::SMALLINT) EXPORT_STATE FROM range(0, 10);
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(state) FROM t1_SMALLINT ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+# Test combine with multiple states
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_SMALLINT ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+
+# avg() has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(1.0::HUGEINT) EXPORT_STATE) = 'AGGREGATE_STATE<avg(HUGEINT)::DOUBLE, STRUCT(count UBIGINT, "value" HUGEINT)>';
+# ----
+# 1
+
+# Works in a table
+# (Forward compatability tests are covered because of this statement) 
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1_HUGEINT AS SELECT avg(range::HUGEINT) EXPORT_STATE as state FROM range(0, 10);
+
+# Test reading from the table
+# We cannot run in force storage mode, as this configuration still uses the old serialization version
+
+# TODO: unsupported feature
+# query T
+# SELECT column_type='AGGREGATE_STATE<avg(HUGEINT)::DOUBLE, STRUCT(count UBIGINT, "value" HUGEINT)>' FROM (DESCRIBE t1_HUGEINT) WHERE column_name = 'state';
+# ----
+# 1
+
+# Test combine and finalize
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_HUGEINT;
+# ----
+# 4.500000
+
+# Test that state typing is independent of input expressions
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1_HUGEINT SELECT avg((range::HUGEINT + 10.0)::HUGEINT) EXPORT_STATE FROM range(0, 10);
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(state) FROM t1_HUGEINT ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+# Test combine with multiple states
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t1_HUGEINT ORDER BY 1;
+# ----
+# 4.500000
+# 14.500000
+
+
+# count() now has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(count(1) EXPORT_STATE) = 'AGGREGATE_STATE<count(ANY)::BIGINT, STRUCT(count BIGINT)>';
+# ----
+# 1
+
+# count(INT) (as opted-in) is still serialized correctly
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2_count_int AS SELECT count(range::INT) EXPORT_STATE as state FROM range(0, 10);
+
+# bit_xor is now opted-in to struct-based state
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(bit_xor(1::BIGINT) EXPORT_STATE) = 'AGGREGATE_STATE<bit_xor(BIGINT)::BIGINT, STRUCT(is_set BOOLEAN, "value" BIGINT)>';
+# ----
+# 1
+
+# other aggregate functions that are not opted-in are not broken
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(min(1::BIGINT) EXPORT_STATE);
+# ----
+# LEGACY_AGGREGATE_STATE<min(BIGINT)::BIGINT>
+
+# Test with interval type
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(INTERVAL '1 day' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(INTERVAL)::INTERVAL, STRUCT(count UBIGINT, "value" INTERVAL)>';
+# ----
+# 1
+
+# Test with TIMESTAMP type
+
+# TODO: type_error
+# query T
+# SELECT typeof(avg(TIMESTAMP '2020-01-01 00:00:00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIMESTAMP)::TIMESTAMP, STRUCT(count UBIGINT, "value" TIMESTAMP)>';
+# ----
+# 1
+
+# Test with TIMESTAMP WITH TIME ZONE type
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(TIMESTAMPTZ '2020-01-01 00:00:00+00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIMESTAMP WITH TIME ZONE)::TIMESTAMP WITH TIME ZONE, STRUCT(count UBIGINT, "value" TIMESTAMP WITH TIME ZONE)>';
+# ----
+# 1
+
+# Test with TIME type
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(TIME '12:00:00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIME)::TIME, STRUCT(count UBIGINT, "value" TIME)>';
+# ----
+# 1
+
+# Test with TIME WITH TIME ZONE type
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(TIMETZ '12:00:00+00' ) EXPORT_STATE)
+#  = 'AGGREGATE_STATE<avg(TIME WITH TIME ZONE)::TIME WITH TIME ZONE, STRUCT(count UBIGINT, "value" TIME WITH TIME ZONE)>';
+# ----
+# 1
+
+# Test with DECIMAL type
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(avg(1.2) EXPORT_STATE) = 'AGGREGATE_STATE<avg(DECIMAL(2,1))::DOUBLE, STRUCT(count UBIGINT, "value" DECIMAL(2,1))>';
+# ----
+# 1
+
+# Casting to struct should work
+
+# TODO: unsupported feature
+# query T
+# SELECT (avg(42) export_state)::struct(count ubigint, "value" integer);
+# ----
+# {'count': 1, 'value': 42}
+
+# Casting to struct that should be casted to a different struct should also work
+
+# TODO: unsupported feature
+# query T
+# SELECT (avg(42) export_state)::struct(count ubigint, "value" double);
+# ----
+# {'count': 1, 'value': 42.0}
+
+# Casting count state to struct should work
+
+# TODO: unsupported feature
+# query T
+# SELECT (count(42) export_state)::struct(count bigint);
+# ----
+# {'count': 1}
+
+# Casting count(*) state to struct should also work
+
+# TODO: unsupported feature
+# query T
+# SELECT (count(*) export_state)::struct(count bigint);
+# ----
+# {'count': 1}
+
+# first() now has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(first(42) EXPORT_STATE) = 'AGGREGATE_STATE<first(INTEGER)::INTEGER, STRUCT("value" INTEGER, is_set BOOLEAN, is_null BOOLEAN)>';
+# ----
+# 1
+
+# last() now has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(last(42) EXPORT_STATE) = 'AGGREGATE_STATE<last(INTEGER)::INTEGER, STRUCT("value" INTEGER, is_set BOOLEAN, is_null BOOLEAN)>';
+# ----
+# 1
+
+# any_value() now has the new get_state_type callback
+
+# TODO: unsupported feature
+# query T
+# SELECT typeof(any_value(42) EXPORT_STATE) = 'AGGREGATE_STATE<any_value(INTEGER)::INTEGER, STRUCT("value" INTEGER, is_set BOOLEAN, is_null BOOLEAN)>';
+# ----
+# 1
+
+# Casting first state to struct should work
+
+# TODO: unsupported feature
+# query T
+# SELECT (first(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+# ----
+# {'value': 42, 'is_set': 1, 'is_null': 0}
+
+# Casting last state to struct should work
+
+# TODO: unsupported feature
+# query T
+# SELECT (last(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+# ----
+# {'value': 42, 'is_set': 1, 'is_null': 0}
+
+# Casting any_value state to struct should work
+
+# TODO: unsupported feature
+# query T
+# SELECT (any_value(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+# ----
+# {'value': 42, 'is_set': 1, 'is_null': 0}
+
+# product() has the new get_state_type callback
+
+# TODO: unknown function
+# query T
+# SELECT typeof(product(1.0::DOUBLE) EXPORT_STATE) = 'AGGREGATE_STATE<product(DOUBLE)::DOUBLE, STRUCT(empty BOOLEAN, val DOUBLE)>';
+# ----
+# 1
+
+# Works in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t3_product AS SELECT product(range::DOUBLE) EXPORT_STATE as state FROM range(1, 6);
+
+# Test reading from the table
+
+# TODO: unsupported feature
+# query T
+# SELECT column_type='AGGREGATE_STATE<product(DOUBLE)::DOUBLE, STRUCT(empty BOOLEAN, val DOUBLE)>' FROM (DESCRIBE t3_product) WHERE column_name = 'state';
+# ----
+# 1
+
+# Test combine and finalize
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t3_product;
+# ----
+# 14400.000000
+
+# Test that state typing is independent of input expressions
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t3_product SELECT product((range::DOUBLE + 10.0)::DOUBLE) EXPORT_STATE FROM range(1, 6);
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(state) FROM t3_product ORDER BY 1;
+# ----
+# 120.000000
+# 360360.000000
+
+# Test combine with multiple states
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t3_product ORDER BY 1;
+# ----
+# 14400.000000
+# 129859329600.000000
+
+# Casting product state to struct should work
+
+# TODO: unsupported feature
+# query T
+# SELECT (product(2.0) export_state)::struct(empty boolean, val double);
+# ----
+# {'empty': 0, 'val': 2.0}
+
+# Test product with empty result (should be NULL when no rows)
+
+# TODO: unknown function
+# query T
+# SELECT finalize(product(1.0::DOUBLE) EXPORT_STATE) IS NULL FROM (SELECT 1 WHERE FALSE);
+# ----
+# 1
+
+# Regression aggregates now have struct-based state export
+# regr_count
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_count(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_count(DOUBLE, DOUBLE)::UINTEGER, STRUCT(count UBIGINT)>';
+# ----
+# 1
+
+# regr_avgx, regr_avgy
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_avgx(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_avgx(DOUBLE, DOUBLE)::DOUBLE, STRUCT(sum DOUBLE, count UBIGINT)>';
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_avgy(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_avgy(DOUBLE, DOUBLE)::DOUBLE, STRUCT(sum DOUBLE, count UBIGINT)>';
+# ----
+# 1
+
+# regr_slope
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_slope(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_slope(DOUBLE, DOUBLE)::DOUBLE, STRUCT(cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE), var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+# ----
+# 1
+
+# regr_intercept
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_intercept(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_intercept(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, sum_x DOUBLE, sum_y DOUBLE, slope STRUCT(cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE), var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE)))>';
+# ----
+# 1
+
+# regr_r2
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_r2(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_r2(DOUBLE, DOUBLE)::DOUBLE, STRUCT(corr STRUCT(cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE), dev_pop_x STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE), dev_pop_y STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE)), var_pop_x STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE), var_pop_y STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+# ----
+# 1
+
+# regr_sxx, regr_syy
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_sxx(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_sxx(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_syy(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_syy(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+# ----
+# 1
+
+# regr_sxy
+
+# TODO: unknown function
+# query T
+# SELECT typeof(regr_sxy(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_sxy(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE))>';
+# ----
+# 1
+
+# regr_count: create table, describe, combine and finalize
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t_regr_count AS SELECT regr_count(range::DOUBLE, range::DOUBLE + 1) EXPORT_STATE as state FROM range(0, 10);
+
+# TODO: unsupported feature
+# query T
+# SELECT column_type='AGGREGATE_STATE<regr_count(DOUBLE, DOUBLE)::UINTEGER, STRUCT(count UBIGINT)>' FROM (DESCRIBE t_regr_count) WHERE column_name = 'state';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query R
+# SELECT finalize(combine(state, state)) FROM t_regr_count;
+# ----
+# 20
+
+# Casting regression state to struct should work
+
+# TODO: unsupported feature
+# query T
+# SELECT (regr_count(1.0, 2.0) export_state)::struct(count ubigint);
+# ----
+# {'count': 1}
+
+# TODO: unsupported feature
+# query T
+# SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
+# ----
+# {'sum': 2.0, 'count': 1}

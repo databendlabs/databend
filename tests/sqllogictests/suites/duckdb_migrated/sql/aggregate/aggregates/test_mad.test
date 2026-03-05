@@ -1,0 +1,348 @@
+statement ok
+DROP TABLE IF EXISTS numerics
+
+statement ok
+DROP TABLE IF EXISTS tinys
+
+# TODO: unknown function
+# query II
+# SELECT mad(NULL), mad(1)
+# ----
+# NULL	0
+
+# constant mad is zero
+
+# TODO: unknown function
+# query II
+# SELECT mad(NULL), mad(1) FROM range(0, 2000)
+# ----
+# NULL	0
+
+#
+# Small numerics
+#
+
+# TODO: unsupported feature
+# statement ok
+# create table tinys as
+# 	select range r, random()
+# 	from range(0, 100)
+# 	union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9)
+# 	order by 2;
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::tinyint) FROM tinys
+# ----
+# 25
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::tinyint) FROM tinys
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::tinyint) FROM tinys
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::decimal(4,1)) FROM tinys
+# ----
+# 25
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::decimal(4,1)) FROM tinys
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::decimal(4,1)) FROM tinys
+# ----
+# 0
+
+
+#
+# Large numerics
+#
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as
+# 	select range r, random()
+# 	from range(0, 10000)
+# 	union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9)
+# 	order by 2;
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::smallint) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::smallint) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::smallint) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::integer) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::integer) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::integer) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::bigint) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::bigint) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::bigint) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::hugeint) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::hugeint) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::hugeint) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::uhugeint) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::uhugeint) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::uhugeint) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::float) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::float) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::float) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::double) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::double) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::double) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::decimal(8,1)) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::decimal(8,1)) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::decimal(8,1)) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::decimal(12,1)) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::decimal(12,1)) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::decimal(12,1)) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::decimal(18,1)) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::decimal(18,1)) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::decimal(18,1)) FROM numerics
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(r::decimal(24,1)) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(NULL::decimal(24,1)) FROM numerics
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(42::decimal(24,1)) FROM numerics
+# ----
+# 0
+
+
+#
+# Temporal
+#
+
+# TODO: unsupported feature
+# query I
+# SELECT mad(('2018-01-01'::DATE + INTERVAL (r) DAY)::DATE) FROM numerics
+# ----
+# 2500 days
+
+# TODO: unsupported feature
+# query I
+# SELECT mad('2018-01-01'::TIMESTAMP + INTERVAL (r) HOUR) FROM numerics
+# ----
+# 104 days 04:00:00
+
+# TODO: unsupported feature
+# query I
+# SELECT mad('00:00:00'::TIME + INTERVAL (r) SECOND) FROM numerics
+# ----
+# 00:41:40
+
+#
+# Extreme values
+#
+
+# TODO: unknown function
+# query I
+# select mad(x) from (values ('127'::DECIMAL(3,0)), ('-128'::DECIMAL(3,0))) tbl(x);
+# ----
+# 127
+
+# TODO: unknown function
+# query I
+# select mad(x) from (values ('32767'::DECIMAL(5,0)), ('-32768'::DECIMAL(5,0))) tbl(x);
+# ----
+# 32767
+
+# TODO: unknown function
+# query I
+# select mad(x) from (values ('2147483647'::DECIMAL(10,0)), ('-2147483648'::DECIMAL(10,0))) tbl(x);
+# ----
+# 2147483647
+
+# TODO: unknown function
+# statement ok
+# select mad(x) from (values (-1e308), (1e308)) tbl(x);
+
+# TODO: unsupported feature
+# query I
+# select mad(x) from (values ('294247-01-10'::date), ('290309-12-22 (BC)'::date)) tbl(x);
+# ----
+# 106751991 days
+
+# TODO: unsupported feature
+# query I
+# select mad(x) from (values
+# 	('294247-01-10 04:00:54.775806'::timestamp),
+# 	('290309-12-22 (BC) 00:00:00'::timestamp)
+# 	) tbl(x);
+# ----
+# 106751991 days 02:00:27.387903
+
+# TODO: unsupported feature
+# query I
+# select mad(x) from (values ('23:59:59.999999'::time), ('00:00:00'::time)) tbl(x);
+# ----
+# 12:00:00

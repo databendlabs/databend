@@ -1,0 +1,35 @@
+statement ok
+DROP TABLE IF EXISTS emptyaggr
+
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# query IIRRRIIII
+# SELECT COUNT(*), COUNT(i), STDDEV_SAMP(i), SUM(i), SUM(DISTINCT i), FIRST(i), LAST(i), MAX(i), MIN(i) FROM integers WHERE i > 100
+# ----
+# 0
+# 0
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+
+statement ok
+CREATE TABLE emptyaggr(i INTEGER);
+
+query I
+SELECT COUNT(*) FROM emptyaggr
+----
+0
+
+query IIIIRIIIII
+SELECT SUM(i), COUNT(i), COUNT(DISTINCT i), COUNT(*), AVG(i), COUNT(*)+1, COUNT(i)+1, MIN(i), MIN(i+1), MIN(i)+1 FROM emptyaggr
+----
+NULL	0	0	0	NULL	1	1	NULL	NULL	NULL

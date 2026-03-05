@@ -1,0 +1,27 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(i INTEGER, j INTEGER, PRIMARY KEY(i, j))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (i, j) VALUES (1, 1), (2, 2)
+
+statement error
+INSERT INTO test (i, j) VALUES (1, 1)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test RENAME COLUMN i TO k
+
+# the unique constraint should still work after altering the table
+# error message refers to the old name of the column (was i, renamed to k)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (k, j) VALUES (3, 3), (4, 4)
+
+statement error
+INSERT INTO test (k, j) VALUES (1, 1)

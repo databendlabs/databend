@@ -1,0 +1,73 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# query I
+# WITH cte AS (
+# 	SELECT a::STRUCT(i INTEGER, j INTEGER)[] a FROM
+# 	VALUES ([ROW(1, 1)]), ([ROW(2, 2)]) t(a)
+# )
+# SELECT remap_struct(
+# 	a,
+# 	NULL::STRUCT(i INTEGER, j INTEGER, k INTEGER)[],
+# 	{'list': ('list', {'i': 'i', 'j': 'j'})},
+# 	{'list': {'k': NULL::INTEGER}}
+# ) FROM cte;
+# ----
+# [{'i': 1, 'j': 1, 'k': NULL}]
+# [{'i': 2, 'j': 2, 'k': NULL}]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])
+
+# Add a field to a STRUCT.
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN s.element.k INTEGER
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# [{'i': 1, 'j': 1, 'k': NULL}]
+# [{'i': 2, 'j': 2, 'k': NULL}]
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(
+# 	s STRUCT(
+# 		a STRUCT(i INTEGER, j INTEGER)[]
+# 	)
+# )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (ROW([ROW(1, 1)])), (ROW([ROW(2, 2)]))
+
+# Add another (one more nesting level) STRUCT field.
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN s.a.element.k INTEGER
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# {'a': [{'i': 1, 'j': 1, 'k': NULL}]}
+# {'a': [{'i': 2, 'j': 2, 'k': NULL}]}
+
+# Try to add an element to the list.
+
+statement error
+ALTER TABLE test ADD COLUMN s.a.not_element INTEGER

@@ -1,0 +1,85 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl2
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+INSERT INTO tbl VALUES (999), (100)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE tbl RENAME TO tbl2
+
+query I
+SELECT * FROM tbl2
+----
+999
+100
+
+statement error
+SELECT * FROM tbl
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl
+# ----
+# 999
+# 100
+
+# TODO: result differs
+# statement error
+# SELECT * FROM tbl2
+
+statement ok
+COMMIT
+
+statement ok
+COMMIT
+
+statement error
+SELECT * FROM tbl
+
+statement error
+SELECT * FROM tbl
+
+query I
+SELECT * FROM tbl2
+----
+999
+100
+
+query I
+SELECT * FROM tbl2
+----
+999
+100
+
+# we can create "tbl" again
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+# tbl2 is still occupied though
+
+statement error
+CREATE TABLE tbl2(i INTEGER);
+
+statement ok
+DROP TABLE tbl2;
+
+statement ok
+CREATE TABLE tbl2(i INTEGER);
+
+# a rename fails now
+
+statement error
+ALTER TABLE tbl RENAME TO tbl2

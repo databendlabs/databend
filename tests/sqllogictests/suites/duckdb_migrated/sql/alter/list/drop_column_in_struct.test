@@ -1,0 +1,55 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])
+
+# Try to drop element from the list.
+
+statement error
+ALTER TABLE test DROP COLUMN s.element
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN s.element.j
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# [{'i': 1}]
+# [{'i': 2}]
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(
+# 	s STRUCT(
+# 		a STRUCT(i INTEGER, j INTEGER)[]
+# 	)
+# )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (ROW([ROW(1, 1)])), (ROW([ROW(2, 2)]))
+
+# Drop another (one more nesting level) STRUCT field.
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN s.a.element.i
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'a': [{'j': 1}]}
+# {'a': [{'j': 2}]}

@@ -1,0 +1,35 @@
+statement ok
+DROP TABLE IF EXISTS new_database.integers
+
+statement ok
+DROP TABLE IF EXISTS new_database.new_schema
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS new_database;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE new_database.integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA new_database.new_schema
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE new_database.new_schema.integers(i INTEGER)
+
+query T
+SELECT current_database()
+----
+default
+
+# TODO: unsupported feature
+# statement ok
+# USE new_database.new_schema
+
+query T
+SELECT current_database()
+----
+default

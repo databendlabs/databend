@@ -1,0 +1,188 @@
+statement ok
+DROP TABLE IF EXISTS db1.table_in_db1
+
+statement ok
+DROP TABLE IF EXISTS db2.table_in_db2
+
+statement ok
+DROP TABLE IF EXISTS db2.test_schema
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS db1;
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS db2;
+
+statement ok
+CREATE TABLE db1.table_in_db1(i int);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.table_in_db2(i int);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA db2.test_schema;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.test_schema.table_in_db2_test_schema(i int);
+
+query T
+SHOW TABLES
+----
+a1
+aggr
+args
+array_names
+array_of_structs
+bigints
+booleans
+customers
+data
+dates
+ddb
+doubles
+duplicates
+employees
+emptyaggr
+entry
+entry2
+entry3
+entry4
+exam
+example
+flights
+foo
+groups
+hello
+hist_data
+int
+integer
+interval_tbl
+intervals
+ints
+issue3056
+issue3105
+issue5259
+kahan_context1
+kahan_context2
+main_t1
+manycolumns
+my_table
+mytable
+names
+null_table
+nulls
+nulls_compound
+obs
+power
+qt
+repro
+response
+reverse
+scan
+smallints
+stddev_test
+stddev_test_alias
+strings
+students
+t0
+t1
+t2
+t4
+tbl
+tbl2
+tbl3
+tbl4
+tbl5
+tbl_alter_column
+test_strings
+test_val
+timeseries
+timestamp
+timestamps
+tinyints
+tmp
+unit
+user_causes
+user_pq
+v3
+
+statement ok
+USE DB1
+
+query T
+SHOW TABLES
+----
+str_tbl
+str_tbl2
+t1
+table_in_db1
+tbl
+tbl2
+
+statement ok
+USE db1
+
+query T
+SHOW TABLES
+----
+str_tbl
+str_tbl2
+t1
+table_in_db1
+tbl
+tbl2
+
+# TODO: unsupported feature
+# statement ok
+# USE db2
+
+query T
+SHOW TABLES
+----
+str_tbl
+str_tbl2
+t1
+table_in_db1
+tbl
+tbl2
+
+# TODO: unsupported feature
+# statement ok
+# USE db2.test_schema;
+
+query T
+SHOW TABLES
+----
+str_tbl
+str_tbl2
+t1
+table_in_db1
+tbl
+tbl2
+
+# TODO: unsupported feature
+# statement ok
+# USE DB2.TEST_sChEmA;
+
+query T
+SHOW TABLES
+----
+str_tbl
+str_tbl2
+t1
+table_in_db1
+tbl
+tbl2
+
+# TODO: unsupported feature
+# statement ok
+# FROM table_in_db2
+
+# TODO: unsupported feature
+# statement ok
+# FROM table_in_db2_test_schema

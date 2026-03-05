@@ -1,0 +1,95 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+statement ok
+CREATE TABLE t1 (val VARCHAR, arg INT);
+
+statement ok
+INSERT INTO t1 VALUES ('a', 2), ('a', 1), ('b', 5), ('b', 4), ('a', 3), ('b', 6);
+
+# TODO: unsupported feature
+# query I
+# SELECT arg_max(val, arg, 3 ORDER BY val DESC) FROM t1;
+# ----
+# [b, b, b]
+
+query I
+SELECT list(rs.val) FROM (SELECT val, arg, row_number() OVER (ORDER BY arg DESC) as rid FROM t1 ORDER BY val) as rs WHERE rid < 4;
+----
+["b","b","b"]
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT arg_max(arg, val, 2 ORDER BY arg) FROM t1 GROUP BY val;
+# ----
+# [2, 1]
+# [5, 4]
+
+statement ok
+CREATE TABLE t2 AS SELECT i%5 as even_groups, i FROM range(0, 10000) t(i);
+
+# TODO: unsupported feature
+# query I
+# SELECT arg_max(even_groups, i, 3) FROM t2;
+# ----
+# [4, 3, 2]
+
+
+# Test limits
+
+statement error
+select min(arg, NULL) from t1;
+
+statement error
+SELECT min(arg, -1) FROM t1;
+
+statement error
+select min(arg, 1000000) from t1;
+
+statement error
+select max(arg, NULL) from t1;
+
+statement error
+SELECT max(arg, -1) FROM t1;
+
+statement error
+select max(arg, 1000000) from t1;
+
+statement error
+select arg_min(arg, val, NULL) from t1;
+
+statement error
+SELECT arg_min(arg, val, -1) FROM t1;
+
+statement error
+select arg_min(arg, val, 1000000) from t1;
+
+statement error
+select arg_max(arg, val, NULL) from t1;
+
+statement error
+SELECT arg_max(arg, val, -1) FROM t1;
+
+statement error
+select arg_max(arg, val, 1000000) from t1;
+
+statement error
+select min_by(arg, val, NULL) from t1;
+
+statement error
+SELECT min_by(arg, val, -1) FROM t1;
+
+statement error
+select min_by(arg, val, 1000000) from t1;
+
+statement error
+select max_by(arg, val, NULL) from t1;
+
+statement error
+SELECT max_by(arg, val, -1) FROM t1;
+
+statement error
+select max_by(arg, val, 1000000) from t1;

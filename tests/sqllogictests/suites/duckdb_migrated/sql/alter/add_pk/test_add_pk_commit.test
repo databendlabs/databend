@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (1, 1)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD PRIMARY KEY (j)
+
+statement ok
+COMMIT
+
+# TODO: result differs
+# statement error
+# INSERT INTO test VALUES (2, 1)

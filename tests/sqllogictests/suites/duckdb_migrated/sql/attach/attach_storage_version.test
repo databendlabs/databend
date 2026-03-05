@@ -1,0 +1,119 @@
+statement ok
+DROP TABLE IF EXISTS default_version.tbl
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
+# ----
+# v1.2.0+
+
+# TODO: unsupported feature
+# statement ok
+# DETACH version_1_2_0
+
+# cannot downgrade storage version
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
+# ----
+# v1.2.0+
+
+# TODO: unsupported feature
+# statement ok
+# DETACH version_1_2_0
+
+# we can also open it without specifying the version at this point
+# the version will be loaded from the file
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
+# ----
+# v1.2.0+
+
+# TODO: unsupported feature
+# statement ok
+# DETACH version_1_2_0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE default_version.tbl(i VARCHAR);
+
+# check the default compat version
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='default_version'
+# ----
+# v1.0.0+
+
+# TODO: unsupported feature
+# statement ok
+# DETACH default_version
+
+# upgrade the database
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='default_version'
+# ----
+# v1.2.0+
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO default_version.tbl VALUES ('abcd'), ('efgh'), ('hello'), ('world'), (NULL);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT default_version
+
+# TODO: unsupported feature
+# statement ok
+# DETACH default_version
+
+# we can attach the database again (without specifying the default)
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='default_version'
+# ----
+# v1.2.0+
+
+# TODO: unsupported feature
+# query I
+# FROM default_version.tbl
+# ----
+# abcd
+# efgh
+# hello
+# world
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DETACH default_version
+
+# we can also attach it by specifying v1.2.0 explicitly
+
+# TODO: unsupported feature
+# query I
+# FROM default_version.tbl
+# ----
+# abcd
+# efgh
+# hello
+# world
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DETACH default_version
+
+# but not by specifying a lower version anymore at this point
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='modified_default_setting'
+# ----
+# v1.2.0+

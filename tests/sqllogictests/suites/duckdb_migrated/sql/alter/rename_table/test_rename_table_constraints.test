@@ -1,0 +1,51 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+# create a table with a check constraint
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(i INTEGER PRIMARY KEY, j INTEGER CHECK(j < 10))
+
+# check primary key constrain
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (999, 4), (1000, 5)
+
+statement error
+INSERT INTO tbl VALUES (999, 4), (1000, 5)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (9999, 0), (10000, 1)
+
+statement error
+INSERT INTO tbl VALUES (777, 10), (888, 10)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl
+# ----
+# 999	4
+# 1000	5
+# 9999	0
+# 10000	1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE tbl RENAME TO new_tbl
+
+# insert two conflicting pairs at the same time
+
+statement error
+INSERT INTO new_tbl VALUES (999, 0), (1000, 1)
+
+statement error
+INSERT INTO new_tbl VALUES (9999, 0), (10000, 1)
+
+statement error
+INSERT INTO new_tbl VALUES (1, 10), (2, 999)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO new_tbl VALUES (66, 6), (55, 5)

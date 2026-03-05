@@ -1,0 +1,115 @@
+statement ok
+DROP VIEW IF EXISTS vw1
+
+statement ok
+DROP TABLE IF EXISTS tbl1
+
+statement ok
+CREATE TABLE tbl1(i INTEGER)
+
+statement ok
+INSERT INTO tbl1 VALUES (999), (100)
+
+statement ok
+CREATE VIEW vw1 AS SELECT * FROM tbl1
+
+# rename chain
+# con2 starts a transaction now
+
+statement ok
+BEGIN TRANSACTION
+
+# rename in con1, con2 should still see "vw1"
+
+# TODO: unsupported feature
+# statement ok
+# ALTER VIEW vw1 RENAME TO vw2
+
+# con3 starts a transaction now
+
+statement ok
+BEGIN TRANSACTION
+
+# rename in con1, con3 should still see "vw2"
+
+# TODO: unsupported feature
+# statement ok
+# ALTER VIEW vw2 RENAME TO vw3
+
+# con4 starts a transaction now
+
+statement ok
+BEGIN TRANSACTION
+
+# rename in con1, con4 should still see "vw3"
+
+# TODO: unsupported feature
+# statement ok
+# ALTER VIEW vw3 RENAME TO vw4
+
+# con2 sees ONLY vw1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vw1
+# ----
+# 999
+# 100
+
+# TODO: result differs
+# statement error
+# SELECT * FROM vw2
+
+statement error
+SELECT * FROM vw3
+
+statement error
+SELECT * FROM vw4
+
+statement error
+SELECT * FROM vw1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vw2
+# ----
+# 999
+# 100
+
+statement error
+SELECT * FROM vw3
+
+statement error
+SELECT * FROM vw4
+
+statement error
+SELECT * FROM vw1
+
+statement error
+SELECT * FROM vw2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vw3
+# ----
+# 999
+# 100
+
+statement error
+SELECT * FROM vw4
+
+statement error
+SELECT * FROM vw1
+
+statement error
+SELECT * FROM vw2
+
+statement error
+SELECT * FROM vw3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vw4
+# ----
+# 999
+# 100

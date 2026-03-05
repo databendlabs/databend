@@ -1,0 +1,16 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+# cannot rename a column that does not exist
+
+statement error
+ALTER TABLE test RENAME COLUMN blablabla TO k
+
+statement error
+ALTER TABLE test RENAME COLUMN i TO j
+
+statement ok
+SELECT i, j FROM test

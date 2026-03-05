@@ -1,0 +1,183 @@
+statement ok
+DROP TABLE IF EXISTS flights
+
+statement ok
+CREATE TABLE flights(
+	"year" INTEGER,
+	"month" INTEGER,
+	"day" INTEGER,
+	dep_time INTEGER,
+	sched_dep_time INTEGER,
+	dep_delay DOUBLE,
+	arr_time INTEGER,
+	sched_arr_time INTEGER,
+	arr_delay DOUBLE,
+	carrier VARCHAR,
+	flight INTEGER,
+	tailnum VARCHAR,
+	origin VARCHAR,
+	dest VARCHAR,
+	air_time DOUBLE,
+	distance DOUBLE,
+	"hour" DOUBLE,
+	"minute" DOUBLE,
+	time_hour TIMESTAMP);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
+# FROM "flights"
+# GROUP BY "dest"
+
+# TODO: unknown function
+# statement ok
+# SELECT "dest", percentile_cont(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
+# FROM "flights"
+# GROUP BY "dest"
+
+# TODO: unknown function
+# statement ok
+# SELECT "dest", percentile_cont([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_delay") AS "iqr_delay"
+# FROM "flights"
+# GROUP BY "dest"
+
+# TODO: unknown function
+# statement ok
+# SELECT "dest", percentile_disc(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
+# FROM "flights"
+# GROUP BY "dest"
+
+# TODO: unknown function
+# statement ok
+# SELECT "dest", percentile_disc([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_delay") AS "iqr_delay"
+# FROM "flights"
+# GROUP BY "dest"
+
+# ORDER BY DESC
+
+# TODO: unknown function
+# query I
+# select percentile_disc(0.25) within group(order by i desc) from generate_series(0,100) tbl(i);
+# ----
+# 75
+
+# TODO: unknown function
+# query I
+# select percentile_disc([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
+# ----
+# [75, 50, 25]
+
+# TODO: unknown function
+# query I
+# select percentile_cont(0.25) within group(order by i desc) from generate_series(0,100) tbl(i);
+# ----
+# 75.000000
+
+# TODO: unknown function
+# query I
+# select percentile_cont([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
+# ----
+# [75.0, 50.0, 25.0]
+
+# DESC boundary condition
+
+# TODO: unsupported feature
+# query I
+# SELECT percentile_disc(.5) WITHIN GROUP (order by col desc) 
+# FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+# ----
+# 2900
+
+# TODO: unsupported feature
+# query I
+# SELECT percentile_disc([.25, .5, .75]) WITHIN GROUP (order by col desc) 
+# FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+# ----
+# [3100, 2900, 2600]
+
+# MODE is order-sensitive
+
+# TODO: unsupported feature
+# query I
+# SELECT MODE() WITHIN GROUP (ORDER BY order_occurrences DESC) FROM (
+# VALUES
+# 	(500, 1),
+# 	(1000, 2),
+# 	(800, 3),
+# 	(1000, 4),
+# 	(500, 5),
+# 	(550, 6),
+# 	(400, 7),
+# 	(200, 8),
+# 	(10, 9)
+# ) items_per_order(order_occurrences, item_count);
+# ----
+# 1000
+
+#
+# Error checking
+#
+
+# Cannot use multiple ORDER BY clauses with WITHIN GROUP
+
+statement error
+SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay", "arr_time") AS "median_delay"
+FROM "flights"
+GROUP BY "dest"
+
+statement error
+SELECT "dest", duck(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "duck_delay"
+FROM "flights"
+GROUP BY "dest"
+
+statement error
+select percentile_disc() within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+select percentile_disc(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+select percentile_cont() within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+select percentile_cont(0.25, 0.5) within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+SELECT percentile_disc(CAST('NaN' AS REAL)) WITHIN GROUP (ORDER BY 1);
+
+statement error
+SELECT percentile_disc([]) WITHIN GROUP (ORDER BY LAST);
+
+statement error
+select mode(0.25) within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+select percentile_disc('duck') within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+select percentile_cont('duck') within group(order by i) from generate_series(0,100) tbl(i);
+
+statement error
+SELECT percentile_disc(sum(1)) WITHIN GROUP (ORDER BY 1 DESC);
+
+statement error
+SELECT percentile_disc(strftime(DATE '1-11-25',NULL)) WITHIN GROUP (ORDER BY 1 DESC);
+
+statement error
+SELECT percentile_cont(CASE 1 WHEN 2 THEN 3 END) WITHIN GROUP (ORDER BY 1 DESC);
+
+statement error
+SELECT percentile_disc(-.5) WITHIN GROUP (order by col ASC) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+
+statement error
+SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col ASC) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+
+statement error
+SELECT percentile_disc(-.5) WITHIN GROUP (order by col DESC) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+
+statement error
+SELECT percentile_disc([-.25, .5, .75]) WITHIN GROUP (order by col DESC) 
+FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);

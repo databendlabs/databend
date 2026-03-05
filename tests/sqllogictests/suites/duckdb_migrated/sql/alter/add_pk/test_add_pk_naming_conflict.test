@@ -1,0 +1,36 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS test
+
+# There is also a catalog dependency conflict,
+# which prevents altering a table with a dependency (index) on it.
+statement ok
+CREATE TABLE tbl (i INTEGER);
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX PRIMARY_tbl_i ON tbl(i);
+
+statement error
+ALTER TABLE tbl ADD PRIMARY KEY (i);
+
+statement error
+ALTER TABLE tbl ADD PRIMARY KEY (i);
+
+statement ok
+CREATE TABLE test (i INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD PRIMARY KEY (i);
+
+statement error
+CREATE INDEX PRIMARY_test_i ON test(i);

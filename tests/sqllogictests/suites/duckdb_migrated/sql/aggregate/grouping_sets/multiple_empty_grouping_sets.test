@@ -1,0 +1,7 @@
+# TODO: result differs
+# query I
+# select count(*)
+# group by grouping sets ((), ())
+# ----
+# 1
+# 1

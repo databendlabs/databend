@@ -1,0 +1,9 @@
+# workaround - alternative verify always forces the latest storage
+# We need httpfs to do encrypted writes
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted_aws

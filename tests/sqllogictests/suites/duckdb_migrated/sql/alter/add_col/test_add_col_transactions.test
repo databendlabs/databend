@@ -1,0 +1,126 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Only one pending table alter can be active at a time
+
+statement ok
+BEGIN TRANSACTION
+
+# con adds a column to test
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+# con2 cannot add a new column now!
+
+# TODO: result differs
+# statement error
+# ALTER TABLE test ADD COLUMN l INTEGER
+
+statement ok
+COMMIT
+
+# after a commit, con2 can add a new column again
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN l INTEGER
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Can only append to newest table
+
+statement ok
+BEGIN TRANSACTION
+
+# con adds a column to test
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+# con2 cannot append now!
+
+# TODO: result differs
+# statement error
+# INSERT INTO test (i, j) VALUES (3, 3)
+
+# TODO: result differs
+# statement error
+# DELETE FROM test WHERE i=1
+
+query III
+SELECT * FROM test
+----
+1 1 NULL
+2 2 NULL
+
+query III
+SELECT * FROM test
+----
+1 1 NULL
+2 2 NULL
+
+# cannot update an altered table
+
+# TODO: result differs
+# statement error
+# UPDATE test SET j=100
+
+query III
+SELECT * FROM test
+----
+1 1 NULL
+2 2 NULL
+
+statement ok
+UPDATE test SET j=100
+
+statement ok
+COMMIT
+
+query III
+SELECT * FROM test
+----
+1 100 NULL
+2 100 NULL
+
+statement ok
+DROP TABLE test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# Alter table while other transaction still has pending appends
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (3, 3)
+
+# now con adds a column
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+# cannot commit con2! conflict on append
+
+# TODO: result differs
+# statement error
+# COMMIT

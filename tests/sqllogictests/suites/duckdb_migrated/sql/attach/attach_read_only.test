@@ -1,0 +1,81 @@
+statement ok
+DROP TABLE IF EXISTS db1.integers
+
+statement ok
+DROP TABLE IF EXISTS db1.test
+
+statement ok
+DROP TABLE IF EXISTS db2.integers
+
+statement ok
+DROP TABLE IF EXISTS test
+
+statement error
+ATTACH ':memory:' AS db1 (READONLY 1)
+
+statement error
+ATTACH ':memory:' AS db1 (BLABLABLA 1)
+
+statement ok
+CREATE TABLE db1.integers AS SELECT * FROM range(0, 10) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db1
+
+# now attach in read only mode
+
+query I
+SELECT SUM(i) FROM db1.integers
+----
+45
+
+# database is opened in read-only mode - cannot create a table
+
+# TODO: result differs
+# statement error
+# CREATE TABLE db1.test AS SELECT * FROM range(0, 10) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.integers AS SELECT * FROM db1.integers
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM db2.integers
+# ----
+# 45
+
+# attach main database in read only mode
+# load the DB from disk
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM integers
+# ----
+# 45
+
+# cannot create a table - database is opened in read-only mode
+
+# TODO: result differs
+# statement error
+# CREATE TABLE test AS SELECT * FROM range(0, 10) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db1 (READ_WRITE);
+
+# we can write tables to that database
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.test AS SELECT * FROM integers
+
+# but not to the main (read-only) database
+
+statement error
+CREATE TABLE test AS SELECT * FROM db1.test

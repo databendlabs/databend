@@ -1,0 +1,28 @@
+statement ok
+DROP TABLE IF EXISTS wal_writes.tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE wal_writes.tbl AS SELECT range AS id, 0 AS v FROM range(5_000);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH wal_writes;
+
+# Ensure that we have a WAL.
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO wal_writes.tbl VALUES (42, 42);
+
+# CHECKPOINT to delete the WAL.
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT wal_writes;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE wal_writes.tbl SET v = id;
+
+# Verify no WAL creation.

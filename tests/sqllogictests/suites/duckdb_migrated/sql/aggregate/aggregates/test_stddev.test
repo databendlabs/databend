@@ -1,0 +1,164 @@
+statement ok
+DROP TABLE IF EXISTS stddev_test
+
+statement ok
+DROP TABLE IF EXISTS stddev_test_alias
+
+statement ok
+create table stddev_test(val integer, grp integer)
+
+statement ok
+insert into stddev_test values (42, 1), (43, 1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)
+
+query R
+SELECT stddev_samp(1)
+----
+NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT var_samp(1)
+# ----
+# NULL
+
+# stddev_samp
+
+query R
+select round(stddev_samp(val), 1) from stddev_test
+----
+478.8
+
+query R
+select round(stddev_samp(val), 1) from stddev_test  where val is not null
+----
+478.8
+
+query IIRI
+select grp, sum(val), round(stddev_samp(val), 1), min(val) from stddev_test group by grp order by grp
+----
+1 85 0.7 42
+2 1042 677.4 42
+3 NULL NULL NULL
+
+query IIRI
+select grp, sum(val), round(stddev_samp(val), 1), min(val) from stddev_test where val is not null group by grp order by grp
+----
+1 85 0.7 42
+2 1042 677.4 42
+
+# stddev_pop
+
+query R
+select round(stddev_pop(val), 1) from stddev_test
+----
+414.7
+
+query R
+select round(stddev_pop(val), 1) from stddev_test  where val is not null
+----
+414.7
+
+query IIRI
+select grp, sum(val), round(stddev_pop(val), 1), min(val) from stddev_test group by grp order by grp
+----
+1 85 0.5 42
+2 1042 479.0 42
+3 NULL NaN NULL
+
+query IIRI
+select grp, sum(val), round(stddev_pop(val), 1), min(val) from stddev_test where val is not null group by grp order by grp
+----
+1 85 0.5 42
+2 1042 479.0 42
+
+# var_samp
+
+# TODO: unsupported feature
+# query R
+# select round(var_samp(val), 1) from stddev_test
+# ----
+# 229281.600000
+
+# TODO: unknown function
+# query R
+# select round(variance(val), 1) from stddev_test
+# ----
+# 229281.600000
+
+# TODO: unsupported feature
+# query R
+# select round(var_samp(val), 1) from stddev_test  where val is not null
+# ----
+# 229281.600000
+
+# TODO: unsupported feature
+# query IRRI
+# select grp, sum(val), round(var_samp(val), 1), min(val) from stddev_test group by grp order by grp
+# ----
+# 1	85.000000	0.500000	42
+# 2	1042.000000	458882.000000	42
+# 3	NULL	NULL	NULL
+
+# TODO: unsupported feature
+# query IRRI
+# select grp, sum(val), round(var_samp(val), 1), min(val) from stddev_test where val is not null group by grp order by grp
+# ----
+# 1	85.000000	0.500000	42
+# 2	1042.000000	458882.000000	42
+
+# var_pop
+
+# TODO: unsupported feature
+# query R
+# select round(var_pop(val), 1) from stddev_test
+# ----
+# 171961.200000
+
+# TODO: unsupported feature
+# query R
+# select round(var_pop(val), 1) from stddev_test  where val is not null
+# ----
+# 171961.200000
+
+# TODO: unsupported feature
+# query IRRI
+# select grp, sum(val), round(var_pop(val), 2), min(val) from stddev_test group by grp order by grp
+# ----
+# 1	85.000000	0.250000	42
+# 2	1042.000000	229441.000000	42
+# 3	NULL	NULL	NULL
+
+# TODO: unsupported feature
+# query IRRI
+# select grp, sum(val), round(var_pop(val), 2), min(val) from stddev_test where val is not null group by grp order by grp
+# ----
+# 1	85.000000	0.250000	42
+# 2	1042.000000	229441.000000	42
+
+statement ok
+create table stddev_test_alias(val integer, grp integer)
+
+statement ok
+insert into stddev_test_alias values (42, 1), (43, 1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)
+
+# stddev_samp
+
+query R
+select round(stddev(val), 1) from stddev_test_alias
+----
+478.8
+
+query R
+select stddev(0) from range(0, 10)
+----
+0.0
+
+# TODO: result differs
+# statement error
+# select stddev(a) from (values (1e301), (-1e301)) tbl(a)
+
+statement error
+select var_samp(a) from (values (1e301), (-1e301)) tbl(a)
+
+statement error
+select var_pop(a) from (values (1e301), (-1e301)) tbl(a)

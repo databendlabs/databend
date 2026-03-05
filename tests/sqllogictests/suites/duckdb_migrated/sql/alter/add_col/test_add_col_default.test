@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE test ADD COLUMN l INTEGER DEFAULT 3
+
+query III
+SELECT i, j, l FROM test
+----
+1	1	3
+2	2	3

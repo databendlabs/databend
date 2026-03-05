@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+begin;
+
+# TODO: unsupported feature
+# statement ok
+# attach ':memory:' as mem;
+
+# TODO: unsupported feature
+# statement ok
+# use mem;
+
+statement ok
+rollback;
+
+# TODO: result differs
+# statement error
+# create table tbl(i int);

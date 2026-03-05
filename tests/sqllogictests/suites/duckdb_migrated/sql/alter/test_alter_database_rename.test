@@ -1,0 +1,46 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_db.sample
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS test_db;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_db.sample AS SELECT i FROM range(0, 100) t(i);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test_db.sample
+# ----
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# ALTER DATABASE test_db RENAME TO renamed_db;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM renamed_db.sample
+# ----
+# 100
+
+statement error
+ALTER DATABASE non_existent RENAME TO something_else;
+
+statement ok
+ALTER DATABASE IF EXISTS non_existent RENAME TO something_else;
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS another_db;
+
+statement error
+ALTER DATABASE another_db RENAME TO renamed_db;
+
+statement error
+ALTER DATABSE renamed_db RENAME TO system;
+
+statement error
+ALTER DATABSE renamed_db RENAME TO temp;

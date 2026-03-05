@@ -1,0 +1,576 @@
+statement ok
+DROP VIEW IF EXISTS intlists
+
+statement ok
+DROP VIEW IF EXISTS longlists
+
+statement ok
+DROP VIEW IF EXISTS r2l3r4l5i4i2l3v
+
+statement ok
+DROP VIEW IF EXISTS strlists
+
+statement ok
+DROP VIEW IF EXISTS struct_lint_lstr
+
+statement ok
+DROP VIEW IF EXISTS structs
+
+statement ok
+DROP TABLE IF EXISTS intlists
+
+statement ok
+DROP TABLE IF EXISTS longlists
+
+statement ok
+DROP TABLE IF EXISTS r2l3r4l5i4i2l3v
+
+statement ok
+DROP TABLE IF EXISTS strlists
+
+statement ok
+DROP TABLE IF EXISTS struct_lint_lstr
+
+statement ok
+DROP TABLE IF EXISTS structs
+
+statement ok
+CREATE VIEW intlists AS SELECT * FROM (VALUES
+	(21, [1]),
+	(22, [NULL]),
+	(23, []),
+	(24, [2, 3]),
+	(NULL::INTEGER, [13]),
+	(32, [NULL]),
+	(34, [2, 3])
+	) lv(v, k);
+
+# Single hash
+
+query II
+SELECT k, SUM(v) FROM intlists GROUP BY k ORDER BY 2
+----
+[1] 21
+[] 23
+[NULL] 54
+[2,3] 58
+[13] NULL
+
+# Combined hash
+
+query III
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM intlists GROUP BY k, c ORDER BY 2, 3
+----
+[1] 21 21
+[] 21 23
+[NULL] 21 54
+[2,3] 21 58
+[13] NULL NULL
+
+# Key is LIST<VARCHAR>
+
+statement ok
+CREATE VIEW strlists AS SELECT * FROM (VALUES
+	(21, ['a']),
+	(22, [NULL]),
+	(23, []),
+	(24, ['Branta Canadensis', 'c']),
+	(NULL::INTEGER, ['Somateria mollissima']),
+	(32, [NULL]),
+	(34, ['Branta Canadensis', 'c'])
+	) lv(v, k);
+
+# Single hash
+
+query II
+SELECT k, SUM(v) FROM strlists GROUP BY k ORDER BY 2
+----
+["a"] 21
+[] 23
+[NULL] 54
+["Branta Canadensis","c"] 58
+["Somateria mollissima"] NULL
+
+# Combined hash
+
+query III
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM strlists GROUP BY k, c ORDER BY 2, 3
+----
+["a"] 21 21
+[] 21 23
+[NULL] 21 54
+["Branta Canadensis","c"] 21 58
+["Somateria mollissima"] NULL NULL
+
+# Key is STRUCT<x: INTEGER, y: VARCHAR>
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW structs AS SELECT * FROM (VALUES
+# 	(21, {'x': 1, 'y': 'a'}),
+# 	(22, {'x': NULL, 'y': NULL}),
+# 	(23, {'x': 0, 'y': ''}),
+# 	(24, {'x': 2, 'y': 'c'}),
+# 	(NULL::INTEGER, {'x': 13, 'y': 'Somateria mollissima'}),
+# 	(32, {'x': NULL, 'y': NULL}),
+# 	(34, {'x': 2, 'y': 'c'})
+# 	) sv(v, k);
+
+# Single hash
+
+# TODO: unsupported feature
+# query II
+# SELECT k, SUM(v) FROM structs GROUP BY k ORDER BY 2
+# ----
+# {'x': 13, 'y': Somateria mollissima}	NULL
+# {'x': 1, 'y': a}	21
+# {'x': 0, 'y': ''}	23
+# {'x': NULL, 'y': NULL}	54
+# {'x': 2, 'y': c}	58
+
+# Combined hash
+
+# TODO: unsupported feature
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM structs GROUP BY k, c ORDER BY 2, 3
+# ----
+# {'x': 13, 'y': Somateria mollissima}	21	NULL
+# {'x': 1, 'y': a}	21	21
+# {'x': 0, 'y': ''}	21	23
+# {'x': NULL, 'y': NULL}	21	54
+# {'x': 2, 'y': c}	21	58
+
+# Key is STRUCT<x: LIST<INTEGER>, y: LIST<VARCHAR> >
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW struct_lint_lstr AS SELECT * FROM (VALUES
+# 	(21, {'x': [1], 'y': ['a']}),
+# 	(22, {'x': [NULL], 'y': [NULL]}),
+# 	(23, {'x': [], 'y': []}),
+# 	(24, {'x': [2, 3], 'y': ['Branta Canadensis', 'c']}),
+# 	(NULL::INTEGER, {'x': [13], 'y': ['Somateria mollissima']}),
+# 	(32, {'x': [NULL], 'y': [NULL]}),
+# 	(34, {'x': [2, 3], 'y': ['Branta Canadensis', 'c']})
+# 	) sv(v, k);
+
+# Single hash
+
+# TODO: unsupported feature
+# query II
+# SELECT k, SUM(v) FROM struct_lint_lstr
+# GROUP BY k
+# ORDER BY 2
+# ----
+# {'x': [13], 'y': [Somateria mollissima]}	NULL
+# {'x': [1], 'y': [a]}	21
+# {'x': [], 'y': []}	23
+# {'x': [NULL], 'y': [NULL]}	54
+# {'x': [2, 3], 'y': [Branta Canadensis, c]}	58
+
+# Combined hash
+
+# TODO: unsupported feature
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM struct_lint_lstr
+# GROUP BY k, c
+# ORDER BY 2, 3
+# ----
+# {'x': [13], 'y': [Somateria mollissima]}	21	NULL
+# {'x': [1], 'y': [a]}	21	21
+# {'x': [], 'y': []}	21	23
+# {'x': [NULL], 'y': [NULL]}	21	54
+# {'x': [2, 3], 'y': [Branta Canadensis, c]}	21	58
+
+# Key is STRUCT<x: LIST<STRUCT<l4: LIST<INT>, i4 INT> >, y: LIST<VARCHAR> >.
+
+# TODO: unknown function
+# statement ok
+# CREATE VIEW r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
+# 	(21, {'x': [{'l4': [51], 'i4': 41}], 'y': ['a']}),
+# 	(22, {'x': [NULL], 'y': [NULL]}),
+# 	(23, {'x': [], 'y': []}),
+# 	(24, {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': ['Branta Canadensis', 'c']}),
+# 	(NULL::INTEGER, {'x': [{'l4': [62], 'i4': 47}], 'y': ['Somateria mollissima']}),
+# 	(32, {'x': [NULL], 'y': [NULL]}),
+# 	(34, {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': ['Branta Canadensis', 'c']})
+# 	) sv(v, k);
+
+# Single hash
+
+# TODO: unsupported feature
+# query II
+# SELECT k, SUM(v) FROM r2l3r4l5i4i2l3v
+# GROUP BY k
+# ORDER BY 2
+# ----
+# {'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}	NULL
+# {'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	21
+# {'x': [], 'y': []}	23
+# {'x': [NULL], 'y': [NULL]}	54
+# {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	58
+
+# Combined hash
+
+# TODO: unsupported feature
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM r2l3r4l5i4i2l3v
+# GROUP BY k, c
+# ORDER BY 2, 3
+# ----
+# {'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}	21	NULL
+# {'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	21	21
+# {'x': [], 'y': []}	21	23
+# {'x': [NULL], 'y': [NULL]}	21	54
+# {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	21	58
+
+# Key is LIST<INTEGER[2000]>
+
+statement ok
+CREATE VIEW longlists AS
+SELECT *
+FROM ((VALUES
+	(21, [1]),
+	(22, [NULL]),
+	(23, []),
+	(NULL::INTEGER, [13]),
+	(32, [NULL])
+	)
+UNION ALL
+	select 24 as i, list(r) as pk from range(0, 2000) tbl(r)
+UNION ALL
+	select 34 as i, list(r) as pk from range(0, 2000) tbl(r)
+) sv(v, k);
+
+# mode output_hash
+
+# Single hash
+
+# TODO: result differs
+# query II
+# SELECT k, SUM(v) FROM longlists
+# GROUP BY k
+# ORDER BY 2
+# ----
+# TODO: hash result
+
+# Combined hash
+
+# TODO: result differs
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM longlists
+# GROUP BY k, c
+# ORDER BY 2, 3
+# ----
+# TODO: hash result
+
+# Multiple constant keys
+
+# TODO: result differs
+# query II
+# select [1,2,3] a, count(*)
+# from range(0, 5) tbl(b)
+# group by a;
+# ----
+# [1, 2, 3]	5
+
+# TODO: result differs
+# query II
+# select {'x': 1, 'y': 2, 'z': 3} a, count(*)
+# from range(0, 5) tbl(b)
+# group by a;
+# ----
+# {'x': 1, 'y': 2, 'z': 3}	5
+
+statement ok
+DROP VIEW intlists;
+
+statement ok
+DROP VIEW strlists;
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW structs;
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW struct_lint_lstr;
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW r2l3r4l5i4i2l3v;
+
+statement ok
+DROP VIEW longlists;
+
+
+# Key is LIST<INTEGER>
+
+statement ok
+CREATE TABLE intlists AS SELECT * FROM (VALUES
+	(21, [1]),
+	(22, [NULL]),
+	(23, []),
+	(24, [2, 3]),
+	(NULL::INTEGER, [13]),
+	(32, [NULL]),
+	(34, [2, 3])
+	) lv(v, k);
+
+# Single hash
+
+query II
+SELECT k, SUM(v) FROM intlists GROUP BY k ORDER BY 2
+----
+[1] 21
+[] 23
+[NULL] 54
+[2,3] 58
+[13] NULL
+
+# Combined hash
+
+query III
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM intlists GROUP BY k, c ORDER BY 2, 3
+----
+[1] 21 21
+[] 21 23
+[NULL] 21 54
+[2,3] 21 58
+[13] NULL NULL
+
+# Key is LIST<VARCHAR>
+
+statement ok
+CREATE TABLE strlists AS SELECT * FROM (VALUES
+	(21, ['a']),
+	(22, [NULL]),
+	(23, []),
+	(24, ['Branta Canadensis', 'c']),
+	(NULL::INTEGER, ['Somateria mollissima']),
+	(32, [NULL]),
+	(34, ['Branta Canadensis', 'c'])
+	) lv(v, k);
+
+# Single hash
+
+query II
+SELECT k, SUM(v) FROM strlists GROUP BY k ORDER BY 2
+----
+["a"] 21
+[] 23
+[NULL] 54
+["Branta Canadensis","c"] 58
+["Somateria mollissima"] NULL
+
+# Combined hash
+
+query III
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM strlists GROUP BY k, c ORDER BY 2, 3
+----
+["a"] 21 21
+[] 21 23
+[NULL] 21 54
+["Branta Canadensis","c"] 21 58
+["Somateria mollissima"] NULL NULL
+
+# Key is STRUCT<x: INTEGER, y: VARCHAR>
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT * FROM (VALUES
+# 	(21, {'x': 1, 'y': 'a'}),
+# 	(22, {'x': NULL, 'y': NULL}),
+# 	(23, {'x': 0, 'y': ''}),
+# 	(24, {'x': 2, 'y': 'c'}),
+# 	(NULL::INTEGER, {'x': 13, 'y': 'Somateria mollissima'}),
+# 	(32, {'x': NULL, 'y': NULL}),
+# 	(34, {'x': 2, 'y': 'c'})
+# 	) sv(v, k);
+
+# Single hash
+
+# TODO: unsupported feature
+# query II
+# SELECT k, SUM(v) FROM structs GROUP BY k ORDER BY 2
+# ----
+# {'x': 13, 'y': Somateria mollissima}	NULL
+# {'x': 1, 'y': a}	21
+# {'x': 0, 'y': ''}	23
+# {'x': NULL, 'y': NULL}	54
+# {'x': 2, 'y': c}	58
+
+# Combined hash
+
+# TODO: unsupported feature
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM structs GROUP BY k, c ORDER BY 2, 3
+# ----
+# {'x': 13, 'y': Somateria mollissima}	21	NULL
+# {'x': 1, 'y': a}	21	21
+# {'x': 0, 'y': ''}	21	23
+# {'x': NULL, 'y': NULL}	21	54
+# {'x': 2, 'y': c}	21	58
+
+# Key is STRUCT<x: LIST<INTEGER>, y: LIST<VARCHAR> >
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE struct_lint_lstr AS SELECT * FROM (VALUES
+# 	(21, {'x': [1], 'y': ['a']}),
+# 	(22, {'x': [NULL], 'y': [NULL]}),
+# 	(23, {'x': [], 'y': []}),
+# 	(24, {'x': [2, 3], 'y': ['Branta Canadensis', 'c']}),
+# 	(NULL::INTEGER, {'x': [13], 'y': ['Somateria mollissima']}),
+# 	(32, {'x': [NULL], 'y': [NULL]}),
+# 	(34, {'x': [2, 3], 'y': ['Branta Canadensis', 'c']})
+# 	) sv(v, k);
+
+# Single hash
+
+# TODO: unsupported feature
+# query II
+# SELECT k, SUM(v) FROM struct_lint_lstr
+# GROUP BY k
+# ORDER BY 2
+# ----
+# {'x': [13], 'y': [Somateria mollissima]}	NULL
+# {'x': [1], 'y': [a]}	21
+# {'x': [], 'y': []}	23
+# {'x': [NULL], 'y': [NULL]}	54
+# {'x': [2, 3], 'y': [Branta Canadensis, c]}	58
+
+# Combined hash
+
+# TODO: unsupported feature
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM struct_lint_lstr
+# GROUP BY k, c
+# ORDER BY 2, 3
+# ----
+# {'x': [13], 'y': [Somateria mollissima]}	21	NULL
+# {'x': [1], 'y': [a]}	21	21
+# {'x': [], 'y': []}	21	23
+# {'x': [NULL], 'y': [NULL]}	21	54
+# {'x': [2, 3], 'y': [Branta Canadensis, c]}	21	58
+
+# Key is STRUCT<x: LIST<STRUCT<l4: LIST<INT>, i4 INT> >, y: LIST<VARCHAR> >.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
+# 	(21, {'x': [{'l4': [51], 'i4': 41}], 'y': ['a']}),
+# 	(22, {'x': [NULL], 'y': [NULL]}),
+# 	(23, {'x': [], 'y': []}),
+# 	(24, {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': ['Branta Canadensis', 'c']}),
+# 	(NULL::INTEGER, {'x': [{'l4': [62], 'i4': 47}], 'y': ['Somateria mollissima']}),
+# 	(32, {'x': [NULL], 'y': [NULL]}),
+# 	(34, {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': ['Branta Canadensis', 'c']})
+# 	) sv(v, k);
+
+# Single hash
+
+# TODO: unsupported feature
+# query II
+# SELECT k, SUM(v) FROM r2l3r4l5i4i2l3v
+# GROUP BY k
+# ORDER BY 2
+# ----
+# {'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}	NULL
+# {'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	21
+# {'x': [], 'y': []}	23
+# {'x': [NULL], 'y': [NULL]}	54
+# {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	58
+
+# Combined hash
+
+# TODO: unsupported feature
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM r2l3r4l5i4i2l3v
+# GROUP BY k, c
+# ORDER BY 2, 3
+# ----
+# {'x': [{'l4': [62], 'i4': 47}], 'y': [Somateria mollissima]}	21	NULL
+# {'x': [{'l4': [51], 'i4': 41}], 'y': [a]}	21	21
+# {'x': [], 'y': []}	21	23
+# {'x': [NULL], 'y': [NULL]}	21	54
+# {'x': [{'l4': [52, 53], 'i4': 42}, {'l4': [54, 55], 'i4': 43}], 'y': [Branta Canadensis, c]}	21	58
+
+# Key is LIST<INTEGER[2000]>
+
+statement ok
+CREATE TABLE longlists AS
+SELECT *
+FROM ((VALUES
+	(21, [1]),
+	(22, [NULL]),
+	(23, []),
+	(NULL::INTEGER, [13]),
+	(32, [NULL])
+	)
+UNION ALL
+	select 24 as i, list(r) as pk from range(0, 2000) tbl(r)
+UNION ALL
+	select 34 as i, list(r) as pk from range(0, 2000) tbl(r)
+) sv(v, k);
+
+# mode output_hash
+
+# Single hash
+
+# TODO: result differs
+# query II
+# SELECT k, SUM(v) FROM longlists
+# GROUP BY k
+# ORDER BY 2
+# ----
+# TODO: hash result
+
+# Combined hash
+
+# TODO: result differs
+# query III
+# SELECT k, LEAST(v, 21) as c, SUM(v) FROM longlists
+# GROUP BY k, c
+# ORDER BY 2, 3
+# ----
+# TODO: hash result
+
+# Multiple constant keys
+
+# TODO: result differs
+# query II
+# select [1,2,3] a, count(*)
+# from range(0, 5) tbl(b)
+# group by a;
+# ----
+# [1, 2, 3]	5
+
+# TODO: result differs
+# query II
+# select {'x': 1, 'y': 2, 'z': 3} a, count(*)
+# from range(0, 5) tbl(b)
+# group by a;
+# ----
+# {'x': 1, 'y': 2, 'z': 3}	5
+
+statement ok
+DROP TABLE intlists;
+
+statement ok
+DROP TABLE strlists;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE struct_lint_lstr;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE r2l3r4l5i4i2l3v;
+
+statement ok
+DROP TABLE longlists;

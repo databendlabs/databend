@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS system_db.integers
+
+statement ok
+DROP TABLE IF EXISTS temp_db.integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE temp_db.integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH temp_db;
+
+# attach a new database called temp
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE system_db.integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH system_db;
+
+# explicitly selecting these aliases leads to an error
+
+statement error
+ATTACH DATABASE ':memory:' AS temp;
+
+statement error
+ATTACH DATABASE ':memory:' AS main;
+
+statement error
+ATTACH DATABASE ':memory:' AS system;

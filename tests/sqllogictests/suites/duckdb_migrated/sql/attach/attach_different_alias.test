@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS alias1.tbl1
+
+# TODO: unsupported feature
+# statement ok
+# create table alias1.tbl1 as select 1 as a;
+
+# TODO: unsupported feature
+# query I
+# FROM alias1.tbl1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DETACH alias1
+
+# TODO: unsupported feature
+# query I
+# FROM alias2.tbl1
+# ----
+# 1

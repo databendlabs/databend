@@ -1,0 +1,31 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(i INTEGER PRIMARY KEY, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1, 1), (2, 2)
+
+# cannot drop primary key column
+
+statement error
+ALTER TABLE test DROP COLUMN i
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN j
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (3)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 1
+# 2
+# 3

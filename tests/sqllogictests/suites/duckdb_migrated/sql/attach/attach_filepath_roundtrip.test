@@ -1,0 +1,52 @@
+# use a concurrent loop to attach many databases
+# TODO: unsupported feature
+# query I
+# SELECT database_name FROM duckdb_databases() WHERE database_name = 'concurrent';
+# ----
+# concurrent
+
+# TODO: unsupported feature
+# statement ok
+# DETACH concurrent;
+
+# roundtrip
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db1;
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION;
+
+# attach files in con1
+
+# TODO: unsupported feature
+# statement ok
+# DETACH con2_rollback_detach;
+
+# detach is instant - so we can attach
+
+# TODO: unsupported feature
+# statement ok
+# DETACH con2_rollback_detach
+
+# can't attach con1.db file in con2
+
+# TODO: unsupported feature
+# statement ok
+# DETACH con1;
+
+# we still can't attach (need to commit the DETACH)
+
+statement ok
+COMMIT;
+
+statement ok
+ROLLBACK
+
+# now we can ATTACH, as we committed the DETACH

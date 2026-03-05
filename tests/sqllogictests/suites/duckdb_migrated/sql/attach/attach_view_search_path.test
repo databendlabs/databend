@@ -1,0 +1,102 @@
+statement ok
+DROP VIEW IF EXISTS my_view
+
+statement ok
+DROP TABLE IF EXISTS my_tbl
+
+# TODO: unsupported feature
+# statement ok
+# USE view_search_path
+
+statement ok
+CREATE TABLE my_tbl(i INTEGER)
+
+statement ok
+INSERT INTO my_tbl VALUES (42)
+
+statement ok
+CREATE VIEW my_view AS FROM my_tbl
+
+query I
+FROM my_view
+----
+42
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA my_schema
+
+statement ok
+USE my_schema
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE my_tbl(i INTEGER)
+
+statement ok
+INSERT INTO my_tbl VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW my_view AS FROM my_tbl
+
+query I
+FROM my_view
+----
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+84
+
+# TODO: unsupported feature
+# statement ok
+# USE view_search_path_other;
+
+# TODO: unsupported feature
+# query I
+# FROM view_search_path.my_view
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# FROM view_search_path.my_schema.my_view
+# ----
+# 84
+
+# TODO: unsupported feature
+# statement ok
+# DETACH view_search_path
+
+# TODO: unsupported feature
+# query I
+# FROM view_search_path.my_view
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# FROM view_search_path.my_schema.my_view
+# ----
+# 84

@@ -1,0 +1,263 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: result differs
+# statement error
+# INSERT INTO t VALUES(7777, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t VALUES(7, 7)
+
+statement ok
+ROLLBACK
+
+statement ok
+COMMIT
+
+# TODO: result differs
+# query I
+# SELECT i FROM t
+# ----
+# 7
+
+# Scenario #2, tran1 set not null, tran2 failed to commit
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO t VALUES(7777, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+COMMIT
+
+# TODO: result differs
+# statement error
+# COMMIT
+
+# TODO: result differs
+# statement error
+# INSERT INTO t VALUES(7777, NULL)
+
+query I
+SELECT COUNT(*) FROM  t
+----
+1
+
+# Scenario #3, cannot insert if one connection alter column
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: result differs
+# statement error
+# INSERT INTO t VALUES(1, 1)
+
+statement ok
+COMMIT
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) from t
+----
+0
+
+# For following tests:
+# begin t1 and begin t2
+# a1 = alter in t1;
+# c1 = commint t1;
+# i2 = insert in t1;
+# c2 = commit t2
+#
+# Scenario #4, a1+c1+i2+c2
+# i2 failed with following error:
+# Transaction conflict: adding entries to a table that has been altered!
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+COMMIT
+
+# TODO: result differs
+# statement error
+# INSERT INTO t VALUES(1, NULL)
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) from t
+----
+0
+
+# Scenario #5, i2+a1+c1+c2
+# c2 failed with following error
+# Transaction conflict: adding entries to a table that has been altered!
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO t VALUES(1, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+COMMIT
+
+#Failed to commit
+
+# TODO: result differs
+# statement error
+# COMMIT
+
+# TODO: result differs
+# statement error
+# INSERT INTO t VALUES(2, NULL)
+
+query I
+SELECT count(*) from t
+----
+1
+
+# Scenario #6, i2+a1+c2+c1
+# c2 failed with following error
+# Transaction conflict: adding entries to a table that has been altered!
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO t VALUES(1, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+# Failed to commit
+
+# TODO: result differs
+# statement error
+# COMMIT
+
+statement ok
+COMMIT
+
+# Failed to insert null
+
+# TODO: result differs
+# statement error
+# INSERT INTO t VALUES(2, NULL)
+
+query I
+SELECT count(*) from t
+----
+1
+
+# Scenario #7, i2+c2+a1+c1
+# a1 should failed!
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO t VALUES(1, NULL)
+
+statement ok
+COMMIT
+
+statement error
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) from t
+----
+1

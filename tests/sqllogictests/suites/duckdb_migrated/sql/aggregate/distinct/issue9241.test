@@ -1,0 +1,21 @@
+statement ok
+DROP TABLE IF EXISTS foo
+
+statement ok
+create table foo (a int, b int);
+
+statement ok
+insert into foo values (1, 1), (2, 1), (2, 2);
+
+# TODO: unsupported feature
+# query II
+# select * from (select distinct on (a) a, b from foo order by a, b desc) sub;
+# ----
+# 1	1
+# 2	2
+
+# TODO: unsupported feature
+# query II
+# select * from (select distinct on (a) a, b from foo order by a, b desc) sub where b <> 2;
+# ----
+# 1	1

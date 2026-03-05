@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON test(i)
+
+statement error
+ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ALTER i SET DATA TYPE VARCHAR

@@ -1,0 +1,2 @@
+statement error
+ALTER SCHEMA a RENAME TO b;

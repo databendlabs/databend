@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# DETACH default_size;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH default_size;
+
+# We detect the block allocation size in the header.
+
+# TODO: unsupported feature
+# statement ok
+# DETACH dbname;

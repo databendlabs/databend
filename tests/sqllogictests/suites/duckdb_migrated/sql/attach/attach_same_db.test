@@ -1,0 +1,9 @@
+statement ok
+BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db1
+
+statement ok
+COMMIT

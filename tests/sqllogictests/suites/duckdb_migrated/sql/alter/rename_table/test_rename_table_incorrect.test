@@ -1,0 +1,19 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl2
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+CREATE TABLE tbl2(i INTEGER)
+
+# Renaming a non existing table
+
+statement error
+ALTER TABLE non_table RENAME TO tbl
+
+statement error
+ALTER TABLE tbl2 RENAME TO tbl

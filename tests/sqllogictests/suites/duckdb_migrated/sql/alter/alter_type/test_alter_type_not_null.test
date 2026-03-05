@@ -1,0 +1,28 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER NOT NULL, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement error
+INSERT INTO test VALUES (NULL, 4)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('hello', 3)
+
+statement error
+INSERT INTO test VALUES (NULL, 4)
+
+query II
+SELECT * FROM test
+----
+1 1
+2 2

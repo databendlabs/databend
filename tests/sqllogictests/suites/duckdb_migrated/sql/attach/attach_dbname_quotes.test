@@ -1,0 +1,62 @@
+statement ok
+DROP TABLE IF EXISTS "my""db"."my""schema"
+
+statement ok
+DROP TABLE IF EXISTS "my""db".tbl
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' as "my""db";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "my""db".tbl(i int);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO "my""db".tbl VALUES (42)
+
+# use with a table name in quotes
+
+# TODO: unsupported feature
+# statement ok
+# USE "my""db";
+
+query I
+SELECT * FROM tbl
+----
+999
+100
+
+# TODO: unsupported feature
+# statement ok
+# USE attach_quoated_base
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "my""db"."my""schema"
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "my""db"."my""schema".tbl(i int);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO "my""db"."my""schema".tbl VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# USE "my""db"."my""schema"
+
+query I
+SELECT * FROM tbl
+----
+999
+100
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA """"
+
+statement ok
+USE """"

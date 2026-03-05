@@ -1,0 +1,45 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(s STRUCT(i INT, s2 STRUCT(v1 INT, v2 INT)))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (ROW(42, ROW(1, 1))), (ROW(84, ROW(2, 2)))
+
+# add a column to a nested struct
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP s.s2.v1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'i': 42, 's2': {'v2': 1}}
+# {'i': 84, 's2': {'v2': 2}}
+
+# does not exists
+
+statement error
+ALTER TABLE test DROP COLUMN s.s2.v1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN IF EXISTS s.s2.v1
+
+# we can drop the struct in its entirety
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN s.s2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'i': 42}
+# {'i': 84}

@@ -1,0 +1,28 @@
+statement ok
+DROP TABLE IF EXISTS db1.integers
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db1;
+
+statement ok
+CREATE TABLE db1.integers(i INTEGER);
+
+statement ok
+INSERT INTO db1.integers VALUES (42);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION READ ONLY
+
+query I
+FROM db1.integers
+----
+42
+
+# TODO: result differs
+# statement error
+# INSERT INTO db1.integers VALUES (48)
+
+statement ok
+COMMIT

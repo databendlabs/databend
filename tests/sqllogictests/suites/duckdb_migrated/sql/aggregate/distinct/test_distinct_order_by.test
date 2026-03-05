@@ -1,0 +1,56 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+query I
+SELECT DISTINCT i%2 FROM integers ORDER BY 1
+----
+0
+1
+
+# controversial: Postgres fails here with the error "with SELECT DISTINCT columns from ORDER BY must appear in the
+# SELECT clause" but SQLite succeeds
+# we also succeed here, even though it can give unintuitive results
+# this is transformed into SELECT DISTINCT(1) i % 2, i
+
+# TODO: unsupported feature
+# query I
+# SELECT DISTINCT i % 2 FROM integers WHERE i<3 ORDER BY i
+# ----
+# 1
+# 0
+
+# TODO: unsupported feature
+# query II
+# SELECT DISTINCT ON (1) i % 2, i FROM integers WHERE i<3 ORDER BY i
+# ----
+# 1	1
+# 0	2
+
+# binding of DISTINCT with column names
+
+query I
+SELECT DISTINCT integers.i FROM integers ORDER BY i DESC
+----
+3
+2
+1
+
+query I
+SELECT DISTINCT i FROM integers ORDER BY integers.i DESC
+----
+3
+2
+1
+
+query I
+SELECT DISTINCT integers.i FROM integers ORDER BY integers.i DESC
+----
+3
+2
+1

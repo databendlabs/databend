@@ -1,0 +1,56 @@
+statement ok
+DROP TABLE IF EXISTS encrypted.tbl
+
+statement ok
+DROP TABLE IF EXISTS unencrypted.tbl
+
+# workaround - alternative verify always forces the latest storage
+# We need httpfs to do encrypted writes
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE encrypted.tbl AS SELECT * FROM range(0, 10) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(0, 10) t(i);
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM encrypted.tbl
+# ----
+# 45
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM unencrypted.tbl
+# ----
+# 45
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH unencrypted
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM encrypted.tbl
+# ----
+# 45
+
+# TODO: unsupported feature
+# query I
+# SELECT tags FROM duckdb_databases() WHERE database_name LIKE '%encrypted%' ORDER BY database_name;
+# ----
+# {storage_version=v1.5.0+}
+# {storage_version=v1.0.0+}
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH unencrypted

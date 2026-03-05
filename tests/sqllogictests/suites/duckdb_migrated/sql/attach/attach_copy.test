@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS db1.test
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CREATE TABLE db1.test(a INTEGER, b INTEGER, c VARCHAR(10));
+
+# TODO: unsupported feature
+# query I
+# COPY db1.test FROM '{DATA_DIR}/csv/test/test.csv';
+# ----
+# 5000
+
+# TODO: unsupported feature
+# query I
+# COPY db1.main.test FROM '{DATA_DIR}/csv/test/test.csv';
+# ----
+# 5000
+
+# TODO: unsupported feature
+# statement ok
+# COPY db1.main.test TO '{TEMP_DIR}/test.csv';
+
+statement ok
+USE db1
+
+# TODO: unsupported feature
+# query I
+# COPY test FROM '{DATA_DIR}/csv/test/test.csv';
+# ----
+# 5000

@@ -1,0 +1,31 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+# create two prepared statements
+# one uses specific columns (i, j)
+# the other uses select *
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT i, j FROM test
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v2 AS SELECT * FROM test
+
+# now rename "i" to "k"
+
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+# v1 does not work anymore: "i" does not exist
+
+statement error
+EXECUTE v1
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v2

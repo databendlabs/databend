@@ -1,0 +1,84 @@
+statement ok
+DROP TABLE IF EXISTS db1.myschema
+
+statement ok
+DROP TABLE IF EXISTS db1.test
+
+statement ok
+DROP TABLE IF EXISTS hello
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS db1;
+
+# did you mean errors with an attached database
+
+statement ok
+CREATE TABLE hello(i INTEGER);
+
+statement ok
+CREATE TABLE db1.test(a INTEGER);
+
+# TODO: result differs
+# statement error
+# SELECT * FROM test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA db1.myschema
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.myschema.blablabla(i INTEGER)
+
+statement error
+SELECT * FROM blablabla;
+
+statement error
+SELECT * FROM blablabla;
+
+# TODO: unsupported feature
+# statement ok
+# RESET catalog_error_max_schemas
+
+# what if we switch the default database?
+
+statement ok
+USE db1
+
+statement ok
+SELECT * FROM test
+
+statement error
+SELECT * FROM blablabla
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM myschema.blablabla
+
+statement error
+SELECT * FROM hello;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM memory.hello
+
+# what if we switch default database AND default schema?
+
+# TODO: unsupported feature
+# statement ok
+# USE db1.myschema
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM blablabla
+
+statement ok
+SELECT * FROM test;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM db1.main.test
+
+statement error
+SELECT * FROM hello;

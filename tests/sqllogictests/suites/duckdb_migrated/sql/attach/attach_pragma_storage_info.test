@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS persistent.T1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE persistent.T1 (A0 int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into persistent.T1 values (5);
+
+# TODO: unsupported feature
+# query I
+# SELECT column_name from pragma_storage_info('persistent.T1');
+# ----
+# A0
+# A0

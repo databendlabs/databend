@@ -1,0 +1,25 @@
+statement ok
+DROP VIEW IF EXISTS v1
+
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+INSERT INTO tbl VALUES (999), (100)
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM tbl
+
+# TODO: result differs
+# statement error
+# ALTER TABLE v1 RENAME TO v2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v1
+# ----
+# 999
+# 100

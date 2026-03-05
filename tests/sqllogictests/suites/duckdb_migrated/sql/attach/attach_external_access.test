@@ -1,0 +1,6 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db1
+
+statement error
+ATTACH 'mydb.db' AS db2

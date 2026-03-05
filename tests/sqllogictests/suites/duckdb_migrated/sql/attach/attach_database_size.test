@@ -1,0 +1,16 @@
+# TODO: unsupported feature
+# query I
+# SELECT database_name FROM pragma_database_size() WHERE database_name = 'db1';
+# ----
+# db1
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db2
+
+# TODO: unsupported feature
+# query I
+# SELECT database_name FROM pragma_database_size() WHERE database_name = 'db1' OR database_name = 'db2' ORDER BY ALL;
+# ----
+# db1
+# db2

@@ -1,0 +1,67 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# load the DB from disk
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# create a macro
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO plus1(x) AS (x + (SELECT COUNT(*) FROM (SELECT b, SUM(test.a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1)))
+
+# use the macro
+
+# TODO: unknown function
+# query T
+# SELECT plus1(3)
+# ----
+# 5
+
+
+# restart the system
+
+# TODO: unknown function
+# query T
+# SELECT plus1(5)
+# ----
+# 7
+
+# drop the macro again
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO plus1
+
+statement error
+SELECT plus1(2)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO plus1(x) AS (x + (SELECT COUNT(*) FROM (SELECT b, SUM(test.a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1)))
+
+
+# restart the system
+
+# TODO: unknown function
+# query T
+# SELECT plus1(5)
+# ----
+# 7
+
+# drop the macro again
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO plus1
+
+statement error
+SELECT plus1(2)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO plus1(x) AS (x + (SELECT COUNT(*) FROM (SELECT b, SUM(test.a) FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) = 1)))

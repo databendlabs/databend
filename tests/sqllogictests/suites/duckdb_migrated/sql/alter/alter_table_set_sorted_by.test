@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+statement error
+ALTER TABLE tbl SET SORTED BY (i DESC NULLS FIRST)
+
+statement error
+ALTER TABLE tbl RESET SORTED BY;

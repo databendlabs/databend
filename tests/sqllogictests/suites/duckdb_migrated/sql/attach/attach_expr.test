@@ -1,0 +1,6 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db1 (TYPE getvariable('db_type'))
+
+statement error
+ATTACH ':memory:' AS db2 (TYPE getvariable('db_type'))

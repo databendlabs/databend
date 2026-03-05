@@ -1,0 +1,86 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (ROW(1, 1)), (ROW(2, 2))
+
+# add a column to a struct
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN s.k INTEGER
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'i': 1, 'j': 1, 'k': NULL}
+# {'i': 2, 'j': 2, 'k': NULL}
+
+# defaults
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN s.l INTEGER DEFAULT 42
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'i': 1, 'j': 1, 'k': NULL, 'l': 42}
+# {'i': 2, 'j': 2, 'k': NULL, 'l': 42}
+
+# this is transactional
+
+statement ok
+BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN s.m INTEGER DEFAULT 42
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'i': 1, 'j': 1, 'k': NULL, 'l': 42, 'm': 42}
+# {'i': 2, 'j': 2, 'k': NULL, 'l': 42, 'm': 42}
+
+statement ok
+ROLLBACK
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'i': 1, 'j': 1, 'k': NULL, 'l': 42}
+# {'i': 2, 'j': 2, 'k': NULL, 'l': 42}
+
+# already exists
+
+statement error
+ALTER TABLE test ADD COLUMN s.i VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN IF NOT EXISTS s.i VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'i': 1, 'j': 1, 'k': NULL, 'l': 42}
+# {'i': 2, 'j': 2, 'k': NULL, 'l': 42}
+
+# not a struct
+
+statement error
+ALTER TABLE test ADD COLUMN s.i.a INTEGER
+
+statement error
+ALTER TABLE test ADD COLUMN s.x.a INTEGER

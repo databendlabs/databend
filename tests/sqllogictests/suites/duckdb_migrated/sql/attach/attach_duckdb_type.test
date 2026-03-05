@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# query I
+# SELECT database_name FROM duckdb_databases() WHERE database_name = 'first';
+# ----
+# first
+
+# DUCKDB type does not allow unrecognized options.

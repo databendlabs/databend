@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INTEGER CHECK(i < 10), j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# we disallow ALTER TYPE on a column with a CHECK constraint
+
+statement error
+ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ALTER j SET DATA TYPE VARCHAR

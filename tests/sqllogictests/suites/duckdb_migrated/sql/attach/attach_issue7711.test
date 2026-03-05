@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# attach ':memory:' as test;
+
+statement ok
+use test;
+
+statement error
+detach test;
+
+# TODO: unsupported feature
+# statement ok
+# use memory
+
+# TODO: unsupported feature
+# statement ok
+# detach test

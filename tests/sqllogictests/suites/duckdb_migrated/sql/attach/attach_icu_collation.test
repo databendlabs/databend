@@ -1,0 +1,22 @@
+# The database is written with a vector size of 2048.
+# TODO: unsupported feature
+# query I rowsort
+# SELECT * FROM db.strings
+# ----
+# Gabel
+# Goethe
+# Goldmann
+# Göbel
+# Göthe
+# Götz
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM db.strings ORDER BY 1
+# ----
+# Gabel
+# Göbel
+# Goethe
+# Goldmann
+# Göthe
+# Götz

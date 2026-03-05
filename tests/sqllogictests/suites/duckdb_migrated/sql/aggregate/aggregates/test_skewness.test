@@ -1,0 +1,86 @@
+statement ok
+DROP TABLE IF EXISTS aggr
+
+statement error
+select skewness()
+
+# TODO: type_error
+# query I
+# select skewness(NULL)
+# ----
+# NULL
+
+query R
+select skewness(1)
+----
+0.0
+
+statement error
+select skewness(*)
+
+query R
+select skewness (10) from range(0, 5)
+----
+0.0
+
+#Empty Table
+
+query R
+select skewness (10) from range(0, 5) where 1 = 0
+----
+NULL
+
+# out of range
+
+# TODO: result differs
+# statement error
+# select skewness(i) from (values (-2e307), (0), (2e307)) tbl(i)
+
+statement ok
+create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
+
+statement ok
+insert into aggr values
+    (1, 10, null),
+    (2, 10, 11),
+    (2, 10, 15),
+    (2, 10, 18),
+    (2, 20, 22),
+    (2, 20, 25),
+    (2, 25, null),
+    (2, 30, 35),
+    (2, 30, 40),
+    (2, 30, 50),
+    (2, 30, 51);
+
+query RRR
+select skewness(k), skewness(v), skewness(v2) from aggr
+----
+-3.316624790355393 -0.16344366935199225 0.3654008511025841
+
+# TODO: unsupported feature
+# query I
+# select skewness(v2) from aggr group by v ORDER BY ALL
+# ----
+# -0.423273
+# -0.330141
+# NULL
+# NULL
+
+# Window Function
+
+query R
+select skewness(v2) over (partition by v)
+    from aggr order by v;
+----
+-0.4232731602681443
+-0.4232731602681443
+-0.4232731602681443
+-0.4232731602681443
+0.0
+0.0
+NULL
+-0.3301409513655613
+-0.3301409513655613
+-0.3301409513655613
+-0.3301409513655613

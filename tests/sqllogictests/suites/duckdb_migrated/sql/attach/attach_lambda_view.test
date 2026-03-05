@@ -1,0 +1,81 @@
+statement ok
+DROP VIEW IF EXISTS version_1_2_0.reduced_lists
+
+statement ok
+DROP VIEW IF EXISTS version_1_3_0.reduced_lists
+
+statement ok
+DROP TABLE IF EXISTS version_1_2_0.lists
+
+statement ok
+DROP TABLE IF EXISTS version_1_3_0.lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE version_1_2_0.lists(l integer[], initial integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO version_1_2_0.lists VALUES ([1], -1), ([1, 2, 3], -2), (NULL, -3), ([-1, NULL, 2], -3);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW version_1_2_0.reduced_lists AS
+# 	SELECT list_reduce(l, LAMBDA x, y : x + y, initial) AS r FROM version_1_2_0.lists;
+
+# TODO: unsupported feature
+# query I
+# FROM version_1_2_0.reduced_lists;
+# ----
+# 0
+# 4
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DETACH version_1_2_0
+
+# TODO: unsupported feature
+# query I
+# FROM version_1_2_0.reduced_lists;
+# ----
+# 0
+# 4
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE version_1_3_0.lists(l integer[], initial integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO version_1_3_0.lists VALUES ([1], -1), ([1, 2, 3], -2), (NULL, -3), ([-1, NULL, 2], -3);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW version_1_3_0.reduced_lists AS
+# 	SELECT list_reduce(l, LAMBDA x, y : x + y, initial) AS r FROM version_1_3_0.lists;
+
+# TODO: unsupported feature
+# query I
+# FROM version_1_3_0.reduced_lists;
+# ----
+# 0
+# 4
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DETACH version_1_3_0
+
+# TODO: unsupported feature
+# query I
+# FROM version_1_3_0.reduced_lists;
+# ----
+# 0
+# 4
+# NULL
+# NULL

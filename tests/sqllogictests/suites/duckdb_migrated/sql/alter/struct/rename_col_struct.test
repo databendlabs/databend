@@ -1,0 +1,59 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (ROW(1, 1)), (ROW(2, 2))
+
+# add a column to a struct
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test RENAME s.i TO v1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'v1': 1, 'j': 1}
+# {'v1': 2, 'j': 2}
+
+statement ok
+BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test RENAME s.j TO v2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'v1': 1, 'v2': 1}
+# {'v1': 2, 'v2': 2}
+
+statement ok
+ROLLBACK
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# {'v1': 1, 'j': 1}
+# {'v1': 2, 'j': 2}
+
+statement error
+ALTER TABLE test RENAME s.j TO v1
+
+statement error
+ALTER TABLE test RENAME s.j.x TO v2
+
+statement error
+ALTER TABLE test RENAME s.i TO v2
+
+statement error
+ALTER TABLE test RENAME x.i TO v2

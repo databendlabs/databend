@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS schema1.table1
+
+# TODO: unsupported feature
+# statement ok
+# attach ':memory:' as test;
+
+statement ok
+use test;
+
+# TODO: unsupported feature
+# statement ok
+# create schema schema1;
+
+statement ok
+create table schema1.table1 as select 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# select * from table1;

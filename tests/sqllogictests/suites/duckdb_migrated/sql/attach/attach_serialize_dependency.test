@@ -1,0 +1,52 @@
+statement ok
+DROP TABLE IF EXISTS A
+
+statement ok
+DROP TABLE IF EXISTS B
+
+statement ok
+use db1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE A (A1 INTEGER PRIMARY KEY,A2 VARCHAR, A3 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX A_index ON A (A2);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE B(B1 INTEGER REFERENCES A(A1));
+
+# TODO: unsupported feature
+# statement ok
+# USE db1_other;
+
+# TODO: unsupported feature
+# statement ok
+# detach db1;
+
+# TODO: unsupported feature
+# statement ok
+# use db2;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE A (A1 INTEGER PRIMARY KEY,A2 VARCHAR, A3 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX A_index ON A (A2);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE B(B1 INTEGER REFERENCES A(A1));
+
+# TODO: unsupported feature
+# statement ok
+# USE db1_other;
+
+# TODO: unsupported feature
+# statement ok
+# detach db2;

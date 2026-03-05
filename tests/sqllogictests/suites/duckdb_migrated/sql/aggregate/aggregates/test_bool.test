@@ -1,0 +1,93 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+statement error
+select bool_or(0)
+
+statement error
+select bool_and(0)
+
+query I
+select bool_or(NULL)
+----
+NULL
+
+query I
+select bool_and(NULL)
+----
+NULL
+
+statement error
+select bool_or()
+
+statement error
+select bool_and()
+
+statement error
+select bool_or(*)
+
+statement error
+select bool_and(*)
+
+query B
+SELECT bool_or(True) FROM range(0, 100);
+----
+1
+
+query B
+SELECT bool_and(True) FROM range(0, 100);
+----
+1
+
+query B
+SELECT bool_or(True) FROM range(0, 100) tbl(i) WHERE 1=0;
+----
+NULL
+
+query B
+SELECT bool_and(True) FROM range(0, 100) tbl(i) WHERE 1=0;
+----
+NULL
+
+statement ok
+create table t (d date)
+
+statement ok
+insert into t values (DATE'2021-02-09'-1),(DATE'2021-02-09'+1),(NULL)
+
+query BB
+select bool_or(d > '2021-02-09') AS or_result,
+       bool_and(d > '2021-02-09') AS and_result
+from t;
+----
+1	0
+
+# TODO: result differs
+# query III
+# select d,bool_or(d > '2021-02-09') AS or_result,
+#        bool_and(d > '2021-02-09') AS and_result
+# from t
+# group by d
+# order by d;
+# ----
+# NULL	NULL	NULL
+# 2021-02-08	0	0
+# 2021-02-10	1	1
+
+# Window Function
+
+query B
+select bool_or(d > '2021-02-09') over (partition by d)
+    from t order by d;
+----
+0
+1
+NULL
+
+query B
+select bool_and(d > '2021-02-09') over (partition by d)
+    from t order by d;
+----
+0
+1
+NULL

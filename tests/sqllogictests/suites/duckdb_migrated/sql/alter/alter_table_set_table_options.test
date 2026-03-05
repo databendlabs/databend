@@ -1,0 +1,32 @@
+statement ok
+DROP TABLE IF EXISTS tbl1
+
+statement ok
+CREATE TABLE tbl1(i INTEGER);
+
+statement error
+ALTER TABLE tbl1 SET ('foo'='baz', 'buzz'='wizz');
+
+statement error
+ALTER TABLE tbl1 SET (foo='baz', buzz='wizz');
+
+statement error
+ALTER TABLE tbl1 SET (foo=getvariable('location'));
+
+statement error
+ALTER TABLE tbl1 RESET ('foo', 'buzz');
+
+statement error
+ALTER TABLE tbl1 RESET (foo, buzz);
+
+statement error
+ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
+
+statement error
+ALTER TABLE tbl1 RESET (foo='baz', buzz='wizz');
+
+statement error
+ALTER TABLE tbl1 RESET ();
+
+statement error
+ALTER TABLE tbl1 SET ();

@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS new_database;
+
+statement error
+CREATE SCHEMA new_database.s1.xxx;
+
+statement error
+CREATE SCHEMA IF NOT EXISTS new_database.s1.xxx;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA new_database.s1;

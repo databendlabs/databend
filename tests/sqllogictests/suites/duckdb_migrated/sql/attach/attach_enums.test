@@ -1,0 +1,90 @@
+statement ok
+DROP TABLE IF EXISTS db1.person
+
+statement ok
+DROP TABLE IF EXISTS db2.person
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE db1.mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# query I
+# SELECT enum_range(NULL::db1.mood) AS my_enum_range;
+# ----
+# [sad, ok, happy]
+
+# TODO: unsupported feature
+# query I
+# SELECT enum_range(NULL::db1.main.mood) AS my_enum_range;
+# ----
+# [sad, ok, happy]
+
+statement error
+SELECT enum_range(NULL::xx.db1.main.mood) AS my_enum_range;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE db1.mood
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE IF EXISTS db1.main.mood
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE db1.mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO db1.person VALUES ('Moe', 'happy');
+
+# TODO: unsupported feature
+# query TT
+# select * from db1.person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db1
+
+# TODO: unsupported feature
+# query TT
+# select * from db1.person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE db2.mood AS ENUM ('ble','grr','kkcry');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO db2.person VALUES ('Moe', 'kkcry');
+
+# TODO: unsupported feature
+# query TT
+# select * from db1.person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# query TT
+# select * from db2.person
+# ----
+# Moe	kkcry

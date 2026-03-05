@@ -1,0 +1,14 @@
+# TODO: unsupported feature
+# query II
+# WITH evs AS (
+#   SELECT * FROM (VALUES
+#     ('1','123','7'),
+#     ('1','456','7')
+#   ) AS t("id", "type", "value" )
+# )
+# SELECT "id"
+# , COUNT(DISTINCT "value") FILTER (WHERE "type" = '456') AS type_456_count
+# FROM evs
+# GROUP BY "id"
+# ----
+# 1	1

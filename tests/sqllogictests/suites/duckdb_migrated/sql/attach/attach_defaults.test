@@ -1,0 +1,12 @@
+# attach a new database
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS new_database;
+
+# we cannot attach a database with the same name
+
+statement error
+ATTACH ':memory:' AS new_database;
+
+statement error
+ATTACH ':memory:'

@@ -1,0 +1,207 @@
+statement ok
+DROP TABLE IF EXISTS e1
+
+statement ok
+DROP TABLE IF EXISTS e2
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+statement ok
+DROP TABLE IF EXISTS t3
+
+statement ok
+CREATE TABLE t1(i INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE t2(i VARCHAR);
+
+statement ok
+INSERT INTO t2 VALUES (4), (5), (6);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP TABLE t2;
+
+statement ok
+ALTER TABLE t1 RENAME TO t2;
+
+query I
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM t1 ORDER BY i;
+# ----
+# 1
+# 2
+# 3
+
+query I
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+statement ok
+COMMIT
+
+query I
+SELECT i FROM t2 ORDER BY i;
+----
+1
+2
+3
+
+statement error
+SELECT * FROM t1
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE t2 RENAME TO t3;
+
+# TODO: result differs
+# statement error
+# SELECT i FROM t3 ORDER BY i
+
+statement error
+SELECT i FROM t2 ORDER BY i
+
+query I
+SELECT i FROM t3 ORDER BY i
+----
+1
+2
+3
+
+statement ok
+DROP TABLE t3;
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM t2 ORDER BY i;
+# ----
+# 1
+# 2
+# 3
+
+statement ok
+CREATE TABLE t2 (i integer)
+
+statement ok
+INSERT INTO t2 VALUES (7), (8), (9)
+
+query I
+SELECT i FROM t2 ORDER BY i
+----
+7
+8
+9
+
+statement ok
+ROLLBACK
+
+query I
+SELECT i FROM t2 ORDER BY i;
+----
+7
+8
+9
+
+query I
+SELECT i FROM t2 ORDER BY i;
+----
+7
+8
+9
+
+# alter/create collision
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE t2 RENAME TO t3
+
+statement error
+CREATE TABLE t3 (i INTEGER)
+
+statement ok
+ROLLBACK
+
+statement ok
+ROLLBACK
+
+# alter/alter collision
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t2 RENAME TO t3
+
+statement error
+ALTER TABLE t2 RENAME TO t4
+
+statement ok
+ROLLBACK
+
+statement ok
+ROLLBACK
+
+# create some additional reference tables
+# for testing, outside of any transaction
+
+statement ok
+CREATE TABLE e1 (i INTEGER)
+
+statement ok
+CREATE TABLE e2 (i INTEGER)
+
+# crossing drops/renames
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP TABLE e2
+
+statement ok
+DROP TABLE e1
+
+statement error
+ALTER TABLE e1 RENAME TO e2
+
+statement error
+ALTER TABLE e2 RENAME TO e1
+
+statement ok
+ROLLBACK
+
+statement ok
+ROLLBACK

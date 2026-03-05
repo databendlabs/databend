@@ -1,0 +1,31 @@
+statement ok
+DROP TABLE IF EXISTS tbl1
+
+# TODO: unsupported feature
+# statement ok
+# attach ':memory:' as test;
+
+statement ok
+use test;
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl1 as select 1 as a;
+
+query I
+FROM test.tbl1
+----
+1
+
+# TODO: unsupported feature
+# statement ok
+# USE memory
+
+# TODO: unsupported feature
+# statement ok
+# DETACH test
+
+query I
+FROM tbl1
+----
+1

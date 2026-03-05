@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+statement error
+ALTER TABLE tbl SET PARTITIONED BY (i)
+
+statement error
+ALTER TABLE tbl RESET PARTITIONED BY;

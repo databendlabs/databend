@@ -1,0 +1,45 @@
+statement ok
+DROP TABLE IF EXISTS doubles
+
+statement ok
+DROP TABLE IF EXISTS kahan_context1
+
+statement ok
+DROP TABLE IF EXISTS kahan_context2
+
+statement ok
+CREATE TABLE doubles(n DOUBLE);
+
+statement ok
+INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
+
+# this would give the wrong result with a simple sum-and-divide
+
+# TODO: unknown function
+# query R
+# SELECT FAVG(n) - '2251799813685248.5'::DOUBLE FROM doubles;
+# ----
+# 0
+
+# Test that Kahan avg preserves precision in exported states combine operations, should fail if we miss the `err` value in the state export
+
+statement ok
+CREATE TABLE kahan_context1 AS
+SELECT unnest([9007199254740992.0, 1.0, 1.0, 1.0, 1.0]) as val;
+
+statement ok
+CREATE TABLE kahan_context2 AS
+SELECT unnest([9007199254740990.0, 2.0, 2.0, 2.0, 2.0]) as val;
+
+# TODO: unknown function
+# query R
+#   SELECT
+#       finalize(combine(
+#           (SELECT favg(val) EXPORT_STATE FROM kahan_context1),
+#           (SELECT favg(val) EXPORT_STATE FROM kahan_context2)
+#       )) -
+#       (SELECT favg(val) FROM (
+#           SELECT val FROM kahan_context1 UNION ALL SELECT val FROM kahan_context2
+#       ));
+# ----
+# 0

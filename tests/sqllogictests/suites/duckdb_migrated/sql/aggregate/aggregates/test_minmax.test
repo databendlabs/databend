@@ -1,0 +1,18 @@
+statement ok
+DROP TABLE IF EXISTS lists
+
+# TODO: unsupported feature
+# statement ok
+# create table lists as select array[i] l from generate_series(0,5,1) tbl(i);
+
+# TODO: unsupported feature
+# query I
+# select min(l) from lists where l[1]>2;
+# ----
+# [3]
+
+# TODO: unsupported feature
+# query I
+# select min(l) from lists where l[0]>2;
+# ----
+# NULL

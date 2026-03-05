@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(i AS (1), j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2)
+
+# Alter generated column
+
+statement error
+ALTER TABLE test ALTER i TYPE VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ALTER j TYPE VARCHAR
+
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM test
+# ----
+# 1	1
+# 1	2
