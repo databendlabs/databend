@@ -2968,12 +2968,11 @@ fn timestamp_tz_from_parts_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) ->
     let hour_arg = args[3].try_downcast::<Int32Type>().unwrap();
     let minute_arg = args[4].try_downcast::<Int32Type>().unwrap();
     let second_arg = args[5].try_downcast::<Int32Type>().unwrap();
-    let nanosecond_arg =
-        if args.len() >= 7 && args[6].try_downcast::<StringType>().is_err() {
-            Some(args[6].try_downcast::<Int32Type>().unwrap())
-        } else {
-            None
-        };
+    let nanosecond_arg = if args.len() >= 7 && args[6].try_downcast::<StringType>().is_err() {
+        Some(args[6].try_downcast::<Int32Type>().unwrap())
+    } else {
+        None
+    };
     let tz_arg = if args.len() == 8 {
         Some(args[7].try_downcast::<StringType>().unwrap())
     } else if args.len() == 7 && nanosecond_arg.is_none() {
