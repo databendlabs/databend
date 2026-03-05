@@ -469,7 +469,10 @@ impl ModifyTableColumnInterpreter {
             )));
         }
 
-        // if don't need to rebuild table, only update table meta.
+        // Metadata-only path: no physical rewrite needed.
+        // For deterministic default-only changes on non-empty tables, virtual
+        // columns (never physically materialized) will retroactively reflect
+        // the new default value when read — no data files are touched.
         if !need_rebuild || is_empty_table {
             commit_table_meta(
                 &self.ctx,
