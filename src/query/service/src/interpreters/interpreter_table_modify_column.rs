@@ -396,14 +396,6 @@ impl ModifyTableColumnInterpreter {
                 let default_expr_changed = old_field.default_expr != field.default_expr;
                 let computed_expr_changed = old_field.computed_expr != field.computed_expr;
 
-                // Validate the new default expression against the new column type
-                // to catch invalid defaults at ALTER time rather than at query time.
-                if data_type_changed || default_expr_changed {
-                    let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
-                    let _ = default_expr_binder
-                        .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
-                }
-
                 // Parquet String -> Binary: safe metadata-only conversion,
                 // physical data is identical so no rebuild or CDC concern.
                 if format_as_parquet
@@ -421,35 +413,49 @@ impl ModifyTableColumnInterpreter {
 
                 has_column_change = true;
 
-                // Already decided to rebuild from a previous field; keep
-                // iterating only to validate remaining default expressions.
-                if need_rebuild {
-                    continue;
-                }
-
-                if data_type_changed || computed_expr_changed {
-                    need_rebuild = true;
-                    continue;
-                }
-
-                // Default-only change: skip rebuild unless non-deterministic.
-                if default_expr_changed && field.default_expr.is_some() {
-                    let data_field: DataField = field.into();
-                    let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
-                    // Use default_value_evaluable() to detect nextval (AsyncFunctionCall)
-                    // because parse_and_bind may wrap the result in CastExpr, hiding
-                    // the AsyncFunctionCall from a top-level matches! check.
-                    // See: https://github.com/databendlabs/databend/issues/19451
-                    let (_, has_nextval) = scalar_expr.default_value_evaluable();
-                    let is_deterministic = !has_nextval
-                        && scalar_expr
-                            .as_expr()?
-                            .project_column_ref(|col| Ok(col.index))?
-                            .is_deterministic(&BUILTIN_FUNCTIONS);
-                    if !is_deterministic {
+                // Type or computed-expr change, or already committed to rebuild
+                // from a previous field: validate via get_scalar (parse + eval).
+                if data_type_changed || computed_expr_changed || need_rebuild {
+                    let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+                    let _ = default_expr_binder
+                        .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
+                    if data_type_changed || computed_expr_changed {
                         need_rebuild = true;
                     }
+                    continue;
                 }
+
+                // --- Default-only change below this point. ---
+
+                // Removing a default is always metadata-only.
+                // Virtual columns (added via ADD COLUMN, never physically written)
+                // fall back to the type's zero/NULL value for old rows.
+                if field.default_expr.is_none() {
+                    continue;
+                }
+
+                // Single parse_and_bind: used for both determinism check and
+                // cast validation, avoiding a redundant second parse.
+                let data_field: DataField = field.into();
+                let scalar_expr = default_expr_binder.parse_and_bind(&data_field)?;
+
+                // Use default_value_evaluable() to detect nextval (AsyncFunctionCall)
+                // because parse_and_bind may wrap the result in CastExpr, hiding
+                // the AsyncFunctionCall from a top-level matches! check.
+                // See: https://github.com/databendlabs/databend/issues/19451
+                let (_, has_nextval) = scalar_expr.default_value_evaluable();
+                let is_deterministic = !has_nextval
+                    && scalar_expr
+                        .as_expr()?
+                        .project_column_ref(|col| Ok(col.index))?
+                        .is_deterministic(&BUILTIN_FUNCTIONS);
+                if !is_deterministic {
+                    need_rebuild = true;
+                }
+
+                // Evaluate to catch invalid casts (e.g., DEFAULT 'abc' on INT)
+                // at ALTER time rather than at query time.
+                default_expr_binder.validate_scalar(&scalar_expr, &field.name)?;
             }
         }
 
