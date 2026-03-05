@@ -22,13 +22,13 @@ copy into @s1/t1 from t1;
 statement ok
 copy into @s1/t2 from t2
 
-query ??
+query error column b doesn't exist
 select a, b from @s1/t1;
+
+query ??
+select a, `B` from @s1/t1;
 ----
 1 2
-
-query error column B doesn't exist
-select a, `B` from @s1/t1;
 
 query error column b doesn't exist
 select a, b from @s1/t1(case_sensitive=>true);
@@ -134,13 +134,13 @@ copy into @s1/t1 from t1;
 statement ok
 copy into @s1/t2 from t2
 
-query ??
+query error column b doesn't exist
 select a, b from @s1/t1;
+
+query ??
+select a, `B` from @s1/t1;
 ----
 1 2
-
-query error column B doesn't exist
-select a, `B` from @s1/t1;
 
 query error column b doesn't exist
 select a, b from @s1/t1(case_sensitive=>true);
