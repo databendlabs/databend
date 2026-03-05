@@ -256,8 +256,13 @@ SELECT a, b FROM t_seq_det
 statement ok
 CREATE TABLE t_inv(a INT NOT NULL, b INT DEFAULT 0)
 
+# Default-only path: invalid cast caught by validate_scalar.
 statement error
 ALTER TABLE t_inv MODIFY COLUMN b INT DEFAULT 'not_a_number'
+
+# Type-change path: invalid default caught by get_scalar.
+statement error
+ALTER TABLE t_inv MODIFY COLUMN b FLOAT DEFAULT 'not_a_number'
 
 ####################################################
 # physically-written column retains value after default change #
