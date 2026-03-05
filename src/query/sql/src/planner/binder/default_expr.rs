@@ -240,7 +240,11 @@ impl DefaultExprBinder {
     /// resulting scalar.  This is the rewrite+eval portion of [`get_scalar`]
     /// extracted so callers that already hold a `ScalarExpr` (from
     /// `parse_and_bind`) can validate without re-parsing.
-    pub fn validate_scalar(&mut self, scalar_expr: &ScalarExpr, field_name: &str) -> Result<Scalar> {
+    pub fn validate_scalar(
+        &mut self,
+        scalar_expr: &ScalarExpr,
+        field_name: &str,
+    ) -> Result<Scalar> {
         let mut scalar_expr = scalar_expr.clone();
         self.rewriter.visit(&mut scalar_expr)?;
         let expr = scalar_expr
