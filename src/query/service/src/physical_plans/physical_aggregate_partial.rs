@@ -24,13 +24,12 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_pipeline_transforms::sorts::TransformSortPartial;
+use databend_common_pipeline_transforms::sorts::TransformRankLimitSort;
 use databend_common_sql::IndexType;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
@@ -225,8 +224,8 @@ impl IPhysicalPlan for AggregatePartial {
         if let Some((sort_desc, limit)) =
             self.resolve_rank_limit_descriptions(&schema_before_group_by)
         {
-            builder.main_pipeline.add_transformer(|| {
-                TransformSortPartial::new(LimitType::LimitRank(limit), sort_desc.clone())
+            builder.main_pipeline.add_accumulating_transformer(|| {
+                TransformRankLimitSort::new(limit, sort_desc.clone(), max_block_rows)
             });
         }
 

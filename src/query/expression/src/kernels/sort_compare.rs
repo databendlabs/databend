@@ -139,6 +139,12 @@ impl SortCompare {
         self.current_column_index += 1;
     }
 
+    pub fn update_permutation_by<C>(&mut self, validity: Option<Bitmap>, compare: C)
+    where C: Fn(u32, u32) -> Ordering + Copy {
+        self.validity = validity;
+        self.generic_sort((), |_, idx| idx, compare);
+    }
+
     pub fn take_permutation(mut self) -> Vec<u32> {
         match self.limit {
             LimitType::None => self.permutation,
@@ -211,13 +217,14 @@ impl SortCompare {
         let validity = self.validity.take();
         let ordering_desc = self.ordering_descs[self.current_column_index].clone();
 
-        // faster path for only one sort column
-        if self.ordering_descs.len() == 1 {
+        // Faster path for one sort column when equality tracking is not needed.
+        // LimitRank requires equality_index updates even for single-column sort.
+        let need_update_equality_index = self.need_update_equality_index();
+        if self.ordering_descs.len() == 1 && !need_update_equality_index {
             do_sorter!(self, value, validity, g, c, ordering_desc, 0..self.rows);
         } else {
             let mut current = 1;
             let len = self.rows;
-            let need_update_equality_index = self.need_update_equality_index();
 
             while current < len {
                 // Find the start of the next range of equal elements
@@ -328,6 +335,12 @@ impl ValueVisitor for SortCompare {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Column;
+    use crate::DataBlock;
+    use crate::types::ArgType;
+    use crate::types::ArrayColumn;
+    use crate::types::ArrayType;
+    use crate::types::Int64Type;
 
     #[test]
     fn test_take_permutation() {
@@ -358,5 +371,39 @@ mod tests {
             let result: Vec<u32> = range.map(|c| c as u32).collect();
             assert_eq!(permutation, result);
         }
+    }
+
+    fn build_i64_array_column(rows: Vec<Vec<i64>>) -> Column {
+        let mut values = Vec::new();
+        let mut offsets = Vec::with_capacity(rows.len() + 1);
+        offsets.push(0_u64);
+        for row in rows {
+            values.extend(row.into_iter());
+            offsets.push(values.len() as u64);
+        }
+        let col = ArrayColumn::<Int64Type>::new(Buffer::from(values), Buffer::from(offsets));
+        ArrayType::<Int64Type>::upcast_column(col)
+    }
+
+    #[test]
+    fn test_sort_rank_limit_array_number() {
+        let array_col =
+            build_i64_array_column(vec![vec![2], vec![1], vec![1], vec![3], vec![2], vec![4]]);
+        let block = DataBlock::new_from_columns(vec![array_col]);
+
+        let sorted = DataBlock::sort_with_type(
+            block,
+            &[SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }],
+            LimitType::LimitRank(2),
+        )
+        .unwrap();
+
+        let expected = build_i64_array_column(vec![vec![1], vec![1], vec![2], vec![2]]);
+        assert_eq!(sorted.num_rows(), 4);
+        assert_eq!(sorted.get_by_offset(0).to_column(), expected);
     }
 }
