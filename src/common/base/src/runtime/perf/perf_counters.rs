@@ -18,38 +18,60 @@ pub enum PerfEvent {
     // Hardware events
     CpuCycles,
     Instructions,
-    CacheMisses,
-    BranchMisses,
     CacheReferences,
-    L1dReadMisses,
-    L1dReadAccesses,
-    L1dWriteMisses,
-    LlReadMisses,
-    LlWriteMisses,
-    DtlbReadMisses,
-    ItlbReadMisses,
-    BpuReadMisses,
+    CacheMisses,
     BranchInstructions,
+    BranchMisses,
     BusCycles,
     StalledCyclesFrontend,
     StalledCyclesBackend,
     RefCycles,
+    // Cache events
+    L1dReadMisses,
+    L1dReadAccesses,
+    LlReadMisses,
+    DtlbReadMisses,
+    ItlbReadMisses,
+    BpuReadMisses,
+    NodeReadMisses,
     // Software events
+    CpuClock,
+    TaskClock,
     PageFaults,
     ContextSwitches,
     CpuMigrations,
     MinorFaults,
     MajorFaults,
-    TaskClock,
+    AlignmentFaults,
+    EmulationFaults,
+    BpfOutput,
+    CgroupSwitches,
 }
 
 /// (name, variant, display_name)
 const EVENT_TABLE: &[(&str, PerfEvent, &str)] = &[
     ("cycles", PerfEvent::CpuCycles, "CPU Cycles"),
     ("instructions", PerfEvent::Instructions, "Instructions"),
-    ("cache-misses", PerfEvent::CacheMisses, "Cache Misses"),
-    ("branch-misses", PerfEvent::BranchMisses, "Branch Misses"),
     ("cache-refs", PerfEvent::CacheReferences, "Cache Refs"),
+    ("cache-misses", PerfEvent::CacheMisses, "Cache Misses"),
+    (
+        "branch-instructions",
+        PerfEvent::BranchInstructions,
+        "Branch Instructions",
+    ),
+    ("branch-misses", PerfEvent::BranchMisses, "Branch Misses"),
+    ("bus-cycles", PerfEvent::BusCycles, "Bus Cycles"),
+    (
+        "stalled-cycles-frontend",
+        PerfEvent::StalledCyclesFrontend,
+        "Stalled Cycles (Frontend)",
+    ),
+    (
+        "stalled-cycles-backend",
+        PerfEvent::StalledCyclesBackend,
+        "Stalled Cycles (Backend)",
+    ),
+    ("ref-cycles", PerfEvent::RefCycles, "Ref Cycles"),
     (
         "l1d-read-misses",
         PerfEvent::L1dReadMisses,
@@ -60,17 +82,7 @@ const EVENT_TABLE: &[(&str, PerfEvent, &str)] = &[
         PerfEvent::L1dReadAccesses,
         "L1D Read Accesses",
     ),
-    (
-        "l1d-write-misses",
-        PerfEvent::L1dWriteMisses,
-        "L1D Write Misses",
-    ),
     ("ll-read-misses", PerfEvent::LlReadMisses, "LL Read Misses"),
-    (
-        "ll-write-misses",
-        PerfEvent::LlWriteMisses,
-        "LL Write Misses",
-    ),
     (
         "dtlb-read-misses",
         PerfEvent::DtlbReadMisses,
@@ -87,22 +99,12 @@ const EVENT_TABLE: &[(&str, PerfEvent, &str)] = &[
         "BPU Read Misses",
     ),
     (
-        "branch-instructions",
-        PerfEvent::BranchInstructions,
-        "Branch Instructions",
+        "node-read-misses",
+        PerfEvent::NodeReadMisses,
+        "Node Read Misses",
     ),
-    ("bus-cycles", PerfEvent::BusCycles, "Bus Cycles"),
-    (
-        "stalled-cycles-frontend",
-        PerfEvent::StalledCyclesFrontend,
-        "Stalled Cycles (Frontend)",
-    ),
-    (
-        "stalled-cycles-backend",
-        PerfEvent::StalledCyclesBackend,
-        "Stalled Cycles (Backend)",
-    ),
-    ("ref-cycles", PerfEvent::RefCycles, "Ref Cycles"),
+    ("cpu-clock", PerfEvent::CpuClock, "CPU Clock"),
+    ("task-clock", PerfEvent::TaskClock, "Task Clock"),
     ("page-faults", PerfEvent::PageFaults, "Page Faults"),
     (
         "context-switches",
@@ -112,7 +114,22 @@ const EVENT_TABLE: &[(&str, PerfEvent, &str)] = &[
     ("cpu-migrations", PerfEvent::CpuMigrations, "CPU Migrations"),
     ("minor-faults", PerfEvent::MinorFaults, "Minor Faults"),
     ("major-faults", PerfEvent::MajorFaults, "Major Faults"),
-    ("task-clock", PerfEvent::TaskClock, "Task Clock"),
+    (
+        "alignment-faults",
+        PerfEvent::AlignmentFaults,
+        "Alignment Faults",
+    ),
+    (
+        "emulation-faults",
+        PerfEvent::EmulationFaults,
+        "Emulation Faults",
+    ),
+    ("bpf-output", PerfEvent::BpfOutput, "BPF Output"),
+    (
+        "cgroup-switches",
+        PerfEvent::CgroupSwitches,
+        "Cgroup Switches",
+    ),
 ];
 
 impl PerfEvent {
@@ -169,10 +186,10 @@ impl PerfEvent {
         match self {
             Self::CpuCycles => Builder::new(Hardware::CPU_CYCLES),
             Self::Instructions => Builder::new(Hardware::INSTRUCTIONS),
-            Self::CacheMisses => Builder::new(Hardware::CACHE_MISSES),
-            Self::BranchMisses => Builder::new(Hardware::BRANCH_MISSES),
             Self::CacheReferences => Builder::new(Hardware::CACHE_REFERENCES),
+            Self::CacheMisses => Builder::new(Hardware::CACHE_MISSES),
             Self::BranchInstructions => Builder::new(Hardware::BRANCH_INSTRUCTIONS),
+            Self::BranchMisses => Builder::new(Hardware::BRANCH_MISSES),
             Self::BusCycles => Builder::new(Hardware::BUS_CYCLES),
             Self::StalledCyclesFrontend => Builder::new(Hardware::STALLED_CYCLES_FRONTEND),
             Self::StalledCyclesBackend => Builder::new(Hardware::STALLED_CYCLES_BACKEND),
@@ -187,19 +204,9 @@ impl PerfEvent {
                 operation: CacheOp::READ,
                 result: CacheResult::ACCESS,
             }),
-            Self::L1dWriteMisses => Builder::new(Cache {
-                which: CacheId::L1D,
-                operation: CacheOp::WRITE,
-                result: CacheResult::MISS,
-            }),
             Self::LlReadMisses => Builder::new(Cache {
                 which: CacheId::LL,
                 operation: CacheOp::READ,
-                result: CacheResult::MISS,
-            }),
-            Self::LlWriteMisses => Builder::new(Cache {
-                which: CacheId::LL,
-                operation: CacheOp::WRITE,
                 result: CacheResult::MISS,
             }),
             Self::DtlbReadMisses => Builder::new(Cache {
@@ -217,12 +224,22 @@ impl PerfEvent {
                 operation: CacheOp::READ,
                 result: CacheResult::MISS,
             }),
+            Self::NodeReadMisses => Builder::new(Cache {
+                which: CacheId::NODE,
+                operation: CacheOp::READ,
+                result: CacheResult::MISS,
+            }),
+            Self::CpuClock => Builder::new(Software::CPU_CLOCK),
+            Self::TaskClock => Builder::new(Software::TASK_CLOCK),
             Self::PageFaults => Builder::new(Software::PAGE_FAULTS),
             Self::ContextSwitches => Builder::new(Software::CONTEXT_SWITCHES),
             Self::CpuMigrations => Builder::new(Software::CPU_MIGRATIONS),
             Self::MinorFaults => Builder::new(Software::PAGE_FAULTS_MIN),
             Self::MajorFaults => Builder::new(Software::PAGE_FAULTS_MAJ),
-            Self::TaskClock => Builder::new(Software::TASK_CLOCK),
+            Self::AlignmentFaults => Builder::new(Software::ALIGNMENT_FAULTS),
+            Self::EmulationFaults => Builder::new(Software::EMULATION_FAULTS),
+            Self::BpfOutput => Builder::new(Software::BPF_OUTPUT),
+            Self::CgroupSwitches => Builder::new(Software::CGROUP_SWITCHES),
         }
     }
 }
