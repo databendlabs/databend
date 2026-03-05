@@ -35,7 +35,7 @@ EvalScalar
             ├── push downs: [filters: [products.name (#0) = 'Laptop' and json_path_query_first(products.details (#1), '$.features.*') = '"16GB"'], limit: NONE]
             └── estimated rows: 0.60
 
-query T??
+query TTT
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB' and all_features = '512GB';
 ----
 Laptop "512GB" "16GB"
@@ -63,7 +63,7 @@ EvalScalar
         ├── push downs: [filters: [products.name (#0) = 'Laptop' and json_path_query_first(products.details (#1), '$.features.*') = '"16GB"'], limit: NONE]
         └── estimated rows: 0.60
 
-query T??
+query TTT
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB';
 ----
 Laptop "16GB" "16GB"
