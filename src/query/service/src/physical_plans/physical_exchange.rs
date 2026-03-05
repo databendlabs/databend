@@ -120,7 +120,7 @@ impl PhysicalPlanBuilder {
                     let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                     keys.push(expr.as_remote_expr());
                 }
-                FragmentKind::GlobalShuffle
+                FragmentKind::Normal
             }
             databend_common_sql::plans::Exchange::Broadcast => FragmentKind::Expansive,
             databend_common_sql::plans::Exchange::Merge => FragmentKind::Merge,
