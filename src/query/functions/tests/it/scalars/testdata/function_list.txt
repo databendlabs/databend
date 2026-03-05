@@ -95,11 +95,7 @@ substr_utf8 -> substr
 substring -> substr
 substring_utf8 -> substr
 subtract -> minus
-timestamp_ltz_from_parts -> timestamp_from_parts
-timestamp_ntz_from_parts -> timestamp_from_parts
 timestampfromparts -> timestamp_from_parts
-timestampltzfromparts -> timestamp_from_parts
-timestampntzfromparts -> timestamp_from_parts
 timestamptzfromparts -> timestamp_tz_from_parts
 to_char -> to_string
 to_datetime -> to_timestamp
@@ -1381,8 +1377,8 @@ Functions overloads:
 1 date_add_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_add_months(Timestamp, Int64) :: Timestamp
 3 date_add_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
-0 date_from_parts(Int32, Int32, Int32) :: Date
-1 date_from_parts(Int32 NULL, Int32 NULL, Int32 NULL) :: Date NULL
+0 date_from_parts(Int64, Int64, Int64) :: Date
+1 date_from_parts(Int64 NULL, Int64 NULL, Int64 NULL) :: Date NULL
 0 date_subtract_months(Date, Int64) :: Date
 1 date_subtract_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_subtract_months(Timestamp, Int64) :: Timestamp
