@@ -1458,7 +1458,7 @@ EXPLAIN PERF SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Perf {
-        events: [],
+        event_groups: [],
     },
     options: (
         None,
@@ -1551,9 +1551,13 @@ EXPLAIN PERF(events='cycles,instructions') SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Perf {
-        events: [
-            "cycles",
-            "instructions",
+        event_groups: [
+            [
+                "cycles",
+            ],
+            [
+                "instructions",
+            ],
         ],
     },
     options: (
@@ -1609,6 +1613,107 @@ Explain {
                                 table: Identifier {
                                     span: Some(
                                         58..59,
+                                    ),
+                                    name: "b",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+explain perf (events='cycles+instructions,branch-misses') select a from b;
+---------- Output ---------
+EXPLAIN PERF(events='cycles+instructions,branch-misses') SELECT a FROM b
+---------- AST ------------
+Explain {
+    kind: Perf {
+        event_groups: [
+            [
+                "cycles",
+                "instructions",
+            ],
+            [
+                "branch-misses",
+            ],
+        ],
+    },
+    options: (
+        None,
+        [],
+    ),
+    query: Query(
+        Query {
+            span: Some(
+                58..73,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        58..73,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    65..66,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                65..66,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                72..73,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        72..73,
                                     ),
                                     name: "b",
                                     quote: None,

@@ -7,5 +7,8 @@ explain perf (events='cycles') select avg(number) from numbers(10000);
 statement ok
 explain perf (events='cycles,instructions,l1d-read-misses,branch-misses,ll-read-misses') select avg(number) as n from numbers(10000) order by n limit 5
 
+statement ok
+explain perf (events='cycles+instructions,branch-misses') select avg(number) from numbers(10000);
+
 statement error 1005
 explain perf (events='bad_arguments') select avg(number) from numbers(10000);
