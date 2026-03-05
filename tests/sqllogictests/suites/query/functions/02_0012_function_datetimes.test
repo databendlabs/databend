@@ -1812,3 +1812,118 @@ query ??
 select add_months('2025-04-30',1), DATE_ADD(month, 1, '2025-04-30');
 ----
 2025-05-31 2025-05-30
+
+## DATE_FROM_PARTS
+
+# Basic date construction
+query ?
+select date_from_parts(1977, 8, 7);
+----
+1977-08-07
+
+# Alias: datefromparts
+query ?
+select datefromparts(1977, 8, 7);
+----
+1977-08-07
+
+# Day overflow: 100th day from Jan 1, 2010
+query ?
+select date_from_parts(2010, 1, 100);
+----
+2010-04-10
+
+# Month overflow: +24 months from Jan 2010
+query ?
+select date_from_parts(2010, 1 + 24, 1);
+----
+2012-01-01
+
+# Zero month: month=0 means Dec of previous year
+query ?
+select date_from_parts(2004, 0, 1);
+----
+2003-12-01
+
+# Negative month: month=-1 means Nov of previous year (2 months before month=1)
+query ?
+select date_from_parts(2004, -1, 1);
+----
+2003-11-01
+
+# Zero day: day=0 means one day before the 1st of the month
+query ?
+select date_from_parts(2004, 2, 0);
+----
+2004-01-31
+
+# Negative day
+query ?
+select date_from_parts(2004, 2, -1);
+----
+2004-01-30
+
+# Both negative month and negative day
+query ?
+select date_from_parts(2004, -1, -1);
+----
+2003-10-30
+
+# Normal date
+query ?
+select date_from_parts(2004, 1, 1);
+----
+2004-01-01
+
+## TIMESTAMP_FROM_PARTS
+
+statement ok
+set timezone = 'UTC'
+
+# Basic timestamp construction (6 args)
+query ?
+select timestamp_from_parts(2013, 4, 5, 12, 0, 0);
+----
+2013-04-05 12:00:00.000000
+
+# With nanoseconds (7 args) - nanoseconds truncated to microseconds
+query ?
+select timestamp_from_parts(2013, 4, 5, 12, 0, 0, 987654321);
+----
+2013-04-05 12:00:00.987654
+
+# Alias: timestampfromparts
+query ?
+select timestampfromparts(2013, 4, 5, 12, 0, 0);
+----
+2013-04-05 12:00:00.000000
+
+# Alias: timestamp_ntz_from_parts
+query ?
+select timestamp_ntz_from_parts(2013, 4, 5, 12, 0, 0);
+----
+2013-04-05 12:00:00.000000
+
+# Handling values outside normal ranges: subtracting 1 hour via -3600 seconds
+query ?
+select timestamp_from_parts(2013, 4, 5, 12, 0, -3600);
+----
+2013-04-05 11:00:00.000000
+
+## TIMESTAMP_TZ_FROM_PARTS
+
+statement ok
+set timezone = 'UTC'
+
+# Basic timestamp_tz construction with default (UTC) timezone
+query T
+select typeof(timestamp_tz_from_parts(2013, 4, 5, 12, 0, 0));
+----
+TIMESTAMP_TZ
+
+# Alias: timestamptzfromparts
+query T
+select typeof(timestamptzfromparts(2013, 4, 5, 12, 0, 0));
+----
+TIMESTAMP_TZ
+

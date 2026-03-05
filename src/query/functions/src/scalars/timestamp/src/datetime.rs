@@ -17,6 +17,7 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::FormattingOptions;
 use std::io::Write;
+use std::sync::Arc;
 
 use chrono::Datelike;
 use chrono::NaiveDate;
@@ -24,14 +25,20 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::error_to_null;
 use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -40,6 +47,7 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -71,6 +79,7 @@ use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_4_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
@@ -138,6 +147,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // convert_timezone( target_timezone, 'timestamp')
     register_convert_timezone(registry);
+
+    // date_from_parts(year, month, day)
+    // timestamp_from_parts(year, month, day, hour, minute, second [, nanosecond])
+    // timestamp_tz_from_parts(year, month, day, hour, minute, second [, nanosecond] [, time_zone])
+    register_date_from_parts(registry);
+    register_timestamp_from_parts(registry);
+    register_timestamp_tz_from_parts(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
@@ -2732,4 +2748,362 @@ fn prepare_format_string(format: &str, date_format_style: &str) -> String {
         format.to_string()
     };
     replace_time_format(&processed_format).to_string()
+}
+
+/// Normalize month/day values that may be outside normal ranges.
+/// Snowflake allows e.g. month=0 (meaning Dec of previous year),
+/// month=13 (meaning Jan of next year), day=100 (100th day from month start), etc.
+fn normalize_date_parts(year: i32, month: i32, day: i32) -> Result<NaiveDate, String> {
+    // Normalize month: month is 1-based, so month=0 means Dec of previous year,
+    // month=-1 means Nov of previous year, month=13 means Jan of next year.
+    let total_months = (year as i64) * 12 + (month as i64 - 1);
+    let norm_year = (total_months.div_euclid(12)) as i32;
+    let norm_month = (total_months.rem_euclid(12) + 1) as u32; // 1..=12
+
+    // Create date at day=1 of the normalized year/month, then add (day-1) days
+    let base = NaiveDate::from_ymd_opt(norm_year, norm_month, 1)
+        .ok_or_else(|| format!("Invalid date: year={year}, month={month}, day={day}"))?;
+
+    // day=1 means the first day, day=0 means one day before, day=-1 means two days before, etc.
+    let result = base
+        .checked_add_signed(chrono::Duration::days(day as i64 - 1))
+        .ok_or_else(|| format!("Date out of range: year={year}, month={month}, day={day}"))?;
+
+    Ok(result)
+}
+
+/// Normalize timestamp components that may be outside normal ranges.
+/// Similar to normalize_date_parts but also handles hour/minute/second/nanosecond overflow.
+fn normalize_timestamp_micros(
+    year: i32,
+    month: i32,
+    day: i32,
+    hour: i32,
+    minute: i32,
+    second: i32,
+    nanosecond: i32,
+    tz: &TimeZone,
+) -> Result<i64, String> {
+    // Handle nanosecond overflow first: convert to extra seconds + remaining nanos
+    let total_nanos = nanosecond as i64;
+    let extra_secs_from_nanos = total_nanos.div_euclid(1_000_000_000);
+    let norm_nanos = total_nanos.rem_euclid(1_000_000_000) as i32;
+    let norm_micros = (norm_nanos / 1_000) as u32;
+
+    // Combine all time components into total seconds (including nanosecond overflow)
+    let total_seconds =
+        hour as i64 * 3600 + minute as i64 * 60 + second as i64 + extra_secs_from_nanos;
+
+    // Split into extra days and time-of-day
+    let extra_days = total_seconds.div_euclid(86400);
+    let time_of_day = total_seconds.rem_euclid(86400);
+
+    let final_hour = (time_of_day / 3600) as u8;
+    let final_minute = ((time_of_day % 3600) / 60) as u8;
+    let final_second = (time_of_day % 60) as u8;
+
+    // Adjust day by the overflow days
+    let final_day = day + extra_days as i32;
+
+    let base_date = normalize_date_parts(year, month, final_day)
+        .map_err(|e| format!("Cannot construct timestamp: {e}"))?;
+
+    let jiff_year = base_date.year() as i16;
+    let jiff_month = base_date.month() as i8;
+    let jiff_day = base_date.day() as i8;
+
+    // Try fast path first
+    if let Some(micros) = fast_utc_from_local(
+        tz,
+        jiff_year as i32,
+        jiff_month as u8,
+        jiff_day as u8,
+        final_hour,
+        final_minute,
+        final_second,
+        norm_micros,
+    ) {
+        return Ok(micros);
+    }
+
+    // Slow path via jiff
+    let dt = jiff::civil::date(jiff_year, jiff_month, jiff_day).at(
+        final_hour as i8,
+        final_minute as i8,
+        final_second as i8,
+        norm_nanos,
+    );
+    let zoned = tz
+        .to_zoned(dt)
+        .map_err(|e| format!("Cannot construct timestamp: {e}"))?;
+    Ok(zoned.timestamp().as_microsecond())
+}
+
+fn register_date_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("date_from_parts", &["datefromparts"]);
+
+    registry
+        .register_passthrough_nullable_3_arg::<Int32Type, Int32Type, Int32Type, DateType, _, _>(
+            "date_from_parts",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<Int32Type, Int32Type, Int32Type, DateType>(
+                |year, month, day, output, ctx| match normalize_date_parts(year, month, day) {
+                    Ok(d) => {
+                        let days = d.num_days_from_ce() - EPOCH_DAYS_FROM_CE;
+                        output.push(clamp_date(days as i64));
+                    }
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("cannot create date from parts: {e}"));
+                        output.push(0);
+                    }
+                },
+            ),
+        );
+}
+
+fn timestamp_from_parts_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        Value::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let year_arg = args[0].try_downcast::<Int32Type>().unwrap();
+    let month_arg = args[1].try_downcast::<Int32Type>().unwrap();
+    let day_arg = args[2].try_downcast::<Int32Type>().unwrap();
+    let hour_arg = args[3].try_downcast::<Int32Type>().unwrap();
+    let minute_arg = args[4].try_downcast::<Int32Type>().unwrap();
+    let second_arg = args[5].try_downcast::<Int32Type>().unwrap();
+    let nanosecond_arg = if args.len() >= 7 {
+        Some(args[6].try_downcast::<Int32Type>().unwrap())
+    } else {
+        None
+    };
+
+    let size = len.unwrap_or(1);
+    let mut builder = Vec::with_capacity(size);
+
+    for idx in 0..size {
+        let year = unsafe { year_arg.index_unchecked(idx) };
+        let month = unsafe { month_arg.index_unchecked(idx) };
+        let day = unsafe { day_arg.index_unchecked(idx) };
+        let hour = unsafe { hour_arg.index_unchecked(idx) };
+        let minute = unsafe { minute_arg.index_unchecked(idx) };
+        let second = unsafe { second_arg.index_unchecked(idx) };
+        let nanosecond = nanosecond_arg
+            .as_ref()
+            .map(|a| unsafe { a.index_unchecked(idx) })
+            .unwrap_or(0);
+
+        match normalize_timestamp_micros(
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanosecond,
+            &ctx.func_ctx.tz,
+        ) {
+            Ok(micros) => builder.push(micros),
+            Err(e) => {
+                ctx.set_error(
+                    builder.len(),
+                    format!("cannot create timestamp from parts: {e}"),
+                );
+                builder.push(0);
+            }
+        }
+    }
+
+    match len {
+        Some(_) => Value::Column(Column::Timestamp(builder.into())),
+        _ => Value::Scalar(Scalar::Timestamp(builder[0])),
+    }
+}
+
+fn register_timestamp_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("timestamp_from_parts", &[
+        "timestampfromparts",
+        "timestamp_ntz_from_parts",
+        "timestampntzfromparts",
+        "timestamp_ltz_from_parts",
+        "timestampltzfromparts",
+    ]);
+
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let int32_type = DataType::Number(NumberDataType::Int32);
+        let args_type = match args_type.len() {
+            6 => vec![int32_type; 6],
+            7 => vec![int32_type; 7],
+            _ => return None,
+        };
+
+        let signature = FunctionSignature {
+            name: "timestamp_from_parts".to_string(),
+            args_type,
+            return_type: DataType::Timestamp,
+        };
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            timestamp_from_parts_fn,
+            None,
+            has_null,
+        )))
+    }));
+    registry.register_function_factory("timestamp_from_parts", factory);
+}
+
+fn timestamp_tz_from_parts_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        Value::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let year_arg = args[0].try_downcast::<Int32Type>().unwrap();
+    let month_arg = args[1].try_downcast::<Int32Type>().unwrap();
+    let day_arg = args[2].try_downcast::<Int32Type>().unwrap();
+    let hour_arg = args[3].try_downcast::<Int32Type>().unwrap();
+    let minute_arg = args[4].try_downcast::<Int32Type>().unwrap();
+    let second_arg = args[5].try_downcast::<Int32Type>().unwrap();
+    let nanosecond_arg =
+        if args.len() >= 7 && args[6].try_downcast::<StringType>().is_err() {
+            Some(args[6].try_downcast::<Int32Type>().unwrap())
+        } else {
+            None
+        };
+    let tz_arg = if args.len() == 8 {
+        Some(args[7].try_downcast::<StringType>().unwrap())
+    } else if args.len() == 7 && nanosecond_arg.is_none() {
+        Some(args[6].try_downcast::<StringType>().unwrap())
+    } else {
+        None
+    };
+
+    let size = len.unwrap_or(1);
+    let mut ts_values = Vec::with_capacity(size);
+    let mut offset_values = Vec::with_capacity(size);
+
+    for idx in 0..size {
+        let year = unsafe { year_arg.index_unchecked(idx) };
+        let month = unsafe { month_arg.index_unchecked(idx) };
+        let day = unsafe { day_arg.index_unchecked(idx) };
+        let hour = unsafe { hour_arg.index_unchecked(idx) };
+        let minute = unsafe { minute_arg.index_unchecked(idx) };
+        let second = unsafe { second_arg.index_unchecked(idx) };
+        let nanosecond = nanosecond_arg
+            .as_ref()
+            .map(|a| unsafe { a.index_unchecked(idx) })
+            .unwrap_or(0);
+
+        let tz = if let Some(ref tz_arg) = tz_arg {
+            let tz_str = unsafe { tz_arg.index_unchecked(idx) };
+            match TimeZone::get(tz_str) {
+                Ok(tz) => tz,
+                Err(e) => {
+                    ctx.set_error(ts_values.len(), format!("cannot parse timezone: {e}"));
+                    ts_values.push(0i64);
+                    offset_values.push(0i32);
+                    continue;
+                }
+            }
+        } else {
+            ctx.func_ctx.tz.clone()
+        };
+
+        match normalize_timestamp_micros(year, month, day, hour, minute, second, nanosecond, &tz) {
+            Ok(utc_micros) => {
+                // normalize_timestamp_micros returns UTC micros.
+                // Get offset from the timezone for this timestamp for display.
+                match Timestamp::from_microsecond(utc_micros) {
+                    Ok(ts) => {
+                        let offset = tz.to_offset(ts);
+                        ts_values.push(utc_micros);
+                        offset_values.push(offset.seconds());
+                    }
+                    Err(e) => {
+                        ctx.set_error(
+                            ts_values.len(),
+                            format!("cannot create timestamp_tz from parts: {e}"),
+                        );
+                        ts_values.push(0);
+                        offset_values.push(0);
+                    }
+                }
+            }
+            Err(e) => {
+                ctx.set_error(
+                    ts_values.len(),
+                    format!("cannot create timestamp_tz from parts: {e}"),
+                );
+                ts_values.push(0);
+                offset_values.push(0);
+            }
+        }
+    }
+
+    match len {
+        Some(_) => {
+            let col = Column::TimestampTz(
+                ts_values
+                    .iter()
+                    .zip(offset_values.iter())
+                    .map(|(&ts, &off)| timestamp_tz::new(ts, off))
+                    .collect(),
+            );
+            Value::Column(col)
+        }
+        _ => Value::Scalar(Scalar::TimestampTz(timestamp_tz::new(
+            ts_values[0],
+            offset_values[0],
+        ))),
+    }
+}
+
+fn register_timestamp_tz_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("timestamp_tz_from_parts", &["timestamptzfromparts"]);
+
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let int32_type = DataType::Number(NumberDataType::Int32);
+
+        let args_type = match args_type.len() {
+            // 6 args: year, month, day, hour, minute, second
+            6 => vec![int32_type; 6],
+            // 7 args: either (y, m, d, h, min, sec, nanosecond) or (y, m, d, h, min, sec, timezone)
+            7 => {
+                if args_type[6].remove_nullable() == DataType::String {
+                    let mut v = vec![int32_type; 6];
+                    v.push(DataType::String);
+                    v
+                } else {
+                    vec![int32_type; 7]
+                }
+            }
+            // 8 args: year, month, day, hour, minute, second, nanosecond, timezone
+            8 => {
+                let mut v = vec![int32_type; 7];
+                v.push(DataType::String);
+                v
+            }
+            _ => return None,
+        };
+
+        let signature = FunctionSignature {
+            name: "timestamp_tz_from_parts".to_string(),
+            args_type,
+            return_type: DataType::TimestampTz,
+        };
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            timestamp_tz_from_parts_fn,
+            None,
+            has_null,
+        )))
+    }));
+    registry.register_function_factory("timestamp_tz_from_parts", factory);
 }

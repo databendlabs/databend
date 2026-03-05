@@ -43,6 +43,8 @@ fn test_datetime() {
     test_rounder_functions(file);
     test_date_date_diff(file);
     test_current_time(file);
+    test_date_from_parts(file);
+    test_timestamp_from_parts(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -769,4 +771,40 @@ fn test_current_time(file: &mut impl Write) {
     run_ast_with_context(file, "current_time()", ctx.clone());
     run_ast_with_context(file, "current_time(3)", ctx.clone());
     run_ast_with_context(file, "current_time(10)", ctx);
+}
+
+fn test_date_from_parts(file: &mut impl Write) {
+    // Basic date construction
+    run_ast(file, "date_from_parts(1977, 8, 7)", &[]);
+    // Alias
+    run_ast(file, "datefromparts(2023, 1, 15)", &[]);
+    // Day overflow: 100th day from Jan 1, 2010
+    run_ast(file, "date_from_parts(2010, 1, 100)", &[]);
+    // Month overflow: +24 months from Jan 2010
+    run_ast(file, "date_from_parts(2010, 25, 1)", &[]);
+    // Zero month: Dec of previous year
+    run_ast(file, "date_from_parts(2004, 0, 1)", &[]);
+    // Negative month: Nov of previous year
+    run_ast(file, "date_from_parts(2004, -1, 1)", &[]);
+    // Zero day: one day before 1st
+    run_ast(file, "date_from_parts(2004, 2, 0)", &[]);
+    // Negative day
+    run_ast(file, "date_from_parts(2004, 2, -1)", &[]);
+    // Both negative
+    run_ast(file, "date_from_parts(2004, -1, -1)", &[]);
+}
+
+fn test_timestamp_from_parts(file: &mut impl Write) {
+    // Basic 6-arg timestamp
+    run_ast(file, "timestamp_from_parts(2013, 4, 5, 12, 0, 0)", &[]);
+    // 7-arg with nanoseconds
+    run_ast(
+        file,
+        "timestamp_from_parts(2013, 4, 5, 12, 0, 0, 987654321)",
+        &[],
+    );
+    // Alias
+    run_ast(file, "timestampfromparts(2013, 4, 5, 12, 0, 0)", &[]);
+    // Negative seconds (overflow handling)
+    run_ast(file, "timestamp_from_parts(2013, 4, 5, 12, 0, -3600)", &[]);
 }
