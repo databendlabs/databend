@@ -23,6 +23,7 @@ current_date -> today
 current_timestamp -> now
 date -> to_date
 date_format -> to_string
+datefromparts -> date_from_parts
 day -> to_day_of_month
 dayofmonth -> to_day_of_month
 dayofyear -> to_day_of_year
@@ -94,6 +95,12 @@ substr_utf8 -> substr
 substring -> substr
 substring_utf8 -> substr
 subtract -> minus
+timestamp_ltz_from_parts -> timestamp_from_parts
+timestamp_ntz_from_parts -> timestamp_from_parts
+timestampfromparts -> timestamp_from_parts
+timestampltzfromparts -> timestamp_from_parts
+timestampntzfromparts -> timestamp_from_parts
+timestamptzfromparts -> timestamp_tz_from_parts
 to_char -> to_string
 to_datetime -> to_timestamp
 to_number -> to_decimal
@@ -1374,6 +1381,8 @@ Functions overloads:
 1 date_add_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_add_months(Timestamp, Int64) :: Timestamp
 3 date_add_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+0 date_from_parts(Int32, Int32, Int32) :: Date
+1 date_from_parts(Int32 NULL, Int32 NULL, Int32 NULL) :: Date NULL
 0 date_subtract_months(Date, Int64) :: Date
 1 date_subtract_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_subtract_months(Timestamp, Int64) :: Timestamp
@@ -4060,6 +4069,8 @@ Functions overloads:
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 timestamp_diff(Timestamp, Timestamp) :: Interval
 1 timestamp_diff(Timestamp NULL, Timestamp NULL) :: Interval NULL
+0 timestamp_from_parts FACTORY
+0 timestamp_tz_from_parts FACTORY
 0 to_base64(Binary) :: String
 1 to_base64(Binary NULL) :: String NULL
 0 to_binary(Variant) :: Binary NULL
