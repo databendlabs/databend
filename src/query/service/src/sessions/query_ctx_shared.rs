@@ -952,13 +952,14 @@ impl QueryContextShared {
                     }
                     std::collections::hash_map::Entry::Occupied(mut e) => {
                         let existing = e.get_mut();
-                        existing.multiplexed = existing.multiplexed || new.multiplexed;
                         for (plan_key, new_events) in new.counters {
                             if let Some((_, existing_events)) =
                                 existing.counters.iter_mut().find(|(k, _)| *k == plan_key)
                             {
-                                for (event, value) in new_events {
-                                    *existing_events.entry(event).or_insert(0) += value;
+                                for (event, pv) in new_events {
+                                    let e = existing_events.entry(event).or_default();
+                                    e.count += pv.count;
+                                    e.multiplexed = e.multiplexed || pv.multiplexed;
                                 }
                             } else {
                                 existing.counters.push((plan_key, new_events));
@@ -970,12 +971,12 @@ impl QueryContextShared {
         }
     }
 
-    pub fn set_perf_events(&self, events: Vec<PerfEvent>) {
-        self.perf_config.lock().events = events;
+    pub fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
+        self.perf_config.lock().event_groups = event_groups;
     }
 
-    pub fn get_perf_events(&self) -> Vec<PerfEvent> {
-        self.perf_config.lock().events.clone()
+    pub fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
+        self.perf_config.lock().event_groups.clone()
     }
 }
 

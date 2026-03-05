@@ -24,6 +24,7 @@ use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use databend_common_base::runtime::PerfEvent;
+use databend_common_base::runtime::PerfValue;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetricValues;
 use databend_common_exception::ErrorCode;
@@ -38,8 +39,7 @@ use crate::servers::flight::v1::packets::ProgressInfo;
 /// Per-node hardware performance counter data, collected separately from PlanProfile.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodePerfCounters {
-    pub counters: Vec<(String, HashMap<PerfEvent, u64>)>,
-    pub multiplexed: bool,
+    pub counters: Vec<(String, HashMap<PerfEvent, PerfValue>)>,
 }
 
 pub struct FragmentData {

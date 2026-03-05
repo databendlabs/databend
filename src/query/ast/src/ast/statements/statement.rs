@@ -702,10 +702,12 @@ impl Display for Statement {
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
-                    ExplainKind::Perf { events } => {
+                    ExplainKind::Perf { event_groups } => {
                         write!(f, " PERF")?;
-                        if !events.is_empty() {
-                            write!(f, "(events='{}')", events.join(","))?;
+                        if !event_groups.is_empty() {
+                            let groups_str: Vec<String> =
+                                event_groups.iter().map(|g| g.join("+")).collect();
+                            write!(f, "(events='{}')", groups_str.join(","))?;
                         }
                     }
                 }

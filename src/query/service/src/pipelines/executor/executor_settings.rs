@@ -27,7 +27,7 @@ pub struct ExecutorSettings {
     pub enable_queries_executor: bool,
     pub max_execute_time_in_seconds: Duration,
     pub executor_node_id: String,
-    pub perf_events: Vec<PerfEvent>,
+    pub perf_event_groups: Vec<Vec<PerfEvent>>,
 }
 
 impl ExecutorSettings {
@@ -56,7 +56,7 @@ impl ExecutorSettings {
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
             executor_node_id: ctx.get_cluster().local_id.clone(),
-            perf_events: ctx.get_perf_config().events,
+            perf_event_groups: ctx.get_perf_config().event_groups,
         })
     }
 }

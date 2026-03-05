@@ -99,7 +99,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
-                    Some(TokenKind::PERF) => ExplainKind::Perf { events: vec![] },
+                    Some(TokenKind::PERF) => ExplainKind::Perf {
+                        event_groups: vec![],
+                    },
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -6344,7 +6346,7 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
             EXPLAIN ~ PERF ~ ( "(" ~ ^#ident ~ "=" ~ ^#literal_string ~ ")" )? ~ #statement
         },
         |(_, _, opt_options, statement)| {
-            let events = if let Some((_, key, _, value, _)) = opt_options {
+            let event_groups = if let Some((_, key, _, value, _)) = opt_options {
                 if key.name.to_lowercase() != "events" {
                     return Err(nom::Err::Failure(ErrorKind::Other(
                         "expected 'events' as the option key for EXPLAIN PERF",
@@ -6352,14 +6354,20 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
                 }
                 value
                     .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
+                    .map(|group| {
+                        group
+                            .split('+')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|g| !g.is_empty())
                     .collect()
             } else {
                 vec![]
             };
             Ok(Statement::Explain {
-                kind: ExplainKind::Perf { events },
+                kind: ExplainKind::Perf { event_groups },
                 options: Default::default(),
                 query: Box::new(statement.stmt),
             })

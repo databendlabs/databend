@@ -562,7 +562,7 @@ async fn create_executor_with_simple_pipeline(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
-        perf_events: vec![],
+        perf_event_groups: vec![],
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

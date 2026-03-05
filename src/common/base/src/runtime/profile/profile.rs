@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -24,6 +23,7 @@ use crate::runtime::ThreadTracker;
 use crate::runtime::error_info::NodeErrorType;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::perf::PerfEvent;
+use crate::runtime::perf::PerfValue;
 use crate::runtime::profile::ProfileStatisticsName;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -54,9 +54,7 @@ pub struct Profile {
     pub metrics_registry: Option<Arc<ScopedRegistry>>,
     pub errors: Arc<Mutex<Vec<NodeErrorType>>>,
     /// Hardware/software perf counter results, only populated during EXPLAIN PERF.
-    pub perf_counters: Mutex<HashMap<PerfEvent, u64>>,
-    /// Whether any perf counter read detected kernel timesharing (multiplexing).
-    pub perf_multiplexed: AtomicBool,
+    pub perf_counters: Mutex<HashMap<PerfEvent, PerfValue>>,
 }
 
 impl Clone for Profile {
@@ -75,7 +73,6 @@ impl Clone for Profile {
             }),
             errors: self.errors.clone(),
             perf_counters: Mutex::new(self.perf_counters.lock().clone()),
-            perf_multiplexed: AtomicBool::new(self.perf_multiplexed.load(Ordering::SeqCst)),
         }
     }
 }
@@ -106,7 +103,6 @@ impl Profile {
             metrics_registry,
             errors: Arc::new(Mutex::new(vec![])),
             perf_counters: Mutex::new(HashMap::new()),
-            perf_multiplexed: AtomicBool::new(false),
         }
     }
 
@@ -120,17 +116,16 @@ impl Profile {
     }
 
     /// Record perf counter values into the current thread's profile.
-    /// Only called during EXPLAIN PERF execution.
-    pub fn record_perf_counters(values: Vec<(PerfEvent, u64)>, multiplexed: bool) {
+    /// Each entry carries its own per-event multiplexed flag.
+    pub fn record_perf_counters(values: Vec<(PerfEvent, u64, bool)>) {
         ThreadTracker::with(|x| match x.borrow().payload.profile.as_ref() {
             None => {}
             Some(profile) => {
                 let mut counters = profile.perf_counters.lock();
-                for (event, value) in values {
-                    *counters.entry(event).or_insert(0) += value;
-                }
-                if multiplexed {
-                    profile.perf_multiplexed.store(true, Ordering::SeqCst);
+                for (event, value, mux) in values {
+                    let e = counters.entry(event).or_default();
+                    e.count += value;
+                    e.multiplexed = e.multiplexed || mux;
                 }
             }
         });

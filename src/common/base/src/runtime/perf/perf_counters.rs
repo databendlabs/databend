@@ -138,15 +138,21 @@ impl PerfEvent {
     }
 
     /// The default set of events used when none are specified.
-    pub fn defaults() -> Vec<Self> {
+    /// Each event is in its own group (standalone) by default.
+    pub fn default_groups() -> Vec<Vec<Self>> {
         vec![
-            Self::CpuCycles,
-            Self::Instructions,
-            Self::BranchMisses,
-            Self::CacheMisses,
-            Self::CacheReferences,
+            vec![Self::CpuCycles, Self::Instructions],
+            vec![Self::CacheMisses, Self::CacheReferences],
+            vec![Self::BranchMisses],
         ]
     }
+}
+
+/// A single perf event measurement with per-event multiplexing info.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PerfValue {
+    pub count: u64,
+    pub multiplexed: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -230,52 +236,88 @@ mod target_impl {
 
     use super::PerfEvent;
 
-    /// Per-thread hardware performance counter group.
+    /// Per-thread hardware performance counters supporting mixed grouped and
+    /// standalone modes.
     ///
-    /// Holds a dynamic set of counters determined at construction time by the
-    /// caller-supplied `&[PerfEvent]`. Created once per executor worker thread
-    /// and reused across processor executions via reset→enable→process→disable→read.
+    /// - Multi-event groups: events are atomically scheduled together by the
+    ///   kernel, making ratios between them meaningful (e.g. IPC).
+    /// - Standalone counters: each event runs independently, avoiding the
+    ///   kernel's group size limit.
+    ///
+    /// Created once per executor worker thread and reused across processor
+    /// executions via reset→enable→process→disable→read.
     pub struct PerfCounters {
-        group: Group,
-        counters: Vec<(PerfEvent, Counter)>,
+        /// Multi-event groups (len > 1 events each).
+        groups: Vec<(Group, Vec<(PerfEvent, Counter)>)>,
+        /// Standalone counters (single events, not in any group).
+        standalone: Vec<(PerfEvent, Counter)>,
     }
 
     impl PerfCounters {
-        /// Try to create a new perf counter group for the given events.
-        /// Returns `None` if the kernel denies access or any counter fails to add.
-        pub fn try_new(events: &[PerfEvent]) -> Option<Self> {
-            let mut group = Group::new().ok()?;
-            let mut counters = Vec::with_capacity(events.len());
-            for &event in events {
-                let counter = group.add(&event.to_builder()).ok()?;
-                counters.push((event, counter));
+        /// Try to create perf counters for the given event groups.
+        /// Each inner slice with len > 1 becomes a perf_event Group;
+        /// single-element slices become standalone Counters.
+        /// Returns `None` if the kernel denies access or any counter fails.
+        pub fn try_new(event_groups: &[Vec<PerfEvent>]) -> Option<Self> {
+            let mut groups = Vec::new();
+            let mut standalone = Vec::new();
+
+            for group_events in event_groups {
+                if group_events.len() > 1 {
+                    let mut group = Group::new().ok()?;
+                    let mut counters = Vec::with_capacity(group_events.len());
+                    for &event in group_events {
+                        let counter = group.add(&event.to_builder()).ok()?;
+                        counters.push((event, counter));
+                    }
+                    groups.push((group, counters));
+                } else if let Some(&event) = group_events.first() {
+                    let counter = event.to_builder().build().ok()?;
+                    standalone.push((event, counter));
+                }
             }
-            Some(PerfCounters { group, counters })
+
+            Some(PerfCounters { groups, standalone })
         }
 
-        /// Reset all counters to zero and enable the group.
+        /// Reset all counters to zero and enable them.
         pub fn reset_and_enable(&mut self) -> io::Result<()> {
-            self.group.reset()?;
-            self.group.enable()
+            for (group, _) in &mut self.groups {
+                group.reset()?;
+                group.enable()?;
+            }
+            for (_, counter) in &mut self.standalone {
+                counter.reset()?;
+                counter.enable()?;
+            }
+            Ok(())
         }
 
-        /// Disable the group and read all counter values.
-        /// Returns `(values, multiplexed)` where `multiplexed` is true if the
-        /// kernel time-shared the hardware counters (time_running < time_enabled),
-        /// meaning the reported values are estimated.
-        pub fn disable_and_read(&mut self) -> io::Result<(Vec<(PerfEvent, u64)>, bool)> {
-            self.group.disable()?;
-            let counts = self.group.read()?;
-            let multiplexed = match (counts.time_enabled(), counts.time_running()) {
-                (Some(enabled), Some(running)) => running < enabled,
-                _ => false,
-            };
-            let values = self
-                .counters
-                .iter()
-                .map(|(event, counter)| (*event, counts[counter]))
-                .collect();
-            Ok((values, multiplexed))
+        /// Disable all counters and read values.
+        /// Returns per-event `(event, count, multiplexed)` triples.
+        pub fn disable_and_read(&mut self) -> io::Result<Vec<(PerfEvent, u64, bool)>> {
+            let mut results = Vec::new();
+
+            for (group, counters) in &mut self.groups {
+                group.disable()?;
+                let counts = group.read()?;
+                let multiplexed = match (counts.time_enabled(), counts.time_running()) {
+                    (Some(enabled), Some(running)) => running < enabled,
+                    _ => false,
+                };
+                for (event, counter) in counters.iter() {
+                    results.push((*event, counts[counter], multiplexed));
+                }
+            }
+
+            for (event, counter) in &mut self.standalone {
+                counter.disable()?;
+                let cat = counter.read_count_and_time()?;
+                let multiplexed = cat.time_running < cat.time_enabled;
+                results.push((*event, cat.count, multiplexed));
+            }
+
+            Ok(results)
         }
     }
 }
@@ -288,7 +330,7 @@ mod target_impl {
     pub struct PerfCounters;
 
     impl PerfCounters {
-        pub fn try_new(_events: &[PerfEvent]) -> Option<Self> {
+        pub fn try_new(_event_groups: &[Vec<PerfEvent>]) -> Option<Self> {
             None
         }
 
@@ -296,8 +338,8 @@ mod target_impl {
             Ok(())
         }
 
-        pub fn disable_and_read(&mut self) -> std::io::Result<(Vec<(PerfEvent, u64)>, bool)> {
-            Ok((vec![], false))
+        pub fn disable_and_read(&mut self) -> std::io::Result<Vec<(PerfEvent, u64, bool)>> {
+            Ok(vec![])
         }
     }
 }
@@ -312,7 +354,7 @@ fn default_frequency() -> i32 {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct PerfConfig {
     pub profiler_enabled: bool,
-    pub events: Vec<PerfEvent>,
+    pub event_groups: Vec<Vec<PerfEvent>>,
     #[serde(default = "default_frequency")]
     pub frequency: i32,
 }
@@ -320,12 +362,17 @@ pub struct PerfConfig {
 impl PerfConfig {
     /// True if either the CPU profiler or hw counters are active.
     pub fn is_perf_active(&self) -> bool {
-        self.profiler_enabled || !self.events.is_empty()
+        self.profiler_enabled || !self.event_groups.is_empty()
     }
 
     /// True if hardware performance counters are requested.
     pub fn has_hw_counters(&self) -> bool {
-        !self.events.is_empty()
+        !self.event_groups.is_empty()
+    }
+
+    /// Flatten all event groups into a single ordered list of events.
+    pub fn all_events(&self) -> Vec<PerfEvent> {
+        self.event_groups.iter().flatten().copied().collect()
     }
 }
 

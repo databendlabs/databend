@@ -52,6 +52,7 @@ pub use memory::set_alloc_error_hook;
 pub use perf::PerfConfig;
 pub use perf::PerfCounters;
 pub use perf::PerfEvent;
+pub use perf::PerfValue;
 pub use perf::QueryPerf;
 pub use perf::QueryPerfGuard;
 pub use runtime::Dropper;

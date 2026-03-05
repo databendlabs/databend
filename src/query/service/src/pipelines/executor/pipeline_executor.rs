@@ -78,7 +78,7 @@ impl PipelineExecutor {
                 1,
                 settings.query_id.clone(),
                 Some(finish_condvar.clone()),
-                settings.perf_events.clone(),
+                settings.perf_event_groups.clone(),
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
@@ -134,7 +134,7 @@ impl PipelineExecutor {
                 1,
                 settings.query_id.clone(),
                 Some(finish_condvar.clone()),
-                settings.perf_events.clone(),
+                settings.perf_event_groups.clone(),
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {

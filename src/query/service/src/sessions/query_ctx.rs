@@ -2369,12 +2369,12 @@ impl TableContext for QueryContext {
         self.shared.set_nodes_perf(node, perf);
     }
 
-    fn get_perf_events(&self) -> Vec<PerfEvent> {
+    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
         self.shared.get_perf_events()
     }
 
-    fn set_perf_events(&self, events: Vec<PerfEvent>) {
-        self.shared.set_perf_events(events);
+    fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
+        self.shared.set_perf_events(event_groups);
     }
 }
 

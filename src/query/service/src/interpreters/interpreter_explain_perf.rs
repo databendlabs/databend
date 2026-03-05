@@ -19,6 +19,7 @@ use std::time::Duration;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
+use databend_common_base::runtime::PerfValue;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
@@ -47,33 +48,41 @@ use crate::sessions::QueryContext;
 pub struct ExplainPerfInterpreter {
     pub sql: String,
     pub ctx: Arc<QueryContext>,
-    pub events: Vec<PerfEvent>,
+    pub event_groups: Vec<Vec<PerfEvent>>,
 }
 
 impl ExplainPerfInterpreter {
     pub fn try_create(
         sql: String,
-        event_names: Vec<String>,
+        event_group_names: Vec<Vec<String>>,
         ctx: Arc<QueryContext>,
     ) -> Result<Self> {
-        let events = if event_names.is_empty() {
-            PerfEvent::defaults()
+        let event_groups = if event_group_names.is_empty() {
+            PerfEvent::default_groups()
         } else {
-            let mut resolved = Vec::with_capacity(event_names.len());
-            for name in &event_names {
-                match PerfEvent::from_name(name) {
-                    Some(e) => resolved.push(e),
-                    None => {
-                        return Err(ErrorCode::SyntaxException(format!(
-                            "Unknown perf event: '{name}'. Valid events: {}",
-                            PerfEvent::all_names().collect::<Vec<_>>().join(", ")
-                        )));
+            let mut groups = Vec::with_capacity(event_group_names.len());
+            for group in &event_group_names {
+                let mut resolved = Vec::with_capacity(group.len());
+                for name in group {
+                    match PerfEvent::from_name(name) {
+                        Some(e) => resolved.push(e),
+                        None => {
+                            return Err(ErrorCode::SyntaxException(format!(
+                                "Unknown perf event: '{name}'. Valid events: {}",
+                                PerfEvent::all_names().collect::<Vec<_>>().join(", ")
+                            )));
+                        }
                     }
                 }
+                groups.push(resolved);
             }
-            resolved
+            groups
         };
-        Ok(Self { sql, ctx, events })
+        Ok(Self {
+            sql,
+            ctx,
+            event_groups,
+        })
     }
 
     pub async fn perf(&self) -> Result<Vec<DataBlock>> {
@@ -91,7 +100,7 @@ impl ExplainPerfInterpreter {
         let _permit = self.acquire_semaphore().await?;
         let config = PerfConfig {
             profiler_enabled: true,
-            events: self.events.clone(),
+            event_groups: self.event_groups.clone(),
             frequency: 99,
         };
         self.ctx.set_perf_config(config.clone());
@@ -174,12 +183,11 @@ impl ExplainPerfInterpreter {
     }
 
     fn build_hw_counters_html(&self) -> String {
-        let events = &self.events;
+        let all_events: Vec<PerfEvent> = self.event_groups.iter().flatten().copied().collect();
         let mut sections = Vec::new();
 
         let local_node_id = GlobalConfig::instance().query.node_id.clone();
         let all_nodes = self.ctx.get_nodes_perf_counters();
-        // Sort so the local (coordinator) node appears first.
         let mut nodes: Vec<_> = all_nodes.into_iter().collect();
         nodes.sort_by_key(|(id, _)| if id == &local_node_id { 0 } else { 1 });
 
@@ -193,9 +201,9 @@ impl ExplainPerfInterpreter {
             if !entries.is_empty() {
                 sections.push(Self::build_node_table(
                     node_id,
-                    events,
+                    &all_events,
+                    &self.event_groups,
                     &entries,
-                    node_counters.multiplexed,
                 ));
             }
         }
@@ -213,39 +221,94 @@ impl ExplainPerfInterpreter {
         )
     }
 
+    /// Check if two events are in the same group.
+    fn events_in_same_group(event_groups: &[Vec<PerfEvent>], a: PerfEvent, b: PerfEvent) -> bool {
+        event_groups
+            .iter()
+            .any(|g| g.contains(&a) && g.contains(&b))
+    }
+
     fn build_node_table(
         node_id: &str,
         events: &[PerfEvent],
-        entries: &[(String, &HashMap<PerfEvent, u64>)],
-        multiplexed: bool,
+        event_groups: &[Vec<PerfEvent>],
+        entries: &[(String, &HashMap<PerfEvent, PerfValue>)],
     ) -> String {
+        // Determine which events have any multiplexed values across all entries.
+        let mut mux_events: std::collections::HashSet<PerfEvent> = std::collections::HashSet::new();
+        for (_, counters) in entries {
+            for (event, pv) in counters.iter() {
+                if pv.multiplexed {
+                    mux_events.insert(*event);
+                }
+            }
+        }
+
         let mut header = "<th>Plan Node</th>".to_string();
         for event in events {
-            header.push_str(&format!("<th>{}</th>", event.display_name()));
+            let name = event.display_name();
+            if mux_events.contains(event) {
+                header.push_str(&format!("<th>{} *</th>", name));
+            } else {
+                header.push_str(&format!("<th>{}</th>", name));
+            }
         }
         let has_cycles = events.contains(&PerfEvent::CpuCycles);
         let has_insns = events.contains(&PerfEvent::Instructions);
         let has_misses = events.contains(&PerfEvent::CacheMisses);
         let has_refs = events.contains(&PerfEvent::CacheReferences);
+        let ipc_same_group = has_cycles
+            && has_insns
+            && Self::events_in_same_group(
+                event_groups,
+                PerfEvent::CpuCycles,
+                PerfEvent::Instructions,
+            );
+        let cmr_same_group = has_misses
+            && has_refs
+            && Self::events_in_same_group(
+                event_groups,
+                PerfEvent::CacheMisses,
+                PerfEvent::CacheReferences,
+            );
         if has_cycles && has_insns {
-            header.push_str("<th>IPC</th>");
+            let suffix = if ipc_same_group { "" } else { " \u{2020}" };
+            header.push_str(&format!("<th>IPC{}</th>", suffix));
         }
         if has_misses && has_refs {
-            header.push_str("<th>Cache Miss Rate</th>");
+            let suffix = if cmr_same_group { "" } else { " \u{2020}" };
+            header.push_str(&format!("<th>Cache Miss Rate{}</th>", suffix));
         }
 
         let mut rows = String::new();
-        let mut totals: HashMap<PerfEvent, u64> = events.iter().map(|e| (*e, 0u64)).collect();
+        let mut totals: HashMap<PerfEvent, PerfValue> =
+            events.iter().map(|e| (*e, PerfValue::default())).collect();
 
         for (name, counters) in entries {
             let mut row = format!("<td>{}</td>", name);
             for event in events {
-                let val = counters.get(event).copied().unwrap_or(0);
-                *totals.entry(*event).or_insert(0) += val;
-                row.push_str(&format!("<td>{}</td>", convert_number_size(val as f64)));
+                let pv = counters.get(event);
+                let val = pv.map(|v| v.count).unwrap_or(0);
+                let mux = pv.map(|v| v.multiplexed).unwrap_or(false);
+                let t = totals.entry(*event).or_default();
+                t.count += val;
+                t.multiplexed = t.multiplexed || mux;
+                let formatted = convert_number_size(val as f64);
+                if mux {
+                    row.push_str(&format!("<td>≈{}</td>", formatted));
+                } else {
+                    row.push_str(&format!("<td>{}</td>", formatted));
+                }
             }
+            let row_counts: HashMap<PerfEvent, u64> =
+                counters.iter().map(|(e, v)| (*e, v.count)).collect();
             Self::append_derived_metrics(
-                &mut row, counters, has_cycles, has_insns, has_misses, has_refs,
+                &mut row,
+                &row_counts,
+                has_cycles,
+                has_insns,
+                has_misses,
+                has_refs,
             );
             rows.push_str(&format!("<tr>{}</tr>\n", row));
         }
@@ -253,34 +316,44 @@ impl ExplainPerfInterpreter {
         // Total row
         let mut total_row = "<td>TOTAL</td>".to_string();
         for event in events {
-            total_row.push_str(&format!(
-                "<td>{}</td>",
-                convert_number_size(*totals.get(event).unwrap_or(&0) as f64)
-            ));
+            let pv = totals.get(event).cloned().unwrap_or_default();
+            let formatted = convert_number_size(pv.count as f64);
+            if pv.multiplexed {
+                total_row.push_str(&format!("<td>≈{}</td>", formatted));
+            } else {
+                total_row.push_str(&format!("<td>{}</td>", formatted));
+            }
         }
+        let total_counts: HashMap<PerfEvent, u64> =
+            totals.iter().map(|(e, v)| (*e, v.count)).collect();
         Self::append_derived_metrics(
             &mut total_row,
-            &totals,
+            &total_counts,
             has_cycles,
             has_insns,
             has_misses,
             has_refs,
         );
 
-        let warning = if multiplexed {
-            r#"<p style="color:#cc6600;font-weight:bold;">&#9888; Kernel counter multiplexing detected: values are estimated. Consider reducing the number of perf events for accurate measurements.</p>"#
-        } else {
-            ""
-        };
+        let mut footnotes = Vec::new();
+        if !mux_events.is_empty() {
+            footnotes.push(r#"<p style="color:#cc6600;">* marked columns had kernel counter multiplexing; values with ≈ are estimated.</p>"#);
+        }
+        if (has_cycles && has_insns && !ipc_same_group)
+            || (has_misses && has_refs && !cmr_same_group)
+        {
+            footnotes.push(r#"<p style="color:#888;">&dagger; derived metric computed from events not in the same group; value may be imprecise.</p>"#);
+        }
 
         format!(
             r#"<h4 style="color:#4a90e2;">Node: {node_id}</h4>
-{warning}
 <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;margin-bottom:20px;">
 <tr style="background:#e0e0e0;">{header}</tr>
 {rows}
 <tr style="background:#f0f0f0;font-weight:bold;">{total_row}</tr>
-</table>"#
+</table>
+{}"#,
+            footnotes.join("\n")
         )
     }
 

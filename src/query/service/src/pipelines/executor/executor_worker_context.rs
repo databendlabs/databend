@@ -99,8 +99,8 @@ impl ExecutorWorkerContext {
 
     /// Initialize hardware performance counters for this worker thread.
     /// Silently does nothing if perf events are unavailable (non-Linux, no permissions, etc).
-    pub fn init_perf_counters(&mut self, events: &[PerfEvent]) {
-        self.perf_counters = PerfCounters::try_new(events);
+    pub fn init_perf_counters(&mut self, event_groups: &[Vec<PerfEvent>]) {
+        self.perf_counters = PerfCounters::try_new(event_groups);
     }
 
     pub fn has_task(&self) -> bool {
@@ -190,8 +190,8 @@ impl ExecutorWorkerContext {
 
             if perf_enabled {
                 if let Some(counters) = &mut self.perf_counters {
-                    if let Ok((values, multiplexed)) = counters.disable_and_read() {
-                        Profile::record_perf_counters(values, multiplexed);
+                    if let Ok(values) = counters.disable_and_read() {
+                        Profile::record_perf_counters(values);
                     }
                 }
             }

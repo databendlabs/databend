@@ -29,6 +29,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::PerfEvent;
+use databend_common_base::runtime::PerfValue;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
@@ -191,8 +192,8 @@ struct ExecutingGraph {
     finished_error: Mutex<Option<ErrorCode>>,
     executor_stats: ExecutorStats,
     waker: Arc<ExecutorWaker>,
-    /// Perf events selected for this query (only set during EXPLAIN PERF).
-    perf_events: Vec<PerfEvent>,
+    /// Perf event groups selected for this query (only set during EXPLAIN PERF).
+    perf_event_groups: Vec<Vec<PerfEvent>>,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -203,10 +204,10 @@ impl ExecutingGraph {
         init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
-        perf_events: Vec<PerfEvent>,
+        perf_event_groups: Vec<Vec<PerfEvent>>,
     ) -> Result<ExecutingGraph> {
         let waker = pipeline.get_waker();
-        let perf_enabled = !perf_events.is_empty();
+        let perf_enabled = !perf_event_groups.is_empty();
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
@@ -229,7 +230,7 @@ impl ExecutingGraph {
             finished_error: Mutex::new(None),
             executor_stats,
             waker,
-            perf_events,
+            perf_event_groups,
         })
     }
 
@@ -238,7 +239,7 @@ impl ExecutingGraph {
         init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
-        perf_events: Vec<PerfEvent>,
+        perf_event_groups: Vec<Vec<PerfEvent>>,
     ) -> Result<ExecutingGraph> {
         // Create a shared waker at the graph level
         let graph_waker = ExecutorWaker::create();
@@ -250,7 +251,7 @@ impl ExecutingGraph {
             pipeline.get_waker().bind(proxy_target);
         }
 
-        let perf_enabled = !perf_events.is_empty();
+        let perf_enabled = !perf_event_groups.is_empty();
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
@@ -275,7 +276,7 @@ impl ExecutingGraph {
             finished_error: Mutex::new(None),
             executor_stats,
             waker: graph_waker,
-            perf_events,
+            perf_event_groups,
         })
     }
 
@@ -736,14 +737,14 @@ impl RunningGraph {
         init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
-        perf_events: Vec<PerfEvent>,
+        perf_event_groups: Vec<Vec<PerfEvent>>,
     ) -> Result<Arc<RunningGraph>> {
         let graph_state = ExecutingGraph::create(
             pipeline,
             init_epoch,
             query_id,
             finish_condvar_notify,
-            perf_events,
+            perf_event_groups,
         )?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
@@ -754,14 +755,14 @@ impl RunningGraph {
         init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
-        perf_events: Vec<PerfEvent>,
+        perf_event_groups: Vec<Vec<PerfEvent>>,
     ) -> Result<Arc<RunningGraph>> {
         let graph_state = ExecutingGraph::from_pipelines(
             pipelines,
             init_epoch,
             query_id,
             finish_condvar_notify,
-            perf_events,
+            perf_event_groups,
         )?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
@@ -789,8 +790,8 @@ impl RunningGraph {
         &self.0.graph[pid].tracking_payload
     }
 
-    pub fn perf_events(&self) -> &[PerfEvent] {
-        &self.0.perf_events
+    pub fn perf_event_groups(&self) -> &[Vec<PerfEvent>] {
+        &self.0.perf_event_groups
     }
 
     pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
@@ -846,8 +847,7 @@ impl RunningGraph {
     }
 
     pub fn fetch_perf_counters(&self) -> NodePerfCounters {
-        let mut by_plan: HashMap<u32, (String, HashMap<PerfEvent, u64>)> = HashMap::new();
-        let mut multiplexed = false;
+        let mut by_plan: HashMap<u32, (String, HashMap<PerfEvent, PerfValue>)> = HashMap::new();
 
         for node in self.0.graph.node_weights() {
             let profile = node.tracking_payload.profile.as_deref().unwrap();
@@ -863,11 +863,10 @@ impl RunningGraph {
             let entry = by_plan
                 .entry(plan_id)
                 .or_insert_with(|| (plan_name, HashMap::new()));
-            for (event, value) in counters.iter() {
-                *entry.1.entry(*event).or_insert(0) += value;
-            }
-            if profile.perf_multiplexed.load(Ordering::SeqCst) {
-                multiplexed = true;
+            for (event, pv) in counters.iter() {
+                let e = entry.1.entry(*event).or_default();
+                e.count += pv.count;
+                e.multiplexed = e.multiplexed || pv.multiplexed;
             }
         }
 
@@ -876,10 +875,7 @@ impl RunningGraph {
             .map(|(id, (name, c))| (format!("{} [#{}]", name, id), c))
             .collect();
         counters.sort_by_key(|(name, _)| name.clone());
-        NodePerfCounters {
-            counters,
-            multiplexed,
-        }
+        NodePerfCounters { counters }
     }
 
     pub fn interrupt_running_nodes(&self) {

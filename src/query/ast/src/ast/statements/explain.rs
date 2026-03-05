@@ -44,7 +44,7 @@ pub enum ExplainKind {
     Graphical,
 
     Perf {
-        events: Vec<String>,
+        event_groups: Vec<Vec<String>>,
     },
 }
 

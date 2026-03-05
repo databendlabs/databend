@@ -71,7 +71,7 @@ pub struct QueryPipelineExecutor {
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
     lock_guards: Vec<Arc<LockGuard>>,
-    perf_events: Vec<PerfEvent>,
+    perf_event_groups: Vec<Vec<PerfEvent>>,
 }
 
 impl QueryPipelineExecutor {
@@ -94,7 +94,7 @@ impl QueryPipelineExecutor {
             1,
             settings.query_id.clone(),
             None,
-            settings.perf_events.clone(),
+            settings.perf_event_groups.clone(),
         ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
@@ -161,7 +161,7 @@ impl QueryPipelineExecutor {
             1,
             settings.query_id.clone(),
             None,
-            settings.perf_events.clone(),
+            settings.perf_event_groups.clone(),
         ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
@@ -198,7 +198,7 @@ impl QueryPipelineExecutor {
             on_init_callback,
             on_finished_chain,
             async_runtime: GlobalIORuntime::instance(),
-            perf_events: settings.perf_events.clone(),
+            perf_event_groups: settings.perf_event_groups.clone(),
             settings,
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
@@ -442,7 +442,7 @@ impl QueryPipelineExecutor {
         unsafe {
             let workers_condvar = self.workers_condvar.clone();
             let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
-            context.init_perf_counters(&self.perf_events);
+            context.init_perf_counters(&self.perf_event_groups);
 
             while !self.global_tasks_queue.is_finished() {
                 // When there are not enough tasks, the thread will be blocked, so we need loop check.
