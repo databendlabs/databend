@@ -174,5 +174,113 @@ SELECT default_expression FROM system.columns WHERE database = 'db_09_0103' AND 
 ----
 99
 
+####################################################
+# deterministic default-only change does NOT rebuild       #
+####################################################
+
+statement ok
+CREATE TABLE t_det(a INT NOT NULL) row_per_block=1
+
+statement ok
+INSERT INTO t_det VALUES(1)
+
+statement ok
+ALTER TABLE t_det ADD COLUMN b INT DEFAULT 10
+
+# ADD COLUMN is metadata-only; no physical column data for b.
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_det') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_det MODIFY COLUMN b INT DEFAULT 42
+
+# Deterministic default change is metadata-only; still no physical column data.
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_det') WHERE column_name = 'b'
+----
+0
+
+query II
+SELECT a, b FROM t_det
+----
+1 42
+
+####################################################
+# multiple sequential deterministic default changes        #
+####################################################
+
+statement ok
+CREATE TABLE t_seq_det(a INT NOT NULL) row_per_block=1
+
+statement ok
+INSERT INTO t_seq_det VALUES(1)
+
+statement ok
+ALTER TABLE t_seq_det ADD COLUMN b INT DEFAULT 1
+
+statement ok
+ALTER TABLE t_seq_det MODIFY COLUMN b INT DEFAULT 2
+
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_seq_det') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_seq_det MODIFY COLUMN b INT DEFAULT 3
+
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_seq_det') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_seq_det MODIFY COLUMN b INT DEFAULT 4
+
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_seq_det') WHERE column_name = 'b'
+----
+0
+
+query II
+SELECT a, b FROM t_seq_det
+----
+1 4
+
+####################################################
+# invalid default rejected at ALTER time                   #
+####################################################
+
+statement ok
+CREATE TABLE t_inv(a INT NOT NULL, b INT DEFAULT 0)
+
+statement error
+ALTER TABLE t_inv MODIFY COLUMN b INT DEFAULT 'not_a_number'
+
+####################################################
+# physically-written column retains value after default change #
+####################################################
+
+statement ok
+CREATE TABLE t_phys(a INT NOT NULL, b INT DEFAULT 10)
+
+statement ok
+INSERT INTO t_phys VALUES(1, 100)
+
+statement ok
+ALTER TABLE t_phys MODIFY COLUMN b INT DEFAULT 999
+
+# Old row keeps its physically-written value; new row gets new default.
+statement ok
+INSERT INTO t_phys(a) VALUES(2)
+
+query II
+SELECT a, b FROM t_phys ORDER BY a
+----
+1 100
+2 999
+
 statement ok
 DROP DATABASE db_09_0103
