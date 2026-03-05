@@ -47,8 +47,10 @@ copy into t1 from @s1/t1 return_failed_only=true column_match_mode=case_sensitiv
 query error must be one of
 copy into t1 from @s1/t1 return_failed_only=true column_match_mode=CaseSensitive force=true
 
-query error ambiguous
+query ?
 select a from @s1/t2;
+----
+1
 
 query ??
 select a, `A` from @s1/t2(case_sensitive=>true);
@@ -159,8 +161,10 @@ copy into t1 from @s1/t1 return_failed_only=true column_match_mode=case_sensitiv
 query error must be one of
 copy into t1 from @s1/t1 return_failed_only=true column_match_mode=CaseSensitive force=true
 
-query error ambiguous
+query ?
 select a from @s1/t2;
+----
+1
 
 query ??
 select a, `A` from @s1/t2(case_sensitive=>true);
