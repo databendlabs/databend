@@ -26,16 +26,17 @@ use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
-use super::exchange_sink::build_broadcast_outbound_channels;
-use super::exchange_sink::build_outbound_channels;
 use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::hash_send_transform::HashSendTransform;
+use crate::servers::flight::v1::exchange::BroadcastRecvTransform;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_outbound_channels;
+use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_channels;
 use crate::servers::flight::v1::network::create_local_channels;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
@@ -165,7 +166,7 @@ impl ExchangeTransform {
 
         let mut items = Vec::with_capacity(local_threads);
         for idx in 0..channel_set.channels.len() {
-            items.push(ExchangeRecvTransform::create_item(
+            items.push(BroadcastRecvTransform::create_item(
                 idx,
                 channel_set.create_receiver(idx, &params.schema),
                 waker.clone(),
@@ -184,15 +185,17 @@ impl ExchangeTransform {
         let mut local_pos = 0;
         let mut local_threads = 0;
 
-        for (idx, (dest, threads)) in params.destination_channels.iter().enumerate() {
+        for (dest, threads) in params.destination_channels.iter() {
             if dest == &params.executor_id {
-                local_pos = idx;
                 local_threads = threads.len();
+                break;
             }
+
+            local_pos += threads.len();
         }
 
-        let compression = ctx.get_settings().get_query_flight_compression()?;
         let waker = pipeline.get_waker();
+        let compression = ctx.get_settings().get_query_flight_compression()?;
 
         pipeline.resize(local_threads, false)?;
 
@@ -204,14 +207,7 @@ impl ExchangeTransform {
         assert_eq!(channel_set.channels.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);
-        let channels = build_outbound_channels(
-            query_id,
-            exchange_id,
-            &params.executor_id,
-            &params.destination_channels,
-            local_outbound,
-            compression,
-        )?;
+        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
 
         let scatter_size = params.destination_channels.len();
         let scatter = Arc::new(HashFlightScatter::try_create(
@@ -225,9 +221,9 @@ impl ExchangeTransform {
         for idx in 0..local_threads {
             items.push(HashSendTransform::create_item(
                 idx,
-                local_pos,
+                local_pos + idx,
                 scatter.clone(),
-                channels.clone(),
+                remote_outbound.clone(),
                 waker.clone(),
             ));
         }

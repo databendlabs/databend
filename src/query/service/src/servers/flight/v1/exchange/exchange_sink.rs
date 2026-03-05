@@ -154,14 +154,7 @@ impl ExchangeSink {
         assert_eq!(channel_set.channels.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);
-        let channels = build_outbound_channels(
-            query_id,
-            exchange_id,
-            &params.executor_id,
-            &params.destination_channels,
-            local_outbound,
-            compression,
-        )?;
+        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
 
         let scatter_size = params.destination_channels.len();
         let local_pos = params
@@ -181,7 +174,7 @@ impl ExchangeSink {
             items.push(HashSendSink::create_item(
                 idx,
                 scatter.clone(),
-                channels.clone(),
+                remote_outbound.clone(),
                 waker.clone(),
             ));
         }
@@ -221,34 +214,16 @@ pub(super) fn build_broadcast_outbound_channels(
     local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
 ) -> Result<Vec<Arc<dyn OutboundChannel>>> {
-    build_outbound_channels(
-        &params.query_id,
-        &params.exchange_id,
-        &params.executor_id,
-        &params.destination_channels,
-        local_outbound_channels,
-        compression,
-    )
-}
-
-/// Build OutboundChannels using PingPongExchange.
-/// Local destination uses a LocalOutboundChannel; remote destinations
-/// use RoundRobinChannel wrapping multiple RemoteChannels (one per thread).
-pub(super) fn build_outbound_channels(
-    query_id: &str,
-    exchange_id: &str,
-    executor_id: &str,
-    destination_channels: &[(String, Vec<String>)],
-    local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
-    compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+    let query_id = &params.query_id;
+    let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
+
     let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
 
     let mut exchanges_seq = Vec::with_capacity(exchanges.len());
 
-    for (target_id, threads) in destination_channels {
-        if target_id != executor_id {
+    for (target_id, threads) in &params.destination_channels {
+        if target_id != &params.executor_id {
             let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "PingPongExchange not found for target {}",
@@ -271,8 +246,8 @@ pub(super) fn build_outbound_channels(
     let local_channel = RoundRobinChannel::create(local_outbound_channels);
     let mut remote_idx = 0;
     let mut channels = vec![];
-    for (target_id, threads) in destination_channels {
-        if target_id == executor_id {
+    for (target_id, threads) in &params.destination_channels {
+        if target_id == &params.executor_id {
             channels.push(local_channel.clone());
             continue;
         }
@@ -288,6 +263,64 @@ pub(super) fn build_outbound_channels(
         }
 
         channels.push(RoundRobinChannel::create(remote_channels));
+        remote_idx += 1;
+    }
+
+    Ok(channels)
+}
+
+/// Build per-thread OutboundChannels for hash exchange.
+pub(super) fn build_hash_outbound_channels(
+    params: &GlobalExchangeParams,
+    mut local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
+    compression: Option<databend_common_settings::FlightCompression>,
+) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+    let num_threads = local_outbound_channels.len();
+    let query_id = &params.query_id;
+    let exchange_id = &params.exchange_id;
+    let exchange_manager = DataExchangeManager::instance();
+    let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+
+    let mut exchanges_seq = Vec::with_capacity(exchanges.len());
+
+    for (target_id, threads) in &params.destination_channels {
+        if target_id != &params.executor_id {
+            let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "PingPongExchange not found for target {}",
+                    target_id
+                ))
+            })?;
+            assert_eq!(threads.len(), exchange.num_threads);
+            exchanges_seq.push(exchange);
+        }
+    }
+
+    let config = ExchangeBufferConfig::default();
+    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+        exchanges_seq,
+        config,
+        &GlobalIORuntime::instance(),
+    )?);
+
+    let mut remote_idx = 0;
+    let mut channels = Vec::with_capacity(params.destination_channels.len() * num_threads);
+
+    for (target_id, threads) in &params.destination_channels {
+        if target_id == &params.executor_id {
+            channels.extend(std::mem::take(&mut local_outbound_channels));
+            continue;
+        }
+
+        for t_idx in 0..threads.len() {
+            channels.push(RemoteChannel::create(
+                remote_idx,
+                t_idx,
+                shared_buffer.clone(),
+                compression,
+            )?);
+        }
+
         remote_idx += 1;
     }
 
