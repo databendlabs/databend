@@ -428,8 +428,9 @@ impl ModifyTableColumnInterpreter {
                 // --- Default-only change below this point. ---
 
                 // Removing a default is always metadata-only.
-                // Virtual columns (added via ADD COLUMN, never physically written)
-                // fall back to the type's zero/NULL value for old rows.
+                // Columns added via ADD COLUMN (never physically materialized in
+                // existing blocks) fall back to the type's zero/NULL value for
+                // old rows once the default is removed.
                 if field.default_expr.is_none() {
                     continue;
                 }
@@ -470,9 +471,9 @@ impl ModifyTableColumnInterpreter {
         }
 
         // Metadata-only path: no physical rewrite needed.
-        // For deterministic default-only changes on non-empty tables, virtual
-        // columns (never physically materialized) will retroactively reflect
-        // the new default value when read — no data files are touched.
+        // For deterministic default-only changes on non-empty tables, columns
+        // not yet physically materialized will return the new default value
+        // on read — no data files are touched.
         if !need_rebuild || is_empty_table {
             commit_table_meta(
                 &self.ctx,
