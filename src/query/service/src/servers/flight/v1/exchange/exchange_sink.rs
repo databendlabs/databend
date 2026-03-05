@@ -153,8 +153,7 @@ impl ExchangeSink {
         let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
         assert_eq!(channel_set.channels.len(), local_threads);
 
-        let max_bytes = 20 * 1024 * 1024;
-        let local_outbound = create_local_channels(&channel_set, max_bytes);
+        let local_outbound = create_local_channels(&channel_set);
         let channels = build_outbound_channels(
             query_id,
             exchange_id,

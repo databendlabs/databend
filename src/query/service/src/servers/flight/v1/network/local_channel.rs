@@ -108,11 +108,13 @@ impl Drop for LocalOutboundChannel {
     }
 }
 
+/// Max bytes for local channel backpressure (20 MB).
+pub const LOCAL_CHANNEL_MAX_BYTES: usize = 20 * 1024 * 1024;
+
 pub fn create_local_channels(
     channel_set: &NetworkInboundChannelSet,
-    max_bytes: usize,
 ) -> Vec<Arc<dyn OutboundChannel>> {
-    let semaphore = Arc::new(Semaphore::new(max_bytes));
+    let semaphore = Arc::new(Semaphore::new(LOCAL_CHANNEL_MAX_BYTES));
 
     let mut outbound = Vec::<Arc<dyn OutboundChannel>>::with_capacity(channel_set.channels.len());
     for channel in channel_set.channels.iter() {
@@ -122,7 +124,7 @@ pub fn create_local_channels(
             semaphore: semaphore.clone(),
             sender: channel.sender.clone(),
             sender_count: channel.sender_count.clone(),
-            max_bytes_local_channel: max_bytes,
+            max_bytes_local_channel: LOCAL_CHANNEL_MAX_BYTES,
         }));
     }
 
