@@ -3873,3 +3873,122 @@ error:
 
 
 
+ast            : date_from_parts(1977, 8, 7)
+raw expr       : date_from_parts(1977, 8, 7)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(1977_u16 AS Int32), CAST<UInt8>(8_u8 AS Int32), CAST<UInt8>(7_u8 AS Int32))
+optimized expr : 2775
+output type    : Date
+output domain  : {2775..=2775}
+output         : '1977-08-07'
+
+
+ast            : datefromparts(2023, 1, 15)
+raw expr       : datefromparts(2023, 1, 15)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2023_u16 AS Int32), CAST<UInt8>(1_u8 AS Int32), CAST<UInt8>(15_u8 AS Int32))
+optimized expr : 19372
+output type    : Date
+output domain  : {19372..=19372}
+output         : '2023-01-15'
+
+
+ast            : date_from_parts(2010, 1, 100)
+raw expr       : date_from_parts(2010, 1, 100)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2010_u16 AS Int32), CAST<UInt8>(1_u8 AS Int32), CAST<UInt8>(100_u8 AS Int32))
+optimized expr : 14709
+output type    : Date
+output domain  : {14709..=14709}
+output         : '2010-04-10'
+
+
+ast            : date_from_parts(2010, 25, 1)
+raw expr       : date_from_parts(2010, 25, 1)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2010_u16 AS Int32), CAST<UInt8>(25_u8 AS Int32), CAST<UInt8>(1_u8 AS Int32))
+optimized expr : 15340
+output type    : Date
+output domain  : {15340..=15340}
+output         : '2012-01-01'
+
+
+ast            : date_from_parts(2004, 0, 1)
+raw expr       : date_from_parts(2004, 0, 1)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2004_u16 AS Int32), CAST<UInt8>(0_u8 AS Int32), CAST<UInt8>(1_u8 AS Int32))
+optimized expr : 12387
+output type    : Date
+output domain  : {12387..=12387}
+output         : '2003-12-01'
+
+
+ast            : date_from_parts(2004, -1, 1)
+raw expr       : date_from_parts(2004, -1, 1)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2004_u16 AS Int32), CAST<Int8>(-1_i8 AS Int32), CAST<UInt8>(1_u8 AS Int32))
+optimized expr : 12357
+output type    : Date
+output domain  : {12357..=12357}
+output         : '2003-11-01'
+
+
+ast            : date_from_parts(2004, 2, 0)
+raw expr       : date_from_parts(2004, 2, 0)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2004_u16 AS Int32), CAST<UInt8>(2_u8 AS Int32), CAST<UInt8>(0_u8 AS Int32))
+optimized expr : 12448
+output type    : Date
+output domain  : {12448..=12448}
+output         : '2004-01-31'
+
+
+ast            : date_from_parts(2004, 2, -1)
+raw expr       : date_from_parts(2004, 2, -1)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2004_u16 AS Int32), CAST<UInt8>(2_u8 AS Int32), CAST<Int8>(-1_i8 AS Int32))
+optimized expr : 12447
+output type    : Date
+output domain  : {12447..=12447}
+output         : '2004-01-30'
+
+
+ast            : date_from_parts(2004, -1, -1)
+raw expr       : date_from_parts(2004, -1, -1)
+checked expr   : date_from_parts<Int32, Int32, Int32>(CAST<UInt16>(2004_u16 AS Int32), CAST<Int8>(-1_i8 AS Int32), CAST<Int8>(-1_i8 AS Int32))
+optimized expr : 12355
+output type    : Date
+output domain  : {12355..=12355}
+output         : '2003-10-30'
+
+
+ast            : timestamp_from_parts(2013, 4, 5, 12, 0, 0)
+raw expr       : timestamp_from_parts(2013, 4, 5, 12, 0, 0)
+checked expr   : timestamp_from_parts<Int32, Int32, Int32, Int32, Int32, Int32>(CAST<UInt16>(2013_u16 AS Int32), CAST<UInt8>(4_u8 AS Int32), CAST<UInt8>(5_u8 AS Int32), CAST<UInt8>(12_u8 AS Int32), CAST<UInt8>(0_u8 AS Int32), CAST<UInt8>(0_u8 AS Int32))
+optimized expr : 1365163200000000
+output type    : Timestamp
+output domain  : {1365163200000000..=1365163200000000}
+output         : '2013-04-05 12:00:00.000000'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | timestamp_from_parts(2013, 4, 5, 12, 0, 0, 987654321)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `timestamp_from_parts(UInt16, UInt8, UInt8, UInt8, UInt8, UInt8, UInt32)`, you might need to add explicit type casts.
+
+candidate functions:
+  timestamp_from_parts(Int32, Int32, Int32, Int32, Int32, Int32, Int32) :: Timestamp  : unable to unify `UInt32` with `Int32`
+
+
+
+ast            : timestampfromparts(2013, 4, 5, 12, 0, 0)
+raw expr       : timestampfromparts(2013, 4, 5, 12, 0, 0)
+checked expr   : timestamp_from_parts<Int32, Int32, Int32, Int32, Int32, Int32>(CAST<UInt16>(2013_u16 AS Int32), CAST<UInt8>(4_u8 AS Int32), CAST<UInt8>(5_u8 AS Int32), CAST<UInt8>(12_u8 AS Int32), CAST<UInt8>(0_u8 AS Int32), CAST<UInt8>(0_u8 AS Int32))
+optimized expr : 1365163200000000
+output type    : Timestamp
+output domain  : {1365163200000000..=1365163200000000}
+output         : '2013-04-05 12:00:00.000000'
+
+
+ast            : timestamp_from_parts(2013, 4, 5, 12, 0, -3600)
+raw expr       : timestamp_from_parts(2013, 4, 5, 12, 0, -3600)
+checked expr   : timestamp_from_parts<Int32, Int32, Int32, Int32, Int32, Int32>(CAST<UInt16>(2013_u16 AS Int32), CAST<UInt8>(4_u8 AS Int32), CAST<UInt8>(5_u8 AS Int32), CAST<UInt8>(12_u8 AS Int32), CAST<UInt8>(0_u8 AS Int32), CAST<Int16>(-3600_i16 AS Int32))
+optimized expr : 1365159600000000
+output type    : Timestamp
+output domain  : {1365159600000000..=1365159600000000}
+output         : '2013-04-05 11:00:00.000000'
+
+
