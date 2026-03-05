@@ -1,0 +1,62 @@
+statement ok
+create or replace table t1 (a int, `B` int);
+
+
+statement ok
+insert into t1 values (1, 2);
+
+statement ok
+create or replace stage s1;
+
+statement ok
+copy into @s1/t1 from t1;
+
+# query and transform is case insensitive
+
+query 
+select a, `B` from @s1/t1;
+----
+1 2
+
+query 
+copy into t1 from (select a, `B` from @s1/t1) return_failed_only=true;
+----
+
+query 
+select count(1) from t1;
+----
+2
+
+query error column b doesn't exist
+select a, b from @s1/t1;
+
+query error column b doesn't exist
+copy into t1 from (select a, b from @s1/t1) return_failed_only=true force=true;
+
+query 
+select count(1) from t1;
+----
+2
+
+# copy without transform is case insensitive
+
+query 
+copy into t1 from @s1/t1 return_failed_only=true force=true;
+----
+
+query 
+select count(1) from t1;
+----
+3
+
+statement ok
+create or replace table t2 (a int, b int);
+
+query 
+copy into t2 from @s1/t1  return_failed_only=true;
+----
+
+query 
+select * from t2
+----
+1 2

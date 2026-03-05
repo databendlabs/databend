@@ -105,7 +105,7 @@ impl<'a> Binder {
                     .bind_copy_into_table_common(bind_context, stmt, location, true)
                     .await?;
 
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
+                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias, true)
                     .await
             }
         }
@@ -229,7 +229,7 @@ impl<'a> Binder {
                 });
             }
 
-            self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
+            self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None, false)
                 .await
         } else {
             Ok(Plan::CopyIntoTable(Box::new(plan)))
@@ -357,6 +357,7 @@ impl<'a> Binder {
         mut plan: CopyIntoTablePlan,
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
+        is_transform: bool,
     ) -> Result<Plan> {
         plan.collect_files(self.ctx.as_ref()).await?;
         if plan.no_file_to_copy {
@@ -372,6 +373,7 @@ impl<'a> Binder {
                 plan.stage_table_info.files_info.clone(),
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
+                is_transform,
             )
             .await?;
 

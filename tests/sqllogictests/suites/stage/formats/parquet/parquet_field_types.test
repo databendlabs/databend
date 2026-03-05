@@ -5,50 +5,60 @@ select * from @data/parquet/tuple.parquet;
 2 (3,'b')
 3 (3,'c')
 
+# NOTE:
+# `t:A`/`t:B` is an internal tuple-field access path currently supported by
+# planner/executor. We cover it here for regression protection only, and do
+# not guarantee it as a stable SQL interface.
+query
+select id, t:B from @data/parquet/tuple.parquet where t:A = id order by id;
+----
+1 a
+3 c
+
 query 
-select * from @data/parquet/tuple.parquet where t:a = 1;
+select * from @data/parquet/tuple.parquet where t.1 = 1;
 ----
 1 (1,'a')
 
-query 
-select * from @data/parquet/tuple.parquet where t:a = id;
+query
+select * from @data/parquet/tuple.parquet where t.1 = id;
 ----
 1 (1,'a')
 3 (3,'c')
 
 query 
-select * from @data/parquet/tuple.parquet where t:a >= 2;
+select * from @data/parquet/tuple.parquet where t.1 >= 2;
 ----
 2 (3,'b')
 3 (3,'c')
 
 query 
-select t:b from @data/parquet/tuple.parquet where t:a >= 2;
+select t.2 from @data/parquet/tuple.parquet where t.1 >= 2;
 ----
 b
 c
 
 query 
-select t:b from @data/parquet/tuple.parquet
+select t.2 from @data/parquet/tuple.parquet
 ----
 a
 b
 c
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet
+select id, t.1, t from @data/parquet/tuple.parquet
 ----
 1 1 (1,'a')
 2 3 (3,'b')
 3 3 (3,'c')
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet where id > 2
+select id, t.1, t from @data/parquet/tuple.parquet where id > 2
 ----
 3 3 (3,'c')
 
 query 
-select id, t:a, t from @data/parquet/tuple.parquet where to_string(t:b) < 'c'
+select id, t.1, t from @data/parquet/tuple.parquet where to_string(t.2) < 'c'
 ----
 1 1 (1,'a')
 2 3 (3,'b')
