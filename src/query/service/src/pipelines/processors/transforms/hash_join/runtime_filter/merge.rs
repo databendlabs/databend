@@ -208,7 +208,10 @@ mod tests {
         let merged = merge_join_runtime_filter_packets(vec![packet], 1, 1, 1)?;
 
         assert_eq!(merged.build_rows, 100);
-        assert!(merged.packets.is_none());
+        let packet = merged.packets.unwrap().remove(&1).unwrap();
+        assert!(packet.inlist.is_none());
+        assert!(packet.min_max.is_none());
+        assert!(packet.bloom.is_none());
         assert!(!merged.disable_all_due_to_spill);
         Ok(())
     }
