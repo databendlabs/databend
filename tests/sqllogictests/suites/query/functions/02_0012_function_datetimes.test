@@ -1812,3 +1812,84 @@ query ??
 select add_months('2025-04-30',1), DATE_ADD(month, 1, '2025-04-30');
 ----
 2025-05-31 2025-05-30
+
+## Additional TIMESTAMP_FROM_PARTS tests
+
+statement ok
+set timezone = 'UTC'
+
+# Nanosecond overflow → adds seconds
+query ?
+select timestamp_from_parts(2013, 4, 5, 12, 0, 0, 2000000000);
+----
+2013-04-05 12:00:02.000000
+
+# Hour overflow
+query ?
+select timestamp_from_parts(2013, 4, 5, 25, 0, 0);
+----
+2013-04-06 01:00:00.000000
+
+# Negative hour overflow
+query ?
+select timestamp_from_parts(2013, 4, 5, -1, 0, 0);
+----
+2013-04-04 23:00:00.000000
+
+# Month overflow with timestamp
+query ?
+select timestamp_from_parts(2010, 13, 1, 0, 0, 0);
+----
+2011-01-01 00:00:00.000000
+
+
+## Additional TIMESTAMP_TZ_FROM_PARTS tests
+
+statement ok
+set timezone = 'UTC'
+
+# 7 args: explicit timezone
+query ?
+select timestamp_tz_from_parts(2013, 4, 5, 12, 0, 0, 'UTC');
+----
+2013-04-05 12:00:00.000000 +0000
+
+# 7 args: different timezone
+query ?
+select timestamp_tz_from_parts(2013, 4, 5, 12, 0, 0, 'Asia/Shanghai');
+----
+2013-04-05 12:00:00.000000 +0800
+
+# 8 args: nanosecond + timezone
+query ?
+select timestamp_tz_from_parts(2013, 4, 5, 12, 0, 0, 987654321, 'UTC');
+----
+2013-04-05 12:00:00.987654 +0000
+
+# 8 args: nanosecond + different timezone
+query ?
+select timestamp_tz_from_parts(2013, 4, 5, 12, 0, 0, 123456789, 'Asia/Shanghai');
+----
+2013-04-05 12:00:00.123456 +0800
+
+# Overflow in hour with timezone
+query ?
+select timestamp_tz_from_parts(2013, 4, 5, 25, 0, 0, 'UTC');
+----
+2013-04-06 01:00:00.000000 +0000
+
+# Negative seconds overflow with timezone
+query ?
+select timestamp_tz_from_parts(2013, 4, 5, 12, 0, -3600, 'UTC');
+----
+2013-04-05 11:00:00.000000 +0000
+
+# Month overflow with timezone
+query ?
+select timestamp_tz_from_parts(2013, 13, 1, 0, 0, 0, 'UTC');
+----
+2014-01-01 00:00:00.000000 +0000
+
+# Invalid timezone should produce error
+query error
+select timestamp_tz_from_parts(2013, 4, 5, 12, 0, 0, 'INVALID_TZ');
