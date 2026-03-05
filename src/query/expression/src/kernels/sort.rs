@@ -85,17 +85,17 @@ impl DataBlock {
             LimitType::None
         };
 
-        Self::sort_with_type(block, descriptions, limit)
+        Self::sort_with_type(block.clone(), descriptions, limit)
     }
 
     pub fn sort_with_type(
-        block: &DataBlock,
+        block: DataBlock,
         descriptions: &[SortColumnDescription],
         limit: LimitType,
     ) -> Result<DataBlock> {
         let num_rows = block.num_rows();
         if num_rows <= 1 || block.num_columns() == 0 {
-            return Ok(block.clone());
+            return Ok(block);
         }
         let mut sort_compare = SortCompare::new(descriptions.to_owned(), num_rows, limit);
 
@@ -106,7 +106,7 @@ impl DataBlock {
         }
 
         let permutations = sort_compare.take_permutation();
-        DataBlock::take(block, permutations.as_slice())
+        DataBlock::take(&block, permutations.as_slice())
     }
 }
 

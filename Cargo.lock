@@ -5786,7 +5786,6 @@ dependencies = [
  "dyn-clone",
  "either",
  "ethnum",
- "event-listener",
  "fastrace",
  "flatbuffers",
  "futures",
