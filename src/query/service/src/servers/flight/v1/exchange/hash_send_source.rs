@@ -70,6 +70,7 @@ impl Processor for HashSendSource {
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         if self.output.is_finished() {
             self.receiver.close();
+
             return Ok(Event::Finished);
         }
 
@@ -103,7 +104,13 @@ impl Processor for HashSendSource {
             };
         }
 
-        Ok(Event::NeedConsume)
+        if self.handle.is_none() {
+            self.output.finish();
+            self.receiver.close();
+            return Ok(Event::Finished);
+        }
+
+        Ok(Event::NeedData)
     }
 
     fn set_id(&mut self, id: NodeIndex) {

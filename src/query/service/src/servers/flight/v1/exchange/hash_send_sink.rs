@@ -64,42 +64,6 @@ impl HashSendSink {
 
         PipeItem::create(processor, vec![input], vec![])
     }
-
-    fn send_ready_blocks(
-        &mut self,
-        ready_blocks: Vec<(usize, databend_common_expression::DataBlock)>,
-        cause: &EventCause,
-    ) -> Result<Event> {
-        if ready_blocks.is_empty() {
-            return Ok(Event::Sync);
-        }
-
-        let mut futures = Vec::new();
-        for (partition_id, block) in ready_blocks {
-            if block.is_empty() {
-                continue;
-            }
-            let channel = self.channels[partition_id].clone();
-            futures.push(async move { channel.add_block(block).await });
-        }
-
-        if futures.is_empty() {
-            return Ok(Event::Sync);
-        }
-
-        let joined = Box::pin(futures::future::try_join_all(futures));
-        let mut handle = self.tasks.spawn(self.id, joined);
-
-        if matches!(
-            handle.poll(matches!(cause, EventCause::Other)),
-            Poll::Pending
-        ) {
-            self.handle = Some(handle);
-            return Ok(Event::NeedConsume);
-        }
-
-        Ok(Event::Sync)
-    }
 }
 
 impl Processor for HashSendSink {
@@ -127,46 +91,72 @@ impl Processor for HashSendSink {
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
 
-            let indices = self.scatter.scatter_indices(&data_block)?;
-            if let Some(indices) = indices {
+            if let Some(indices) = self.scatter.scatter_indices(&data_block)? {
                 let ready_blocks = self.partition_stream.partition(indices, data_block, true);
-                return self.send_ready_blocks(ready_blocks, &cause);
+
+                let mut futures = Vec::new();
+
+                for (partition_id, block) in ready_blocks {
+                    if block.is_empty() {
+                        continue;
+                    }
+
+                    futures.push({
+                        let channel = self.channels[partition_id].clone();
+                        async move { channel.add_block(block).await }
+                    });
+                }
+
+                if !futures.is_empty() {
+                    let joined = Box::pin(futures::future::try_join_all(futures));
+                    let mut handle = self.tasks.spawn(self.id, joined);
+
+                    if matches!(handle.poll(true), Poll::Pending) {
+                        self.handle = Some(handle);
+                        return Ok(Event::NeedConsume);
+                    }
+                }
             }
         }
 
-        // Input finished → finalize all partitions and send remaining
         if self.input.is_finished() {
             let mut futures = Vec::new();
+
             for partition_id in 0..self.channels.len() {
                 if let Some(block) = self.partition_stream.finalize_partition(partition_id) {
                     if block.is_empty() {
                         continue;
                     }
-                    let channel = self.channels[partition_id].clone();
-                    futures.push(async move { channel.add_block(block).await });
+
+                    futures.push({
+                        let channel = self.channels[partition_id].clone();
+                        async move { channel.add_block(block).await }
+                    });
                 }
             }
 
-            // Close all channels
-            for idx in 0..self.channels.len() {
-                let mut closed = DummyOutboundChannel::create();
-                std::mem::swap(&mut self.channels[idx], &mut closed);
-                closed.close();
-            }
-
             if futures.is_empty() {
+                for idx in 0..self.channels.len() {
+                    let mut closed = DummyOutboundChannel::create();
+                    std::mem::swap(&mut self.channels[idx], &mut closed);
+                    closed.close();
+                }
+
                 return Ok(Event::Finished);
             }
 
             let joined = Box::pin(futures::future::try_join_all(futures));
             let mut handle = self.tasks.spawn(self.id, joined);
 
-            if matches!(
-                handle.poll(matches!(cause, EventCause::Other)),
-                Poll::Pending
-            ) {
+            if matches!(handle.poll(true), Poll::Pending) {
                 self.handle = Some(handle);
                 return Ok(Event::NeedConsume);
+            }
+
+            for idx in 0..self.channels.len() {
+                let mut closed = DummyOutboundChannel::create();
+                std::mem::swap(&mut self.channels[idx], &mut closed);
+                closed.close();
             }
 
             return Ok(Event::Finished);
