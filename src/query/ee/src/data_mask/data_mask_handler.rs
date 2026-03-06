@@ -29,8 +29,8 @@ use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
 use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandler;
 use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandlerWrapper;
-use databend_meta_types::MetaError;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
 
 use crate::meta_service_error;
 

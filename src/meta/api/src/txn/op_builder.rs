@@ -15,9 +15,9 @@
 use std::time::Duration;
 
 use databend_common_proto_conv::FromToProto;
-use databend_meta_kvapi::kvapi;
-use databend_meta_types::InvalidArgument;
-use databend_meta_types::TxnOp;
+use databend_meta_client::kvapi;
+use databend_meta_client::types::InvalidArgument;
+use databend_meta_client::types::TxnOp;
 
 use crate::kv_pb_api::encode_pb;
 

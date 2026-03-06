@@ -22,12 +22,12 @@ use databend_base::testutil::next_port;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_node::meta_worker::MetaWorker;
+use databend_meta::runtime_api::RuntimeApi;
 use databend_meta_client::ClientHandle;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
 use databend_meta_client::errors::CreationError;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_runtime_api::RuntimeApi;
 use log::info;
 use log::warn;
 

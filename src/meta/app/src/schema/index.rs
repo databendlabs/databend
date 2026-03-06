@@ -19,7 +19,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 
 use super::CreateOption;
 use crate::KeyWithTenant;

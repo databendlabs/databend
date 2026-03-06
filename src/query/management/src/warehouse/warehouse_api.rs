@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
-use databend_meta_types::NodeInfo;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::NodeInfo;
+use databend_meta_client::types::SeqV;
 
 /// Databend-query cluster ID.
 ///

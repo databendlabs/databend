@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use anyhow::Error;
-use databend_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_meta_types::Cmd;
-use databend_meta_types::LogEntry;
-use databend_meta_types::Operation;
-use databend_meta_types::SeqV;
-use databend_meta_types::TxnCondition;
-use databend_meta_types::TxnOp;
-use databend_meta_types::TxnPutRequest;
-use databend_meta_types::TxnRequest;
-use databend_meta_types::UpsertKV;
-use databend_meta_types::raft_types::Entry;
-use databend_meta_types::txn_condition::Target;
-use databend_meta_types::txn_op::Request;
+use databend_meta::raft_store::key_spaces::RaftStoreEntry;
+use databend_meta::types::Cmd;
+use databend_meta::types::LogEntry;
+use databend_meta::types::Operation;
+use databend_meta::types::SeqV;
+use databend_meta::types::TxnCondition;
+use databend_meta::types::TxnOp;
+use databend_meta::types::TxnPutRequest;
+use databend_meta::types::TxnRequest;
+use databend_meta::types::UpsertKV;
+use databend_meta::types::raft_types::Entry;
+use databend_meta::types::txn_condition::Target;
+use databend_meta::types::txn_op::Request;
 use openraft::EntryPayload;
 
 use crate::process::Process;
@@ -144,6 +144,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                 );
                 Ok(Some(x))
             }
+            Cmd::KvTransaction(_) => Ok(None),
             Cmd::Transaction(tx) => {
                 let mut condition = vec![];
                 for c in tx.condition {
@@ -221,7 +222,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
     fn proc_tx_put_request(&self, p: TxnPutRequest) -> Result<TxnPutRequest, anyhow::Error> {
         let value = (self.process_pb)(&p.key, p.value)?;
 
-        let pr = TxnPutRequest::new(p.key, value, p.prev_value, p.expire_at, p.ttl_ms);
+        let pr = TxnPutRequest::new(p.key, value, p.expire_at, p.ttl_ms);
 
         Ok(pr)
     }

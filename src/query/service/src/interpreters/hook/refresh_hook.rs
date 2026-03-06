@@ -36,7 +36,7 @@ use databend_common_sql::NameResolutionContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RefreshTableIndexPlan;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use parking_lot::RwLock;

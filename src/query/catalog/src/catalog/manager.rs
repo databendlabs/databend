@@ -36,8 +36,8 @@ use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_meta_client::types::anyerror::func_name;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::anyerror::func_name;
 use databend_storages_common_session::SessionState;
 use parking_lot::RwLock;
 
