@@ -144,6 +144,7 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr
         _ => unreachable!(),
     };
 
+    let probe_data_type = probe_key.data_type.clone();
     let raw_probe_key = RawExpr::ColumnRef {
         span: probe_key.span,
         id: probe_key.id.to_string(),
@@ -160,7 +161,7 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr
             args: vec![raw_probe_key.clone(), RawExpr::Constant {
                 span: None,
                 scalar: scalar_ref.to_owned(),
-                data_type: None,
+                data_type: Some(probe_data_type.clone()),
             }],
         })
         .collect();
@@ -396,6 +397,55 @@ mod tests {
                 panic!("Expected constant false, got: {:?}", folded_expr_false);
             }
         }
+    }
+
+    fn collect_string_constant_types(expr: &Expr<String>, constant_types: &mut Vec<DataType>) {
+        match expr {
+            Expr::Constant(Constant {
+                scalar: Scalar::String(_),
+                data_type,
+                ..
+            }) => constant_types.push(data_type.clone()),
+            Expr::Cast(cast) => collect_string_constant_types(&cast.expr, constant_types),
+            Expr::FunctionCall(call) => {
+                for arg in &call.args {
+                    collect_string_constant_types(arg, constant_types);
+                }
+            }
+            Expr::LambdaFunctionCall(call) => {
+                for arg in &call.args {
+                    collect_string_constant_types(arg, constant_types);
+                }
+            }
+            Expr::Constant(_) | Expr::ColumnRef(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_build_inlist_filter_nullable_string_preserves_constant_type() {
+        let data_type = DataType::String;
+        let probe_data_type = DataType::Nullable(Box::new(DataType::String));
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 2);
+        builder.push(Scalar::String("a".to_string()).as_ref());
+        builder.push(Scalar::String("b".to_string()).as_ref());
+        let inlist = builder.build();
+
+        let probe_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "column_s".to_string(),
+            data_type: probe_data_type.clone(),
+            display_name: "column_s".to_string(),
+        });
+
+        let (filter_expr, inlist_value_count) = build_inlist_filter(inlist, &probe_key).unwrap();
+        assert_eq!(inlist_value_count, 2);
+
+        let mut constant_types = Vec::new();
+        collect_string_constant_types(&filter_expr, &mut constant_types);
+        assert_eq!(constant_types, vec![
+            probe_data_type.clone(),
+            probe_data_type
+        ]);
     }
 
     #[test]
