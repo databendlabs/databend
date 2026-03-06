@@ -42,7 +42,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_storage::DataOperator;
 use databend_common_storage::init_operator;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;

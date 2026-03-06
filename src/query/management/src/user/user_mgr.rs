@@ -24,15 +24,15 @@ use databend_common_meta_app::principal::tenant_user_ident::Resource as UserIden
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_kvapi::kvapi::ListKVReply;
-use databend_meta_kvapi::kvapi::ListOptions;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::MetaError;
-use databend_meta_types::SeqV;
-use databend_meta_types::With;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::ListKVReply;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::With;
 use fastrace::func_name;
 use futures::TryStreamExt;
 

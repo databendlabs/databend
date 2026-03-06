@@ -19,8 +19,8 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_meta_client::types::MetaError;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::MetaError;
 
 fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {

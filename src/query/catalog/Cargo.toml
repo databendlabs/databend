@@ -26,8 +26,8 @@ databend-common-settings = { workspace = true }
 databend-common-statistics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
+databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
-databend-meta-types = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 dyn-clone = { workspace = true }

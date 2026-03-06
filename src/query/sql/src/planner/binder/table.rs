@@ -64,7 +64,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;

@@ -35,7 +35,7 @@ use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_enterprise_stream_handler::StreamHandler;
 use databend_enterprise_stream_handler::StreamHandlerWrapper;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;

@@ -19,8 +19,8 @@ use std::net::ToSocketAddrs;
 use anyhow::anyhow;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::types::protobuf;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::protobuf;
 use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
 

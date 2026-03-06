@@ -103,8 +103,8 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 

@@ -39,7 +39,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_statistics::Histogram;
 use databend_common_storage::StorageMetrics;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;

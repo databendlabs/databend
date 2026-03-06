@@ -35,7 +35,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_enterprise_resources_management::ResourcesManagement;
-use databend_meta_types::NodeInfo;
+use databend_meta_client::types::NodeInfo;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
