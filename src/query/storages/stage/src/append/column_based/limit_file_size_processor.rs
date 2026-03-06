@@ -70,7 +70,7 @@ impl PartitionBucket {
     }
 }
 
-pub(super) struct LimitFileSizeProcessor {
+pub(crate) struct LimitFileSizeProcessor {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -83,7 +83,7 @@ pub(super) struct LimitFileSizeProcessor {
 }
 
 impl LimitFileSizeProcessor {
-    pub(super) fn try_create(
+    pub(crate) fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         threshold: usize,
