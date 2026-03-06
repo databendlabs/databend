@@ -12,6 +12,15 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+# ALTER TABLE MODIFY COLUMN on change-tracking tables.
+#
+# Sections:
+#   1. Default change rejected on non-empty change-tracking table.
+#   2. Stream reads correct default after rejected ALTER.
+#   3. Type change rejected on non-empty change-tracking table.
+#   4. Same type and default (no-op) is allowed.
+#   5. Changes allowed on empty change-tracking table.
+
 statement ok
 DROP DATABASE IF EXISTS test_stream_modify_column_default
 
@@ -20,6 +29,13 @@ CREATE DATABASE test_stream_modify_column_default
 
 statement ok
 USE test_stream_modify_column_default
+
+# ------------------------------------------------------------------
+# 1. Default change rejected on non-empty change-tracking table
+#
+# Metadata-only default changes on non-empty change-tracking tables
+# would silently alter historical row values, breaking stream/CDC.
+# ------------------------------------------------------------------
 
 statement ok
 CREATE TABLE t(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
@@ -30,24 +46,75 @@ INSERT INTO t(a) VALUES(1)
 statement error 1132
 ALTER TABLE t MODIFY COLUMN b INT DEFAULT 99
 
-# Explicit stream case: create a stream on this table.
+statement ok
+INSERT INTO t(a) VALUES(2)
+
+query II
+SELECT a, b FROM t ORDER BY a
+----
+1 10
+2 10
+
+# ------------------------------------------------------------------
+# 2. Stream reads correct default after rejected ALTER
+#
+# The ALTER above was rejected, so b still uses the original
+# default (10). A stream on this table should see that value.
+# ------------------------------------------------------------------
+
 statement ok
 CREATE STREAM s ON TABLE t APPEND_ONLY=false
 
 statement ok
-INSERT INTO t(a) VALUES(2)
+INSERT INTO t(a) VALUES(3)
 
-# The ALTER above was rejected, so b still uses the original default (10).
 query IITB
 SELECT a, b, change$action, change$is_update FROM s ORDER BY a
 ----
-2 10 INSERT 0
+3 10 INSERT 0
 
 statement ok
 DROP STREAM s
 
+# ------------------------------------------------------------------
+# 3. Type change rejected on non-empty change-tracking table
+# ------------------------------------------------------------------
+
+statement error 1132
+ALTER TABLE t MODIFY COLUMN b STRING
+
+# ------------------------------------------------------------------
+# 4. Same type and default (no-op) is allowed
+#
+# Re-specifying the current type and default leaves the schema
+# unchanged, so it is not rejected.
+# ------------------------------------------------------------------
+
+statement ok
+ALTER TABLE t MODIFY COLUMN b INT DEFAULT 10
+
+# ------------------------------------------------------------------
+# 5. Changes allowed on empty change-tracking table
+#
+# An empty change-tracking table has no rows to corrupt.
+# ------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_empty(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
+
+statement ok
+ALTER TABLE t_empty MODIFY COLUMN b INT DEFAULT 99
+
+query T
+SELECT default_expression FROM system.columns WHERE database = 'test_stream_modify_column_default' AND table = 't_empty' AND name = 'b'
+----
+99
+
 statement ok
 DROP TABLE t ALL
+
+statement ok
+DROP TABLE t_empty ALL
 
 statement ok
 DROP DATABASE IF EXISTS test_stream_modify_column_default

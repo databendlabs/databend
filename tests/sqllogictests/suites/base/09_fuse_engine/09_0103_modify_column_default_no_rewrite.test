@@ -9,8 +9,6 @@
 #   6. Invalid default is rejected at ALTER time.
 #   7. Physical column value is not affected by default change.
 #   8. Multi-column ALTER rolls back entirely on one bad default.
-#   9. Change tracking rejects changes on non-empty table.
-#  10. Change tracking allows no-op and empty-table changes.
 
 statement ok
 CREATE OR REPLACE DATABASE db_09_0103
@@ -241,61 +239,6 @@ SELECT name, data_type FROM system.columns WHERE database = 'db_09_0103' AND tab
 ----
 a INT
 b INT
-
-# ------------------------------------------------------------------
-# 9. Change tracking rejects changes on non-empty table
-#
-# Metadata-only default changes on non-empty change-tracking tables
-# would silently alter historical row values, breaking stream/CDC.
-# Both default changes and type changes are rejected.
-#
-# Exception: re-specifying the same type and default is a no-op
-# (schema unchanged) and is allowed.
-# ------------------------------------------------------------------
-
-statement ok
-CREATE TABLE t_ct(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
-
-statement ok
-INSERT INTO t_ct(a) VALUES(1)
-
-# Default change on non-empty CT table — rejected.
-statement error 1132
-ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 99
-
-statement ok
-INSERT INTO t_ct(a) VALUES(2)
-
-query II
-SELECT a, b FROM t_ct ORDER BY a
-----
-1 10
-2 10
-
-# Type change on non-empty CT table — also rejected.
-statement error 1132
-ALTER TABLE t_ct MODIFY COLUMN b STRING
-
-# Same type and same default — no-op, allowed.
-statement ok
-ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 10
-
-# ------------------------------------------------------------------
-# 10. Change tracking allows changes on empty table
-#
-# An empty change-tracking table has no rows to corrupt.
-# ------------------------------------------------------------------
-
-statement ok
-CREATE TABLE t_ct_empty(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
-
-statement ok
-ALTER TABLE t_ct_empty MODIFY COLUMN b INT DEFAULT 99
-
-query T
-SELECT default_expression FROM system.columns WHERE database = 'db_09_0103' AND table = 't_ct_empty' AND name = 'b'
-----
-99
 
 statement ok
 DROP DATABASE db_09_0103
