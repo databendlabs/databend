@@ -14,7 +14,7 @@
 
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_types::MetaError;
 use fastrace::func_name;
 use log::debug;

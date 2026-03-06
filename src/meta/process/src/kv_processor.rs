@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use anyhow::Error;
-use databend_meta_raft_store::key_spaces::RaftStoreEntry;
+use databend_meta::raft_store::key_spaces::RaftStoreEntry;
 use databend_meta_types::Cmd;
 use databend_meta_types::LogEntry;
 use databend_meta_types::Operation;
@@ -165,6 +165,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                     log_entry.time_ms,
                 )))
             }
+            Cmd::KvTransaction(_) => Ok(None),
         }
     }
 
@@ -221,7 +222,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
     fn proc_tx_put_request(&self, p: TxnPutRequest) -> Result<TxnPutRequest, anyhow::Error> {
         let value = (self.process_pb)(&p.key, p.value)?;
 
-        let pr = TxnPutRequest::new(p.key, value, p.prev_value, p.expire_at, p.ttl_ms);
+        let pr = TxnPutRequest::new(p.key, value, p.expire_at, p.ttl_ms);
 
         Ok(pr)
     }

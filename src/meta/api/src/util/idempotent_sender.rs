@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_types::InvalidReply;
 use databend_meta_types::MetaError;
 use databend_meta_types::TxnCondition;

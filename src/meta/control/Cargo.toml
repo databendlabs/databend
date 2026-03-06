@@ -13,10 +13,8 @@ databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-admin = { workspace = true }
 databend-meta-client = { workspace = true }
-databend-meta-raft-store = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-runtime-api = { workspace = true }
-databend-meta-sled-store = { workspace = true }
 databend-meta-types = { workspace = true }
 
 anyhow = { workspace = true }
@@ -24,6 +22,7 @@ clap = { workspace = true }
 display-more = { workspace = true }
 futures = { workspace = true }
 mlua = { workspace = true }
+openraft = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -33,7 +33,7 @@ use databend_common_metrics::lock::record_acquired_lock_nums;
 use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_storages_fuse::operations::set_backoff;
 use databend_common_users::UserApiProvider;
-use databend_meta_kvapi::kvapi::Key;
+use databend_meta_client::kvapi::Key;
 use databend_meta_types::protobuf::WatchRequest;
 use databend_meta_types::protobuf::watch_request::FilterType;
 use futures::future::Either;

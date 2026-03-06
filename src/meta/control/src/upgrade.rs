@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta_raft_store::config::RaftConfig;
-use databend_meta_raft_store::ondisk::OnDisk;
+use databend_meta::raft_store::config::RaftConfig;
+use databend_meta::raft_store::ondisk::OnDisk;
 use databend_meta_runtime_api::SpawnApi;
 
 /// Upgrade the data in raft_dir to the latest version.

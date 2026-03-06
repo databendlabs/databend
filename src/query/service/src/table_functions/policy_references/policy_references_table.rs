@@ -55,8 +55,8 @@ use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_users::UserApiProvider;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::ListOptions;
 
 use crate::meta_service_error;
 

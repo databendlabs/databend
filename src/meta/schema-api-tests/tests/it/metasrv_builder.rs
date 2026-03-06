@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use databend_common_meta_store::MetaStore;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::MetaSrvTestContext;
 use databend_meta_test_harness::start_metasrv;

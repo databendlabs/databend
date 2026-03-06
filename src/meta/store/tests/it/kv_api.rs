@@ -14,7 +14,7 @@
 
 use async_trait::async_trait;
 use databend_common_meta_store::MetaStore;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_runtime_api::TokioRuntime;
 
 #[derive(Clone)]
@@ -36,7 +36,7 @@ impl kvapi::ApiBuilder<MetaStore> for MetaNodeUnitTestBuilder {
 async fn test_meta_node_kv_api() -> anyhow::Result<()> {
     let builder = MetaNodeUnitTestBuilder {};
 
-    databend_meta_kvapi_test_suite::TestSuite {}
+    databend_meta_client::kvapi_test_suite::TestSuite {}
         .test_single_node(&builder)
         .await
 }

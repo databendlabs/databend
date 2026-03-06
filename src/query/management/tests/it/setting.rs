@@ -20,7 +20,7 @@ use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_types::SeqV;
 use fastrace::func_name;

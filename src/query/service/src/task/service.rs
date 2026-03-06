@@ -58,7 +58,7 @@ use databend_common_sql::Planner;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
-use databend_meta_kvapi::kvapi::Key;
+use databend_meta_client::kvapi::Key;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_types::protobuf::WatchRequest;
 use databend_meta_types::protobuf::WatchResponse;

@@ -21,10 +21,10 @@ use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_proto_conv::FromToProto;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::KVApi;
-use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::KVApi;
+use databend_meta_client::kvapi::ListOptions;
 use databend_meta_types::Change;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaError;
@@ -408,15 +408,13 @@ mod tests {
     use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_proto_conv::FromToProto;
-    use databend_meta_kvapi::kvapi::KVApi;
-    use databend_meta_kvapi::kvapi::KVStream;
-    use databend_meta_kvapi::kvapi::ListOptions;
-    use databend_meta_kvapi::kvapi::UpsertKVReply;
+    use databend_meta_client::kvapi::KVApi;
+    use databend_meta_client::kvapi::KVStream;
+    use databend_meta_client::kvapi::ListOptions;
     use databend_meta_types::MetaError;
     use databend_meta_types::SeqV;
     use databend_meta_types::TxnReply;
     use databend_meta_types::TxnRequest;
-    use databend_meta_types::UpsertKV;
     use databend_meta_types::protobuf::StreamItem;
     use futures::StreamExt;
     use futures::stream::BoxStream;
@@ -432,15 +430,11 @@ mod tests {
     impl KVApi for Foo {
         type Error = MetaError;
 
-        async fn upsert_kv(&self, _req: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
-            unimplemented!()
-        }
-
         async fn get_many_kv(
             &self,
             keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            use databend_meta_kvapi::kvapi::fail_fast;
+            use databend_meta_client::kvapi::fail_fast;
             use futures::TryStreamExt;
 
             let kvs = self.kvs.clone();

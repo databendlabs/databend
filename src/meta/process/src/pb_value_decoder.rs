@@ -605,9 +605,9 @@ mod tests {
             request: Some(Request::Put(TxnPutRequest {
                 key: "__fd_db_id_list/1".to_string(),
                 value: buf,
-                prev_value: true,
                 expire_at: Some(1700000000),
                 ttl_ms: None,
+                match_seq: None,
             })),
         };
         let txn = TxnRequest::new(vec![], vec![op]);
@@ -631,9 +631,9 @@ mod tests {
             request: Some(Request::Put(TxnPutRequest {
                 key: "__fd_db_id_list/1".to_string(),
                 value: buf,
-                prev_value: true,
                 expire_at: Some(1700000000),
                 ttl_ms: Some(30000),
+                match_seq: None,
             })),
         };
         let txn = TxnRequest::new(vec![], vec![op]);

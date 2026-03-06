@@ -25,7 +25,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_types::SeqV;
 use fastrace::func_name;

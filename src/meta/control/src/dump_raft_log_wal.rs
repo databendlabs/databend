@@ -20,12 +20,12 @@ use std::sync::Arc;
 
 use databend_common_meta_process::pb_value_decoder::decode_cmd_values;
 use databend_common_meta_process::pb_value_decoder::raw_cmd_values;
-use databend_meta_raft_store::raft_log::Config;
-use databend_meta_raft_store::raft_log::Dump;
-use databend_meta_raft_store::raft_log::DumpApi;
-use databend_meta_raft_store::raft_log::WALRecord;
-use databend_meta_raft_store::raft_log::dump_writer::write_record_display;
-use databend_meta_raft_store::raft_log_v004::RaftLogTypes;
+use databend_meta::raft_store::raft_log::Config;
+use databend_meta::raft_store::raft_log::Dump;
+use databend_meta::raft_store::raft_log::DumpApi;
+use databend_meta::raft_store::raft_log::WALRecord;
+use databend_meta::raft_store::raft_log::dump_writer::write_record_display;
+use databend_meta::raft_store::raft_log_v004::RaftLogTypes;
 use databend_meta_types::raft_types::EntryPayload;
 
 use crate::args::DumpRaftLogWalArgs;
@@ -93,11 +93,11 @@ mod tests {
     use chrono::Utc;
     use databend_common_meta_app::schema::DatabaseMeta;
     use databend_common_proto_conv::FromToProto;
-    use databend_meta_raft_store::raft_log::Config;
-    use databend_meta_raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
-    use databend_meta_raft_store::raft_log_v004::Cw;
-    use databend_meta_raft_store::raft_log_v004::RaftLogV004;
-    use databend_meta_raft_store::raft_log_v004::util::blocking_flush;
+    use databend_meta::raft_store::raft_log::Config;
+    use databend_meta::raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
+    use databend_meta::raft_store::raft_log_v004::Cw;
+    use databend_meta::raft_store::raft_log_v004::RaftLogV004;
+    use databend_meta::raft_store::raft_log_v004::util::blocking_flush;
     use databend_meta_types::Cmd;
     use databend_meta_types::LogEntry;
     use databend_meta_types::UpsertKV;

@@ -29,12 +29,11 @@ use databend_meta_client::MetaGrpcClient;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::Streamed;
 use databend_meta_client::errors::CreationError;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::KVStream;
-use databend_meta_kvapi::kvapi::ListOptions;
-use databend_meta_kvapi::kvapi::UpsertKVReply;
-use databend_meta_kvapi::kvapi::fail_fast;
-use databend_meta_kvapi::kvapi::limit_stream;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::KVStream;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::fail_fast;
+use databend_meta_client::kvapi::limit_stream;
 use databend_meta_plugin_semaphore::Semaphore;
 use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_plugin_semaphore::errors::AcquireError;
@@ -43,7 +42,6 @@ use databend_meta_runtime_api::RuntimeApi;
 use databend_meta_types::MetaError;
 use databend_meta_types::TxnReply;
 use databend_meta_types::TxnRequest;
-use databend_meta_types::UpsertKV;
 use databend_meta_types::protobuf::WatchRequest;
 use databend_meta_types::protobuf::WatchResponse;
 use futures::StreamExt;
@@ -242,12 +240,6 @@ impl MetaStoreProvider {
 #[tonic::async_trait]
 impl kvapi::KVApi for MetaStore {
     type Error = MetaError;
-
-    #[fastrace::trace]
-    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
-        let reply = self.inner().upsert_via_txn(act).await?;
-        Ok(reply)
-    }
 
     #[fastrace::trace]
     async fn list_kv(

@@ -45,7 +45,7 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_meta_client::RpcClientConf;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_types::MatchSeq;

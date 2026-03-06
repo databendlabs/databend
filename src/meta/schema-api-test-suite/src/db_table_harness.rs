@@ -42,7 +42,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::tenant::Tenant;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaError;
 use fastrace::func_name;

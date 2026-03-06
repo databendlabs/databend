@@ -43,8 +43,8 @@ use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_file
 use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::ListOptions;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_types::TxnRequest;
 use databend_query::test_kits::*;

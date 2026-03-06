@@ -25,7 +25,7 @@ use databend_common_management::*;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_meta_store::MetaStore;
 use databend_common_version::BUILD_INFO;
-use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MatchSeqExt;

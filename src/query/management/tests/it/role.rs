@@ -29,7 +29,7 @@ fn make_role_key(role: &str) -> String {
 mod add {
 
     use databend_common_meta_app::principal::RoleInfo;
-    use databend_meta_kvapi::kvapi::KVApi;
+    use databend_meta_client::kvapi::KvApiExt;
     use databend_meta_types::MatchSeq;
     use databend_meta_types::Operation;
 

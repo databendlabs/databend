@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaSpec;
 use databend_meta_types::Operation;
