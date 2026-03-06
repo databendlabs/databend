@@ -19,8 +19,8 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_meta_client::ClientHandle;
+use databend_meta_client::runtime_api::SpawnApi;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_runtime_api::SpawnApi;
 use futures::FutureExt;
 use log::info;
 use tokio::sync::mpsc;

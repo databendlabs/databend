@@ -14,15 +14,15 @@
 
 use std::time::Duration;
 
-use databend_meta_kvapi::kvapi;
-use databend_meta_types::InvalidReply;
-use databend_meta_types::MetaError;
-use databend_meta_types::TxnCondition;
-use databend_meta_types::TxnOp;
-use databend_meta_types::TxnOpResponse;
-use databend_meta_types::TxnRequest;
-use databend_meta_types::anyerror::AnyError;
-use databend_meta_types::txn_op_response::Response;
+use databend_meta_client::kvapi;
+use databend_meta_client::types::InvalidReply;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::TxnCondition;
+use databend_meta_client::types::TxnOp;
+use databend_meta_client::types::TxnOpResponse;
+use databend_meta_client::types::TxnRequest;
+use databend_meta_client::types::anyerror::AnyError;
+use databend_meta_client::types::txn_op_response::Response;
 use log::info;
 use uuid::Uuid;
 

@@ -89,6 +89,8 @@ def main():
     print(f"Found {len(tags)} tags", file=sys.stderr)
 
     out_path = os.path.join(BASE_DIR, "src/min_compatible_versions.txt")
+    seen_tags = set()
+
     with open(out_path, "w") as out:
         out.write(f"{'tag':<30} {'MIN_METASRV_SEMVER':<22} {'MIN_METACLI_SEMVER':<22}\n")
         out.write("-" * 74 + "\n")
@@ -96,6 +98,10 @@ def main():
         for i, tag in enumerate(tags):
             if (i + 1) % 100 == 0:
                 print(f"  {i + 1}/{len(tags)}...", file=sys.stderr)
+
+            display_tag = tag.removeprefix("v").removesuffix("-nightly")
+            if display_tag in seen_tags:
+                continue
 
             metasrv = None
             for path in METASRV_PATHS:
@@ -114,7 +120,7 @@ def main():
                         break
 
             if metasrv or metacli:
-                display_tag = tag.removeprefix("v").removesuffix("-nightly")
+                seen_tags.add(display_tag)
                 out.write(
                     f"{display_tag:<30} {metasrv or '-':<22} {metacli or '-':<22}\n"
                 )

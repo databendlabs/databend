@@ -33,7 +33,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use databend_common_proto_conv::FromToProto;
-use databend_meta_types::Operation;
+use databend_meta_client::types::Operation;
 
 use crate::kv_pb_api::errors::PbEncodeError;
 

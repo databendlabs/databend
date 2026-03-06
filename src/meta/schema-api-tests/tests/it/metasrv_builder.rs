@@ -14,16 +14,39 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use databend_common_meta_store::MetaStore;
+use databend_meta_client::ClientHandle;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::MetaSrvTestContext;
 use databend_meta_test_harness::start_metasrv;
 use databend_meta_test_harness::start_metasrv_cluster;
+
+async fn grpc_client(
+    tc: &MetaSrvTestContext<DatabendRuntime>,
+) -> anyhow::Result<Arc<ClientHandle<DatabendRuntime>>> {
+    let addr = tc
+        .config
+        .grpc
+        .api_address()
+        .ok_or_else(|| anyhow::anyhow!("gRPC port not assigned yet"))?;
+
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+        vec![addr],
+        "root",
+        "xxx",
+        None,
+        Some(Duration::from_secs(10)),
+        None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
+    )?;
+    Ok(client)
+}
 
 /// Build metasrv or metasrv cluster, returns the clients
 #[derive(Clone)]
@@ -61,9 +84,9 @@ impl kvapi::ApiBuilder<MetaStore> for MetaSrvBuilder {
             .unwrap();
 
         let cluster = vec![
-            MetaStore::R(tcs[0].grpc_client().await.unwrap()),
-            MetaStore::R(tcs[1].grpc_client().await.unwrap()),
-            MetaStore::R(tcs[2].grpc_client().await.unwrap()),
+            MetaStore::R(grpc_client(&tcs[0]).await.unwrap()),
+            MetaStore::R(grpc_client(&tcs[1]).await.unwrap()),
+            MetaStore::R(grpc_client(&tcs[2]).await.unwrap()),
         ];
 
         {

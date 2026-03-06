@@ -36,7 +36,7 @@ use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;

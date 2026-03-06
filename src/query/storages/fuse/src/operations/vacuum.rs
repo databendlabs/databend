@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use codeq::Decode;
-use databend_meta_types::SeqV;
-use databend_meta_types::protobuf::WatchResponse;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::protobuf::WatchResponse;
 use display_more::DisplaySliceExt;
 use log::warn;
 use tokio::sync::mpsc;

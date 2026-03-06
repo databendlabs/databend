@@ -14,9 +14,9 @@
 
 use databend_common_meta_app::primitive::Id;
 use databend_common_proto_conv::FromToProto;
-use databend_meta_types::InvalidArgument;
-use databend_meta_types::InvalidReply;
-use databend_meta_types::MetaNetworkError;
+use databend_meta_client::types::InvalidArgument;
+use databend_meta_client::types::InvalidReply;
+use databend_meta_client::types::MetaNetworkError;
 
 use crate::kv_pb_api::decode_pb;
 use crate::kv_pb_api::encode_pb;

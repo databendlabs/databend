@@ -49,7 +49,7 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Statistics;
 use databend_common_statistics::Datum;
-use databend_meta_types::NodeInfo;
+use databend_meta_client::types::NodeInfo;
 use databend_query::clusters::ClusterHelper;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::QueryContext;

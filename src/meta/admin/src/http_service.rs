@@ -25,7 +25,7 @@ use databend_common_http::home::debug_home_handler;
 use databend_common_http::jeprof::debug_jeprof_dump_handler;
 use databend_common_http::pprof::debug_pprof_handler;
 use databend_meta::meta_node::meta_handle::MetaHandle;
-use databend_meta_runtime_api::SpawnApi;
+use databend_meta::runtime_api::SpawnApi;
 use futures::future::BoxFuture;
 use log::info;
 use log::warn;

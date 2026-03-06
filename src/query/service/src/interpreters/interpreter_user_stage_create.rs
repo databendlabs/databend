@@ -25,7 +25,7 @@ use databend_common_sql::plans::CreateStagePlan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use log::debug;
 use log::info;
 

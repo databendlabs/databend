@@ -20,12 +20,12 @@ use std::time::Duration;
 
 use codeq::Encode;
 use databend_meta_client::ClientHandle;
+use databend_meta_client::runtime_api::SpawnApi;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_client::types::With;
+use databend_meta_client::types::protobuf as pb;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_runtime_api::SpawnApi;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::UpsertKV;
-use databend_meta_types::With;
-use databend_meta_types::protobuf as pb;
 use futures::FutureExt;
 use log::info;
 use log::warn;
