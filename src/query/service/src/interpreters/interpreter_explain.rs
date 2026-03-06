@@ -514,7 +514,7 @@ impl ExplainInterpreter {
                     runtime_filter_reports: runtime_filter_reports.clone(),
                 };
                 let formatter = plan.formatter()?;
-                let format_node = formatter.format(&mut context)?;
+                let format_node = formatter.dispatch(&mut context)?;
                 format_node.format_pretty()?
             }
         };
