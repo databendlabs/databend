@@ -1,19 +1,16 @@
-# Test suite for ALTER TABLE MODIFY COLUMN when only the default expression
-# changes (no type change). The optimization skips physical table rebuild
-# for deterministic defaults and updates metadata only.
+# ALTER TABLE MODIFY COLUMN: default-only changes skip physical rebuild.
 #
 # Sections:
-#   1. Deterministic default-only change is metadata-only (no rebuild).
-#   2. Snapshot preserves per-version default for time travel reads.
-#   3. Non-deterministic default (rand) forces rebuild — detected by is_deterministic().
-#   4. Non-deterministic default (nextval) forces rebuild — detected by
-#      default_value_evaluable() as an async function, a separate code path from #3.
-#   5. Removing a default is metadata-only; new rows fall back to NULL.
-#   6. Invalid default expression is rejected at ALTER time.
-#   7. Physically-written column value survives a default change.
-#   8. Change tracking: reject column changes on non-empty table.
-#   9. Change tracking: same type and default is a no-op, not rejected.
-#  10. Change tracking: allow changes on empty table.
+#   1. Deterministic default change skips rebuild.
+#   2. Each snapshot preserves its own default for time travel.
+#   3. rand() default forces rebuild (is_deterministic check).
+#   4. nextval() default forces rebuild (async function check).
+#   5. Removing a default is metadata-only.
+#   6. Invalid default is rejected at ALTER time.
+#   7. Physical column value is not affected by default change.
+#   8. Multi-column ALTER rolls back entirely on one bad default.
+#   9. Change tracking rejects changes on non-empty table.
+#  10. Change tracking allows no-op and empty-table changes.
 
 statement ok
 CREATE OR REPLACE DATABASE db_09_0103
@@ -21,17 +18,12 @@ CREATE OR REPLACE DATABASE db_09_0103
 statement ok
 USE db_09_0103
 
-# Pre-create the change-tracking table used by sections 8-10.
-statement ok
-CREATE TABLE t_ct(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
-
 # ------------------------------------------------------------------
-# 1. Deterministic default-only change is metadata-only (no rebuild)
+# 1. Deterministic default change skips rebuild
 #
-# ADD COLUMN creates a column that has no physical data in existing
-# blocks. Changing its default to another deterministic value should
-# remain metadata-only: fuse_column must still show zero rows for
-# that column.
+# Column added via ADD COLUMN has no physical data. Changing its
+# default to another deterministic value stays metadata-only:
+# fuse_column still shows zero rows for that column.
 # ------------------------------------------------------------------
 
 statement ok
@@ -62,49 +54,47 @@ SELECT a, b FROM t_det
 1 42
 
 # ------------------------------------------------------------------
-# 2. Snapshot preserves per-version default for time travel reads
+# 2. Each snapshot preserves its own default for time travel
 #
-# Each snapshot records its own default expression. After a
-# metadata-only default change, older snapshots still carry the
-# previous default value.
+# After a metadata-only default change, the latest snapshot has the
+# new default while older snapshots keep the previous one.
 # ------------------------------------------------------------------
 
 statement ok
-CREATE TABLE t(a INT NOT NULL)
+CREATE TABLE t_tt(a INT NOT NULL)
 
 statement ok
-INSERT INTO t VALUES(1),(2)
+INSERT INTO t_tt VALUES(1),(2)
 
 statement ok
-ALTER TABLE t ADD COLUMN b INT DEFAULT 10
+ALTER TABLE t_tt ADD COLUMN b INT DEFAULT 10
 
 query II
-SELECT a,b FROM t ORDER BY a
+SELECT a, b FROM t_tt ORDER BY a
 ----
 1 10
 2 10
 
 statement ok
-ALTER TABLE t MODIFY COLUMN b INT DEFAULT 20
+ALTER TABLE t_tt MODIFY COLUMN b INT DEFAULT 20
 
 query II
-SELECT a,b FROM t ORDER BY a
+SELECT a, b FROM t_tt ORDER BY a
 ----
 1 20
 2 20
 
 query T
-SELECT snapshot:schema:fields[1]:default_expr FROM fuse_dump_snapshots('db_09_0103', 't') LIMIT 2
+SELECT snapshot:schema:fields[1]:default_expr FROM fuse_dump_snapshots('db_09_0103', 't_tt') LIMIT 2
 ----
 "20"
 "10"
 
 # ------------------------------------------------------------------
-# 3. Non-deterministic default (rand) forces rebuild
+# 3. rand() default forces rebuild (is_deterministic check)
 #
-# rand() is not deterministic, so existing blocks must be rewritten
-# to materialize stable values. Verified by checking fuse_column
-# shows physical data after the ALTER.
+# rand() is not deterministic. Existing blocks must be rewritten to
+# materialize stable values. fuse_column shows physical data after.
 # ------------------------------------------------------------------
 
 statement ok
@@ -130,10 +120,10 @@ SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = '
 1
 
 # ------------------------------------------------------------------
-# 4. Non-deterministic default (nextval) forces rebuild
+# 4. nextval() default forces rebuild (async function check)
 #
-# nextval is an AsyncFunctionCall, detected via default_value_evaluable()
-# rather than is_deterministic(). This tests that separate detection path.
+# nextval is an async function detected by default_value_evaluable(),
+# a separate code path from the is_deterministic() check in #3.
 # ------------------------------------------------------------------
 
 statement ok
@@ -162,11 +152,11 @@ SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = '
 1
 
 # ------------------------------------------------------------------
-# 5. Removing a default is metadata-only; new rows fall back to NULL
+# 5. Removing a default is metadata-only
 #
-# MODIFY COLUMN b INT (no DEFAULT clause) removes the default.
-# Old rows keep their previous default value (already baked into the
-# snapshot). New rows inserted without an explicit value get NULL.
+# MODIFY COLUMN b INT (no DEFAULT) removes the default. Old rows
+# keep their snapshot default. New rows without an explicit value
+# get NULL.
 # ------------------------------------------------------------------
 
 statement ok
@@ -193,10 +183,9 @@ SELECT a, b FROM t_rm ORDER BY a
 2 NULL
 
 # ------------------------------------------------------------------
-# 6. Invalid default expression is rejected at ALTER time
+# 6. Invalid default is rejected at ALTER time
 #
-# A default that cannot be cast to the column type must fail during
-# ALTER, not silently succeed and break later at query time.
+# A default that cannot cast to the column type fails immediately.
 # ------------------------------------------------------------------
 
 statement ok
@@ -206,12 +195,11 @@ statement error
 ALTER TABLE t_inv MODIFY COLUMN b INT DEFAULT 'not_a_number'
 
 # ------------------------------------------------------------------
-# 7. Physically-written column value survives a default change
+# 7. Physical column value is not affected by default change
 #
-# When a row was inserted with an explicit column value, that value
-# is stored in the data block. Changing the default must not affect
-# the physically-written value; only new rows omitting the column
-# pick up the new default.
+# A row inserted with an explicit value stores it physically.
+# Changing the default does not overwrite it. Only new rows
+# omitting the column use the new default.
 # ------------------------------------------------------------------
 
 statement ok
@@ -233,16 +221,45 @@ SELECT a, b FROM t_phys ORDER BY a
 2 999
 
 # ------------------------------------------------------------------
-# 8. Change tracking: reject column changes on non-empty table
+# 8. Multi-column ALTER rolls back entirely on one bad default
 #
-# Tables with change tracking enabled must not allow metadata-only
-# default changes on non-empty tables, because silently altering
-# historical row values would break stream/CDC consistency.
+# When multiple columns are modified in one ALTER and one has an
+# invalid default, the whole statement fails. No types change.
 # ------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_multi(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO t_multi VALUES(1, 1)
+
+statement error 1006
+ALTER TABLE t_multi MODIFY COLUMN a FLOAT NOT NULL, COLUMN b FLOAT NOT NULL DEFAULT 'a'
+
+query TT
+SELECT name, data_type FROM system.columns WHERE database = 'db_09_0103' AND table = 't_multi' ORDER BY name
+----
+a INT
+b INT
+
+# ------------------------------------------------------------------
+# 9. Change tracking rejects changes on non-empty table
+#
+# Metadata-only default changes on non-empty change-tracking tables
+# would silently alter historical row values, breaking stream/CDC.
+# Both default changes and type changes are rejected.
+#
+# Exception: re-specifying the same type and default is a no-op
+# (schema unchanged) and is allowed.
+# ------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_ct(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
 
 statement ok
 INSERT INTO t_ct(a) VALUES(1)
 
+# Default change on non-empty CT table — rejected.
 statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 99
 
@@ -250,30 +267,23 @@ statement ok
 INSERT INTO t_ct(a) VALUES(2)
 
 query II
-SELECT a,b FROM t_ct ORDER BY a
+SELECT a, b FROM t_ct ORDER BY a
 ----
 1 10
 2 10
 
+# Type change on non-empty CT table — also rejected.
 statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b STRING
 
-# ------------------------------------------------------------------
-# 9. Change tracking: no-op re-specification is allowed
-#
-# Re-specifying a column with its current type and default is a
-# no-op (schema unchanged). It must not be rejected even on a
-# non-empty change-tracking table.
-# ------------------------------------------------------------------
-
+# Same type and same default — no-op, allowed.
 statement ok
 ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 10
 
 # ------------------------------------------------------------------
-# 10. Change tracking: allow changes on empty table
+# 10. Change tracking allows changes on empty table
 #
-# An empty change-tracking table has no historical rows to corrupt,
-# so schema changes are safe.
+# An empty change-tracking table has no rows to corrupt.
 # ------------------------------------------------------------------
 
 statement ok
