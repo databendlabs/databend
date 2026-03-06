@@ -26,6 +26,7 @@ use opendal::Operator;
 use opendal::services::Memory;
 
 use super::committer_processor::LanceDatasetCommitter;
+use super::writer_processor::FragmentWriterParams;
 use super::writer_processor::LanceDatasetWriter;
 use super::writer_processor::SharedFragmentState;
 
@@ -55,19 +56,17 @@ pub(crate) fn append_data_to_lance_dataset(
 
     let processor_num = max_threads.max(1);
     let fragment_state = Arc::new(SharedFragmentState::new());
+    let params = Arc::new(FragmentWriterParams::try_create(
+        info.clone(),
+        schema.clone(),
+        op.clone(),
+        target_dataset_path.clone(),
+        staging_accessor.clone(),
+        staging_dataset_path.clone(),
+    )?);
     pipeline.try_resize(processor_num)?;
     pipeline.add_transform(|input, output| {
-        LanceDatasetWriter::try_create(
-            input,
-            output,
-            info.clone(),
-            schema.clone(),
-            op.clone(),
-            target_dataset_path.clone(),
-            staging_accessor.clone(),
-            staging_dataset_path.clone(),
-            fragment_state.clone(),
-        )
+        LanceDatasetWriter::try_create(input, output, params.clone(), fragment_state.clone())
     })?;
 
     pipeline.try_resize(1)?;

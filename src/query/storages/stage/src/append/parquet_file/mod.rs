@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_batch;
-mod limit_file_size_processor;
 mod pipeline;
 mod writer_processor;
 pub(crate) use pipeline::append_data_to_parquet_files;

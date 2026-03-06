@@ -98,14 +98,6 @@ impl SharedFragmentState {
 pub struct LanceDatasetWriter {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    schema: TableSchemaRef,
-
-    target_accessor: Operator,
-    target_dataset_path: String,
-
-    staging_accessor: Operator,
-    staging_dataset_path: String,
-    fragment_state: Arc<SharedFragmentState>,
 
     input_data: Option<DataBlock>,
 
@@ -118,13 +110,27 @@ pub struct LanceDatasetWriter {
     // Used for flush-threshold checks, then reset in `build_write_task`.
     batches_input_bytes: usize,
 
-    // Aggregated write stats across all completed flush+move operations.
-    written_summary: DataSummary,
-
-    lance_schema: LanceSchema,
     file_to_move: Option<PreparedMoveTask>,
 
     final_output_state: FinalOutputState,
+
+    // Aggregated write stats across all completed flush+move operations.
+    written_summary: DataSummary,
+
+    params: Arc<FragmentWriterParams>,
+    fragment_state: Arc<SharedFragmentState>,
+}
+
+pub(crate) struct FragmentWriterParams {
+    schema: TableSchemaRef,
+
+    target_accessor: Operator,
+    target_dataset_path: String,
+
+    staging_accessor: Operator,
+    staging_dataset_path: String,
+
+    lance_schema: LanceSchema,
 
     max_bytes_per_file: usize,
     max_rows_per_file: usize,
@@ -132,19 +138,15 @@ pub struct LanceDatasetWriter {
     base_path: object_store::path::Path,
 }
 
-impl LanceDatasetWriter {
-    #[allow(clippy::too_many_arguments)]
+impl FragmentWriterParams {
     pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
         info: CopyIntoLocationInfo,
         schema: TableSchemaRef,
         target_accessor: Operator,
         target_dataset_path: String,
         staging_accessor: Operator,
         staging_dataset_path: String,
-        fragment_state: Arc<SharedFragmentState>,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Self> {
         let max_bytes_per_file = if info.options.single {
             usize::MAX
         } else if info.options.max_file_size == 0 {
@@ -172,27 +174,63 @@ impl LanceDatasetWriter {
             })
         })?;
 
-        Ok(ProcessorPtr::create(Box::new(LanceDatasetWriter {
-            input,
-            output,
+        Ok(Self {
             schema,
             target_accessor,
             target_dataset_path,
             staging_accessor,
             staging_dataset_path,
+            lance_schema,
+            max_bytes_per_file,
+            max_rows_per_file: 1000,
+            object_store,
+            base_path,
+        })
+    }
+
+    pub(crate) fn build_store_params(
+        data_accessor: Operator,
+        dataset_path: &str,
+    ) -> Result<ObjectStoreParams> {
+        let object_store: Arc<dyn ObjectStore> = Arc::new(OpendalStore::new(data_accessor));
+
+        let mut root = PathBuf::from("/");
+        let normalized = dataset_path.trim_matches('/');
+        if !normalized.is_empty() {
+            root.push(normalized);
+        }
+        let base_url = Url::from_directory_path(root).map_err(|_| {
+            ErrorCode::Internal("invalid base url for lance object store".to_string())
+        })?;
+
+        #[allow(deprecated)]
+        let store_params = ObjectStoreParams {
+            object_store: Some((object_store, base_url)),
+            ..Default::default()
+        };
+        Ok(store_params)
+    }
+}
+
+impl LanceDatasetWriter {
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        params: Arc<FragmentWriterParams>,
+        fragment_state: Arc<SharedFragmentState>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(LanceDatasetWriter {
+            input,
+            output,
+            params,
             fragment_state,
             input_data: None,
             batches: Vec::new(),
             batches_row_counts: 0,
             batches_input_bytes: 0,
             written_summary: DataSummary::default(),
-            lance_schema,
             file_to_move: None,
             final_output_state: FinalOutputState::Unprepared,
-            max_bytes_per_file,
-            max_rows_per_file: 1000,
-            object_store,
-            base_path,
         })))
     }
 
@@ -205,8 +243,8 @@ impl LanceDatasetWriter {
     }
 
     fn need_flush(&self) -> bool {
-        self.batches_input_bytes >= self.max_bytes_per_file
-            || self.batches_row_counts >= self.max_rows_per_file
+        self.batches_input_bytes >= self.params.max_bytes_per_file
+            || self.batches_row_counts >= self.params.max_rows_per_file
     }
 
     fn flush_pending_batches_sync(&mut self) -> Result<()> {
@@ -238,29 +276,6 @@ impl LanceDatasetWriter {
         }
 
         Ok(())
-    }
-
-    pub(crate) fn build_store_params(
-        data_accessor: Operator,
-        dataset_path: &str,
-    ) -> Result<ObjectStoreParams> {
-        let object_store: Arc<dyn ObjectStore> = Arc::new(OpendalStore::new(data_accessor));
-
-        let mut root = PathBuf::from("/");
-        let normalized = dataset_path.trim_matches('/');
-        if !normalized.is_empty() {
-            root.push(normalized);
-        }
-        let base_url = Url::from_directory_path(root).map_err(|_| {
-            ErrorCode::Internal("invalid base url for lance object store".to_string())
-        })?;
-
-        #[allow(deprecated)]
-        let store_params = ObjectStoreParams {
-            object_store: Some((object_store, base_url)),
-            ..Default::default()
-        };
-        Ok(store_params)
     }
 
     fn data_file_path(dataset_path: &str, relative_path: &str) -> String {
@@ -314,13 +329,18 @@ impl LanceDatasetWriter {
         let data_file_key = uuid::Uuid::new_v4().to_string();
         let filename = format!("{}.lance", data_file_key);
         // let has_blob_v2 = schema_has_blob_v2(&schema);
-        let full_path = self.base_path.child("data").child(filename.clone());
-        let obj_writer = self.object_store.create(&full_path).await.map_err(|err| {
-            ErrorCode::StorageOther(format!("create staging lance data file failed: {err}"))
-        })?;
+        let full_path = self.params.base_path.child("data").child(filename.clone());
+        let obj_writer = self
+            .params
+            .object_store
+            .create(&full_path)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!("create staging lance data file failed: {err}"))
+            })?;
         let mut file_writer = lance_file::writer::FileWriter::try_new(
             obj_writer,
-            self.lance_schema.clone(),
+            self.params.lance_schema.clone(),
             FileWriterOptions::default(),
         )
         .map_err(|err| {
@@ -351,6 +371,7 @@ impl LanceDatasetWriter {
         fragment.physical_rows = Some(num_rows as usize);
 
         let file_meta = self
+            .params
             .object_store
             .inner
             .head(&full_path)
@@ -401,10 +422,10 @@ impl LanceDatasetWriter {
 
         let move_results =
             futures::stream::iter(encoded_file_paths.into_iter().map(|relative_path| {
-                let source_accessor = self.staging_accessor.clone();
-                let target_accessor = self.target_accessor.clone();
-                let source_dataset_path = self.staging_dataset_path.clone();
-                let target_dataset_path = self.target_dataset_path.clone();
+                let source_accessor = self.params.staging_accessor.clone();
+                let target_accessor = self.params.target_accessor.clone();
+                let source_dataset_path = self.params.staging_dataset_path.clone();
+                let target_dataset_path = self.params.target_dataset_path.clone();
 
                 async move {
                     let source =
@@ -525,7 +546,7 @@ impl Processor for LanceDatasetWriter {
         if let Some(block) = self.input_data.take() {
             self.batches_row_counts += block.num_rows();
             self.batches_input_bytes = self.batches_input_bytes.saturating_add(block.memory_size());
-            let batch = block.to_record_batch(self.schema.as_ref())?;
+            let batch = block.to_record_batch(self.params.schema.as_ref())?;
             self.batches.push(batch);
             if self.need_flush() {
                 self.flush_pending_batches_sync()?;
