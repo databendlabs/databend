@@ -39,17 +39,16 @@ use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::metrics::server_metrics;
+use databend_meta::raft_store::config::RaftConfig;
+use databend_meta::raft_store::ondisk::DATA_VERSION;
+use databend_meta::raft_store::ondisk::OnDisk;
 use databend_meta::util::reply_to_api_result;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
 use databend_meta_cli_config::MetaConfig;
-use databend_meta_raft_store::config::RaftConfig;
-use databend_meta_raft_store::ondisk::DATA_VERSION;
-use databend_meta_raft_store::ondisk::OnDisk;
 use databend_meta_runtime_api::RuntimeApi;
-use databend_meta_sled_store::openraft::MessageSummary;
 use databend_meta_types::Cmd;
 use databend_meta_types::LogEntry;
 use databend_meta_types::node::Node;
@@ -58,6 +57,7 @@ use databend_meta_types::raft_types::NodeId;
 use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use log::info;
 use log::warn;
+use openraft::MessageSummary;
 use tokio::time::Instant;
 use tokio::time::sleep;
 
@@ -165,7 +165,7 @@ pub async fn entry<RT: RuntimeApi>(conf: MetaConfig) -> anyhow::Result<()> {
     );
 
     let runtime = RT::new(Some(32), Some("meta-io-rt".to_string())).map_err(|e| {
-        databend_meta_types::MetaStartupError::MetaServiceError(format!(
+        databend_meta::raft_store::MetaStartupError::MetaServiceError(format!(
             "Cannot create meta IO runtime: {}",
             e
         ))

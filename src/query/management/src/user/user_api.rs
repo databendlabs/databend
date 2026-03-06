@@ -17,7 +17,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::tenant_user_ident::Resource as UserIdentResource;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
-use databend_meta_kvapi::kvapi::ListKVReply;
+use databend_meta_client::kvapi::ListKVReply;
 use databend_meta_types::MetaError;
 use databend_meta_types::SeqV;
 

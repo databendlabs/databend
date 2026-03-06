@@ -29,12 +29,9 @@ databend-meta = { workspace = true }
 databend-meta-admin = { workspace = true }
 databend-meta-cli-config = { workspace = true }
 databend-meta-client = { workspace = true }
-databend-meta-kvapi = { workspace = true }
 databend-meta-plugin-semaphore = { workspace = true }
-databend-meta-raft-store = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-runtime-api = { workspace = true }
-databend-meta-sled-store = { workspace = true }
 databend-meta-types = { workspace = true }
 databend-meta-ver = { workspace = true }
 
@@ -47,6 +44,7 @@ fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 mlua = { workspace = true }
+openraft = { workspace = true }
 num_cpus = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

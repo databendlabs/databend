@@ -24,7 +24,7 @@ use databend_common_meta_app::principal::client_session_ident::UserSessionId;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token_ident::TokenIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaError;
 use databend_meta_types::With;

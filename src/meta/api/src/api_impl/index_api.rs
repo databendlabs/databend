@@ -43,10 +43,10 @@ use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDelet
 use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDeletedTableIndexIdIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::Key;
-use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::ListOptions;
 use databend_meta_types::Change;
 use databend_meta_types::ConditionResult::Eq;
 use databend_meta_types::MetaError;

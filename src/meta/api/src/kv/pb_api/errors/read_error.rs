@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_types::InvalidReply;
 use databend_meta_types::MetaError;
 use databend_meta_types::anyerror::AnyError;

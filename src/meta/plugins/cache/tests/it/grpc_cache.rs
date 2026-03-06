@@ -16,6 +16,7 @@
 
 use std::time::Duration;
 
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::make_grpc_client;

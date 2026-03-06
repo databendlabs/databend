@@ -25,6 +25,7 @@ use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_meta_client::ClientHandle;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_plugin_semaphore::Semaphore;
 use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_runtime::DatabendRuntime;

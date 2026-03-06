@@ -20,7 +20,7 @@ use databend_common_meta_api::deserialize_struct;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_store::MetaStore;
-use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_types::MatchSeq;
 

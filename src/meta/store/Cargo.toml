@@ -14,8 +14,6 @@ databend-base = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-client = { workspace = true }
-databend-meta-kvapi = { workspace = true }
-databend-meta-kvapi-test-suite = { workspace = true }
 databend-meta-plugin-semaphore = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-runtime-api = { workspace = true }

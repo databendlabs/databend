@@ -349,7 +349,7 @@ impl ListDatabaseReq {
 }
 
 mod kvapi_key_impl {
-    use databend_meta_kvapi::kvapi;
+    use databend_meta_client::kvapi;
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;

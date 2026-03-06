@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 
 // For doc
 #[allow(unused_imports)]

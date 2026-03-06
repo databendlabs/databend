@@ -15,8 +15,8 @@
 use std::fs::File;
 use std::io::Write;
 
+use databend_meta::raft_store::config::RaftConfig;
 use databend_meta::store::RaftStore;
-use databend_meta_raft_store::config::RaftConfig;
 use databend_meta_runtime_api::SpawnApi;
 use futures::TryStreamExt;
 

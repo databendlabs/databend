@@ -15,13 +15,12 @@ memory-profiling = ["databend-common-http/memory-profiling"]
 databend-base = { workspace = true }
 databend-common-http = { workspace = true }
 databend-meta = { workspace = true }
-databend-meta-raft-store = { workspace = true }
 databend-meta-runtime-api = { workspace = true }
-databend-meta-sled-store = { workspace = true }
 databend-meta-types = { workspace = true }
 
 anyerror = { workspace = true }
 async-trait = { workspace = true }
+openraft-rt = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }

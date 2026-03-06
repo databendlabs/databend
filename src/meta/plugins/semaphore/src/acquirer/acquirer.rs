@@ -20,6 +20,7 @@ use std::time::Duration;
 
 use codeq::Encode;
 use databend_meta_client::ClientHandle;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_runtime_api::SpawnApi;
 use databend_meta_types::MatchSeq;

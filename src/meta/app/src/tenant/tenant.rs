@@ -87,9 +87,9 @@ impl ToTenant for &Tenant {
 
 mod kvapi_key_impl {
 
-    use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::KeyBuilder;
-    use databend_meta_kvapi::kvapi::KeyError;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::KeyBuilder;
+    use databend_meta_client::kvapi::KeyError;
 
     use crate::tenant::tenant::Tenant;
 

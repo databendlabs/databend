@@ -17,9 +17,8 @@ use std::time::Duration;
 
 use databend_common_exception::Result;
 use databend_common_meta_store::MetaStore;
-use databend_meta_kvapi::kvapi::KVApi;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_kvapi::kvapi::ListOptions;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::ListOptions;
 use databend_meta_types::MatchSeq;
 use databend_meta_types::MetaSpec;
 use databend_meta_types::Operation;

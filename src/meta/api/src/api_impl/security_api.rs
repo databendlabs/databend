@@ -29,7 +29,7 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::tenant::Tenant;
-use databend_meta_kvapi::kvapi;
+use databend_meta_client::kvapi;
 use databend_meta_types::ConditionResult::Eq;
 use databend_meta_types::MatchSeqExt;
 use databend_meta_types::MetaError;

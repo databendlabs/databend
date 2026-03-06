@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_proto_conv::FromToProto;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::NonEmptyItem;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::NonEmptyItem;
 use databend_meta_types::Change;
 use databend_meta_types::Operation;
 use databend_meta_types::SeqV;
