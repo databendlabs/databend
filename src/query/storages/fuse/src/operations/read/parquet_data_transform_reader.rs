@@ -34,7 +34,6 @@ use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_sql::IndexType;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
-use log::info;
 
 use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FuseBlockPartInfo;
@@ -46,6 +45,7 @@ use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
+use crate::pruning::RuntimeFilterExprKind;
 
 pub struct ReadStats {
     pub blocks_total: AtomicU64,
@@ -112,16 +112,27 @@ impl AsyncTransform for ReadParquetDataTransform {
                 if !parts.is_empty() {
                     let mut chunks = Vec::with_capacity(parts.len());
                     let mut fuse_part_infos = Vec::with_capacity(parts.len());
+                    let inlist_bloom_prune_threshold = self
+                        .context
+                        .get_settings()
+                        .get_inlist_runtime_bloom_prune_threshold()?
+                        as usize;
 
+                    let runtime_filters = self.context.get_runtime_filters(self.scan_id);
                     let runtime_filter = ExprRuntimePruner::new(
-                        self.context
-                            .get_runtime_filters(self.scan_id)
+                        self.func_ctx.clone(),
+                        self.table_schema.clone(),
+                        self.block_reader.operator(),
+                        inlist_bloom_prune_threshold,
+                        runtime_filters
                             .into_iter()
                             .flat_map(|entry| {
                                 let mut exprs = Vec::new();
                                 if let Some(expr) = entry.inlist.clone() {
                                     exprs.push(RuntimeFilterExpr {
                                         filter_id: entry.id,
+                                        kind: RuntimeFilterExprKind::Inlist,
+                                        inlist_value_count: entry.inlist_value_count,
                                         expr,
                                         stats: entry.stats.clone(),
                                     });
@@ -129,6 +140,8 @@ impl AsyncTransform for ReadParquetDataTransform {
                                 if let Some(expr) = entry.min_max.clone() {
                                     exprs.push(RuntimeFilterExpr {
                                         filter_id: entry.id,
+                                        kind: RuntimeFilterExprKind::MinMax,
+                                        inlist_value_count: 0,
                                         expr,
                                         stats: entry.stats.clone(),
                                     });
@@ -140,7 +153,7 @@ impl AsyncTransform for ReadParquetDataTransform {
                     for part in parts.into_iter() {
                         let prune_start = Instant::now();
                         self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);
-                        if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
+                        if runtime_filter.prune(&part).await? {
                             self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
                             let prune_duration = prune_start.elapsed();
                             Profile::record_usize_profile(
@@ -227,17 +240,8 @@ impl AsyncTransform for ReadParquetDataTransform {
     }
 
     async fn on_finish(&mut self) -> Result<()> {
-        let unfinished_processors_count = self
-            .unfinished_processors_count
+        self.unfinished_processors_count
             .fetch_sub(1, Ordering::Relaxed);
-        if unfinished_processors_count == 1 {
-            let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
-            let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!(
-                "RUNTIME-FILTER: AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}",
-                self.scan_id, blocks_total, blocks_pruned
-            );
-        }
         Ok(())
     }
 }

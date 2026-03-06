@@ -69,6 +69,16 @@ pub async fn build_runtime_filter_infos(
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
         for (probe_key, scan_id) in &desc.probe_targets {
             let entry = filters.entry(*scan_id).or_default();
+            let (inlist, inlist_value_count) = if enabled {
+                if let Some(ref inlist) = packet.inlist {
+                    let (expr, value_count) = build_inlist_filter(inlist.clone(), probe_key)?;
+                    (Some(expr), value_count)
+                } else {
+                    (None, 0)
+                }
+            } else {
+                (None, 0)
+            };
 
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
@@ -85,15 +95,8 @@ pub async fn build_runtime_filter_infos(
                 } else {
                     None
                 },
-                inlist: if enabled {
-                    if let Some(ref inlist) = packet.inlist {
-                        Some(build_inlist_filter(inlist.clone(), probe_key)?)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
+                inlist,
+                inlist_value_count,
                 min_max: if enabled {
                     if let Some(ref min_max) = packet.min_max {
                         Some(build_min_max_filter(
@@ -119,13 +122,17 @@ pub async fn build_runtime_filter_infos(
     Ok(filters)
 }
 
-fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<String>> {
+fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr<String>, usize)> {
+    let inlist_value_count = inlist.len();
     if inlist.len() == 0 {
-        return Ok(Expr::Constant(Constant {
-            span: None,
-            scalar: Scalar::Boolean(false),
-            data_type: DataType::Boolean,
-        }));
+        return Ok((
+            Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::Boolean(false),
+                data_type: DataType::Boolean,
+            }),
+            0,
+        ));
     }
     let probe_key = match probe_key {
         Expr::ColumnRef(col) => col,
@@ -170,7 +177,7 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
     };
 
     let expr = type_check::check(&or_filters_expr, &BUILTIN_FUNCTIONS)?;
-    Ok(expr)
+    Ok((expr, inlist_value_count))
 }
 
 fn build_min_max_filter(
@@ -339,7 +346,8 @@ mod tests {
         });
 
         // Build the filter expression
-        let filter_expr = build_inlist_filter(inlist, &probe_key).unwrap();
+        let (filter_expr, inlist_value_count) = build_inlist_filter(inlist, &probe_key).unwrap();
+        assert_eq!(inlist_value_count, 2);
 
         // Test with ConstantFolder - case where column_a in [2,10] (can be folded to constant)
         let mut input_domains = HashMap::new();
@@ -411,7 +419,8 @@ mod tests {
         });
 
         // Build the filter expression - this should create a balanced binary tree
-        let filter_expr = build_inlist_filter(inlist, &probe_key).unwrap();
+        let (filter_expr, inlist_value_count) = build_inlist_filter(inlist, &probe_key).unwrap();
+        assert_eq!(inlist_value_count, 1024);
 
         // Verify the expression was built successfully
         assert!(

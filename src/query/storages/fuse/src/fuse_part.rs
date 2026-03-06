@@ -40,6 +40,9 @@ use databend_storages_common_table_meta::meta::Location;
 pub struct FuseBlockPartInfo {
     pub location: String,
 
+    pub bloom_filter_index_location: Option<Location>,
+    pub bloom_filter_index_size: u64,
+
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
@@ -77,6 +80,8 @@ impl FuseBlockPartInfo {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
+        bloom_filter_index_location: Option<Location>,
+        bloom_filter_index_size: u64,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
         columns_stat: Option<HashMap<ColumnId, ColumnStatistics>>,
@@ -87,6 +92,8 @@ impl FuseBlockPartInfo {
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FuseBlockPartInfo {
             location,
+            bloom_filter_index_location,
+            bloom_filter_index_size,
             create_on,
             columns_meta,
             nums_rows: rows_count as usize,

@@ -1,0 +1,164 @@
+statement ok
+set max_threads = 1;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+statement ok
+create or replace table test_a(number UInt64 not null) row_per_block = 1000 as
+select if(number < 10, number + 50000, number + 1000000) as number from numbers(10000);
+
+statement ok
+create or replace table test_b(number UInt64 not null) bloom_index_columns='number' row_per_block = 1000 as
+select (number % 1000) * 100 + (number DIV 1000) as number from numbers(100000);
+
+query I
+select count() from test_b where number in (select number from test_a limit 10);
+----
+10
+
+statement ok
+set inlist_runtime_bloom_prune_threshold = 0;
+
+query T
+explain analyze select * from test_b where number in (select number from test_a limit 10);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [test_b.number (#0)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_1 (#1)]
+├── probe keys: [test_b.number (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_1 (#1), probe targets:[test_b.number (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 100000.00
+├── Limit(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── output columns: [test_a.number (#1)]
+│   ├── limit: 10
+│   ├── offset: 0
+│   ├── estimated rows: 10.00
+│   └── TableScan
+│       ├── cpu time: <slt:ignore>
+│       ├── wait time: <slt:ignore>
+│       ├── output rows: <slt:ignore>
+│       ├── output bytes: <slt:ignore>
+│       ├── bytes scanned: <slt:ignore>
+│       ├── read from remote: <slt:ignore>
+│       ├── runtime filter bloom time: <slt:ignore>
+│       ├── runtime filter inlist/min-max time: <slt:ignore>
+│       ├── table: default.default.test_a
+│       ├── scan id: 1
+│       ├── output columns: [number (#1)]
+│       ├── read rows: 1000
+│       ├── read size: 1.06 KiB
+│       ├── partitions total: 10
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [], limit: 10]
+│       └── estimated rows: 10000.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.test_b
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 100000
+    ├── read size: 167.25 KiB
+    ├── partitions total: 99
+    ├── partitions scanned: 99
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 100000.00
+
+statement ok
+set inlist_runtime_bloom_prune_threshold = 10;
+
+query T
+explain analyze select * from test_b where number in (select number from test_a limit 10);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [test_b.number (#0)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_1 (#1)]
+├── probe keys: [test_b.number (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_1 (#1), probe targets:[test_b.number (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 100000.00
+├── Limit(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── output columns: [test_a.number (#1)]
+│   ├── limit: 10
+│   ├── offset: 0
+│   ├── estimated rows: 10.00
+│   └── TableScan
+│       ├── cpu time: <slt:ignore>
+│       ├── wait time: <slt:ignore>
+│       ├── output rows: <slt:ignore>
+│       ├── output bytes: <slt:ignore>
+│       ├── bytes scanned: <slt:ignore>
+│       ├── read from remote: <slt:ignore>
+│       ├── runtime filter bloom time: <slt:ignore>
+│       ├── runtime filter inlist/min-max time: <slt:ignore>
+│       ├── table: default.default.test_a
+│       ├── scan id: 1
+│       ├── output columns: [number (#1)]
+│       ├── read rows: 1000
+│       ├── read size: 1.06 KiB
+│       ├── partitions total: 10
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [], limit: 10]
+│       └── estimated rows: 10000.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── parts pruned by runtime filter: 85
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.test_b
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 100000
+    ├── read size: 167.25 KiB
+    ├── partitions total: 99
+    ├── partitions scanned: 99
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 100000.00
+
+statement ok
+drop table if exists test_a;
+
+statement ok
+drop table if exists test_b;

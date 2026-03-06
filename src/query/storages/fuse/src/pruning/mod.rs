@@ -31,6 +31,7 @@ pub use bloom_pruner::BloomPrunerCreator;
 pub use expr_bloom_filter::ExprBloomFilter;
 pub use expr_runtime_pruner::ExprRuntimePruner;
 pub use expr_runtime_pruner::RuntimeFilterExpr;
+pub use expr_runtime_pruner::RuntimeFilterExprKind;
 pub use fuse_pruner::FusePruner;
 pub use fuse_pruner::PruningContext;
 pub use fuse_pruner::table_sample;
