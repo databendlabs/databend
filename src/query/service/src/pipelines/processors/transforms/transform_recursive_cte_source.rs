@@ -79,6 +79,7 @@ pub struct TransformRecursiveCteSource {
 }
 
 static NEXT_R_CTE_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_R_CTE_SOURCE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 impl TransformRecursiveCteSource {
     pub fn try_create(
@@ -92,9 +93,12 @@ impl TransformRecursiveCteSource {
         // If we keep using the stable scan name (cte name/alias), concurrent queries can interfere
         // by creating/dropping/recreating the same table name, leading to wrong or flaky results.
         //
-        // Make the internal table names query-unique by prefixing them with the query id.
+        // Make the internal table names unique by prefixing them with query id + source instance id.
+        // Query id alone is insufficient when one query has multiple recursive CTE sources running
+        // concurrently (e.g. multiple scalar subqueries each containing recursive CTE).
         // This is purely internal and does not change user-visible semantics.
-        let rcte_prefix = make_rcte_prefix(&ctx.get_id());
+        let source_instance_id = NEXT_R_CTE_SOURCE_INSTANCE_ID.fetch_add(1, Ordering::Relaxed);
+        let rcte_prefix = make_rcte_prefix(&ctx.get_id(), source_instance_id);
         let local_cte_scan_names = {
             let names = collect_local_recursive_scan_names(&union_plan.right);
             if names.is_empty() {
@@ -218,15 +222,16 @@ impl TransformRecursiveCteSource {
     }
 }
 
-fn make_rcte_prefix(query_id: &str) -> String {
+fn make_rcte_prefix(query_id: &str, source_instance_id: u64) -> String {
     // Keep it readable and safe as an identifier.
-    // Preserve full query-id entropy to avoid collisions across concurrent queries.
+    // Preserve full query-id entropy and add per-source uniqueness to avoid collisions across:
+    // 1) concurrent queries and 2) multiple recursive CTE sources within one query.
     let suffix = if query_id.is_empty() {
         "unknown"
     } else {
         query_id
     };
-    format!("__rcte_{suffix}_")
+    format!("__rcte_{suffix}_{source_instance_id}_")
 }
 
 fn rewrite_assign_and_strip_recursive_cte(
