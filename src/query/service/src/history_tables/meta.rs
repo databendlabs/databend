@@ -379,6 +379,7 @@ mod tests {
     use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
     use databend_common_meta_store::MetaStore;
+    use databend_meta_client::kvapi::KvApiExt;
     use databend_meta_runtime::DatabendRuntime;
     use databend_meta_types::UpsertKV;
 
