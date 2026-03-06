@@ -1,15 +1,72 @@
+# Test suite for ALTER TABLE MODIFY COLUMN when only the default expression
+# changes (no type change). The optimization skips physical table rebuild
+# for deterministic defaults and updates metadata only.
+#
+# Sections:
+#   1. Deterministic default-only change is metadata-only (no rebuild).
+#   2. Snapshot preserves per-version default for time travel reads.
+#   3. Non-deterministic default (rand) forces rebuild.
+#   4. Non-deterministic default (nextval) forces rebuild.
+#   5. Removing a default is metadata-only; new rows fall back to NULL.
+#   6. Invalid default expression is rejected at ALTER time.
+#   7. Physically-written column value survives a default change.
+#   8. Change tracking: reject column changes on non-empty table.
+#   9. Change tracking: no-op re-specification is allowed.
+#  10. Change tracking: allow changes on empty table.
+
 statement ok
 CREATE OR REPLACE DATABASE db_09_0103
 
 statement ok
 USE db_09_0103
 
+# Pre-create the change-tracking table used by sections 8-10.
 statement ok
 CREATE TABLE t_ct(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
 
-#############################################
-# time travel: default-only modify keeps snapshot-specific defaults #
-#############################################
+# ------------------------------------------------------------------
+# 1. Deterministic default-only change is metadata-only (no rebuild)
+#
+# ADD COLUMN creates a column that has no physical data in existing
+# blocks. Changing its default to another deterministic value should
+# remain metadata-only: fuse_column must still show zero rows for
+# that column.
+# ------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_det(a INT NOT NULL) row_per_block=1
+
+statement ok
+INSERT INTO t_det VALUES(1)
+
+statement ok
+ALTER TABLE t_det ADD COLUMN b INT DEFAULT 10
+
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_det') WHERE column_name = 'b'
+----
+0
+
+statement ok
+ALTER TABLE t_det MODIFY COLUMN b INT DEFAULT 42
+
+query I
+SELECT count() FROM fuse_column('db_09_0103', 't_det') WHERE column_name = 'b'
+----
+0
+
+query II
+SELECT a, b FROM t_det
+----
+1 42
+
+# ------------------------------------------------------------------
+# 2. Snapshot preserves per-version default for time travel reads
+#
+# Each snapshot records its own default expression. After a
+# metadata-only default change, older snapshots still carry the
+# previous default value.
+# ------------------------------------------------------------------
 
 statement ok
 CREATE TABLE t(a INT NOT NULL)
@@ -41,9 +98,13 @@ SELECT snapshot:schema:fields[1]:default_expr FROM fuse_dump_snapshots('db_09_01
 "20"
 "10"
 
-#############################################################
-# non-deterministic default: default-only modify triggers rewrite #
-#############################################################
+# ------------------------------------------------------------------
+# 3. Non-deterministic default (rand) forces rebuild
+#
+# rand() is not deterministic, so existing blocks must be rewritten
+# to materialize stable values. Verified by checking fuse_column
+# shows physical data after the ALTER.
+# ------------------------------------------------------------------
 
 statement ok
 CREATE TABLE t_nd(a INT NOT NULL) row_per_block=1
@@ -54,8 +115,6 @@ INSERT INTO t_nd VALUES(1)
 statement ok
 ALTER TABLE t_nd ADD COLUMN b FLOAT DEFAULT 1.0
 
-# The ADD COLUMN above is metadata-only, so the existing block does not have
-# physical column metadata for `b`.
 query I
 SELECT count() FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = 'b'
 ----
@@ -64,16 +123,17 @@ SELECT count() FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = 'b'
 statement ok
 ALTER TABLE t_nd MODIFY COLUMN b FLOAT DEFAULT rand()
 
-# Changing the default to a non-deterministic expression requires rewriting
-# existing blocks to materialize stable values.
 query B
 SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nd') WHERE column_name = 'b'
 ----
 1
 
-#############################################################
-# nextval default: default-only modify triggers rewrite            #
-#############################################################
+# ------------------------------------------------------------------
+# 4. Non-deterministic default (nextval) forces rebuild
+#
+# nextval is an AsyncFunctionCall, detected via default_value_evaluable()
+# rather than is_deterministic(). This tests that separate detection path.
+# ------------------------------------------------------------------
 
 statement ok
 CREATE SEQUENCE seq_09_0103
@@ -95,15 +155,18 @@ SELECT count() FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = 'b'
 statement ok
 ALTER TABLE t_nv MODIFY COLUMN b INT DEFAULT nextval(seq_09_0103)
 
-# nextval is non-deterministic (AsyncFunctionCall); must trigger rewrite.
 query B
 SELECT count() >= 1 FROM fuse_column('db_09_0103', 't_nv') WHERE column_name = 'b'
 ----
 1
 
-####################################################
-# remove default: metadata-only, column falls back to type default #
-####################################################
+# ------------------------------------------------------------------
+# 5. Removing a default is metadata-only; new rows fall back to NULL
+#
+# MODIFY COLUMN b INT (no DEFAULT clause) removes the default.
+# Old rows keep their previous default value (already baked into the
+# snapshot). New rows inserted without an explicit value get NULL.
+# ------------------------------------------------------------------
 
 statement ok
 CREATE TABLE t_rm(a INT NOT NULL, b INT DEFAULT 10)
@@ -128,9 +191,53 @@ SELECT a, b FROM t_rm ORDER BY a
 1 10
 2 NULL
 
-####################################################
-# change tracking: reject schema changes on non-empty table  #
-####################################################
+# ------------------------------------------------------------------
+# 6. Invalid default expression is rejected at ALTER time
+#
+# A default that cannot be cast to the column type must fail during
+# ALTER, not silently succeed and break later at query time.
+# ------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_inv(a INT NOT NULL, b INT DEFAULT 0)
+
+statement error
+ALTER TABLE t_inv MODIFY COLUMN b INT DEFAULT 'not_a_number'
+
+# ------------------------------------------------------------------
+# 7. Physically-written column value survives a default change
+#
+# When a row was inserted with an explicit column value, that value
+# is stored in the data block. Changing the default must not affect
+# the physically-written value; only new rows omitting the column
+# pick up the new default.
+# ------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_phys(a INT NOT NULL, b INT DEFAULT 10)
+
+statement ok
+INSERT INTO t_phys VALUES(1, 100)
+
+statement ok
+ALTER TABLE t_phys MODIFY COLUMN b INT DEFAULT 999
+
+statement ok
+INSERT INTO t_phys(a) VALUES(2)
+
+query II
+SELECT a, b FROM t_phys ORDER BY a
+----
+1 100
+2 999
+
+# ------------------------------------------------------------------
+# 8. Change tracking: reject column changes on non-empty table
+#
+# Tables with change tracking enabled must not allow metadata-only
+# default changes on non-empty tables, because silently altering
+# historical row values would break stream/CDC consistency.
+# ------------------------------------------------------------------
 
 statement ok
 INSERT INTO t_ct(a) VALUES(1)
@@ -150,18 +257,23 @@ SELECT a,b FROM t_ct ORDER BY a
 statement error 1132
 ALTER TABLE t_ct MODIFY COLUMN b STRING
 
-####################################################
-# change tracking: no-op column spec should not trigger guard      #
-####################################################
+# ------------------------------------------------------------------
+# 9. Change tracking: no-op re-specification is allowed
+#
+# Re-specifying a column with its current type and default is a
+# no-op (schema unchanged). It must not be rejected even on a
+# non-empty change-tracking table.
+# ------------------------------------------------------------------
 
-# Re-specifying column b with its current type and default is a no-op;
-# it must not be rejected on a change-tracking table.
 statement ok
 ALTER TABLE t_ct MODIFY COLUMN b INT DEFAULT 10
 
-####################################################
-# change tracking: allow schema changes on empty table         #
-####################################################
+# ------------------------------------------------------------------
+# 10. Change tracking: allow changes on empty table
+#
+# An empty change-tracking table has no historical rows to corrupt,
+# so schema changes are safe.
+# ------------------------------------------------------------------
 
 statement ok
 CREATE TABLE t_ct_empty(a INT NOT NULL, b INT DEFAULT 10) CHANGE_TRACKING=true
@@ -173,119 +285,6 @@ query T
 SELECT default_expression FROM system.columns WHERE database = 'db_09_0103' AND table = 't_ct_empty' AND name = 'b'
 ----
 99
-
-####################################################
-# deterministic default-only change does NOT rebuild       #
-####################################################
-
-statement ok
-CREATE TABLE t_det(a INT NOT NULL) row_per_block=1
-
-statement ok
-INSERT INTO t_det VALUES(1)
-
-statement ok
-ALTER TABLE t_det ADD COLUMN b INT DEFAULT 10
-
-# ADD COLUMN is metadata-only; no physical column data for b.
-query I
-SELECT count() FROM fuse_column('db_09_0103', 't_det') WHERE column_name = 'b'
-----
-0
-
-statement ok
-ALTER TABLE t_det MODIFY COLUMN b INT DEFAULT 42
-
-# Deterministic default change is metadata-only; still no physical column data.
-query I
-SELECT count() FROM fuse_column('db_09_0103', 't_det') WHERE column_name = 'b'
-----
-0
-
-query II
-SELECT a, b FROM t_det
-----
-1 42
-
-####################################################
-# multiple sequential deterministic default changes        #
-####################################################
-
-statement ok
-CREATE TABLE t_seq_det(a INT NOT NULL) row_per_block=1
-
-statement ok
-INSERT INTO t_seq_det VALUES(1)
-
-statement ok
-ALTER TABLE t_seq_det ADD COLUMN b INT DEFAULT 1
-
-statement ok
-ALTER TABLE t_seq_det MODIFY COLUMN b INT DEFAULT 2
-
-query I
-SELECT count() FROM fuse_column('db_09_0103', 't_seq_det') WHERE column_name = 'b'
-----
-0
-
-statement ok
-ALTER TABLE t_seq_det MODIFY COLUMN b INT DEFAULT 3
-
-query I
-SELECT count() FROM fuse_column('db_09_0103', 't_seq_det') WHERE column_name = 'b'
-----
-0
-
-statement ok
-ALTER TABLE t_seq_det MODIFY COLUMN b INT DEFAULT 4
-
-query I
-SELECT count() FROM fuse_column('db_09_0103', 't_seq_det') WHERE column_name = 'b'
-----
-0
-
-query II
-SELECT a, b FROM t_seq_det
-----
-1 4
-
-####################################################
-# invalid default rejected at ALTER time                   #
-####################################################
-
-statement ok
-CREATE TABLE t_inv(a INT NOT NULL, b INT DEFAULT 0)
-
-# Type unchanged (INT -> INT), only default changes; invalid cast caught by validate_scalar.
-statement error
-ALTER TABLE t_inv MODIFY COLUMN b INT DEFAULT 'not_a_number'
-
-# Type-change path: invalid default caught by get_scalar.
-statement error
-ALTER TABLE t_inv MODIFY COLUMN b FLOAT DEFAULT 'not_a_number'
-
-####################################################
-# physically-written column retains value after default change #
-####################################################
-
-statement ok
-CREATE TABLE t_phys(a INT NOT NULL, b INT DEFAULT 10)
-
-statement ok
-INSERT INTO t_phys VALUES(1, 100)
-
-statement ok
-ALTER TABLE t_phys MODIFY COLUMN b INT DEFAULT 999
-
-# Old row keeps its physically-written value; new row gets new default.
-statement ok
-INSERT INTO t_phys(a) VALUES(2)
-
-query II
-SELECT a, b FROM t_phys ORDER BY a
-----
-1 100
-2 999
 
 statement ok
 DROP DATABASE db_09_0103
