@@ -43,7 +43,7 @@ use lance_table::format::Manifest;
 use log::info;
 use opendal::Operator;
 
-use super::writer_processor::LanceDatasetWriter;
+use super::writer_processor::FragmentWriterParams;
 use super::writer_processor::SharedFragmentState;
 use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
@@ -53,14 +53,13 @@ async fn commit_fragments_to_target_dataset(
     schema: TableSchemaRef,
     store_params: ObjectStoreParams,
     fragments: Vec<Fragment>,
-) -> Result<()> {
+) -> lance_core::Result<()> {
     if fragments.is_empty() {
         return Ok(());
     }
 
     let arrow_schema = Schema::from(schema.as_ref());
-    let lance_schema = LanceSchema::try_from(&arrow_schema)
-        .map_err(|err| ErrorCode::StorageOther(format!("lance schema conversion failed: {err}")))?;
+    let lance_schema = LanceSchema::try_from(&arrow_schema)?;
 
     info!(
         "commit lance fragments into target dataset: path={}, fragments={}",
@@ -84,38 +83,15 @@ async fn commit_fragments_to_target_dataset(
         target_dataset_path,
         &store_params,
     )
-    .await
-    .map_err(|e| ErrorCode::StorageOther(format!("lance object store creation failed: {e}")))?;
+    .await?;
     let path = base_path.child("_versions").child(file_name);
-    // let path = Path::parse(target_dataset_path).unwrap().child(".versions").child(file_name);
 
-    let mut object_writer = ObjectWriter::new(&object_store, &path).await.unwrap();
-    let pos = object_writer.write_struct(&manifest).await.unwrap();
+    let mut object_writer = ObjectWriter::new(&object_store, &path).await?;
+    let pos = object_writer.write_struct(&manifest).await?;
     object_writer
         .write_magics(pos, MAJOR_VERSION, MINOR_VERSION, MAGIC)
-        .await
-        .unwrap();
-    let _res = object_writer.shutdown().await.unwrap();
-
-    // let transaction = TransactionBuilder::new(0, LanceOperation::Overwrite {
-    //     schema: lance_schema,
-    //     fragments,
-    //     config_upsert_values: None,
-    //     initial_bases: None,
-    // })
-    // .build();
-    //
-    //
-    // CommitBuilder::new(target_dataset_path)
-    //     .with_store_params(store_params)
-    //     .with_commit_handler(Arc::new(UnsafeCommitHandler))
-    //     .execute(transaction)
-    //     .await
-    //     .map_err(|err| {
-    //         ErrorCode::StorageOther(format!(
-    //             "commit fragments to target lance dataset failed: {err}"
-    //         ))
-    //     })?;
+        .await?;
+    let _res = object_writer.shutdown().await?;
 
     Ok(())
 }
@@ -145,8 +121,10 @@ impl LanceDatasetCommitter {
         schema: TableSchemaRef,
         fragment_state: Arc<SharedFragmentState>,
     ) -> Result<ProcessorPtr> {
-        let target_store_params =
-            LanceDatasetWriter::build_store_params(target_accessor, target_dataset_path.as_str())?;
+        let target_store_params = FragmentWriterParams::build_store_params(
+            target_accessor,
+            target_dataset_path.as_str(),
+        )?;
 
         Ok(ProcessorPtr::create(Box::new(Self {
             input,
@@ -233,7 +211,8 @@ impl Processor for LanceDatasetCommitter {
             self.target_store_params.clone(),
             fragments,
         )
-        .await?;
+        .await
+        .map_err(|e| ErrorCode::StorageOther(format!("fail to commit lance dataset: {:?}", e)))?;
 
         if self.aggregated_summary.is_empty() {
             self.output_blocks = None;

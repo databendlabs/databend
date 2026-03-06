@@ -18,8 +18,8 @@ use databend_common_pipeline::core::Pipeline;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;
 
-use super::limit_file_size_processor::LimitFileSizeProcessor;
 use super::writer_processor::ParquetFileWriter;
+use crate::append::column_based::limit_file_size_processor::LimitFileSizeProcessor;
 /// - LimitFileSizeProcessor * 1: slice/group block to batches (as a block meta) to avoid files being too small when there are many threads.
 /// - ParquetFileSink * N:  serialize incoming blocks to Vec to reduce memory, and flush when they are large enough.
 #[allow(clippy::too_many_arguments)]

@@ -42,8 +42,8 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
 use parquet::schema::types::ColumnPath;
 
-use super::block_batch::BlockBatch;
 use crate::append::UnloadOutput;
+use crate::append::column_based::block_batch::BlockBatch;
 use crate::append::output::DataSummary;
 use crate::append::partition::partition_from_block;
 use crate::append::path::unload_path;
