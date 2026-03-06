@@ -1935,6 +1935,11 @@ query T
 explain analyze WITH RECURSIVE t(n) AS (SELECT 5 UNION ALL SELECT n + 1 FROM t WHERE n < 9) SELECT * FROM t;
 ----
 UnionAll(recursive cte)
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: 5
+├── output bytes: <slt:ignore>
+├── bytes scanned: <slt:ignore>
 ├── output columns: [5 (#3)]
 ├── estimated rows: 1.00
 ├── EvalScalar
