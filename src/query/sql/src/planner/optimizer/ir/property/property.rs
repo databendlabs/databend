@@ -113,8 +113,7 @@ impl Distribution {
             (Distribution::Any, _)
             | (Distribution::Random, _)
             | (Distribution::Serial, Distribution::Serial)
-            | (Distribution::Broadcast, Distribution::Broadcast)
-            | (Distribution::NodeToNodeHash(_), Distribution::Broadcast) => true,
+            | (Distribution::Broadcast, Distribution::Broadcast) => true,
 
             (Distribution::NodeToNodeHash(keys), Distribution::NodeToNodeHash(other_keys)) => {
                 keys == other_keys
