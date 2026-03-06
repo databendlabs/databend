@@ -36,6 +36,7 @@ use databend_common_io::ewkb_to_geo;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
+use databend_storages_common_blocks::ParquetWriteOptions;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -171,15 +172,16 @@ impl SpatialIndexBuilder {
         let index_block = DataBlock::new(index_columns, 1);
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let options = ParquetWriteOptions::builder(TableCompression::Zstd)
+            // No dictionary page for spatial index.
+            .enable_dictionary(false)
+            .metadata(Some(metadata))
+            .build();
         let _ = blocks_to_parquet(
             index_schema.as_ref(),
             vec![index_block],
             &mut data,
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for spatial index
-            false,
-            Some(metadata),
+            &options,
         )?;
 
         let size = data.len() as u64;
