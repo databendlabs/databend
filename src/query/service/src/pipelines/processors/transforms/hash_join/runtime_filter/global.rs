@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storages_fuse::TableContext;
 
 use super::merge::merge_join_runtime_filter_packets;
 use super::packet::JoinRuntimeFilterPacket;
@@ -37,5 +38,11 @@ pub async fn get_global_runtime_filter_packet(
     while let Ok(data_block) = receiver.recv().await {
         received.push(JoinRuntimeFilterPacket::try_from(data_block)?);
     }
-    merge_join_runtime_filter_packets(received)
+    let settings = ctx.get_settings();
+    merge_join_runtime_filter_packets(
+        received,
+        settings.get_inlist_runtime_filter_threshold()? as usize,
+        settings.get_bloom_runtime_filter_threshold()? as usize,
+        settings.get_min_max_runtime_filter_threshold()? as usize,
+    )
 }

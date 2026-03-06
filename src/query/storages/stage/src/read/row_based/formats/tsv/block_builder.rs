@@ -32,7 +32,7 @@ pub struct TsvDecoder {
     pub load_context: Arc<LoadContext>,
     pub field_decoder: SeparatedTextDecoder,
 
-    pub field_delimiter: u8,
+    pub field_delimiter: Option<u8>,
 
     pub record_delimiter: u8,
     pub trim_cr: bool,
@@ -42,10 +42,10 @@ impl TsvDecoder {
     pub fn create(fmt: TsvInputFormat, load_context: Arc<LoadContext>) -> Self {
         let field_decoder =
             SeparatedTextDecoder::create_tsv(&fmt.params, load_context.settings.clone());
-        let field_delimiter = fmt.params.field_delimiter.as_bytes()[0];
+        let field_delimiter = fmt.params.field_delimiter.as_bytes().first().copied();
 
         // we only accept \r\n when len > 1
-        let trim_cr = fmt.params.field_delimiter.len() > 1;
+        let trim_cr = fmt.params.record_delimiter.len() > 1;
         // safe to unwrap, params are checked
         let record_delimiter = *fmt.params.record_delimiter.as_bytes().last().unwrap();
         Self {
@@ -105,6 +105,16 @@ impl TsvDecoder {
         buf: &[u8],
         columns: &mut [ColumnBuilder],
     ) -> std::result::Result<(), FileParseError> {
+        if self.field_delimiter.is_none() {
+            if columns.len() != 1 {
+                return Err(FileParseError::NumberOfColumnsMismatch {
+                    table: columns.len(),
+                    file: 1,
+                });
+            }
+            return self.read_column(&mut columns[0], buf, 0);
+        }
+        let field_delimiter = self.field_delimiter.unwrap();
         let num_columns = columns.len();
         let mut column_index = 0;
         let mut field_start = 0;
@@ -114,8 +124,7 @@ impl TsvDecoder {
         let mut last_is_delimiter = false;
         if let Some(columns_to_read) = &self.load_context.pos_projection {
             while field_end <= buf_len && column_index < num_columns {
-                if field_end == buf_len
-                    || (buf[field_end] == self.field_delimiter && !last_is_delimiter)
+                if field_end == buf_len || (buf[field_end] == field_delimiter && !last_is_delimiter)
                 {
                     if columns_to_read.contains(&column_index) {
                         if let Err(e) = self.read_column(
@@ -143,8 +152,7 @@ impl TsvDecoder {
             }
         } else {
             while field_end <= buf_len && column_index < num_columns {
-                if field_end == buf_len
-                    || (buf[field_end] == self.field_delimiter && !last_is_delimiter)
+                if field_end == buf_len || (buf[field_end] == field_delimiter && !last_is_delimiter)
                 {
                     if let Err(err) = self.read_column(
                         &mut columns[column_index],

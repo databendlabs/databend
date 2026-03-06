@@ -2153,6 +2153,13 @@ impl TableContext for QueryContext {
                         file_type
                     )));
                 }
+                if let FileFormatParams::Tsv(fmt) = &stage_info.file_format_params {
+                    if fmt.field_delimiter.is_empty() && max_column_position > 1 {
+                        return Err(ErrorCode::SemanticError(
+                            "Query from TSV line mode only supports $1 as column position",
+                        ));
+                    }
+                }
 
                 let mut fields = vec![];
                 for i in 1..(max_column_position + 1) {

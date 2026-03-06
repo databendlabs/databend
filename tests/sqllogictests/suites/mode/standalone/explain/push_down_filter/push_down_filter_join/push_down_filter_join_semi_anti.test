@@ -28,6 +28,8 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -50,6 +52,7 @@ HashJoin
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(t1.a (#0) > 3)], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 0.00
 
 # left anti, can propagate t1.a > 3
