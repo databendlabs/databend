@@ -5,13 +5,14 @@
 # Sections:
 #   1. Deterministic default-only change is metadata-only (no rebuild).
 #   2. Snapshot preserves per-version default for time travel reads.
-#   3. Non-deterministic default (rand) forces rebuild.
-#   4. Non-deterministic default (nextval) forces rebuild.
+#   3. Non-deterministic default (rand) forces rebuild — detected by is_deterministic().
+#   4. Non-deterministic default (nextval) forces rebuild — detected by
+#      default_value_evaluable() as an async function, a separate code path from #3.
 #   5. Removing a default is metadata-only; new rows fall back to NULL.
 #   6. Invalid default expression is rejected at ALTER time.
 #   7. Physically-written column value survives a default change.
 #   8. Change tracking: reject column changes on non-empty table.
-#   9. Change tracking: no-op re-specification is allowed.
+#   9. Change tracking: same type and default is a no-op, not rejected.
 #  10. Change tracking: allow changes on empty table.
 
 statement ok

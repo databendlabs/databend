@@ -1,0 +1,39 @@
+# Validation cases for ALTER TABLE MODIFY COLUMN added by PR #19424.
+#
+# 1. Multi-column ALTER rolls back entirely when one column has a bad default.
+
+statement ok
+DROP DATABASE IF EXISTS db_05_0041
+
+statement ok
+CREATE DATABASE db_05_0041
+
+statement ok
+USE db_05_0041
+
+# ------------------------------------------------------------------
+# 1. Multi-column ALTER: one bad default rolls back the entire statement
+#
+# When multiple columns are modified in a single ALTER and one of them
+# has an invalid default, the whole statement fails. No column types
+# should change.
+# ------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO t VALUES(1, 1)
+
+statement error 1006
+ALTER TABLE t MODIFY COLUMN a FLOAT NOT NULL, COLUMN b FLOAT NOT NULL DEFAULT 'a'
+
+# Schema unchanged after the failed ALTER.
+query TT
+SELECT name, data_type FROM system.columns WHERE database = 'db_05_0041' AND table = 't' ORDER BY name
+----
+a INT
+b INT
+
+statement ok
+DROP DATABASE db_05_0041
