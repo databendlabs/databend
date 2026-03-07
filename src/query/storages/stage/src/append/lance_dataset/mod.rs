@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod committer_processor;
+mod limit_file_size_processor;
 mod pipeline;
 mod writer_processor;
 

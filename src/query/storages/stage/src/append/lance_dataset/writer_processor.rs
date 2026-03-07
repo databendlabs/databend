@@ -25,6 +25,7 @@ use async_trait::async_trait;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline::core::Event;
@@ -32,7 +33,6 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_storages_common_stage::CopyIntoLocationInfo;
 use futures::StreamExt;
 use lance_core::datatypes::Schema as LanceSchema;
 use lance_file::writer::FileWriterOptions;
@@ -48,15 +48,11 @@ use opendal::Operator;
 use tokio::sync::Mutex;
 use url::Url;
 
+use crate::append::column_based::block_batch::BlockBatch;
 use crate::append::output::DataSummary;
 
 const STAGING_MOVE_CONCURRENCY: usize = 8;
 const STAGING_MOVE_CHUNK_SIZE: u64 = 8 * 1024 * 1024;
-
-struct DatasetWriteTask {
-    batches: Vec<RecordBatch>,
-    summary: DataSummary,
-}
 
 struct PreparedMoveTask {
     fragments: Vec<Fragment>,
@@ -99,16 +95,7 @@ pub struct LanceDatasetWriter {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data: Option<DataBlock>,
-
-    // Accumulate small batches to avoid writing tiny fragments.
-    batches: Vec<RecordBatch>,
-    // Number of rows currently buffered in `batches` and not flushed yet.
-    // Reset to 0 in `build_write_task` after creating a flush task.
-    batches_row_counts: usize,
-    // Number of bytes currently buffered in `batches` and not flushed yet.
-    // Used for flush-threshold checks, then reset in `build_write_task`.
-    batches_input_bytes: usize,
+    input_data: Vec<DataBlock>,
 
     file_to_move: Option<PreparedMoveTask>,
 
@@ -132,28 +119,18 @@ pub(crate) struct FragmentWriterParams {
 
     lance_schema: LanceSchema,
 
-    max_bytes_per_file: usize,
-    max_rows_per_file: usize,
     object_store: Arc<LanceObjectStore>,
     base_path: object_store::path::Path,
 }
 
 impl FragmentWriterParams {
     pub fn try_create(
-        info: CopyIntoLocationInfo,
         schema: TableSchemaRef,
         target_accessor: Operator,
         target_dataset_path: String,
         staging_accessor: Operator,
         staging_dataset_path: String,
     ) -> Result<Self> {
-        let max_bytes_per_file = if info.options.single {
-            usize::MAX
-        } else if info.options.max_file_size == 0 {
-            128 * 1024 * 1024
-        } else {
-            info.options.max_file_size
-        };
         let arrow_schema = ArrowSchema::from(schema.as_ref());
         let lance_schema = LanceSchema::try_from(&arrow_schema).map_err(|err| {
             ErrorCode::StorageOther(format!("lance schema conversion failed: {err}"))
@@ -181,8 +158,6 @@ impl FragmentWriterParams {
             staging_accessor,
             staging_dataset_path,
             lance_schema,
-            max_bytes_per_file,
-            max_rows_per_file: 1000,
             object_store,
             base_path,
         })
@@ -224,10 +199,7 @@ impl LanceDatasetWriter {
             output,
             params,
             fragment_state,
-            input_data: None,
-            batches: Vec::new(),
-            batches_row_counts: 0,
-            batches_input_bytes: 0,
+            input_data: Vec::new(),
             written_summary: DataSummary::default(),
             file_to_move: None,
             final_output_state: FinalOutputState::Unprepared,
@@ -240,42 +212,6 @@ impl LanceDatasetWriter {
         }
 
         Some(self.written_summary.to_block())
-    }
-
-    fn need_flush(&self) -> bool {
-        self.batches_input_bytes >= self.params.max_bytes_per_file
-            || self.batches_row_counts >= self.params.max_rows_per_file
-    }
-
-    fn flush_pending_batches_sync(&mut self) -> Result<()> {
-        if self.batches_row_counts == 0 || self.batches.is_empty() {
-            return Ok(());
-        }
-
-        let summary = DataSummary {
-            row_counts: self.batches_row_counts,
-            input_bytes: self.batches_input_bytes,
-            output_bytes: 0,
-        };
-        self.batches_row_counts = 0;
-        self.batches_input_bytes = 0;
-
-        let task = DatasetWriteTask {
-            batches: mem::take(&mut self.batches),
-            summary,
-        };
-
-        let prepared = Self::with_thread_local_runtime(|rt| {
-            rt.block_on(self.append_to_staging_dataset(task))
-        })?;
-
-        if prepared.fragments.is_empty() {
-            self.written_summary.add(&prepared.summary);
-        } else {
-            self.file_to_move = Some(prepared);
-        }
-
-        Ok(())
     }
 
     fn data_file_path(dataset_path: &str, relative_path: &str) -> String {
@@ -322,7 +258,11 @@ impl LanceDatasetWriter {
             })?
     }
 
-    async fn append_to_staging_dataset(&self, task: DatasetWriteTask) -> Result<PreparedMoveTask> {
+    async fn append_to_staging_dataset(
+        &self,
+        batches: Vec<RecordBatch>,
+        mut summary: DataSummary,
+    ) -> Result<PreparedMoveTask> {
         let mut fragments = Vec::new();
 
         let mut fragment = Fragment::new(0);
@@ -358,7 +298,7 @@ impl LanceDatasetWriter {
         // } else {
         //     None
         // };
-        for batch in &task.batches {
+        for batch in &batches {
             file_writer.write_batch(batch).await.map_err(|err| {
                 ErrorCode::StorageOther(format!(
                     "write batch into lance staging file failed: {err}"
@@ -402,7 +342,6 @@ impl LanceDatasetWriter {
         );
         fragment.files.push(data_file);
 
-        let mut summary = task.summary;
         summary.output_bytes = file_meta.size as usize;
         fragments.push(fragment);
 
@@ -495,45 +434,49 @@ impl Processor for LanceDatasetWriter {
         } else if self.file_to_move.is_some() {
             self.input.set_not_need_data();
             Ok(Event::Async)
-        } else if self.input_data.is_some() {
+        } else if !self.input_data.is_empty() {
             self.input.set_not_need_data();
             Ok(Event::Sync)
         } else if self.input.is_finished() {
-            if self.batches_row_counts > 0 {
-                self.input.set_not_need_data();
-                Ok(Event::Sync)
-            } else {
-                if matches!(self.final_output_state, FinalOutputState::Unprepared) {
-                    self.final_output_state = match self.build_final_output_block() {
-                        Some(block) => FinalOutputState::Ready(block),
-                        None => FinalOutputState::Done,
-                    };
+            if matches!(self.final_output_state, FinalOutputState::Unprepared) {
+                self.final_output_state = match self.build_final_output_block() {
+                    Some(block) => FinalOutputState::Ready(block),
+                    None => FinalOutputState::Done,
+                };
 
-                    if matches!(self.final_output_state, FinalOutputState::Done) {
-                        self.output.finish();
-                        return Ok(Event::Finished);
-                    }
-                }
-
-                if self.output.can_push() {
-                    let output_state =
-                        mem::replace(&mut self.final_output_state, FinalOutputState::Done);
-                    match output_state {
-                        FinalOutputState::Ready(block) => {
-                            self.output.push_data(Ok(block));
-                            Ok(Event::NeedConsume)
-                        }
-                        FinalOutputState::Unprepared | FinalOutputState::Done => {
-                            self.output.finish();
-                            Ok(Event::Finished)
-                        }
-                    }
-                } else {
-                    Ok(Event::NeedConsume)
+                if matches!(self.final_output_state, FinalOutputState::Done) {
+                    self.output.finish();
+                    return Ok(Event::Finished);
                 }
             }
+
+            if self.output.can_push() {
+                let output_state =
+                    mem::replace(&mut self.final_output_state, FinalOutputState::Done);
+                match output_state {
+                    FinalOutputState::Ready(block) => {
+                        self.output.push_data(Ok(block));
+                        Ok(Event::NeedConsume)
+                    }
+                    FinalOutputState::Unprepared | FinalOutputState::Done => {
+                        self.output.finish();
+                        Ok(Event::Finished)
+                    }
+                }
+            } else {
+                Ok(Event::NeedConsume)
+            }
         } else if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
+            let block = self.input.pull_data().unwrap()?;
+            if block.get_meta().is_some() {
+                let block_meta = block.get_owned_meta().unwrap();
+                let block_batch = BlockBatch::downcast_from(block_meta).unwrap();
+                for b in block_batch.blocks {
+                    self.input_data.push(b);
+                }
+            } else {
+                self.input_data.push(block);
+            };
             self.input.set_not_need_data();
             Ok(Event::Sync)
         } else {
@@ -543,19 +486,30 @@ impl Processor for LanceDatasetWriter {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(block) = self.input_data.take() {
-            self.batches_row_counts += block.num_rows();
-            self.batches_input_bytes = self.batches_input_bytes.saturating_add(block.memory_size());
+        if self.input_data.is_empty() {
+            return Ok(());
+        }
+        let mut batches = Vec::new();
+
+        let mut summary = DataSummary::default();
+        for block in std::mem::take(&mut self.input_data) {
+            summary.row_counts += block.num_rows();
+            summary.input_bytes = summary.input_bytes.saturating_add(block.memory_size());
             let batch = block.to_record_batch(self.params.schema.as_ref())?;
-            self.batches.push(batch);
-            if self.need_flush() {
-                self.flush_pending_batches_sync()?;
-            }
+            batches.push(batch)
+        }
+        if summary.row_counts == 0 {
             return Ok(());
         }
 
-        if self.input.is_finished() && self.batches_row_counts > 0 {
-            self.flush_pending_batches_sync()?;
+        let prepared = Self::with_thread_local_runtime(|rt| {
+            rt.block_on(self.append_to_staging_dataset(batches, summary))
+        })?;
+
+        if prepared.fragments.is_empty() {
+            self.written_summary.add(&prepared.summary);
+        } else {
+            self.file_to_move = Some(prepared);
         }
 
         Ok(())
