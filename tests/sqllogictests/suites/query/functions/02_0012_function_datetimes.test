@@ -1842,7 +1842,6 @@ select timestamp_from_parts(2010, 13, 1, 0, 0, 0);
 ----
 2011-01-01 00:00:00.000000
 
-
 ## Additional TIMESTAMP_TZ_FROM_PARTS tests
 
 statement ok
@@ -1893,3 +1892,63 @@ select timestamp_tz_from_parts(2013, 13, 1, 0, 0, 0, 'UTC');
 # Invalid timezone should produce error
 query error
 select timestamp_tz_from_parts(2013, 4, 5, 12, 0, 0, 'INVALID_TZ');
+
+# America/Los_Angeles winter (PST)
+query ?
+select timestamp_tz_from_parts(2023, 1, 1, 12, 0, 0, 'America/Los_Angeles');
+----
+2023-01-01 12:00:00.000000 -0800
+
+# America/Los_Angeles summer (PDT)
+query ?
+select timestamp_tz_from_parts(2023, 7, 1, 12, 0, 0, 'America/Los_Angeles');
+----
+2023-07-01 12:00:00.000000 -0700
+
+# DST start boundary (spring forward)
+query ?
+select timestamp_tz_from_parts(2023, 3, 12, 3, 0, 0, 'America/Los_Angeles');
+----
+2023-03-12 03:00:00.000000 -0700
+
+# Before DST transition
+query ?
+select timestamp_tz_from_parts(2023, 3, 12, 1, 30, 0, 'America/Los_Angeles');
+----
+2023-03-12 01:30:00.000000 -0800
+
+# After DST transition
+query ?
+select timestamp_tz_from_parts(2023, 3, 12, 4, 0, 0, 'America/Los_Angeles');
+----
+2023-03-12 04:00:00.000000 -0700
+
+# DST fall back (overlap hour)
+query ?
+select timestamp_tz_from_parts(2023, 11, 5, 1, 30, 0, 'America/Los_Angeles');
+----
+2023-11-05 01:30:00.000000 -0700
+
+# After DST fallback
+query ?
+select timestamp_tz_from_parts(2023, 11, 5, 2, 30, 0, 'America/Los_Angeles');
+----
+2023-11-05 02:30:00.000000 -0800
+
+# Asia/Shanghai (no DST behavior)
+query ?
+select timestamp_tz_from_parts(2023, 6, 1, 12, 0, 0, 'Asia/Shanghai');
+----
+2023-06-01 12:00:00.000000 +0800
+
+# Nanosecond overflow with timezone
+query ?
+select timestamp_tz_from_parts(2023, 1, 1, 12, 0, 0, 2000000000, 'UTC');
+----
+2023-01-01 12:00:02.000000 +0000
+
+# Negative nanoseconds
+query ?
+select timestamp_tz_from_parts(2023, 1, 1, 12, 0, 0, -1000000000, 'UTC');
+----
+2023-01-01 11:59:59.000000 +0000

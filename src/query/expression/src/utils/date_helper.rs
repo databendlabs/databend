@@ -2069,8 +2069,8 @@ pub fn pg_format_to_strftime(pg_format_string: &str) -> String {
 }
 
 /// Normalize month/day values that may be outside normal ranges.
-/// Snowflake allows e.g. month=0 (meaning Dec of previous year),
-/// month=13 (meaning Jan of next year), day=100 (100th day from month start), etc.
+/// Supports values like month=0 (meaning Dec of previous year),
+/// month=13 (meaning Jan of next year), and day=100 (100th day from month start).
 pub fn normalize_date_parts(year: i64, month: i64, day: i64) -> std::result::Result<Date, String> {
     // Normalize month: month is 1-based, so month=0 means Dec of previous year,
     // month=-1 means Nov of previous year, month=13 means Jan of next year.

@@ -2786,8 +2786,16 @@ fn register_timestamp_from_parts(registry: &mut FunctionRegistry) {
             Vec<DataType>,
             fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>,
         ) = match args_type.len() {
-            6 => (vec![int64_type; 6], timestamp_from_parts_6 as _),
-            7 => (vec![int64_type; 7], timestamp_from_parts_7 as _),
+            // 6 args: year, month, day, hour, minute, second
+            6 => (vec![int64_type; 6], |args, ctx| {
+                timestamp_from_parts_fn(args, ctx, false)
+            }),
+
+            // 7 args: includes nanosecond
+            7 => (vec![int64_type; 7], |args, ctx| {
+                timestamp_from_parts_fn(args, ctx, true)
+            }),
+
             _ => return None,
         };
 
@@ -2809,14 +2817,6 @@ fn register_timestamp_from_parts(registry: &mut FunctionRegistry) {
     registry.register_function_factory("timestamp_from_parts", factory);
 }
 
-fn timestamp_from_parts_6(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    timestamp_from_parts_fn(args, ctx, false)
-}
-
-fn timestamp_from_parts_7(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    timestamp_from_parts_fn(args, ctx, true)
-}
-
 fn register_timestamp_tz_from_parts(registry: &mut FunctionRegistry) {
     registry.register_aliases("timestamp_tz_from_parts", &["timestamptzfromparts"]);
 
@@ -2828,20 +2828,36 @@ fn register_timestamp_tz_from_parts(registry: &mut FunctionRegistry) {
             Vec<DataType>,
             fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>,
         ) = match args_type.len() {
-            6 => (vec![int64_type; 6], timestamp_tz_from_parts_6 as _),
+            // 6 args: no nanoseconds, no timezone
+            6 => (vec![int64_type; 6], |args, ctx| {
+                timestamp_tz_from_parts_fn(args, ctx, false, false)
+            }),
 
+            // 7 args: timezone provided
             7 if args_type[6].remove_nullable() == DataType::String => {
                 let mut v = vec![int64_type; 6];
                 v.push(DataType::String);
-                (v, timestamp_tz_from_parts_7_tz as _)
+
+                // year, month, day, hour, minute, second, timezone
+                (v, |args, ctx| {
+                    timestamp_tz_from_parts_fn(args, ctx, false, true)
+                })
             }
 
-            7 => (vec![int64_type; 7], timestamp_tz_from_parts_7_nano as _),
+            // 7 args: nanoseconds
+            7 => (vec![int64_type; 7], |args, ctx| {
+                timestamp_tz_from_parts_fn(args, ctx, true, false)
+            }),
 
+            // 8 args: nanoseconds + timezone
             8 => {
                 let mut v = vec![int64_type; 7];
                 v.push(DataType::String);
-                (v, timestamp_tz_from_parts_8 as _)
+
+                // year, month, day, hour, minute, second, nanosecond, timezone
+                (v, |args, ctx| {
+                    timestamp_tz_from_parts_fn(args, ctx, true, true)
+                })
             }
 
             _ => return None,
@@ -2863,25 +2879,6 @@ fn register_timestamp_tz_from_parts(registry: &mut FunctionRegistry) {
     }));
 
     registry.register_function_factory("timestamp_tz_from_parts", factory);
-}
-
-fn timestamp_tz_from_parts_6(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    timestamp_tz_from_parts_fn(args, ctx, false, false)
-}
-
-fn timestamp_tz_from_parts_7_nano(
-    args: &[Value<AnyType>],
-    ctx: &mut EvalContext,
-) -> Value<AnyType> {
-    timestamp_tz_from_parts_fn(args, ctx, true, false)
-}
-
-fn timestamp_tz_from_parts_7_tz(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    timestamp_tz_from_parts_fn(args, ctx, false, true)
-}
-
-fn timestamp_tz_from_parts_8(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    timestamp_tz_from_parts_fn(args, ctx, true, true)
 }
 
 fn build_timestamp_parts(
