@@ -25,6 +25,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ColumnSet;
+use crate::Symbol;
 use crate::optimizer::optimizers::operator::filter::check_float_range;
 use crate::optimizer::optimizers::operator::filter::check_int_range;
 use crate::optimizer::optimizers::operator::filter::check_uint_range;
@@ -753,7 +754,7 @@ impl<'a> InferFilterOptimizer<'a> {
             // The equal ScalarExprs of each ScalarExpr.
             expr_equal_to: &'a Vec<Vec<ScalarExpr>>,
             // The columns used by the predicate.
-            column_set: HashSet<usize>,
+            column_set: HashSet<Symbol>,
             // If the predicate can be replaced to generate a new predicate.
             can_replace: bool,
         }

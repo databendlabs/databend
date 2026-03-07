@@ -58,6 +58,7 @@ use databend_common_sql::DerivedColumn;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TableInternalColumn;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::VirtualColumn;
@@ -85,7 +86,7 @@ use crate::pipelines::PipelineBuilder;
 pub struct TableScan {
     pub meta: PhysicalPlanMeta,
     pub scan_id: usize,
-    pub name_mapping: BTreeMap<String, IndexType>,
+    pub name_mapping: BTreeMap<String, Symbol>,
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
@@ -250,7 +251,7 @@ impl IPhysicalPlan for TableScan {
 impl TableScan {
     pub fn create(
         scan_id: usize,
-        name_mapping: BTreeMap<String, IndexType>,
+        name_mapping: BTreeMap<String, Symbol>,
         source: Box<DataSourcePlan>,
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
@@ -277,7 +278,7 @@ impl TableScan {
 
     pub fn output_fields(
         schema: TableSchemaRef,
-        name_mapping: &BTreeMap<String, IndexType>,
+        name_mapping: &BTreeMap<String, Symbol>,
     ) -> Result<Vec<DataField>> {
         let mut fields = Vec::with_capacity(name_mapping.len());
         let mut name_and_ids = name_mapping
@@ -365,7 +366,7 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         let mut has_inner_column = false;
         let mut name_mapping = BTreeMap::new();
-        let mut project_internal_columns = BTreeMap::new();
+        let mut project_internal_columns: BTreeMap<FieldIndex, InternalColumn> = BTreeMap::new();
         let mut project_virtual_columns = BTreeMap::new();
         let metadata = self.metadata.read().clone();
 
@@ -383,7 +384,7 @@ impl PhysicalPlanBuilder {
                 ColumnEntry::InternalColumn(TableInternalColumn {
                     internal_column, ..
                 }) => {
-                    project_internal_columns.insert(*index, internal_column.to_owned());
+                    project_internal_columns.insert(index.as_usize(), internal_column.to_owned());
                 }
                 ColumnEntry::VirtualColumn(virtual_column) => {
                     project_virtual_columns.insert(*index, virtual_column.clone());
@@ -409,7 +410,7 @@ impl PhysicalPlanBuilder {
                     .get_internal_column(ROW_ID_COL_NAME)
                     .unwrap();
                 name_mapping.insert(ROW_ID_COL_NAME.to_string(), index);
-                project_internal_columns.insert(index, internal_column);
+                project_internal_columns.insert(index.as_usize(), internal_column);
             }
         }
 
@@ -584,7 +585,7 @@ impl PhysicalPlanBuilder {
 
         Ok(TableScan::create(
             DUMMY_TABLE_INDEX,
-            BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
+            BTreeMap::from([("dummy".to_string(), Symbol::new(DUMMY_COLUMN_INDEX))]),
             Box::new(source),
             Some(DUMMY_TABLE_INDEX),
             Some(PlanStatsInfo {
@@ -598,7 +599,7 @@ impl PhysicalPlanBuilder {
         &self,
         scan: &databend_common_sql::plans::Scan,
         table_schema: &TableSchema,
-        virtual_columns: BTreeMap<IndexType, VirtualColumn>,
+        virtual_columns: BTreeMap<Symbol, VirtualColumn>,
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
@@ -672,7 +673,7 @@ impl PhysicalPlanBuilder {
                     .columns
                     .difference(&prewhere.prewhere_columns)
                     .copied()
-                    .collect::<HashSet<usize>>();
+                    .collect::<HashSet<Symbol>>();
 
                 let output_columns = Self::build_projection(
                     &metadata,
@@ -817,7 +818,7 @@ impl PhysicalPlanBuilder {
 
     fn build_virtual_column(
         &self,
-        virtual_columns: BTreeMap<IndexType, VirtualColumn>,
+        virtual_columns: BTreeMap<Symbol, VirtualColumn>,
     ) -> Result<Option<VirtualColumnInfo>> {
         if virtual_columns.is_empty() {
             return Ok(None);
@@ -915,7 +916,7 @@ impl PhysicalPlanBuilder {
     pub fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
-        columns: impl Iterator<Item = &'a IndexType>,
+        columns: impl Iterator<Item = &'a Symbol>,
         has_inner_column: bool,
         ignore_internal_column: bool,
         add_virtual_source_column: bool,
@@ -969,20 +970,21 @@ impl PhysicalPlanBuilder {
                         ..
                     }) => match path_indices {
                         Some(path_indices) => {
-                            col_indices.insert(column.index(), path_indices.to_vec());
+                            col_indices.insert(column.index().as_usize(), path_indices.to_vec());
                         }
                         None => {
                             let idx = schema.index_of(column_name).unwrap();
-                            col_indices.insert(column.index(), vec![idx]);
+                            col_indices.insert(column.index().as_usize(), vec![idx]);
                         }
                     },
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
                         let idx = schema.index_of(alias).unwrap();
-                        col_indices.insert(column.index(), vec![idx]);
+                        col_indices.insert(column.index().as_usize(), vec![idx]);
                     }
                     ColumnEntry::InternalColumn(TableInternalColumn { column_index, .. }) => {
                         if !ignore_internal_column {
-                            col_indices.insert(*column_index, vec![*column_index]);
+                            col_indices
+                                .insert(column_index.as_usize(), vec![column_index.as_usize()]);
                         }
                     }
                     ColumnEntry::VirtualColumn(VirtualColumn {

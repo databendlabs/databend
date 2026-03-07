@@ -19,6 +19,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RulePushDownFilterJoin;
@@ -244,8 +245,10 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     let join_condition = JoinEquiCondition::new(t1_id.clone(), t2_id.clone(), false);
 
     // Create table scans
-    let left_scan = builder.table_scan_with_columns(0, "t1", ColumnSet::from([0, 2]));
-    let right_scan = builder.table_scan_with_columns(1, "t2", ColumnSet::from([1, 3]));
+    let left_scan =
+        builder.table_scan_with_columns(0, "t1", ColumnSet::from([Symbol::new(0), Symbol::new(2)]));
+    let right_scan =
+        builder.table_scan_with_columns(1, "t2", ColumnSet::from([Symbol::new(1), Symbol::new(3)]));
 
     // Create join
     let join = builder.join(
@@ -1157,9 +1160,17 @@ fn test_push_down_complex_or_expressions() -> anyhow::Result<()> {
 
     // Create table scans
     // SQL: FROM t1
-    let left_scan = builder.table_scan_with_columns(0, "t1", ColumnSet::from([0, 2]));
+    let left_scan = builder.table_scan_with_columns(
+        0,
+        "t1",
+        ColumnSet::from_iter([0, 2].into_iter().map(Symbol::new)),
+    );
     // SQL: FROM t2
-    let right_scan = builder.table_scan_with_columns(1, "t2", ColumnSet::from([1, 3]));
+    let right_scan = builder.table_scan_with_columns(
+        1,
+        "t2",
+        ColumnSet::from_iter([1, 3].into_iter().map(Symbol::new)),
+    );
 
     // Create join
     // SQL: FROM t1 INNER JOIN t2 ON t1.id = t2.id

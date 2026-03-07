@@ -24,8 +24,8 @@ use databend_common_expression::types::NumberDataType;
 
 use crate::ColumnEntry;
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::Metadata;
+use crate::Symbol;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::RelExpr;
@@ -342,7 +342,7 @@ impl SubqueryDecorrelatorOptimizer {
         fn process_conditions(
             conditions: &[ScalarExpr],
             correlated_columns: &ColumnSet,
-            derived_columns: &HashMap<IndexType, IndexType>,
+            derived_columns: &HashMap<Symbol, Symbol>,
             need_cross_join: bool,
         ) -> Result<Vec<ScalarExpr>> {
             if need_cross_join {
@@ -965,11 +965,7 @@ impl SubqueryDecorrelatorOptimizer {
         }
     }
 
-    fn scalar_item_from_index(
-        index: IndexType,
-        name_prefix: &str,
-        metadata: &Metadata,
-    ) -> ScalarItem {
+    fn scalar_item_from_index(index: Symbol, name_prefix: &str, metadata: &Metadata) -> ScalarItem {
         let column_entry = metadata.column(index);
         let column = ColumnBindingBuilder::new(
             format!("{name_prefix}{}", column_entry.name()),
@@ -984,7 +980,7 @@ impl SubqueryDecorrelatorOptimizer {
         }
     }
 
-    pub fn get_derived(&self, old: IndexType) -> Result<IndexType> {
+    pub fn get_derived(&self, old: Symbol) -> Result<Symbol> {
         self.derived_columns
             .get(&old)
             .copied()
@@ -994,5 +990,5 @@ impl SubqueryDecorrelatorOptimizer {
 
 enum Item<'a> {
     Scalar(&'a ScalarItem),
-    Index(IndexType),
+    Index(Symbol),
 }

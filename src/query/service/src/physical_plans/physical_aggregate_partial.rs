@@ -30,7 +30,7 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformRankLimitSort;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_storage::DataOperator;
@@ -55,7 +55,7 @@ use crate::pipelines::processors::transforms::aggregator::TransformPartialAggreg
 pub struct AggregatePartial {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
-    pub group_by: Vec<IndexType>,
+    pub group_by: Vec<Symbol>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub group_by_display: Vec<String>,
 

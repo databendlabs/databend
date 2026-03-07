@@ -44,7 +44,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
@@ -70,8 +70,8 @@ use crate::stream::PullingExecutorStream;
 pub struct TransformRecursiveCteSource {
     ctx: Arc<QueryContext>,
     union_plan: UnionAll,
-    left_outputs: Vec<(IndexType, Option<Expr>)>,
-    right_outputs: Vec<(IndexType, Option<Expr>)>,
+    left_outputs: Vec<(Symbol, Option<Expr>)>,
+    right_outputs: Vec<(Symbol, Option<Expr>)>,
 
     recursive_step: usize,
     cte_scan_tables: Vec<(u64, Arc<dyn Table>)>,
@@ -475,8 +475,8 @@ fn project_block(
     block: DataBlock,
     left_schema: &DataSchemaRef,
     right_schema: &DataSchemaRef,
-    left_outputs: &[(IndexType, Option<Expr>)],
-    right_outputs: &[(IndexType, Option<Expr>)],
+    left_outputs: &[(Symbol, Option<Expr>)],
+    right_outputs: &[(Symbol, Option<Expr>)],
     is_left: bool,
 ) -> Result<DataBlock> {
     let num_rows = block.num_rows();

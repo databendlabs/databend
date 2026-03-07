@@ -24,6 +24,7 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::Visibility;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
@@ -148,7 +149,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 column_position: None,
                 table_index: None,
                 column_name: "".to_string(),
-                index: 0,
+                index: Symbol::new(0),
                 data_type: Box::new(data_type.clone()),
                 visibility: Visibility::Visible,
                 virtual_expr: None,

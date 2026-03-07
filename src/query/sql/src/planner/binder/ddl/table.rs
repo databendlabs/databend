@@ -72,6 +72,7 @@ use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -2309,7 +2310,7 @@ impl Binder {
         for (index, field) in schema.fields().iter().enumerate() {
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                Symbol::new(index),
                 Box::new(DataType::from(field.data_type())),
                 Visibility::Visible,
             )

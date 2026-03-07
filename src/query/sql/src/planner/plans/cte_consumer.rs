@@ -21,6 +21,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::Symbol;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -34,9 +35,9 @@ use crate::plans::RelOp;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MaterializedCTERef {
     pub cte_name: String,
-    pub output_columns: Vec<usize>,
+    pub output_columns: Vec<Symbol>,
     pub def: SExpr,
-    pub column_mapping: HashMap<usize, usize>,
+    pub column_mapping: HashMap<Symbol, Symbol>,
 }
 
 impl Hash for MaterializedCTERef {

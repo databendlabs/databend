@@ -23,9 +23,9 @@ use databend_common_expression::types::number::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::wrap_cast;
@@ -490,7 +490,7 @@ struct EagerContext<'a> {
     extra_eval_scalar: EvalScalar,
     metadata: &'a MetadataRef,
     can_eager: Pair<bool>,
-    eager_aggregations: Pair<Vec<(usize, IndexType)>>,
+    eager_aggregations: Pair<Vec<(usize, Symbol)>>,
     eager_extra_eval_scalar_expr: Pair<EvalScalar>,
     join_columns: Pair<ColumnSet>,
     original_group_items_len: usize,
@@ -560,7 +560,7 @@ impl<'a> EagerContext<'a> {
         let mut eager_split_eval_scalar = self.eval_scalar.clone();
 
         let mut old_to_new = HashMap::new();
-        let mut func_from: HashMap<usize, Side> = HashMap::new();
+        let mut func_from: HashMap<Symbol, Side> = HashMap::new();
         let mut success = false;
 
         eager_count_indexes.try_for_each(|side, (_, idx)| {
@@ -720,7 +720,7 @@ impl<'a> EagerContext<'a> {
         let mut final_double_eager = self.final_agg.clone();
         let mut final_eager_count = self.final_agg.clone();
 
-        let mut eager_count_index = 0;
+        let mut eager_count_index = Symbol::new(0);
         let mut eager_count_vec_idx = 0;
         if self.can_eager[d.opposite()] {
             (eager_count_index, eager_count_vec_idx) =
@@ -880,7 +880,7 @@ fn get_eager_aggregation_functions(
     join_columns: &ColumnSet,
     eval_scalar_columns: &ColumnSet,
     function_factory: &AggregateFunctionFactory,
-) -> Vec<(usize, IndexType)> {
+) -> Vec<(usize, Symbol)> {
     agg_final
         .aggregate_functions
         .iter()
@@ -910,7 +910,7 @@ fn get_eager_aggregation_functions(
 
 // Final aggregate functions's data type = eager aggregate functions's return_type
 // For COUNT, func_name: count => sum, return_type: Nullable(UInt64)
-fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: usize) {
+fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: Symbol) {
     if agg.func_name.as_str() == "count" {
         agg.func_name = "sum".to_string();
         agg.return_type = Box::new(UInt64Type::data_type().wrap_nullable());
@@ -936,7 +936,7 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: usize
 fn remove_group_by_items_and_aggregate_functions(
     agg_final: &mut Aggregate,
     columns_set: &ColumnSet,
-    eager_aggregations: &[(usize, usize)],
+    eager_aggregations: &[(usize, Symbol)],
 ) {
     // Remove group by items.
     agg_final
@@ -949,7 +949,7 @@ fn remove_group_by_items_and_aggregate_functions(
         .retain(|item| eager_aggregations.iter().all(|(_, i)| *i != item.index));
 }
 
-fn add_eager_count(final_agg: &mut Aggregate, metadata: &MetadataRef) -> (usize, usize) {
+fn add_eager_count(final_agg: &mut Aggregate, metadata: &MetadataRef) -> (Symbol, usize) {
     let eager_count_vec_index = final_agg.aggregate_functions.len();
     let eager_count_column = metadata.write().add_derived_column(
         "count(*)".to_string(),
@@ -975,7 +975,7 @@ fn update_aggregate_and_eval<'a>(
     aggr_function: &mut ScalarItem,
     metadata: &MetadataRef,
     eval_scalar_items: impl Iterator<Item = &'a mut ScalarItem>,
-) -> Result<(bool, usize, usize), ErrorCode> {
+) -> Result<(bool, Symbol, Symbol), ErrorCode> {
     let ScalarExpr::AggregateFunction(agg) = &mut aggr_function.scalar else {
         unreachable!()
     };
@@ -1019,7 +1019,7 @@ fn update_aggregate_and_eval<'a>(
 
 fn create_eager_count_multiply_scalar_item(
     aggregate_function: &mut AggregateFunction,
-    eager_count_index: IndexType,
+    eager_count_index: Symbol,
     extra_eval_scalar: &EvalScalar,
     metadata: &MetadataRef,
 ) -> Result<ScalarItem, ErrorCode> {

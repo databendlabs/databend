@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -28,7 +30,6 @@ use databend_common_expression::arrow::and_validities;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_settings::Settings;
-use databend_common_sql::ColumnSet;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use parking_lot::RwLock;
 
@@ -65,8 +66,8 @@ pub struct HashJoinDesc {
     pub(crate) from_correlated_subquery: bool,
     pub(crate) runtime_filter: RuntimeFiltersDesc,
 
-    pub(crate) build_projection: ColumnSet,
-    pub(crate) probe_projection: ColumnSet,
+    pub(crate) build_projection: BTreeSet<usize>,
+    pub(crate) probe_projection: BTreeSet<usize>,
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
     pub(crate) build_schema: DataSchemaRef,
     pub(crate) probe_schema: DataSchemaRef,
@@ -301,7 +302,7 @@ impl HashJoinDesc {
             return Ok(None);
         };
 
-        let projections = projection.iter().copied().collect::<ColumnSet>();
+        let projections = projection.iter().copied().collect::<BTreeSet<usize>>();
         let field_reorder = {
             let mapper = projections.iter().copied().collect::<Vec<_>>();
             debug_assert!(mapper.is_sorted());
@@ -335,7 +336,7 @@ impl HashJoinDesc {
 
 pub struct NestedLoopDesc {
     pub filter: FilterExecutor,
-    pub projections: ColumnSet,
+    pub projections: BTreeSet<usize>,
     pub field_reorder: Option<Vec<FieldIndex>>,
     pub nested_loop_join_threshold: usize,
 }

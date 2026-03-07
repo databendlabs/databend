@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -45,12 +46,11 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::processors::BlockingTransform;
 use databend_common_pipeline_transforms::processors::BlockingTransformer;
-use databend_common_sql::ColumnSet;
 
 /// Expand the input [`DataBlock`] with set-returning functions.
 pub struct TransformSRF {
     input: Option<DataBlock>,
-    projections: ColumnSet,
+    projections: BTreeSet<usize>,
     func_ctx: FunctionContext,
     srf_exprs: Vec<FunctionCall>,
     /// The output of each set-returning function for each input row.
@@ -66,7 +66,7 @@ impl TransformSRF {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         func_ctx: FunctionContext,
-        projections: ColumnSet,
+        projections: BTreeSet<usize>,
         srf_exprs: Vec<Expr>,
         max_block_size: usize,
         max_block_bytes: usize,

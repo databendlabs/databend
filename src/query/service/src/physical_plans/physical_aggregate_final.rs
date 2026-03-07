@@ -25,8 +25,8 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
@@ -58,7 +58,7 @@ use crate::pipelines::processors::transforms::aggregator::build_partition_bucket
 pub struct AggregateFinal {
     meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
-    pub group_by: Vec<IndexType>,
+    pub group_by: Vec<Symbol>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
     pub group_by_display: Vec<String>,

@@ -51,6 +51,7 @@ use databend_common_sql::DUMMY_COLUMN_INDEX;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::Visibility;
 use databend_common_sql::binder::MutationStrategy;
@@ -819,7 +820,7 @@ pub fn generate_update_list(
 ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
     let column = ColumnBindingBuilder::new(
         PREDICATE_COLUMN_NAME.to_string(),
-        use_column_name_index.unwrap_or_else(|| schema.num_fields()),
+        Symbol::new(use_column_name_index.unwrap_or_else(|| schema.num_fields())),
         Box::new(DataType::Boolean),
         Visibility::Visible,
     )
@@ -920,7 +921,7 @@ pub fn mutation_update_expr(
     let predicate = if let Some(predicate_column_index) = predicate_column_index {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
-            predicate_column_index,
+            Symbol::new(predicate_column_index),
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
@@ -1011,7 +1012,7 @@ pub fn generate_stored_computed_list(
             let mut need_update = false;
             let field_indices = expr.column_refs();
             for (field_index, _) in field_indices.iter() {
-                if update_list.contains_key(field_index) {
+                if update_list.contains_key(&field_index.as_usize()) {
                     need_update = true;
                     break;
                 }
@@ -1023,10 +1024,10 @@ pub fn generate_stored_computed_list(
                         if BindContext::match_column_binding(
                             database,
                             Some(table),
-                            schema.field(*id).name(),
+                            schema.field(id.as_usize()).name(),
                             column_binding,
                         ) {
-                            column_index = Some(column_binding.index);
+                            column_index = Some(column_binding.index.as_usize());
                             break;
                         }
                     }

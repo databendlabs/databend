@@ -19,6 +19,7 @@ use std::sync::LazyLock;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::types::DataType;
 
 use super::AggregateFunctionCombinatorNull;
@@ -118,7 +119,7 @@ impl AggregateFunctionDescription {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSortDesc {
-    pub index: usize,
+    pub index: SymbolOrOffset,
     pub is_reuse_index: bool,
     pub data_type: DataType,
     pub nulls_first: bool,
