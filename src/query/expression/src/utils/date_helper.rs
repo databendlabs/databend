@@ -2069,25 +2069,32 @@ pub fn pg_format_to_strftime(pg_format_string: &str) -> String {
 }
 
 /// Normalize month/day values that may be outside normal ranges.
-/// Snowflake allows e.g. month=0 (meaning Dec of previous year),
-/// month=13 (meaning Jan of next year), day=100 (100th day from month start), etc.
+/// Supports values like month=0 (meaning Dec of previous year),
+/// month=13 (meaning Jan of next year), and day=100 (100th day from month start).
 pub fn normalize_date_parts(year: i64, month: i64, day: i64) -> std::result::Result<Date, String> {
-    // Normalize month: month is 1-based, so month=0 means Dec of previous year,
-    // month=-1 means Nov of previous year, month=13 means Jan of next year.
-    let total_months = year * 12 + (month - 1);
+    // 1. Safe month normalization
+    let total_months = year
+        .checked_mul(12)
+        .and_then(|y| y.checked_add(month - 1))
+        .ok_or_else(|| format!("Date parts out of bounds: year={year}, month={month}"))?;
+
     let norm_year_i64 = total_months.div_euclid(12);
     let norm_month = (total_months.rem_euclid(12) + 1) as i8; // 1..=12
 
     let norm_year =
         i16::try_from(norm_year_i64).map_err(|_| format!("Year out of bounds: {norm_year_i64}"))?;
 
-    // Create date at day=1 of the normalized year/month, then add (day-1) days
+    // Create base date
     let base = Date::new(norm_year, norm_month, 1)
         .map_err(|_| format!("Invalid date: year={year}, month={month}, day={day}"))?;
 
-    // day=1 means the first day, day=0 means one day before, day=-1 means two days before, etc.
+    // 2. Safe day normalization (Fixing the second bot flag)
+    let hours_to_add = (day - 1)
+        .checked_mul(24)
+        .ok_or_else(|| format!("Day value out of bounds: {day}"))?;
+
     let result = base
-        .checked_add(SignedDuration::from_hours((day - 1) * 24))
+        .checked_add(SignedDuration::from_hours(hours_to_add))
         .map_err(|_| format!("Date out of range: year={year}, month={month}, day={day}"))?;
 
     Ok(result)
@@ -2111,7 +2118,12 @@ pub fn normalize_timestamp_micros(
     let norm_micros = (norm_nanos / 1_000) as u32;
 
     // Combine time components into seconds
-    let total_seconds = hour * 3600 + minute * 60 + second + extra_secs_from_nanos;
+    let total_seconds = hour
+        .checked_mul(3600)
+        .and_then(|h| h.checked_add(minute * 60))
+        .and_then(|m| m.checked_add(second))
+        .and_then(|s| s.checked_add(extra_secs_from_nanos))
+        .ok_or_else(|| ErrorCode::BadArguments("Timestamp components overflow i64"))?;
 
     // Split into day overflow and time-of-day
     let extra_days = total_seconds.div_euclid(86400);
