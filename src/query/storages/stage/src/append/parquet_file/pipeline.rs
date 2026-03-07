@@ -31,30 +31,11 @@ pub(crate) fn append_data_to_parquet_files(
     query_id: String,
     group_id: &std::sync::atomic::AtomicUsize,
     mem_limit: usize,
-    max_threads: usize,
+    max_file_size: usize,
     create_by: String,
 ) -> Result<()> {
-    let is_single = info.options.single;
-    let max_file_size = info.options.max_file_size;
-    // when serializing block to parquet, the memory may be doubled
-    let mem_limit = mem_limit / 2;
-    pipeline.try_resize(1)?;
-    let max_file_size = if is_single {
-        None
-    } else {
-        let max_file_size = if max_file_size == 0 {
-            64 * 1024 * 1024
-        } else {
-            max_file_size.min(mem_limit)
-        };
-        pipeline.add_transform(|input, output| {
-            LimitFileSizeProcessor::try_create(input, output, max_file_size)
-        })?;
-
-        let max_threads = max_threads.min(mem_limit / max_file_size).max(1);
-        pipeline.try_resize(max_threads)?;
-        Some(max_file_size)
-    };
+    let max_file_size =
+        LimitFileSizeProcessor::build(pipeline, mem_limit, max_file_size, &info.options)?;
     pipeline.add_transform(|input, output| {
         let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         ParquetFileWriter::try_create(

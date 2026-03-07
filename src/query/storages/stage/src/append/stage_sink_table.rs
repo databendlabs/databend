@@ -115,7 +115,7 @@ impl StageSinkTable {
                 self.schema.clone(),
                 op,
                 query_id,
-                &group_id,
+                mem_limit,
                 max_threads,
             )?,
             _ => append_data_to_row_based_files(
