@@ -18,11 +18,13 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoLocationOptions;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
@@ -112,6 +114,36 @@ impl LimitFileSizeProcessor {
         for (_, bucket) in buckets {
             self.queue_flush_bucket(bucket);
         }
+    }
+
+    pub fn build(
+        pipeline: &mut Pipeline,
+        mem_limit: usize,
+        max_threads: usize,
+        options: &CopyIntoLocationOptions,
+    ) -> Result<Option<usize>> {
+        let is_single = options.single;
+        let max_file_size = options.max_file_size;
+        // when serializing block to parquet, the memory may be doubled
+        let mem_limit = mem_limit / 2;
+        pipeline.try_resize(1)?;
+        let max_file_size = if is_single {
+            None
+        } else {
+            let max_file_size = if max_file_size == 0 {
+                64 * 1024 * 1024
+            } else {
+                max_file_size.min(mem_limit)
+            };
+            pipeline.add_transform(|input, output| {
+                LimitFileSizeProcessor::try_create(input, output, max_file_size)
+            })?;
+
+            let max_threads = max_threads.min(mem_limit / max_file_size).max(1);
+            pipeline.try_resize(max_threads)?;
+            Some(max_file_size)
+        };
+        Ok(max_file_size)
     }
 }
 

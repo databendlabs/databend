@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
@@ -26,6 +25,7 @@ use opendal::Operator;
 use opendal::services::Memory;
 
 use super::committer_processor::LanceDatasetCommitter;
+use super::limit_file_size_processor::LimitFileSizeProcessor;
 use super::writer_processor::FragmentWriterParams;
 use super::writer_processor::LanceDatasetWriter;
 use super::writer_processor::SharedFragmentState;
@@ -36,7 +36,7 @@ pub(crate) fn append_data_to_lance_dataset(
     schema: TableSchemaRef,
     op: Operator,
     query_id: String,
-    _group_id: &AtomicUsize,
+    mem_limit: usize,
     max_threads: usize,
 ) -> Result<()> {
     let target_dataset_path = if info.options.use_raw_path {
@@ -54,17 +54,17 @@ pub(crate) fn append_data_to_lance_dataset(
     let staging_accessor = Operator::new(Memory::default())?.finish();
     let staging_dataset_path = "tmp".to_string();
 
-    let processor_num = max_threads.max(1);
+    let max_threads = max_threads.max(1);
     let fragment_state = Arc::new(SharedFragmentState::new());
     let params = Arc::new(FragmentWriterParams::try_create(
-        info.clone(),
         schema.clone(),
         op.clone(),
         target_dataset_path.clone(),
         staging_accessor.clone(),
         staging_dataset_path.clone(),
     )?);
-    pipeline.try_resize(processor_num)?;
+
+    let _ = LimitFileSizeProcessor::build(pipeline, mem_limit, max_threads, &info.options)?;
     pipeline.add_transform(|input, output| {
         LanceDatasetWriter::try_create(input, output, params.clone(), fragment_state.clone())
     })?;
