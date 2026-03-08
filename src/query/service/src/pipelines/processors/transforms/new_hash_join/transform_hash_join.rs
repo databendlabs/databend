@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::marker::PhantomPinned;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::Barrier;
@@ -47,12 +48,14 @@ pub struct TransformHashJoin {
     projection: ColumnSet,
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
+    plan_id: u32,
     instant: Instant,
     _p: PhantomPinned,
 }
 
 impl TransformHashJoin {
     pub fn create(
+        plan_id: u32,
         build_port: Arc<InputPort>,
         probe_port: Arc<InputPort>,
         joined_port: Arc<OutputPort>,
@@ -75,6 +78,7 @@ impl TransformHashJoin {
             joined_port,
             join,
             rf_desc,
+            plan_id,
             projection,
             stage_sync_barrier,
             joined_data: None,
@@ -163,6 +167,7 @@ impl Processor for TransformHashJoin {
                 Ok(())
             }
             Stage::Probe(state) => {
+                let instant = Instant::now();
                 if let Some(probe_data) = state.input_data.take() {
                     let stream = self.join.probe_block(probe_data)?;
                     // This is safe because both join and stream are properties of the struct.
@@ -177,6 +182,8 @@ impl Processor for TransformHashJoin {
                         state.stream = Some(stream);
                     }
                 }
+
+                state.cpu_time += instant.elapsed().as_nanos() as u64;
 
                 Ok(())
             }
@@ -246,7 +253,8 @@ impl Processor for TransformHashJoin {
                 let wait_rf_elapsed = self.instant.elapsed() - before_wait;
 
                 log::info!(
-                    "HashJoin build stage, sync work elapsed: {:?}, build rf elapsed: {:?}, wait other node rf elapsed: {:?}",
+                    "HashJoin({}) build stage, sync work elapsed: {:?}, build rf elapsed: {:?}, wait other node rf elapsed: {:?}",
+                    self.plan_id,
                     elapsed,
                     rf_build_elapsed,
                     wait_rf_elapsed
@@ -258,7 +266,8 @@ impl Processor for TransformHashJoin {
             Stage::BuildFinal(_) => {
                 let wait_elapsed = self.instant.elapsed() - elapsed;
                 log::info!(
-                    "HashJoin build final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    "HashJoin({}) build final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    self.plan_id,
                     elapsed,
                     wait_elapsed
                 );
@@ -266,12 +275,15 @@ impl Processor for TransformHashJoin {
                 self.instant = Instant::now();
                 Stage::Probe(ProbeState::new())
             }
-            Stage::Probe(_) => {
+            Stage::Probe(state) => {
                 let wait_elapsed = self.instant.elapsed() - elapsed;
                 log::info!(
-                    "HashJoin probe stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                    "HashJoin({}) probe stage, sync work elapsed: {:?}, wait elapsed: {:?}, cpu time: {:?}, probe rows: {}",
+                    self.plan_id,
                     elapsed,
-                    wait_elapsed
+                    wait_elapsed,
+                    Duration::from_nanos(state.cpu_time),
+                    state.probe_rows
                 );
 
                 self.instant = Instant::now();
@@ -281,7 +293,8 @@ impl Processor for TransformHashJoin {
                 true => {
                     let wait_elapsed = self.instant.elapsed() - elapsed;
                     log::info!(
-                        "HashJoin probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        "HashJoin({}) probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        self.plan_id,
                         elapsed,
                         wait_elapsed
                     );
@@ -292,7 +305,8 @@ impl Processor for TransformHashJoin {
                 false => {
                     let wait_elapsed = self.instant.elapsed() - elapsed;
                     log::info!(
-                        "HashJoin probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        "HashJoin({}) probe final stage, sync work elapsed: {:?}, wait elapsed: {:?}",
+                        self.plan_id,
                         elapsed,
                         wait_elapsed
                     );
@@ -369,8 +383,10 @@ impl BuildFinalState {
 }
 
 struct ProbeState {
+    probe_rows: usize,
     input_data: Option<DataBlock>,
     stream: Option<Box<dyn JoinStream>>,
+    cpu_time: u64,
 }
 
 impl Debug for ProbeState {
@@ -382,8 +398,10 @@ impl Debug for ProbeState {
 impl ProbeState {
     pub fn new() -> ProbeState {
         ProbeState {
+            probe_rows: 0,
             input_data: None,
             stream: None,
+            cpu_time: 0,
         }
     }
 
@@ -393,7 +411,9 @@ impl ProbeState {
         }
 
         if input.has_data() {
-            self.input_data = Some(input.pull_data().unwrap()?);
+            let data_block = input.pull_data().unwrap()?;
+            self.probe_rows += data_block.num_rows();
+            self.input_data = Some(data_block);
             return Ok(Event::Sync);
         }
 
