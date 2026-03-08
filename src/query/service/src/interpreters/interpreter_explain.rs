@@ -297,7 +297,8 @@ impl Interpreter for ExplainInterpreter {
             ExplainKind::Raw
             | ExplainKind::Optimized
             | ExplainKind::Decorrelated
-            | ExplainKind::Perf => {
+            | ExplainKind::Perf
+            | ExplainKind::Trace => {
                 unreachable!()
             }
         };

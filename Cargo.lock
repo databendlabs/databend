@@ -3416,6 +3416,7 @@ dependencies = [
  "databend-base",
  "databend-common-exception",
  "enquote",
+ "fastrace",
  "futures",
  "hickory-resolver",
  "libc",

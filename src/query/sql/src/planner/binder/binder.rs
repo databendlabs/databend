@@ -196,6 +196,11 @@ impl Binder {
                     .await?
             }
 
+            Statement::ExplainTrace { options, query } => {
+                self.bind_explain_trace(bind_context, options, query)
+                    .await?
+            }
+
             Statement::ReportIssue(sql) => self.bind_report_issue(sql).await?,
 
             Statement::ExplainAnalyze {

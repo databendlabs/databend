@@ -34,6 +34,7 @@ use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TraceFilterOptions;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -188,6 +189,16 @@ pub struct QueryContextShared {
     pub(super) perf_flag: AtomicBool,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
 
+    // QueryTrace used for EXPLAIN TRACE
+    pub(super) trace_flag: AtomicBool,
+    pub(super) nodes_trace: Arc<Mutex<HashMap<String, String>>>,
+    /// W3C Trace Context traceparent for distributed tracing propagation
+    pub(super) trace_parent: Arc<RwLock<Option<String>>>,
+    /// Flag to indicate that EXPLAIN TRACE has set up the reporter (to avoid overwriting)
+    pub(super) explain_trace_reporter_set: AtomicBool,
+    /// Filter options for trace collection (used by remote nodes)
+    pub(super) trace_filter_options: Arc<RwLock<TraceFilterOptions>>,
+
     pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
 }
 
@@ -271,6 +282,11 @@ impl QueryContextShared {
             broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
             perf_flag: AtomicBool::new(false),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
+            trace_flag: AtomicBool::new(false),
+            nodes_trace: Arc::new(Mutex::new(HashMap::new())),
+            trace_parent: Arc::new(RwLock::new(None)),
+            explain_trace_reporter_set: AtomicBool::new(false),
+            trace_filter_options: Arc::new(RwLock::new(TraceFilterOptions::default())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
@@ -917,6 +933,49 @@ impl QueryContextShared {
     pub fn set_nodes_perf(&self, node: String, perf: String) {
         let mut nodes_perf = self.nodes_perf.lock();
         nodes_perf.insert(node, perf);
+    }
+
+    pub fn set_trace_flag(&self, flag: bool) {
+        self.trace_flag.store(flag, Ordering::SeqCst);
+    }
+
+    pub fn get_trace_flag(&self) -> bool {
+        self.trace_flag.load(Ordering::SeqCst)
+    }
+
+    pub fn get_nodes_trace(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.nodes_trace.clone()
+    }
+
+    pub fn set_nodes_trace(&self, node: String, trace: String) {
+        let mut nodes_trace = self.nodes_trace.lock();
+        nodes_trace.insert(node, trace);
+    }
+
+    pub fn set_trace_parent(&self, trace_parent: Option<String>) {
+        let mut guard = self.trace_parent.write();
+        *guard = trace_parent;
+    }
+
+    pub fn get_trace_parent(&self) -> Option<String> {
+        self.trace_parent.read().clone()
+    }
+
+    pub fn set_explain_trace_reporter_set(&self, flag: bool) {
+        self.explain_trace_reporter_set
+            .store(flag, Ordering::SeqCst);
+    }
+
+    pub fn get_explain_trace_reporter_set(&self) -> bool {
+        self.explain_trace_reporter_set.load(Ordering::SeqCst)
+    }
+
+    pub fn set_trace_filter_options(&self, options: TraceFilterOptions) {
+        *self.trace_filter_options.write() = options;
+    }
+
+    pub fn get_trace_filter_options(&self) -> TraceFilterOptions {
+        self.trace_filter_options.read().clone()
     }
 }
 

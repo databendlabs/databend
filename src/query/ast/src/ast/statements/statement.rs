@@ -63,6 +63,10 @@ pub enum Statement {
         graphical: bool,
         query: Box<Statement>,
     },
+    ExplainTrace {
+        options: ExplainTraceOptions,
+        query: Box<Statement>,
+    },
     ReportIssue(String),
 
     CopyIntoTable(CopyIntoTableStmt),
@@ -459,6 +463,7 @@ impl Statement {
         match self {
             Statement::Query(..)
             | Statement::Explain { .. }
+            | Statement::ExplainTrace { .. }
             | Statement::ReportIssue { .. }
             | Statement::ExplainAnalyze { .. }
             | Statement::CopyIntoTable(..)
@@ -703,6 +708,7 @@ impl Display for Statement {
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                     ExplainKind::Perf => write!(f, " PERF")?,
+                    ExplainKind::Trace => write!(f, " TRACE")?,
                 }
                 write!(f, " {query}")?;
             }
@@ -740,6 +746,14 @@ impl Display for Statement {
                 } else {
                     write!(f, "EXPLAIN ANALYZE {query}")?;
                 }
+            }
+            Statement::ExplainTrace { options, query } => {
+                write!(f, "EXPLAIN TRACE")?;
+                let opts_str = options.to_string();
+                if !opts_str.is_empty() {
+                    write!(f, " {}", opts_str)?;
+                }
+                write!(f, " {query}")?;
             }
             Statement::Query(stmt) => write!(f, "{stmt}")?,
             Statement::Insert(stmt) => write!(f, "{stmt}")?,
