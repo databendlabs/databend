@@ -80,6 +80,19 @@ async fn test_set_settings() {
                 "WrongValueForVariable. Code: 2803, Text = xx is not a valid integer value.";
             assert_eq!(expect, format!("{}", result.unwrap_err()));
         }
+
+        {
+            settings
+                .set_setting(
+                    "inlist_runtime_bloom_prune_threshold".to_string(),
+                    "10".to_string(),
+                )
+                .unwrap();
+            assert_eq!(
+                settings.get_inlist_runtime_bloom_prune_threshold().unwrap(),
+                10
+            );
+        }
     }
 
     // String out of range.

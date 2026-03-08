@@ -39,6 +39,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use crate::FuseBlockPartInfo;
 use crate::io::BlockWriter;
 use crate::io::BloomBlockFilterReader;
 use crate::io::BloomIndexRebuilder;
@@ -54,6 +55,69 @@ pub trait BloomPruner {
         column_ids: Vec<ColumnId>,
         block_meta: &BlockReadInfo,
     ) -> bool;
+}
+
+pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
+    func_ctx: &FunctionContext,
+    dal: &Operator,
+    data_schema: &TableSchemaRef,
+    expr: &Expr<String>,
+    part: &FuseBlockPartInfo,
+) -> Result<bool> {
+    let Some(index_location) = part.bloom_filter_index_location.as_ref() else {
+        return Ok(false);
+    };
+
+    if part.bloom_filter_index_size == 0 {
+        return Ok(false);
+    }
+
+    let bloom_fields = data_schema
+        .fields()
+        .iter()
+        .filter(|field| BloomIndex::supported_type(field.data_type()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let result = BloomIndex::filter_index_field(expr, bloom_fields, vec![])?;
+    if result.bloom_fields.is_empty() {
+        return Ok(false);
+    }
+
+    let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
+    for (_, scalar, ty) in result.bloom_scalars {
+        if let Entry::Vacant(entry) = eq_scalar_map.entry(scalar) {
+            let digest = BloomIndex::calculate_scalar_digest(func_ctx, entry.key(), &ty)?;
+            entry.insert(digest);
+        }
+    }
+
+    let index_columns = result
+        .bloom_fields
+        .iter()
+        .map(|field| BloomIndex::build_filter_bloom_name(index_location.1, field))
+        .collect::<Result<Vec<_>>>()?;
+    let filter = index_location
+        .read_block_filter(dal.clone(), &index_columns, part.bloom_filter_index_size)
+        .await?;
+
+    let bloom_index = BloomIndex::from_filter_block(
+        func_ctx.clone(),
+        filter.filter_schema,
+        filter.filters,
+        index_location.1,
+    )?;
+
+    let like_scalar_map = HashMap::new();
+    let empty_stats = StatisticsOfColumns::new();
+    let column_stats = part.columns_stat.as_ref().unwrap_or(&empty_stats);
+    Ok(bloom_index.apply(
+        expr.clone(),
+        &eq_scalar_map,
+        &like_scalar_map,
+        &[],
+        column_stats,
+        data_schema.clone(),
+    )? == FilterEvalResult::MustFalse)
 }
 
 pub struct BloomPrunerCreator {
