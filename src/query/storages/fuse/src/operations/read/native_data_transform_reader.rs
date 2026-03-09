@@ -38,6 +38,7 @@ use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
+use crate::pruning::RuntimeFilterExprKind;
 
 pub struct ReadNativeDataTransform {
     func_ctx: FunctionContext,
@@ -88,15 +89,26 @@ impl AsyncTransform for ReadNativeDataTransform {
                 if !parts.is_empty() {
                     let mut chunks = Vec::with_capacity(parts.len());
                     let mut native_part_infos = Vec::with_capacity(parts.len());
+                    let inlist_bloom_prune_threshold = self
+                        .context
+                        .get_settings()
+                        .get_inlist_runtime_bloom_prune_threshold()?
+                        as usize;
+                    let runtime_filters = self.context.get_runtime_filters(self.scan_id);
                     let runtime_filter = ExprRuntimePruner::new(
-                        self.context
-                            .get_runtime_filters(self.scan_id)
+                        self.func_ctx.clone(),
+                        self.table_schema.clone(),
+                        self.block_reader.operator(),
+                        inlist_bloom_prune_threshold,
+                        runtime_filters
                             .into_iter()
                             .flat_map(|entry| {
                                 let mut exprs = Vec::new();
                                 if let Some(expr) = entry.inlist.clone() {
                                     exprs.push(RuntimeFilterExpr {
                                         filter_id: entry.id,
+                                        kind: RuntimeFilterExprKind::Inlist,
+                                        inlist_value_count: entry.inlist_value_count,
                                         expr,
                                         stats: entry.stats.clone(),
                                     });
@@ -104,6 +116,8 @@ impl AsyncTransform for ReadNativeDataTransform {
                                 if let Some(expr) = entry.min_max.clone() {
                                     exprs.push(RuntimeFilterExpr {
                                         filter_id: entry.id,
+                                        kind: RuntimeFilterExprKind::MinMax,
+                                        inlist_value_count: 0,
                                         expr,
                                         stats: entry.stats.clone(),
                                     });
@@ -113,7 +127,7 @@ impl AsyncTransform for ReadNativeDataTransform {
                             .collect(),
                     );
                     for part in parts.into_iter() {
-                        if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
+                        if runtime_filter.prune(&part).await? {
                             continue;
                         }
 

@@ -33,6 +33,8 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::PerfConfig;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
@@ -74,6 +76,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
 use crate::sessions::query_affect::QueryAffect;
@@ -184,9 +187,10 @@ pub struct QueryContextShared {
     pub(super) next_broadcast_id: AtomicU32,
     pub(super) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
 
-    // QueryPerf used to draw flamegraph
-    pub(super) perf_flag: AtomicBool,
+    // QueryPerf configuration (profiler + hw counters)
+    pub(super) perf_config: Mutex<PerfConfig>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
+    pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
     pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
 }
@@ -269,8 +273,9 @@ impl QueryContextShared {
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             next_broadcast_id: AtomicU32::new(0),
             broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
-            perf_flag: AtomicBool::new(false),
+            perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
+            nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
@@ -902,12 +907,20 @@ impl QueryContextShared {
         }
     }
 
+    pub fn set_perf_config(&self, config: PerfConfig) {
+        *self.perf_config.lock() = config;
+    }
+
+    pub fn get_perf_config(&self) -> PerfConfig {
+        self.perf_config.lock().clone()
+    }
+
     pub fn set_perf_flag(&self, flag: bool) {
-        self.perf_flag.store(flag, Ordering::SeqCst);
+        self.perf_config.lock().profiler_enabled = flag;
     }
 
     pub fn get_perf_flag(&self) -> bool {
-        self.perf_flag.load(Ordering::SeqCst)
+        self.perf_config.lock().profiler_enabled
     }
 
     pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
@@ -917,6 +930,53 @@ impl QueryContextShared {
     pub fn set_nodes_perf(&self, node: String, perf: String) {
         let mut nodes_perf = self.nodes_perf.lock();
         nodes_perf.insert(node, perf);
+    }
+
+    pub fn set_nodes_perf_counters(&self, node: String, counters: NodePerfCounters) {
+        let mut guard = self.nodes_perf_counters.lock();
+        guard.insert(node, counters);
+    }
+
+    pub fn get_nodes_perf_counters(&self) -> HashMap<String, NodePerfCounters> {
+        self.nodes_perf_counters.lock().clone()
+    }
+
+    pub fn collect_local_perf_counters(&self, node_id: String) {
+        if let Some(executor) = self.executor.read().upgrade() {
+            let new = executor.fetch_perf_counters();
+            if !new.counters.is_empty() {
+                let mut guard = self.nodes_perf_counters.lock();
+                match guard.entry(node_id) {
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        e.insert(new);
+                    }
+                    std::collections::hash_map::Entry::Occupied(mut e) => {
+                        let existing = e.get_mut();
+                        for (plan_key, new_events) in new.counters {
+                            if let Some((_, existing_events)) =
+                                existing.counters.iter_mut().find(|(k, _)| *k == plan_key)
+                            {
+                                for (event, pv) in new_events {
+                                    let e = existing_events.entry(event).or_default();
+                                    e.count += pv.count;
+                                    e.multiplexed = e.multiplexed || pv.multiplexed;
+                                }
+                            } else {
+                                existing.counters.push((plan_key, new_events));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
+        self.perf_config.lock().event_groups = event_groups;
+    }
+
+    pub fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
+        self.perf_config.lock().event_groups.clone()
     }
 }
 

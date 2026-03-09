@@ -23,6 +23,7 @@ use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::BlockProfileStatistics;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
@@ -247,5 +248,47 @@ impl BlockMetaInfo for AggregateMeta {
 
     fn typetag_name(&self) -> &'static str {
         unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
+    }
+
+    fn output_stats(&self) -> Option<BlockProfileStatistics> {
+        match self {
+            AggregateMeta::Serialized(payload) => Some(BlockProfileStatistics {
+                rows: payload.data_block.num_rows(),
+                bytes: payload.data_block.memory_size(),
+            }),
+            AggregateMeta::AggregatePayload(payload) => Some(BlockProfileStatistics {
+                rows: payload.payload.len(),
+                bytes: payload.payload.memory_size(),
+            }),
+            AggregateMeta::AggregateSpilling(payload) => Some(BlockProfileStatistics {
+                rows: payload.payloads.iter().map(|p| p.len()).sum(),
+                bytes: payload.payloads.iter().map(|p| p.memory_size()).sum(),
+            }),
+            AggregateMeta::Spilled(_) | AggregateMeta::BucketSpilled(_) => None,
+            AggregateMeta::Partitioned { data, .. } => Some(BlockProfileStatistics {
+                rows: data
+                    .iter()
+                    .map(|meta| meta.output_stats().map(|s| s.rows).unwrap_or(0))
+                    .sum(),
+                bytes: data
+                    .iter()
+                    .map(|meta| meta.output_stats().map(|s| s.bytes).unwrap_or(0))
+                    .sum(),
+            }),
+            AggregateMeta::NewBucketSpilled(payload) => Some(BlockProfileStatistics {
+                rows: payload.row_group.num_rows() as usize,
+                bytes: payload.row_group.total_byte_size() as usize,
+            }),
+            AggregateMeta::NewSpilled(payloads) => Some(BlockProfileStatistics {
+                rows: payloads
+                    .iter()
+                    .map(|p| p.row_group.num_rows() as usize)
+                    .sum(),
+                bytes: payloads
+                    .iter()
+                    .map(|p| p.row_group.total_byte_size() as usize)
+                    .sum(),
+            }),
+        }
     }
 }

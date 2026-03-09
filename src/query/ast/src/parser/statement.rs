@@ -99,7 +99,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
-                    Some(TokenKind::PERF) => ExplainKind::Perf,
+                    Some(TokenKind::PERF) => ExplainKind::Perf {
+                        event_groups: vec![],
+                    },
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -2780,7 +2782,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ).parse(i),
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
-            #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
+            | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
         REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),
@@ -6332,6 +6335,42 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             OPTIMIZED => ExplainOption::Optimized,
             DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
+        },
+    )
+    .parse(i)
+}
+
+pub fn explain_perf(i: Input) -> IResult<Statement> {
+    map_res(
+        rule! {
+            EXPLAIN ~ PERF ~ ( "(" ~ ^#ident ~ "=" ~ ^#literal_string ~ ")" )? ~ #statement
+        },
+        |(_, _, opt_options, statement)| {
+            let event_groups = if let Some((_, key, _, value, _)) = opt_options {
+                if key.name.to_lowercase() != "events" {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "expected 'events' as the option key for EXPLAIN PERF",
+                    )));
+                }
+                value
+                    .split(',')
+                    .map(|group| {
+                        group
+                            .split('+')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|g| !g.is_empty())
+                    .collect()
+            } else {
+                vec![]
+            };
+            Ok(Statement::Explain {
+                kind: ExplainKind::Perf { event_groups },
+                options: Default::default(),
+                query: Box::new(statement.stmt),
+            })
         },
     )
     .parse(i)

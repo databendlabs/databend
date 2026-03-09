@@ -59,6 +59,7 @@ unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+perf-event2 = { workspace = true }
 procfs = { workspace = true }
 
 [dev-dependencies]
