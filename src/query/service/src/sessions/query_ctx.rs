@@ -573,6 +573,7 @@ impl QueryContext {
             has_bloom: bool,
             has_inlist: bool,
             has_min_max: bool,
+            has_spatial: bool,
             stats: RuntimeFilterStatsSnapshot,
             build_rows: usize,
             build_table_rows: Option<u64>,
@@ -595,6 +596,7 @@ impl QueryContext {
                     has_bloom: entry.bloom.is_some(),
                     has_inlist: entry.inlist.is_some(),
                     has_min_max: entry.min_max.is_some(),
+                    has_spatial: entry.spatial.is_some(),
                     stats: entry.stats.snapshot(),
                     build_rows: entry.build_rows,
                     build_table_rows: entry.build_table_rows,
@@ -628,6 +630,7 @@ impl QueryContext {
                     has_bloom,
                     has_inlist,
                     has_min_max,
+                    has_spatial,
                     stats,
                     build_rows,
                     build_table_rows,
@@ -643,6 +646,9 @@ impl QueryContext {
                 }
                 if has_min_max {
                     types.push("min_max");
+                }
+                if has_spatial {
+                    types.push("spatial");
                 }
                 let type_text = if types.is_empty() {
                     "none".to_string()
@@ -690,6 +696,20 @@ impl QueryContext {
                     detail_children.push(FormatTreeNode::new(format!(
                         "min-max partitions pruned: {}",
                         stats.min_max_partitions_pruned
+                    )));
+                }
+                if has_spatial {
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "spatial time: {:?}",
+                        Duration::from_nanos(stats.spatial_time_ns)
+                    )));
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "spatial rows filtered: {}",
+                        stats.spatial_rows_filtered
+                    )));
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "spatial partitions pruned: {}",
+                        stats.spatial_partitions_pruned
                     )));
                 }
 

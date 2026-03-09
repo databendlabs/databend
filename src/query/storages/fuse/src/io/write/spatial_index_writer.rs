@@ -30,8 +30,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_io::ewkb_to_geo;
 use databend_common_meta_app::schema::TableIndex;
@@ -49,7 +47,6 @@ use geozero::wkb::Ewkb;
 use log::debug;
 use log::info;
 use parquet::file::metadata::KeyValue;
-use roaring::RoaringBitmap;
 
 use crate::statistics::SpatialStatsBuilder;
 
@@ -295,10 +292,8 @@ impl SpatialIndexBuilder {
 
                 let spatial_stat = self.spatial_stats.entry(*column_id).or_default();
 
-                let mut builder = RTreeBuilder::<f64>::new(column.len() as u32);
-                // Track rows that cannot be indexed (null, empty, or invalid geometry).
-                let mut invalid_rows_rb = RoaringBitmap::new();
-                for (row_idx, value) in column.iter().enumerate() {
+                let mut rects = Vec::with_capacity(column.len());
+                for value in column.iter() {
                     let (geo, srid) = match value {
                         ScalarRef::Geometry(v) => {
                             let (geo, srid) = ewkb_to_geo(&mut Ewkb(v))?;
@@ -311,9 +306,7 @@ impl SpatialIndexBuilder {
                             (geo, 4326)
                         }
                         _ => {
-                            invalid_rows_rb.insert(row_idx as u32);
-                            builder.add(0.0, 0.0, 0.0, 0.0);
-                            spatial_stat.mark_null();
+                            let _ = spatial_stat.update_value(ScalarRef::Null);
                             continue;
                         }
                     };
@@ -322,22 +315,20 @@ impl SpatialIndexBuilder {
                     if spatial_stat.is_srid_mixed() {
                         break;
                     }
-                    if let Some(rec) = rect {
-                        let min = rec.min();
-                        let max = rec.max();
-                        builder.add(min.x, min.y, max.x, max.y);
-                    } else {
-                        invalid_rows_rb.insert(row_idx as u32);
-                        builder.add(0.0, 0.0, 0.0, 0.0);
+                    if let Some(rect) = rect {
+                        rects.push(rect)
                     }
                 }
-                // Don't build index if the column SRID is mixed,
-                if spatial_stat.is_srid_mixed() {
+                // Don't build index if the column SRID is mixed or all rects are empty.
+                if !spatial_stat.is_valid() {
                     continue;
                 }
-                let Some(srid) = spatial_stat.srid() else {
-                    continue;
-                };
+                let mut builder = RTreeBuilder::<f64>::new(rects.len() as u32);
+                for rect in rects {
+                    let min = rect.min();
+                    let max = rect.max();
+                    builder.add(min.x, min.y, max.x, max.y);
+                }
                 let tree = builder.finish::<HilbertSort>();
                 let buffer = tree.into_inner();
 
@@ -345,39 +336,11 @@ impl SpatialIndexBuilder {
                     &format!("{}", column_id),
                     TableDataType::Binary,
                 ));
-
                 index_columns.push(BlockEntry::new_const_column(
                     DataType::Binary,
                     Scalar::Binary(buffer),
                     1,
                 ));
-
-                index_fields.push(TableField::new(
-                    &format!("{}_srid", column_id),
-                    TableDataType::Number(NumberDataType::Int32),
-                ));
-                index_columns.push(BlockEntry::new_const_column(
-                    DataType::Number(NumberDataType::Int32),
-                    Scalar::Number(NumberScalar::Int32(srid)),
-                    1,
-                ));
-                // Rows not indexed by the RTree (null, empty geometry, or invalid data).
-                if !invalid_rows_rb.is_empty() {
-                    let mut invalid_rows_buffer = vec![];
-                    invalid_rows_rb
-                        .serialize_into(&mut invalid_rows_buffer)
-                        .unwrap();
-
-                    index_fields.push(TableField::new(
-                        &format!("{}_invalid_rows", column_id),
-                        TableDataType::Binary,
-                    ));
-                    index_columns.push(BlockEntry::new_const_column(
-                        DataType::Binary,
-                        Scalar::Binary(invalid_rows_buffer),
-                        1,
-                    ));
-                }
             }
             let version_meta = KeyValue {
                 key: index_param.index_name.clone(),
@@ -403,9 +366,8 @@ impl SpatialIndexBuilder {
         }
         let mut statistics = HashMap::new();
         for (column_id, spatial_stat) in std::mem::take(&mut self.spatial_stats) {
-            if let Some(spatial_stat) = spatial_stat.finalize() {
-                statistics.insert(column_id, spatial_stat);
-            }
+            let spatial_stat = spatial_stat.finalize();
+            statistics.insert(column_id, spatial_stat);
         }
         (!statistics.is_empty()).then_some(statistics)
     }

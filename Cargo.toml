@@ -64,7 +64,6 @@ default-members = [
 # Workspace dependencies
 [workspace.dependencies]
 databend-common-ast = { path = "src/query/ast" }
-databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-base = { path = "src/common/base" }
 databend-common-binaries = { path = "src/binaries" }
 databend-common-building = { path = "src/common/building" }

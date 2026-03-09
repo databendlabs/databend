@@ -27,6 +27,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_sql::IndexType;
+use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::native_data_source::NativeDataSource;
@@ -39,6 +40,7 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
 use crate::pruning::RuntimeFilterExprKind;
+use crate::pruning::SpatialRuntimePruner;
 
 pub struct ReadNativeDataTransform {
     func_ctx: FunctionContext,
@@ -49,6 +51,7 @@ pub struct ReadNativeDataTransform {
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
+    read_settings: ReadSettings,
 }
 
 impl ReadNativeDataTransform {
@@ -62,6 +65,7 @@ impl ReadNativeDataTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
+        let read_settings = ReadSettings::from_ctx(&ctx)?;
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
@@ -72,6 +76,7 @@ impl ReadNativeDataTransform {
                 table_schema,
                 scan_id,
                 context: ctx,
+                read_settings,
             },
         )))
     }
@@ -101,7 +106,7 @@ impl AsyncTransform for ReadNativeDataTransform {
                         self.block_reader.operator(),
                         inlist_bloom_prune_threshold,
                         runtime_filters
-                            .into_iter()
+                            .iter()
                             .flat_map(|entry| {
                                 let mut exprs = Vec::new();
                                 if let Some(expr) = entry.inlist.clone() {
@@ -126,9 +131,22 @@ impl AsyncTransform for ReadNativeDataTransform {
                             })
                             .collect(),
                     );
+                    let spatial_runtime_pruner = SpatialRuntimePruner::try_create(
+                        self.table_schema.clone(),
+                        self.block_reader.operator(),
+                        self.read_settings,
+                        &runtime_filters,
+                    )?;
                     for part in parts.into_iter() {
-                        if runtime_filter.prune(&part).await? {
-                            continue;
+                        if let Some(runtime_filter) = &runtime_filter {
+                            if runtime_filter.prune(&part).await? {
+                                continue;
+                            }
+                        }
+                        if let Some(spatial_runtime_pruner) = &spatial_runtime_pruner {
+                            if spatial_runtime_pruner.prune(&part).await? {
+                                continue;
+                            }
                         }
 
                         native_part_infos.push(part.clone());

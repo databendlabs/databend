@@ -20,12 +20,15 @@ use databend_common_expression::Column;
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::RuntimeFilterPacket;
 use super::packet::SerializableDomain;
+use super::packet::SpatialPacket;
+use super::spatial::merge_rtrees_to_threshold;
 
 pub fn merge_join_runtime_filter_packets(
     packets: Vec<JoinRuntimeFilterPacket>,
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
+    spatial_threshold: usize,
 ) -> Result<JoinRuntimeFilterPacket> {
     log::info!(
         "RUNTIME-FILTER: merge_join_runtime_filter_packets input: {:?}",
@@ -73,6 +76,7 @@ pub fn merge_join_runtime_filter_packets(
             } else {
                 None
             },
+            spatial: merge_spatial(&packets, *id, spatial_threshold)?,
         });
     }
 
@@ -170,6 +174,50 @@ fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) ->
     Some(bloom)
 }
 
+fn merge_spatial(
+    packets: &[HashMap<usize, RuntimeFilterPacket>],
+    rf_id: usize,
+    spatial_threshold: usize,
+) -> Result<Option<SpatialPacket>> {
+    let mut srid: Option<i32> = None;
+    let mut rtrees = Vec::new();
+
+    for packet in packets {
+        let Some(entry) = packet.get(&rf_id) else {
+            return Ok(None);
+        };
+        let Some(spatial) = entry.spatial.as_ref() else {
+            return Ok(None);
+        };
+        if !spatial.valid {
+            return Ok(None);
+        }
+        if let Some(entry_srid) = spatial.srid {
+            if let Some(prev) = srid {
+                if prev != entry_srid {
+                    return Ok(None);
+                }
+            } else {
+                srid = Some(entry_srid);
+            }
+        }
+        if !spatial.rtrees.is_empty() {
+            rtrees.push(spatial.rtrees.as_slice());
+        }
+    }
+
+    let rtrees = merge_rtrees_to_threshold(rtrees, spatial_threshold)?;
+    if rtrees.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(SpatialPacket {
+        valid: true,
+        srid,
+        rtrees,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -202,10 +250,11 @@ mod tests {
                 max: Scalar::Number(NumberScalar::Int32(3)),
             }),
             bloom: Some(vec![11, 22, 33]),
+            spatial: None,
         });
 
         let packet = JoinRuntimeFilterPacket::complete(runtime_filters, 100);
-        let merged = merge_join_runtime_filter_packets(vec![packet], 1, 1, 1)?;
+        let merged = merge_join_runtime_filter_packets(vec![packet], 1, 1, 1, 1)?;
 
         assert_eq!(merged.build_rows, 100);
         let packet = merged.packets.unwrap().remove(&1).unwrap();
@@ -227,6 +276,7 @@ mod tests {
                 max: Scalar::Number(NumberScalar::Int32(5)),
             }),
             bloom: Some(vec![1, 2]),
+            spatial: None,
         });
         let mut runtime_filters_2 = HashMap::new();
         runtime_filters_2.insert(7, RuntimeFilterPacket {
@@ -237,6 +287,7 @@ mod tests {
                 max: Scalar::Number(NumberScalar::Int32(8)),
             }),
             bloom: Some(vec![3, 4]),
+            spatial: None,
         });
 
         let merged = merge_join_runtime_filter_packets(
@@ -245,6 +296,7 @@ mod tests {
                 JoinRuntimeFilterPacket::complete(runtime_filters_2, 5),
             ],
             10,
+            100,
             100,
             100,
         )?;
@@ -270,6 +322,7 @@ mod tests {
                 JoinRuntimeFilterPacket::disable_all(10),
                 JoinRuntimeFilterPacket::complete_without_filters(5),
             ],
+            usize::MAX,
             usize::MAX,
             usize::MAX,
             usize::MAX,

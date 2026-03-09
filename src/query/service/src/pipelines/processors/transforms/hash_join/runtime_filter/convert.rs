@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSpatial;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::sbbf::Sbbf;
 use databend_common_catalog::sbbf::SbbfAtomic;
@@ -38,6 +39,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::SerializableDomain;
+use super::spatial::rtree_bounds_from_bytes;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 
@@ -70,6 +72,31 @@ pub async fn build_runtime_filter_infos(
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
         for (probe_key, scan_id) in &desc.probe_targets {
             let entry = filters.entry(*scan_id).or_default();
+
+            let spatial = if let Some(ref spatial_packet) = packet.spatial {
+                let spatial_valid = spatial_packet.valid;
+                let spatial_srid = spatial_packet.srid;
+                let spatial_rtrees = &spatial_packet.rtrees;
+                if spatial_valid && !spatial_rtrees.is_empty() && spatial_srid.is_some() {
+                    let rtree_bounds = rtree_bounds_from_bytes(spatial_rtrees)?;
+                    let column_name = match probe_key {
+                        Expr::ColumnRef(col) => col.id.to_string(),
+                        _ => unreachable!(),
+                    };
+                    let spatial = RuntimeFilterSpatial {
+                        column_name,
+                        srid: spatial_srid.unwrap(),
+                        rtrees: Arc::new(spatial_rtrees.clone()),
+                        rtree_bounds,
+                    };
+                    Some(spatial)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let (inlist, inlist_value_count) = if let Some(ref inlist) = packet.inlist {
                 let (expr, value_count) = build_inlist_filter(inlist.clone(), probe_key)?;
                 (Some(expr), value_count)
@@ -85,6 +112,7 @@ pub async fn build_runtime_filter_infos(
             } else {
                 None
             };
+
             let min_max = if let Some(ref min_max) = packet.min_max {
                 Some(build_min_max_filter(
                     min_max.clone(),
@@ -94,12 +122,14 @@ pub async fn build_runtime_filter_infos(
             } else {
                 None
             };
-            let enabled = bloom.is_some() || inlist.is_some() || min_max.is_some();
+            let enabled =
+                bloom.is_some() || inlist.is_some() || min_max.is_some() || spatial.is_some();
 
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
                 bloom,
+                spatial,
                 inlist,
                 inlist_value_count,
                 min_max,
@@ -317,6 +347,8 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_functions::BUILTIN_FUNCTIONS;
+    use geo_index::rtree::RTreeBuilder;
+    use geo_index::rtree::sort::HilbertSort;
 
     use super::build_inlist_filter;
     use super::build_runtime_filter_infos;
@@ -324,6 +356,7 @@ mod tests {
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
+    use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SpatialPacket;
 
     #[tokio::test(flavor = "current_thread")]
     async fn test_build_runtime_filter_infos_selectivity_threshold_only_disables_bloom() {
@@ -353,6 +386,7 @@ mod tests {
             enable_bloom_runtime_filter: true,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: true,
+            is_spatial: false,
         };
 
         let mut packets = HashMap::new();
@@ -364,6 +398,7 @@ mod tests {
                 max: Scalar::Number(10i32.into()),
             }),
             bloom: Some(vec![11, 22]),
+            spatial: None,
         });
 
         let runtime_filter_infos = build_runtime_filter_infos(
@@ -381,6 +416,71 @@ mod tests {
         assert_eq!(entry.inlist_value_count, 2);
         assert!(entry.min_max.is_some());
         assert!(entry.enabled);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_build_runtime_filter_infos_spatial() {
+        let data_type = DataType::Number(NumberDataType::Int32);
+        let build_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: data_type.clone(),
+            display_name: "build_key".to_string(),
+        });
+        let probe_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "probe_key".to_string(),
+            data_type: data_type.clone(),
+            display_name: "probe_key".to_string(),
+        });
+        let desc = RuntimeFilterDesc {
+            id: 0,
+            build_key,
+            probe_targets: vec![(probe_key, 42)],
+            build_table_rows: Some(10),
+            enable_bloom_runtime_filter: true,
+            enable_inlist_runtime_filter: true,
+            enable_min_max_runtime_filter: true,
+            is_spatial: true,
+        };
+
+        let mut builder = RTreeBuilder::<f64>::new(1);
+        builder.add(0.0, 0.0, 1.0, 1.0);
+        let rtrees = builder.finish::<HilbertSort>().into_inner();
+
+        let mut packets = HashMap::new();
+        packets.insert(0, RuntimeFilterPacket {
+            id: 0,
+            inlist: None,
+            min_max: None,
+            bloom: None,
+            spatial: Some(SpatialPacket {
+                valid: true,
+                srid: Some(4326),
+                rtrees,
+            }),
+        });
+
+        let runtime_filter_infos = build_runtime_filter_infos(
+            JoinRuntimeFilterPacket::complete(packets, 1),
+            HashMap::from([(0, &desc)]),
+            1,
+            1,
+        )
+        .await
+        .unwrap();
+
+        let entry = &runtime_filter_infos.get(&42).unwrap().filters[0];
+        assert!(entry.bloom.is_none());
+        assert!(entry.inlist.is_none());
+        assert!(entry.min_max.is_none());
+        assert!(entry.enabled);
+
+        let spatial = entry.spatial.as_ref().unwrap();
+        assert_eq!(spatial.column_name, "probe_key");
+        assert_eq!(spatial.srid, 4326);
+        assert_eq!(spatial.rtree_bounds, Some([0.0, 0.0, 1.0, 1.0]));
+        assert!(!spatial.rtrees.is_empty());
     }
 
     #[test]

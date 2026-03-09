@@ -210,15 +210,15 @@ impl RangeIndex {
             return domains;
         };
         for predicate in &self.predicates {
-            let Some(stats) = spatial_stats.get(&predicate.column_id) else {
+            let Some(stat) = spatial_stats.get(&predicate.column_id) else {
                 continue;
             };
-            if stats.srid != predicate.query_srid {
+            if !stat.is_valid || stat.srid != predicate.query_srid {
                 continue;
             }
             let block_rect = Rect::new(
-                Point::new(stats.min_x.into_inner(), stats.min_y.into_inner()),
-                Point::new(stats.max_x.into_inner(), stats.max_y.into_inner()),
+                Point::new(stat.min_x.into_inner(), stat.min_y.into_inner()),
+                Point::new(stat.max_x.into_inner(), stat.max_y.into_inner()),
             );
             if !rects_intersect(&block_rect, &predicate.query_rect)
                 || (matches!(predicate.op, SpatialOp::Contains | SpatialOp::Equals)
@@ -226,7 +226,7 @@ impl RangeIndex {
             {
                 domains.insert(
                     predicate.placeholder.clone(),
-                    spatial_false_domain(&predicate.return_type, stats.has_null),
+                    spatial_false_domain(&predicate.return_type, stat.has_null),
                 );
             }
         }
@@ -234,18 +234,26 @@ impl RangeIndex {
     }
 }
 
-fn rects_intersect(block_rect: &Rect<f64>, query_rect: &Rect<f64>) -> bool {
-    block_rect.min().x <= query_rect.max().x
-        && block_rect.max().x >= query_rect.min().x
-        && block_rect.min().y <= query_rect.max().y
-        && block_rect.max().y >= query_rect.min().y
+fn rects_intersect(block_rect: &Rect<f64>, query_rect: &Option<Rect<f64>>) -> bool {
+    if let Some(query_rect) = query_rect {
+        block_rect.min().x <= query_rect.max().x
+            && block_rect.max().x >= query_rect.min().x
+            && block_rect.min().y <= query_rect.max().y
+            && block_rect.max().y >= query_rect.min().y
+    } else {
+        false
+    }
 }
 
-fn rect_contains(block_rect: &Rect<f64>, query_rect: &Rect<f64>) -> bool {
-    block_rect.min().x <= query_rect.min().x
-        && block_rect.min().y <= query_rect.min().y
-        && block_rect.max().x >= query_rect.max().x
-        && block_rect.max().y >= query_rect.max().y
+fn rect_contains(block_rect: &Rect<f64>, query_rect: &Option<Rect<f64>>) -> bool {
+    if let Some(query_rect) = query_rect {
+        block_rect.min().x <= query_rect.min().x
+            && block_rect.min().y <= query_rect.min().y
+            && block_rect.max().x >= query_rect.max().x
+            && block_rect.max().y >= query_rect.max().y
+    } else {
+        false
+    }
 }
 
 fn spatial_false_domain(return_type: &DataType, has_null: bool) -> Domain {

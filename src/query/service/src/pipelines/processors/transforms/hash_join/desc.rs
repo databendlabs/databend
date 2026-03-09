@@ -83,6 +83,7 @@ pub struct RuntimeFilterDesc {
     pub enable_bloom_runtime_filter: bool,
     pub enable_inlist_runtime_filter: bool,
     pub enable_min_max_runtime_filter: bool,
+    pub is_spatial: bool,
 }
 
 #[derive(Debug)]
@@ -112,6 +113,7 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
             enable_bloom_runtime_filter: runtime_filter.enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: runtime_filter.enable_inlist_runtime_filter,
             enable_min_max_runtime_filter: runtime_filter.enable_min_max_runtime_filter,
+            is_spatial: runtime_filter.is_spatial,
         }
     }
 }

@@ -88,6 +88,27 @@ SELECT store_id, store_name, category FROM spatial_stores WHERE category IN ('re
 13 Burger King restaurant
 
 statement ok
+CREATE TABLE districts (district_id INT, district_name String, geom Geometry);
+
+statement ok
+INSERT INTO districts VALUES
+(1, 'Central', TO_GEOMETRY('POLYGON((8 8, 8 13, 13 13, 13 8, 8 8))')),
+(2, 'West', TO_GEOMETRY('POLYGON((-2 -2, -2 2, 2 2, 2 -2, -2 -2))')),
+(3, 'South', TO_GEOMETRY('POLYGON((18 -2, 18 2, 32 2, 32 -2, 18 -2))')),
+(4, 'North', TO_GEOMETRY('POLYGON((-2 18, -2 32, 2 32, 2 18, -2 18))'));
+
+query TT
+SELECT d.district_name, s.store_name AS store_count FROM districts d JOIN spatial_stores s ON st_within(s.location, d.geom);
+----
+Central Starbucks
+Central Costa
+
+query TI
+SELECT d.district_name, count(s.store_id) AS store_count FROM districts d JOIN spatial_stores s ON st_within(s.location, d.geom) GROUP BY d.district_name;
+----
+Central 2
+
+statement ok
 USE default
 
 statement ok

@@ -68,23 +68,23 @@ impl ExprRuntimePruner {
         dal: Operator,
         inlist_bloom_prune_threshold: usize,
         exprs: Vec<RuntimeFilterExpr>,
-    ) -> Self {
-        Self {
-            func_ctx,
-            table_schema,
-            dal,
-            inlist_bloom_prune_threshold,
-            exprs,
+    ) -> Option<Self> {
+        if !exprs.is_empty() {
+            Some(Self {
+                func_ctx,
+                table_schema,
+                dal,
+                inlist_bloom_prune_threshold,
+                exprs,
+            })
+        } else {
+            None
         }
     }
 
     /// Prune a partition based on expressions.
     /// Returns true if the partition should be pruned.
     pub async fn prune(&self, part: &PartInfoPtr) -> Result<bool> {
-        if self.exprs.is_empty() {
-            return Ok(false);
-        }
-
         let part = FuseBlockPartInfo::from_part(part)?;
         let mut partition_pruned = false;
         for entry in self.exprs.iter() {
@@ -251,7 +251,8 @@ mod tests {
                 stats: stats.clone(),
             },
         ]);
-
+        assert!(pruner.is_some());
+        let pruner = pruner.unwrap();
         assert!(pruner.prune(&part).await?);
 
         let snapshot = stats.snapshot();
@@ -277,6 +278,8 @@ mod tests {
                 stats: Arc::new(RuntimeFilterStats::default()),
             },
         ]);
+        assert!(pruner.is_some());
+        let pruner = pruner.unwrap();
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -297,6 +300,8 @@ mod tests {
                 stats: Arc::new(RuntimeFilterStats::default()),
             },
         ]);
+        assert!(pruner.is_some());
+        let pruner = pruner.unwrap();
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -343,9 +348,12 @@ mod tests {
             "memory:///block".to_string(),
             bloom_filter_index_location,
             bloom_filter_index_size,
+            None,
+            0,
             4,
             HashMap::new(),
             Some(column_stats),
+            None,
             Compression::Lz4Raw,
             None,
             None,
@@ -431,6 +439,8 @@ mod tests {
                 stats: Arc::new(RuntimeFilterStats::default()),
             },
         ]);
+        assert!(pruner.is_some());
+        let pruner = pruner.unwrap();
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -457,6 +467,8 @@ mod tests {
                     stats: Arc::new(RuntimeFilterStats::default()),
                 },
             ]);
+        assert!(pruner.is_some());
+        let pruner = pruner.unwrap();
 
         assert!(pruner.prune(&part).await?);
         Ok(())
@@ -493,9 +505,12 @@ mod tests {
             "memory:///block".to_string(),
             bloom_filter_index_location,
             bloom_filter_index_size,
+            None,
+            0,
             1000,
             HashMap::new(),
             Some(column_stats),
+            None,
             Compression::Lz4Raw,
             None,
             None,

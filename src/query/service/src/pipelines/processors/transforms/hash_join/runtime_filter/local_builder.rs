@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -23,19 +24,26 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_io::ewkb_to_geo;
+use geo::algorithm::bounding_rect::BoundingRect;
+use geozero::ToGeo;
+use geozero::wkb::Ewkb;
 
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
+use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SpatialPacket;
+use crate::pipelines::processors::transforms::hash_join::runtime_filter::spatial::build_rtree_from_rects_with_threshold;
 use crate::pipelines::processors::transforms::hash_join::util::hash_by_method_for_bloom;
 
 struct SingleFilterBuilder {
     id: usize,
     data_type: DataType,
-    hash_method: HashMethodKind,
+    hash_method: Option<HashMethodKind>,
 
     min_max_domain: Option<Domain>,
     min_max_threshold: usize,
@@ -45,6 +53,12 @@ struct SingleFilterBuilder {
 
     bloom_hashes: Option<Vec<u64>>,
     bloom_threshold: usize,
+
+    is_spatial: bool,
+    spatial_rects: Vec<(f64, f64, f64, f64)>,
+    spatial_srid: Option<i32>,
+    spatial_srid_mixed: bool,
+    spatial_threshold: usize,
 }
 
 impl SingleFilterBuilder {
@@ -53,9 +67,16 @@ impl SingleFilterBuilder {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
+        spatial_threshold: usize,
     ) -> Result<Self> {
         let data_type = desc.build_key.data_type().clone();
-        let hash_method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
+        let hash_method = if desc.is_spatial {
+            None
+        } else {
+            Some(DataBlock::choose_hash_method_with_types(&[
+                data_type.clone()
+            ])?)
+        };
 
         Ok(Self {
             id: desc.id,
@@ -79,11 +100,20 @@ impl SingleFilterBuilder {
             } else {
                 0
             },
+            is_spatial: desc.is_spatial,
+            spatial_rects: Vec::new(),
+            spatial_srid: None,
+            spatial_srid_mixed: false,
+            spatial_threshold,
         })
     }
 
     fn add_column(&mut self, column: &Column, total_rows: usize) -> Result<()> {
         let new_total = total_rows + column.len();
+        if self.is_spatial {
+            self.add_spatial_bbox(column)?;
+            return Ok(());
+        }
         self.add_min_max(column, new_total);
         self.add_inlist(column, new_total);
         self.add_bloom(column, new_total)?;
@@ -126,40 +156,115 @@ impl SingleFilterBuilder {
         };
         hashes.reserve(column.len());
         let entry = BlockEntry::from(column.clone());
-        hash_by_method_for_bloom(
-            &self.hash_method,
-            (&[entry]).into(),
-            column.len(),
-            &mut hashes,
-        )?;
+        let hash_method = self
+            .hash_method
+            .as_ref()
+            .expect("hash_method must exist for non-spatial filters");
+        hash_by_method_for_bloom(hash_method, (&[entry]).into(), column.len(), &mut hashes)?;
         self.bloom_hashes = Some(hashes);
         Ok(())
     }
 
-    fn finish(mut self, func_ctx: &FunctionContext) -> Result<RuntimeFilterPacket> {
-        let min_max = self.min_max_domain.take().map(|domain| {
-            let (min, max) = domain.to_minmax();
-            SerializableDomain { min, max }
-        });
+    fn add_spatial_bbox(&mut self, column: &Column) -> Result<()> {
+        if self.spatial_srid_mixed {
+            return Ok(());
+        }
 
-        let inlist = if let Some(builder) = self.inlist_builder.take() {
-            let column = builder.build();
-            if column.len() == 0 {
-                None
+        for value in column.iter() {
+            let (geo, srid) = match value {
+                ScalarRef::Geometry(v) => {
+                    let (geo, srid) = ewkb_to_geo(&mut Ewkb(v))?;
+                    (geo, srid.unwrap_or(0))
+                }
+                ScalarRef::Geography(v) => {
+                    let geo = Ewkb(v.0)
+                        .to_geo()
+                        .map_err(|e| ErrorCode::Internal(format!("Invalid geo ewkb value: {e}")))?;
+                    (geo, 4326)
+                }
+                _ => continue,
+            };
+
+            if let Some(prev) = self.spatial_srid {
+                if prev != srid {
+                    self.spatial_srid_mixed = true;
+                    self.spatial_rects.clear();
+                    return Ok(());
+                }
             } else {
-                Some(dedup_column(column, func_ctx, &self.data_type)?)
+                self.spatial_srid = Some(srid);
             }
+
+            if let Some(rect) = geo.bounding_rect() {
+                let min = rect.min();
+                let max = rect.max();
+                self.spatial_rects.push((min.x, min.y, max.x, max.y));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn finish(mut self, func_ctx: &FunctionContext) -> Result<RuntimeFilterPacket> {
+        if self.is_spatial {
+            let id = self.id;
+            let spatial_packet = self.finish_spatial_packet()?;
+            Ok(RuntimeFilterPacket {
+                id,
+                min_max: None,
+                inlist: None,
+                bloom: None,
+                spatial: Some(spatial_packet),
+            })
         } else {
-            None
-        };
+            let min_max = self.min_max_domain.take().map(|domain| {
+                let (min, max) = domain.to_minmax();
+                SerializableDomain { min, max }
+            });
 
-        let bloom = self.bloom_hashes.take();
+            let inlist = if let Some(builder) = self.inlist_builder.take() {
+                let column = builder.build();
+                if column.len() == 0 {
+                    None
+                } else {
+                    Some(dedup_column(column, func_ctx, &self.data_type)?)
+                }
+            } else {
+                None
+            };
 
-        Ok(RuntimeFilterPacket {
-            id: self.id,
-            min_max,
-            inlist,
-            bloom,
+            let bloom = self.bloom_hashes.take();
+
+            Ok(RuntimeFilterPacket {
+                id: self.id,
+                min_max,
+                inlist,
+                bloom,
+                spatial: None,
+            })
+        }
+    }
+
+    fn finish_spatial_packet(self) -> Result<SpatialPacket> {
+        if self.spatial_srid_mixed {
+            return Ok(SpatialPacket {
+                valid: false,
+                srid: None,
+                rtrees: Vec::new(),
+            });
+        }
+
+        let rect_count = self.spatial_rects.len();
+        let rtrees = build_rtree_from_rects_with_threshold(
+            self.spatial_rects.into_iter(),
+            rect_count,
+            self.spatial_threshold,
+        )?;
+
+        Ok(SpatialPacket {
+            valid: true,
+            srid: self.spatial_srid,
+            rtrees,
         })
     }
 }
@@ -178,6 +283,7 @@ impl RuntimeFilterLocalBuilder {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
+        spatial_threshold: usize,
     ) -> Result<Option<Self>> {
         if descs.is_empty() {
             return Ok(None);
@@ -190,6 +296,7 @@ impl RuntimeFilterLocalBuilder {
                 inlist_threshold,
                 bloom_threshold,
                 min_max_threshold,
+                spatial_threshold,
             )?);
         }
 

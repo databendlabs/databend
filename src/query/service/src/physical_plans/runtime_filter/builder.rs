@@ -177,6 +177,9 @@ pub async fn build_runtime_filter(
         let enable_min_max_runtime_filter =
             !is_null_equal && is_type_supported_for_min_max_filter(&data_type);
 
+        let is_spatial = matches!(data_type, DataType::Geometry | DataType::Geography);
+        let enable_inlist_runtime_filter = !is_null_equal && !is_spatial;
+
         // Create and add the runtime filter
         let runtime_filter = PhysicalRuntimeFilter {
             id,
@@ -184,8 +187,9 @@ pub async fn build_runtime_filter(
             probe_targets,
             build_table_rows,
             enable_bloom_runtime_filter,
-            enable_inlist_runtime_filter: !is_null_equal,
+            enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
+            is_spatial,
         };
         filters.push(runtime_filter);
     }
