@@ -278,6 +278,19 @@ async fn mutation_source_partitions(
         (None, vec![])
     };
 
+    let read_column_positions = if !filter_used_columns.is_empty() {
+        let metadata = mutation.metadata.read();
+        let table_schema = fuse_table.schema();
+        let (positions, _internal_columns) = crate::physical_plans::resolve_column_positions(
+            &metadata,
+            filter_used_columns.into_iter(),
+            &table_schema,
+        )?;
+        positions
+    } else {
+        Vec::new()
+    };
+
     let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
         let cluster = ctx.get_cluster();
         let is_lazy = fuse_table.is_column_oriented()
@@ -292,7 +305,7 @@ async fn mutation_source_partitions(
         .mutation_read_partitions(
             ctx,
             table_snapshot,
-            filter_used_columns,
+            read_column_positions,
             filters,
             is_lazy,
             is_delete,
