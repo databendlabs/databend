@@ -35,6 +35,9 @@ statement ok
 drop table if exists tsv_crlf_empty_line_repro
 
 statement ok
+drop table if exists tsv_crlf_unterminated_data_cr_repro
+
+statement ok
 create table tsv_crlf_trim_repro(a string not null, b string not null)
 
 query TIITI
@@ -67,3 +70,20 @@ select count() from tsv_crlf_empty_line_repro
 
 statement ok
 drop table if exists tsv_crlf_empty_line_repro
+
+statement ok
+create table tsv_crlf_unterminated_data_cr_repro(a string not null, b string not null)
+
+query TIITI
+copy into tsv_crlf_unterminated_data_cr_repro from @data/tsv/crlf_unterminated_data_cr.tsv file_format = (type = TSV record_delimiter = '\r\n')
+----
+tsv/crlf_unterminated_data_cr.tsv 1 0 NULL NULL
+
+# regression for unterminated CRLF rows: a trailing data CR must be preserved
+query TT
+select hex(a), hex(b) from tsv_crlf_unterminated_data_cr_repro
+----
+61 620d
+
+statement ok
+drop table if exists tsv_crlf_unterminated_data_cr_repro
