@@ -139,6 +139,7 @@ impl ExchangeSink {
         for (dest, threads) in &params.destination_channels {
             if dest == &params.executor_id {
                 local_threads = threads.len();
+                break;
             }
 
             local_pos += threads.len();
@@ -165,6 +166,34 @@ impl ExchangeSink {
             remote_outbound.len(),
             local_pos,
         )?);
+
+        let mut partition_mapping = Vec::new();
+        let mut partition_id = 0;
+        for (dest, threads) in &params.destination_channels {
+            for thread_idx in 0..threads.len() {
+                let local_marker = if dest == &params.executor_id {
+                    "(local)"
+                } else {
+                    ""
+                };
+                partition_mapping.push(format!(
+                    "{}:{}#{}{}",
+                    partition_id, dest, thread_idx, local_marker
+                ));
+                partition_id += 1;
+            }
+        }
+
+        log::info!(
+            "GLOBAL_SHUFFLE_DEBUG sink query_id={} exchange_id={} executor_id={} local_threads={} local_pos={} scatter_size={} partitions=[{}]",
+            params.query_id,
+            params.exchange_id,
+            params.executor_id,
+            local_threads,
+            local_pos,
+            remote_outbound.len(),
+            partition_mapping.join(",")
+        );
 
         let mut items = Vec::with_capacity(local_threads);
         for idx in 0..local_threads {
