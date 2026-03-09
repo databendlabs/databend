@@ -24,6 +24,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -47,7 +48,7 @@ impl CacheSourceState {
 #[derive(Clone)]
 pub struct HashJoinCacheState {
     initialized: bool,
-    column_indexes: Vec<usize>,
+    column_indexes: Vec<Symbol>,
     columns: Vec<Vec<BlockEntry>>,
     num_rows: Vec<usize>,
     num_cache_blocks: usize,
@@ -58,7 +59,7 @@ pub struct HashJoinCacheState {
 
 impl HashJoinCacheState {
     pub fn new(
-        column_indexes: Vec<usize>,
+        column_indexes: Vec<Symbol>,
         hash_join_state: Arc<HashJoinState>,
         max_block_size: usize,
     ) -> Self {

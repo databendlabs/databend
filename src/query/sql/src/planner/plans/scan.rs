@@ -32,6 +32,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use super::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
@@ -87,8 +88,8 @@ pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub table_stats: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
-    pub column_stats: HashMap<IndexType, Option<BasicColumnStatistics>>,
-    pub histograms: HashMap<IndexType, Option<Histogram>>,
+    pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
+    pub histograms: HashMap<Symbol, Option<Histogram>>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -39,6 +39,7 @@ use databend_common_sql::FormatOptions;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
@@ -408,7 +409,7 @@ impl<'a> StatsApplier<'a> {
         metadata: &databend_common_sql::Metadata,
         table_index: IndexType,
         table_name: &str,
-    ) -> HashMap<IndexType, Option<BasicColumnStatistics>> {
+    ) -> HashMap<Symbol, Option<BasicColumnStatistics>> {
         let mut result = HashMap::new();
 
         for (idx, column) in metadata
@@ -420,7 +421,7 @@ impl<'a> StatsApplier<'a> {
                 let full_name = format!("{}.{}", table_name, column_name);
                 if let Some(stats) = self.column_stats.get(&full_name) {
                     result.insert(
-                        idx as IndexType,
+                        Symbol::new(idx),
                         Some(BasicColumnStatistics {
                             min: to_datum(&stats.min)
                                 .or_else(|| default_min_datum(&column.data_type())),

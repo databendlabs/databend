@@ -270,6 +270,7 @@ async fn mutation_source_partitions(
             .direct_filter
             .iter()
             .flat_map(|expr| expr.used_columns())
+            .map(|i| i.as_usize())
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();

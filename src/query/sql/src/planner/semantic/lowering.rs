@@ -26,8 +26,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ColumnBinding;
 use crate::ColumnEntry;
-use crate::IndexType;
 use crate::Metadata;
+use crate::Symbol;
 use crate::binder::DummyColumnType;
 use crate::plans::ScalarExpr;
 
@@ -35,8 +35,8 @@ pub trait TypeProvider<ColumnID: ColumnIndex> {
     fn get_type(&self, column_id: &ColumnID) -> Result<DataType>;
 }
 
-impl TypeProvider<IndexType> for Metadata {
-    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
+impl TypeProvider<Symbol> for Metadata {
+    fn get_type(&self, column_id: &Symbol) -> Result<DataType> {
         let column_entry = self.column(*column_id);
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
@@ -53,8 +53,15 @@ impl TypeProvider<ColumnBinding> for Metadata {
     }
 }
 
-impl TypeProvider<IndexType> for DataSchema {
-    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
+impl TypeProvider<usize> for DataSchema {
+    fn get_type(&self, column_id: &usize) -> Result<DataType> {
+        let column = self.field_with_name(&column_id.to_string())?;
+        Ok(column.data_type().clone())
+    }
+}
+
+impl TypeProvider<Symbol> for DataSchema {
+    fn get_type(&self, column_id: &Symbol) -> Result<DataType> {
         let column = self.field_with_name(&column_id.to_string())?;
         Ok(column.data_type().clone())
     }
@@ -162,8 +169,8 @@ impl<ColumnID: ColumnIndex> TypeCheck<ColumnID> for RawExpr<ColumnID> {
     }
 }
 
-impl TypeCheck<IndexType> for ScalarExpr {
-    fn type_check(&self, type_provider: &impl TypeProvider<IndexType>) -> Result<Expr<IndexType>> {
+impl TypeCheck<Symbol> for ScalarExpr {
+    fn type_check(&self, type_provider: &impl TypeProvider<Symbol>) -> Result<Expr<Symbol>> {
         let raw_expr = self.as_raw_expr().project_column_ref(|col| col.index);
         raw_expr.type_check(type_provider)
     }

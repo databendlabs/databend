@@ -182,7 +182,12 @@ impl<'a> ClusteringInformationImpl<'a> {
                     .iter()
                     .map(|k| {
                         k.project_column_ref(|index| {
-                            Ok(self.table.schema().field(*index).name().to_string())
+                            Ok(self
+                                .table
+                                .schema()
+                                .field(index.as_usize())
+                                .name()
+                                .to_string())
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;

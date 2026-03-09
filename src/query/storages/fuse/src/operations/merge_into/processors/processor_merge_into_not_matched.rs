@@ -32,7 +32,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::ColumnSet;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_storage::MutationStatus;
 use itertools::Itertools;
@@ -68,7 +67,7 @@ impl MergeIntoNotMatchedProcessor {
     ) -> Result<Self> {
         let mut ops = Vec::<InsertDataBlockMutation>::with_capacity(unmatched.len());
         for item in unmatched.iter() {
-            let eval_projections: ColumnSet =
+            let eval_projections =
                 (input_schema.num_fields()..input_schema.num_fields() + item.2.len()).collect();
             ops.push(InsertDataBlockMutation {
                 op: BlockOperator::Map {

@@ -21,9 +21,9 @@ use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 pub use databend_common_statistics::Ndv;
 
-use crate::IndexType;
+use crate::Symbol;
 
-pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
+pub type ColumnStatSet = HashMap<Symbol, ColumnStat>;
 
 #[derive(Debug, Clone)]
 /// Statistics information of a column

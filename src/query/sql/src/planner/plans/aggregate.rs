@@ -20,8 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
@@ -53,11 +53,11 @@ pub enum AggregateMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct GroupingSets {
     /// The index of the virtual column `_grouping_id`. It's valid only if `grouping_sets` is not empty.
-    pub grouping_id_index: IndexType,
+    pub grouping_id_index: Symbol,
     /// See the comment in `GroupingSetsInfo`.
-    pub sets: Vec<Vec<IndexType>>,
+    pub sets: Vec<Vec<Symbol>>,
     /// See the comment in `GroupingSetsInfo`.
-    pub dup_group_items: Vec<(IndexType, DataType)>,
+    pub dup_group_items: Vec<(Symbol, DataType)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

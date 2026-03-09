@@ -30,7 +30,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::Matcher;
@@ -57,9 +57,9 @@ use crate::pipelines::PipelineBuilder;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
     meta: PhysicalPlanMeta,
-    pub projections: ColumnSet,
+    pub projections: BTreeSet<usize>,
     pub input: PhysicalPlan,
-    pub exprs: Vec<(RemoteExpr, IndexType)>,
+    pub exprs: Vec<(RemoteExpr, Symbol)>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -219,7 +219,7 @@ impl PhysicalPlanBuilder {
                 self.build(child, required).await?
             };
 
-            let column_projections: HashSet<usize> = column_projections
+            let column_projections: HashSet<_> = column_projections
                 .union(self.metadata.read().get_retained_column())
                 .cloned()
                 .collect();
@@ -232,7 +232,7 @@ impl PhysicalPlanBuilder {
     pub fn create_eval_scalar(
         &mut self,
         eval_scalar: &databend_common_sql::plans::EvalScalar,
-        column_projections: Vec<IndexType>,
+        column_projections: Vec<Symbol>,
         input: PhysicalPlan,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
@@ -260,7 +260,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Vec<_>>();
 
-        let mut projections = ColumnSet::new();
+        let mut projections = BTreeSet::new();
         for column in column_projections.iter() {
             if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
@@ -390,7 +390,7 @@ impl PhysicalPlanBuilder {
 
 struct FlattenColumnsVisitor {
     params: BTreeSet<Scalar>,
-    column_index: IndexType,
+    column_index: Symbol,
 }
 
 impl<'a> Visitor<'a> for FlattenColumnsVisitor {

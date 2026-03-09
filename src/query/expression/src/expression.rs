@@ -24,6 +24,7 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Symbol;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
@@ -48,6 +49,12 @@ impl ColumnIndex for usize {
 impl ColumnIndex for String {
     fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
         write!(f, "{self}")
+    }
+}
+
+impl ColumnIndex for Symbol {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
+        write!(f, "{}", self.as_usize())
     }
 }
 

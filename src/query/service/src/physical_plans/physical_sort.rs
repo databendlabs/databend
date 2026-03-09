@@ -378,7 +378,9 @@ impl PhysicalPlanBuilder {
 
         // If the query will be optimized by lazy reading, we don't need to do pre-projection.
         let pre_projection: Option<Vec<usize>> = if self.metadata.read().lazy_columns().is_empty() {
-            sort.pre_projection.clone()
+            sort.pre_projection
+                .as_ref()
+                .map(|projection| projection.iter().map(|index| index.as_usize()).collect())
         } else {
             None
         };

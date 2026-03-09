@@ -19,7 +19,7 @@ use databend_common_ast::Span;
 use databend_common_exception::Result;
 
 use crate::BindContext;
-use crate::IndexType;
+use crate::Symbol;
 use crate::WindowChecker;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
@@ -39,7 +39,7 @@ impl Binder {
         span: Span,
         bind_context: &mut BindContext,
         projections: &[ColumnBinding],
-        scalar_items: &mut HashMap<IndexType, ScalarItem>,
+        scalar_items: &mut HashMap<Symbol, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
         let scalar_items: Vec<ScalarItem> = scalar_items

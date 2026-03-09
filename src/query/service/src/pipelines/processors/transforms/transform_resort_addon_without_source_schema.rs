@@ -62,7 +62,9 @@ pub fn build_expression_transform(
     for f in output_schema.fields().iter() {
         let expr = if !input_schema.has_field(f.name()) {
             if let Some(default_expr) = f.default_expr() {
-                let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?.remove(0);
+                let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?
+                    .remove(0)
+                    .project_column_ref(|i| Ok(i.as_usize()))?;
                 check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
             } else {
                 // #issue13932

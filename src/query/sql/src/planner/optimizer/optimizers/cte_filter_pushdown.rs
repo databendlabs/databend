@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 
+use crate::Symbol;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -39,7 +40,7 @@ pub struct CTEFilterPushdownOptimizer {
 }
 
 struct ColumnMappingRewriter {
-    mapping: HashMap<usize, usize>,
+    mapping: HashMap<Symbol, Symbol>,
 }
 
 impl VisitorMut<'_> for ColumnMappingRewriter {

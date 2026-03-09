@@ -22,6 +22,7 @@ use databend_common_expression::type_check::check_number;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -142,7 +143,7 @@ impl Rule for RulePushDownFilterWindowTopN {
     }
 }
 
-fn extract_top_n(column: usize, predicate: ScalarExpr) -> Option<usize> {
+fn extract_top_n(column: Symbol, predicate: ScalarExpr) -> Option<usize> {
     let ScalarExpr::FunctionCall(call) = predicate else {
         return None;
     };

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
@@ -42,7 +43,6 @@ use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::ColumnSet;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 use itertools::Itertools;
@@ -95,7 +95,7 @@ pub struct HashJoinBuildState {
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     /// `build_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in build schema.
-    pub(crate) build_projections: ColumnSet,
+    pub(crate) build_projections: BTreeSet<usize>,
     pub(crate) build_worker_num: AtomicU32,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: RwLock<VecDeque<usize>>,
@@ -114,7 +114,7 @@ impl HashJoinBuildState {
         ctx: Arc<QueryContext>,
         func_ctx: FunctionContext,
         build_keys: &[RemoteExpr],
-        build_projections: &ColumnSet,
+        build_projections: &BTreeSet<usize>,
         hash_join_state: Arc<HashJoinState>,
         num_threads: usize,
         broadcast_id: Option<u32>,
