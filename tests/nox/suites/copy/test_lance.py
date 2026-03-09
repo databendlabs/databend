@@ -7,6 +7,7 @@ import pyarrow.compute as pc
 
 from ..utils import DATABEND_DSL
 
+debug = False
 
 def _list_stage_files(conn, location):
     return [str(row.values()[0]) for row in conn.query_iter(f"list {location}")]
@@ -73,7 +74,7 @@ def test_copy_into_lance_parallel_manifest_complete():
         assert res.values()[0] == 200000
 
         files = _list_stage_files(conn, location)
-        assert any(path.endswith(".lance") and "data/" in path for path in files)
+        assert len(list(path.endswith(".lance") and "data/" in path for path in files)) > 2
         assert any("_versions/" in path for path in files)
         assert any(".manifest" in path for path in files)
 
@@ -88,8 +89,9 @@ def test_copy_into_lance_parallel_manifest_complete():
         assert pc.sum(table["number"]).as_py() == 19999900000
         assert pc.sum(table["number + 1"]).as_py() == 20000100000
     finally:
-        conn.exec(f"remove @{stage}")
-        conn.exec(f"drop stage if exists {stage}")
+        if debug:
+            conn.exec(f"remove @{stage}")
+            conn.exec(f"drop stage if exists {stage}")
 
 
 def test_copy_into_lance_overwrite_raw_path_cleanup_prefix():
@@ -146,8 +148,9 @@ def test_copy_into_lance_overwrite_raw_path_cleanup_prefix():
         table = ds.to_table()
         assert table.num_rows == 10
     finally:
-        conn.exec(f"remove @{stage}")
-        conn.exec(f"drop stage if exists {stage}")
+        if debug:
+            conn.exec(f"remove @{stage}")
+            conn.exec(f"drop stage if exists {stage}")
 
 
 def test_copy_into_lance_default_path_with_query_id_directory():
@@ -187,8 +190,9 @@ def test_copy_into_lance_default_path_with_query_id_directory():
         assert pc.min(table["number"]).as_py() == 0
         assert pc.max(table["number"]).as_py() == 127
     finally:
-        conn.exec(f"remove @{stage}")
-        conn.exec(f"drop stage if exists {stage}")
+        if debug:
+            conn.exec(f"remove @{stage}")
+            conn.exec(f"drop stage if exists {stage}")
 
 
 def test_copy_into_lance_detailed_output_is_aggregated_once():
@@ -228,5 +232,6 @@ def test_copy_into_lance_detailed_output_is_aggregated_once():
         table = ds.to_table()
         assert table.num_rows == 200000
     finally:
-        conn.exec(f"remove @{stage}")
-        conn.exec(f"drop stage if exists {stage}")
+        if debug:
+            conn.exec(f"remove @{stage}")
+            conn.exec(f"drop stage if exists {stage}")
