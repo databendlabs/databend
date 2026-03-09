@@ -117,6 +117,10 @@ impl PingPongExchangeInner {
     pub fn ready_send(&self) {
         self.in_flight.store(false, Ordering::SeqCst);
     }
+
+    pub fn is_in_flight(&self) -> bool {
+        self.in_flight.load(Ordering::Acquire)
+    }
 }
 
 impl PingPongExchange {

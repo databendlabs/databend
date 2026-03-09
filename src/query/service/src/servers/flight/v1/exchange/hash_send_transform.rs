@@ -169,6 +169,11 @@ impl Processor for HashSendTransform {
             }
 
             if futures.is_empty() {
+                log::debug!(
+                    "ANY_JOIN_ROOT_DEBUG hash_send_transform_close reason=no_final_blocks processor_id={} channels={}",
+                    self.id.index(),
+                    self.channels.len()
+                );
                 for idx in 0..self.channels.len() {
                     let mut closed = DummyOutboundChannel::create();
                     std::mem::swap(&mut self.channels[idx], &mut closed);
@@ -186,6 +191,11 @@ impl Processor for HashSendTransform {
                 return Ok(Event::NeedConsume);
             }
 
+            log::debug!(
+                "ANY_JOIN_ROOT_DEBUG hash_send_transform_close reason=after_final_send processor_id={} channels={}",
+                self.id.index(),
+                self.channels.len()
+            );
             for idx in 0..self.channels.len() {
                 let mut closed = DummyOutboundChannel::create();
                 std::mem::swap(&mut self.channels[idx], &mut closed);

@@ -163,7 +163,35 @@ struct ExchangeSinkBufferInner {
 
 impl Drop for ExchangeSinkBufferInner {
     fn drop(&mut self) {
-        for remote in &self.state.remotes {
+        for (dest_idx, remote) in self.state.remotes.iter().enumerate() {
+            let (total_pending, pending_by_tid, has_error) = {
+                let state = remote.state.lock();
+                let mut total_pending = 0usize;
+                let mut pending_by_tid = Vec::new();
+
+                for (tid, channel) in state.channels.iter().enumerate() {
+                    let pending = channel.pending_queue.len();
+                    total_pending += pending;
+                    if pending > 0 {
+                        pending_by_tid.push(format!("{}:{}", tid, pending));
+                    }
+                }
+
+                (total_pending, pending_by_tid, state.last_error.is_some())
+            };
+
+            let in_flight = remote.exchange.is_in_flight();
+            if total_pending > 0 || in_flight {
+                log::warn!(
+                    "ANY_JOIN_ROOT_DEBUG buffer_drop_with_unfinished dest_idx={} total_pending={} in_flight={} has_error={} pending_by_tid=[{}]",
+                    dest_idx,
+                    total_pending,
+                    in_flight,
+                    has_error,
+                    pending_by_tid.join(",")
+                );
+            }
+
             remote.exchange.shutdown.notify_waiters();
         }
     }
@@ -292,6 +320,21 @@ impl ExchangeSinkBuffer {
         }
 
         Ok(())
+    }
+
+    pub fn debug_channel_state(&self, tid: usize, dest_idx: usize) -> (usize, bool, bool) {
+        let remote = &self.inner.state.remotes[dest_idx];
+        let (pending, has_error) = {
+            let state = remote.state.lock();
+            let pending = state
+                .channels
+                .get(tid)
+                .map(|channel| channel.pending_queue.len())
+                .unwrap_or_default();
+            (pending, state.last_error.is_some())
+        };
+
+        (pending, remote.exchange.is_in_flight(), has_error)
     }
 }
 
