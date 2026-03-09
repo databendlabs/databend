@@ -49,6 +49,7 @@ impl HashJoinProbeState {
         // Process States.
         let mut next_process_state = false;
         let process_state = probe_state.process_state.as_mut().unwrap();
+        let input_num_rows = process_state.input.num_rows();
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
@@ -207,7 +208,7 @@ impl HashJoinProbeState {
             log::info!(
                 "INNER_ANY_DEBUG query_id={} input_rows={} match_calls={} matched_rows={} skipped_used_once={} output_rows={} max_block_size={}",
                 self.ctx.get_id(),
-                process_state.input.num_rows(),
+                input_num_rows,
                 match_calls,
                 matched_rows,
                 skipped_used_once,
