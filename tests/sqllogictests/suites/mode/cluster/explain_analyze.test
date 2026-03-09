@@ -2,6 +2,9 @@ query T
 EXPLAIN ANALYZE SELECT 1;
 ----
 EvalScalar
+├── cpu time: <slt:ignore>
+├── output rows: 1
+├── output bytes: 1.00 B
 ├── output columns: [1 (#0)]
 ├── expressions: [1]
 ├── estimated rows: 1.00
@@ -15,6 +18,9 @@ query T
 settings (max_threads = 4) EXPLAIN ANALYZE select avg(number) from numbers(1000000);
 ----
 EvalScalar
+├── cpu time: <slt:ignore>
+├── output rows: 1
+├── output bytes: 9.00 B
 ├── output columns: [sum(number) / if(count(number) = 0, 1, count(number)) (#3)]
 ├── expressions: [sum(number) (#1) / CAST(if(CAST(count(number) (#2) = 0 AS Boolean NULL), 1, count(number) (#2)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
