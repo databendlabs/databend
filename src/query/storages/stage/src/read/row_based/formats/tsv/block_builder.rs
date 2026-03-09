@@ -45,7 +45,7 @@ impl TsvDecoder {
         let field_delimiter = fmt.params.field_delimiter.as_bytes()[0];
 
         // we only accept \r\n when len > 1
-        let trim_cr = fmt.params.field_delimiter.len() > 1;
+        let trim_cr = fmt.params.record_delimiter.len() > 1;
         // safe to unwrap, params are checked
         let record_delimiter = *fmt.params.record_delimiter.as_bytes().last().unwrap();
         Self {
@@ -58,11 +58,10 @@ impl TsvDecoder {
     }
 
     fn trim_record_delimiter<'a>(&self, mut row: &'a [u8]) -> &'a [u8] {
-        let len = row.len();
-        if len > 0 && row[len - 1] == self.record_delimiter {
-            row = &row[..(len - 1)];
-            if self.trim_cr && len > 2 && row[len - 2] == b'\r' {
-                row = &row[..(len - 2)];
+        if row.last() == Some(&self.record_delimiter) {
+            row = &row[..(row.len() - 1)];
+            if self.trim_cr && row.last() == Some(&b'\r') {
+                row = &row[..(row.len() - 1)];
             }
         }
         row
