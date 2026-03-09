@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_storages_common_cache::TempDirManager;
 
@@ -45,7 +45,7 @@ use crate::spillers::SpillerDiskConfig;
 pub struct WindowPartition {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
-    pub partition_by: Vec<IndexType>,
+    pub partition_by: Vec<Symbol>,
     pub order_by: Vec<SortDesc>,
     pub top_n: Option<WindowPartitionTopN>,
 

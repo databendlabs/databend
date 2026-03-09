@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -34,7 +35,7 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::types::DataType;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_sql::ColumnSet;
+use databend_common_sql::Symbol;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 use parking_lot::RwLock;
@@ -51,7 +52,6 @@ use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHas
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::sessions::QueryContext;
-use crate::sql::IndexType;
 
 pub type UniqueSerializerHashJoinHashTable = SerializerHashJoinHashTable<true>;
 pub type UniqueSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashTable<true>;
@@ -143,7 +143,7 @@ pub struct HashJoinState {
 
     /// Build side cache info.
     /// A HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
-    pub(crate) column_map: HashMap<usize, usize>,
+    pub(crate) column_map: HashMap<Symbol, usize>,
     // The index of the next cache block to be read.
     pub(crate) next_cache_block_index: AtomicUsize,
 }
@@ -152,12 +152,12 @@ impl HashJoinState {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         mut build_schema: DataSchemaRef,
-        build_projections: &ColumnSet,
+        build_projections: &BTreeSet<usize>,
         hash_join_desc: HashJoinDesc,
         probe_to_build: &[(usize, (bool, bool))],
         merge_into_is_distributed: bool,
         enable_merge_into_optimization: bool,
-        build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
+        build_side_cache_info: Option<(usize, HashMap<Symbol, usize>)>,
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
@@ -296,7 +296,7 @@ impl HashJoinState {
         build_state.generation_state.chunks.len()
     }
 
-    pub fn get_cached_columns(&self, column_index: usize) -> Vec<BlockEntry> {
+    pub fn get_cached_columns(&self, column_index: Symbol) -> Vec<BlockEntry> {
         let index = self.column_map.get(&column_index).unwrap();
         let build_state = unsafe { &*self.build_state.get() };
         let columns = build_state

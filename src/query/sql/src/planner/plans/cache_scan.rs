@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Symbol;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::Distribution;
@@ -29,14 +30,17 @@ use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CacheSource {
-    HashJoinBuild((usize, Vec<usize>)),
+    HashJoinBuild((usize, Vec<Symbol>)),
 }
 
 impl CacheSource {
     pub fn project(&self, projection: &[usize]) -> Self {
         match self {
             CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
-                let column_indexes = column_indexes.iter().map(|idx| projection[*idx]).collect();
+                let column_indexes = column_indexes
+                    .iter()
+                    .map(|idx| Symbol::new(projection[idx.as_usize()]))
+                    .collect();
                 CacheSource::HashJoinBuild((*cache_index, column_indexes))
             }
         }

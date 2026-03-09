@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -25,7 +26,6 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_sql::ColumnSet;
 use databend_common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::HashJoinHashTable;
@@ -80,7 +80,7 @@ pub struct TransformHashJoinProbe {
     // The restored data blocks from spilled data.
     restored_data_blocks: VecDeque<DataBlock>,
     // The projections for output data blocks.
-    projections: ColumnSet,
+    projections: BTreeSet<usize>,
     // The output data blocks need to send to output port.
     pub(crate) output_data_blocks: VecDeque<DataBlock>,
 
@@ -120,7 +120,7 @@ impl TransformHashJoinProbe {
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
-        projections: ColumnSet,
+        projections: BTreeSet<usize>,
         join_probe_state: Arc<HashJoinProbeState>,
         max_block_size: usize,
         func_ctx: FunctionContext,

@@ -33,6 +33,7 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::SExpr;
@@ -78,8 +79,8 @@ struct QueryInfo {
     residual_classes: ResidualClasses,
     sort_items: Option<Vec<SortItem>>,
     aggregate: Option<Aggregate>,
-    column_map: HashMap<IndexType, ScalarExpr>,
-    column_display_map: HashMap<String, IndexType>,
+    column_map: HashMap<Symbol, ScalarExpr>,
+    column_display_map: HashMap<String, Symbol>,
     output_cols: Vec<ScalarItem>,
 }
 
@@ -407,7 +408,7 @@ impl ViewInfo {
             let index_field = TableField::new(&name, table_ty);
             index_fields.push(index_field);
 
-            let index_scalar = to_index_scalar(index, &data_type);
+            let index_scalar = to_index_scalar(Symbol::new(index), &data_type);
             index_output_cols.insert(display_name, (index_scalar, is_agg));
         }
 
@@ -434,7 +435,7 @@ impl PredicatesSplitter {
         }
     }
 
-    fn split(&mut self, pred: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr>) {
+    fn split(&mut self, pred: &ScalarExpr, column_map: &HashMap<Symbol, ScalarExpr>) {
         if let ScalarExpr::FunctionCall(func) = pred {
             match func.func_name.as_str() {
                 "and" | "and_filters" => {
@@ -1221,7 +1222,7 @@ impl AggIndexRewriter {
     }
 }
 
-fn to_index_scalar(index: IndexType, data_type: &DataType) -> ScalarExpr {
+fn to_index_scalar(index: Symbol, data_type: &DataType) -> ScalarExpr {
     let col = BoundColumnRef {
         span: None,
         column: ColumnBindingBuilder::new(
@@ -1260,7 +1261,7 @@ fn reverse_op(op: &str) -> String {
 // replace derived column with actual ScalarExpr.
 fn actual_column_ref<'a>(
     col: &'a ScalarExpr,
-    column_map: &'a HashMap<IndexType, ScalarExpr>,
+    column_map: &'a HashMap<Symbol, ScalarExpr>,
 ) -> &'a ScalarExpr {
     if let ScalarExpr::BoundColumnRef(col) = col {
         if let Some(arg) = column_map.get(&col.column.index) {
@@ -1270,7 +1271,7 @@ fn actual_column_ref<'a>(
     col
 }
 
-fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr>) -> String {
+fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<Symbol, ScalarExpr>) -> String {
     match scalar {
         ScalarExpr::BoundColumnRef(_) => match actual_column_ref(scalar, column_map) {
             ScalarExpr::BoundColumnRef(col) => format_col(&col.column),
@@ -1353,7 +1354,7 @@ fn format_sort_desc(
         asc,
         ..
     }: &AggregateFunctionScalarSortDesc,
-    column_map: &HashMap<IndexType, ScalarExpr>,
+    column_map: &HashMap<Symbol, ScalarExpr>,
 ) -> String {
     let mut expr = format_scalar(expr, column_map);
 

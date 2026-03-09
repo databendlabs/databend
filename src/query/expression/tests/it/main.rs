@@ -26,6 +26,7 @@ extern crate core;
 mod arrow;
 mod block;
 mod block_thresholds;
+mod block_vec;
 mod common;
 mod decimal;
 mod display;

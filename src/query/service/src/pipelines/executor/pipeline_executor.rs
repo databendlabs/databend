@@ -39,6 +39,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
+use crate::servers::flight::v1::packets::NodePerfCounters;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 
@@ -77,6 +78,7 @@ impl PipelineExecutor {
                 1,
                 settings.query_id.clone(),
                 Some(finish_condvar.clone()),
+                settings.perf_event_groups.clone(),
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
@@ -132,6 +134,7 @@ impl PipelineExecutor {
                 1,
                 settings.query_id.clone(),
                 Some(finish_condvar.clone()),
+                settings.perf_event_groups.clone(),
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
@@ -282,6 +285,15 @@ impl PipelineExecutor {
                     .fetch_profiling(Some(v.settings.executor_node_id.clone())),
                 false => v.graph.fetch_profiling(None),
             },
+        }
+    }
+
+    pub fn fetch_perf_counters(&self) -> NodePerfCounters {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => {
+                executor.graph.fetch_perf_counters()
+            }
+            PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.fetch_perf_counters(),
         }
     }
 

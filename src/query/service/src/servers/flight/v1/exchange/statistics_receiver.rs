@@ -190,6 +190,10 @@ impl StatisticsReceiver {
                 ctx.merge_pruned_partitions_stats(&stat);
                 Ok(false)
             }
+            Ok(Some(DataPacket::QueryPerfCounters(counters))) => {
+                ctx.set_nodes_perf_counters(source_target.to_string(), counters);
+                Ok(false)
+            }
         }
     }
 

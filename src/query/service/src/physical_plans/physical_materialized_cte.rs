@@ -136,7 +136,7 @@ impl PhysicalPlanBuilder {
             .get(&materialized_cte.cte_name)
             .unwrap()
             .clone();
-        let cte_output_columns = Some(required.iter().copied().collect());
+        let cte_output_columns = Some(required.iter().map(|idx| idx.as_usize()).collect());
         let input = self.build_physical_plan(s_expr.child(0)?, required).await?;
         Ok(PhysicalPlan::new(MaterializedCTE {
             plan_id: 0,

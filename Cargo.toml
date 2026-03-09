@@ -291,6 +291,7 @@ humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 lru = "0.12"
+perf-event2 = "0.7.4"
 
 ## in branch dev
 iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e", features = [

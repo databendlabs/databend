@@ -36,6 +36,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
@@ -236,12 +237,16 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         let mut sort_descs = Vec::with_capacity(self.sort_descs.len());
 
         for desc in self.sort_descs.iter() {
+            let offset = match desc.index {
+                SymbolOrOffset::Symbol(index) => index.as_usize(),
+                SymbolOrOffset::Offset(offset) => offset,
+            };
             if !desc.is_reuse_index {
-                not_arg_indexes.insert(desc.index);
+                not_arg_indexes.insert(offset);
             }
 
             sort_descs.push(SortColumnDescription {
-                offset: desc.index,
+                offset,
                 asc: desc.asc,
                 nulls_first: desc.nulls_first,
             });

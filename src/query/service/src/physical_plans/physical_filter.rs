@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourcePlan;
@@ -39,7 +40,7 @@ use crate::pipelines::PipelineBuilder;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     meta: PhysicalPlanMeta,
-    pub projections: ColumnSet,
+    pub projections: BTreeSet<usize>,
     pub input: PhysicalPlan,
     // Assumption: expression's data type must be `DataType::Boolean`.
     pub predicates: Vec<RemoteExpr>,
@@ -149,7 +150,7 @@ impl PhysicalPlanBuilder {
             .collect();
         let column_projections = required.clone().into_iter().collect::<Vec<_>>();
         let input_schema = input.output_schema()?;
-        let mut projections = ColumnSet::new();
+        let mut projections = BTreeSet::new();
         for column in column_projections.iter() {
             if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);

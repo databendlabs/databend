@@ -85,6 +85,7 @@ use databend_common_expression::RawExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::cast_scalar;
@@ -2539,7 +2540,7 @@ impl<'a> TypeChecker<'a> {
             _ => {
                 struct LambdaVisitor<'a> {
                     bind_context: &'a BindContext,
-                    arg_index: HashSet<IndexType>,
+                    arg_index: HashSet<Symbol>,
                     args: Vec<ScalarExpr>,
                     fields: Vec<DataField>,
                 }
@@ -4924,7 +4925,7 @@ impl<'a> TypeChecker<'a> {
         let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = &args[0] else {
             return None;
         };
-        if column.index >= self.metadata.read().columns().len() {
+        if column.index.as_usize() >= self.metadata.read().columns().len() {
             return None;
         }
         // only rewrite when arg[1] is path
@@ -6686,7 +6687,7 @@ impl<'a> TypeChecker<'a> {
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            if column.index < self.metadata.read().columns().len() {
+            if column.index.as_usize() < self.metadata.read().columns().len() {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
                     column_entry
@@ -6896,7 +6897,7 @@ impl<'a> TypeChecker<'a> {
                             span: None,
                             column: ctx.columns[0].clone(),
                         }),
-                        index: self.metadata.read().columns().len() - 1,
+                        index: Symbol::new(self.metadata.read().columns().len() - 1),
                     }],
                     ..Default::default()
                 }
@@ -7015,7 +7016,7 @@ impl<'a> TypeChecker<'a> {
 
         // try rewrite as virtual column and pushdown to storage layer.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            if column.index < self.metadata.read().columns().len() {
+            if column.index.as_usize() < self.metadata.read().columns().len() {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
                     if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(

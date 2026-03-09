@@ -26,8 +26,8 @@ use databend_common_exception::Result;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::aggregate::AggregateRewriter;
@@ -196,8 +196,8 @@ impl Binder {
             .collect::<HashSet<_>>();
 
         struct AnyColumn {
-            old: IndexType,
-            new: IndexType,
+            old: Symbol,
+            new: Symbol,
             cast: Option<ScalarExpr>,
         }
 
