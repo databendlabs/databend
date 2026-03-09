@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Query Performance Flamegraphs</title>
+    <title>Query Performance Report</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -38,14 +38,6 @@
             display: block;
         }
     </style>
-</head>
-<body>
-<h1>Query Performance Flamegraphs</h1>
-
-{{CURRENT_NODE_IFRAME}}
-
-{{OTHER_NODES_IFRAMES}}
-
 <script>
     function resizeIframe(iframe) {
         setTimeout(() => {
@@ -63,5 +55,15 @@
         }, 150);
     }
 </script>
+</head>
+<body>
+<h1>Query Performance Report</h1>
+
+{{PERF_COUNTERS_TABLE}}
+
+{{CURRENT_NODE_IFRAME}}
+
+{{OTHER_NODES_IFRAMES}}
+
 </body>
 </html>

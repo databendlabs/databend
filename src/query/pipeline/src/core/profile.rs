@@ -26,6 +26,27 @@ use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::StackTrace;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+
+fn serialize_statistics<S: Serializer>(
+    stats: &[usize; std::mem::variant_count::<ProfileStatisticsName>()],
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    stats.as_slice().serialize(serializer)
+}
+
+fn deserialize_statistics<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<[usize; std::mem::variant_count::<ProfileStatisticsName>()], D::Error> {
+    let vec = Vec::<usize>::deserialize(deserializer)?;
+    let mut arr = [0usize; std::mem::variant_count::<ProfileStatisticsName>()];
+    let len = vec.len().min(arr.len());
+    arr[..len].copy_from_slice(&vec[..len]);
+    Ok(arr)
+}
 
 pub struct PlanScopeGuard {
     save: Option<Arc<PlanScope>>,
@@ -76,6 +97,10 @@ pub struct PlanProfile {
     pub title: Arc<String>,
     pub labels: Arc<Vec<ProfileLabel>>,
 
+    #[serde(
+        serialize_with = "serialize_statistics",
+        deserialize_with = "deserialize_statistics"
+    )]
     pub statistics: [usize; std::mem::variant_count::<ProfileStatisticsName>()],
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[serde(default)]

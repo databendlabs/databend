@@ -230,6 +230,7 @@ pub enum Plan {
     },
     ExplainPerf {
         sql: String,
+        event_groups: Vec<Vec<String>>,
     },
     ReportIssue(String),
 

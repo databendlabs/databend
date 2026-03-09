@@ -16,6 +16,7 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::ExplainOption;
 use databend_common_ast::ast::Statement;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -156,9 +157,28 @@ impl Binder {
                     plan: Box::new(self.bind_statement(bind_context, inner).await?),
                 })
             }
-            ExplainKind::Perf => Ok(Plan::ExplainPerf {
-                sql: inner.to_string(),
-            }),
+            ExplainKind::Perf { event_groups } => {
+                let mut seen = std::collections::HashSet::new();
+                for group in event_groups {
+                    for name in group {
+                        if PerfEvent::from_name(name).is_none() {
+                            return Err(ErrorCode::SyntaxException(format!(
+                                "Unknown perf event: '{name}'. Valid events: {}",
+                                PerfEvent::all_names().collect::<Vec<_>>().join(", ")
+                            )));
+                        }
+                        if !seen.insert(name.clone()) {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "Duplicate perf event: '{name}' — each event may only appear once across all groups"
+                            )));
+                        }
+                    }
+                }
+                Ok(Plan::ExplainPerf {
+                    sql: inner.to_string(),
+                    event_groups: event_groups.clone(),
+                })
+            }
             _ => Ok(Plan::Explain {
                 kind: kind.clone(),
                 config,
