@@ -67,6 +67,18 @@ async fn commit_fragments_to_target_dataset(
         fragments.len()
     );
 
+    let mut fragment_id = 0;
+    let fragments = fragments
+        .into_iter()
+        .map(move |mut f| {
+            if f.id == 0 {
+                f.id = fragment_id;
+                fragment_id += 1;
+            }
+            f
+        })
+        .collect::<Vec<_>>();
+
     let manifest = Manifest::new(
         lance_schema,
         Arc::new(fragments),

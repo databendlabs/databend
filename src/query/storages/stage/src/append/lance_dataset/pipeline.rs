@@ -39,13 +39,7 @@ pub(crate) fn append_data_to_lance_dataset(
     mem_limit: usize,
     max_threads: usize,
 ) -> Result<()> {
-    let target_dataset_path = if info.options.use_raw_path {
-        info.path.to_string()
-    } else if info.path.ends_with('/') {
-        format!("{}{query_id}", info.path)
-    } else {
-        format!("{}/{query_id}", info.path)
-    };
+    let target_dataset_path = build_target_dataset_path(&info, &query_id);
     GlobalIORuntime::instance().block_on(prepare_target_dataset_path(
         &info,
         op.clone(),
@@ -82,6 +76,22 @@ pub(crate) fn append_data_to_lance_dataset(
         )
     })?;
     Ok(())
+}
+
+fn build_target_dataset_path(info: &CopyIntoLocationInfo, query_id: &str) -> String {
+    if info.options.use_raw_path {
+        return info.path.to_string();
+    }
+
+    let path = info.path.as_str();
+    let (path, sep) = if path == "/" {
+        ("", "")
+    } else if path.ends_with('/') {
+        (path, "")
+    } else {
+        (path, "/")
+    };
+    format!("{path}{sep}{query_id}")
 }
 
 async fn ensure_dataset_absent(data_accessor: &Operator, path: &str) -> Result<()> {
@@ -149,5 +159,57 @@ async fn prepare_target_dataset_path(
         cleanup_dataset_if_exists(&data_accessor, dataset_path).await
     } else {
         ensure_dataset_absent(&data_accessor, dataset_path).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::ast::CopyIntoLocationOptions;
+    use databend_common_meta_app::principal::FileFormatParams;
+    use databend_common_meta_app::principal::ParquetFileFormatParams;
+    use databend_common_meta_app::principal::StageInfo;
+    use databend_storages_common_stage::CopyIntoLocationInfo;
+
+    use super::build_target_dataset_path;
+
+    fn make_info(path: &str, use_raw_path: bool) -> CopyIntoLocationInfo {
+        let mut stage = StageInfo::new_internal_stage("test");
+        stage.file_format_params = FileFormatParams::Parquet(ParquetFileFormatParams::default());
+
+        CopyIntoLocationInfo {
+            stage: Box::new(stage),
+            path: path.to_string(),
+            options: CopyIntoLocationOptions {
+                use_raw_path,
+                ..Default::default()
+            },
+            is_ordered: false,
+            partition_by: None,
+        }
+    }
+
+    #[test]
+    fn test_build_target_dataset_path_root_stage_path() {
+        let info = make_info("/", false);
+        let path = build_target_dataset_path(&info, "qid");
+        assert_eq!(path, "qid");
+    }
+
+    #[test]
+    fn test_build_target_dataset_path_non_root() {
+        let info = make_info("foo", false);
+        let path = build_target_dataset_path(&info, "qid");
+        assert_eq!(path, "foo/qid");
+
+        let info = make_info("foo/", false);
+        let path = build_target_dataset_path(&info, "qid");
+        assert_eq!(path, "foo/qid");
+    }
+
+    #[test]
+    fn test_build_target_dataset_path_use_raw_path() {
+        let info = make_info("/", true);
+        let path = build_target_dataset_path(&info, "qid");
+        assert_eq!(path, "/");
     }
 }
