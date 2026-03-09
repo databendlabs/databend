@@ -30,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_exception::StackTrace;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_management::WorkloadMgr;
+use databend_common_meta_api::kv_pb_api::compress;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
@@ -84,6 +85,8 @@ impl GlobalServices {
         // The order of initialization is very important
         // 1. global config init.
         GlobalConfig::init(config, version)?;
+
+        compress::GLOBAL_ENCODER.set_compress(config.meta.compress_values());
 
         // 2. log init.
         let mut log_labels = BTreeMap::new();

@@ -44,6 +44,7 @@ use opendal::Operator;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::VirtualSchemaMode;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::statistics::ColumnHLLAccumulator;
@@ -212,7 +213,10 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     // emit log entry.
                     // for newly created virtual schema.
                     let meta = MutationLogs {
-                        entries: vec![MutationLogEntry::AppendVirtualSchema { virtual_schema }],
+                        entries: vec![MutationLogEntry::AppendVirtualSchema {
+                            virtual_schema: Some(virtual_schema),
+                            mode: VirtualSchemaMode::Merge,
+                        }],
                     };
                     let data_block = DataBlock::empty_with_meta(Box::new(meta));
                     self.output.push_data(Ok(data_block));

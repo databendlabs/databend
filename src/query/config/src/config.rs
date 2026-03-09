@@ -2853,6 +2853,12 @@ pub struct MetaConfig {
     /// Maximum message size for gRPC communication (in bytes).
     #[clap(long = "meta-grpc-max-message-size", value_name = "VALUE")]
     pub grpc_max_message_size: Option<usize>,
+
+    /// Enable zstd compression for values written to meta-service.
+    /// Default is false for backward compatibility: older query nodes
+    /// cannot read compressed values.
+    #[clap(long = "meta-compress-values", value_name = "VALUE")]
+    pub compress_values: Option<bool>,
 }
 
 impl Default for MetaConfig {
@@ -2876,6 +2882,7 @@ impl Default for MetaConfig {
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
             grpc_max_message_size: None,
+            compress_values: None,
         }
     }
 }
@@ -2906,6 +2913,10 @@ impl MetaConfig {
 
         Ok(())
     }
+
+    pub fn compress_values(&self) -> bool {
+        self.compress_values.unwrap_or(false)
+    }
 }
 
 impl Debug for MetaConfig {
@@ -2929,6 +2940,7 @@ impl Debug for MetaConfig {
                 "rpc_tls_meta_service_domain_name",
                 &self.rpc_tls_meta_service_domain_name,
             )
+            .field("compress_values", &self.compress_values)
             .finish()
     }
 }
@@ -3153,6 +3165,46 @@ pub struct CacheConfig {
     )]
     pub vector_index_filter_memory_ratio: u64,
 
+    /// Max number of cached spatial index meta objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-spatial-index-meta-count",
+        value_name = "VALUE",
+        default_value = "30000"
+    )]
+    pub spatial_index_meta_count: u64,
+
+    /// Max bytes of cached spatial index metadata on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-spatial-index-meta-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_spatial_index_meta_size: u64,
+
+    /// Max bytes of cached spatial index filters used. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-spatial-index-filter-size",
+        value_name = "VALUE",
+        default_value = "64424509440"
+    )]
+    pub spatial_index_filter_size: u64,
+
+    /// Max bytes of cached spatial index filters on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-spatial-index-data-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_spatial_index_data_size: u64,
+
+    /// Max percentage of in memory spatial index filter cache relative to whole memory. By default it is 0 (disabled).
+    #[clap(
+        long = "cache-spatial-index-filter-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub spatial_index_filter_memory_ratio: u64,
+
     /// Max number of cached virtual column meta objects. Set it to 0 to disable it.
     #[clap(
         long = "cache-virtual-column-meta-count",
@@ -3295,6 +3347,11 @@ impl Default for CacheConfig {
             vector_index_filter_size: 64424509440,
             disk_cache_vector_index_data_size: 0,
             vector_index_filter_memory_ratio: 0,
+            spatial_index_meta_count: 30000,
+            disk_cache_spatial_index_meta_size: 0,
+            spatial_index_filter_size: 64424509440,
+            disk_cache_spatial_index_data_size: 0,
+            spatial_index_filter_memory_ratio: 0,
             virtual_column_meta_count: 30000,
             disk_cache_virtual_column_meta_size: 0,
             data_cache_storage: CacheStorageTypeConfig::None,

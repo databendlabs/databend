@@ -42,6 +42,7 @@ use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::SpatialIndexBuilder;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::create_inverted_index_builders;
@@ -162,12 +163,21 @@ impl TransformSerializeBlock {
         let inverted_index_builders =
             create_inverted_index_builders(&table.table_info.meta.indexes, &schema);
 
-        let virtual_column_builder = if table.support_virtual_columns() {
+        let enable_virtual_column = ctx
+            .get_settings()
+            .get_enable_experimental_virtual_column()
+            .unwrap_or_default();
+        let virtual_column_builder = if table.support_virtual_columns() && enable_virtual_column {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
         } else {
             None
         };
         let vector_index_builder = VectorIndexBuilder::try_create(
+            &table.table_info.meta.indexes,
+            source_schema.clone(),
+            true,
+        );
+        let spatial_index_builder = SpatialIndexBuilder::try_create(
             &table.table_info.meta.indexes,
             source_schema.clone(),
             true,
@@ -197,6 +207,7 @@ impl TransformSerializeBlock {
             inverted_index_builders,
             virtual_column_builder,
             vector_index_builder,
+            spatial_index_builder,
             table_meta_timestamps,
             serialize_hll,
         };

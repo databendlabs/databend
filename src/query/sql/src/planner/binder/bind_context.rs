@@ -49,6 +49,7 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::Symbol;
 use crate::VirtualColumn;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::column_binding::ColumnBinding;
@@ -130,10 +131,10 @@ pub struct BindContext {
     pub columns: Vec<ColumnBinding>,
 
     // map internal column: (table_index, column_id) -> column_index
-    pub bound_internal_columns: BTreeMap<(IndexType, ColumnId), IndexType>,
+    pub bound_internal_columns: BTreeMap<(IndexType, ColumnId), Symbol>,
 
     // map virtual column: virtual_column_name -> (column_id, column_index)
-    pub bound_virtual_columns: BTreeMap<VirtualColumnName, (ColumnId, IndexType)>,
+    pub bound_virtual_columns: BTreeMap<VirtualColumnName, (ColumnId, Symbol)>,
 
     pub aggregate_info: AggregateInfo,
 
@@ -547,7 +548,7 @@ impl BindContext {
     ///
     /// This method is used to retrieve the physical representation of result set of
     /// a query.
-    pub fn result_columns(&self) -> Vec<(IndexType, String)> {
+    pub fn result_columns(&self) -> Vec<(Symbol, String)> {
         self.columns
             .iter()
             .map(|col| (col.index, col.column_name.clone()))
@@ -583,7 +584,7 @@ impl BindContext {
         let metadata = metadata.read();
         let mut fields = Vec::with_capacity(self.columns.len());
         for column_binding in &self.columns {
-            let table_data_type = if column_binding.index < metadata.columns().len() {
+            let table_data_type = if column_binding.index.as_usize() < metadata.columns().len() {
                 match metadata.column(column_binding.index) {
                     ColumnEntry::BaseTableColumn(base) => base.data_type.clone(),
                     ColumnEntry::VirtualColumn(virtual_column) => virtual_column.data_type.clone(),

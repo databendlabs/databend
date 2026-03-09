@@ -20,8 +20,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::ColumnBindingBuilder;
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AsyncFunction;
@@ -45,7 +45,7 @@ pub(crate) struct AsyncFunctionRewriter {
     async_functions_map: HashMap<String, BoundColumnRef>,
     /// Mapping: (async function display name) -> (derived index)
     /// This is used to reuse already generated derived columns
-    async_functions_index_map: HashMap<String, IndexType>,
+    async_functions_index_map: HashMap<String, Symbol>,
 }
 
 impl AsyncFunctionRewriter {

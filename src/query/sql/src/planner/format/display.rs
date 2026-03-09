@@ -20,6 +20,7 @@ use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
@@ -28,7 +29,7 @@ use crate::plans::RelOperator;
 
 /// A trait for humanizing IDs.
 pub trait IdHumanizer {
-    fn humanize_column_id(&self, id: IndexType) -> String;
+    fn humanize_column_id(&self, id: Symbol) -> String;
 
     fn humanize_table_id(&self, id: IndexType) -> String;
 
@@ -81,8 +82,9 @@ impl<'a> MetadataIdHumanizer<'a> {
 }
 
 impl IdHumanizer for MetadataIdHumanizer<'_> {
-    fn humanize_column_id(&self, id: IndexType) -> String {
+    fn humanize_column_id(&self, id: Symbol) -> String {
         let column_entry = self.metadata.column(id);
+        let id = id.as_usize();
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => {
                 let table = self.metadata.table(column.table_index);

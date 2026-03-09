@@ -34,6 +34,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
+use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
@@ -55,6 +56,7 @@ use super::WindowFuncType;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::binder::ColumnBinding;
 use crate::optimizer::ir::SExpr;
 
@@ -250,10 +252,10 @@ impl ScalarExpr {
         (visitor.evaluable, visitor.has_nextval)
     }
 
-    pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
+    pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
         struct ReplaceColumnVisitor {
-            old: IndexType,
-            new: IndexType,
+            old: Symbol,
+            new: Symbol,
         }
 
         impl VisitorMut<'_> for ReplaceColumnVisitor {
@@ -272,11 +274,11 @@ impl ScalarExpr {
 
     pub fn replace_column_binding(
         &mut self,
-        old: IndexType,
+        old: Symbol,
         new_column: &ColumnBinding,
     ) -> Result<()> {
         struct ReplaceColumnBindingVisitor<'a> {
-            old: IndexType,
+            old: Symbol,
             new_column: &'a ColumnBinding,
         }
 
@@ -322,9 +324,9 @@ impl ScalarExpr {
         Ok(())
     }
 
-    pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<usize, DataType> {
+    pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<Symbol, DataType> {
         struct UsedColumnsVisitor {
-            columns: HashMap<IndexType, DataType>,
+            columns: HashMap<Symbol, DataType>,
             metadata: MetadataRef,
         }
 
@@ -918,7 +920,7 @@ impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
         };
 
         Ok(AggregateFunctionSortDesc {
-            index: col.column.index,
+            index: SymbolOrOffset::Symbol(col.column.index),
             is_reuse_index: self.is_reuse_index,
             data_type: expr.data_type()?,
             nulls_first: self.nulls_first,
@@ -1060,7 +1062,7 @@ pub struct SubqueryExpr {
     pub compare_op: Option<SubqueryComparisonOp>,
     // Output column of Any/All and scalar subqueries.
     pub output_column: ColumnBinding,
-    pub projection_index: Option<IndexType>,
+    pub projection_index: Option<Symbol>,
     pub(crate) data_type: Box<DataType>,
     #[educe(Hash(method = "hash_column_set"))]
     pub outer_columns: ColumnSet,

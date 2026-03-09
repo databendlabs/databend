@@ -213,7 +213,7 @@ impl VirtualDataSchema {
     }
 
     pub fn is_full(&self) -> bool {
-        self.fields.len() == VIRTUAL_COLUMNS_LIMIT
+        self.fields.len() >= VIRTUAL_COLUMNS_LIMIT
     }
 
     pub fn add_field(&mut self, mut field: VirtualDataField) -> Result<ColumnId> {

@@ -354,6 +354,9 @@ impl Settings {
     pub fn get_inlist_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("inlist_runtime_filter_threshold")
     }
+    pub fn get_inlist_runtime_bloom_prune_threshold(&self) -> Result<u64> {
+        self.try_get_u64("inlist_runtime_bloom_prune_threshold")
+    }
     pub fn get_bloom_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("bloom_runtime_filter_threshold")
     }
@@ -871,10 +874,6 @@ impl Settings {
         self.try_get_u64("cost_factor_network_per_row")
     }
 
-    pub fn get_enable_geo_create_table(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_geo_create_table")? != 0)
-    }
-
     pub fn get_idle_transaction_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("idle_transaction_timeout_secs")
     }
@@ -924,6 +923,14 @@ impl Settings {
 
     pub fn get_enable_fixed_rows_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_fixed_rows_sort")? == 1)
+    }
+
+    pub fn get_enable_sort_spill_prefetch(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_sort_spill_prefetch")? == 1)
+    }
+
+    pub fn get_enable_sort_spill_stream_regroup(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_sort_spill_stream_regroup")? == 1)
     }
 
     pub fn get_format_null_as_str(&self) -> Result<bool> {

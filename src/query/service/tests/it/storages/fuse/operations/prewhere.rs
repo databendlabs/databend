@@ -301,6 +301,8 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
     // Construct FuseBlockPartInfo for deserialize_and_apply_prewhere
     let part = FuseBlockPartInfo {
         location: "test_block".to_string(),
+        bloom_filter_index_location: None,
+        bloom_filter_index_size: 0,
         create_on: None,
         nums_rows: num_rows,
         columns_meta: column_metas.clone(),
@@ -329,6 +331,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
                     filter: Arc::new(bloom_y),
                 }),
                 inlist: None,
+                inlist_value_count: 0,
                 min_max: None,
                 stats: Arc::new(RuntimeFilterStats::default()),
                 build_rows: 1,
@@ -347,6 +350,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
                     filter: Arc::new(bloom_d),
                 }),
                 inlist: None,
+                inlist_value_count: 0,
                 min_max: None,
                 stats: Arc::new(RuntimeFilterStats::default()),
                 build_rows: 1,

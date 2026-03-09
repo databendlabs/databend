@@ -197,6 +197,7 @@ pub enum Statement {
     VacuumTable(VacuumTableStmt),
     VacuumDropTable(VacuumDropTableStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
+    VacuumVirtualColumn(VacuumVirtualColumnStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     ShowStatistics(ShowStatisticsStmt),
@@ -503,6 +504,7 @@ impl Statement {
             | Statement::VacuumTable(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
+            | Statement::VacuumVirtualColumn(..)
             | Statement::AnalyzeTable(..)
             | Statement::ExistsTable(..)
             | Statement::ShowCreateDictionary(..)
@@ -686,7 +688,7 @@ impl Display for Statement {
                             .join(", ")
                     )?;
                 }
-                match *kind {
+                match kind {
                     ExplainKind::Ast(_) => write!(f, " AST")?,
                     ExplainKind::Syntax(_) => write!(f, " SYNTAX")?,
                     ExplainKind::Graph => write!(f, " GRAPH")?,
@@ -700,7 +702,14 @@ impl Display for Statement {
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
-                    ExplainKind::Perf => write!(f, " PERF")?,
+                    ExplainKind::Perf { event_groups } => {
+                        write!(f, " PERF")?;
+                        if !event_groups.is_empty() {
+                            let groups_str: Vec<String> =
+                                event_groups.iter().map(|g| g.join("+")).collect();
+                            write!(f, "(events='{}')", groups_str.join(","))?;
+                        }
+                    }
                 }
                 write!(f, " {query}")?;
             }
@@ -867,6 +876,7 @@ impl Display for Statement {
             Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumDropTable(stmt) => write!(f, "{stmt}")?,
             Statement::VacuumTemporaryFiles(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDictionary(stmt) => write!(f, "{stmt}")?,

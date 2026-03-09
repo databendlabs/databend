@@ -239,21 +239,22 @@ impl OutputPort {
 
             if let Ok(data_block) = &data {
                 if *self.record_profile {
+                    let output_stats = data_block.profile_statistics();
                     Profile::record_usize_profile(
                         ProfileStatisticsName::OutputRows,
-                        data_block.num_rows(),
+                        output_stats.rows,
                     );
                     QueryTimeSeriesProfile::record_time_series_profile(
                         TimeSeriesProfileName::OutputRows,
-                        data_block.num_rows(),
+                        output_stats.rows,
                     );
                     Profile::record_usize_profile(
                         ProfileStatisticsName::OutputBytes,
-                        data_block.memory_size(),
+                        output_stats.bytes,
                     );
                     QueryTimeSeriesProfile::record_time_series_profile(
                         TimeSeriesProfileName::OutputBytes,
-                        data_block.memory_size(),
+                        output_stats.bytes,
                     );
                 }
             }

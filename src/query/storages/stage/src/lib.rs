@@ -38,5 +38,6 @@ pub use read::LoadContext;
 pub use read::row_based::BytesBatch;
 pub use read::row_based::BytesReader;
 pub use read::row_based::Decompressor;
+pub use read::row_based::parse_tsv_records_for_infer_schema;
 pub use stage_table::StageTable;
 pub use streaming_load::build_streaming_load_pipeline;

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -79,6 +80,7 @@ async fn apply_snapshot_pruning(
         push_down,
         bloom_index_cols,
         vec![],
+        HashSet::new(),
         None,
     )?);
 
@@ -121,6 +123,7 @@ async fn apply_snapshot_pruning(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
     };
     let executor = QueryPipelineExecutor::create(prune_pipeline, settings)?;
 

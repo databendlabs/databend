@@ -69,6 +69,7 @@ use crate::operations::MutationGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
+use crate::operations::VirtualSchemaMode;
 use crate::operations::set_backoff;
 use crate::operations::set_compaction_num_block_hint;
 use crate::statistics::TableStatsGenerator;
@@ -113,6 +114,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     new_segment_locs: Vec<Location>,
     new_virtual_schema: Option<VirtualDataSchema>,
+    new_virtual_schema_mode: VirtualSchemaMode,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
     insert_hll: BlockHLL,
@@ -179,6 +181,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             input,
             new_segment_locs: vec![],
             new_virtual_schema: None,
+            new_virtual_schema_mode: VirtualSchemaMode::Merge,
             insert_hll: HashMap::new(),
             insert_rows: 0,
             start_time: Instant::now(),
@@ -298,17 +301,20 @@ where F: SnapshotGenerator + Send + Sync + 'static
             conflict_resolve_context,
             new_segment_locs,
             virtual_schema,
+            virtual_schema_mode,
             hll,
             ..
         } = meta;
 
         let has_new_segments = !new_segment_locs.is_empty();
-        let has_virtual_schema = virtual_schema.is_some();
+        let has_virtual_schema =
+            virtual_schema.is_some() || matches!(virtual_schema_mode, VirtualSchemaMode::Replace);
         let has_hll = !hll.is_empty();
 
         self.new_segment_locs = new_segment_locs;
 
         self.new_virtual_schema = virtual_schema;
+        self.new_virtual_schema_mode = virtual_schema_mode;
 
         if has_hll {
             let binding = self.ctx.get_mutation_status();
@@ -588,9 +594,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 if fuse_table.branch_info.is_none() {
                     // merge virtual schema
                     let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                    let merged_virtual_schema = TransformMergeCommitMeta::merge_virtual_schema(
+                    let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
                         old_virtual_schema,
                         self.new_virtual_schema.clone(),
+                        self.new_virtual_schema_mode,
                     );
                     table_info.meta.virtual_schema = merged_virtual_schema;
                 }
@@ -792,9 +799,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 if fuse_table.branch_info.is_none() {
                     // merge virtual schema
                     let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                    let merged_virtual_schema = TransformMergeCommitMeta::merge_virtual_schema(
+                    let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
                         old_virtual_schema,
                         self.new_virtual_schema.clone(),
+                        self.new_virtual_schema_mode,
                     );
                     table_info.meta.virtual_schema = merged_virtual_schema;
                 }

@@ -3933,6 +3933,14 @@ Functions overloads:
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
 0 st_geompointfromgeohash(String) :: Geometry
 1 st_geompointfromgeohash(String NULL) :: Geometry NULL
+0 st_hilbert(Geometry) :: UInt64 NULL
+1 st_hilbert(Geometry NULL) :: UInt64 NULL
+2 st_hilbert(Geometry, Array(Float64)) :: UInt64 NULL
+3 st_hilbert(Geometry NULL, Array(Float64) NULL) :: UInt64 NULL
+4 st_hilbert(Geography) :: UInt64 NULL
+5 st_hilbert(Geography NULL) :: UInt64 NULL
+6 st_hilbert(Geography, Array(Float64)) :: UInt64 NULL
+7 st_hilbert(Geography NULL, Array(Float64) NULL) :: UInt64 NULL
 0 st_intersects(Geometry, Geometry) :: Boolean
 1 st_intersects(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_length(Geometry) :: Float64

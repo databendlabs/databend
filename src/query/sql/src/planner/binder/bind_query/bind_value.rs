@@ -40,6 +40,7 @@ use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::wrap_cast;
 use crate::optimizer::ir::SExpr;
@@ -62,17 +63,17 @@ pub struct ExpressionScanContext {
     // Cache column bindings in hash join build side.
     pub cache_columns: Vec<Vec<ColumnBinding>>,
     // Cache column indexes in hash join build side.
-    pub column_indexes: Vec<Vec<usize>>,
+    pub column_indexes: Vec<Vec<Symbol>>,
     // The hash join build cache index which are used in expression scan.
     pub used_cache_indexes: HashSet<usize>,
     // The hash join build cache columns which are used in expression scan.
-    pub used_column_indexes: Vec<HashSet<usize>>,
+    pub used_column_indexes: Vec<HashSet<Symbol>>,
 
     // Expression scan info.
     // Derived column indexes for each expression scan.
-    pub derived_indexes: Vec<HashMap<usize, usize>>,
+    pub derived_indexes: Vec<HashMap<Symbol, Symbol>>,
     // Original column indexes for each expression scan.
-    pub originnal_columns: Vec<HashMap<usize, usize>>,
+    pub originnal_columns: Vec<HashMap<Symbol, Symbol>>,
 }
 
 impl Default for ExpressionScanContext {
@@ -103,8 +104,8 @@ impl ExpressionScanContext {
     pub fn add_expression_scan_column(
         &mut self,
         expression_scan_index: usize,
-        original_column_index: usize,
-        derived_column_index: usize,
+        original_column_index: Symbol,
+        derived_column_index: Symbol,
     ) {
         self.derived_indexes[expression_scan_index]
             .insert(original_column_index, derived_column_index);
@@ -112,14 +113,18 @@ impl ExpressionScanContext {
             .insert(derived_column_index, original_column_index);
     }
 
-    pub fn get_derived_column(&self, expression_scan_index: usize, column_index: usize) -> usize {
+    pub fn get_derived_column(&self, expression_scan_index: usize, column_index: Symbol) -> Symbol {
         self.derived_indexes[expression_scan_index]
             .get(&column_index)
             .cloned()
             .unwrap()
     }
 
-    pub fn get_original_column(&self, expression_scan_index: usize, column_index: usize) -> usize {
+    pub fn get_original_column(
+        &self,
+        expression_scan_index: usize,
+        column_index: Symbol,
+    ) -> Symbol {
         self.originnal_columns[expression_scan_index]
             .get(&column_index)
             .cloned()
@@ -130,7 +135,7 @@ impl ExpressionScanContext {
     pub fn add_hash_join_build_cache(
         &mut self,
         columns: Vec<ColumnBinding>,
-        column_indexes: Vec<usize>,
+        column_indexes: Vec<Symbol>,
     ) -> usize {
         self.cache_columns.push(columns);
         self.column_indexes.push(column_indexes);
@@ -144,12 +149,12 @@ impl ExpressionScanContext {
         self.used_cache_indexes.insert(cache_index);
     }
 
-    pub fn add_used_cache_column_index(&mut self, cache_index: usize, column_index: usize) {
+    pub fn add_used_cache_column_index(&mut self, cache_index: usize, column_index: Symbol) {
         self.used_column_indexes[cache_index].insert(column_index);
     }
 
     // Try to find the cache index for the column index.
-    pub fn find_cache_index(&self, column_index: usize) -> Option<usize> {
+    pub fn find_cache_index(&self, column_index: Symbol) -> Option<usize> {
         for idx in (0..self.column_indexes.len()).rev() {
             for index in &self.column_indexes[idx] {
                 if *index == column_index {
@@ -544,14 +549,14 @@ pub fn bind_expression_scan(
         let index = metadata.columns().len();
         let column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx),
-            index,
+            Symbol::new(index),
             Box::new(field.data_type().clone()),
             Visibility::Visible,
         )
         .build();
         let _ = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
         bind_context.add_column_binding(column_binding);
-        column_indexes.push(index);
+        column_indexes.push(Symbol::new(index));
     }
 
     // Add column bindings for cache columns.
@@ -570,7 +575,7 @@ pub fn bind_expression_scan(
         let new_column_index = metadata.columns().len();
         let new_column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx + num_columns),
-            new_column_index,
+            Symbol::new(new_column_index),
             Box::new(data_type.clone()),
             Visibility::Visible,
         )
@@ -578,13 +583,13 @@ pub fn bind_expression_scan(
 
         let _ = metadata.add_derived_column(name, data_type);
         bind_context.add_column_binding(new_column_binding);
-        column_indexes.push(new_column_index);
+        column_indexes.push(Symbol::new(new_column_index));
 
         // Record the mapping between original index (cache index in hash join build side) and derived index.
         expression_scan_info.add_expression_scan_column(
             expression_scan_index,
             cache_column.index,
-            new_column_index,
+            Symbol::new(new_column_index),
         );
     }
 
@@ -665,7 +670,7 @@ pub fn bind_constant_scan(
     let mut fields = Vec::with_capacity(num_values);
     let mut metadata = metadata.write();
     for value_field in value_schema.fields() {
-        let index = metadata.columns().len();
+        let index = Symbol::new(metadata.columns().len());
         columns.insert(index);
         let column_binding = ColumnBindingBuilder::new(
             value_field.name().clone(),

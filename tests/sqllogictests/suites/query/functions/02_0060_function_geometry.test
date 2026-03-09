@@ -74,15 +74,6 @@ statement ok
 DROP TABLE IF EXISTS t1
 
 statement ok
-SET enable_geo_create_table=0
-
-statement error 1090
-CREATE TABLE t1 (a int, g geometry)
-
-statement ok
-SET enable_geo_create_table=1
-
-statement ok
 CREATE TABLE t1 (a int, g geometry)
 
 statement ok
@@ -487,7 +478,7 @@ SELECT ST_SRID(TO_GEOMETRY('POINT(-122.306100 37.554162)', 1234))
 query I
 SELECT ST_SRID(ST_MAKEGEOMPOINT(37.5, 45.5))
 ----
-4326
+0
 
 query ?
 SELECT ST_SRID(ST_MAKEGEOMPOINT(NULL, NULL))
@@ -735,11 +726,26 @@ POLYGON((3 4,3 4))
 POLYGON((0 0,1 1,0 0))
 POLYGON((1 0,1 1,0 1,0 0,1 0))
 
-statement ok
-DROP TABLE collect_test;
+query III
+SELECT ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)')), ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)')), ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'));
+----
+134217728 2684354560 2181038080
+
+query III
+SELECT ST_HILBERT(TO_GEOMETRY('POINT(0.25 0.25)'), [0, 0, 1, 1]), ST_HILBERT(TO_GEOMETRY('POINT(0.50 0.50)'), [0, 0, 1, 1]), ST_HILBERT(TO_GEOMETRY('POINT(0.75 0.75)'), [0, 0, 1, 1]);
+----
+178956970 715827882 2326440618
+
+query I
+SELECT ST_HILBERT(g) FROM collect_test;
+----
+3355443200
+4060086272
+2684354560
+2684354560
 
 statement ok
-SET enable_geo_create_table=0
+DROP TABLE collect_test;
 
 statement ok
 DROP TABLE IF EXISTS t1;

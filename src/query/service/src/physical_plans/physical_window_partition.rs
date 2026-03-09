@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_storages_common_cache::TempDirManager;
 
@@ -33,7 +33,6 @@ use crate::physical_plans::format::WindowPartitionFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::physical_sort::SortStep;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::SortStrategy;
@@ -46,9 +45,8 @@ use crate::spillers::SpillerDiskConfig;
 pub struct WindowPartition {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
-    pub partition_by: Vec<IndexType>,
+    pub partition_by: Vec<Symbol>,
     pub order_by: Vec<SortDesc>,
-    pub sort_step: SortStep,
     pub top_n: Option<WindowPartitionTopN>,
 
     pub stat_info: Option<PlanStatsInfo>,
@@ -92,7 +90,6 @@ impl IPhysicalPlan for WindowPartition {
             input,
             partition_by: self.partition_by.clone(),
             order_by: self.order_by.clone(),
-            sort_step: self.sort_step,
             top_n: self.top_n.clone(),
             stat_info: self.stat_info.clone(),
         })
@@ -158,21 +155,12 @@ impl IPhysicalPlan for WindowPartition {
             .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
             .transpose()?;
 
-        let have_order_col = match self.sort_step {
-            SortStep::Single | SortStep::Partial => false,
-            SortStep::Final => true,
-            _ => unimplemented!(),
-        };
         let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
 
         let processor_id = AtomicUsize::new(0);
         builder.main_pipeline.add_transform(|input, output| {
-            let strategy = SortStrategy::try_create(
-                &settings,
-                sort_desc.clone(),
-                plan_schema.clone(),
-                have_order_col,
-            )?;
+            let strategy =
+                SortStrategy::try_create(&settings, sort_desc.clone(), plan_schema.clone())?;
             Ok(ProcessorPtr::create(Box::new(
                 TransformWindowPartitionCollect::new(
                     builder.ctx.clone(),

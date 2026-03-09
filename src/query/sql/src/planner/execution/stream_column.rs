@@ -28,6 +28,7 @@ use databend_common_expression::TableSchema;
 
 use crate::ColumnBindingBuilder;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::Visibility;
 use crate::evaluator::BlockOperator;
 use crate::plans::BoundColumnRef;
@@ -73,7 +74,7 @@ impl StreamContext {
                 span: None,
                 column: ColumnBindingBuilder::new(
                     stream_column.column_name().to_string(),
-                    schema_index,
+                    Symbol::new(schema_index),
                     Box::new(stream_column.data_type()),
                     Visibility::Visible,
                 )
@@ -94,7 +95,7 @@ impl StreamContext {
                         span: None,
                         column: ColumnBindingBuilder::new(
                             CURRENT_BLOCK_ID_COL_NAME.to_string(),
-                            num_fields + 1,
+                            Symbol::new(num_fields + 1),
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
@@ -107,7 +108,7 @@ impl StreamContext {
                         span: None,
                         column: ColumnBindingBuilder::new(
                             CURRENT_BLOCK_ROW_NUM_COL_NAME.to_string(),
-                            num_fields,
+                            Symbol::new(num_fields),
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
@@ -135,7 +136,7 @@ impl StreamContext {
             exprs.push(
                 new_stream_column_scalar_expr
                     .as_expr()?
-                    .project_column_ref(|col| Ok(col.index))?,
+                    .project_column_ref(|col| Ok(col.index.as_usize()))?,
             );
         }
 

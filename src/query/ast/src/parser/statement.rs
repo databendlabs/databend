@@ -99,7 +99,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
-                    Some(TokenKind::PERF) => ExplainKind::Perf,
+                    Some(TokenKind::PERF) => ExplainKind::Perf {
+                        event_groups: vec![],
+                    },
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -1284,6 +1286,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 option,
+            })
+        },
+    );
+    let vacuum_virtual_column = map(
+        rule! {
+            VACUUM ~ VIRTUAL ~ ^COLUMN ~ ^FROM ~ ^#dot_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::VacuumVirtualColumn(VacuumVirtualColumnStmt {
+                catalog,
+                database,
+                table,
             })
         },
     );
@@ -2768,7 +2782,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ).parse(i),
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
-            #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
+            | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
         REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),
@@ -2869,6 +2884,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
             | #vacuum_temporary_tables
         ).parse(i),
         ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
@@ -3026,7 +3042,7 @@ AS
             | #alter_worker: "`ALTER WORKER <name> SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...] | SET <key> = '<value>' [, ...] | UNSET <key> [, ...] | SUSPEND | RESUME`"
             | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
             | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
-            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | CONNECTION} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
+            | #alter_object_tags: "`ALTER {DATABASE | TABLE | STAGE | USER | ROLE | CONNECTION | VIEW | STREAM | FUNCTION | PROCEDURE} ... SET TAG <name> = '<value>' [, ...] | UNSET TAG <name> [, ...]`"
             | #alter_stage : "`ALTER STAGE [IF EXISTS] <name> SET <option> [, ...] | UNSET <option> [, ...]`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
@@ -4502,6 +4518,24 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
         ),
         map(
             rule! {
+                USER ~ ( IF ~ ^EXISTS )? ~ #user_identity
+            },
+            |(_, opt_if_exists, user)| AlterObjectTagTarget::User {
+                if_exists: opt_if_exists.is_some(),
+                user,
+            },
+        ),
+        map(
+            rule! {
+                ROLE ~ ( IF ~ ^EXISTS )? ~ #role_name
+            },
+            |(_, opt_if_exists, role_name)| AlterObjectTagTarget::Role {
+                if_exists: opt_if_exists.is_some(),
+                role_name,
+            },
+        ),
+        map(
+            rule! {
                 CONNECTION ~ ( IF ~ ^EXISTS )? ~ #ident
             },
             |(_, opt_if_exists, connection_name)| AlterObjectTagTarget::Connection {
@@ -4518,6 +4552,17 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
                 catalog,
                 database,
                 view,
+            },
+        ),
+        map(
+            rule! {
+                STREAM ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            },
+            |(_, opt_if_exists, (catalog, database, stream))| AlterObjectTagTarget::Stream {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                stream,
             },
         ),
         map(
@@ -6290,6 +6335,42 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             OPTIMIZED => ExplainOption::Optimized,
             DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
+        },
+    )
+    .parse(i)
+}
+
+pub fn explain_perf(i: Input) -> IResult<Statement> {
+    map_res(
+        rule! {
+            EXPLAIN ~ PERF ~ ( "(" ~ ^#ident ~ "=" ~ ^#literal_string ~ ")" )? ~ #statement
+        },
+        |(_, _, opt_options, statement)| {
+            let event_groups = if let Some((_, key, _, value, _)) = opt_options {
+                if key.name.to_lowercase() != "events" {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "expected 'events' as the option key for EXPLAIN PERF",
+                    )));
+                }
+                value
+                    .split(',')
+                    .map(|group| {
+                        group
+                            .split('+')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|g| !g.is_empty())
+                    .collect()
+            } else {
+                vec![]
+            };
+            Ok(Statement::Explain {
+                kind: ExplainKind::Perf { event_groups },
+                options: Default::default(),
+                query: Box::new(statement.stmt),
+            })
         },
     )
     .parse(i)

@@ -15,8 +15,10 @@
 mod index;
 #[rustfmt::skip]
 mod lut;
+mod spatial;
 mod state;
 
 pub use index::*;
 pub use lut::LUT;
+pub use spatial::*;
 pub use state::*;

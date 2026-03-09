@@ -16,6 +16,7 @@ use databend_common_expression::ColumnIndex;
 use databend_common_expression::types::DataType;
 
 use crate::IndexType;
+use crate::Symbol;
 use crate::Visibility;
 
 // Please use `ColumnBindingBuilder` to construct a new `ColumnBinding`
@@ -31,7 +32,7 @@ pub struct ColumnBinding {
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
-    pub index: IndexType,
+    pub index: Symbol,
 
     pub data_type: Box<DataType>,
 
@@ -57,8 +58,8 @@ pub enum DummyColumnType {
 }
 
 impl DummyColumnType {
-    fn type_identifier(&self) -> usize {
-        DUMMY_INDEX - (*self) as usize
+    fn type_identifier(&self) -> Symbol {
+        Symbol::new(DUMMY_INDEX - (*self) as usize)
     }
 }
 
@@ -84,7 +85,7 @@ impl ColumnBinding {
     }
 
     pub fn is_dummy(&self) -> bool {
-        self.index >= DummyColumnType::Other.type_identifier()
+        self.index.as_usize() >= DummyColumnType::Other.type_identifier().as_usize()
     }
 }
 
@@ -106,7 +107,7 @@ pub struct ColumnBindingBuilder {
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
-    pub index: IndexType,
+    pub index: Symbol,
 
     pub data_type: Box<DataType>,
 
@@ -119,7 +120,7 @@ pub struct ColumnBindingBuilder {
 impl ColumnBindingBuilder {
     pub fn new(
         column_name: String,
-        index: IndexType,
+        index: Symbol,
         data_type: Box<DataType>,
         visibility: Visibility,
     ) -> ColumnBindingBuilder {

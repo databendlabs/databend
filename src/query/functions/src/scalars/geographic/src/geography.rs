@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::hilbert_index_from_bounds;
+use databend_common_expression::hilbert_index_from_bounds_slice;
 use databend_common_expression::types::geography::GeographyRef;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -27,25 +28,26 @@ use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::geography::GEOGRAPHY_SRID;
+use databend_common_io::geography::LATITUDE_MAX;
+use databend_common_io::geography::LATITUDE_MIN;
+use databend_common_io::geography::LONGITUDE_MAX;
+use databend_common_io::geography::LONGITUDE_MIN;
 use databend_common_io::geography::geography_from_ewkb;
 use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::geography::geography_from_geojson;
+use databend_common_io::geography::haversine_distance_between_geometries;
 use databend_common_io::geometry::count_points;
+use databend_common_io::geometry::geometry_bbox_center;
 use databend_common_io::geometry::point_to_geohash;
 use databend_common_io::geometry::st_extreme;
 use databend_common_io::geometry_format;
 use databend_common_io::geometry_type_name;
 use databend_common_io::wkb::make_point;
-use geo::Closest;
 use geo::Coord;
-use geo::CoordsIter;
-use geo::Distance;
 use geo::Geodesic;
 use geo::GeodesicArea;
 use geo::Geometry;
 use geo::HasDimensions;
-use geo::Haversine;
-use geo::HaversineClosestPoint;
 use geo::Length;
 use geo::LineString;
 use geo::Point;
@@ -1189,56 +1191,83 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-}
 
-fn haversine_distance_point_to_geometry(
-    point: &Point<f64>,
-    geometry: &Geometry<f64>,
-) -> std::result::Result<f64, Box<ErrorCode>> {
-    match geometry.haversine_closest_point(point) {
-        Closest::Intersection(_) => Ok(0_f64),
-        Closest::SinglePoint(closest) => Ok(Haversine.distance(*point, closest)),
-        Closest::Indeterminate => Err(Box::new(ErrorCode::GeometryError(
-            "failed to calculate distance for empty geography".to_string(),
-        ))),
-    }
-}
+    registry.register_combine_nullable_1_arg::<GeographyType, UInt64Type, _, _>(
+        "st_hilbert",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeographyType, NullableType<UInt64Type>>(
+            |ewkb, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
 
-fn haversine_distance_between_geometries(
-    left: &Geometry<f64>,
-    right: &Geometry<f64>,
-) -> std::result::Result<f64, Box<ErrorCode>> {
-    match (left, right) {
-        (Geometry::Point(l_point), _) => {
-            return haversine_distance_point_to_geometry(l_point, right);
-        }
-        (_, Geometry::Point(r_point)) => {
-            return haversine_distance_point_to_geometry(r_point, left);
-        }
-        (_, _) => {}
-    }
+                match Ewkb(ewkb.as_ref()).to_geo() {
+                    Ok(geo) => match geometry_bbox_center(&geo) {
+                        Some((x, y)) => match hilbert_index_from_bounds(
+                            x,
+                            y,
+                            LONGITUDE_MIN,
+                            LATITUDE_MIN,
+                            LONGITUDE_MAX,
+                            LATITUDE_MAX,
+                        ) {
+                            Ok(index) => builder.push(index),
+                            Err(e) => {
+                                ctx.set_error(builder.len(), e.to_string());
+                                builder.push_null();
+                            }
+                        },
+                        None => builder.push_null(),
+                    },
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push_null();
+                    }
+                }
+            },
+        ),
+    );
 
-    let mut min_distance: Option<f64> = None;
-    for coord in left.coords_iter() {
-        let point = Point::new(coord.x, coord.y);
-        let distance = haversine_distance_point_to_geometry(&point, right)?;
-        min_distance = Some(match min_distance {
-            Some(current) => current.min(distance),
-            None => distance,
-        });
-    }
-    for coord in right.coords_iter() {
-        let point = Point::new(coord.x, coord.y);
-        let distance = haversine_distance_point_to_geometry(&point, left)?;
-        min_distance = Some(match min_distance {
-            Some(current) => current.min(distance),
-            None => distance,
-        });
-    }
+    registry.register_combine_nullable_2_arg::<
+        GeographyType,
+        ArrayType<NumberType<F64>>,
+        UInt64Type,
+        _,
+        _,
+    >(
+        "st_hilbert",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<
+            GeographyType,
+            ArrayType<NumberType<F64>>,
+            NullableType<UInt64Type>,
+        >(|ewkb, bounds, builder, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(builder.len()) {
+                    builder.push_null();
+                    return;
+                }
+            }
 
-    min_distance.ok_or_else(|| {
-        Box::new(ErrorCode::GeometryError(
-            "failed to calculate distance for empty geography".to_string(),
-        ))
-    })
+            match Ewkb(ewkb.as_ref()).to_geo() {
+                Ok(geo) => match geometry_bbox_center(&geo) {
+                    Some((x, y)) => match hilbert_index_from_bounds_slice(x, y, &bounds) {
+                        Ok(index) => builder.push(index),
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                            builder.push_null();
+                        }
+                    },
+                    None => builder.push_null(),
+                },
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                    builder.push_null();
+                }
+            }
+        }),
+    );
 }

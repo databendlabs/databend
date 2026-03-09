@@ -25,42 +25,40 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
+use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge;
-use databend_common_pipeline_transforms::sorts::utils::add_order_field;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
-use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
-use crate::spillers::SortSpiller;
+use crate::spillers::SortSpillerImpl;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
 type TransformSortBuilder =
-    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpiller>;
+    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpillerImpl>;
 
 pub struct SortPipelineBuilder {
     ctx: Arc<QueryContext>,
-    output_schema: DataSchemaRef,
-    sort_desc: Arc<[SortColumnDescription]>,
+    key_desc: SortKeyDescription,
     limit: Option<usize>,
     block_size: usize,
-    remove_order_col_at_last: bool,
     enable_loser_tree: bool,
     broadcast_id: Option<u32>,
     enable_fixed_rows: bool,
+    enable_sort_spill_prefetch: bool,
+    enable_sort_spill_stream_regroup: bool,
 }
 
 impl SortPipelineBuilder {
     pub fn create(
         ctx: Arc<QueryContext>,
-        output_schema: DataSchemaRef,
+        schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
         broadcast_id: Option<u32>,
         enable_fixed_rows: bool,
@@ -68,16 +66,18 @@ impl SortPipelineBuilder {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
+        let enable_sort_spill_prefetch = settings.get_enable_sort_spill_prefetch()?;
+        let enable_sort_spill_stream_regroup = settings.get_enable_sort_spill_stream_regroup()?;
         Ok(Self {
             ctx,
-            output_schema,
-            sort_desc,
+            key_desc: SortKeyDescription::new(sort_desc, schema, enable_fixed_rows)?,
             limit: None,
             block_size,
-            remove_order_col_at_last: false,
             enable_loser_tree,
             broadcast_id,
             enable_fixed_rows,
+            enable_sort_spill_prefetch,
+            enable_sort_spill_stream_regroup,
         })
     }
 
@@ -92,41 +92,33 @@ impl SortPipelineBuilder {
         self
     }
 
-    pub fn remove_order_col_at_last(mut self) -> Self {
-        self.remove_order_col_at_last = true;
-        self
-    }
-
-    pub fn build_full_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn build_full_sort_pipeline(
+        self,
+        pipeline: &mut Pipeline,
+        keep_order_col: bool,
+    ) -> Result<()> {
         // Partial sort
         pipeline.add_transformer(|| {
             TransformSortPartial::new(
                 LimitType::from_limit_rows(self.limit),
-                self.sort_desc.clone(),
+                self.key_desc.sort_column_desc(),
             )
         });
 
-        self.build_merge_sort_pipeline(pipeline, false)
+        self.build_merge_sort_pipeline(pipeline, false, keep_order_col)
     }
 
-    fn build_merge_sort(&self, pipeline: &mut Pipeline, order_col_generated: bool) -> Result<()> {
-        // Merge sort
-        let need_multi_merge = pipeline.output_len() > 1;
-        let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
+    fn build_merge_sort(
+        &self,
+        pipeline: &mut Pipeline,
+        input_has_order_col: bool,
+        keep_order_col: bool,
+    ) -> Result<()> {
         debug_assert!(
-            // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
-            !order_col_generated || !output_order_col
+            // If input already has order column, this stage is the last local merge in
+            // distributed sort and should drop order column after merge.
+            !input_has_order_col || !keep_order_col
         );
-
-        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
-        let sort_merge_output_schema = match output_order_col {
-            true => add_order_field(
-                self.output_schema.clone(),
-                &self.sort_desc,
-                self.enable_fixed_rows,
-            ),
-            false => self.output_schema.clone(),
-        };
 
         let settings = self.ctx.get_settings();
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
@@ -148,20 +140,20 @@ impl SortPipelineBuilder {
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
-            SortSpiller::new(self.ctx.clone(), op, config)?
+            SortSpillerImpl::new(self.ctx.clone(), op, config)?
         };
 
         pipeline.add_transform(|input, output| {
             let builder = TransformSortBuilder::new(
-                sort_merge_output_schema.clone(),
-                self.sort_desc.clone(),
+                self.key_desc.clone(),
                 self.block_size,
                 self.enable_fixed_rows,
             )
             .with_spiller(spiller.clone())
             .with_limit(self.limit)
-            .with_order_column(order_col_generated, output_order_col)
-            .with_memory_settings(memory_settings.clone())
+            .with_order_column(input_has_order_col, keep_order_col)
+            .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
+            .with_enable_sort_spill_stream_regroup(self.enable_sort_spill_stream_regroup)
             .with_enable_loser_tree(enable_loser_tree);
 
             Ok(ProcessorPtr::create(builder.build(input, output)?))
@@ -171,42 +163,42 @@ impl SortPipelineBuilder {
     pub fn build_merge_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
-        order_col_generated: bool,
+        input_has_order_col: bool,
+        keep_order_col: bool,
     ) -> Result<()> {
         let need_multi_merge = pipeline.output_len() > 1;
-        self.build_merge_sort(pipeline, order_col_generated)?;
+        let local_keep_order_col = need_multi_merge || keep_order_col;
+        self.build_merge_sort(pipeline, input_has_order_col, local_keep_order_col)?;
 
         if !need_multi_merge {
             return Ok(());
         }
 
-        self.build_multi_merge(pipeline)
+        self.build_multi_merge(pipeline, !keep_order_col)
     }
 
-    pub fn build_multi_merge(self, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn build_multi_merge(self, pipeline: &mut Pipeline, remove_order_col: bool) -> Result<()> {
         // Multi-pipelines merge sort
         let settings = self.ctx.get_settings();
         if settings.get_enable_parallel_multi_merge_sort()? {
             let max_threads = settings.get_max_threads()? as usize;
             add_k_way_merge_sort(
                 pipeline,
-                self.output_schema.clone(),
+                self.key_desc.clone(),
                 max_threads,
                 self.block_size,
                 self.limit,
-                &self.sort_desc,
-                self.remove_order_col_at_last,
+                remove_order_col,
                 self.enable_loser_tree,
                 self.enable_fixed_rows,
             )
         } else {
             try_add_multi_sort_merge(
                 pipeline,
-                self.output_schema.clone(),
+                self.key_desc.clone(),
                 self.block_size,
                 self.limit,
-                &self.sort_desc,
-                self.remove_order_col_at_last,
+                remove_order_col,
                 self.enable_loser_tree,
                 self.enable_fixed_rows,
             )
@@ -221,7 +213,7 @@ impl SortPipelineBuilder {
         pipeline.add_transformer(|| {
             TransformSortPartial::new(
                 LimitType::from_limit_rows(self.limit),
-                self.sort_desc.clone(),
+                self.key_desc.sort_column_desc(),
             )
         });
 
@@ -234,22 +226,21 @@ impl SortPipelineBuilder {
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
-            SortSpiller::new(self.ctx.clone(), op, config)?
+            SortSpillerImpl::new(self.ctx.clone(), op, config)?
         };
 
-        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
         let builder = TransformSortBuilder::new(
-            self.output_schema.clone(),
-            self.sort_desc.clone(),
+            self.key_desc.clone(),
             max_block_size,
             self.enable_fixed_rows,
         )
         .with_spiller(spiller)
         .with_limit(self.limit)
         .with_order_column(false, true)
-        .with_memory_settings(memory_settings)
+        .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
+        .with_enable_sort_spill_stream_regroup(self.enable_sort_spill_stream_regroup)
         .with_enable_loser_tree(enable_loser_tree);
 
         let default_num_merge = settings.get_max_threads()?.max(2);
@@ -283,13 +274,14 @@ impl SortPipelineBuilder {
 
     pub fn build_bounded_merge_sort(self, pipeline: &mut Pipeline) -> Result<()> {
         let builder = TransformSortBuilder::new(
-            self.output_schema.clone(),
-            self.sort_desc.clone(),
+            self.key_desc.clone(),
             self.block_size,
             self.enable_fixed_rows,
         )
         .with_limit(self.limit)
-        .with_order_column(true, !self.remove_order_col_at_last)
+        .with_order_column(true, false)
+        .with_enable_restore_prefetch(self.enable_sort_spill_prefetch)
+        .with_enable_sort_spill_stream_regroup(self.enable_sort_spill_stream_regroup)
         .with_enable_loser_tree(self.enable_loser_tree);
 
         let inputs_port: Vec<_> = (0..pipeline.output_len())

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
@@ -61,6 +62,18 @@ pub struct StageTagSetTarget {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserTagSetTarget {
+    pub if_exists: bool,
+    pub user: UserIdentity,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoleTagSetTarget {
+    pub if_exists: bool,
+    pub role_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConnectionTagSetTarget {
     pub if_exists: bool,
     pub connection_name: String,
@@ -72,6 +85,14 @@ pub struct ViewTagSetTarget {
     pub catalog: String,
     pub database: String,
     pub view: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StreamTagSetTarget {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub stream: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,8 +113,11 @@ pub enum TagSetObject {
     Database(DatabaseTagSetTarget),
     Table(TableTagSetTarget),
     Stage(StageTagSetTarget),
+    User(UserTagSetTarget),
+    Role(RoleTagSetTarget),
     Connection(ConnectionTagSetTarget),
     View(ViewTagSetTarget),
+    Stream(StreamTagSetTarget),
     UDF(UDFTagSetTarget),
     Procedure(ProcedureTagSetTarget),
 }

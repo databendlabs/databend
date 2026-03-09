@@ -55,7 +55,6 @@ use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
-use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UndropTableStmt;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
@@ -73,6 +72,7 @@ use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -696,21 +696,6 @@ impl Binder {
                 );
             }
         };
-
-        // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns { columns, .. }) = &source {
-            if columns
-                .iter()
-                .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
-                && !self.ctx.get_settings().get_enable_geo_create_table()?
-            {
-                return Err(ErrorCode::GeometryError(
-                    "Create table using the geometry/geography type is an experimental feature. \
-                    You can `set enable_geo_create_table=1` to use this feature. \
-                    We do not guarantee its compatibility until we doc this feature.",
-                ));
-            }
-        }
 
         // Build table schema
         let (
@@ -2325,7 +2310,7 @@ impl Binder {
         for (index, field) in schema.fields().iter().enumerate() {
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                Symbol::new(index),
                 Box::new(DataType::from(field.data_type())),
                 Visibility::Visible,
             )

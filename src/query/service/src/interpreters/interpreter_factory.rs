@@ -295,10 +295,9 @@ impl InterpreterFactory {
                 *partial,
                 *graphical,
             )?)),
-            Plan::ExplainPerf { sql } => Ok(Arc::new(ExplainPerfInterpreter::try_create(
-                sql.clone(),
-                ctx,
-            )?)),
+            Plan::ExplainPerf { sql, event_groups } => Ok(Arc::new(
+                ExplainPerfInterpreter::try_create(sql.clone(), event_groups.clone(), ctx)?,
+            )),
             Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(
                 ctx,
                 sql.clone(),
@@ -530,6 +529,9 @@ impl InterpreterFactory {
             // Virtual columns
             Plan::RefreshVirtualColumn(refresh_virtual_column) => Ok(Arc::new(
                 RefreshVirtualColumnInterpreter::try_create(ctx, *refresh_virtual_column.clone())?,
+            )),
+            Plan::VacuumVirtualColumn(vacuum_virtual_column) => Ok(Arc::new(
+                VacuumVirtualColumnInterpreter::try_create(ctx, *vacuum_virtual_column.clone())?,
             )),
             // Users
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use ahash::HashMap;
 use databend_common_exception::Result;
 
-use crate::IndexType;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::Matcher;
@@ -87,7 +87,7 @@ impl Rule for RulePushDownFilterUnion {
             .zip([&mut union_left_child, &mut union_right_child].iter_mut())
         {
             // Create a filter which matches union's right child.
-            let index_pairs: HashMap<IndexType, IndexType> = union
+            let index_pairs: HashMap<Symbol, Symbol> = union
                 .output_indexes
                 .iter()
                 .zip(union_side.iter())
@@ -125,11 +125,11 @@ impl Rule for RulePushDownFilterUnion {
 }
 
 fn replace_column_binding(
-    index_pairs: &HashMap<IndexType, IndexType>,
+    index_pairs: &HashMap<Symbol, Symbol>,
     mut scalar: ScalarExpr,
 ) -> Result<ScalarExpr> {
     struct ReplaceColumnVisitor<'a> {
-        index_pairs: &'a HashMap<IndexType, IndexType>,
+        index_pairs: &'a HashMap<Symbol, Symbol>,
     }
 
     impl<'a> VisitorMut<'a> for ReplaceColumnVisitor<'a> {

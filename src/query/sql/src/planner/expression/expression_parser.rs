@@ -31,6 +31,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionCall;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::infer_table_schema;
@@ -89,7 +90,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
                 };
                 ColumnBindingBuilder::new(
                     column_name.clone(),
-                    index,
+                    Symbol::new(index),
                     Box::new(data_type.into()),
                     visibility,
                 )
@@ -113,7 +114,7 @@ pub fn parse_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
-) -> Result<Vec<Expr>> {
+) -> Result<Vec<Expr<Symbol>>> {
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
@@ -124,7 +125,7 @@ fn parse_ast_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
-) -> Result<Vec<Expr>> {
+) -> Result<Vec<Expr<Symbol>>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -161,7 +162,7 @@ pub fn parse_to_filters(
         .iter()
         .map(|expr| {
             Ok(expr
-                .project_column_ref(|index| Ok(schema.field(*index).name().to_string()))?
+                .project_column_ref(|index| Ok(schema.field(index.as_usize()).name().to_string()))?
                 .as_remote_expr())
         })
         .collect::<Result<Vec<_>>>()?;
@@ -193,14 +194,14 @@ pub fn parse_computed_expr(
     ctx: Arc<dyn TableContext>,
     schema: DataSchemaRef,
     sql: &str,
-) -> Result<Expr> {
+) -> Result<Expr<Symbol>> {
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     let table_schema = infer_table_schema(&schema)?;
     for (index, field) in schema.fields().iter().enumerate() {
         let column = ColumnBindingBuilder::new(
             field.name().clone(),
-            index,
+            Symbol::new(index),
             Box::new(field.data_type().clone()),
             Visibility::Visible,
         )
@@ -256,7 +257,7 @@ pub fn parse_computed_expr_to_string(
         bind_context.add_column_binding(
             ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                Symbol::new(index),
                 Box::new(field.data_type().into()),
                 Visibility::Visible,
             )
@@ -334,7 +335,7 @@ pub fn parse_lambda_expr(
         .max()
         .unwrap_or_default();
     for (lambda_column, lambda_column_type) in lambda_columns.iter() {
-        column_index += 1;
+        column_index = Symbol::new(column_index.as_usize() + 1);
         lambda_context.add_column_binding(
             ColumnBindingBuilder::new(
                 lambda_column.clone(),
@@ -436,7 +437,7 @@ pub fn analyze_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
-) -> Result<(String, Vec<Expr>)> {
+) -> Result<(String, Vec<Expr<Symbol>>)> {
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;

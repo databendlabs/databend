@@ -30,6 +30,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -241,7 +242,7 @@ impl DefaultExprBinder {
         self.rewriter.visit(&mut scalar_expr)?;
         let expr = scalar_expr
             .as_expr()?
-            .project_column_ref(|col| Ok(col.index))?;
+            .project_column_ref(|col| Ok(col.index.as_usize()))?;
         let result = self.evaluator().run(&expr)?;
         match result {
             databend_common_expression::Value::Scalar(s) => Ok(s),
@@ -331,7 +332,7 @@ impl DefaultExprBinder {
                     func_name: async_func.func_name.clone(),
                     display_name: async_func.display_name.clone(),
                     // not used
-                    output_column: 0,
+                    output_column: Symbol::new(0),
                     arg_indices: vec![],
                     data_type: async_func.return_type.clone(),
                     func_arg: async_func.func_arg.clone(),

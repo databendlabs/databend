@@ -316,10 +316,10 @@ Limit
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 10.00
     └── Exchange
-        ├── output columns: [numbers.number (#0), #_order_col]
+        ├── output columns: [numbers.number (#0)]
         ├── exchange type: Merge
         └── Sort(Partial)
-            ├── output columns: [numbers.number (#0), #_order_col]
+            ├── output columns: [numbers.number (#0)]
             ├── sort keys: [number ASC NULLS LAST]
             ├── estimated rows: 10.00
             └── TableScan

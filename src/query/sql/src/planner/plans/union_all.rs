@@ -18,8 +18,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -34,14 +34,14 @@ use crate::plans::RelOp;
 pub struct UnionAll {
     // We'll cast the output of union to the expected data type by the cast expr at runtime.
     // Left of union, output idx and the expected data type
-    pub left_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
+    pub left_outputs: Vec<(Symbol, Option<ScalarExpr>)>,
     // Right of union, output idx and the expected data type
-    pub right_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
+    pub right_outputs: Vec<(Symbol, Option<ScalarExpr>)>,
     // Recursive cte scan names
     // For example: `with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t`
     // The `cte_scan_names` are `m` and `f`
     pub cte_scan_names: Vec<String>,
-    pub output_indexes: Vec<IndexType>,
+    pub output_indexes: Vec<Symbol>,
 }
 
 impl UnionAll {

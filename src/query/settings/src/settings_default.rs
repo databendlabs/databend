@@ -371,6 +371,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("inlist_runtime_bloom_prune_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(64),
+                    desc: "Sets the maximum number of values in an IN list for runtime block bloom pruning.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("bloom_runtime_filter_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3000000),
                     desc: "Sets the maximum number of rows for bloom runtime filter generation.",
@@ -1176,7 +1183,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                // this setting will be removed when geometry type stable.
+                // This setting has been deprecated, retained to prevent set errors.
                 ("enable_geo_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Create and alter table with geometry/geography type",
@@ -1264,6 +1271,20 @@ impl DefaultSettings {
                 ("enable_fixed_rows_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable fixed rows sort serialize",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_sort_spill_prefetch", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable asynchronous restore prefetch for spilled sort blocks",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_sort_spill_stream_regroup", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable regrouping sort spill streams by domain before merge",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

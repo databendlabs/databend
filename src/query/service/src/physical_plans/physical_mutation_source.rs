@@ -50,6 +50,7 @@ use databend_common_storages_fuse::operations::CommitMeta;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
+use databend_common_storages_fuse::operations::VirtualSchemaMode;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::MutationSourceFormatter;
@@ -134,6 +135,7 @@ impl IPhysicalPlan for MutationSource {
                         new_segment_locs: vec![],
                         table_id: table.get_id(),
                         virtual_schema: None,
+                        virtual_schema_mode: VirtualSchemaMode::Merge,
                         hll: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
@@ -143,8 +145,11 @@ impl IPhysicalPlan for MutationSource {
             );
         }
 
-        let read_partition_columns: Vec<usize> =
-            self.read_partition_columns.clone().into_iter().collect();
+        let read_partition_columns: Vec<usize> = self
+            .read_partition_columns
+            .iter()
+            .map(|idx| idx.as_usize())
+            .collect();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
         if is_lazy {
@@ -191,7 +196,11 @@ impl IPhysicalPlan for MutationSource {
         } else {
             MutationAction::Update
         };
-        let col_indices = self.read_partition_columns.clone().into_iter().collect();
+        let col_indices = self
+            .read_partition_columns
+            .iter()
+            .map(|idx| idx.as_usize())
+            .collect();
         let update_mutation_with_filter =
             self.input_type == MutationType::Update && filter.is_some();
         table.add_mutation_source(

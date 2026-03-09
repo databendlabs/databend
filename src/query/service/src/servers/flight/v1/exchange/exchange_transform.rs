@@ -21,13 +21,19 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 
+use super::broadcast_recv_transform::BroadcastRecvTransform;
+use super::broadcast_send_transform::BroadcastSendTransform;
+use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
+use super::exchange_sink::build_broadcast_outbound_channels;
 use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::network::create_local_channels;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;
@@ -43,7 +49,9 @@ impl ExchangeTransform {
             ExchangeParams::MergeExchange(params) => {
                 via_exchange_source(ctx.clone(), params, injector, pipeline)
             }
-            ExchangeParams::BroadcastExchange(_params) => Ok(()),
+            ExchangeParams::BroadcastExchange(params) => {
+                Self::broadcast_exchange(ctx, pipeline, params)
+            }
             ExchangeParams::NodeShuffleExchange(params) => {
                 Self::node_shuffle(ctx, pipeline, injector, params)
             }
@@ -103,5 +111,63 @@ impl ExchangeTransform {
         }
 
         injector.apply_shuffle_deserializer(params, pipeline)
+    }
+
+    fn broadcast_exchange(
+        ctx: &Arc<QueryContext>,
+        pipeline: &mut Pipeline,
+        params: &BroadcastExchangeParams,
+    ) -> Result<()> {
+        let mut local_pos = 0;
+        let mut local_threads = 0;
+
+        for (idx, (dest, threads)) in params.destination_channels.iter().enumerate() {
+            if dest == &params.executor_id {
+                local_pos = idx;
+                local_threads = threads.len();
+            }
+        }
+
+        let compression = ctx.get_settings().get_query_flight_compression()?;
+        let waker = pipeline.get_waker();
+
+        pipeline.resize(local_threads, false)?;
+
+        let query_id = &params.query_id;
+        let exchange_id = &params.exchange_id;
+        let exchange_manager = DataExchangeManager::instance();
+
+        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+
+        assert_eq!(channel_set.channels.len(), local_threads);
+
+        let max_bytes = 20 * 1024 * 1024;
+        let local_outbound = create_local_channels(&channel_set, max_bytes);
+        let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
+
+        let mut items = Vec::with_capacity(local_threads);
+
+        for idx in 0..local_threads {
+            items.push(BroadcastSendTransform::create_item(
+                idx,
+                local_pos,
+                channels.clone(),
+                waker.clone(),
+            ));
+        }
+
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
+
+        let mut items = Vec::with_capacity(local_threads);
+        for idx in 0..channel_set.channels.len() {
+            items.push(BroadcastRecvTransform::create_item(
+                idx,
+                channel_set.create_receiver(idx, &params.schema),
+                waker.clone(),
+            ));
+        }
+
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
+        Ok(())
     }
 }

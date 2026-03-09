@@ -258,6 +258,7 @@ enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.2", features = ["serde", "macros"] }
+event-listener = "5.4.0"
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
 feistel-permutation-rs = "0.1.1"
@@ -269,13 +270,14 @@ futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
 geo = { version = "0.32.0", features = ["use-serde"] }
+geo-index = "0.3.2"
 geohash = "0.13.1"
 geozero = { version = "0.15.1", features = ["with-geo", "with-geojson", "with-wkb", "with-wkt"] }
 gimli = "0.31.0"
 glob = "0.3.0"
 globiter = "0.1"
 goldenfile = "1.4"
-h3o = "0.4.0"
+h3o = "0.9.4"
 hashbrown = { version = "0.15.2", default-features = false }
 hashbrown_v0_14 = { package = "hashbrown", version = "0.14.0", default-features = false, features = ["ahash"] }
 hashlink = "0.8"
@@ -289,6 +291,7 @@ humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 lru = "0.12"
+perf-event2 = "0.7.4"
 
 ## in branch dev
 iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e", features = [

@@ -250,7 +250,7 @@ impl AsyncSink for CommitMultiTableInsert {
                     m.clone(),
                     meta,
                     table.cluster_key_id(),
-                );
+                )?;
             }
             None => {
                 self.commit_metas.insert(meta.table_id, meta);

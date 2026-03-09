@@ -39,6 +39,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -453,6 +454,7 @@ impl FuseTable {
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
         if pruner.pruning_ctx.bloom_pruner.is_some()
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
+            || pruner.pruning_ctx.spatial_index_pruner.is_some()
             || pruner.pruning_ctx.virtual_column_pruner.is_some()
         {
             // async pruning with bloom index or inverted index.
@@ -691,6 +693,9 @@ impl FuseTable {
             None
         };
 
+        let spatial_index_columns =
+            Self::create_spatial_index_columns(&self.table_info.meta.indexes);
+
         let pruner =
             if !self.is_native() || self.cluster_type().is_none_or(|v| v != ClusterType::Linear) {
                 FusePruner::create(
@@ -700,6 +705,7 @@ impl FuseTable {
                     &push_downs,
                     self.bloom_index_cols(),
                     ngram_args,
+                    spatial_index_columns,
                     bloom_index_builder,
                 )?
             } else {
@@ -714,6 +720,7 @@ impl FuseTable {
                     cluster_keys,
                     self.bloom_index_cols(),
                     ngram_args,
+                    spatial_index_columns,
                     bloom_index_builder,
                 )?
             };
@@ -755,6 +762,21 @@ impl FuseTable {
             }
         }
         Ok(ngram_index_args)
+    }
+
+    pub fn create_spatial_index_columns(
+        indexes: &BTreeMap<String, TableIndex>,
+    ) -> HashSet<ColumnId> {
+        let mut column_ids = HashSet::new();
+        for index in indexes.values() {
+            if !matches!(index.index_type, TableIndexType::Spatial) {
+                continue;
+            }
+            for column_id in &index.column_ids {
+                column_ids.insert(*column_id);
+            }
+        }
+        column_ids
     }
 
     pub fn check_prune_cache(
@@ -1071,6 +1093,8 @@ impl FuseTable {
 
         FuseBlockPartInfo::create(
             location,
+            meta.bloom_filter_index_location.clone(),
+            meta.bloom_filter_index_size,
             rows_count,
             columns_meta,
             Some(columns_stats),
@@ -1119,6 +1143,8 @@ impl FuseTable {
         // not the count the rows in this partition
         FuseBlockPartInfo::create(
             location,
+            meta.bloom_filter_index_location.clone(),
+            meta.bloom_filter_index_size,
             rows_count,
             columns_meta,
             Some(columns_stat),

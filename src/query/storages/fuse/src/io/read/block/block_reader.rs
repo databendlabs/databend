@@ -234,6 +234,10 @@ impl BlockReader {
         self.schema().into()
     }
 
+    pub fn operator(&self) -> Operator {
+        self.operator.clone()
+    }
+
     pub fn report_cache_metrics<'a>(
         &self,
         block_read_res: &BlockReadResult,

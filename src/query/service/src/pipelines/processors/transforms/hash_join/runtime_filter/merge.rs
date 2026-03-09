@@ -23,6 +23,9 @@ use super::packet::SerializableDomain;
 
 pub fn merge_join_runtime_filter_packets(
     packets: Vec<JoinRuntimeFilterPacket>,
+    inlist_threshold: usize,
+    bloom_threshold: usize,
+    min_max_threshold: usize,
 ) -> Result<JoinRuntimeFilterPacket> {
     log::info!(
         "RUNTIME-FILTER: merge_join_runtime_filter_packets input: {:?}",
@@ -34,6 +37,10 @@ pub fn merge_join_runtime_filter_packets(
     if packets.iter().any(|packet| packet.disable_all_due_to_spill) {
         return Ok(JoinRuntimeFilterPacket::disable_all(total_build_rows));
     }
+
+    let should_merge_inlist = total_build_rows < inlist_threshold;
+    let should_merge_bloom = total_build_rows < bloom_threshold;
+    let should_merge_min_max = total_build_rows < min_max_threshold;
 
     let packets = packets
         .into_iter()
@@ -51,9 +58,21 @@ pub fn merge_join_runtime_filter_packets(
     for id in packets[0].keys() {
         result.insert(*id, RuntimeFilterPacket {
             id: *id,
-            inlist: merge_inlist(&packets, *id)?,
-            min_max: merge_min_max(&packets, *id),
-            bloom: merge_bloom(&packets, *id),
+            inlist: if should_merge_inlist {
+                merge_inlist(&packets, *id)?
+            } else {
+                None
+            },
+            min_max: if should_merge_min_max {
+                merge_min_max(&packets, *id)
+            } else {
+                None
+            },
+            bloom: if should_merge_bloom {
+                merge_bloom(&packets, *id)
+            } else {
+                None
+            },
         });
     }
 
@@ -149,4 +168,114 @@ fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) ->
         bloom.extend_from_slice(other);
     }
     Some(bloom)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+
+    fn int_column(values: &[i32]) -> Column {
+        let data_type = DataType::Number(NumberDataType::Int32);
+        let mut builder = ColumnBuilder::with_capacity(&data_type, values.len());
+        for value in values {
+            builder.push(Scalar::Number(NumberScalar::Int32(*value)).as_ref());
+        }
+        builder.build()
+    }
+
+    #[test]
+    fn test_merge_short_circuit_all_types() -> Result<()> {
+        let mut runtime_filters = HashMap::new();
+        runtime_filters.insert(1, RuntimeFilterPacket {
+            id: 1,
+            inlist: Some(int_column(&[1, 2, 3])),
+            min_max: Some(SerializableDomain {
+                min: Scalar::Number(NumberScalar::Int32(1)),
+                max: Scalar::Number(NumberScalar::Int32(3)),
+            }),
+            bloom: Some(vec![11, 22, 33]),
+        });
+
+        let packet = JoinRuntimeFilterPacket::complete(runtime_filters, 100);
+        let merged = merge_join_runtime_filter_packets(vec![packet], 1, 1, 1)?;
+
+        assert_eq!(merged.build_rows, 100);
+        let packet = merged.packets.unwrap().remove(&1).unwrap();
+        assert!(packet.inlist.is_none());
+        assert!(packet.min_max.is_none());
+        assert!(packet.bloom.is_none());
+        assert!(!merged.disable_all_due_to_spill);
+        Ok(())
+    }
+
+    #[test]
+    fn test_merge_short_circuit_inlist_only() -> Result<()> {
+        let mut runtime_filters_1 = HashMap::new();
+        runtime_filters_1.insert(7, RuntimeFilterPacket {
+            id: 7,
+            inlist: Some(int_column(&[1, 2])),
+            min_max: Some(SerializableDomain {
+                min: Scalar::Number(NumberScalar::Int32(1)),
+                max: Scalar::Number(NumberScalar::Int32(5)),
+            }),
+            bloom: Some(vec![1, 2]),
+        });
+        let mut runtime_filters_2 = HashMap::new();
+        runtime_filters_2.insert(7, RuntimeFilterPacket {
+            id: 7,
+            inlist: Some(int_column(&[3, 4])),
+            min_max: Some(SerializableDomain {
+                min: Scalar::Number(NumberScalar::Int32(-1)),
+                max: Scalar::Number(NumberScalar::Int32(8)),
+            }),
+            bloom: Some(vec![3, 4]),
+        });
+
+        let merged = merge_join_runtime_filter_packets(
+            vec![
+                JoinRuntimeFilterPacket::complete(runtime_filters_1, 6),
+                JoinRuntimeFilterPacket::complete(runtime_filters_2, 5),
+            ],
+            10,
+            100,
+            100,
+        )?;
+
+        let packet = merged.packets.unwrap().remove(&7).unwrap();
+        assert_eq!(merged.build_rows, 11);
+        assert!(packet.inlist.is_none());
+        assert_eq!(packet.bloom, Some(vec![1, 2, 3, 4]));
+        assert_eq!(
+            packet.min_max,
+            Some(SerializableDomain {
+                min: Scalar::Number(NumberScalar::Int32(-1)),
+                max: Scalar::Number(NumberScalar::Int32(8)),
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_merge_spill_priority() -> Result<()> {
+        let merged = merge_join_runtime_filter_packets(
+            vec![
+                JoinRuntimeFilterPacket::disable_all(10),
+                JoinRuntimeFilterPacket::complete_without_filters(5),
+            ],
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+        )?;
+        assert!(merged.disable_all_due_to_spill);
+        assert_eq!(merged.build_rows, 15);
+        Ok(())
+    }
 }

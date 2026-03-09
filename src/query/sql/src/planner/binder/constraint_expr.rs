@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::Symbol;
 use databend_common_meta_app::schema::Constraint;
 use parking_lot::RwLock;
 
@@ -54,7 +55,7 @@ impl ConstraintExprBinder {
         for (index, field) in schema.fields().iter().enumerate() {
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                Symbol::new(index),
                 Box::new(field.data_type().clone()),
                 Visibility::Visible,
             )
@@ -103,8 +104,9 @@ impl ConstraintExprBinder {
         let mut constraint_name = format!("{}_", table);
 
         for i in used_columns.iter() {
-            constraint_name
-                .push_str(format!("{}_", self.bind_context.columns[*i].column_name).as_str());
+            constraint_name.push_str(
+                format!("{}_", self.bind_context.columns[i.as_usize()].column_name).as_str(),
+            );
         }
         match constraint {
             Constraint::Check(_) => constraint_name.push_str("check"),

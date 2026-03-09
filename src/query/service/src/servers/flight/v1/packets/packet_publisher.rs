@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_base::runtime::PerfConfig;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
@@ -44,7 +45,14 @@ use crate::sessions::SessionManager;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
     Statistics,
+    /// do_get based channel (unidirectional: receiver pulls from sender)
     Fragment(String),
+    /// do_exchange based channel (bidirectional: sender pushes via ping-pong)
+    /// One edge per node pair, identified by exchange_id, carrying all channel_ids.
+    ExchangeFragment {
+        exchange_id: String,
+        channels: Vec<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -89,8 +97,24 @@ impl DataflowDiagramBuilder {
     }
 
     pub fn add_data_edge(&mut self, source: &str, destination: &str, channel: &str) -> Result<()> {
+        self.add_edge_inner(source, destination, Edge::Fragment(channel.to_string()))
+    }
+
+    pub fn add_exchange_edge(
+        &mut self,
+        source: &str,
+        destination: &str,
+        exchange_id: &str,
+        channels: Vec<String>,
+    ) -> Result<()> {
+        self.add_edge_inner(source, destination, Edge::ExchangeFragment {
+            exchange_id: exchange_id.to_string(),
+            channels,
+        })
+    }
+
+    fn add_edge_inner(&mut self, source: &str, destination: &str, edge: Edge) -> Result<()> {
         if source != destination {
-            // avoid local to local
             let source = self
                 .nodes
                 .get(source)
@@ -99,8 +123,7 @@ impl DataflowDiagramBuilder {
                 ErrorCode::NotFoundClusterNode(format!("not found {}", destination))
             })?;
 
-            self.graph
-                .add_edge(*source, *destination, Edge::Fragment(channel.to_string()));
+            self.graph.add_edge(*source, *destination, edge);
         }
 
         Ok(())
@@ -139,7 +162,8 @@ pub struct QueryEnv {
     pub request_server_id: String,
     pub workload_group: Option<String>,
     pub create_rpc_clint_with_current_rt: bool,
-    pub perf_flag: bool,
+    #[serde(default)]
+    pub perf_config: PerfConfig,
     pub user: UserInfo,
 }
 

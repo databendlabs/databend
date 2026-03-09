@@ -29,34 +29,93 @@
 
 use std::borrow::Cow;
 use std::io;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+
+use databend_common_proto_conv::FromToProto;
+use databend_meta_types::Operation;
+
+use crate::kv_pb_api::errors::PbEncodeError;
 
 const MAGIC: u8 = 0x0F;
 const HEADER_LEN: usize = 4;
 const FLAG_ZSTD: u8 = 0x01;
 pub const COMPRESS_THRESHOLD: usize = 4096;
 
-/// Optionally compress `buf` with zstd.
+/// Value encoder with compression config.
 ///
-/// Returns `buf` unchanged if `buf.len() < COMPRESS_THRESHOLD`.
-/// Otherwise prepends `[0x0F, FLAG_ZSTD, 0x00, 0x00]` and returns the compressed payload.
-/// Falls back to returning `buf` uncompressed on compression error.
-pub fn encode_value(buf: Vec<u8>) -> Vec<u8> {
-    if buf.len() < COMPRESS_THRESHOLD {
-        return buf;
+/// The `compress` field is atomic so a single `static Encoder` can serve as
+/// the process-wide instance while remaining cheaply constructible for tests.
+pub struct Encoder {
+    compress: AtomicBool,
+}
+
+impl Encoder {
+    pub const fn new(compress: bool) -> Self {
+        Self {
+            compress: AtomicBool::new(compress),
+        }
     }
 
-    match zstd::encode_all(buf.as_slice(), 3) {
-        Ok(compressed) => {
-            let mut out = Vec::with_capacity(HEADER_LEN + compressed.len());
-            out.extend_from_slice(&[MAGIC, FLAG_ZSTD, 0x00, 0x00]);
-            out.extend_from_slice(&compressed);
-            out
+    pub fn set_compress(&self, compress: bool) {
+        self.compress.store(compress, Ordering::Relaxed);
+    }
+
+    /// Encode an upsert Operation of T into protobuf encoded value.
+    pub fn encode_operation<T: FromToProto>(
+        &self,
+        value: &Operation<T>,
+    ) -> Result<Operation<Vec<u8>>, PbEncodeError> {
+        match value {
+            Operation::Update(t) => Ok(Operation::Update(self.encode_pb(t)?)),
+            Operation::Delete => Ok(Operation::Delete),
+            _ => {
+                unreachable!("Operation::AsIs is not supported")
+            }
         }
-        Err(_) => buf,
+    }
+
+    /// Encode a `FromToProto` value to protobuf bytes, with optional zstd compression.
+    pub fn encode_pb<T: FromToProto>(&self, value: &T) -> Result<Vec<u8>, PbEncodeError> {
+        let p = value.to_pb()?;
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        Ok(self.encode_value(buf))
+    }
+
+    /// Optionally compress `buf` with zstd.
+    ///
+    /// Returns `buf` unchanged if compression is disabled or `buf.len() < COMPRESS_THRESHOLD`.
+    /// Otherwise prepends `[0x0F, FLAG_ZSTD, 0x00, 0x00]` and returns the compressed payload.
+    /// Falls back to returning `buf` uncompressed on compression error.
+    pub fn encode_value(&self, buf: Vec<u8>) -> Vec<u8> {
+        if !self.compress.load(Ordering::Relaxed) {
+            return buf;
+        }
+
+        if buf.len() < COMPRESS_THRESHOLD {
+            return buf;
+        }
+
+        match zstd::encode_all(buf.as_slice(), 3) {
+            Ok(compressed) => {
+                let mut out = Vec::with_capacity(HEADER_LEN + compressed.len());
+                out.extend_from_slice(&[MAGIC, FLAG_ZSTD, 0x00, 0x00]);
+                out.extend_from_slice(&compressed);
+                out
+            }
+            Err(_) => buf,
+        }
     }
 }
 
-/// Decode a value produced by [`encode_value`] or a legacy raw protobuf value.
+/// Global encoder instance, used by [`codec::encode_pb`].
+///
+/// Compression is disabled by default. Call [`GLOBAL_ENCODER.set_compress(true)`]
+/// at startup to enable it.
+pub static GLOBAL_ENCODER: Encoder = Encoder::new(false);
+
+/// Decode a value produced by [`Encoder::encode_value`] or a legacy raw protobuf value.
 ///
 /// Returns `Cow::Borrowed` for legacy/uncompressed data (zero copy),
 /// and `Cow::Owned` for decompressed data.
@@ -105,15 +164,17 @@ mod tests {
 
     #[test]
     fn test_small_passthrough() {
+        let enc = Encoder::new(true);
         let data = b"small protobuf data".to_vec();
-        let encoded = encode_value(data.clone());
+        let encoded = enc.encode_value(data.clone());
         assert_eq!(encoded, data, "small values must not get a header");
     }
 
     #[test]
     fn test_large_has_header() {
+        let enc = Encoder::new(true);
         let data = vec![b'a'; COMPRESS_THRESHOLD + 1];
-        let encoded = encode_value(data);
+        let encoded = enc.encode_value(data);
         assert_eq!(
             &encoded[..4],
             &[MAGIC, FLAG_ZSTD, 0x00, 0x00],
@@ -122,17 +183,30 @@ mod tests {
     }
 
     #[test]
+    fn test_large_passthrough_when_disabled() {
+        let enc = Encoder::new(false);
+        let data = vec![b'a'; COMPRESS_THRESHOLD + 1];
+        let encoded = enc.encode_value(data.clone());
+        assert_eq!(
+            encoded, data,
+            "large values must pass through when compression is disabled"
+        );
+    }
+
+    #[test]
     fn test_round_trip_small() {
+        let enc = Encoder::new(true);
         let data = b"hello protobuf".to_vec();
-        let encoded = encode_value(data.clone());
+        let encoded = enc.encode_value(data.clone());
         let decoded = decode_value(&encoded).unwrap();
         assert_eq!(decoded.as_ref(), data.as_slice());
     }
 
     #[test]
     fn test_round_trip_large() {
+        let enc = Encoder::new(true);
         let data = vec![b'z'; COMPRESS_THRESHOLD + 100];
-        let encoded = encode_value(data.clone());
+        let encoded = enc.encode_value(data.clone());
         let decoded = decode_value(&encoded).unwrap();
         assert_eq!(decoded.as_ref(), data.as_slice());
     }

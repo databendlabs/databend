@@ -86,6 +86,11 @@ pub trait Processor: Send {
     fn details_status(&self) -> Option<String> {
         None
     }
+
+    /// Called after the processor's NodeIndex is assigned during graph construction.
+    /// Processors that need a `std::task::Waker` should obtain the `ExecutorWaker`
+    /// during creation (via `pipeline.get_waker()`) and use it here with the assigned id.
+    fn set_id(&mut self, _id: NodeIndex) {}
 }
 
 // To keep ProcessPtr::async_process taking &self, instead of self,
@@ -142,6 +147,7 @@ impl ProcessorPtr {
     pub unsafe fn set_id(&self, id: NodeIndex) {
         unsafe {
             *self.id.get() = id;
+            (*self.inner.get()).set_id(id);
         }
     }
 

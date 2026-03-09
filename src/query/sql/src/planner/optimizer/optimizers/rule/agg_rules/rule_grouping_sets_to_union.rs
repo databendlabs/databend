@@ -21,8 +21,8 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -99,7 +99,7 @@ impl Rule for RuleGroupingSetsToUnion {
         }
 
         let agg_input = s_expr.child(0)?.child(0)?;
-        let agg_input_columns: Vec<IndexType> = RelExpr::with_s_expr(agg_input)
+        let agg_input_columns: Vec<Symbol> = RelExpr::with_s_expr(agg_input)
             .derive_relational_prop()?
             .output_columns
             .iter()
@@ -162,7 +162,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     // grouping_ids: 00, 01, 10, 11
 
                     for g in set {
-                        let i = group_bys.iter().position(|t| *t == *g).unwrap();
+                        let i = group_bys.iter().position(|t| *t == g.as_usize()).unwrap();
                         id |= 1 << i;
                     }
                     let grouping_id = !id & mask;
@@ -171,7 +171,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     let mut agg = agg.clone();
                     agg.grouping_sets = None;
 
-                    let null_group_ids: Vec<IndexType> = agg
+                    let null_group_ids: Vec<Symbol> = agg
                         .group_items
                         .iter()
                         .map(|i| i.index)
@@ -180,8 +180,7 @@ impl Rule for RuleGroupingSetsToUnion {
                         .collect();
 
                     agg.group_items.retain(|x| set.contains(&x.index));
-                    let group_ids: Vec<IndexType> =
-                        agg.group_items.iter().map(|i| i.index).collect();
+                    let group_ids: Vec<Symbol> = agg.group_items.iter().map(|i| i.index).collect();
 
                     let mut visitor = ReplaceColumnForGroupingSetsVisitor {
                         group_indexes: group_ids,
@@ -202,7 +201,7 @@ impl Rule for RuleGroupingSetsToUnion {
                 // fold children into result
                 let mut result = children.first().unwrap().clone();
                 for other in children.into_iter().skip(1) {
-                    let left_outputs: Vec<(IndexType, Option<ScalarExpr>)> =
+                    let left_outputs: Vec<(Symbol, Option<ScalarExpr>)> =
                         eval_scalar.items.iter().map(|x| (x.index, None)).collect();
                     let right_outputs = left_outputs.clone();
 
@@ -228,9 +227,9 @@ impl Rule for RuleGroupingSetsToUnion {
 }
 
 struct ReplaceColumnForGroupingSetsVisitor {
-    group_indexes: Vec<IndexType>,
-    exclude_group_indexes: Vec<IndexType>,
-    grouping_id_index: IndexType,
+    group_indexes: Vec<Symbol>,
+    exclude_group_indexes: Vec<Symbol>,
+    grouping_id_index: Symbol,
     grouping_id_value: u32,
 }
 
