@@ -123,7 +123,7 @@ impl ReplaceIntoOperationAggregator {
     ) -> Result<Self> {
         let data_accessor = table.get_operator();
         let table_schema = table.schema_with_stream();
-        let write_settings = table.get_write_settings();
+        let write_settings = table.get_write_settings_with_ctx(ctx.as_ref())?;
         let update_stream_columns = table.change_tracking_enabled();
 
         let deletion_accumulator = DeletionAccumulator::default();

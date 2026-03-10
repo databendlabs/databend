@@ -106,7 +106,7 @@ AggregateFinal
         ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 3000
-        ├── read size: 5.90 KiB
+        ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
@@ -159,7 +159,7 @@ EvalScalar
                     ├── scan id: 0
                     ├── output columns: [number (#0), money (#2)]
                     ├── read rows: 3000
-                    ├── read size: 10.51 KiB
+                    ├── read size: 4.72 KiB
                     ├── partitions total: 2
                     ├── partitions scanned: 2
                     ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
@@ -205,7 +205,7 @@ EvalScalar
             ├── scan id: 0
             ├── output columns: [number (#0), money (#2)]
             ├── read rows: 3000
-            ├── read size: 10.51 KiB
+            ├── read size: 4.72 KiB
             ├── partitions total: 2
             ├── partitions scanned: 2
             ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]

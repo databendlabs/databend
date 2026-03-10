@@ -34,6 +34,7 @@ use crate::filters::FilterBuilder;
 /// When a filter is built, the source key set should be updated(by calling `add_keys()`), although Xor8 itself allows.
 pub struct Xor8Builder {
     builder: xorfilter::Xor8Builder,
+    digest_count: usize,
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -86,15 +87,19 @@ impl FilterBuilder for Xor8Builder {
     type Error = Xor8BuildingError;
 
     fn add_key<K: Hash>(&mut self, key: &K) {
-        self.builder.insert(key)
+        self.builder.insert(key);
+        self.digest_count += 1;
     }
 
     fn add_keys<K: Hash>(&mut self, keys: &[K]) {
-        self.builder.populate(keys)
+        self.builder.populate(keys);
+        self.digest_count += keys.len();
     }
 
     fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
-        self.builder.populate_digests(digests)
+        let digests: Vec<&u64> = digests.into_iter().collect();
+        self.digest_count += digests.len();
+        self.builder.populate_digests(digests);
     }
 
     fn build(&mut self) -> Result<Self::Filter, Self::Error> {
@@ -105,12 +110,17 @@ impl FilterBuilder for Xor8Builder {
 
         Ok(Xor8Filter { filter: f })
     }
+
+    fn peek_digest_count(&self) -> Option<usize> {
+        Some(self.digest_count)
+    }
 }
 
 impl Xor8Builder {
     pub fn create() -> Self {
         Xor8Builder {
             builder: xorfilter::Xor8Builder::default(),
+            digest_count: 0,
         }
     }
 }

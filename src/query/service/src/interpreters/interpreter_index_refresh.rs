@@ -324,12 +324,13 @@ impl Interpreter for RefreshIndexInterpreter {
         let sink_schema = Arc::new(sink_schema);
 
         build_res.main_pipeline.try_resize(1)?;
+        let write_settings = fuse_table.get_write_settings_with_ctx(self.ctx.as_ref())?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
                 fuse_table.get_operator(),
                 self.plan.index_id,
-                fuse_table.get_write_settings(),
+                write_settings.clone(),
                 sink_schema.clone(),
                 block_name_offset,
                 self.plan.user_defined_block_name,
