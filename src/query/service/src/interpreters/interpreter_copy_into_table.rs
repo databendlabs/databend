@@ -41,7 +41,6 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
@@ -163,7 +162,7 @@ impl CopyIntoTableInterpreter {
 
             let mut name_mapping = BTreeMap::new();
             for (idx, field) in data_source_plan.schema().fields.iter().enumerate() {
-                name_mapping.insert(field.name.clone(), Symbol::new(idx));
+                name_mapping.insert(field.name.clone(), idx.to_string());
             }
 
             (
