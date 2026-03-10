@@ -670,18 +670,18 @@ pub fn bind_constant_scan(
     let mut fields = Vec::with_capacity(num_values);
     let mut metadata = metadata.write();
     for value_field in value_schema.fields() {
-        let index = Symbol::new(metadata.columns().len());
-        columns.insert(index);
-        let column_binding = ColumnBindingBuilder::new(
-            value_field.name().clone(),
-            index,
-            Box::new(value_field.data_type().clone()),
-            Visibility::Visible,
-        )
-        .build();
-        let _ = metadata
+        let index = metadata
             .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
-        bind_context.add_column_binding(column_binding);
+        columns.insert(index);
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                value_field.name().clone(),
+                index,
+                Box::new(value_field.data_type().clone()),
+                Visibility::Visible,
+            )
+            .build(),
+        );
 
         let field = DataField::new(&index.to_string(), value_field.data_type().clone());
         fields.push(field);

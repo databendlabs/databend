@@ -23,12 +23,18 @@ use serde::Serialize;
 pub struct Symbol(usize);
 
 impl Symbol {
+    pub const DUMMY_COLUMN: Self = Self(usize::MAX);
+
     pub const fn new(index: usize) -> Self {
         Self(index)
     }
 
     pub const fn as_usize(&self) -> usize {
         self.0
+    }
+
+    pub const fn is_dummy_column(&self) -> bool {
+        self.0 == Self::DUMMY_COLUMN.0
     }
 }
 

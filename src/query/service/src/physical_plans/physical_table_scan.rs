@@ -52,7 +52,6 @@ use databend_common_pipeline_transforms::columns::TransformAddInternalColumns;
 use databend_common_sql::BaseTableColumn;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::DUMMY_COLUMN_INDEX;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_sql::DerivedColumn;
 use databend_common_sql::IndexType;
@@ -585,7 +584,7 @@ impl PhysicalPlanBuilder {
 
         Ok(TableScan::create(
             DUMMY_TABLE_INDEX,
-            BTreeMap::from([("dummy".to_string(), Symbol::new(DUMMY_COLUMN_INDEX))]),
+            BTreeMap::from([("dummy".to_string(), Symbol::DUMMY_COLUMN)]),
             Box::new(source),
             Some(DUMMY_TABLE_INDEX),
             Some(PlanStatsInfo {

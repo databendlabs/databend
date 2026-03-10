@@ -47,7 +47,6 @@ use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::DUMMY_COLUMN_INDEX;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
@@ -431,7 +430,7 @@ impl PhysicalPlanBuilder {
         let row_id_offset = if !is_not_matched_only {
             mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
-            DUMMY_COLUMN_INDEX
+            Symbol::DUMMY_COLUMN.as_usize()
         };
 
         // For distributed merge, we shuffle data blocks by block_id (derived from row_id) to avoid
@@ -530,7 +529,7 @@ impl PhysicalPlanBuilder {
             let update_list = if let Some(update_list) = &item.update {
                 // we don't need real col_indices here, just give a
                 // dummy index, that's ok.
-                let col_indices = vec![DUMMY_COLUMN_INDEX];
+                let col_indices = vec![Symbol::DUMMY_COLUMN.as_usize()];
                 let (database, table_name) = match table_name_alias {
                     None => (Some(database_name.as_str()), table_name.clone()),
                     Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
