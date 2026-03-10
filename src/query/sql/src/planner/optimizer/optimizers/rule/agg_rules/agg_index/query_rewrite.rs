@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -403,12 +404,12 @@ impl ViewInfo {
                 None => (item.scalar.data_type().unwrap(), false),
             };
 
-            let name = format!("{index}");
+            let name = index.to_string();
             let table_ty = infer_schema_type(&data_type)?;
             let index_field = TableField::new(&name, table_ty);
             index_fields.push(index_field);
 
-            let index_scalar = to_index_scalar(Symbol::new(index), &data_type);
+            let index_scalar = to_index_scalar(index, &data_type);
             index_output_cols.insert(display_name, (index_scalar, is_agg));
         }
 
@@ -1222,12 +1223,12 @@ impl AggIndexRewriter {
     }
 }
 
-fn to_index_scalar(index: Symbol, data_type: &DataType) -> ScalarExpr {
+fn to_index_scalar(index: FieldIndex, data_type: &DataType) -> ScalarExpr {
     let col = BoundColumnRef {
         span: None,
         column: ColumnBindingBuilder::new(
             format!("index_col_{index}"),
-            index,
+            Symbol::new(index),
             Box::new(data_type.clone()),
             Visibility::Visible,
         )
