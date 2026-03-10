@@ -1228,7 +1228,7 @@ fn to_index_scalar(index: FieldIndex, data_type: &DataType) -> ScalarExpr {
         span: None,
         column: ColumnBindingBuilder::new(
             format!("index_col_{index}"),
-            Symbol::new(index),
+            Symbol::from_field_index(index),
             Box::new(data_type.clone()),
             Visibility::Visible,
         )

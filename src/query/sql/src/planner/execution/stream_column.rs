@@ -74,7 +74,7 @@ impl StreamContext {
                 span: None,
                 column: ColumnBindingBuilder::new(
                     stream_column.column_name().to_string(),
-                    Symbol::new(schema_index),
+                    Symbol::from_field_index(schema_index),
                     Box::new(stream_column.data_type()),
                     Visibility::Visible,
                 )
@@ -95,7 +95,7 @@ impl StreamContext {
                         span: None,
                         column: ColumnBindingBuilder::new(
                             CURRENT_BLOCK_ID_COL_NAME.to_string(),
-                            Symbol::new(num_fields + 1),
+                            Symbol::from_field_index(num_fields + 1),
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
@@ -108,7 +108,7 @@ impl StreamContext {
                         span: None,
                         column: ColumnBindingBuilder::new(
                             CURRENT_BLOCK_ROW_NUM_COL_NAME.to_string(),
-                            Symbol::new(num_fields),
+                            Symbol::from_field_index(num_fields),
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )

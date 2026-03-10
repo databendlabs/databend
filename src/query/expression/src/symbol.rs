@@ -44,6 +44,10 @@ impl Symbol {
         Self(index)
     }
 
+    pub const fn from_field_index(index: crate::FieldIndex) -> Self {
+        Self(index)
+    }
+
     pub const fn new_dummy_column(dummy_type: DummyColumnType) -> Self {
         Self(usize::MAX - dummy_type as usize)
     }
