@@ -460,7 +460,7 @@ impl PhysicalPlanBuilder {
                     offset: lag_lead.offset,
                     return_type: *lag_lead.return_type.clone(),
                     arg: if let ScalarExpr::BoundColumnRef(col) = *lag_lead.arg.clone() {
-                        Ok(col.column.index.as_usize())
+                        Ok(col.column.index)
                     } else {
                         Err(ErrorCode::Internal(
                             "Window's lag function argument must be a BoundColumnRef".to_string(),
@@ -474,7 +474,7 @@ impl PhysicalPlanBuilder {
                 n: func.n,
                 return_type: *func.return_type.clone(),
                 arg: if let ScalarExpr::BoundColumnRef(col) = &*func.arg {
-                    Ok(col.column.index.as_usize())
+                    Ok(col.column.index)
                 } else {
                     Err(ErrorCode::Internal(
                         "Window's nth_value function argument must be a BoundColumnRef".to_string(),

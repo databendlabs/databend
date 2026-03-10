@@ -1013,7 +1013,7 @@ pub fn generate_stored_computed_list(
             }
             if need_update {
                 let expr = expr.project_column_ref(|id| {
-                    let mut column_index: Option<usize> = None;
+                    let mut column_index = None;
                     for column_binding in bind_context.columns.iter() {
                         if BindContext::match_column_binding(
                             database,
@@ -1021,7 +1021,7 @@ pub fn generate_stored_computed_list(
                             schema.field(id.as_usize()).name(),
                             column_binding,
                         ) {
-                            column_index = Some(column_binding.index.as_usize());
+                            column_index = Some(column_binding.index);
                             break;
                         }
                     }

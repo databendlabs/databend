@@ -52,7 +52,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
+        col_indices: Vec<FieldIndex>,
         pipeline: &mut Pipeline,
         mutation_action: MutationAction,
     ) -> Result<()> {

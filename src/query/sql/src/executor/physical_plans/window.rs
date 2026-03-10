@@ -79,7 +79,7 @@ pub enum LagLeadDefault {
 pub struct LagLeadFunctionDesc {
     pub is_lag: bool,
     pub offset: u64,
-    pub arg: usize,
+    pub arg: Symbol,
     pub return_type: DataType,
     pub default: LagLeadDefault,
 }
@@ -87,7 +87,7 @@ pub struct LagLeadFunctionDesc {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NthValueFunctionDesc {
     pub n: Option<u64>,
-    pub arg: usize,
+    pub arg: Symbol,
     pub return_type: DataType,
     pub ignore_null: bool,
 }
