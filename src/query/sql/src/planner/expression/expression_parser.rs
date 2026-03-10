@@ -28,8 +28,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionCall;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Symbol;
 use databend_common_expression::TableField;
@@ -45,6 +45,7 @@ use parking_lot::RwLock;
 use crate::BaseTableColumn;
 use crate::Binder;
 use crate::ClusterKeyNormalizer;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
@@ -115,18 +116,29 @@ pub fn parse_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
-) -> Result<Vec<Expr<Symbol>>> {
+) -> Result<Vec<Expr<ColumnBinding>>> {
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     parse_ast_exprs(ctx, table_meta, ast_exprs)
 }
 
+pub fn parse_exprs_to_field_index(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+) -> Result<Vec<Expr<FieldIndex>>> {
+    parse_exprs(ctx, table_meta, sql)?
+        .into_iter()
+        .map(|expr| expr.project_column_ref(|binding| Ok(binding.index.as_field_index())))
+        .collect()
+}
+
 fn parse_ast_exprs(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
-) -> Result<Vec<Expr<Symbol>>> {
+) -> Result<Vec<Expr<ColumnBinding>>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -144,7 +156,7 @@ fn parse_ast_exprs(
         .iter()
         .map(|ast| {
             let (scalar, _) = *type_checker.resolve(ast)?;
-            let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
+            let expr = scalar.as_expr()?;
             Ok(expr)
         })
         .collect::<Result<_>>()?;
@@ -158,12 +170,16 @@ pub fn parse_to_filters(
     sql: &str,
 ) -> Result<Filters> {
     let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, sql)?;
-    let exprs: Vec<RemoteExpr<String>> = exprs
-        .iter()
+    let exprs = parse_exprs(ctx, table_meta, sql)?
+        .into_iter()
         .map(|expr| {
             Ok(expr
-                .project_column_ref(|index| Ok(schema.field(index.as_field_index()).name().to_string()))?
+                .project_column_ref(|binding| {
+                    Ok(schema
+                        .field(binding.index.as_field_index())
+                        .name()
+                        .to_string())
+                })?
                 .as_remote_expr())
         })
         .collect::<Result<Vec<_>>>()?;
@@ -195,7 +211,7 @@ pub fn parse_computed_expr(
     ctx: Arc<dyn TableContext>,
     schema: DataSchemaRef,
     sql: &str,
-) -> Result<Expr<Symbol>> {
+) -> Result<Expr<ColumnBinding>> {
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
     let table_schema = infer_table_schema(&schema)?;
@@ -242,8 +258,17 @@ pub fn parse_computed_expr(
     }
     let ast = asts.remove(0);
     let (scalar, _) = *type_checker.resolve(&ast)?;
-    let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
+    let expr = scalar.as_expr()?;
     Ok(expr)
+}
+
+pub fn parse_computed_field_index_expr(
+    ctx: Arc<dyn TableContext>,
+    schema: DataSchemaRef,
+    sql: &str,
+) -> Result<Expr<FieldIndex>> {
+    parse_computed_expr(ctx, schema, sql)?
+        .project_column_ref(|binding| Ok(binding.index.as_field_index()))
 }
 
 pub fn parse_computed_expr_to_string(
@@ -460,7 +485,7 @@ pub fn analyze_cluster_keys(
             )));
         }
 
-        let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
+        let expr = scalar.as_symbol_expr()?;
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Cluster by expression `{:#}` is not deterministic",

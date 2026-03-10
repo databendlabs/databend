@@ -240,9 +240,7 @@ impl DefaultExprBinder {
         let data_field: DataField = field.into();
         let mut scalar_expr = self.parse_and_bind(&data_field)?;
         self.rewriter.visit(&mut scalar_expr)?;
-        let expr = scalar_expr
-            .as_expr()?
-            .project_column_ref(|col| Ok(col.index.as_field_index()))?;
+        let expr = scalar_expr.as_field_index_expr()?;
         let result = self.evaluator().run(&expr)?;
         match result {
             databend_common_expression::Value::Scalar(s) => Ok(s),

@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::RawExpr;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
@@ -299,6 +300,22 @@ impl ScalarExpr {
 
     pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
         type_check::check(&self.as_raw_expr(), &BUILTIN_FUNCTIONS)
+    }
+
+    pub fn as_symbol_expr(&self) -> Result<Expr<Symbol>> {
+        type_check::check(
+            &self.as_raw_expr().project_column_ref(|col| col.index),
+            &BUILTIN_FUNCTIONS,
+        )
+    }
+
+    pub fn as_field_index_expr(&self) -> Result<Expr<FieldIndex>> {
+        type_check::check(
+            &self
+                .as_raw_expr()
+                .project_column_ref(|col| col.index.as_field_index()),
+            &BUILTIN_FUNCTIONS,
+        )
     }
 
     pub fn is_column_ref(&self) -> bool {

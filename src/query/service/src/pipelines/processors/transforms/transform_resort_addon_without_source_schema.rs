@@ -30,7 +30,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::parse_exprs;
+use databend_common_sql::parse_exprs_to_field_index;
 use databend_common_storages_factory::Table;
 
 use crate::sessions::QueryContext;
@@ -62,9 +62,8 @@ pub fn build_expression_transform(
     for f in output_schema.fields().iter() {
         let expr = if !input_schema.has_field(f.name()) {
             if let Some(default_expr) = f.default_expr() {
-                let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?
-                    .remove(0)
-                    .project_column_ref(|i| Ok(i.as_field_index()))?;
+                let expr =
+                    parse_exprs_to_field_index(ctx.clone(), table.clone(), default_expr)?.remove(0);
                 check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
             } else {
                 // #issue13932

@@ -58,7 +58,7 @@ use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::parse_computed_expr;
+use databend_common_sql::parse_computed_field_index_expr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
@@ -999,8 +999,7 @@ pub fn generate_stored_computed_list(
     let mut remote_exprs = Vec::new();
     for (i, f) in schema.fields().iter().enumerate() {
         if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
-            let expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?
-                .project_column_ref(|i| Ok(i.as_field_index()))?;
+            let expr = parse_computed_field_index_expr(ctx.clone(), schema.clone(), stored_expr)?;
             let expr = check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?;
 
             // If related column has updated, the stored computed column need to regenerate.
