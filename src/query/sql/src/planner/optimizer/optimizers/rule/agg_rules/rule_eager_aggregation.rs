@@ -720,12 +720,13 @@ impl<'a> EagerContext<'a> {
         let mut final_double_eager = self.final_agg.clone();
         let mut final_eager_count = self.final_agg.clone();
 
-        let mut eager_count_index = Symbol::new(0);
+        let mut eager_count_index = None;
         let mut eager_count_vec_idx = 0;
         if self.can_eager[d.opposite()] {
-            (eager_count_index, eager_count_vec_idx) =
-                add_eager_count(&mut final_double_eager, self.metadata);
-            self.eager_aggregations[d.opposite()].push((eager_count_vec_idx, eager_count_index));
+            let (index, vec_idx) = add_eager_count(&mut final_double_eager, self.metadata);
+            eager_count_index = Some(index);
+            eager_count_vec_idx = vec_idx;
+            self.eager_aggregations[d.opposite()].push((eager_count_vec_idx, index));
         }
 
         let mut eager_group_by = final_double_eager.clone();
@@ -760,6 +761,8 @@ impl<'a> EagerContext<'a> {
         let mut double_eager_count_sum = EvalScalar { items: vec![] };
         let mut eager_count_sum = EvalScalar { items: vec![] };
         if self.can_eager[d.opposite()] {
+            let eager_count_index =
+                eager_count_index.expect("eager count enabled without eager count index");
             let mut plans_and_counts = Pair {
                 left: (&mut final_double_eager, &mut double_eager_count_sum),
                 right: (&mut final_eager_count, &mut eager_count_sum),
