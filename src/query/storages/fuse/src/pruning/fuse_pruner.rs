@@ -45,6 +45,7 @@ use databend_storages_common_pruner::Limiter;
 use databend_storages_common_pruner::LimiterPrunerCreator;
 use databend_storages_common_pruner::PagePruner;
 use databend_storages_common_pruner::PagePrunerCreator;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_pruner::TopNPruner;
@@ -393,9 +394,11 @@ impl FusePruner {
                     if delete_pruning {
                         for (segment_location, compact_segment_info) in &pruned_segments {
                             if let Some(range_index) = &inverse_range_index {
-                                if !range_index
-                                    .should_keep(&compact_segment_info.summary.col_stats, None)
-                                {
+                                let range_input = RangeIndexInput::new(
+                                    &compact_segment_info.summary.col_stats,
+                                    compact_segment_info.summary.spatial_stats.as_ref(),
+                                );
+                                if !range_index.should_keep(&range_input, None) {
                                     deleted_segments.push(DeletedSegmentInfo {
                                         index: segment_location.segment_idx,
                                         summary: compact_segment_info.summary.clone(),
