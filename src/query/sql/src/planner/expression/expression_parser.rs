@@ -326,17 +326,8 @@ pub fn parse_lambda_expr(
     let metadata = parent_metadata.unwrap_or_else(|| Arc::new(RwLock::new(Metadata::default())));
     lambda_context.set_expr_context(ExprContext::InLambdaFunction);
 
-    // The column index may not be consecutive, and the length of columns
-    // cannot be used to calculate the column index of the lambda argument.
-    // We need to start from the current largest column index.
-    let mut column_index = lambda_context
-        .all_column_bindings()
-        .iter()
-        .map(|c| c.index)
-        .max()
-        .unwrap_or_default();
     for (lambda_column, lambda_column_type) in lambda_columns.iter() {
-        column_index = Symbol::new(column_index.as_usize() + 1);
+        let column_index = lambda_context.next_column_index();
         lambda_context.add_column_binding(
             ColumnBindingBuilder::new(
                 lambda_column.clone(),
