@@ -74,9 +74,10 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
 
     let columns = metadata.read().columns_by_table_index(table_index);
     let table = metadata.read().table(table_index).clone();
-    for (index, column) in columns.iter().enumerate() {
+    for column in columns.iter() {
         let column_binding = match column {
             ColumnEntry::BaseTableColumn(BaseTableColumn {
+                column_index,
                 column_name,
                 data_type,
                 path_indices,
@@ -90,7 +91,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
                 };
                 ColumnBindingBuilder::new(
                     column_name.clone(),
-                    Symbol::new(index),
+                    *column_index,
                     Box::new(data_type.into()),
                     visibility,
                 )
@@ -199,16 +200,8 @@ pub fn parse_computed_expr(
     let mut metadata = Metadata::default();
     let table_schema = infer_table_schema(&schema)?;
     for (index, field) in schema.fields().iter().enumerate() {
-        let column = ColumnBindingBuilder::new(
-            field.name().clone(),
-            Symbol::new(index),
-            Box::new(field.data_type().clone()),
-            Visibility::Visible,
-        )
-        .build();
-        bind_context.add_column_binding(column);
         let table_field = table_schema.field(index);
-        metadata.add_base_table_column(
+        let column_index = metadata.add_base_table_column(
             table_field.name().clone(),
             table_field.data_type().clone(),
             0,
@@ -217,6 +210,14 @@ pub fn parse_computed_expr(
             None,
             None,
         );
+        let column = ColumnBindingBuilder::new(
+            field.name().clone(),
+            column_index,
+            Box::new(field.data_type().clone()),
+            Visibility::Visible,
+        )
+        .build();
+        bind_context.add_column_binding(column);
     }
 
     let settings = ctx.get_settings();
@@ -253,17 +254,8 @@ pub fn parse_computed_expr_to_string(
 ) -> Result<String> {
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
-    for (index, field) in table_schema.fields().iter().enumerate() {
-        bind_context.add_column_binding(
-            ColumnBindingBuilder::new(
-                field.name().clone(),
-                Symbol::new(index),
-                Box::new(field.data_type().into()),
-                Visibility::Visible,
-            )
-            .build(),
-        );
-        metadata.add_base_table_column(
+    for field in table_schema.fields().iter() {
+        let column_index = metadata.add_base_table_column(
             field.name().clone(),
             field.data_type().clone(),
             0,
@@ -271,6 +263,15 @@ pub fn parse_computed_expr_to_string(
             field.column_id,
             None,
             None,
+        );
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                field.name().clone(),
+                column_index,
+                Box::new(field.data_type().into()),
+                Visibility::Visible,
+            )
+            .build(),
         );
     }
 

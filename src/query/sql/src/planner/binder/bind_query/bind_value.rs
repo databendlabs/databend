@@ -546,17 +546,16 @@ pub fn bind_expression_scan(
     let mut column_indexes = Vec::with_capacity(num_columns + cache_columns.len());
     // Add column bindings for expression scan columns.
     for (idx, field) in expression_scan_fields.iter().take(num_columns).enumerate() {
-        let index = metadata.columns().len();
+        let index = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
         let column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx),
-            Symbol::new(index),
+            index,
             Box::new(field.data_type().clone()),
             Visibility::Visible,
         )
         .build();
-        let _ = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
         bind_context.add_column_binding(column_binding);
-        column_indexes.push(Symbol::new(index));
+        column_indexes.push(index);
     }
 
     // Add column bindings for cache columns.
@@ -572,24 +571,23 @@ pub fn bind_expression_scan(
         let column_entry = metadata.column(cache_column.index);
         let name = column_entry.name();
         let data_type = column_entry.data_type();
-        let new_column_index = metadata.columns().len();
+        let new_column_index = metadata.add_derived_column(name, data_type.clone());
         let new_column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx + num_columns),
-            Symbol::new(new_column_index),
+            new_column_index,
             Box::new(data_type.clone()),
             Visibility::Visible,
         )
         .build();
 
-        let _ = metadata.add_derived_column(name, data_type);
         bind_context.add_column_binding(new_column_binding);
-        column_indexes.push(Symbol::new(new_column_index));
+        column_indexes.push(new_column_index);
 
         // Record the mapping between original index (cache index in hash join build side) and derived index.
         expression_scan_info.add_expression_scan_column(
             expression_scan_index,
             cache_column.index,
-            Symbol::new(new_column_index),
+            new_column_index,
         );
     }
 

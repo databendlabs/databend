@@ -23,7 +23,6 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
-use databend_common_sql::Symbol;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use itertools::Itertools;
@@ -171,7 +170,7 @@ impl PhysicalPlanBuilder {
                                             )));
                                         }
                                     };
-                                Ok(Symbol::new(index))
+                                Ok(index)
                             }
                             _ => Err(ErrorCode::Internal(
                                 "Async function's argument must be a BoundColumnRef".to_string(),
