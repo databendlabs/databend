@@ -319,44 +319,33 @@ impl Binder {
                     cache_scan_fields.push(field);
                 }
 
-                let cache_source = CacheSource::HashJoinBuild((
-                    scan.cache_index,
-                    cache_scan_column_indexes.clone(),
-                ));
-                let cache_scan = SExpr::create_leaf(Arc::new(RelOperator::CacheScan(CacheScan {
+                let cache_source = CacheSource {
+                    cache_index: scan.cache_index,
+                    column_indices: cache_scan_column_indexes.clone(),
+                };
+
+                // Wrap CacheScan with distinct to eliminate duplicates rows.
+                let group_items = cache_scan_column_indexes
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(i, index)| ScalarItem {
+                        scalar: cache_scan_columns[i].clone(),
+                        index,
+                    })
+                    .collect();
+
+                let s_expr = SExpr::create_leaf(CacheScan {
                     cache_source,
                     columns: ColumnSet::new(),
                     schema: DataSchemaRefExt::create(cache_scan_fields),
-                })));
-
-                let mut distinct_columns = Vec::new();
-                for column in scan.values[0].iter().skip(scan.num_scalar_columns) {
-                    distinct_columns.push(column);
-                }
-
-                // Wrap CacheScan with distinct to eliminate duplicates rows.
-                let mut group_items = Vec::with_capacity(cache_scan_column_indexes.len());
-                for (index, column_index) in cache_scan_column_indexes.iter().enumerate() {
-                    group_items.push(ScalarItem {
-                        scalar: cache_scan_columns[index].clone(),
-                        index: *column_index,
-                    });
-                }
-
-                let s_expr = SExpr::create_unary(
-                    Arc::new(RelOperator::ExpressionScan(scan)),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            Aggregate {
-                                mode: AggregateMode::Initial,
-                                group_items,
-                                ..Default::default()
-                            }
-                            .into(),
-                        ),
-                        Arc::new(cache_scan),
-                    )),
-                );
+                })
+                .build_unary(Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items,
+                    ..Default::default()
+                })
+                .build_unary(scan);
 
                 Ok((s_expr, join_condition_columns))
             }
