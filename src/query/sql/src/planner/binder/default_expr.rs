@@ -332,7 +332,7 @@ impl DefaultExprBinder {
                     func_name: async_func.func_name.clone(),
                     display_name: async_func.display_name.clone(),
                     // not used
-                    output_column: Symbol::new(0),
+                    output_column: Symbol::DUMMY_COLUMN,
                     arg_indices: vec![],
                     data_type: async_func.return_type.clone(),
                     func_arg: async_func.func_arg.clone(),

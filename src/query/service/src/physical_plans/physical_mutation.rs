@@ -47,7 +47,6 @@ use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
@@ -89,8 +88,8 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 
-// The predicate_column_index should not be conflict with update expr's column_binding's index.
-pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
+// The predicate column symbol should not conflict with update expr column bindings.
+pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mutation {
@@ -540,7 +539,7 @@ impl PhysicalPlanBuilder {
                     update_list,
                     table.schema_with_stream().into(),
                     col_indices,
-                    Some(PREDICATE_COLUMN_INDEX),
+                    PREDICATE_COLUMN_INDEX,
                     database,
                     &table_name,
                 )?;
@@ -813,13 +812,13 @@ pub fn generate_update_list(
     update_list: &HashMap<FieldIndex, ScalarExpr>,
     schema: DataSchema,
     col_indices: Vec<usize>,
-    use_column_name_index: Option<usize>,
+    use_column_name_index: Symbol,
     database: Option<&str>,
     table: &str,
 ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
     let column = ColumnBindingBuilder::new(
         PREDICATE_COLUMN_NAME.to_string(),
-        Symbol::new(use_column_name_index.unwrap_or_else(|| schema.num_fields())),
+        use_column_name_index,
         Box::new(DataType::Boolean),
         Visibility::Visible,
     )
@@ -891,13 +890,9 @@ pub fn generate_update_list(
                     arguments: vec![predicate.clone(), left, right],
                 })
             };
-            let expr = scalar.as_expr()?.project_column_ref(|col| {
-                if use_column_name_index.is_none() {
-                    Ok(col.column_name.clone())
-                } else {
-                    Ok(col.index.to_string())
-                }
-            })?;
+            let expr = scalar
+                .as_expr()?
+                .project_column_ref(|col| Ok(col.index.to_string()))?;
             let (expr, _) =
                 ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));
