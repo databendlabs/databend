@@ -304,14 +304,53 @@ impl SubqueryDecorrelatorOptimizer {
             need_cross_join,
         )?;
         for predicate in filter.predicates.iter() {
+            if !need_cross_join
+                && self.is_join_lifted_correlated_equi_predicate(predicate, correlated_columns)
+            {
+                continue;
+            }
             predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
         }
 
-        let filter_plan = Filter { predicates }.into();
-        Ok(SExpr::create_unary(
-            Arc::new(filter_plan),
-            Arc::new(flatten_plan),
-        ))
+        if predicates.is_empty() {
+            return Ok(flatten_plan);
+        }
+        Ok(flatten_plan.build_unary(Filter { predicates }))
+    }
+
+    fn is_join_lifted_correlated_equi_predicate(
+        &self,
+        predicate: &ScalarExpr,
+        correlated_columns: &ColumnSet,
+    ) -> bool {
+        let ScalarExpr::FunctionCall(func) = predicate else {
+            return false;
+        };
+
+        if func.func_name != "eq" || func.arguments.len() != 2 {
+            return false;
+        }
+
+        let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
+            (&func.arguments[0], &func.arguments[1])
+        else {
+            return false;
+        };
+
+        let left_is_correlated = correlated_columns.contains(&left.column.index);
+        let right_is_correlated = correlated_columns.contains(&right.column.index);
+
+        match (left_is_correlated, right_is_correlated) {
+            (true, false) => self
+                .derived_columns
+                .get(&left.column.index)
+                .is_some_and(|index| *index == right.column.index),
+            (false, true) => self
+                .derived_columns
+                .get(&right.column.index)
+                .is_some_and(|index| *index == left.column.index),
+            _ => false,
+        }
     }
 
     fn flatten_sub_join(

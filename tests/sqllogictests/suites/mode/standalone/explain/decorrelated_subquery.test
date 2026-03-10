@@ -1,0 +1,46 @@
+statement ok
+drop database if exists decorrelate_regress
+
+statement ok
+create database decorrelate_regress
+
+statement ok
+use decorrelate_regress
+
+statement ok
+create table t_outer(a int, b int)
+
+statement ok
+create table t_inner(c int, d int)
+
+query T
+explain(decorrelated) select * from t_outer o where o.b > (select avg(i.d) from t_inner i where i.c = o.a)
+----
+EvalScalar
+├── scalars: [t_outer.a (#0) AS (#0), t_outer.b (#1) AS (#1)]
+└── Filter
+    ├── filters: [gt(t_outer.b (#1), sum(i.d) / if(count(i.d) = 0, 1, count(i.d)) (#6))]
+    └── Join(Left)
+        ├── build keys: [t_inner.c (#2)]
+        ├── probe keys: [t_outer.a (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [t_inner.c (#2) AS (#2), divide(sum(i.d) (#4), if(eq(count(i.d) (#5), 0), 1, count(i.d) (#5))) AS (#6)]
+        │   └── Aggregate(Initial)
+        │       ├── group items: [t_inner.c (#2) AS (#2)]
+        │       ├── aggregate functions: [sum(t_inner.d (#3)) AS (#4), count(t_inner.d (#3)) AS (#5)]
+        │       └── EvalScalar
+        │           ├── scalars: [t_inner.c (#2) AS (#2), t_inner.d (#3) AS (#3), t_inner.d (#3) AS (#3)]
+        │           └── Scan
+        │               ├── table: decorrelate_regress.t_inner (#1)
+        │               ├── filters: []
+        │               ├── order by: []
+        │               └── limit: NONE
+        └── Scan
+            ├── table: decorrelate_regress.t_outer (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+statement ok
+drop database decorrelate_regress
