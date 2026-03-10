@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 use log::info;
 
 use crate::InsertInputSource;
-use crate::Symbol;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::binder::target_probe;
@@ -437,7 +436,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
                 }
                 mutation.direct_filter = rel.predicates.clone();
                 if let Some(index) = rel.predicate_column_index {
-                    mutation.required_columns.insert(Symbol::new(index));
+                    mutation.required_columns.insert(index);
                     mutation.predicate_column_index = Some(index);
                 }
             }

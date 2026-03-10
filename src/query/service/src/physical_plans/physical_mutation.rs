@@ -913,14 +913,14 @@ pub fn mutation_update_expr(
     update_list: &HashMap<FieldIndex, ScalarExpr>,
     schema: DataSchema,
     input_schema: Arc<DataSchema>,
-    predicate_column_index: Option<usize>,
+    predicate_column_index: Option<Symbol>,
     database: Option<&str>,
     table: &str,
 ) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
     let predicate = if let Some(predicate_column_index) = predicate_column_index {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
-            Symbol::new(predicate_column_index),
+            predicate_column_index,
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
