@@ -212,7 +212,7 @@ pub fn format_output_columns(
         .iter()
         .map(|field| match field.name().parse::<Symbol>() {
             Ok(column_index) => {
-                if column_index == Symbol::DUMMY_COLUMN {
+                if column_index.is_dummy_column() {
                     return String::from("dummy value");
                 }
                 let column_entry = metadata.column(column_index);

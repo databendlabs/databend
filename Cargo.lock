@@ -3706,6 +3706,7 @@ dependencies = [
  "memchr",
  "micromarshal",
  "num-bigint",
+ "num-derive",
  "num-traits",
  "pretty_assertions",
  "proptest",
