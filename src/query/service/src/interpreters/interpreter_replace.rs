@@ -253,7 +253,7 @@ impl ReplaceInterpreter {
             let filter = cast_expr_to_non_null_boolean(
                 scalar
                     .as_expr()?
-                    .project_column_ref(|col| Ok(col.index.as_usize()))?,
+                    .project_column_ref(|col| Ok(col.index.as_field_index()))?,
             )?;
 
             let filter = filter.as_remote_expr();

@@ -999,26 +999,27 @@ pub fn generate_stored_computed_list(
     let mut remote_exprs = Vec::new();
     for (i, f) in schema.fields().iter().enumerate() {
         if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
-            let expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?;
+            let expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?
+                .project_column_ref(|i| Ok(i.as_field_index()))?;
             let expr = check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?;
 
             // If related column has updated, the stored computed column need to regenerate.
             let mut need_update = false;
             let field_indices = expr.column_refs();
             for (field_index, _) in field_indices.iter() {
-                if update_list.contains_key(&field_index.as_usize()) {
+                if update_list.contains_key(field_index) {
                     need_update = true;
                     break;
                 }
             }
             if need_update {
-                let expr = expr.project_column_ref(|id| {
+                let expr = expr.project_column_ref(|field| {
                     let mut column_index = None;
                     for column_binding in bind_context.columns.iter() {
                         if BindContext::match_column_binding(
                             database,
                             Some(table),
-                            schema.field(id.as_usize()).name(),
+                            schema.field(*field).name(),
                             column_binding,
                         ) {
                             column_index = Some(column_binding.index);

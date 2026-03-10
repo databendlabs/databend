@@ -242,7 +242,7 @@ impl DefaultExprBinder {
         self.rewriter.visit(&mut scalar_expr)?;
         let expr = scalar_expr
             .as_expr()?
-            .project_column_ref(|col| Ok(col.index.as_usize()))?;
+            .project_column_ref(|col| Ok(col.index.as_field_index()))?;
         let result = self.evaluator().run(&expr)?;
         match result {
             databend_common_expression::Value::Scalar(s) => Ok(s),

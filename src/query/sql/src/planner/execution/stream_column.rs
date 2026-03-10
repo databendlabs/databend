@@ -136,7 +136,7 @@ impl StreamContext {
             exprs.push(
                 new_stream_column_scalar_expr
                     .as_expr()?
-                    .project_column_ref(|col| Ok(col.index.as_usize()))?,
+                    .project_column_ref(|col| Ok(col.index.as_field_index()))?,
             );
         }
 

@@ -117,7 +117,7 @@ impl AsyncSystemTable for ConstraintsTable {
                     .used_columns()
                     .iter()
                     .map(|i| {
-                        binder.bind_context.columns[i.as_usize()]
+                        binder.bind_context.columns[i.as_field_index()]
                             .column_name
                             .clone()
                     })

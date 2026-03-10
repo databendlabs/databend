@@ -56,6 +56,10 @@ impl Symbol {
         self.0
     }
 
+    pub const fn as_field_index(&self) -> crate::FieldIndex {
+        self.0
+    }
+
     pub const fn is_dummy_column(&self) -> bool {
         self.0 >= Self::MIN_DUMMY_COLUMN.0
     }

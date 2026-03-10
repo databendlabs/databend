@@ -163,7 +163,7 @@ pub fn parse_to_filters(
         .iter()
         .map(|expr| {
             Ok(expr
-                .project_column_ref(|index| Ok(schema.field(index.as_usize()).name().to_string()))?
+                .project_column_ref(|index| Ok(schema.field(index.as_field_index()).name().to_string()))?
                 .as_remote_expr())
         })
         .collect::<Result<Vec<_>>>()?;

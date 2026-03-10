@@ -55,7 +55,7 @@ impl ColumnIndex for String {
 
 impl ColumnIndex for Symbol {
     fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
-        self.fmt(f)
+        write!(f, "{self}")
     }
 }
 
