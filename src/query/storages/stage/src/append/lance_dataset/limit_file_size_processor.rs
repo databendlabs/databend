@@ -82,13 +82,18 @@ impl LimitFileSizeProcessor {
         let max_file_size = options.max_file_size;
         let max_rows_per_file = 1024 * 1024;
         let max_rows_per_block = 128 * 1024;
+        let mem_limit = if mem_limit == 0 {
+            usize::MAX
+        } else {
+            mem_limit
+        };
         let mem_limit = mem_limit / 2;
         pipeline.try_resize(1)?;
         let max_file_size = if is_single {
             None
         } else {
             let max_file_size = if max_file_size == 0 {
-                64 * 1024 * 1024
+                128 * 1024 * 1024
             } else {
                 max_file_size.min(mem_limit)
             };

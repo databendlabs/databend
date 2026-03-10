@@ -125,6 +125,11 @@ impl LimitFileSizeProcessor {
         let is_single = options.single;
         let max_file_size = options.max_file_size;
         // when serializing block to parquet, the memory may be doubled
+        let mem_limit = if mem_limit == 0 {
+            usize::MAX
+        } else {
+            mem_limit
+        };
         let mem_limit = mem_limit / 2;
         pipeline.try_resize(1)?;
         let max_file_size = if is_single {

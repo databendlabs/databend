@@ -126,20 +126,7 @@ async fn cleanup_dataset_if_exists(data_accessor: &Operator, path: &str) -> Resu
         ));
     }
 
-    if data_accessor.stat(path).await.is_ok() {
-        data_accessor.delete(path).await?;
-    }
-
-    let prefix = if path.ends_with('/') {
-        path.to_string()
-    } else {
-        format!("{path}/")
-    };
-    if let Ok(mut lister) = data_accessor
-        .lister_with(prefix.as_str())
-        .recursive(true)
-        .await
-    {
+    if let Ok(mut lister) = data_accessor.lister_with(path).recursive(true).await {
         while let Some(entry) = lister.try_next().await? {
             if entry.metadata().is_file() {
                 data_accessor.delete(entry.path()).await?;
