@@ -79,9 +79,10 @@ impl Processor for ExchangeRecvTransform {
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         if self.output.is_finished() {
             log::warn!(
-                "ANY_JOIN_ROOT_DEBUG exchange_recv_close reason=output_finished input_finished={} receiver_closed={}",
+                "ANY_JOIN_ROOT_DEBUG exchange_recv_close reason=output_finished input_finished={} receiver_closed={}, pid={:?}",
                 self.input.is_finished(),
                 self.receiver.is_closed(),
+                self.id,
             );
             self.input.finish();
             self.receiver.close();
