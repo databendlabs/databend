@@ -149,7 +149,8 @@ pub fn parse_tsv_records_for_infer_schema(
     params: &TsvFileFormatParams,
     is_eof: bool,
 ) -> Result<impl Iterator<Item = Result<(usize, String)>>> {
-    let record_delimiter = *params.record_delimiter.as_bytes().last().ok_or_else(|| {
+    let record_delimiter = params.record_delimiter.as_bytes();
+    let record_delimiter_byte = *record_delimiter.last().ok_or_else(|| {
         ErrorCode::BadBytes("empty TSV record delimiter when infer schema".to_string())
     })?;
     let field_delimiter = params
@@ -180,7 +181,7 @@ pub fn parse_tsv_records_for_infer_schema(
 
         field_buf: Vec::new(),
 
-        record_delimiter,
+        record_delimiter: record_delimiter_byte,
         field_delimiter,
         trim_cr,
     };

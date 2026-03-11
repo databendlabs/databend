@@ -252,6 +252,32 @@ pub struct CopyIntoLocationOptions {
     pub overwrite: bool,
 }
 
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq, Default,
+)]
+pub struct CopyIntoLocationOptionsRaw {
+    pub single: Option<bool>,
+    pub max_file_size: Option<usize>,
+    pub detailed_output: Option<bool>,
+    pub use_raw_path: Option<bool>,
+    pub include_query_id: Option<bool>,
+    pub overwrite: Option<bool>,
+}
+
+impl CopyIntoLocationOptionsRaw {
+    pub fn with_defaults(&self) -> CopyIntoLocationOptions {
+        let defaults = CopyIntoLocationOptions::default();
+        CopyIntoLocationOptions {
+            single: self.single.unwrap_or(defaults.single),
+            max_file_size: self.max_file_size.unwrap_or(defaults.max_file_size),
+            detailed_output: self.detailed_output.unwrap_or(defaults.detailed_output),
+            use_raw_path: self.use_raw_path.unwrap_or(defaults.use_raw_path),
+            include_query_id: self.include_query_id.unwrap_or(defaults.include_query_id),
+            overwrite: self.overwrite.unwrap_or(defaults.overwrite),
+        }
+    }
+}
+
 impl Default for CopyIntoLocationOptions {
     fn default() -> Self {
         Self {
@@ -274,7 +300,7 @@ pub struct CopyIntoLocationStmt {
     pub dst: FileLocation,
     pub partition_by: Option<Expr>,
     pub file_format: FileFormatOptions,
-    pub options: CopyIntoLocationOptions,
+    pub options: CopyIntoLocationOptionsRaw,
 }
 
 impl Display for CopyIntoLocationStmt {
@@ -295,12 +321,24 @@ impl Display for CopyIntoLocationStmt {
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = ({})", self.file_format)?;
         }
-        write!(f, " SINGLE = {}", self.options.single)?;
-        write!(f, " MAX_FILE_SIZE = {}", self.options.max_file_size)?;
-        write!(f, " DETAILED_OUTPUT = {}", self.options.detailed_output)?;
-        write!(f, " INCLUDE_QUERY_ID = {}", self.options.include_query_id)?;
-        write!(f, " USE_RAW_PATH = {}", self.options.use_raw_path)?;
-        write!(f, " OVERWRITE = {}", self.options.overwrite)?;
+        if let Some(single) = self.options.single {
+            write!(f, " SINGLE = {single}")?;
+        }
+        if let Some(max_file_size) = self.options.max_file_size {
+            write!(f, " MAX_FILE_SIZE = {max_file_size}")?;
+        }
+        if let Some(detailed_output) = self.options.detailed_output {
+            write!(f, " DETAILED_OUTPUT = {detailed_output}")?;
+        }
+        if let Some(include_query_id) = self.options.include_query_id {
+            write!(f, " INCLUDE_QUERY_ID = {include_query_id}")?;
+        }
+        if let Some(use_raw_path) = self.options.use_raw_path {
+            write!(f, " USE_RAW_PATH = {use_raw_path}")?;
+        }
+        if let Some(overwrite) = self.options.overwrite {
+            write!(f, " OVERWRITE = {overwrite}")?;
+        }
 
         Ok(())
     }
@@ -310,12 +348,12 @@ impl CopyIntoLocationStmt {
     pub fn apply_option(&mut self, opt: CopyIntoLocationOption) {
         match opt {
             CopyIntoLocationOption::FileFormat(v) => self.file_format = v,
-            CopyIntoLocationOption::Single(v) => self.options.single = v,
-            CopyIntoLocationOption::MaxFileSize(v) => self.options.max_file_size = v,
-            CopyIntoLocationOption::DetailedOutput(v) => self.options.detailed_output = v,
-            CopyIntoLocationOption::IncludeQueryID(v) => self.options.include_query_id = v,
-            CopyIntoLocationOption::UseRawPath(v) => self.options.use_raw_path = v,
-            CopyIntoLocationOption::OverWrite(v) => self.options.overwrite = v,
+            CopyIntoLocationOption::Single(v) => self.options.single = Some(v),
+            CopyIntoLocationOption::MaxFileSize(v) => self.options.max_file_size = Some(v),
+            CopyIntoLocationOption::DetailedOutput(v) => self.options.detailed_output = Some(v),
+            CopyIntoLocationOption::IncludeQueryID(v) => self.options.include_query_id = Some(v),
+            CopyIntoLocationOption::UseRawPath(v) => self.options.use_raw_path = Some(v),
+            CopyIntoLocationOption::OverWrite(v) => self.options.overwrite = Some(v),
         }
     }
 }

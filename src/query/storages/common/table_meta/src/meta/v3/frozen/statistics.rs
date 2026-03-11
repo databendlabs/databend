@@ -54,6 +54,7 @@ impl From<Statistics> for crate::meta::Statistics {
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
             virtual_col_stats: None,
+            spatial_stats: None,
             cluster_stats: None,
             virtual_block_count: None,
             additional_stats_meta: None,

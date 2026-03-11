@@ -25,6 +25,7 @@ use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
@@ -136,8 +137,9 @@ impl BlockPruner {
                     BlockPruneResult::new(block_idx, block_meta.location.0.clone());
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
+                let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
                 prune_result.keep = pruning_cost.measure(PruningCostKind::BlocksRange, || {
-                    range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
+                    range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
                 });
                 if prune_result.keep {
                     // Perf.
@@ -391,8 +393,9 @@ impl BlockPruner {
                 break;
             }
             let row_count = block_meta.row_count;
+            let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
             let keep_by_range = pruning_cost.measure(PruningCostKind::BlocksRange, || {
-                range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
+                range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
             });
             if keep_by_range && limit_pruner.within_limit(row_count) {
                 // Perf.

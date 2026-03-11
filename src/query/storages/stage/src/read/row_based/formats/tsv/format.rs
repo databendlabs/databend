@@ -37,7 +37,7 @@ impl RowBasedFileFormat for TsvInputFormat {
     ) -> Result<Box<dyn SeparatorState>> {
         Ok(Box::new(TsvRowSeparator::try_create(
             path,
-            *self.params.record_delimiter.as_bytes().last().unwrap(),
+            self.params.record_delimiter.as_bytes(),
             self.params.headers,
         )?))
     }

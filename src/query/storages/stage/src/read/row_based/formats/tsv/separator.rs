@@ -28,7 +28,8 @@ pub struct TsvRowSeparator {
     // remain from last read batch
     last_partial_row: Vec<u8>,
     pos: Position,
-    record_delimiter: u8,
+    record_delimiter: Vec<u8>,
+    record_delimiter_byte: u8,
     in_escape: bool,
     rows_to_skip: u64,
 }
@@ -47,11 +48,13 @@ impl SeparatorState for TsvRowSeparator {
 }
 
 impl TsvRowSeparator {
-    pub fn try_create(path: &str, record_delimiter: u8, rows_to_skip: u64) -> Result<Self> {
+    pub fn try_create(path: &str, record_delimiter: &[u8], rows_to_skip: u64) -> Result<Self> {
+        let record_delimiter_byte = *record_delimiter.last().unwrap();
         Ok(Self {
             last_partial_row: vec![],
             pos: Position::new(path.to_string()),
-            record_delimiter,
+            record_delimiter: record_delimiter.to_vec(),
+            record_delimiter_byte,
             in_escape: false,
             rows_to_skip,
         })
@@ -67,7 +70,7 @@ impl TsvRowSeparator {
         let mut end = 0;
         for (i, b) in data.iter().enumerate() {
             // here we only care about the escape of record_delimiter
-            if *b == self.record_delimiter && !self.in_escape {
+            if *b == self.record_delimiter_byte && !self.in_escape {
                 if check_first {
                     let mut tail_of_last_batch = std::mem::take(&mut self.last_partial_row);
                     tail_of_last_batch.extend_from_slice(&data[..i]);
@@ -95,7 +98,7 @@ impl TsvRowSeparator {
                     // make the last line end with record_delimiter,
                     // so we can trim all rows in the same way.
                     // most of the time, it will not lead to realloc.
-                    data.push(self.record_delimiter);
+                    data.extend_from_slice(&self.record_delimiter);
                     rows.row_ends.push(data.len());
                 } else {
                     self.last_partial_row.extend_from_slice(&data);
@@ -125,12 +128,13 @@ mod tests {
     fn helper(
         last: &[u8],
         new: &[u8],
+        record_delimiter: &[u8],
         is_eof: bool,
         exp_last: &[u8],
         exp_rows: usize,
         exp_output: Option<NdjsonRowBatch>,
     ) -> Result<()> {
-        let mut sep = TsvRowSeparator::try_create("test", b'\n', 0).unwrap();
+        let mut sep = TsvRowSeparator::try_create("test", record_delimiter, 0).unwrap();
         sep.last_partial_row = last.to_vec();
 
         let input = BytesBatch {
@@ -164,6 +168,7 @@ mod tests {
         helper(
             b"",
             b"1\n2\n3\n4\n5\n",
+            b"\n",
             false,
             b"",
             5,
@@ -177,6 +182,7 @@ mod tests {
         helper(
             b"",
             b"1\n2\n3\n4\n5",
+            b"\n",
             false,
             b"5",
             4,
@@ -190,6 +196,7 @@ mod tests {
         helper(
             b"",
             b"1\n2\n3\n4\n5",
+            b"\n",
             true,
             b"",
             5,
@@ -203,6 +210,7 @@ mod tests {
         helper(
             b"0",
             b"1\n2\n3\n4\n5\n",
+            b"\n",
             true,
             b"",
             5,
@@ -213,10 +221,11 @@ mod tests {
                 start: 2,
             }),
         )?;
-        helper(b"0", b"1", false, b"01", 0, None)?;
+        helper(b"0", b"1", b"\n", false, b"01", 0, None)?;
         helper(
             b"0",
             b"1",
+            b"\n",
             true,
             b"",
             1,
@@ -235,12 +244,32 @@ mod tests {
         helper(
             b"",
             b"\\\n\n2\n3\n4\n5\n",
+            b"\n",
             false,
             b"",
             5,
             Some(NdjsonRowBatch {
                 data: b"\\\n\n2\n3\n4\n5\n".to_vec(),
                 row_ends: vec![3, 5, 7, 9, 11],
+                tail_of_last_batch: None,
+                start: 0,
+            }),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_tsv_row_separator_crlf_eof_preserves_data_cr() -> Result<()> {
+        helper(
+            b"",
+            b"a\tb\r",
+            b"\r\n",
+            true,
+            b"",
+            1,
+            Some(NdjsonRowBatch {
+                data: b"a\tb\r\r\n".to_vec(),
+                row_ends: vec![6],
                 tail_of_last_batch: None,
                 start: 0,
             }),

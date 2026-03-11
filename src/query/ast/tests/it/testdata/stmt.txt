@@ -19318,7 +19318,7 @@ COPY INTO @my_stage/partitioned
     PARTITION BY (concat('p=', to_varchar(id)))
     FILE_FORMAT = (type = PARQUET);
 ---------- Output ---------
-COPY INTO '@my_stage/partitioned' FROM mytable PARTITION BY (concat('p=', to_varchar(id))) FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
+COPY INTO '@my_stage/partitioned' FROM mytable PARTITION BY (concat('p=', to_varchar(id))) FILE_FORMAT = (type = PARQUET)
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -19420,13 +19420,13 @@ CopyIntoLocation(
                 ),
             },
         },
-        options: CopyIntoLocationOptions {
-            single: false,
-            max_file_size: 0,
-            detailed_output: false,
-            use_raw_path: false,
-            include_query_id: true,
-            overwrite: false,
+        options: CopyIntoLocationOptionsRaw {
+            single: None,
+            max_file_size: None,
+            detailed_output: None,
+            use_raw_path: None,
+            include_query_id: None,
+            overwrite: None,
         },
     },
 )
@@ -19629,7 +19629,7 @@ COPY INTO 's3://mybucket/data.csv'
         skip_header = 1
     )
 ---------- Output ---------
-COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -19676,13 +19676,13 @@ CopyIntoLocation(
                 ),
             },
         },
-        options: CopyIntoLocationOptions {
-            single: false,
-            max_file_size: 0,
-            detailed_output: false,
-            use_raw_path: false,
-            include_query_id: true,
-            overwrite: false,
+        options: CopyIntoLocationOptionsRaw {
+            single: None,
+            max_file_size: None,
+            detailed_output: None,
+            use_raw_path: None,
+            include_query_id: None,
+            overwrite: None,
         },
     },
 )
@@ -19692,7 +19692,7 @@ CopyIntoLocation(
 COPY INTO '@my_stage/my data'
     FROM mytable;
 ---------- Output ---------
-COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
+COPY INTO '@my_stage/my data' FROM mytable
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -19718,13 +19718,13 @@ CopyIntoLocation(
         file_format: FileFormatOptions {
             options: {},
         },
-        options: CopyIntoLocationOptions {
-            single: false,
-            max_file_size: 0,
-            detailed_output: false,
-            use_raw_path: false,
-            include_query_id: true,
-            overwrite: false,
+        options: CopyIntoLocationOptionsRaw {
+            single: None,
+            max_file_size: None,
+            detailed_output: None,
+            use_raw_path: None,
+            include_query_id: None,
+            overwrite: None,
         },
     },
 )
@@ -19740,7 +19740,7 @@ COPY INTO @my_stage
         skip_header = 1
     );
 ---------- Output ---------
-COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
+COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -19779,13 +19779,117 @@ CopyIntoLocation(
                 ),
             },
         },
-        options: CopyIntoLocationOptions {
-            single: false,
-            max_file_size: 0,
-            detailed_output: false,
-            use_raw_path: false,
-            include_query_id: true,
-            overwrite: false,
+        options: CopyIntoLocationOptionsRaw {
+            single: None,
+            max_file_size: None,
+            detailed_output: None,
+            use_raw_path: None,
+            include_query_id: None,
+            overwrite: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO @tmp/test1/
+    FROM (SELECT * FROM numbers(10))
+    FILE_FORMAT = (
+        type = LANCE
+    )
+---------- Output ---------
+COPY INTO '@tmp/test1/' FROM (SELECT * FROM numbers(10)) FILE_FORMAT = (type = LANCE)
+---------- AST ------------
+CopyIntoLocation(
+    CopyIntoLocationStmt {
+        with: None,
+        hints: None,
+        src: Query(
+            Query {
+                span: Some(
+                    32..57,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            32..57,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            StarColumns {
+                                qualified: [
+                                    Star(
+                                        Some(
+                                            39..40,
+                                        ),
+                                    ),
+                                ],
+                                column_filter: None,
+                            },
+                        ],
+                        from: [
+                            TableFunction {
+                                span: Some(
+                                    46..57,
+                                ),
+                                lateral: false,
+                                name: Identifier {
+                                    span: Some(
+                                        46..53,
+                                    ),
+                                    name: "numbers",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                params: [
+                                    Literal {
+                                        span: Some(
+                                            54..56,
+                                        ),
+                                        value: UInt64(
+                                            10,
+                                        ),
+                                    },
+                                ],
+                                named_params: [],
+                                alias: None,
+                                sample: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        ),
+        dst: Stage(
+            "tmp/test1/",
+        ),
+        partition_by: None,
+        file_format: FileFormatOptions {
+            options: {
+                "type": Keyword(
+                    "LANCE",
+                ),
+            },
+        },
+        options: CopyIntoLocationOptionsRaw {
+            single: None,
+            max_file_size: None,
+            detailed_output: None,
+            use_raw_path: None,
+            include_query_id: None,
+            overwrite: None,
         },
     },
 )
@@ -25518,7 +25622,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET)
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -25538,7 +25642,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false",
+            "COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET)",
         ),
     },
 )

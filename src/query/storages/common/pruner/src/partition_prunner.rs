@@ -86,6 +86,6 @@ impl PartitionPruner {
                 stats.insert(f.column_id(), column_stats);
             }
         }
-        self.range_filter.apply(&stats, |_| false)
+        self.range_filter.apply(&stats, None, |_| false)
     }
 }

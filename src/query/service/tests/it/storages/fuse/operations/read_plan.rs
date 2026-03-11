@@ -107,6 +107,7 @@ fn test_to_partitions() -> anyhow::Result<()> {
         None,
         None,
         None,
+        None,
         meta::Compression::Lz4Raw,
         Some(Utc::now()),
     ));
