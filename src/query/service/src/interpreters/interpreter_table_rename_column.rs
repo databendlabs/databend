@@ -112,24 +112,22 @@ impl Interpreter for RenameTableColumnInterpreter {
         }
 
         // update table options
-        if self.plan.branch.is_none() {
-            let opts = &mut new_table_meta.options;
-            if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
-                rename_column_in_comma_separated_ident(
-                    self.ctx.as_ref(),
-                    value,
-                    &self.plan.old_column,
-                    &self.plan.new_column,
-                )?;
-            }
-            if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
-                rename_column_in_comma_separated_ident(
-                    self.ctx.as_ref(),
-                    value,
-                    &self.plan.old_column,
-                    &self.plan.new_column,
-                )?;
-            }
+        let opts = &mut new_table_meta.options;
+        if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            rename_column_in_comma_separated_ident(
+                self.ctx.as_ref(),
+                value,
+                &self.plan.old_column,
+                &self.plan.new_column,
+            )?;
+        }
+        if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+            rename_column_in_comma_separated_ident(
+                self.ctx.as_ref(),
+                value,
+                &self.plan.old_column,
+                &self.plan.new_column,
+            )?;
         }
 
         let mut new_cluster_key = None;
@@ -156,12 +154,10 @@ impl Interpreter for RenameTableColumnInterpreter {
                         }
                     }
                 }
-                if self.plan.branch.is_none() {
-                    meta.schema = Arc::new(self.plan.schema.clone());
-                    if let Some(cluster_key) = &new_cluster_key {
-                        if let Some((_, ref mut key)) = meta.cluster_key_v2 {
-                            *key = cluster_key.clone();
-                        }
+                meta.schema = Arc::new(self.plan.schema.clone());
+                if let Some(cluster_key) = &new_cluster_key {
+                    if let Some((_, ref mut key)) = meta.cluster_key_v2 {
+                        *key = cluster_key.clone();
                     }
                 }
             },

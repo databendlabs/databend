@@ -32,11 +32,11 @@ use uuid::Version;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
-use crate::FUSE_TBL_REF_PREFIX;
 use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
 use crate::FUSE_TBL_SPATIAL_INDEX_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+use crate::LEGACY_FUSE_TBL_REF_PREFIX;
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -45,6 +45,7 @@ use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
 use crate::index::InvertedIndexFile;
 use crate::index::filters::BlockFilter;
+
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
@@ -74,6 +75,7 @@ pub struct TableMetaLocationGenerator {
     vector_index_location_prefix: String,
     spatial_index_location_prefix: String,
     segment_statistics_location_prefix: String,
+    // legacy ref prefix.
     ref_snapshot_location_prefix: String,
 }
 
@@ -92,7 +94,7 @@ impl TableMetaLocationGenerator {
             format!("{}/{}/", &prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
         let segment_statistics_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
-        let ref_snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_REF_PREFIX);
+        let ref_snapshot_location_prefix = format!("{}/{}/", &prefix, LEGACY_FUSE_TBL_REF_PREFIX);
         Self {
             prefix,
             block_location_prefix,
@@ -221,17 +223,9 @@ impl TableMetaLocationGenerator {
         }
     }
 
-    pub fn gen_snapshot_location(
-        &self,
-        branch_id: Option<u64>,
-        id: &Uuid,
-        version: u64,
-    ) -> Result<String> {
+    pub fn gen_snapshot_location(&self, id: &Uuid, version: u64) -> Result<String> {
         let snapshot_version = SnapshotVersion::try_from(version)?;
-        let location = match branch_id {
-            Some(branch) => snapshot_version.create_ref(branch, id, &self.prefix),
-            _ => snapshot_version.create(id, &self.prefix),
-        };
+        let location = snapshot_version.create(id, &self.prefix);
         Ok(location)
     }
 
@@ -384,7 +378,6 @@ impl TableMetaLocationGenerator {
 
 trait SnapshotLocationCreator {
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
-    fn create_ref(&self, table_ref: u64, id: &Uuid, prefix: impl AsRef<str>) -> String;
     fn suffix(&self) -> String;
 }
 
@@ -403,18 +396,6 @@ impl SnapshotLocationCreator for SnapshotVersion {
             "{}/{}/{vacuum_prefix}{}{}",
             prefix.as_ref(),
             FUSE_TBL_SNAPSHOT_PREFIX,
-            id.simple(),
-            self.suffix(),
-        )
-    }
-
-    fn create_ref(&self, table_ref: u64, id: &Uuid, prefix: impl AsRef<str>) -> String {
-        format!(
-            "{}/{}/{}/{}{}{}",
-            prefix.as_ref(),
-            FUSE_TBL_REF_PREFIX,
-            table_ref,
-            VACUUM2_OBJECT_KEY_PREFIX,
             id.simple(),
             self.suffix(),
         )
@@ -440,10 +421,6 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
             id.simple(),
             self.suffix(),
         )
-    }
-
-    fn create_ref(&self, _table_ref: u64, _id: &Uuid, _prefix: impl AsRef<str>) -> String {
-        unimplemented!()
     }
 
     fn suffix(&self) -> String {
