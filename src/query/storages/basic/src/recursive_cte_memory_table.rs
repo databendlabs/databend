@@ -56,7 +56,7 @@ impl RecursiveCteMemoryTable {
             };
             in_mem_data
                 .entry(key)
-                .or_insert_with(|| Arc::new(RwLock::new(HashMap::new())))
+                .or_insert_with(|| Arc::new(RwLock::new(HashMap::<u64, Vec<DataBlock>>::new())))
                 .clone()
         };
 
@@ -71,8 +71,14 @@ impl RecursiveCteMemoryTable {
         self.blocks.write().insert(id, blocks);
     }
 
-    pub fn take_by_id(&self, id: u64) -> Vec<DataBlock> {
-        self.blocks.write().remove(&id).unwrap_or_default()
+    pub fn take_one_by_id(&self, id: u64) -> Option<DataBlock> {
+        let mut blocks = self.blocks.write();
+        let queue = blocks.get_mut(&id)?;
+        let block = queue.pop();
+        if queue.is_empty() {
+            blocks.remove(&id);
+        }
+        block
     }
 }
 

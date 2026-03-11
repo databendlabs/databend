@@ -303,7 +303,6 @@ impl AsyncSource for TransformRecursiveCteSource {
     const NAME: &'static str = "TransformRecursiveCteSource";
 
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let mut res = None;
         let mut data = DataBlock::empty();
         match Self::execute_r_cte(
             self.ctx.clone(),
@@ -313,12 +312,44 @@ impl AsyncSource for TransformRecursiveCteSource {
         )
         .await
         {
-            Ok(res) => {
-                if !res.0.is_empty() {
-                    data = DataBlock::concat(&res.0)?;
+            Ok((blocks, cte_scan_tables)) => {
+                if !cte_scan_tables.is_empty() {
+                    self.cte_scan_tables = cte_scan_tables;
                 }
-                if !res.1.is_empty() {
-                    self.cte_scan_tables = res.1;
+
+                if !blocks.is_empty() {
+                    let func_ctx = self.ctx.get_function_context()?;
+                    let projected_blocks = blocks
+                        .into_iter()
+                        .map(|data| {
+                            project_block(
+                                &func_ctx,
+                                data,
+                                &self.union_plan.left.output_schema()?,
+                                &self.union_plan.right.output_schema()?,
+                                &self.left_outputs,
+                                &self.right_outputs,
+                                self.recursive_step == 0,
+                            )
+                        })
+                        .filter_map(|res| match res {
+                            Ok(data) if data.num_rows() > 0 => Some(Ok(data)),
+                            Ok(_) => None,
+                            Err(err) => Some(Err(err)),
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
+                    if !projected_blocks.is_empty() {
+                        debug_assert_eq!(self.cte_scan_tables.len(), self.cte_exec_ids.len());
+                        for (prepare_id, table) in self.cte_scan_tables.iter() {
+                            let memory_table = table
+                                .as_any()
+                                .downcast_ref::<RecursiveCteMemoryTable>()
+                                .unwrap();
+                            memory_table.update_with_id(*prepare_id, projected_blocks.clone());
+                        }
+                        data = DataBlock::concat(&projected_blocks)?;
+                    }
                 }
             }
             Err(e) => {
@@ -332,33 +363,14 @@ impl AsyncSource for TransformRecursiveCteSource {
 
         let row_size = data.num_rows();
         if row_size > 0 {
-            let func_ctx = self.ctx.get_function_context()?;
-            data = project_block(
-                &func_ctx,
-                data,
-                &self.union_plan.left.output_schema()?,
-                &self.union_plan.right.output_schema()?,
-                &self.left_outputs,
-                &self.right_outputs,
-                self.recursive_step == 1,
-            )?;
-            // Prepare the data of next round recursive.
-            debug_assert_eq!(self.cte_scan_tables.len(), self.cte_exec_ids.len());
-            for (prepare_id, table) in self.cte_scan_tables.iter() {
-                let memory_table = table
-                    .as_any()
-                    .downcast_ref::<RecursiveCteMemoryTable>()
-                    .unwrap();
-                memory_table.update_with_id(*prepare_id, vec![data.clone()]);
-            }
-            res = Some(data);
+            Ok(Some(data))
         } else {
             let ctx = self.ctx.clone();
             let table_names = self.union_plan.cte_scan_names.clone();
             // Recursive end, remove all tables
             let _ = drop_tables(ctx, table_names).await?;
+            Ok(None)
         }
-        Ok(res)
     }
 }
 

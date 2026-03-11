@@ -79,21 +79,13 @@ impl AsyncSource for TransformRecursiveCteScan {
             .downcast_ref::<RecursiveCteMemoryTable>()
             .unwrap();
         let data = if let Some(id) = self.exec_id {
-            memory_table.take_by_id(id)
+            memory_table.take_one_by_id(id)
         } else {
             return Err(ErrorCode::Internal(format!(
                 "Internal, TransformRecursiveCteScan not exec_id on CTE: {}",
                 self.table_name,
             )));
         };
-        if data.is_empty() {
-            return Ok(None);
-        }
-        let data = DataBlock::concat(&data)?;
-        if data.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(data))
-        }
+        Ok(data.filter(|block| block.num_rows() > 0))
     }
 }
