@@ -14,7 +14,7 @@ edition = { workspace = true }
 name = "databend-sqllogictests"
 
 [dependencies]
-databend-sqllogictests-core = { git = "https://github.com/dqhl76/databend-sqllogictests.git" }
+databend-sqllogictests-core = { workspace = true }
 
 [lints]
 workspace = true

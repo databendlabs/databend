@@ -5885,7 +5885,7 @@ dependencies = [
 [[package]]
 name = "databend-sqllogictests-core"
 version = "0.1.0"
-source = "git+https://github.com/dqhl76/databend-sqllogictests.git#b46d0bd9b732c82f4533282aacc7720507a09e04"
+source = "git+https://github.com/dqhl76/databend-sqllogictests.git#7302b174e7da9786468817d28479b0f96e8ba7e3"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -5893,6 +5893,7 @@ dependencies = [
  "clap",
  "cookie",
  "env_logger 0.11.8",
+ "flate2",
  "futures-util",
  "mysql_async",
  "rand 0.8.5",
