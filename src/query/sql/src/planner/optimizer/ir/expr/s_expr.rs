@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use educe::Educe;
 
 use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::SExprVisitor;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::VisitAction;
@@ -285,7 +286,7 @@ impl SExpr {
     }
 
     #[recursive::recursive]
-    pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<IndexType>> {
+    pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<Symbol>> {
         let mut udf_ids = BTreeSet::new();
         if let RelOperator::Udf(udf) = self.plan.as_ref() {
             for item in udf.items.iter() {
@@ -303,13 +304,13 @@ impl SExpr {
     pub fn add_column_index_to_scans(
         &self,
         table_index: IndexType,
-        column_index: IndexType,
+        column_index: Symbol,
         inverted_index: &Option<InvertedIndexInfo>,
         vector_index: &Option<VectorIndexInfo>,
     ) -> SExpr {
         struct Visitor<'a> {
             table_index: IndexType,
-            column_index: IndexType,
+            column_index: Symbol,
             inverted_index: &'a Option<InvertedIndexInfo>,
             vector_index: &'a Option<VectorIndexInfo>,
         }

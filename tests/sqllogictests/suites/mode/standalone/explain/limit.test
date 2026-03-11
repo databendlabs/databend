@@ -238,3 +238,44 @@ query T
 explain select c1 from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 0
 ----
 EmptyResultScan
+
+query T
+settings(max_threads=2) explain pipeline select distinct  [number] from numbers(10000000) limit 3;
+----
+digraph {
+    0 [ label = "NumbersSourceTransform" ]
+    1 [ label = "NumbersSourceTransform" ]
+    2 [ label = "CompoundBlockOperator(Map)" ]
+    3 [ label = "CompoundBlockOperator(Map)" ]
+    4 [ label = "TransformRankLimitSort" ]
+    5 [ label = "TransformRankLimitSort" ]
+    6 [ label = "NewTransformPartialAggregate" ]
+    7 [ label = "NewTransformPartialAggregate" ]
+    8 [ label = "LocalScatterTransform(Bucket)" ]
+    9 [ label = "LocalScatterTransform(Bucket)" ]
+    10 [ label = "ExchangeShuffleTransform" ]
+    11 [ label = "NewTransformFinalAggregate" ]
+    12 [ label = "NewTransformFinalAggregate" ]
+    13 [ label = "Resize" ]
+    14 [ label = "Resize" ]
+    15 [ label = "LimitTransform" ]
+    16 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 2 [ label = "" ]
+    1 -> 3 [ label = "" ]
+    2 -> 4 [ label = "" ]
+    3 -> 5 [ label = "" ]
+    4 -> 6 [ label = "" ]
+    5 -> 7 [ label = "" ]
+    6 -> 8 [ label = "" ]
+    7 -> 9 [ label = "" ]
+    8 -> 10 [ label = "from: 0, to: 0" ]
+    9 -> 10 [ label = "from: 0, to: 1" ]
+    10 -> 11 [ label = "from: 0, to: 0" ]
+    10 -> 12 [ label = "from: 1, to: 0" ]
+    11 -> 13 [ label = "from: 0, to: 0" ]
+    12 -> 13 [ label = "from: 0, to: 1" ]
+    13 -> 14 [ label = "from: 0, to: 0" ]
+    13 -> 14 [ label = "from: 1, to: 1" ]
+    14 -> 15 [ label = "" ]
+    15 -> 16 [ label = "" ]
+}  

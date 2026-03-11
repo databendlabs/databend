@@ -1093,6 +1093,8 @@ impl FuseTable {
 
         FuseBlockPartInfo::create(
             location,
+            meta.bloom_filter_index_location.clone(),
+            meta.bloom_filter_index_size,
             rows_count,
             columns_meta,
             Some(columns_stats),
@@ -1141,6 +1143,8 @@ impl FuseTable {
         // not the count the rows in this partition
         FuseBlockPartInfo::create(
             location,
+            meta.bloom_filter_index_location.clone(),
+            meta.bloom_filter_index_size,
             rows_count,
             columns_meta,
             Some(columns_stat),

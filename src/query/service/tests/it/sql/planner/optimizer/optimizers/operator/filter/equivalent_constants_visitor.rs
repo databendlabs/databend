@@ -25,6 +25,7 @@ use databend_common_sql::ColumnBinding;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::optimizers::operator::EquivalentConstantsVisitor;
@@ -105,7 +106,7 @@ fn test_bind_context() -> BindContext {
         column_position: None,
         table_index: None,
         column_name: "a".to_string(),
-        index: 0,
+        index: Symbol::new(0),
         data_type: Box::new(DataType::String),
         visibility: Visibility::Visible,
         virtual_expr: None,
@@ -117,7 +118,7 @@ fn test_bind_context() -> BindContext {
         column_position: None,
         table_index: None,
         column_name: "b".to_string(),
-        index: 1,
+        index: Symbol::new(1),
         data_type: Box::new(DataType::String),
         visibility: Visibility::Visible,
         virtual_expr: None,

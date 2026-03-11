@@ -27,6 +27,8 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::PerfConfig;
+use databend_common_base::runtime::PerfEvent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -472,6 +474,12 @@ pub trait TableContext: Send + Sync {
     fn get_session_type(&self) -> SessionType {
         unimplemented!()
     }
+    fn get_perf_config(&self) -> PerfConfig {
+        unimplemented!()
+    }
+    fn set_perf_config(&self, _config: PerfConfig) {
+        unimplemented!()
+    }
     fn get_perf_flag(&self) -> bool {
         unimplemented!()
     }
@@ -482,6 +490,12 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
     fn set_nodes_perf(&self, _node: String, _perf: String) {
+        unimplemented!()
+    }
+    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
+        unimplemented!()
+    }
+    fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {
         unimplemented!()
     }
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {

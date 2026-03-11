@@ -58,11 +58,10 @@ impl TsvDecoder {
     }
 
     fn trim_record_delimiter<'a>(&self, mut row: &'a [u8]) -> &'a [u8] {
-        let len = row.len();
-        if len > 0 && row[len - 1] == self.record_delimiter {
-            row = &row[..(len - 1)];
-            if self.trim_cr && len > 2 && row[len - 2] == b'\r' {
-                row = &row[..(len - 2)];
+        if row.last() == Some(&self.record_delimiter) {
+            row = &row[..(row.len() - 1)];
+            if self.trim_cr && row.last() == Some(&b'\r') {
+                row = &row[..(row.len() - 1)];
             }
         }
         row

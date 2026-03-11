@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -34,7 +35,6 @@ use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformDummy;
-use databend_common_sql::ColumnSet;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_factory::Table;
@@ -54,7 +54,7 @@ impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(
         &self,
         predicates: &[RemoteExpr],
-        projections: ColumnSet,
+        projections: BTreeSet<usize>,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let predicate = predicates
             .iter()
@@ -185,7 +185,7 @@ impl PipelineBuilder {
         &self,
         num_input_columns: usize,
         remote_exprs: Vec<RemoteExpr>,
-        projections: Option<ColumnSet>,
+        projections: Option<BTreeSet<usize>>,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let func_ctx = self.func_ctx.clone();
         let exprs = remote_exprs

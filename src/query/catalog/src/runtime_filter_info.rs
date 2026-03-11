@@ -62,6 +62,7 @@ pub struct RuntimeFilterEntry {
     pub probe_expr: Expr<String>,
     pub bloom: Option<RuntimeFilterBloom>,
     pub inlist: Option<Expr<String>>,
+    pub inlist_value_count: usize,
     pub min_max: Option<Expr<String>>,
     pub stats: Arc<RuntimeFilterStats>,
     pub build_rows: usize,

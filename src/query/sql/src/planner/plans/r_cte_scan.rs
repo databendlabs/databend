@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
+use databend_common_expression::Symbol;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::Distribution;
@@ -40,7 +41,7 @@ impl RecursiveCteScan {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for field in self.fields.iter() {
-            used_columns.insert(field.name().parse()?);
+            used_columns.insert(field.name().parse::<Symbol>()?);
         }
         Ok(used_columns)
     }

@@ -14,6 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
+use databend_common_expression::types::DataType;
+
+use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -23,7 +27,6 @@ use crate::plans::Aggregate;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 
@@ -39,7 +42,6 @@ use crate::plans::SortItem;
 ///             \
 ///               *
 pub struct RulePushDownRankLimitAggregate {
-    id: RuleID,
     matchers: Vec<Matcher>,
     max_limit: usize,
 }
@@ -47,32 +49,10 @@ pub struct RulePushDownRankLimitAggregate {
 impl RulePushDownRankLimitAggregate {
     pub fn new(max_limit: usize) -> Self {
         Self {
-            id: RuleID::PushDownRankLimitAggregate,
             matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Limit,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::Leaf],
-                    }],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::Leaf],
-                    }],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Sort,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::EvalScalar,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
-                            children: vec![Matcher::Leaf],
-                        }],
-                    }],
-                },
+                match_op!(Limit -> Aggregate -> *),
+                match_op!(Sort -> Aggregate -> *),
+                match_op!(Sort -> EvalScalar -> Aggregate -> *),
             ],
             max_limit,
         }
@@ -93,7 +73,7 @@ impl RulePushDownRankLimitAggregate {
         if count > self.max_limit {
             return Ok(());
         }
-        let agg = s_expr.child(0)?;
+        let agg = s_expr.unary_child();
         let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
 
         let sort_items = agg_limit
@@ -105,24 +85,46 @@ impl RulePushDownRankLimitAggregate {
                 nulls_first: false,
             })
             .collect::<Vec<_>>();
-        agg_limit.rank_limit = Some((sort_items.clone(), count));
+        agg_limit.rank_limit = Some((sort_items, count));
 
-        let sort = Sort {
-            items: sort_items.clone(),
-            limit: Some(count),
-            after_exchange: None,
-            pre_projection: None,
-            window_partition: None,
+        let mut sort_items = Vec::new();
+        for item in &agg_limit.group_items {
+            match item.scalar.data_type()?.remove_nullable() {
+                DataType::Null
+                | DataType::Boolean
+                | DataType::Number(_)
+                | DataType::Decimal(_)
+                | DataType::Timestamp
+                | DataType::TimestampTz
+                | DataType::Interval
+                | DataType::Date
+                | DataType::Binary
+                | DataType::String
+                | DataType::Variant => {}
+                _ => continue,
+            }
+
+            sort_items.push(SortItem {
+                index: item.index,
+                asc: true,
+                nulls_first: false,
+            });
+        }
+
+        let agg = agg.unary_child_arc().ref_build_unary(agg_limit);
+        let mut result = if sort_items.is_empty() {
+            s_expr.replace_children(vec![Arc::new(agg)])
+        } else {
+            s_expr.replace_children(vec![Arc::new(agg.build_unary(Sort {
+                items: sort_items,
+                limit: Some(count),
+                after_exchange: None,
+                pre_projection: None,
+                window_partition: None,
+            }))])
         };
+        result.set_applied_rule(&self.id());
 
-        let agg = SExpr::create_unary(
-            Arc::new(RelOperator::Aggregate(agg_limit)),
-            Arc::new(agg.child(0)?.clone()),
-        );
-        let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg);
-        let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
-
-        result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())
     }
@@ -179,18 +181,14 @@ impl RulePushDownRankLimitAggregate {
 
         agg_limit.rank_limit = Some((sort_items, limit));
 
-        let agg = SExpr::create_unary(
-            Arc::new(RelOperator::Aggregate(agg_limit)),
-            Arc::new(agg_limit_expr.child(0)?.clone()),
-        );
-
+        let agg = agg_limit_expr.unary_child_arc().ref_build_unary(agg_limit);
         let mut result = if has_eval_scalar {
-            let eval_scalar = s_expr.child(0)?.replace_children(vec![Arc::new(agg)]);
+            let eval_scalar = s_expr.unary_child().replace_children(vec![Arc::new(agg)]);
             s_expr.replace_children(vec![Arc::new(eval_scalar)])
         } else {
             s_expr.replace_children(vec![Arc::new(agg)])
         };
-        result.set_applied_rule(&self.id);
+        result.set_applied_rule(&self.id());
         state.add_result(result);
         Ok(())
     }
@@ -198,18 +196,28 @@ impl RulePushDownRankLimitAggregate {
 
 impl Rule for RulePushDownRankLimitAggregate {
     fn id(&self) -> RuleID {
-        self.id
+        RuleID::PushDownRankLimitAggregate
     }
 
-    fn apply(
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<(), ErrorCode> {
+        let i = self
+            .matchers
+            .iter()
+            .position(|matcher| matcher.matches(s_expr))
+            .unwrap();
+        self.apply_matcher(i, s_expr, state)
+    }
+
+    fn apply_matcher(
         &self,
+        i: usize,
         s_expr: &SExpr,
         state: &mut TransformResult,
-    ) -> databend_common_exception::Result<()> {
-        match s_expr.plan().rel_op() {
-            RelOp::Limit => self.apply_limit(s_expr, state),
-            RelOp::Sort | RelOp::EvalScalar => self.apply_sort(s_expr, state),
-            _ => Ok(()),
+    ) -> Result<(), ErrorCode> {
+        match i {
+            0 => self.apply_limit(s_expr, state),
+            1 | 2 => self.apply_sort(s_expr, state),
+            _ => unreachable!(),
         }
     }
 

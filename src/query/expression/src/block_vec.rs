@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
 use binary::take_binary_from_views;
 use binary::take_nullable_binary_from_views;
 use boolean::take_boolean_from_views;
 use boolean::take_nullable_boolean_from_views;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use string::StringColumnBuilder;
@@ -27,10 +30,12 @@ use crate::BlockEntry;
 use crate::BlockIndex;
 use crate::Chunk;
 use crate::ChunkIndex;
-use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnView;
 use crate::DataBlock;
+use crate::LimitType;
+use crate::SortColumnDescription;
+use crate::SortCompare;
 use crate::TakeIndex;
 use crate::types::AccessType;
 use crate::types::date::CoreDate;
@@ -66,6 +71,7 @@ struct TypeHandler {
     push: fn(&mut ColumnStorage, BlockEntry) -> Result<()>,
     replace: fn(&mut ColumnStorage, usize, BlockEntry),
     take: fn(&ColumnStorage, &ChunkIndex) -> BlockEntry,
+    sort_indices: fn(&mut SortCompare, &ColumnStorage, &RowLocations),
     require_same_type: bool,
 }
 
@@ -76,12 +82,20 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<T>,
             replace: DataBlockVec::replace_typed::<T>,
             take: DataBlockVec::take_typed::<T>,
+            sort_indices: DataBlockVec::sort_indices_by_typed::<T>,
             require_same_type,
         }
     }
 
     fn nullable<T: ValueType>() -> Self {
-        Self::typed::<NullableType<T>>(true)
+        Self {
+            init: DataBlockVec::init_typed::<NullableType<T>>,
+            push: DataBlockVec::push_typed::<NullableType<T>>,
+            replace: DataBlockVec::replace_typed::<NullableType<T>>,
+            take: DataBlockVec::take_typed::<NullableType<T>>,
+            sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<T>,
+            require_same_type: true,
+        }
     }
 
     fn primitive<TColumn, TSimple>() -> Self
@@ -94,6 +108,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<TColumn>,
             replace: DataBlockVec::replace_typed::<TColumn>,
             take: DataBlockVec::take_primitive::<TSimple>,
+            sort_indices: DataBlockVec::sort_indices_by_typed::<TColumn>,
             require_same_type: false,
         }
     }
@@ -108,6 +123,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<TColumn>>,
             replace: DataBlockVec::replace_typed::<NullableType<TColumn>>,
             take: DataBlockVec::take_nullable_primitive::<TSimple>,
+            sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<TColumn>,
             require_same_type: true,
         }
     }
@@ -122,6 +138,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<T>,
             replace: DataBlockVec::replace_typed::<T>,
             take: DataBlockVec::take_binary::<T>,
+            sort_indices: DataBlockVec::sort_indices_by_typed::<T>,
             require_same_type: false,
         }
     }
@@ -136,6 +153,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<T>>,
             replace: DataBlockVec::replace_typed::<NullableType<T>>,
             take: DataBlockVec::take_nullable_binary::<T>,
+            sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<T>,
             require_same_type: true,
         }
     }
@@ -146,6 +164,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<StringType>,
             replace: DataBlockVec::replace_typed::<StringType>,
             take: DataBlockVec::take_string,
+            sort_indices: DataBlockVec::sort_indices_by_typed::<StringType>,
             require_same_type: false,
         }
     }
@@ -156,6 +175,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<StringType>>,
             replace: DataBlockVec::replace_typed::<NullableType<StringType>>,
             take: DataBlockVec::take_nullable_string,
+            sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<StringType>,
             require_same_type: true,
         }
     }
@@ -166,6 +186,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<BooleanType>,
             replace: DataBlockVec::replace_typed::<BooleanType>,
             take: DataBlockVec::take_boolean,
+            sort_indices: DataBlockVec::sort_indices_by_typed::<BooleanType>,
             require_same_type: false,
         }
     }
@@ -176,6 +197,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<BooleanType>>,
             replace: DataBlockVec::replace_typed::<NullableType<BooleanType>>,
             take: DataBlockVec::take_nullable_boolean,
+            sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<BooleanType>,
             require_same_type: true,
         }
     }
@@ -187,6 +209,19 @@ impl DataBlockVec {
             size_hit: capacity,
             ..Default::default()
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.columns.clear();
+        self.block_rows.clear();
+    }
+
+    pub fn from_blocks(blocks: Vec<DataBlock>) -> Result<Self> {
+        let mut data_block_vec = Self::with_capacity(blocks.len());
+        for block in blocks {
+            data_block_vec.push(block)?;
+        }
+        Ok(data_block_vec)
     }
 
     pub fn push(&mut self, data_block: DataBlock) -> Result<()> {
@@ -283,6 +318,90 @@ impl DataBlockVec {
 
     pub fn block_rows(&self) -> &[usize] {
         &self.block_rows
+    }
+
+    pub fn sort_limit(
+        &self,
+        sort_desc: Arc<[SortColumnDescription]>,
+        limit: LimitType,
+    ) -> Result<DataBlock> {
+        if self.block_rows.is_empty() {
+            return Err(ErrorCode::EmptyData(
+                "Can not sort with rank limit from empty blocks",
+            ));
+        }
+
+        let num_rows: usize = self.block_rows.iter().sum();
+        if num_rows <= 1 || self.columns.is_empty() {
+            let permutation = (0..num_rows as u32).collect::<Vec<_>>();
+            let chunk_index = Self::permutation_to_chunk_index(&permutation, self.block_rows())?;
+            return Ok(self.take(&chunk_index));
+        }
+
+        let row_locations = self.build_row_locations()?;
+        let num_rows = row_locations.len();
+
+        let mut sort_compare = SortCompare::new(sort_desc.to_vec(), num_rows, limit);
+
+        for desc in sort_desc.iter() {
+            let storage = self.columns.get(desc.offset).ok_or_else(|| {
+                ErrorCode::Internal(format!("Sort offset out of bounds: {}", desc.offset))
+            })?;
+            let handler = Self::handler_for(&storage.data_type);
+            (handler.sort_indices)(&mut sort_compare, storage, &row_locations);
+            sort_compare.increment_column_index();
+        }
+
+        let permutation = sort_compare.take_permutation();
+        let chunk_index = Self::permutation_to_chunk_index(&permutation, self.block_rows())?;
+        Ok(self.take(&chunk_index))
+    }
+
+    fn build_row_locations(&self) -> Result<RowLocations> {
+        let capacity = self.block_rows.iter().sum();
+        let mut row_locations = RowLocations::with_capacity(capacity);
+        for (block, rows) in self.block_rows.iter().copied().enumerate() {
+            if rows == 0 {
+                continue;
+            }
+            for row in 0..rows {
+                row_locations.data.push((block as u32, row as u32));
+            }
+        }
+        Ok(row_locations)
+    }
+
+    fn permutation_to_chunk_index(permutation: &[u32], block_rows: &[usize]) -> Result<ChunkIndex> {
+        let mut block_ends = Vec::with_capacity(block_rows.len());
+        let mut total_rows = 0_u32;
+        for rows in block_rows.iter().copied() {
+            let rows = u32::try_from(rows).map_err(|_| {
+                ErrorCode::Internal("Rows in a single block exceed u32::MAX".to_string())
+            })?;
+            total_rows = total_rows
+                .checked_add(rows)
+                .ok_or_else(|| ErrorCode::Internal("Total rows exceed u32::MAX".to_string()))?;
+            block_ends.push(total_rows);
+        }
+
+        let mut chunk_index = ChunkIndex::default();
+        for global_row in permutation.iter().copied() {
+            let block_index = block_ends.partition_point(|&end| end <= global_row);
+            if block_index >= block_ends.len() {
+                return Err(ErrorCode::Internal(format!(
+                    "Invalid row index in permutation: {global_row}"
+                )));
+            }
+
+            let block_start = if block_index == 0 {
+                0
+            } else {
+                block_ends[block_index - 1]
+            };
+            chunk_index.push_merge(block_index as u32, global_row - block_start);
+        }
+
+        Ok(chunk_index)
     }
 
     fn empty_block(&self) -> DataBlock {
@@ -527,5 +646,98 @@ impl DataBlockVec {
     fn take_nullable_boolean(storage: &ColumnStorage, indices: &ChunkIndex) -> BlockEntry {
         let views = Self::column_views::<NullableType<BooleanType>>(storage);
         take_nullable_boolean_from_views(views, indices)
+    }
+
+    fn sort_indices_by_typed<T: ValueType>(
+        sort_compare: &mut SortCompare,
+        storage: &ColumnStorage,
+        locations: &RowLocations,
+    ) {
+        let views = Self::column_views::<T>(storage);
+        sort_compare.update_permutation_by(None, |left, right| {
+            let (lhs_block, lhs_row) = locations.get(left);
+            let (rhs_block, rhs_row) = locations.get(right);
+            T::compare(
+                unsafe { views[lhs_block].index_unchecked(lhs_row) },
+                unsafe { views[rhs_block].index_unchecked(rhs_row) },
+            )
+        });
+    }
+
+    fn sort_indices_by_nullable_typed<T: ValueType>(
+        sort_compare: &mut SortCompare,
+        storage: &ColumnStorage,
+        locations: &RowLocations,
+    ) {
+        let views = Self::column_views::<NullableType<T>>(storage);
+        sort_compare.update_permutation_by(Self::nullable_validity_bitmap(views), |left, right| {
+            let (lhs_block, lhs_row) = locations.get(left);
+            let (rhs_block, rhs_row) = locations.get(right);
+            T::compare(
+                Self::nullable_inner_value_unchecked(&views[lhs_block], lhs_row),
+                Self::nullable_inner_value_unchecked(&views[rhs_block], rhs_row),
+            )
+        })
+    }
+
+    fn nullable_validity_bitmap<T: ValueType>(
+        views: &[ColumnView<NullableType<T>>],
+    ) -> Option<Bitmap> {
+        let has_null = views.iter().any(|view| match view {
+            ColumnView::Const(value, num_rows) => value.is_none() && *num_rows > 0,
+            ColumnView::Column(column) => column.validity().null_count() > 0,
+        });
+
+        if !has_null {
+            return None;
+        }
+
+        let mut bitmap = MutableBitmap::with_capacity(views.iter().map(ColumnView::len).sum());
+        for view in views.iter() {
+            match view {
+                ColumnView::Const(value, num_rows) => {
+                    bitmap.extend_constant(*num_rows, value.is_some());
+                }
+                ColumnView::Column(column) => bitmap.extend_from_bitmap(column.validity()),
+            }
+        }
+        Some(bitmap.into())
+    }
+
+    fn nullable_inner_value_unchecked<T: ValueType>(
+        view: &ColumnView<NullableType<T>>,
+        row: usize,
+    ) -> T::ScalarRef<'_> {
+        match view {
+            ColumnView::Const(Some(value), _) => T::to_scalar_ref(value),
+            ColumnView::Const(None, _) => {
+                unreachable!("validity bitmap mismatch for nullable sort const value")
+            }
+            ColumnView::Column(nullable) => unsafe {
+                T::index_column_unchecked(nullable.column(), row)
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct RowLocations {
+    data: Vec<(u32, u32)>,
+}
+
+impl RowLocations {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            data: Vec::with_capacity(capacity),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    fn get(&self, index: u32) -> (usize, usize) {
+        let (block, row) = self.data[index as usize];
+        (block as _, row as _)
     }
 }

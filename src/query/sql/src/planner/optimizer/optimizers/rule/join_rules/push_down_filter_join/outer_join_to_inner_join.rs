@@ -31,6 +31,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::TypeCheck;
 use crate::binder::JoinPredicate;
 use crate::executor::cast_expr_to_non_null_boolean;
@@ -240,7 +241,7 @@ pub fn can_filter_null(
 // Convert `ScalarExpr` to `Expr`.
 fn convert_scalar_expr_to_expr(
     scalar_expr: ScalarExpr,
-    columns: HashMap<usize, DataType>,
+    columns: HashMap<Symbol, DataType>,
 ) -> Result<Expr> {
     let fields = columns
         .into_iter()

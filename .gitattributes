@@ -1,2 +1,5 @@
 docker/** -text
 scripts/** -text
+tests/data/tsv/crlf_record_delimiter.tsv -text
+tests/data/tsv/crlf_empty_line.tsv -text
+tests/data/tsv/crlf_unterminated_data_cr.tsv -text

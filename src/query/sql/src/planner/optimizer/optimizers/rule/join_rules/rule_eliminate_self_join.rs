@@ -23,9 +23,9 @@ use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::Visibility;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
@@ -86,8 +86,8 @@ struct AggFuncSignature {
 struct Candidate {
     table_id: u64,
     group_key: GroupKeyItemSignature,
-    group_key_index: IndexType,
-    agg_func_indexes: Vec<(AggFuncSignature, IndexType)>,
+    group_key_index: Symbol,
+    agg_func_indexes: Vec<(AggFuncSignature, Symbol)>,
     /// Scalar items introduced above the (Filter +) Aggregate chain.
     ///
     /// If the corresponding relation is eliminated, these derived columns must be
@@ -194,7 +194,7 @@ impl RuleEliminateSelfJoin {
         }
 
         let mut remove_relations: HashSet<usize> = HashSet::new();
-        let mut removed_to_keep_column_mapping: HashMap<IndexType, IndexType> = HashMap::new();
+        let mut removed_to_keep_column_mapping: HashMap<Symbol, Symbol> = HashMap::new();
         let mut extra_scalar_items: Vec<ScalarItem> = Vec::new();
         for (_key, group_candidates) in groups.iter() {
             let has_strict = group_candidates.iter().any(|c| c.strict);
@@ -255,7 +255,7 @@ impl RuleEliminateSelfJoin {
 
     fn rewrite_extra_scalar_items(
         items: &[ScalarItem],
-        mapping: &HashMap<IndexType, IndexType>,
+        mapping: &HashMap<Symbol, Symbol>,
         metadata: &Metadata,
     ) -> Option<Vec<ScalarItem>> {
         if items.is_empty() {
@@ -423,7 +423,7 @@ impl RuleEliminateSelfJoin {
     fn agg_func_indexes(
         agg_items: &[ScalarItem],
         metadata: &Metadata,
-    ) -> Option<Vec<(AggFuncSignature, IndexType)>> {
+    ) -> Option<Vec<(AggFuncSignature, Symbol)>> {
         let mut result = Vec::with_capacity(agg_items.len());
         for item in agg_items.iter() {
             result.push((Self::agg_func_signature(item, metadata)?, item.index));
@@ -439,12 +439,12 @@ impl RuleEliminateSelfJoin {
     fn build_removed_to_keep_index_mapping(
         remove: &Candidate,
         keep: &Candidate,
-    ) -> Option<HashMap<IndexType, IndexType>> {
+    ) -> Option<HashMap<Symbol, Symbol>> {
         let mut mapping = HashMap::new();
 
         mapping.insert(remove.group_key_index, keep.group_key_index);
 
-        let mut keep_agg_by_sig: HashMap<&AggFuncSignature, Vec<IndexType>> = HashMap::new();
+        let mut keep_agg_by_sig: HashMap<&AggFuncSignature, Vec<Symbol>> = HashMap::new();
         for (sig, idx) in keep.agg_func_indexes.iter() {
             keep_agg_by_sig.entry(sig).or_default().push(*idx);
         }
@@ -463,7 +463,7 @@ impl RuleEliminateSelfJoin {
         Some(mapping)
     }
 
-    fn make_column_binding(metadata: &Metadata, index: IndexType) -> ColumnBinding {
+    fn make_column_binding(metadata: &Metadata, index: Symbol) -> ColumnBinding {
         let entry = metadata.column(index);
         ColumnBindingBuilder::new(
             entry.name(),
@@ -474,7 +474,7 @@ impl RuleEliminateSelfJoin {
         .build()
     }
 
-    fn make_bound_column_ref(metadata: &Metadata, index: IndexType) -> ScalarExpr {
+    fn make_bound_column_ref(metadata: &Metadata, index: Symbol) -> ScalarExpr {
         let binding = Self::make_column_binding(metadata, index);
         crate::plans::BoundColumnRef {
             span: None,
@@ -485,7 +485,7 @@ impl RuleEliminateSelfJoin {
 
     fn project_columns(
         rewritten: SExpr,
-        column_mapping: &HashMap<IndexType, IndexType>,
+        column_mapping: &HashMap<Symbol, Symbol>,
         metadata: &Metadata,
     ) -> Result<SExpr> {
         let output_columns = rewritten.derive_relational_prop()?.output_columns.clone();
@@ -558,7 +558,7 @@ impl RuleEliminateSelfJoin {
         equi_conditions: &[JoinEquiCondition],
         non_equi_conditions: &[ScalarExpr],
         remove_relations: &HashSet<usize>,
-        mapping: &HashMap<IndexType, IndexType>,
+        mapping: &HashMap<Symbol, Symbol>,
         metadata: &Metadata,
     ) -> Result<Option<SExpr>> {
         let mut kept_relations: Vec<Arc<SExpr>> = relations
@@ -652,11 +652,11 @@ impl RuleEliminateSelfJoin {
 
 #[derive(Default, Clone, Debug)]
 struct UnionFind {
-    parent: HashMap<IndexType, IndexType>,
+    parent: HashMap<Symbol, Symbol>,
 }
 
 impl UnionFind {
-    fn find(&mut self, x: IndexType) -> IndexType {
+    fn find(&mut self, x: Symbol) -> Symbol {
         let parent = *self.parent.get(&x).unwrap_or(&x);
         if parent == x {
             self.parent.insert(x, x);
@@ -667,7 +667,7 @@ impl UnionFind {
         root
     }
 
-    fn union(&mut self, a: IndexType, b: IndexType) {
+    fn union(&mut self, a: Symbol, b: Symbol) {
         let ra = self.find(a);
         let rb = self.find(b);
         if ra == rb {
@@ -676,7 +676,7 @@ impl UnionFind {
         self.parent.insert(rb, ra);
     }
 
-    fn same(&mut self, a: IndexType, b: IndexType) -> bool {
+    fn same(&mut self, a: Symbol, b: Symbol) -> bool {
         self.find(a) == self.find(b)
     }
 }

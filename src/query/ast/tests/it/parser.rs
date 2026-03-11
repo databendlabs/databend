@@ -124,6 +124,9 @@ fn test_statement() {
         r#"explain replace into test on(c) select sum(c) as c from source group by v;"#,
         r#"explain pipeline select a from t1 ignore_result;"#,
         r#"explain(verbose, logical, optimized) select * from t where a = 1"#,
+        r#"explain perf select a from b;"#,
+        r#"explain perf (events='cycles,instructions') select a from b;"#,
+        r#"explain perf (events='cycles+instructions,branch-misses') select a from b;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
@@ -550,6 +553,13 @@ SELECT * from s;"#,
                     record_delimiter = '\n'
                     skip_header = 1
                 );
+        "#,
+        r#"
+            COPY INTO @tmp/test1/
+                FROM (SELECT * FROM numbers(10))
+                FILE_FORMAT = (
+                    type = LANCE
+                )
         "#,
         r#"
             COPY INTO mytable

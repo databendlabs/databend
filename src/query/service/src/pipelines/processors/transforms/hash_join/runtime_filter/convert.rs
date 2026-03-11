@@ -69,6 +69,16 @@ pub async fn build_runtime_filter_infos(
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
         for (probe_key, scan_id) in &desc.probe_targets {
             let entry = filters.entry(*scan_id).or_default();
+            let (inlist, inlist_value_count) = if enabled {
+                if let Some(ref inlist) = packet.inlist {
+                    let (expr, value_count) = build_inlist_filter(inlist.clone(), probe_key)?;
+                    (Some(expr), value_count)
+                } else {
+                    (None, 0)
+                }
+            } else {
+                (None, 0)
+            };
 
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
@@ -85,15 +95,8 @@ pub async fn build_runtime_filter_infos(
                 } else {
                     None
                 },
-                inlist: if enabled {
-                    if let Some(ref inlist) = packet.inlist {
-                        Some(build_inlist_filter(inlist.clone(), probe_key)?)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
+                inlist,
+                inlist_value_count,
                 min_max: if enabled {
                     if let Some(ref min_max) = packet.min_max {
                         Some(build_min_max_filter(
@@ -119,13 +122,17 @@ pub async fn build_runtime_filter_infos(
     Ok(filters)
 }
 
-fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<String>> {
+fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr<String>, usize)> {
+    let inlist_value_count = inlist.len();
     if inlist.len() == 0 {
-        return Ok(Expr::Constant(Constant {
-            span: None,
-            scalar: Scalar::Boolean(false),
-            data_type: DataType::Boolean,
-        }));
+        return Ok((
+            Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::Boolean(false),
+                data_type: DataType::Boolean,
+            }),
+            0,
+        ));
     }
     let probe_key = match probe_key {
         Expr::ColumnRef(col) => col,
@@ -137,6 +144,7 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
         _ => unreachable!(),
     };
 
+    let probe_data_type = probe_key.data_type.clone();
     let raw_probe_key = RawExpr::ColumnRef {
         span: probe_key.span,
         id: probe_key.id.to_string(),
@@ -153,7 +161,7 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
             args: vec![raw_probe_key.clone(), RawExpr::Constant {
                 span: None,
                 scalar: scalar_ref.to_owned(),
-                data_type: None,
+                data_type: Some(probe_data_type.clone()),
             }],
         })
         .collect();
@@ -170,7 +178,7 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
     };
 
     let expr = type_check::check(&or_filters_expr, &BUILTIN_FUNCTIONS)?;
-    Ok(expr)
+    Ok((expr, inlist_value_count))
 }
 
 fn build_min_max_filter(
@@ -339,7 +347,8 @@ mod tests {
         });
 
         // Build the filter expression
-        let filter_expr = build_inlist_filter(inlist, &probe_key).unwrap();
+        let (filter_expr, inlist_value_count) = build_inlist_filter(inlist, &probe_key).unwrap();
+        assert_eq!(inlist_value_count, 2);
 
         // Test with ConstantFolder - case where column_a in [2,10] (can be folded to constant)
         let mut input_domains = HashMap::new();
@@ -390,6 +399,55 @@ mod tests {
         }
     }
 
+    fn collect_string_constant_types(expr: &Expr<String>, constant_types: &mut Vec<DataType>) {
+        match expr {
+            Expr::Constant(Constant {
+                scalar: Scalar::String(_),
+                data_type,
+                ..
+            }) => constant_types.push(data_type.clone()),
+            Expr::Cast(cast) => collect_string_constant_types(&cast.expr, constant_types),
+            Expr::FunctionCall(call) => {
+                for arg in &call.args {
+                    collect_string_constant_types(arg, constant_types);
+                }
+            }
+            Expr::LambdaFunctionCall(call) => {
+                for arg in &call.args {
+                    collect_string_constant_types(arg, constant_types);
+                }
+            }
+            Expr::Constant(_) | Expr::ColumnRef(_) => {}
+        }
+    }
+
+    #[test]
+    fn test_build_inlist_filter_nullable_string_preserves_constant_type() {
+        let data_type = DataType::String;
+        let probe_data_type = DataType::Nullable(Box::new(DataType::String));
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 2);
+        builder.push(Scalar::String("a".to_string()).as_ref());
+        builder.push(Scalar::String("b".to_string()).as_ref());
+        let inlist = builder.build();
+
+        let probe_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "column_s".to_string(),
+            data_type: probe_data_type.clone(),
+            display_name: "column_s".to_string(),
+        });
+
+        let (filter_expr, inlist_value_count) = build_inlist_filter(inlist, &probe_key).unwrap();
+        assert_eq!(inlist_value_count, 2);
+
+        let mut constant_types = Vec::new();
+        collect_string_constant_types(&filter_expr, &mut constant_types);
+        assert_eq!(constant_types, vec![
+            probe_data_type.clone(),
+            probe_data_type
+        ]);
+    }
+
     #[test]
     fn test_build_inlist_filter_large() {
         let func_ctx = FunctionContext::default();
@@ -411,7 +469,8 @@ mod tests {
         });
 
         // Build the filter expression - this should create a balanced binary tree
-        let filter_expr = build_inlist_filter(inlist, &probe_key).unwrap();
+        let (filter_expr, inlist_value_count) = build_inlist_filter(inlist, &probe_key).unwrap();
+        assert_eq!(inlist_value_count, 1024);
 
         // Verify the expression was built successfully
         assert!(

@@ -23,6 +23,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
+use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -31,7 +32,6 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_sql::executor::physical_plans::window::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::window::WindowFunction;
-use itertools::Itertools;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
@@ -194,12 +194,13 @@ impl WindowFunctionInfo {
                     arg_indexes.push(*p);
                 }
                 for (i, desc) in agg.sig.sort_descs.iter().enumerate() {
+                    let sort_index = desc.index.as_symbol().unwrap();
                     // sort_desc will reuse existing columns, so only need to insert new columns.
-                    if agg.sig.sort_descs[i].is_reuse_index && args.contains(&desc.index) {
+                    if agg.sig.sort_descs[i].is_reuse_index && arg_indexes.contains(&sort_index) {
                         continue;
                     }
-                    args.push(schema.index_of(&desc.index.to_string())?);
-                    arg_indexes.push(desc.index);
+                    args.push(schema.index_of(&sort_index.to_string())?);
+                    arg_indexes.push(sort_index);
                 }
 
                 let remapping_sort_descs = agg
@@ -207,20 +208,17 @@ impl WindowFunctionInfo {
                     .sort_descs
                     .iter()
                     .map(|desc| {
-                        let index = arg_indexes
-                            .iter()
-                            .find_position(|i| **i == desc.index)
-                            .map(|(i, _)| i)
-                            .unwrap_or(desc.index);
-                        Ok(AggregateFunctionSortDesc {
-                            index,
+                        let sort_index = desc.index.as_symbol().unwrap();
+                        let offset = arg_indexes.iter().position(|i| *i == sort_index).unwrap();
+                        AggregateFunctionSortDesc {
+                            index: SymbolOrOffset::Offset(offset),
                             is_reuse_index: desc.is_reuse_index,
                             data_type: desc.data_type.clone(),
                             nulls_first: desc.nulls_first,
                             asc: desc.asc,
-                        })
+                        }
                     })
-                    .collect::<Result<Vec<_>>>()?;
+                    .collect::<Vec<_>>();
                 let agg_func = AggregateFunctionFactory::instance().get(
                     agg.sig.name.as_str(),
                     agg.sig.params.clone(),

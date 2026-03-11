@@ -27,6 +27,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::UDFType;
 use itertools::Itertools;
@@ -146,7 +147,7 @@ impl IPhysicalPlan for Udf {
 pub struct UdfFunctionDesc {
     pub name: String,
     pub func_name: String,
-    pub output_column: IndexType,
+    pub output_column: Symbol,
     pub arg_indices: Vec<IndexType>,
     pub arg_exprs: Vec<String>,
     pub data_type: Box<DataType>,

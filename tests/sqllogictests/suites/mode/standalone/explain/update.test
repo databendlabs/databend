@@ -34,6 +34,8 @@ CommitSink
                 ├── probe keys: [t1.a (#0)]
                 ├── keys is null equal: [false]
                 ├── filters: []
+                ├── build join filters:
+                │   └── filter id:0, build key:subquery_2 (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
                 ├── estimated rows: 2.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.t2
@@ -56,6 +58,7 @@ CommitSink
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                     ├── push downs: [filters: [], limit: NONE]
+                    ├── apply join filters: [#0]
                     └── estimated rows: 4.00
 
 
@@ -106,6 +109,8 @@ CommitSink
                 ├── probe keys: [t1.a (#0)]
                 ├── keys is null equal: [false]
                 ├── filters: []
+                ├── build join filters:
+                │   └── filter id:0, build key:subquery_2 (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
                 ├── estimated rows: 2.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.t2
@@ -128,6 +133,7 @@ CommitSink
                     ├── partitions scanned: 1
                     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                     ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
+                    ├── apply join filters: [#0]
                     └── estimated rows: 3.00
 
 query T

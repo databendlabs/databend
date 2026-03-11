@@ -247,14 +247,15 @@ impl BlockBuilder {
             None
         };
 
-        let spatial_index_state =
+        let (spatial_index_state, spatial_stats) =
             if let Some(ref spatial_index_builder) = self.spatial_index_builder {
                 let spatial_index_location = self.meta_locations.block_spatial_index_location();
                 let mut spatial_index_builder = spatial_index_builder.clone();
                 spatial_index_builder.add_block(&data_block)?;
-                spatial_index_builder.finalize(&spatial_index_location)?
+                let spatial_result = spatial_index_builder.finalize(&spatial_index_location)?;
+                (spatial_result.index_state, spatial_result.spatial_stats)
             } else {
-                None
+                (None, None)
             };
 
         let virtual_column_state =
@@ -312,6 +313,7 @@ impl BlockBuilder {
             vector_index_location: vector_index_state.as_ref().map(|v| v.location.clone()),
             spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
             spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
+            spatial_stats,
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,

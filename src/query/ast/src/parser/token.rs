@@ -897,6 +897,8 @@ pub enum TokenKind {
     L1DISTANCE,
     #[token("<->")]
     L2DISTANCE,
+    #[token("LANCE", ignore(ascii_case))]
+    LANCE,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]

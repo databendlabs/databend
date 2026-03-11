@@ -25,7 +25,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 
 use crate::ColumnBindingBuilder;
-use crate::IndexType;
+use crate::Symbol;
 use crate::Visibility;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
@@ -90,11 +90,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
     }
 
     /// Analyzes grouping sets to build a true hierarchical dependency DAG
-    fn build_hierarchy_dag(
-        &self,
-        grouping_sets: &[Vec<IndexType>],
-        agg: &Aggregate,
-    ) -> HierarchyDAG {
+    fn build_hierarchy_dag(&self, grouping_sets: &[Vec<Symbol>], agg: &Aggregate) -> HierarchyDAG {
         let mut levels: Vec<GroupingLevel> = grouping_sets
             .iter()
             .enumerate()
@@ -252,7 +248,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg_input: &SExpr,
         hierarchy: HierarchyDAG,
         base_cte_name: String,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<SExpr> {
         let mut all_ctes = Vec::new();
 
@@ -274,7 +270,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         }
 
         // Step 2: Create CTEs for grouping sets, organizing by dependency levels for parallelization
-        let agg_input_columns: Vec<IndexType> = RelExpr::with_s_expr(agg_input)
+        let agg_input_columns: Vec<Symbol> = RelExpr::with_s_expr(agg_input)
             .derive_relational_prop()?
             .output_columns
             .iter()
@@ -442,7 +438,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         original_cte_name: &str,
         level: &GroupingLevel,
         agg: &Aggregate,
-        agg_input_columns: &[IndexType],
+        agg_input_columns: &[Symbol],
     ) -> Result<SExpr> {
         // Create aggregate plan for this grouping set
         let mut group_agg = agg.clone();
@@ -530,7 +526,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         eval_scalar: &EvalScalar,
         hierarchy: &HierarchyDAG,
         agg: &Aggregate,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<Vec<SExpr>> {
         let mut branches = Vec::new();
 
@@ -648,7 +644,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         }
 
         // Create parent CTE consumer
-        let parent_output_columns: Vec<IndexType> = {
+        let parent_output_columns: Vec<Symbol> = {
             let mut output_cols = Vec::new();
             // First: aggregate function output columns
             for agg_item in &agg.aggregate_functions {
@@ -700,7 +696,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         format!("cte_hierarchical_groupingsets_{}", hash)
     }
 
-    fn generate_unique_cte_name(base_name: &str, columns: &[IndexType]) -> String {
+    fn generate_unique_cte_name(base_name: &str, columns: &[Symbol]) -> String {
         if columns.is_empty() {
             return format!("{}_empty", base_name);
         }
@@ -721,12 +717,12 @@ impl RuleHierarchicalGroupingSetsToUnion {
     fn build_final_branch(
         &self,
         eval_scalar: &EvalScalar,
-        group_columns: &[IndexType],
+        group_columns: &[Symbol],
         source_cte: &CteInfo,
-        source_output_columns: &[IndexType],
+        source_output_columns: &[Symbol],
         _set_index: usize,
         agg: &Aggregate,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<SExpr> {
         let mut column_mapping = HashMap::new();
 
@@ -772,13 +768,13 @@ impl RuleHierarchicalGroupingSetsToUnion {
         &self,
         eval_scalar: &mut EvalScalar,
         _source_cte_name: &str,
-        group_columns: &[IndexType],
+        group_columns: &[Symbol],
         agg: &Aggregate,
-        grouping_id_index: IndexType,
+        grouping_id_index: Symbol,
     ) -> Result<()> {
         let grouping_id = self.calculate_grouping_id(group_columns, &agg.group_items);
 
-        let null_group_ids: Vec<IndexType> = agg
+        let null_group_ids: Vec<Symbol> = agg
             .group_items
             .iter()
             .map(|i| i.index)
@@ -810,7 +806,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
         let mut result = branches[0].clone();
         for branch in branches.iter().skip(1) {
-            let left_outputs: Vec<(IndexType, Option<ScalarExpr>)> =
+            let left_outputs: Vec<(Symbol, Option<ScalarExpr>)> =
                 eval_scalar.items.iter().map(|x| (x.index, None)).collect();
             let right_outputs = left_outputs.clone();
 
@@ -826,7 +822,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         Ok(result)
     }
 
-    fn calculate_grouping_id(&self, group_columns: &[IndexType], all_groups: &[ScalarItem]) -> u32 {
+    fn calculate_grouping_id(&self, group_columns: &[Symbol], all_groups: &[ScalarItem]) -> u32 {
         let mask = (1 << all_groups.len()) - 1;
         let mut id = 0;
 
@@ -907,7 +903,7 @@ impl Rule for RuleHierarchicalGroupingSetsToUnion {
 #[derive(Debug, Clone)]
 struct GroupingLevel {
     set_index: usize,
-    columns: Vec<IndexType>,
+    columns: Vec<Symbol>,
     direct_children: Vec<usize>,
     possible_parents: Vec<usize>,
     chosen_parent: Option<usize>,
@@ -934,15 +930,15 @@ impl HierarchyDAG {
 }
 
 /// Check if subset is a proper subset of superset
-fn is_proper_subset(subset: &[IndexType], superset: &[IndexType]) -> bool {
+fn is_proper_subset(subset: &[Symbol], superset: &[Symbol]) -> bool {
     subset.len() < superset.len() && subset.iter().all(|item| superset.contains(item))
 }
 
 /// Set other columns to NULL and current group by columns to be nullable
 struct GroupingSetsNullVisitor {
-    group_indexes: Vec<IndexType>,
-    exclude_group_indexes: Vec<IndexType>,
-    grouping_id_index: IndexType,
+    group_indexes: Vec<Symbol>,
+    exclude_group_indexes: Vec<Symbol>,
+    grouping_id_index: Symbol,
     grouping_id_value: u32,
 }
 

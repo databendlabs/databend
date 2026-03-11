@@ -63,7 +63,6 @@ use tokio::sync::Mutex;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
-use crate::sql::IndexType;
 use crate::sql::plans::AsyncFunctionArgument;
 use crate::sql::plans::ReadFileFunctionArgument;
 
@@ -656,7 +655,7 @@ impl ReadFileContext {
         &mut self,
         ctx: Arc<QueryContext>,
         data_block: &mut DataBlock,
-        arg_indices: &[IndexType],
+        arg_indices: &[usize],
         data_type: &DataType,
         read_file_arg: &ReadFileFunctionArgument,
     ) -> Result<()> {
@@ -973,16 +972,26 @@ impl AsyncTransform for TransformAsyncFunction {
                     .await?;
                 }
                 AsyncFunctionArgument::DictGetFunction(dict_arg) => {
+                    let arg_indices = async_func_desc
+                        .arg_indices
+                        .iter()
+                        .map(|idx| idx.as_usize())
+                        .collect::<Vec<_>>();
                     self.transform_dict_get(
                         i,
                         &mut data_block,
                         dict_arg,
-                        &async_func_desc.arg_indices,
+                        &arg_indices,
                         &async_func_desc.data_type,
                     )
                     .await?;
                 }
                 AsyncFunctionArgument::ReadFile(read_file_arg) => {
+                    let arg_indices = async_func_desc
+                        .arg_indices
+                        .iter()
+                        .map(|idx| idx.as_usize())
+                        .collect::<Vec<_>>();
                     let read_file_ctx = self.read_file_ctx.as_mut().ok_or_else(|| {
                         ErrorCode::Internal("read_file context is not initialized".to_string())
                     })?;
@@ -990,7 +999,7 @@ impl AsyncTransform for TransformAsyncFunction {
                         .transform_read_file(
                             self.ctx.clone(),
                             &mut data_block,
-                            &async_func_desc.arg_indices,
+                            &arg_indices,
                             &async_func_desc.data_type,
                             read_file_arg,
                         )

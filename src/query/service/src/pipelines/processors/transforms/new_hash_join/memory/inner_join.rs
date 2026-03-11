@@ -50,6 +50,9 @@ pub struct InnerHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
+    pub(crate) inlist_threshold: usize,
+    pub(crate) bloom_threshold: usize,
+    pub(crate) min_max_threshold: usize,
 }
 
 impl InnerHashJoin {
@@ -62,6 +65,9 @@ impl InnerHashJoin {
         nested_loop_join_threshold: usize,
     ) -> Result<Self> {
         let block_size = settings.get_max_block_size()? as usize;
+        let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
+        let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
+        let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
@@ -80,6 +86,9 @@ impl InnerHashJoin {
             function_ctx,
             basic_state: state,
             performance_context: context,
+            inlist_threshold,
+            bloom_threshold,
+            min_max_threshold,
         })
     }
 }
@@ -101,7 +110,12 @@ impl Join for InnerHashJoin {
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
         let packets = std::mem::take(self.basic_state.packets.as_mut());
-        merge_join_runtime_filter_packets(packets)
+        merge_join_runtime_filter_packets(
+            packets,
+            self.inlist_threshold,
+            self.bloom_threshold,
+            self.min_max_threshold,
+        )
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

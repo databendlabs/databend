@@ -34,6 +34,7 @@ use crate::BindContext;
 use crate::ColumnEntry;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::binder::Binder;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
@@ -494,7 +495,7 @@ impl Binder {
         }
     }
 
-    pub fn find_column_index(column_entries: &Vec<ColumnEntry>, col_name: &str) -> Result<usize> {
+    pub fn find_column_index(column_entries: &Vec<ColumnEntry>, col_name: &str) -> Result<Symbol> {
         for column_entry in column_entries {
             if col_name == column_entry.name() {
                 return Ok(column_entry.index());
@@ -518,7 +519,7 @@ impl Binder {
 
 fn insert_only(mutation: &crate::plans::Mutation) -> bool {
     let metadata = mutation.metadata.read();
-    let target_table_columns: HashSet<usize> = metadata
+    let target_table_columns: HashSet<Symbol> = metadata
         .columns_by_table_index(mutation.target_table_index)
         .iter()
         .map(|column| column.index())

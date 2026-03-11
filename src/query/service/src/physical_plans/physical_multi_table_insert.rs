@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -37,7 +38,6 @@ use databend_common_pipeline_transforms::Transformer;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
-use databend_common_sql::ColumnSet;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
@@ -239,7 +239,7 @@ impl IPhysicalPlan for ChunkFilter {
             return Ok(());
         }
         let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(self.predicates.len());
-        let projection: ColumnSet = (0..self.input.output_schema()?.fields.len()).collect();
+        let projection: BTreeSet<usize> = (0..self.input.output_schema()?.fields.len()).collect();
         for predicate in self.predicates.iter() {
             if let Some(predicate) = predicate {
                 f.push(Box::new(builder.filter_transform_builder(
@@ -324,7 +324,7 @@ impl IPhysicalPlan for ChunkEvalScalar {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MultiInsertEvalScalar {
     pub remote_exprs: Vec<RemoteExpr>,
-    pub projection: ColumnSet,
+    pub projection: BTreeSet<usize>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

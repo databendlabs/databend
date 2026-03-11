@@ -27,7 +27,7 @@ use databend_common_functions::aggregates::eval_aggr;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 
 use crate::ColumnSet;
-use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
@@ -103,7 +103,7 @@ impl ConstantTableScan {
         }
     }
 
-    pub fn value(&self, index: IndexType) -> Result<(Column, &DataField)> {
+    pub fn value(&self, index: Symbol) -> Result<(Column, &DataField)> {
         let pos = self.schema.index_of(&index.to_string())?;
         Ok((self.values[pos].clone(), self.schema.field(pos)))
     }

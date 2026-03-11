@@ -226,9 +226,15 @@ impl DataExchangeManager {
         env: &QueryEnv,
         ctx: Option<Arc<QueryContext>>,
     ) -> Result<()> {
-        if env.perf_flag {
+        if env.perf_config.is_perf_active() {
             if let Some(ctx) = ctx.as_ref() {
-                ctx.set_perf_flag(env.perf_flag)
+                let mut perf_config = env.perf_config.clone();
+                // The coordinator already starts the profiler manually in ExplainPerfInterpreter.
+                // Suppress it here to avoid starting a second profiler on the same process.
+                if GlobalConfig::instance().query.node_id == env.request_server_id {
+                    perf_config.profiler_enabled = false;
+                }
+                ctx.set_perf_config(perf_config);
             }
         }
 
@@ -410,6 +416,8 @@ impl DataExchangeManager {
                     Entry::Occupied(mut v) => {
                         let query_coordinator = v.get_mut();
                         query_coordinator.info = query_info;
+                        query_coordinator.is_request_server =
+                            GlobalConfig::instance().query.node_id == env.request_server_id;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
@@ -417,6 +425,8 @@ impl DataExchangeManager {
                     Entry::Vacant(v) => {
                         let query_coordinator = v.insert(QueryCoordinator::create());
                         query_coordinator.info = query_info;
+                        query_coordinator.is_request_server =
+                            GlobalConfig::instance().query.node_id == env.request_server_id;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
@@ -905,6 +915,10 @@ struct QueryInfo {
 pub(crate) struct QueryCoordinator {
     info: Option<QueryInfo>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
+    /// True when this node is the request server (coordinator) for the query.
+    /// The coordinator starts the profiler manually in ExplainPerfInterpreter,
+    /// so execute_pipeline() must not start a second one.
+    is_request_server: bool,
 
     statistics_exchanges: HashMap<String, FlightExchange>,
     flight_data_senders: HashMap<String, Vec<FlightSender>>,
@@ -917,6 +931,7 @@ impl QueryCoordinator {
     pub fn create() -> QueryCoordinator {
         QueryCoordinator {
             info: None,
+            is_request_server: false,
             flight_data_senders: HashMap::new(),
             flight_data_receivers: HashMap::new(),
             statistics_exchanges: HashMap::new(),
@@ -1132,10 +1147,13 @@ impl QueryCoordinator {
     pub fn execute_pipeline(&mut self) -> Result<()> {
         let info = self.info.as_mut().expect("Query info is None");
 
-        let perf_guard = if info.query_ctx.get_perf_flag() {
-            Some(QueryPerf::start(99)?)
-        } else {
-            None
+        let perf_guard = {
+            let pc = info.query_ctx.get_perf_config();
+            if pc.profiler_enabled && !self.is_request_server {
+                Some(QueryPerf::start(pc.frequency)?)
+            } else {
+                None
+            }
         };
 
         if !info.started.swap(true, Ordering::SeqCst) {
@@ -1213,6 +1231,7 @@ impl QueryCoordinator {
 
         let query_id = info_mut.query_id.clone();
         let query_ctx = info_mut.query_ctx.clone();
+        query_ctx.set_executor(executor.get_inner())?;
         let request_server_exchanges = std::mem::take(&mut self.statistics_exchanges);
 
         if request_server_exchanges.len() != 1 {

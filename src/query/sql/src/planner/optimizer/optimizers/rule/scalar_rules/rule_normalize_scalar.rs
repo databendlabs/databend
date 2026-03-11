@@ -277,6 +277,7 @@ mod tests {
 
     use databend_common_exception::Result;
     use databend_common_expression::RawExpr;
+    use databend_common_expression::Symbol;
     use databend_common_expression::types::ArgType;
     use databend_common_expression::types::BooleanType;
     use databend_common_expression::types::DataType;
@@ -321,7 +322,7 @@ mod tests {
                 let (name, data_type) = &columns[index];
                 let column = ColumnBindingBuilder::new(
                     name.to_string(),
-                    index,
+                    Symbol::new(index),
                     Box::new(data_type.clone()),
                     Visibility::Visible,
                 )

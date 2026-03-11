@@ -32,6 +32,7 @@ use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -231,7 +232,8 @@ impl FuseTable {
         if !block_metas.is_empty() {
             if let Some(range_index) = pruner.get_inverse_range_index() {
                 for (block_meta_idx, block_meta) in &block_metas {
-                    if !range_index.should_keep(&block_meta.as_ref().col_stats, None) {
+                    let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
+                    if !range_index.should_keep(&range_input, None) {
                         // this block should be deleted completely
                         whole_block_deletions
                             .insert((block_meta_idx.segment_idx, block_meta_idx.block_idx));

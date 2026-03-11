@@ -170,6 +170,11 @@ impl Binder {
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
+        if matches!(stage_info.file_format_params, FileFormatParams::Lance(_)) {
+            return Err(ErrorCode::IllegalFileFormat(
+                "LANCE file format is only supported in COPY INTO <location>".to_string(),
+            ));
+        }
         let mut options = stmt.options.clone();
         stage_info
             .file_format_params
@@ -317,6 +322,11 @@ impl Binder {
                 FileFormatOptionsReader::from_map(options.clone()),
                 false,
             )?;
+            if matches!(params, FileFormatParams::Lance(_)) {
+                return Err(ErrorCode::IllegalFileFormat(
+                    "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                ));
+            }
             if let FileFormatParams::Csv(fmt) = &mut params {
                 // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
                 // CSV attachment is mainly used in Drivers for insert.

@@ -25,6 +25,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableSchema;
 
 use crate::BindContext;
@@ -286,7 +287,7 @@ impl MutationExpression {
                         bind_context,
                         all_source_columns: None,
                         target_table_index,
-                        target_table_row_id_index: DUMMY_COLUMN_INDEX,
+                        target_table_row_id_index: Symbol::new(DUMMY_COLUMN_INDEX),
                     })
                 } else {
                     let is_lazy_table = {
@@ -468,7 +469,7 @@ impl Binder {
         table_index: usize,
         expr: &mut SExpr,
         mutation_type: MutationType,
-    ) -> Result<usize> {
+    ) -> Result<Symbol> {
         let row_id_column_binding = InternalColumnBinding {
             database_name: Some(target_table_identifier.database_name().clone()),
             table_name: Some(target_table_identifier.table_name().clone()),
@@ -494,7 +495,7 @@ impl Binder {
             }
         };
 
-        let row_id_index: usize = column_binding.index;
+        let row_id_index = column_binding.index;
 
         *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None, &None);
 
@@ -584,7 +585,7 @@ pub struct MutationExpressionBindResult {
     pub mutation_type: MutationType,
     pub mutation_strategy: MutationStrategy,
     pub target_table_index: usize,
-    pub target_table_row_id_index: usize,
+    pub target_table_row_id_index: Symbol,
     pub required_columns: ColumnSet,
     pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
 }

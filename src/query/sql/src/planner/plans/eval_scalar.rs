@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
-use crate::IndexType;
+use crate::Symbol;
 use crate::Visibility;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -39,7 +39,7 @@ pub struct EvalScalar {
 pub struct ScalarItem {
     pub scalar: ScalarExpr,
     // The index of the derived column in metadata
-    pub index: IndexType,
+    pub index: Symbol,
 }
 
 impl ScalarItem {
