@@ -5879,12 +5879,19 @@ dependencies = [
 name = "databend-sqllogictests"
 version = "0.1.0"
 dependencies = [
+ "databend-sqllogictests-core",
+]
+
+[[package]]
+name = "databend-sqllogictests-core"
+version = "0.1.0"
+source = "git+https://github.com/dqhl76/databend-sqllogictests.git#b46d0bd9b732c82f4533282aacc7720507a09e04"
+dependencies = [
  "async-recursion",
  "async-trait",
  "bollard",
  "clap",
  "cookie",
- "databend-common-exception",
  "env_logger 0.11.8",
  "futures-util",
  "mysql_async",
@@ -7688,9 +7695,9 @@ dependencies = [
 
 [[package]]
 name = "geo-index"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a27fb4e4ffdde62f8aa7a4165b30f6fe8e8337d35b657ebf86c98d884ee7c750"
+checksum = "f310ad245e63f6b5fcf4a7c2663139708eae1374045396eef95ea3badd242d57"
 dependencies = [
  "bytemuck",
  "float_next_after",
@@ -10726,9 +10733,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.182"
+version = "0.2.183"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
+checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
 
 [[package]]
 name = "libflate"
@@ -15579,9 +15586,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.28.4"
+version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3566426f72a13e393aa34ca3d542c5b0eb86da4c0db137ee9b5cfccc6179e52d"
+checksum = "d03b2262a244037b0b510edbd25a8e6c9fb8d73ee0237fc6cc95a54c16f94a82"
 dependencies = [
  "async-trait",
  "educe",
