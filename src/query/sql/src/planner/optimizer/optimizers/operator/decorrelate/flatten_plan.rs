@@ -287,15 +287,16 @@ impl SubqueryDecorrelatorOptimizer {
         filter: &Filter,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
-        mut need_cross_join: bool,
+        need_cross_join: bool,
     ) -> Result<SExpr> {
         let mut predicates = Vec::with_capacity(filter.predicates.len());
-        if !need_cross_join {
-            need_cross_join = self.join_outer_inner_table(filter, correlated_columns)?;
-            if need_cross_join {
+        let need_cross_join = need_cross_join
+            || if self.join_outer_inner_table(filter, correlated_columns)? {
                 self.derived_columns.clear();
-            }
-        }
+                true
+            } else {
+                false
+            };
         let flatten_plan = self.flatten_plan(
             outer,
             subquery.unary_child(),
