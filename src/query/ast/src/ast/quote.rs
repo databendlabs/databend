@@ -18,9 +18,12 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 use crate::parser::Dialect;
+use crate::parser::token::is_ident_continue;
+use crate::parser::token::is_ident_start;
 
-// In ANSI SQL, it does not need to quote an identifier if the identifier matches
-// the following regular expression: [A-Za-z_][A-Za-z0-9_$]*.
+// An identifier does not need quoting if it matches the rules defined by
+// is_ident_start / is_ident_continue (ASCII letters, underscore, digits, `$`,
+// plus any Unicode Alphabetic character — CJK, Cyrillic, etc.).
 //
 // There are also two known special cases in Databend which do not require quoting:
 // - "~" is a valid stage name
@@ -37,12 +40,12 @@ pub fn ident_needs_quote(ident: &str) -> bool {
 
     let mut chars = ident.chars();
     let first = chars.next().unwrap();
-    if !first.is_ascii_alphabetic() && first != '_' {
+    if !is_ident_start(first) {
         return true;
     }
 
     for c in chars {
-        if !c.is_ascii_alphanumeric() && c != '_' && c != '$' {
+        if !is_ident_continue(c) {
             return true;
         }
     }
