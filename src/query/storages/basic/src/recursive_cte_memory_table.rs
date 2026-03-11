@@ -67,8 +67,12 @@ impl RecursiveCteMemoryTable {
         }))
     }
 
-    pub fn update_generation(&self, generation: usize, blocks: Vec<DataBlock>) {
-        self.blocks.write().insert(generation, blocks);
+    pub fn append_generation_block(&self, generation: usize, block: DataBlock) {
+        self.blocks
+            .write()
+            .entry(generation)
+            .or_default()
+            .push(block);
     }
 
     pub fn take_one_block(&self) -> Option<DataBlock> {

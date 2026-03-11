@@ -20,7 +20,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -48,7 +47,7 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
-use futures_util::TryStreamExt;
+use futures_util::StreamExt;
 
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DropTableInterpreter;
@@ -74,6 +73,8 @@ pub struct TransformRecursiveCteSource {
 
     recursive_step: usize,
     cte_scan_tables: Vec<Arc<dyn Table>>,
+    active_stream: Option<PullingExecutorStream>,
+    active_stream_has_output: bool,
 }
 
 static NEXT_R_CTE_SOURCE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
@@ -159,6 +160,8 @@ impl TransformRecursiveCteSource {
                 right_outputs,
                 recursive_step: 0,
                 cte_scan_tables: vec![],
+                active_stream: None,
+                active_stream_has_output: false,
             },
         )
     }
@@ -167,7 +170,7 @@ impl TransformRecursiveCteSource {
         ctx: Arc<QueryContext>,
         recursive_step: usize,
         union_plan: UnionAll,
-    ) -> Result<(Vec<DataBlock>, Vec<Arc<dyn Table>>)> {
+    ) -> Result<(PullingExecutorStream, Vec<Arc<dyn Table>>)> {
         if ctx.get_settings().get_max_cte_recursive_depth()? < recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
@@ -200,13 +203,8 @@ impl TransformRecursiveCteSource {
         let settings = ExecutorSettings::try_create(ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
         ctx.set_executor(pulling_executor.get_inner())?;
-        let isolate_runtime = Runtime::with_worker_threads(2, Some("r-cte-source".to_string()))?;
-        let join_handle = isolate_runtime.spawn(async move {
-            let stream = PullingExecutorStream::create(pulling_executor)?;
-            stream.try_collect::<Vec<DataBlock>>().await
-        });
-        let data_blocks = join_handle.await??;
-        Ok((data_blocks, cte_scan_tables))
+        let stream = PullingExecutorStream::create(pulling_executor)?;
+        Ok((stream, cte_scan_tables))
     }
 }
 
@@ -284,72 +282,79 @@ impl AsyncSource for TransformRecursiveCteSource {
     const NAME: &'static str = "TransformRecursiveCteSource";
 
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let mut data = DataBlock::empty();
-        match Self::execute_r_cte(
-            self.ctx.clone(),
-            self.recursive_step,
-            self.union_plan.clone(),
-        )
-        .await
-        {
-            Ok((blocks, cte_scan_tables)) => {
-                if !cte_scan_tables.is_empty() {
-                    self.cte_scan_tables = cte_scan_tables;
-                }
-
-                if !blocks.is_empty() {
-                    let func_ctx = self.ctx.get_function_context()?;
-                    let projected_blocks = blocks
-                        .into_iter()
-                        .map(|data| {
-                            project_block(
-                                &func_ctx,
-                                data,
-                                &self.union_plan.left.output_schema()?,
-                                &self.union_plan.right.output_schema()?,
-                                &self.left_outputs,
-                                &self.right_outputs,
-                                self.recursive_step == 0,
-                            )
-                        })
-                        .filter_map(|res| match res {
-                            Ok(data) if data.num_rows() > 0 => Some(Ok(data)),
-                            Ok(_) => None,
-                            Err(err) => Some(Err(err)),
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-
-                    if !projected_blocks.is_empty() {
-                        for table in self.cte_scan_tables.iter() {
-                            let memory_table = table
-                                .as_any()
-                                .downcast_ref::<RecursiveCteMemoryTable>()
-                                .unwrap();
-                            memory_table
-                                .update_generation(self.recursive_step, projected_blocks.clone());
+        loop {
+            if self.active_stream.is_none() {
+                match Self::execute_r_cte(
+                    self.ctx.clone(),
+                    self.recursive_step,
+                    self.union_plan.clone(),
+                )
+                .await
+                {
+                    Ok((stream, cte_scan_tables)) => {
+                        if !cte_scan_tables.is_empty() {
+                            self.cte_scan_tables = cte_scan_tables;
                         }
-                        data = DataBlock::concat(&projected_blocks)?;
+                        self.active_stream = Some(stream);
+                        self.active_stream_has_output = false;
+                    }
+                    Err(e) => {
+                        return Err(ErrorCode::Internal(format!(
+                            "Failed to execute recursive cte: {:?}",
+                            e
+                        )));
                     }
                 }
             }
-            Err(e) => {
-                return Err(ErrorCode::Internal(format!(
-                    "Failed to execute recursive cte: {:?}",
-                    e
-                )));
-            }
-        };
-        self.recursive_step += 1;
 
-        let row_size = data.num_rows();
-        if row_size > 0 {
-            Ok(Some(data))
-        } else {
-            let ctx = self.ctx.clone();
-            let table_names = self.union_plan.cte_scan_names.clone();
-            // Recursive end, remove all tables
-            let _ = drop_tables(ctx, table_names).await?;
-            Ok(None)
+            let next_block = {
+                let stream = self.active_stream.as_mut().unwrap();
+                stream.next().await.transpose()?
+            };
+
+            match next_block {
+                Some(data) => {
+                    let func_ctx = self.ctx.get_function_context()?;
+                    let projected_block = project_block(
+                        &func_ctx,
+                        data,
+                        &self.union_plan.left.output_schema()?,
+                        &self.union_plan.right.output_schema()?,
+                        &self.left_outputs,
+                        &self.right_outputs,
+                        self.recursive_step == 0,
+                    )?;
+
+                    if projected_block.num_rows() == 0 {
+                        continue;
+                    }
+
+                    for table in self.cte_scan_tables.iter() {
+                        let memory_table = table
+                            .as_any()
+                            .downcast_ref::<RecursiveCteMemoryTable>()
+                            .unwrap();
+                        memory_table
+                            .append_generation_block(self.recursive_step, projected_block.clone());
+                    }
+                    self.active_stream_has_output = true;
+                    return Ok(Some(projected_block));
+                }
+                None => {
+                    self.active_stream = None;
+                    self.recursive_step += 1;
+
+                    if self.active_stream_has_output {
+                        continue;
+                    }
+
+                    let ctx = self.ctx.clone();
+                    let table_names = self.union_plan.cte_scan_names.clone();
+                    // Recursive end, remove all tables
+                    let _ = drop_tables(ctx, table_names).await?;
+                    return Ok(None);
+                }
+            }
         }
     }
 }
