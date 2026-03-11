@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -23,7 +24,7 @@ use parking_lot::RwLock;
 /// Indexed by table id etc.
 pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
-pub type InMemoryRecursiveData<K> = HashMap<K, Arc<RwLock<HashMap<u64, Vec<DataBlock>>>>>;
+pub type InMemoryRecursiveData<K> = HashMap<K, Arc<RwLock<BTreeMap<usize, Vec<DataBlock>>>>>;
 
 pub static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<InMemoryDataKey>>>> =
     LazyLock::new(|| Arc::new(Default::default()));

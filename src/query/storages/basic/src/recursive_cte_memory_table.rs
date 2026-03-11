@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::DistributionLevel;
@@ -37,7 +37,7 @@ use parking_lot::RwLock;
 
 pub struct RecursiveCteMemoryTable {
     table_info: TableInfo,
-    blocks: Arc<RwLock<HashMap<u64, Vec<DataBlock>>>>,
+    blocks: Arc<RwLock<BTreeMap<usize, Vec<DataBlock>>>>,
     data_metrics: Arc<StorageMetrics>,
 }
 
@@ -56,7 +56,7 @@ impl RecursiveCteMemoryTable {
             };
             in_mem_data
                 .entry(key)
-                .or_insert_with(|| Arc::new(RwLock::new(HashMap::<u64, Vec<DataBlock>>::new())))
+                .or_insert_with(|| Arc::new(RwLock::new(BTreeMap::<usize, Vec<DataBlock>>::new())))
                 .clone()
         };
 
@@ -67,16 +67,16 @@ impl RecursiveCteMemoryTable {
         }))
     }
 
-    pub fn update_with_id(&self, id: u64, blocks: Vec<DataBlock>) {
-        self.blocks.write().insert(id, blocks);
+    pub fn update_generation(&self, generation: usize, blocks: Vec<DataBlock>) {
+        self.blocks.write().insert(generation, blocks);
     }
 
-    pub fn take_one_by_id(&self, id: u64) -> Option<DataBlock> {
+    pub fn take_one_block(&self) -> Option<DataBlock> {
         let mut blocks = self.blocks.write();
-        let queue = blocks.get_mut(&id)?;
-        let block = queue.pop();
-        if queue.is_empty() {
-            blocks.remove(&id);
+        let mut generation = blocks.first_entry()?;
+        let block = generation.get_mut().pop();
+        if generation.get().is_empty() {
+            generation.remove_entry();
         }
         block
     }

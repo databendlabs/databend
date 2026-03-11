@@ -33,7 +33,6 @@ pub struct RecursiveCteScan {
     pub output_schema: DataSchemaRef,
     pub table_name: String,
     pub stat: PlanStatsInfo,
-    pub exec_id: Option<u64>,
 }
 
 #[typetag::serde]
@@ -61,7 +60,6 @@ impl IPhysicalPlan for RecursiveCteScan {
             output_schema: self.output_schema.clone(),
             table_name: self.table_name.clone(),
             stat: self.stat.clone(),
-            exec_id: self.exec_id,
         })
     }
 
@@ -73,7 +71,6 @@ impl IPhysicalPlan for RecursiveCteScan {
                     builder.ctx.clone(),
                     output_port.clone(),
                     self.table_name.clone(),
-                    self.exec_id,
                 )
             },
             1,
@@ -93,7 +90,6 @@ impl PhysicalPlanBuilder {
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),
             table_name: recursive_cte_scan.table_name.clone(),
             stat: stat_info,
-            exec_id: None,
         }))
     }
 }

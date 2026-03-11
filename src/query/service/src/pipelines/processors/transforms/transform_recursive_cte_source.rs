@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
@@ -74,11 +73,9 @@ pub struct TransformRecursiveCteSource {
     right_outputs: Vec<(Symbol, Option<Expr>)>,
 
     recursive_step: usize,
-    cte_scan_tables: Vec<(u64, Arc<dyn Table>)>,
-    cte_exec_ids: HashMap<String, Vec<u64>>,
+    cte_scan_tables: Vec<Arc<dyn Table>>,
 }
 
-static NEXT_R_CTE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_R_CTE_SOURCE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 impl TransformRecursiveCteSource {
@@ -116,18 +113,15 @@ impl TransformRecursiveCteSource {
             .map(String::as_str)
             .collect();
 
-        let mut exec_ids: HashMap<String, Vec<u64>> = HashMap::new();
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.left,
             &local_cte_scan_name_set,
             &rcte_prefix,
-            &mut exec_ids,
         );
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.right,
             &local_cte_scan_name_set,
             &rcte_prefix,
-            &mut exec_ids,
         );
         for name in union_plan.cte_scan_names.iter_mut() {
             *name = format!("{rcte_prefix}{name}");
@@ -165,7 +159,6 @@ impl TransformRecursiveCteSource {
                 right_outputs,
                 recursive_step: 0,
                 cte_scan_tables: vec![],
-                cte_exec_ids: exec_ids,
             },
         )
     }
@@ -174,8 +167,7 @@ impl TransformRecursiveCteSource {
         ctx: Arc<QueryContext>,
         recursive_step: usize,
         union_plan: UnionAll,
-        cte_ids: &HashMap<String, Vec<u64>>,
-    ) -> Result<(Vec<DataBlock>, Vec<(u64, Arc<dyn Table>)>)> {
+    ) -> Result<(Vec<DataBlock>, Vec<Arc<dyn Table>>)> {
         if ctx.get_settings().get_max_cte_recursive_depth()? < recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
@@ -194,11 +186,7 @@ impl TransformRecursiveCteSource {
                         table_name,
                     )
                     .await?;
-                let prepare_id = cte_ids
-                    .get(table_name)
-                    .and_then(|ids| ids.last())
-                    .ok_or_else(|| ErrorCode::Internal("Recursive CTE prepare id not found"))?;
-                cte_scan_tables.push((*prepare_id, table));
+                cte_scan_tables.push(table);
             }
             union_plan.left.clone()
         } else {
@@ -238,7 +226,6 @@ fn rewrite_assign_and_strip_recursive_cte(
     plan: &mut PhysicalPlan,
     local_cte_scan_name_set: &HashSet<&str>,
     prefix: &str,
-    exec_ids: &mut HashMap<String, Vec<u64>>,
 ) {
     // Only nested recursive UNION nodes that reference the current recursive CTE should be
     // downgraded to normal unions to avoid nested recursive sources for the same table.
@@ -256,17 +243,11 @@ fn rewrite_assign_and_strip_recursive_cte(
     if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
         if local_cte_scan_name_set.contains(recursive_cte_scan.table_name.as_str()) {
             recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
-            let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
-            recursive_cte_scan.exec_id = Some(id);
-            exec_ids
-                .entry(recursive_cte_scan.table_name.clone())
-                .or_default()
-                .push(id);
         }
     }
 
     for child in plan.children_mut() {
-        rewrite_assign_and_strip_recursive_cte(child, local_cte_scan_name_set, prefix, exec_ids);
+        rewrite_assign_and_strip_recursive_cte(child, local_cte_scan_name_set, prefix);
     }
 }
 
@@ -308,7 +289,6 @@ impl AsyncSource for TransformRecursiveCteSource {
             self.ctx.clone(),
             self.recursive_step,
             self.union_plan.clone(),
-            &self.cte_exec_ids,
         )
         .await
         {
@@ -340,13 +320,13 @@ impl AsyncSource for TransformRecursiveCteSource {
                         .collect::<Result<Vec<_>>>()?;
 
                     if !projected_blocks.is_empty() {
-                        debug_assert_eq!(self.cte_scan_tables.len(), self.cte_exec_ids.len());
-                        for (prepare_id, table) in self.cte_scan_tables.iter() {
+                        for table in self.cte_scan_tables.iter() {
                             let memory_table = table
                                 .as_any()
                                 .downcast_ref::<RecursiveCteMemoryTable>()
                                 .unwrap();
-                            memory_table.update_with_id(*prepare_id, projected_blocks.clone());
+                            memory_table
+                                .update_generation(self.recursive_step, projected_blocks.clone());
                         }
                         data = DataBlock::concat(&projected_blocks)?;
                     }
