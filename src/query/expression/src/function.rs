@@ -237,10 +237,9 @@ impl FunctionRegistry {
     }
 
     pub fn contains(&self, func_name: &str) -> bool {
-        let func_name = func_name.to_lowercase();
-        self.funcs.contains_key(&func_name)
-            || self.factories.contains_key(&func_name)
-            || self.aliases.contains_key(&func_name)
+        self.funcs.contains_key(func_name)
+            || self.factories.contains_key(func_name)
+            || self.aliases.contains_key(func_name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {
@@ -322,9 +321,8 @@ impl FunctionRegistry {
 
     // note that if additional_cast_rules is not empty, default cast rules will not be used.
     pub fn get_auto_cast_rules(&self, func_name: &str) -> &[(DataType, DataType)] {
-        let func_name = func_name.to_lowercase();
         self.additional_cast_rules
-            .get(&func_name)
+            .get(func_name)
             .unwrap_or(&self.default_cast_rules)
     }
 
@@ -398,9 +396,8 @@ impl FunctionRegistry {
     }
 
     pub fn get_dynamic_cast_rules(&self, fn_name: &str) -> DynamicCastRules {
-        let fn_name = fn_name.to_lowercase();
         self.dynamic_cast_rules
-            .get(&fn_name)
+            .get(fn_name)
             .cloned()
             .unwrap_or_default()
     }
