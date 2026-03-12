@@ -13,7 +13,6 @@ borsh = { workspace = true }
 bstr = { workspace = true }
 bumpalo = { workspace = true }
 ctor = { workspace = true }
-databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -39,7 +38,6 @@ jaq-std = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }
 libm = { workspace = true }
-log = { workspace = true }
 match-template = { workspace = true }
 md-5 = { workspace = true }
 naive-cityhash = { workspace = true }
@@ -60,10 +58,10 @@ unicase = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-databend-common-sql-test-support = { workspace = true }
 anyhow = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
+databend-common-sql-test-support = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 

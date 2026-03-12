@@ -186,11 +186,8 @@ fn transform_expr(
                 .map(|param| {
                     let raw_expr = transform_expr(param, &[], builtin_functions);
                     let expr = type_check::check(&raw_expr, builtin_functions).unwrap();
-                    let (expr, _) = ConstantFolder::fold(
-                        &expr,
-                        &FunctionContext::default(),
-                        builtin_functions,
-                    );
+                    let (expr, _) =
+                        ConstantFolder::fold(&expr, &FunctionContext::default(), builtin_functions);
                     expr.into_constant().unwrap().scalar
                 })
                 .collect(),
@@ -218,11 +215,27 @@ fn transform_expr(
                     if op == BinaryOperator::Minus {
                         unimplemented!("interval cannot be minuend")
                     } else {
-                        transform_interval_add_sub!(span, columns, builtin_functions, op, unit, right, expr)
+                        transform_interval_add_sub!(
+                            span,
+                            columns,
+                            builtin_functions,
+                            op,
+                            unit,
+                            right,
+                            expr
+                        )
                     }
                 }
                 (_, AExpr::Interval { expr, unit, .. }) => {
-                    transform_interval_add_sub!(span, columns, builtin_functions, op, unit, left, expr)
+                    transform_interval_add_sub!(
+                        span,
+                        columns,
+                        builtin_functions,
+                        op,
+                        unit,
+                        left,
+                        expr
+                    )
                 }
                 (_, _) => RawExpr::FunctionCall {
                     span,
@@ -339,7 +352,11 @@ fn transform_expr(
             let mut keys = Vec::with_capacity(kvs.len());
             let mut vals = Vec::with_capacity(kvs.len());
             for (key, val) in kvs {
-                keys.push(transform_expr(AExpr::Literal { span, value: key }, columns, builtin_functions));
+                keys.push(transform_expr(
+                    AExpr::Literal { span, value: key },
+                    columns,
+                    builtin_functions,
+                ));
                 vals.push(transform_expr(val, columns, builtin_functions));
             }
             let keys = RawExpr::FunctionCall {
@@ -389,9 +406,11 @@ fn transform_expr(
                         data_type: Some(DataType::String),
                     },
                 ]),
-                MapAccessor::DotNumber { key } => {
-                    (vec![key as i64], vec![transform_expr(*expr, columns, builtin_functions)])
-                }
+                MapAccessor::DotNumber { key } => (vec![key as i64], vec![transform_expr(
+                    *expr,
+                    columns,
+                    builtin_functions,
+                )]),
             };
             let params = params
                 .into_iter()

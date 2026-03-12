@@ -367,10 +367,14 @@ fn test_if_function() -> anyhow::Result<()> {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_expression::types::*;
-    let raw_expr = parser::parse_raw_expr("if(eq(n,1), sum_sid + 1,100)", &[
-        ("n", UInt8Type::data_type()),
-        ("sum_sid", Int32Type::data_type().wrap_nullable()),
-    ], &BUILTIN_FUNCTIONS);
+    let raw_expr = parser::parse_raw_expr(
+        "if(eq(n,1), sum_sid + 1,100)",
+        &[
+            ("n", UInt8Type::data_type()),
+            ("sum_sid", Int32Type::data_type().wrap_nullable()),
+        ],
+        &BUILTIN_FUNCTIONS,
+    );
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
     let block = DataBlock::new(
         vec![
