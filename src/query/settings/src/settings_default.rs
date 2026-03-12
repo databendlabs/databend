@@ -562,7 +562,7 @@ impl DefaultSettings {
                 }),
                 ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
-                    desc: "Selectivity threshold (percentage) for join runtime filters. Filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
+                    desc: "Selectivity threshold (percentage) for bloom join runtime filters. Bloom filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),

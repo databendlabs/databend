@@ -63,53 +63,46 @@ pub async fn build_runtime_filter_infos(
     // Iterate over all runtime filter packets
     for packet in packets.into_values() {
         let desc = runtime_filter_descs.get(&packet.id).unwrap();
-        let enabled = should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
+        let bloom_enabled =
+            should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
 
         // Apply this single runtime filter to all probe targets (scan_id, probe_key pairs)
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
         for (probe_key, scan_id) in &desc.probe_targets {
             let entry = filters.entry(*scan_id).or_default();
-            let (inlist, inlist_value_count) = if enabled {
-                if let Some(ref inlist) = packet.inlist {
-                    let (expr, value_count) = build_inlist_filter(inlist.clone(), probe_key)?;
-                    (Some(expr), value_count)
-                } else {
-                    (None, 0)
-                }
+            let (inlist, inlist_value_count) = if let Some(ref inlist) = packet.inlist {
+                let (expr, value_count) = build_inlist_filter(inlist.clone(), probe_key)?;
+                (Some(expr), value_count)
             } else {
                 (None, 0)
             };
+            let bloom = if bloom_enabled {
+                if let Some(ref bloom) = packet.bloom {
+                    Some(build_bloom_filter(bloom.clone(), probe_key, max_threads, desc.id).await?)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            let min_max = if let Some(ref min_max) = packet.min_max {
+                Some(build_min_max_filter(
+                    min_max.clone(),
+                    probe_key,
+                    &desc.build_key,
+                )?)
+            } else {
+                None
+            };
+            let enabled = bloom.is_some() || inlist.is_some() || min_max.is_some();
 
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
-                bloom: if enabled {
-                    if let Some(ref bloom) = packet.bloom {
-                        Some(
-                            build_bloom_filter(bloom.clone(), probe_key, max_threads, desc.id)
-                                .await?,
-                        )
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
+                bloom,
                 inlist,
                 inlist_value_count,
-                min_max: if enabled {
-                    if let Some(ref min_max) = packet.min_max {
-                        Some(build_min_max_filter(
-                            min_max.clone(),
-                            probe_key,
-                            &desc.build_key,
-                        )?)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
+                min_max,
                 stats: Arc::new(RuntimeFilterStats::new()),
                 build_rows: total_build_rows,
                 build_table_rows: desc.build_table_rows,
@@ -326,6 +319,69 @@ mod tests {
     use databend_common_functions::BUILTIN_FUNCTIONS;
 
     use super::build_inlist_filter;
+    use super::build_runtime_filter_infos;
+    use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
+    use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
+    use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
+    use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_build_runtime_filter_infos_selectivity_threshold_only_disables_bloom() {
+        let data_type = DataType::Number(NumberDataType::Int32);
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 2);
+        builder.push(Scalar::Number(1i32.into()).as_ref());
+        builder.push(Scalar::Number(10i32.into()).as_ref());
+        let inlist = builder.build();
+
+        let build_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: data_type.clone(),
+            display_name: "build_key".to_string(),
+        });
+        let probe_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "probe_key".to_string(),
+            data_type: data_type.clone(),
+            display_name: "probe_key".to_string(),
+        });
+        let desc = RuntimeFilterDesc {
+            id: 0,
+            build_key,
+            probe_targets: vec![(probe_key, 7)],
+            build_table_rows: Some(10),
+            enable_bloom_runtime_filter: true,
+            enable_inlist_runtime_filter: true,
+            enable_min_max_runtime_filter: true,
+        };
+
+        let mut packets = HashMap::new();
+        packets.insert(0, RuntimeFilterPacket {
+            id: 0,
+            inlist: Some(inlist),
+            min_max: Some(SerializableDomain {
+                min: Scalar::Number(1i32.into()),
+                max: Scalar::Number(10i32.into()),
+            }),
+            bloom: Some(vec![11, 22]),
+        });
+
+        let runtime_filter_infos = build_runtime_filter_infos(
+            JoinRuntimeFilterPacket::complete(packets, 2),
+            HashMap::from([(0, &desc)]),
+            1,
+            1,
+        )
+        .await
+        .unwrap();
+
+        let entry = &runtime_filter_infos.get(&7).unwrap().filters[0];
+        assert!(entry.bloom.is_none());
+        assert!(entry.inlist.is_some());
+        assert_eq!(entry.inlist_value_count, 2);
+        assert!(entry.min_max.is_some());
+        assert!(entry.enabled);
+    }
 
     #[test]
     fn test_build_inlist_filter() {
