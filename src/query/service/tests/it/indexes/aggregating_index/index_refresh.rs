@@ -535,10 +535,21 @@ async fn test_sync_agg_index_after_copy_into() -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let index_id0 = create_index(ctx, index_name, original_query, query.as_str(), true).await?;
 
-    // Copy into data
-    let _ =fixture.execute_query(
-        "COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);",
-    )
+    // Create a stage and populate it with CSV data, then COPY INTO the table.
+    fixture.execute_command("CREATE STAGE books_stage").await?;
+    fixture
+        .execute_command(
+            "COPY INTO @books_stage FROM (SELECT * FROM (VALUES \
+             ('Transaction Processing', 'Jim Gray', '1992'), \
+             ('Readings in Database Systems', 'Michael Stonebraker', 'NULL'), \
+             ('Three Body', 'NULL-liucixin', '2019')) t(title, author, date)) \
+             FILE_FORMAT = (TYPE = CSV)",
+        )
+        .await?;
+    fixture
+        .execute_command(
+            "COPY INTO books FROM @books_stage FILE_FORMAT = (TYPE = CSV) PURGE = true FORCE = true",
+        )
         .await?;
 
     let root = fixture.storage_root();
