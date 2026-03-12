@@ -237,9 +237,10 @@ impl FunctionRegistry {
     }
 
     pub fn contains(&self, func_name: &str) -> bool {
-        self.funcs.contains_key(func_name)
-            || self.factories.contains_key(func_name)
-            || self.aliases.contains_key(func_name)
+        let func_name = func_name.to_lowercase();
+        self.funcs.contains_key(&func_name)
+            || self.factories.contains_key(&func_name)
+            || self.aliases.contains_key(&func_name)
     }
 
     pub fn get(&self, id: &FunctionID) -> Option<Arc<Function>> {

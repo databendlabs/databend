@@ -57,3 +57,29 @@ select cluster_key, type, info:total_block_count, info:constant_block_count, inf
 
 statement ok
 drop table T_17094 all
+
+# Builtin function names should always be case-insensitive,
+# regardless of unquoted_ident_case_sensitive setting.
+statement ok
+set unquoted_ident_case_sensitive = 1
+
+query T
+SELECT DATE_FORMAT('2020-01-01', '%Y-%m-%d')
+----
+2020-01-01
+
+query T
+SELECT Upper('hello')
+----
+HELLO
+
+query I
+SELECT COUNT(*) FROM numbers(10)
+----
+10
+
+statement ok
+SHOW SETTINGS LIKE '%case%'
+
+statement ok
+set unquoted_ident_case_sensitive = 0

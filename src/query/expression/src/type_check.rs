@@ -304,7 +304,7 @@ pub fn check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
-    if let Some(original_fn_name) = fn_registry.aliases.get(name) {
+    if let Some(original_fn_name) = fn_registry.aliases.get(&name.to_lowercase()) {
         return check_function(span, original_fn_name, params, args, fn_registry);
     }
 
