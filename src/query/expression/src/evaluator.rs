@@ -54,6 +54,7 @@ use crate::types::array::ArrayColumn;
 use crate::types::boolean;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumnBuilder;
+use crate::utils::filter_helper::FilterHelpers;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -1373,46 +1374,10 @@ impl<'a> Evaluator<'a> {
     fn eval_and_filters(
         &self,
         args: &[Expr],
-        mut validity: Option<Bitmap>,
+        validity: Option<Bitmap>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
-        assert!(args.len() >= 2);
-
-        for arg in args {
-            let cond = self.partial_run(arg, validity.clone(), options)?;
-            match &cond {
-                Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => {
-                    return Ok(Value::Scalar(Scalar::Boolean(false)));
-                }
-                Value::Scalar(Scalar::Boolean(true)) => {
-                    continue;
-                }
-                Value::Column(column) => {
-                    let flag = match column {
-                        Column::Nullable(box nullable_column) => {
-                            let boolean_column = nullable_column.column.as_boolean().unwrap();
-                            boolean_column & (&nullable_column.validity)
-                        }
-                        Column::Boolean(boolean_column) => boolean_column.clone(),
-                        _ => unreachable!(),
-                    };
-                    match &validity {
-                        Some(v) => {
-                            validity = Some(v & (&flag));
-                        }
-                        None => {
-                            validity = Some(flag);
-                        }
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
-
-        match validity {
-            Some(bitmap) => Ok(Value::Column(Column::Boolean(bitmap))),
-            None => Ok(Value::Scalar(Scalar::Boolean(true))),
-        }
+        self.eval_filters(args, validity, options, false)
     }
 
     // `or_filters` is the or version of `and_filters`
@@ -1422,43 +1387,75 @@ impl<'a> Evaluator<'a> {
         validity: Option<Bitmap>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
+        self.eval_filters(args, validity, options, true)
+    }
+
+    fn eval_filters(
+        &self,
+        args: &[Expr],
+        mut validity: Option<Bitmap>,
+        options: &mut EvaluateOptions,
+        is_or: bool,
+    ) -> Result<Value<AnyType>> {
         assert!(args.len() >= 2);
 
+        let base_validity = validity.clone();
         let mut result = None;
         for arg in args {
-            let cond = self.partial_run(arg, validity.clone(), options)?;
-            match &cond {
-                Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => {
+            match FilterHelpers::decode_predicate(self.partial_run(
+                arg,
+                validity.clone(),
+                options,
+            )?) {
+                Value::Scalar(false) if is_or => {
                     continue;
                 }
-                Value::Scalar(Scalar::Boolean(true)) => {
-                    return Ok(Value::Scalar(Scalar::Boolean(true)));
+                Value::Scalar(true) if !is_or => {
+                    continue;
                 }
-                Value::Column(column) => {
-                    let flag = match column {
-                        Column::Nullable(box nullable_column) => {
-                            let boolean_column = nullable_column.column.as_boolean().unwrap();
-                            boolean_column & (&nullable_column.validity)
-                        }
-                        Column::Boolean(boolean_column) => boolean_column.clone(),
-                        _ => unreachable!(),
-                    };
-                    match &result {
-                        Some(v) => {
-                            result = Some(v | (&flag));
-                        }
-                        None => {
-                            result = Some(flag);
-                        }
+                Value::Scalar(_) if is_or => {
+                    return Ok(FilterHelpers::finish_predicate(
+                        base_validity.as_ref(),
+                        true,
+                    ));
+                }
+                Value::Scalar(_) => {
+                    return Ok(Value::Scalar(Scalar::Boolean(false)));
+                }
+                Value::Column(flag) if is_or => {
+                    result = Some(match result.take() {
+                        Some(v) => &v | &flag,
+                        None => flag.clone(),
+                    });
+                    validity = Some(match validity.take() {
+                        Some(v) => &v & &flag.not(),
+                        None => flag.not(),
+                    });
+                    if FilterHelpers::is_all_unset_bitmap(validity.as_ref().unwrap()) {
+                        return Ok(FilterHelpers::finish_predicate(
+                            base_validity.as_ref(),
+                            true,
+                        ));
                     }
                 }
-                _ => unreachable!(),
+                Value::Column(flag) => {
+                    validity = Some(match validity.take() {
+                        Some(v) => &v & &flag,
+                        None => flag,
+                    });
+                    if FilterHelpers::is_all_unset_bitmap(validity.as_ref().unwrap()) {
+                        return Ok(Value::Scalar(Scalar::Boolean(false)));
+                    }
+                }
             }
         }
 
-        match result {
-            Some(bitmap) => Ok(Value::Column(Column::Boolean(bitmap))),
-            None => Ok(Value::Scalar(Scalar::Boolean(false))),
+        match (is_or, result, validity) {
+            (true, Some(bitmap), _) | (false, _, Some(bitmap)) => {
+                Ok(Value::Column(Column::Boolean(bitmap)))
+            }
+            (true, None, _) => Ok(Value::Scalar(Scalar::Boolean(false))),
+            (false, _, None) => Ok(Value::Scalar(Scalar::Boolean(true))),
         }
     }
 
@@ -1554,6 +1551,58 @@ impl<'a> Evaluator<'a> {
         Ok(arg0)
     }
 
+    fn eval_lambda_block(&self, block: &DataBlock, expr: &Expr) -> Result<Column> {
+        let evaluator = Evaluator::new(block, self.func_ctx, self.fn_registry);
+        let result = evaluator.run(expr)?;
+        Ok(result.convert_to_full_column(expr.data_type(), block.num_rows()))
+    }
+
+    fn build_filtered_offsets(offsets: &[u64], bitmap: &Bitmap) -> Vec<u64> {
+        let mut new_offset = 0;
+        let mut filtered_offsets = Vec::with_capacity(offsets.len());
+        filtered_offsets.push(0);
+        for offset in offsets.windows(2) {
+            let start = offset[0] as usize;
+            let len = (offset[1] - offset[0]) as usize;
+            new_offset += (len - bitmap.null_count_range(start, len)) as u64;
+            filtered_offsets.push(new_offset);
+        }
+        filtered_offsets
+    }
+
+    fn ensure_unique_map_keys(keys: &Column, offsets: Option<&[u64]>) -> Result<()> {
+        let mut key_set = HashSet::new();
+
+        if let Some(offsets) = offsets {
+            for offset in offsets.windows(2) {
+                key_set.clear();
+                for index in offset[0] as usize..offset[1] as usize {
+                    let key = unsafe { keys.index_unchecked(index) };
+                    if !key_set.insert(key) {
+                        return Err(ErrorCode::SemanticError(
+                            "map keys have to be unique".to_string(),
+                        ));
+                    }
+                }
+            }
+            return Ok(());
+        }
+
+        for index in 0..keys.len() {
+            let key = unsafe { keys.index_unchecked(index) };
+            if !key_set.insert(key) {
+                return Err(ErrorCode::SemanticError(
+                    "map keys have to be unique".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn wrap_lambda_column(column: Column, validity: Option<Bitmap>) -> Value<AnyType> {
+        Value::Column(column).wrap_nullable(validity)
+    }
+
     pub fn run_lambda(
         &self,
         func_name: &str,
@@ -1628,10 +1677,10 @@ impl<'a> Evaluator<'a> {
                 _ => unreachable!(),
             };
 
-            if func_name == "map_filter"
-                || func_name == "map_transform_keys"
-                || func_name == "map_transform_values"
-            {
+            if matches!(
+                func_name,
+                "map_filter" | "map_transform_keys" | "map_transform_values"
+            ) {
                 let (key_col, value_col) = match inner_col.clone() {
                     Column::Tuple(t) => (t[0].clone(), t[1].clone()),
                     _ => unreachable!(),
@@ -1640,10 +1689,7 @@ impl<'a> Evaluator<'a> {
                     vec![key_col.clone().into(), value_col.clone().into()],
                     inner_col.len(),
                 );
-
-                let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                let result = evaluator.run(&expr)?;
-                let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
+                let result_col = self.eval_lambda_block(&block, &expr)?;
 
                 let map_col = match func_name {
                     "map_filter" => {
@@ -1651,46 +1697,16 @@ impl<'a> Evaluator<'a> {
                         let bitmap = result_col.as_boolean().unwrap();
                         let (filtered_key_col, filtered_value_col) =
                             (key_col.filter(bitmap), value_col.filter(bitmap));
-
-                        // generate new offsets after filter.
-                        let mut new_offset = 0;
-                        let mut filtered_offsets = Vec::with_capacity(offsets.len());
-                        filtered_offsets.push(0);
-                        for offset in offsets.windows(2) {
-                            let off = offset[0] as usize;
-                            let len = (offset[1] - offset[0]) as usize;
-                            let unset_count = bitmap.null_count_range(off, len);
-                            new_offset += (len - unset_count) as u64;
-                            filtered_offsets.push(new_offset);
-                        }
-
                         let inner_column = Column::Tuple(vec![
                             filtered_key_col.clone(),
                             filtered_value_col.clone(),
                         ]);
-                        let offsets = filtered_offsets.into();
+                        let offsets =
+                            Self::build_filtered_offsets(offsets.as_slice(), bitmap).into();
                         Column::Map(Box::new(ArrayColumn::new(inner_column, offsets)))
                     }
                     "map_transform_keys" => {
-                        // Check whether the key is duplicate.
-                        let mut key_set = HashSet::new();
-                        for offset in offsets.windows(2) {
-                            let start = offset[0] as usize;
-                            let end = offset[1] as usize;
-                            if start == end {
-                                continue;
-                            }
-                            key_set.clear();
-                            for i in start..end {
-                                let key = unsafe { result_col.index_unchecked(i) };
-                                if key_set.contains(&key) {
-                                    return Err(ErrorCode::SemanticError(
-                                        "map keys have to be unique".to_string(),
-                                    ));
-                                }
-                                key_set.insert(key);
-                            }
-                        }
+                        Self::ensure_unique_map_keys(&result_col, Some(offsets.as_slice()))?;
                         let inner_column = Column::Tuple(vec![result_col, value_col]);
                         Column::Map(Box::new(ArrayColumn::new(inner_column, offsets)))
                     }
@@ -1700,48 +1716,25 @@ impl<'a> Evaluator<'a> {
                     }
                     _ => unreachable!(),
                 };
-                let col = match validity {
-                    Some(validity) => Value::Column(NullableColumn::new_column(map_col, validity)),
-                    None => Value::Column(map_col),
-                };
-                return Ok(col);
+                return Ok(Self::wrap_lambda_column(map_col, validity));
             } else {
                 let entry = inner_col.clone().into();
                 let block = DataBlock::new(vec![entry], inner_col.len());
-                let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                let result = evaluator.run(&expr)?;
-                let result_col = result.convert_to_full_column(expr.data_type(), inner_col.len());
+                let result_col = self.eval_lambda_block(&block, &expr)?;
 
                 let array_col = if func_name == "array_filter" {
                     let result_col = result_col.remove_nullable();
                     let bitmap = result_col.as_boolean().unwrap();
                     let filtered_inner_col = inner_col.filter(bitmap);
-                    // generate new offsets after filter.
-                    let mut new_offset = 0;
-                    let mut filtered_offsets = Vec::with_capacity(offsets.len());
-                    filtered_offsets.push(0);
-                    for offset in offsets.windows(2) {
-                        let off = offset[0] as usize;
-                        let len = (offset[1] - offset[0]) as usize;
-                        let unset_count = bitmap.null_count_range(off, len);
-                        new_offset += (len - unset_count) as u64;
-                        filtered_offsets.push(new_offset);
-                    }
 
                     Column::Array(Box::new(ArrayColumn::new(
                         filtered_inner_col,
-                        filtered_offsets.into(),
+                        Self::build_filtered_offsets(offsets.as_slice(), bitmap).into(),
                     )))
                 } else {
                     Column::Array(Box::new(ArrayColumn::new(result_col, offsets)))
                 };
-                let col = match validity {
-                    Some(validity) => {
-                        Value::Column(NullableColumn::new_column(array_col, validity))
-                    }
-                    None => Value::Column(array_col),
-                };
-                return Ok(col);
+                return Ok(Self::wrap_lambda_column(array_col, validity));
             }
         }
 
@@ -1773,10 +1766,7 @@ impl<'a> Evaluator<'a> {
                         .collect();
 
                     let block = DataBlock::new(entries, col_len);
-
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    let result = evaluator.run(&expr)?;
-                    let result_col = result.convert_to_full_column(expr.data_type(), col_len);
+                    let result_col = self.eval_lambda_block(&block, &expr)?;
 
                     let val = if func_name == "array_filter" {
                         let result_col = result_col.remove_nullable();
@@ -1807,17 +1797,16 @@ impl<'a> Evaluator<'a> {
                         .collect();
 
                     let block = DataBlock::new(entries, col_len);
-
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    let result = evaluator.run(&expr)?;
-                    let result_col = result.convert_to_full_column(expr.data_type(), col_len);
+                    let result_col = self.eval_lambda_block(&block, &expr)?;
                     let val = match func_name {
                         "map_filter" => {
                             let result_col = result_col.remove_nullable();
                             let bitmap = result_col.as_boolean().unwrap();
 
-                            let (key_entry, value_entry) =
-                                (block.get_by_offset(0), block.get_by_offset(1));
+                            let (key_entry, value_entry) = (
+                                block.get_by_offset(lambda_idx),
+                                block.get_by_offset(lambda_idx + 1),
+                            );
                             let (key_col, value_col) = (
                                 key_entry.as_column().unwrap(),
                                 value_entry.as_column().unwrap(),
@@ -1830,17 +1819,7 @@ impl<'a> Evaluator<'a> {
                             ]))
                         }
                         "map_transform_keys" => {
-                            // Check whether the key is duplicate.
-                            let mut key_set = HashSet::new();
-                            for i in 0..result_col.len() {
-                                let key = unsafe { result_col.index_unchecked(i) };
-                                if key_set.contains(&key) {
-                                    return Err(ErrorCode::SemanticError(
-                                        "map keys have to be unique".to_string(),
-                                    ));
-                                }
-                                key_set.insert(key);
-                            }
+                            Self::ensure_unique_map_keys(&result_col, None)?;
                             Scalar::Map(Column::Tuple(vec![result_col, value_col]))
                         }
                         "map_transform_values" => {
