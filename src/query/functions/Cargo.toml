@@ -60,6 +60,7 @@ unicase = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+databend-common-sql-test-support = { workspace = true }
 anyhow = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }

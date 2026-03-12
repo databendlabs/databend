@@ -34,20 +34,20 @@ mod dummy {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::type_check;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use databend_common_functions::test_utils as parser;
+    use databend_common_sql_test_support as parser;
 
     #[divan::bench(args = [10240, 102400])]
     fn parse(bencher: divan::Bencher, n: usize) {
         let text = "[".to_string() + &"true,".repeat(n) + "]";
         bencher.bench(|| {
-            let _ = divan::black_box(parser::parse_raw_expr(&text, &[]));
+            let _ = divan::black_box(parser::parse_raw_expr(&text, &[], &BUILTIN_FUNCTIONS));
         });
     }
 
     #[divan::bench(args = [10240, 102400])]
     fn check(bencher: divan::Bencher, n: usize) {
         let text = "[".to_string() + &"true,".repeat(n) + "]";
-        let raw_expr = parser::parse_raw_expr(&text, &[]);
+        let raw_expr = parser::parse_raw_expr(&text, &[], &BUILTIN_FUNCTIONS);
 
         bencher.bench(|| {
             let _ = divan::black_box(type_check::check(&raw_expr, &BUILTIN_FUNCTIONS));
@@ -57,7 +57,7 @@ mod dummy {
     #[divan::bench(args = [10240, 102400])]
     fn eval(bencher: divan::Bencher, n: usize) {
         let text = "[".to_string() + &"true,".repeat(n) + "]";
-        let raw_expr = parser::parse_raw_expr(&text, &[]);
+        let raw_expr = parser::parse_raw_expr(&text, &[], &BUILTIN_FUNCTIONS);
         let func_ctx = FunctionContext::default();
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let block = DataBlock::new(vec![], 1);
@@ -250,7 +250,7 @@ mod datetime_fast_path {
     use databend_common_expression::types::timestamp::microseconds_to_days;
     use databend_common_expression::types::timestamp::timestamp_to_string;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use databend_common_functions::test_utils as parser;
+    use databend_common_sql_test_support as parser;
     use jiff::civil::date;
     use jiff::tz::TimeZone;
     use rand::Rng;
@@ -457,7 +457,7 @@ mod datetime_fast_path {
     }
 
     fn build_expr(sql: &str, columns: &[(&str, DataType)]) -> Expr {
-        let raw_expr = parser::parse_raw_expr(sql, columns);
+        let raw_expr = parser::parse_raw_expr(sql, columns, &BUILTIN_FUNCTIONS);
         type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap()
     }
 
