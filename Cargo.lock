@@ -5879,13 +5879,16 @@ dependencies = [
 name = "databend-sqllogictests"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "databend-sqllogictests-core",
+ "env_logger 0.11.8",
+ "tokio",
 ]
 
 [[package]]
 name = "databend-sqllogictests-core"
 version = "0.1.0"
-source = "git+https://github.com/dqhl76/databend-sqllogictests.git#7302b174e7da9786468817d28479b0f96e8ba7e3"
+source = "git+https://github.com/dqhl76/databend-sqllogictests.git?rev=f02e6243f1d0cbc9b37252b44c47ca40d3fc5867#f02e6243f1d0cbc9b37252b44c47ca40d3fc5867"
 dependencies = [
  "async-recursion",
  "async-trait",

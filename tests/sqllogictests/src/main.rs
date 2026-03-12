@@ -12,6 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {
-    databend_sqllogictests_core::run();
+use clap::Parser;
+use databend_sqllogictests_core::SqlLogicTestArgs;
+use databend_sqllogictests_core::run;
+
+#[tokio::main]
+async fn main() {
+    env_logger::init();
+    let args = SqlLogicTestArgs::parse();
+    if let Err(e) = run(args).await {
+        eprintln!("{e}");
+        std::process::exit(1);
+    }
 }
