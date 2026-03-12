@@ -18,6 +18,7 @@ mod metadata;
 mod planner;
 mod semantic;
 
+
 pub mod binder;
 pub mod dataframe;
 mod execution;
