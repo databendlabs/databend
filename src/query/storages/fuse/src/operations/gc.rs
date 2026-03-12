@@ -22,8 +22,10 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
@@ -98,6 +100,18 @@ impl FuseTable {
             return if dry_run { Ok(Some(vec![])) } else { Ok(None) };
         };
 
+        let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
+        if !dry_run {
+            // Persist the current snapshot timestamp as LVT so that concurrent
+            // writers/committers will only reference data newer than the gc root.
+            catalog
+                .set_table_lvt(
+                    &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
+                    &LeastVisibleTime::new(root_snapshot.timestamp.unwrap()),
+                )
+                .await?;
+        }
+
         let segment_refs: Vec<&Location> = root_snapshot.segments.iter().collect();
         let referenced_locations = self
             .get_block_locations(ctx.clone(), &segment_refs, true, false)
@@ -119,7 +133,6 @@ impl FuseTable {
         let mut dry_run_purge_files = vec![];
         let mut purged_snapshot_count = 0;
 
-        let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
         let table_agg_index_ids = catalog
             .list_index_ids_by_table_id(ListIndexesByIdReq::new(ctx.get_tenant(), self.get_id()))
             .await?;
