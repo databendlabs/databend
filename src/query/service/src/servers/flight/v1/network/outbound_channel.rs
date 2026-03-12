@@ -174,22 +174,7 @@ impl RemoteChannel {
 
 #[async_trait::async_trait]
 impl OutboundChannel for RemoteChannel {
-    fn close(&self) {
-        let (pending, in_flight, has_error) = self
-            .buffer
-            .debug_channel_state(self.channel_id, self.dest_idx);
-
-        if pending > 0 || in_flight {
-            log::warn!(
-                "ANY_JOIN_ROOT_DEBUG remote_channel_close_with_unfinished dest_idx={} channel_id={} pending={} in_flight={} has_error={}",
-                self.dest_idx,
-                self.channel_id,
-                pending,
-                in_flight,
-                has_error
-            );
-        }
-    }
+    fn close(&self) {}
 
     fn is_closed(&self) -> bool {
         false

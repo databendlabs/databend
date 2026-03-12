@@ -71,10 +71,8 @@ impl OutboundChannel for LocalOutboundChannel {
 
             if let Err(cause) = self.sender.try_send(item) {
                 if cause.is_full() {
-                    log::error!("Logical error, local channel quota queue is full");
+                    unreachable!("Logical error, local channel quota queue is full");
                 }
-
-                return Err(ErrorCode::AbortedQuery("Abort query."));
             }
 
             return Ok(());
@@ -90,10 +88,8 @@ impl OutboundChannel for LocalOutboundChannel {
         let item = LocalQueueItem::create(block, x);
         if let Err(cause) = self.sender.try_send(item) {
             if cause.is_full() {
-                log::error!("Logical error, inbound quota queue is full");
+                unreachable!("Logical error, local channel quota queue is full");
             }
-
-            return Err(ErrorCode::AbortedQuery("Abort query."));
         }
 
         Ok(())

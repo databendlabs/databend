@@ -163,35 +163,7 @@ struct ExchangeSinkBufferInner {
 
 impl Drop for ExchangeSinkBufferInner {
     fn drop(&mut self) {
-        for (dest_idx, remote) in self.state.remotes.iter().enumerate() {
-            let (total_pending, pending_by_tid, has_error) = {
-                let state = remote.state.lock();
-                let mut total_pending = 0usize;
-                let mut pending_by_tid = Vec::new();
-
-                for (tid, channel) in state.channels.iter().enumerate() {
-                    let pending = channel.pending_queue.len();
-                    total_pending += pending;
-                    if pending > 0 {
-                        pending_by_tid.push(format!("{}:{}", tid, pending));
-                    }
-                }
-
-                (total_pending, pending_by_tid, state.last_error.is_some())
-            };
-
-            let in_flight = remote.exchange.is_in_flight();
-            if total_pending > 0 || in_flight {
-                log::warn!(
-                    "ANY_JOIN_ROOT_DEBUG buffer_drop_with_unfinished dest_idx={} total_pending={} in_flight={} has_error={} pending_by_tid=[{}]",
-                    dest_idx,
-                    total_pending,
-                    in_flight,
-                    has_error,
-                    pending_by_tid.join(",")
-                );
-            }
-
+        for remote in &self.state.remotes {
             remote.exchange.shutdown.notify_waiters();
         }
     }

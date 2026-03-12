@@ -78,12 +78,6 @@ impl Processor for ExchangeRecvTransform {
 
     fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         if self.output.is_finished() {
-            log::warn!(
-                "ANY_JOIN_ROOT_DEBUG exchange_recv_close reason=output_finished input_finished={} receiver_closed={}, pid={:?}",
-                self.input.is_finished(),
-                self.receiver.is_closed(),
-                self.id,
-            );
             self.input.finish();
             self.receiver.close();
 
@@ -104,10 +98,6 @@ impl Processor for ExchangeRecvTransform {
             match handle.poll(matches!(cause, EventCause::Other)) {
                 Poll::Ready(Ok(None)) => {
                     if self.input.is_finished() {
-                        log::debug!(
-                            "ANY_JOIN_ROOT_DEBUG exchange_recv_finish reason=remote_closed_after_input_finished receiver_closed={}",
-                            self.receiver.is_closed(),
-                        );
                         self.output.finish();
                         return Ok(Event::Finished);
                     }
@@ -133,10 +123,6 @@ impl Processor for ExchangeRecvTransform {
         }
 
         if self.input.is_finished() && self.handle.is_none() {
-            log::debug!(
-                "ANY_JOIN_ROOT_DEBUG exchange_recv_close reason=input_finished_and_handle_none receiver_closed={}",
-                self.receiver.is_closed(),
-            );
             self.output.finish();
             self.receiver.close();
             return Ok(Event::Finished);

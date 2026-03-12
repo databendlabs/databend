@@ -131,18 +131,7 @@ impl NetworkInboundSender {
             Ok(()) => Ok(()),
             Err(()) => match self.all_receivers_closed() {
                 true => Err(()),
-                false => {
-                    let sub_queue = &self.sub_queues[tid];
-                    log::warn!(
-                        "ANY_JOIN_ROOT_DEBUG inbound_drop_on_closed_tid tid={} sender_closed={} receiver_closed={} sender_count={} queue_len={}",
-                        tid,
-                        sub_queue.sender.is_closed(),
-                        sub_queue.receiver.is_closed(),
-                        sub_queue.sender_count.load(Ordering::Acquire),
-                        sub_queue.receiver.len(),
-                    );
-                    Ok(())
-                }
+                false => Ok(()),
             },
         }
     }
@@ -157,16 +146,6 @@ impl NetworkInboundSender {
                     if self.all_receivers_closed() {
                         return Err(());
                     }
-
-                    let sub_queue = &self.sub_queues[tid];
-                    log::warn!(
-                        "ANY_JOIN_ROOT_DEBUG inbound_drop_on_closed_tid_in_batch tid={} sender_closed={} receiver_closed={} sender_count={} queue_len={}",
-                        tid,
-                        sub_queue.sender.is_closed(),
-                        sub_queue.receiver.is_closed(),
-                        sub_queue.sender_count.load(Ordering::Acquire),
-                        sub_queue.receiver.len(),
-                    );
                 }
             }
         }
