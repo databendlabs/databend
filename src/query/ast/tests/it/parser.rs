@@ -1738,7 +1738,7 @@ fn test_quote() {
         ("a\\\"b", "\"a\\\"\"b\""),
         ("12", "\"12\""),
         ("🍣", "\"🍣\""),
-        ("価格", "\"価格\""),
+        ("価格", "価格"),
         ("\t", "\"\t\""),
         ("complex \"string\"", "\"complex \"\"string\"\"\""),
         ("\"\"\"", "\"\"\"\"\"\"\"\""),
@@ -1757,5 +1757,45 @@ fn test_quote() {
         } else {
             assert_eq!(input, expected);
         };
+    }
+}
+
+#[test]
+fn test_unicode_ident_tokenize() {
+    let cases = &[
+        ("中文", vec![(TokenKind::Ident, "中文")]),
+        ("価格", vec![(TokenKind::Ident, "価格")]),
+        ("SELECT 'a' AS 中文", vec![
+            (TokenKind::SELECT, "SELECT"),
+            (TokenKind::LiteralString, "'a'"),
+            (TokenKind::AS, "AS"),
+            (TokenKind::Ident, "中文"),
+        ]),
+        // Mixed ASCII and Unicode
+        ("abc中文", vec![(TokenKind::Ident, "abc中文")]),
+        ("abc中文123", vec![(TokenKind::Ident, "abc中文123")]),
+        ("_中文", vec![(TokenKind::Ident, "_中文")]),
+        ("_列名_1", vec![(TokenKind::Ident, "_列名_1")]),
+        // Non-BMP but Alphabetic (CJK Extension B U+20000) — still valid
+        ("𠀀", vec![(TokenKind::Ident, "𠀀")]),
+        ("abc𠀀123", vec![(TokenKind::Ident, "abc𠀀123")]),
+        ("_𠀀$1", vec![(TokenKind::Ident, "_𠀀$1")]),
+    ];
+
+    for (input, expected) in cases {
+        let tokens: Vec<_> = Tokenizer::new(input)
+            .map(|t| t.unwrap())
+            .filter(|t| t.kind != TokenKind::EOI)
+            .map(|t| (t.kind, t.text().to_string()))
+            .collect();
+        let tokens: Vec<_> = tokens.iter().map(|(k, s)| (*k, s.as_str())).collect();
+        assert_eq!(tokens, *expected, "input: {input}");
+    }
+
+    // Emoji is not Alphabetic, tokenizer must return an error
+    let err_cases = &["🍣"];
+    for input in err_cases {
+        let result: std::result::Result<Vec<_>, _> = Tokenizer::new(input).collect();
+        assert!(result.is_err(), "expected error for input: {input}");
     }
 }
