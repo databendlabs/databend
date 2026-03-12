@@ -18,9 +18,12 @@ use std::iter::Peekable;
 use std::str::FromStr;
 
 use crate::parser::Dialect;
+use crate::parser::token::is_ident_continue;
+use crate::parser::token::is_ident_start;
 
-// In ANSI SQL, it does not need to quote an identifier if the identifier matches
-// the following regular expression: [A-Za-z_][A-Za-z0-9_$]*.
+// An identifier does not need quoting if it matches the rules defined by
+// is_ident_start / is_ident_continue (ASCII letters, underscore, digits, `$`,
+// plus any Unicode Alphabetic character — CJK, Cyrillic, etc.).
 //
 // There are also two known special cases in Databend which do not require quoting:
 // - "~" is a valid stage name
@@ -37,12 +40,12 @@ pub fn ident_needs_quote(ident: &str) -> bool {
 
     let mut chars = ident.chars();
     let first = chars.next().unwrap();
-    if !first.is_ascii_alphabetic() && first != '_' {
+    if !is_ident_start(first) {
         return true;
     }
 
     for c in chars {
-        if !c.is_ascii_alphanumeric() && c != '_' && c != '$' {
+        if !is_ident_continue(c) {
             return true;
         }
     }
@@ -57,7 +60,11 @@ pub fn display_ident(
     dialect: Dialect,
 ) -> String {
     // Db-s -> "Db-s" ; dbs -> dbs
-    if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive
+    // Quote the identifier if it would change under to_lowercase(), so that
+    // round-tripping through normalize_identifier (which lowercases unquoted
+    // idents) preserves the original name.  This covers both uppercase (Lu)
+    // and titlecase (Lt) Unicode characters — e.g. ǅ (U+01C5).
+    if name != name.to_lowercase() && quoted_ident_case_sensitive
         || ident_needs_quote(name)
         || force_quoted_ident
     {
@@ -73,7 +80,7 @@ pub fn ident_opt_quote(
     quoted_ident_case_sensitive: bool,
     dialect: Dialect,
 ) -> Option<char> {
-    if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive
+    if name != name.to_lowercase() && quoted_ident_case_sensitive
         || ident_needs_quote(name)
         || force_quoted_ident
     {
