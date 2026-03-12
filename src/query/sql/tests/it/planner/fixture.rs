@@ -18,6 +18,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Once;
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -180,6 +182,10 @@ impl DummyCatalog {
         self.tables
             .write()
             .insert((database.to_string(), table.name().to_string()), table);
+    }
+
+    fn clear_tables(&self) {
+        self.tables.write().clear();
     }
 }
 
@@ -625,6 +631,7 @@ pub struct LiteTableContext {
     variables: RwLock<HashMap<String, Scalar>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
     queued_duration: RwLock<Duration>,
+    next_table_id: AtomicU64,
 }
 
 impl LiteTableContext {
@@ -653,10 +660,11 @@ impl LiteTableContext {
             .collect::<Result<HashMap<_, _>>>()?;
 
         let warehouse_distribution = *self.warehouse_distribution.read();
+        let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
 
         Ok(Arc::new(FakeTable {
             table_info: TableInfo {
-                ident: TableIdent::new(1, 0),
+                ident: TableIdent::new(table_id, 0),
                 desc: format!("'{}'.'{}'", database, table_name),
                 name: table_name.to_string(),
                 meta: TableMeta {
@@ -678,42 +686,40 @@ impl LiteTableContext {
         let tenant = Tenant::new_literal("default");
         let settings = Settings::create(tenant.clone());
         let shared_settings = Settings::create(tenant.clone());
-        let (catalog_manager, default_catalog) =
-            if let Some(catalog_manager) = GLOBAL_CATALOG_MANAGER.get() {
-                (
-                    catalog_manager.clone(),
-                    catalog_manager
-                        .default_catalog
-                        .as_any()
-                        .downcast_ref::<DummyCatalog>()
-                        .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
-                        .clone()
-                        .into(),
-                )
-            } else {
-                let default_catalog = Arc::new(DummyCatalog::default());
-                let default_catalog_dyn: Arc<dyn Catalog> = default_catalog.clone();
-                let mut rpc_conf = RpcClientConf::empty();
-                rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
-                rpc_conf.timeout = Some(Duration::from_millis(1));
-                let catalog_manager = Arc::new(CatalogManager {
-                    meta: MetaStoreProvider::new(rpc_conf)
-                        .create_meta_store::<DatabendRuntime>()
-                        .await
-                        .map_err(|err| ErrorCode::Internal(err.to_string()))?,
-                    default_catalog: default_catalog_dyn,
-                    external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
-                    catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
-                    catalog_caches: Default::default(),
-                });
-                let catalog_manager = GLOBAL_CATALOG_MANAGER
-                    .get_or_init(|| catalog_manager.clone())
-                    .clone();
-                INIT_GLOBAL_CATALOG_MANAGER.call_once(|| {
-                    GlobalInstance::set(catalog_manager.clone());
-                });
-                (catalog_manager, default_catalog)
-            };
+        let catalog_manager = if let Some(catalog_manager) = GLOBAL_CATALOG_MANAGER.get() {
+            catalog_manager.clone()
+        } else {
+            let default_catalog = Arc::new(DummyCatalog::default());
+            let default_catalog_dyn: Arc<dyn Catalog> = default_catalog;
+            let mut rpc_conf = RpcClientConf::empty();
+            rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
+            rpc_conf.timeout = Some(Duration::from_millis(1));
+            let catalog_manager = Arc::new(CatalogManager {
+                meta: MetaStoreProvider::new(rpc_conf)
+                    .create_meta_store::<DatabendRuntime>()
+                    .await
+                    .map_err(|err| ErrorCode::Internal(err.to_string()))?,
+                default_catalog: default_catalog_dyn,
+                external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
+                catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
+                catalog_caches: Default::default(),
+            });
+            let catalog_manager = GLOBAL_CATALOG_MANAGER
+                .get_or_init(|| catalog_manager.clone())
+                .clone();
+            INIT_GLOBAL_CATALOG_MANAGER.call_once(|| {
+                GlobalInstance::set(catalog_manager.clone());
+            });
+            catalog_manager
+        };
+        let default_catalog: Arc<DummyCatalog> = catalog_manager
+            .default_catalog
+            .as_any()
+            .downcast_ref::<DummyCatalog>()
+            .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
+            .clone()
+            .into();
+        default_catalog.clear_tables();
 
         Ok(Arc::new(Self {
             catalog_manager,
@@ -748,6 +754,7 @@ impl LiteTableContext {
             variables: RwLock::new(HashMap::new()),
             runtime_filter_ready: RwLock::new(HashMap::new()),
             queued_duration: RwLock::new(Duration::default()),
+            next_table_id: AtomicU64::new(1),
         }))
     }
 
@@ -1404,5 +1411,57 @@ impl TableContext for LiteTableContext {
     fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {}
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         vec![]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_fields() -> Vec<TableField> {
+        vec![TableField::new(
+            "a",
+            TableDataType::Number(NumberDataType::UInt64),
+        )]
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fake_tables_have_unique_ids() -> Result<()> {
+        let ctx = LiteTableContext::create().await?;
+        ctx.register_table_with_stats("default", "t1", test_fields(), None, HashMap::new())?;
+        ctx.register_table_with_stats("default", "t2", test_fields(), None, HashMap::new())?;
+
+        let table1 = ctx
+            .default_catalog
+            .get_table(&ctx.tenant, "default", "t1")
+            .await?;
+        let table2 = ctx
+            .default_catalog
+            .get_table(&ctx.tenant, "default", "t2")
+            .await?;
+
+        assert_ne!(
+            table1.get_table_info().ident.table_id,
+            table2.get_table_info().ident.table_id
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_create_clears_catalog_tables() -> Result<()> {
+        let ctx1 = LiteTableContext::create().await?;
+        ctx1.register_table_with_stats("default", "t1", test_fields(), None, HashMap::new())?;
+        ctx1.default_catalog
+            .get_table(&ctx1.tenant, "default", "t1")
+            .await?;
+
+        let ctx2 = LiteTableContext::create().await?;
+        assert!(
+            ctx2.default_catalog
+                .get_table(&ctx2.tenant, "default", "t1")
+                .await
+                .is_err()
+        );
+        Ok(())
     }
 }

@@ -37,6 +37,7 @@ enum-as-inner = { workspace = true }
 futures = { workspace = true }
 jsonb = { workspace = true }
 lance-core = { workspace = true }
+lance-encoding = { workspace = true }
 lance-file = { workspace = true, features = ["protoc"] }
 lance-io = { workspace = true }
 lance-table = { workspace = true, features = ["protoc"] }
@@ -61,4 +62,4 @@ uuid = { workspace = true }
 workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "lance-encoding"]

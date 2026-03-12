@@ -322,7 +322,7 @@ jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.5"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
 lance-core = "1.0.4"
-lance-encoding = "1.0.4"
+lance-encoding = { version = "1.0.4", features = ["protoc"] }
 lance-file = "1.0.4"
 lance-io = { version = "1.0.4", default-features = false }
 lance-table = "1.0.4"
