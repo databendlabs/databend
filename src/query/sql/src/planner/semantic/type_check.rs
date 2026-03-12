@@ -794,12 +794,7 @@ impl<'a> TypeChecker<'a> {
                             let data_type = predicate.data_type()?;
                             Box::new((predicate, data_type))
                         }
-                        _ => self.resolve_scalar_function_call(
-                            *span,
-                            "or_filters",
-                            vec![],
-                            predicates,
-                        )?,
+                        _ => self.resolve_balanced_or(*span, predicates)?,
                     };
 
                     if *not {
@@ -1552,6 +1547,36 @@ impl<'a> TypeChecker<'a> {
         } else {
             self.resolve_binary_op(*span, op, left, right)
         }
+    }
+
+    fn resolve_balanced_or(
+        &self,
+        span: Span,
+        mut predicates: Vec<ScalarExpr>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        debug_assert!(predicates.len() >= 2);
+
+        while predicates.len() > 1 {
+            let mut next_level = Vec::with_capacity(predicates.len().div_ceil(2));
+            let mut iter = predicates.into_iter();
+
+            while let Some(left) = iter.next() {
+                if let Some(right) = iter.next() {
+                    let (predicate, _) =
+                        *self
+                            .resolve_scalar_function_call(span, "or", vec![], vec![left, right])?;
+                    next_level.push(predicate);
+                } else {
+                    next_level.push(left);
+                }
+            }
+
+            predicates = next_level;
+        }
+
+        let predicate = predicates.pop().unwrap();
+        let data_type = predicate.data_type()?;
+        Ok(Box::new((predicate, data_type)))
     }
 
     fn resolve_scalar_subquery(
