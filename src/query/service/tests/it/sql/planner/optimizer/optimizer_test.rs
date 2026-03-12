@@ -27,8 +27,8 @@ use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
-use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::TestSuite;
+use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_sql_test_support::run_test_case_core;
 use databend_meta_types::NodeInfo;
@@ -36,6 +36,7 @@ use databend_query::clusters::ClusterHelper;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
+
 use crate::sql::planner::optimizer::test_utils::execute_sql;
 use crate::sql::planner::optimizer::test_utils::raw_plan;
 

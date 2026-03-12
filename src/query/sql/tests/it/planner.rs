@@ -18,8 +18,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
-use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::TestSuite;
+use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
 
 use self::fixture::LiteTableContext;
@@ -102,7 +102,10 @@ impl TestCaseRunner for LiteRunner {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
-    let suite = TestSuite::new(TestSuite::optimizer_data_dir(), std::env::var("TEST_SUBDIR").ok());
+    let suite = TestSuite::new(
+        TestSuite::optimizer_data_dir(),
+        std::env::var("TEST_SUBDIR").ok(),
+    );
     let mut mints = suite.create_mints();
 
     for (case, spec) in suite.load_cases()?.into_iter().filter_map(|case| {

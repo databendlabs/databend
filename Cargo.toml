@@ -31,7 +31,6 @@ members = [
     "src/meta/store",
     "src/meta/ver",
     "src/query/codegen",
-    "src/query/sql/test-support",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
 ]

@@ -678,41 +678,42 @@ impl LiteTableContext {
         let tenant = Tenant::new_literal("default");
         let settings = Settings::create(tenant.clone());
         let shared_settings = Settings::create(tenant.clone());
-        let (catalog_manager, default_catalog) = if let Some(catalog_manager) = GLOBAL_CATALOG_MANAGER.get() {
-            (
-                catalog_manager.clone(),
-                catalog_manager
-                    .default_catalog
-                    .as_any()
-                    .downcast_ref::<DummyCatalog>()
-                    .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
-                    .clone()
-                    .into(),
-            )
-        } else {
-            let default_catalog = Arc::new(DummyCatalog::default());
-            let default_catalog_dyn: Arc<dyn Catalog> = default_catalog.clone();
-            let mut rpc_conf = RpcClientConf::empty();
-            rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
-            rpc_conf.timeout = Some(Duration::from_millis(1));
-            let catalog_manager = Arc::new(CatalogManager {
-                meta: MetaStoreProvider::new(rpc_conf)
-                    .create_meta_store::<DatabendRuntime>()
-                    .await
-                    .map_err(|err| ErrorCode::Internal(err.to_string()))?,
-                default_catalog: default_catalog_dyn,
-                external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
-                catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
-                catalog_caches: Default::default(),
-            });
-            let catalog_manager = GLOBAL_CATALOG_MANAGER
-                .get_or_init(|| catalog_manager.clone())
-                .clone();
-            INIT_GLOBAL_CATALOG_MANAGER.call_once(|| {
-                GlobalInstance::set(catalog_manager.clone());
-            });
-            (catalog_manager, default_catalog)
-        };
+        let (catalog_manager, default_catalog) =
+            if let Some(catalog_manager) = GLOBAL_CATALOG_MANAGER.get() {
+                (
+                    catalog_manager.clone(),
+                    catalog_manager
+                        .default_catalog
+                        .as_any()
+                        .downcast_ref::<DummyCatalog>()
+                        .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
+                        .clone()
+                        .into(),
+                )
+            } else {
+                let default_catalog = Arc::new(DummyCatalog::default());
+                let default_catalog_dyn: Arc<dyn Catalog> = default_catalog.clone();
+                let mut rpc_conf = RpcClientConf::empty();
+                rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
+                rpc_conf.timeout = Some(Duration::from_millis(1));
+                let catalog_manager = Arc::new(CatalogManager {
+                    meta: MetaStoreProvider::new(rpc_conf)
+                        .create_meta_store::<DatabendRuntime>()
+                        .await
+                        .map_err(|err| ErrorCode::Internal(err.to_string()))?,
+                    default_catalog: default_catalog_dyn,
+                    external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
+                    catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
+                    catalog_caches: Default::default(),
+                });
+                let catalog_manager = GLOBAL_CATALOG_MANAGER
+                    .get_or_init(|| catalog_manager.clone())
+                    .clone();
+                INIT_GLOBAL_CATALOG_MANAGER.call_once(|| {
+                    GlobalInstance::set(catalog_manager.clone());
+                });
+                (catalog_manager, default_catalog)
+            };
 
         Ok(Arc::new(Self {
             catalog_manager,
