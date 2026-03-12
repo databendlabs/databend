@@ -28,8 +28,6 @@ use crate::pipelines::processors::transforms::hash_join::common::wrap_true_valid
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
-use crate::sessions::TableContext;
-use crate::sql::planner::plans::JoinType;
 
 impl HashJoinProbeState {
     pub(crate) fn inner_join<
@@ -49,7 +47,6 @@ impl HashJoinProbeState {
         // Process States.
         let mut next_process_state = false;
         let process_state = probe_state.process_state.as_mut().unwrap();
-        let input_num_rows = process_state.input.num_rows();
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
@@ -76,9 +73,6 @@ impl HashJoinProbeState {
         // Results.
         let mut matched_idx = 0;
         let mut result_blocks = vec![];
-        let mut skipped_used_once = 0usize;
-        let mut match_calls = 0usize;
-        let mut matched_rows = 0usize;
 
         // Probe hash table and generate data blocks.
         if probe_state.probe_with_selection {
@@ -95,16 +89,12 @@ impl HashJoinProbeState {
                     continue;
                 }
 
-                match_calls += 1;
-                matched_rows += match_count;
-
                 if ProbeState::check_used(
                     &mut probe_state.used_once,
                     max_block_size,
                     build_indexes_ptr,
                     matched_idx,
                 ) {
-                    skipped_used_once += 1;
                     continue;
                 }
 
@@ -147,16 +137,12 @@ impl HashJoinProbeState {
                     continue;
                 }
 
-                match_calls += 1;
-                matched_rows += match_count;
-
                 if ProbeState::check_used(
                     &mut probe_state.used_once,
                     max_block_size,
                     build_indexes_ptr,
                     matched_idx,
                 ) {
-                    skipped_used_once += 1;
                     continue;
                 }
 
@@ -202,19 +188,6 @@ impl HashJoinProbeState {
 
         if !next_process_state {
             probe_state.process_state = None;
-        }
-
-        if self.hash_join_state.hash_join_desc.join_type == JoinType::InnerAny {
-            log::info!(
-                "INNER_ANY_DEBUG query_id={} input_rows={} match_calls={} matched_rows={} skipped_used_once={} output_rows={} max_block_size={}",
-                self.ctx.get_id(),
-                input_num_rows,
-                match_calls,
-                matched_rows,
-                skipped_used_once,
-                result_blocks.iter().map(|b| b.num_rows()).sum::<usize>(),
-                max_block_size
-            );
         }
 
         match &mut probe_state.filter_executor {

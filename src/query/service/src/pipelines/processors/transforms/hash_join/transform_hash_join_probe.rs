@@ -43,7 +43,7 @@ enum FinalScanType {
 pub enum Step {
     Sync(SyncStep),
     Async(AsyncStep),
-    Finish(String),
+    Finish,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -183,8 +183,7 @@ impl TransformHashJoinProbe {
         let event = match &step {
             Step::Sync(_) => Event::Sync,
             Step::Async(_) => Event::Async,
-            Step::Finish(reason) => {
-                log::info!("Finish step reason: {:?}", reason);
+            Step::Finish => {
                 self.input_port.finish();
                 self.output_port.finish();
                 self.finish_build()?;
@@ -200,7 +199,7 @@ impl TransformHashJoinProbe {
             if self.need_final_scan() {
                 return self.next_step(Step::Async(AsyncStep::WaitProbe));
             } else {
-                return self.next_step(Step::Finish("OutputFinished".to_string()));
+                return self.next_step(Step::Finish);
             }
         }
 
@@ -259,7 +258,7 @@ impl TransformHashJoinProbe {
 
     fn final_scan(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
-            return self.next_step(Step::Finish("FinalScanFinished".to_string()));
+            return self.next_step(Step::Finish);
         }
 
         if !self.output_port.can_push() {
@@ -286,7 +285,7 @@ impl TransformHashJoinProbe {
                 HashTableType::Restored => self.next_step(Step::Async(AsyncStep::Restore)),
                 HashTableType::Empty => {
                     if self.can_fast_return() {
-                        self.next_step(Step::Finish("WaitEmptyBuild".to_string()))
+                        self.next_step(Step::Finish)
                     } else {
                         self.probe()
                     }
@@ -321,14 +320,14 @@ impl Processor for TransformHashJoinProbe {
                 AsyncStep::WaitBuild | AsyncStep::NextRound => self.wait_build(),
                 AsyncStep::WaitProbe => {
                     if self.output_port.is_finished() {
-                        self.next_step(Step::Finish("WaitProbeFinished".to_string()))
+                        self.next_step(Step::Finish)
                     } else {
                         self.final_scan()
                     }
                 }
                 AsyncStep::Spill | AsyncStep::Restore => self.probe(),
             },
-            Step::Finish(reason) => self.next_step(Step::Finish(reason.clone())),
+            Step::Finish => self.next_step(Step::Finish),
         }
     }
 
@@ -598,7 +597,7 @@ impl TransformHashJoinProbe {
         {
             self.next_step(Step::Async(AsyncStep::NextRound))
         } else {
-            self.next_step(Step::Finish("NextRoundFinished".to_string()))
+            self.next_step(Step::Finish)
         }
     }
 

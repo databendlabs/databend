@@ -64,7 +64,11 @@ impl HashSendTransform {
             input: input.clone(),
             output: output.clone(),
             tasks: SyncTaskSet::new(worker_id, waker),
-            partition_stream: BlockPartitionStream::create(65536, 8 * 1024 * 1024, scatter_size),
+            partition_stream: BlockPartitionStream::create(
+                super::HASH_SEND_ROWS_THRESHOLD,
+                super::HASH_SEND_BYTES_THRESHOLD,
+                scatter_size,
+            ),
             handle: None,
             id: NodeIndex::default(),
         }));

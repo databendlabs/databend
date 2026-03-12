@@ -293,21 +293,6 @@ impl ExchangeSinkBuffer {
 
         Ok(())
     }
-
-    pub fn debug_channel_state(&self, tid: usize, dest_idx: usize) -> (usize, bool, bool) {
-        let remote = &self.inner.state.remotes[dest_idx];
-        let (pending, has_error) = {
-            let state = remote.state.lock();
-            let pending = state
-                .channels
-                .get(tid)
-                .map(|channel| channel.pending_queue.len())
-                .unwrap_or_default();
-            (pending, state.last_error.is_some())
-        };
-
-        (pending, remote.exchange.is_in_flight(), has_error)
-    }
 }
 
 #[cfg(test)]
