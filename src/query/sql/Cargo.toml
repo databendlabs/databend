@@ -69,6 +69,7 @@ regex = { workspace = true }
 roaring = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 similar = { workspace = true }
 simsearch = { workspace = true }
@@ -80,6 +81,13 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+databend-common-sql-test-support = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-meta-client = { workspace = true }
+databend-meta-runtime = { workspace = true }
+databend-storages-common-session = { workspace = true }
 goldenfile = { workspace = true }
 
 [lints]

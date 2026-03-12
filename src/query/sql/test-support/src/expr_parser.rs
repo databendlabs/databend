@@ -29,6 +29,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::shrink_scalar;
@@ -42,12 +43,14 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use log as _;
 
-use crate::BUILTIN_FUNCTIONS;
-
-pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
+pub fn parse_raw_expr(
+    text: &str,
+    columns: &[(&str, DataType)],
+    builtin_functions: &FunctionRegistry,
+) -> RawExpr {
     let tokens = tokenize_sql(text).unwrap();
     let expr = parse_expr(&tokens, Dialect::PostgreSQL).expect("failed to parse expr");
-    transform_expr(expr, columns)
+    transform_expr(expr, columns, builtin_functions)
 }
 
 macro_rules! with_interval_mapped_name {
@@ -75,7 +78,7 @@ macro_rules! with_weekday_mapped_name {
 }
 
 macro_rules! transform_interval_add_sub {
-    ($span: expr, $columns: expr, $op: expr, $unit: expr, $date: expr, $interval: expr) => {
+    ($span: expr, $columns: expr, $builtin_functions: expr, $op: expr, $unit: expr, $date: expr, $interval: expr) => {
         if $op == BinaryOperator::Plus {
             with_interval_mapped_name!(|INTERVAL| match $unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
@@ -83,8 +86,8 @@ macro_rules! transform_interval_add_sub {
                     name: concat!("add_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*$date, $columns),
-                        transform_expr(*$interval, $columns),
+                        transform_expr(*$date, $columns, $builtin_functions),
+                        transform_expr(*$interval, $columns, $builtin_functions),
                     ],
                 },
                 kind => {
@@ -98,8 +101,8 @@ macro_rules! transform_interval_add_sub {
                     name: concat!("subtract_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*$date, $columns),
-                        transform_expr(*$interval, $columns),
+                        transform_expr(*$date, $columns, $builtin_functions),
+                        transform_expr(*$interval, $columns, $builtin_functions),
                     ],
                 },
                 kind => {
@@ -112,7 +115,11 @@ macro_rules! transform_interval_add_sub {
     };
 }
 
-fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
+fn transform_expr(
+    ast: AExpr,
+    columns: &[(&str, DataType)],
+    builtin_functions: &FunctionRegistry,
+) -> RawExpr {
     match ast {
         AExpr::Literal { span, value } => RawExpr::Constant {
             span,
@@ -147,7 +154,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         } => RawExpr::Cast {
             span,
             is_try: false,
-            expr: Box::new(transform_expr(*expr, columns)),
+            expr: Box::new(transform_expr(*expr, columns, builtin_functions)),
             dest_type: transform_data_type(target_type),
         },
         AExpr::TryCast {
@@ -158,7 +165,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         } => RawExpr::Cast {
             span,
             is_try: true,
-            expr: Box::new(transform_expr(*expr, columns)),
+            expr: Box::new(transform_expr(*expr, columns, builtin_functions)),
             dest_type: transform_data_type(target_type),
         },
         AExpr::FunctionCall {
@@ -172,17 +179,17 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             name: name.name,
             args: args
                 .into_iter()
-                .map(|arg| transform_expr(arg, columns))
+                .map(|arg| transform_expr(arg, columns, builtin_functions))
                 .collect(),
             params: params
                 .into_iter()
                 .map(|param| {
-                    let raw_expr = transform_expr(param, &[]);
-                    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+                    let raw_expr = transform_expr(param, &[], builtin_functions);
+                    let expr = type_check::check(&raw_expr, builtin_functions).unwrap();
                     let (expr, _) = ConstantFolder::fold(
                         &expr,
                         &FunctionContext::default(),
-                        &BUILTIN_FUNCTIONS,
+                        builtin_functions,
                     );
                     expr.into_constant().unwrap().scalar
                 })
@@ -192,7 +199,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             span,
             name: op.to_func_name(),
             params: vec![],
-            args: vec![transform_expr(*expr, columns)],
+            args: vec![transform_expr(*expr, columns, builtin_functions)],
         },
         AExpr::BinaryOp {
             span,
@@ -211,19 +218,19 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     if op == BinaryOperator::Minus {
                         unimplemented!("interval cannot be minuend")
                     } else {
-                        transform_interval_add_sub!(span, columns, op, unit, right, expr)
+                        transform_interval_add_sub!(span, columns, builtin_functions, op, unit, right, expr)
                     }
                 }
                 (_, AExpr::Interval { expr, unit, .. }) => {
-                    transform_interval_add_sub!(span, columns, op, unit, left, expr)
+                    transform_interval_add_sub!(span, columns, builtin_functions, op, unit, left, expr)
                 }
                 (_, _) => RawExpr::FunctionCall {
                     span,
                     name: op.to_func_name(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*left, columns),
-                        transform_expr(*right, columns),
+                        transform_expr(*left, columns, builtin_functions),
+                        transform_expr(*right, columns, builtin_functions),
                     ],
                 },
             },
@@ -238,8 +245,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             name: op.to_func_name(),
             params: vec![],
             args: vec![
-                transform_expr(*left, columns),
-                transform_expr(*right, columns),
+                transform_expr(*left, columns, builtin_functions),
+                transform_expr(*right, columns, builtin_functions),
             ],
         },
         AExpr::Position {
@@ -251,8 +258,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             name: "position".to_string(),
             params: vec![],
             args: vec![
-                transform_expr(*substr_expr, columns),
-                transform_expr(*str_expr, columns),
+                transform_expr(*substr_expr, columns, builtin_functions),
+                transform_expr(*str_expr, columns, builtin_functions),
             ],
         },
         AExpr::Trim {
@@ -267,8 +274,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         name: "trim_both".to_string(),
                         params: vec![],
                         args: vec![
-                            transform_expr(*expr, columns),
-                            transform_expr(*inner.1, columns),
+                            transform_expr(*expr, columns, builtin_functions),
+                            transform_expr(*inner.1, columns, builtin_functions),
                         ],
                     },
                     databend_common_ast::ast::TrimWhere::Leading => RawExpr::FunctionCall {
@@ -276,8 +283,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         name: "trim_leading".to_string(),
                         params: vec![],
                         args: vec![
-                            transform_expr(*expr, columns),
-                            transform_expr(*inner.1, columns),
+                            transform_expr(*expr, columns, builtin_functions),
+                            transform_expr(*inner.1, columns, builtin_functions),
                         ],
                     },
                     databend_common_ast::ast::TrimWhere::Trailing => RawExpr::FunctionCall {
@@ -285,8 +292,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         name: "trim_trailing".to_string(),
                         params: vec![],
                         args: vec![
-                            transform_expr(*expr, columns),
-                            transform_expr(*inner.1, columns),
+                            transform_expr(*expr, columns, builtin_functions),
+                            transform_expr(*inner.1, columns, builtin_functions),
                         ],
                     },
                 }
@@ -295,7 +302,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     span,
                     name: "trim".to_string(),
                     params: vec![],
-                    args: vec![transform_expr(*expr, columns)],
+                    args: vec![transform_expr(*expr, columns, builtin_functions)],
                 }
             }
         }
@@ -306,11 +313,11 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             substring_for,
         } => {
             let mut args = vec![
-                transform_expr(*expr, columns),
-                transform_expr(*substring_from, columns),
+                transform_expr(*expr, columns, builtin_functions),
+                transform_expr(*substring_from, columns, builtin_functions),
             ];
             if let Some(substring_for) = substring_for {
-                args.push(transform_expr(*substring_for, columns));
+                args.push(transform_expr(*substring_for, columns, builtin_functions));
             }
             RawExpr::FunctionCall {
                 span,
@@ -325,15 +332,15 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             params: vec![],
             args: exprs
                 .into_iter()
-                .map(|expr| transform_expr(expr, columns))
+                .map(|expr| transform_expr(expr, columns, builtin_functions))
                 .collect(),
         },
         AExpr::Map { span, kvs } => {
             let mut keys = Vec::with_capacity(kvs.len());
             let mut vals = Vec::with_capacity(kvs.len());
             for (key, val) in kvs {
-                keys.push(transform_expr(AExpr::Literal { span, value: key }, columns));
-                vals.push(transform_expr(val, columns));
+                keys.push(transform_expr(AExpr::Literal { span, value: key }, columns, builtin_functions));
+                vals.push(transform_expr(val, columns, builtin_functions));
             }
             let keys = RawExpr::FunctionCall {
                 span,
@@ -361,7 +368,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             params: vec![],
             args: exprs
                 .into_iter()
-                .map(|expr| transform_expr(expr, columns))
+                .map(|expr| transform_expr(expr, columns, builtin_functions))
                 .collect(),
         },
         AExpr::MapAccess {
@@ -371,11 +378,11 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         } => {
             let (params, args) = match accessor {
                 MapAccessor::Bracket { key } => (vec![], vec![
-                    transform_expr(*expr, columns),
-                    transform_expr(*key, columns),
+                    transform_expr(*expr, columns, builtin_functions),
+                    transform_expr(*key, columns, builtin_functions),
                 ]),
                 MapAccessor::Colon { key } => (vec![], vec![
-                    transform_expr(*expr, columns),
+                    transform_expr(*expr, columns, builtin_functions),
                     RawExpr::Constant {
                         span,
                         scalar: Scalar::String(key.name),
@@ -383,7 +390,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     },
                 ]),
                 MapAccessor::DotNumber { key } => {
-                    (vec![key as i64], vec![transform_expr(*expr, columns)])
+                    (vec![key as i64], vec![transform_expr(*expr, columns, builtin_functions)])
                 }
             };
             let params = params
@@ -398,7 +405,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             }
         }
         AExpr::IsNull { span, expr, not } => {
-            let expr = transform_expr(*expr, columns);
+            let expr = transform_expr(*expr, columns, builtin_functions);
             let result = RawExpr::FunctionCall {
                 span,
                 name: "is_not_null".to_string(),
@@ -429,8 +436,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     name: concat!("add_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*date, columns),
-                        transform_expr(*interval, columns),
+                        transform_expr(*date, columns, builtin_functions),
+                        transform_expr(*interval, columns, builtin_functions),
                     ],
                 },
                 kind => {
@@ -450,8 +457,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     name: concat!("diff_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*date_end, columns),
-                        transform_expr(*date_start, columns),
+                        transform_expr(*date_end, columns, builtin_functions),
+                        transform_expr(*date_start, columns, builtin_functions),
                     ],
                 },
                 kind => {
@@ -471,8 +478,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     name: concat!("between_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*date_end, columns),
-                        transform_expr(*date_start, columns),
+                        transform_expr(*date_end, columns, builtin_functions),
+                        transform_expr(*date_start, columns, builtin_functions),
                     ],
                 },
                 kind => {
@@ -492,8 +499,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     name: concat!("subtract_", INTERVAL, "s").to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*date, columns),
-                        transform_expr(*interval, columns),
+                        transform_expr(*date, columns, builtin_functions),
+                        transform_expr(*interval, columns, builtin_functions),
                     ],
                 },
                 kind => {
@@ -507,7 +514,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     span,
                     name: concat!("to_start_of_", INTERVAL).to_string(),
                     params: vec![],
-                    args: vec![transform_expr(*date, columns),],
+                    args: vec![transform_expr(*date, columns, builtin_functions),],
                 },
                 kind => {
                     unimplemented!("{kind:?} is not supported")
@@ -538,10 +545,10 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 name: "time_slice".to_string(),
                 params: vec![],
                 args: vec![
-                    transform_expr(*date, columns),
-                    transform_expr(slice_length, columns),
-                    transform_expr(unit, columns),
-                    transform_expr(start_or_end, columns),
+                    transform_expr(*date, columns, builtin_functions),
+                    transform_expr(slice_length, columns, builtin_functions),
+                    transform_expr(unit, columns, builtin_functions),
+                    transform_expr(start_or_end, columns, builtin_functions),
                 ],
             }
         }
@@ -551,7 +558,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     span,
                     name: concat!("to_last_of_", INTERVAL).to_string(),
                     params: vec![],
-                    args: vec![transform_expr(*date, columns),],
+                    args: vec![transform_expr(*date, columns, builtin_functions),],
                 },
                 kind => {
                     unimplemented!("{kind:?} is not supported")
@@ -564,7 +571,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     span,
                     name: concat!("to_previous_", WEEKDAY).to_string(),
                     params: vec![],
-                    args: vec![transform_expr(*date, columns),],
+                    args: vec![transform_expr(*date, columns, builtin_functions),],
                 },
             })
         }
@@ -574,7 +581,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     span,
                     name: concat!("to_next_", WEEKDAY).to_string(),
                     params: vec![],
-                    args: vec![transform_expr(*date, columns),],
+                    args: vec![transform_expr(*date, columns, builtin_functions),],
                 },
             })
         }
@@ -595,7 +602,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         not: false,
                     }),
                 };
-                return transform_expr(e, columns);
+                return transform_expr(e, columns, builtin_functions);
             }
 
             let list: Vec<AExpr> = list
@@ -611,8 +618,8 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     name: "contains".to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(array_expr, columns),
-                        transform_expr(*expr, columns),
+                        transform_expr(array_expr, columns, builtin_functions),
+                        transform_expr(*expr, columns, builtin_functions),
                     ],
                 }
             } else {
@@ -639,7 +646,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                         acc
                     })
                     .unwrap();
-                transform_expr(result, columns)
+                transform_expr(result, columns, builtin_functions)
             }
         }
 
