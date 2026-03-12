@@ -1600,7 +1600,10 @@ impl<'a> Evaluator<'a> {
     }
 
     fn wrap_lambda_column(column: Column, validity: Option<Bitmap>) -> Value<AnyType> {
-        Value::Column(column).wrap_nullable(validity)
+        match validity {
+            Some(validity) => Value::Column(NullableColumn::new_column(column, validity)),
+            None => Value::Column(column),
+        }
     }
 
     pub fn run_lambda(
@@ -1650,6 +1653,7 @@ impl<'a> Evaluator<'a> {
 
         // If there is only one column, we can extract the inner column and execute on all rows at once
         if args.len() == 1 && matches!(args[0], Value::Column(_)) {
+            let keep_outer_validity = data_types[0].is_nullable_or_null();
             let (inner_col, offsets, validity) = match &args[0] {
                 Value::Column(Column::Array(box array_col)) => (
                     array_col.underlying_column(),
@@ -1665,12 +1669,12 @@ impl<'a> Evaluator<'a> {
                     Column::Array(box array_col) => (
                         array_col.underlying_column(),
                         array_col.underlying_offsets(),
-                        Some(nullable_col.validity.clone()),
+                        keep_outer_validity.then(|| nullable_col.validity.clone()),
                     ),
                     Column::Map(box map_col) => (
                         map_col.underlying_column(),
                         map_col.underlying_offsets(),
-                        Some(nullable_col.validity.clone()),
+                        keep_outer_validity.then(|| nullable_col.validity.clone()),
                     ),
                     _ => unreachable!(),
                 },
@@ -2092,5 +2096,75 @@ impl ValueVisitor for CheckStrictValue {
 impl CheckStrictValue {
     fn is_strict_decimal(value: &Value<AnyType>) -> bool {
         DecimalDataType::from_value(value).unwrap().0.is_strict()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::bitmap::Bitmap;
+
+    use super::Evaluator;
+    use crate::DataBlock;
+    use crate::FromData;
+    use crate::FunctionContext;
+    use crate::FunctionRegistry;
+    use crate::RemoteExpr;
+    use crate::ScalarRef;
+    use crate::types::DataType;
+    use crate::types::NullableType;
+    use crate::types::NumberDataType;
+    use crate::types::array::ArrayColumn;
+    use crate::types::nullable::NullableColumn;
+    use crate::types::number::Int64Type;
+    use crate::values::Column;
+    use crate::values::Value;
+
+    #[test]
+    fn test_run_lambda_ignores_physical_nullable_wrapper_for_non_nullable_array() {
+        let block = DataBlock::empty();
+        let func_ctx = FunctionContext::default();
+        let fn_registry = FunctionRegistry::empty();
+        let evaluator = Evaluator::new(&block, &func_ctx, &fn_registry);
+
+        let inner_ty = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
+        let array_ty = DataType::Array(Box::new(inner_ty.clone()));
+        let inner_column = NullableColumn::new_column(
+            Int64Type::from_data(vec![1i64, 2, 3]),
+            Bitmap::new_constant(true, 3),
+        );
+        let array_column = Column::Array(Box::new(ArrayColumn::new(
+            inner_column,
+            vec![0_u64, 3].into(),
+        )));
+
+        // Arrays with nullable elements may arrive wrapped physically, even when the
+        // logical argument type is not nullable.
+        let arg = Value::Column(NullableColumn::new_column(
+            array_column,
+            Bitmap::new_constant(true, 1),
+        ));
+        let lambda_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: 0,
+            data_type: inner_ty,
+            display_name: "x".to_string(),
+        };
+
+        let result = evaluator
+            .run_lambda(
+                "array_transform",
+                vec![arg],
+                vec![array_ty.clone()],
+                &lambda_expr,
+                &array_ty,
+            )
+            .unwrap();
+
+        let column = result.into_column().unwrap();
+        assert_eq!(column.data_type(), array_ty);
+        assert!(matches!(
+            unsafe { column.index_unchecked(0) },
+            ScalarRef::Array(_)
+        ));
     }
 }
