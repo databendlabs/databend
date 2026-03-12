@@ -549,7 +549,7 @@ quickcheck = "1.0"
 sqllogictest = "0.28.4"
 
 # Will move to databend org latter, used for testing
-databend-sqllogictests-core = { git = "https://github.com/dqhl76/databend-sqllogictests.git", rev = "32795870ad21f481dadcb5b90a3e2d9e92b43d01" }
+databend-sqllogictests-core = { git = "https://github.com/dqhl76/databend-sqllogictests.git", rev = "66c32a16f2c34da180c412d2925bb421cc8cb2ab" }
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"

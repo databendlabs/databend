@@ -5888,9 +5888,8 @@ dependencies = [
 [[package]]
 name = "databend-sqllogictests-core"
 version = "0.1.0"
-source = "git+https://github.com/dqhl76/databend-sqllogictests.git?rev=f02e6243f1d0cbc9b37252b44c47ca40d3fc5867#f02e6243f1d0cbc9b37252b44c47ca40d3fc5867"
+source = "git+https://github.com/dqhl76/databend-sqllogictests.git?rev=66c32a16f2c34da180c412d2925bb421cc8cb2ab#66c32a16f2c34da180c412d2925bb421cc8cb2ab"
 dependencies = [
- "async-recursion",
  "async-trait",
  "bollard",
  "clap",
@@ -5900,7 +5899,6 @@ dependencies = [
  "futures-util",
  "mysql_async",
  "rand 0.8.5",
- "recursive",
  "redis",
  "regex",
  "reqwest",
