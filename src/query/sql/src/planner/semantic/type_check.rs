@@ -776,38 +776,37 @@ impl<'a> TypeChecker<'a> {
                         self.resolve_function(*span, "contains", vec![], &args)
                     }
                 } else {
-                    let mut result = list
-                        .iter()
-                        .map(|e| Expr::BinaryOp {
-                            span: *span,
-                            op: BinaryOperator::Eq,
-                            left: expr.clone(),
-                            right: Box::new(e.clone()),
-                        })
-                        .fold(None, |mut acc, e| {
-                            match acc.as_mut() {
-                                None => acc = Some(e),
-                                Some(acc) => {
-                                    *acc = Expr::BinaryOp {
-                                        span: *span,
-                                        op: BinaryOperator::Or,
-                                        left: Box::new(acc.clone()),
-                                        right: Box::new(e),
-                                    }
-                                }
-                            }
-                            acc
-                        })
-                        .unwrap();
+                    let mut predicates = Vec::with_capacity(list.len());
+                    for item in list {
+                        let (predicate, _) = *self.resolve_binary_op_or_subquery(
+                            span,
+                            &BinaryOperator::Eq,
+                            expr.as_ref(),
+                            item,
+                        )?;
+                        predicates.push(predicate);
+                    }
+
+                    let (result, data_type) = *match predicates.len() {
+                        0 => unreachable!("IN list should not be empty"),
+                        1 => {
+                            let predicate = predicates.pop().unwrap();
+                            let data_type = predicate.data_type()?;
+                            Box::new((predicate, data_type))
+                        }
+                        _ => self.resolve_scalar_function_call(
+                            *span,
+                            "or_filters",
+                            vec![],
+                            predicates,
+                        )?,
+                    };
 
                     if *not {
-                        result = Expr::UnaryOp {
-                            span: *span,
-                            op: UnaryOperator::Not,
-                            expr: Box::new(result),
-                        };
+                        self.resolve_scalar_function_call(*span, "not", vec![], vec![result])
+                    } else {
+                        Ok(Box::new((result, data_type)))
                     }
-                    self.resolve(&result)
                 }
             }
 

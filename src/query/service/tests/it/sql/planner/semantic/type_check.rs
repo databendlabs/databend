@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_expression::Expr;
 use databend_common_sql::parse_exprs;
 use databend_query::test_kits::TestFixture;
 
@@ -42,5 +43,45 @@ async fn test_query_overflow() -> anyhow::Result<()> {
         .await?;
 
     parse_exprs(ctx.clone(), table, query.as_str())?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_inlist_with_null_uses_flat_or_filters() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("max_inlist_to_or".to_string(), "1000".to_string())?;
+
+    fixture
+        .execute_command("CREATE table default.t_inlist_or_filters(a string);")
+        .await?;
+    let catalog = ctx.get_catalog("default").await?;
+    let table = catalog
+        .get_table(&fixture.default_tenant(), "default", "t_inlist_or_filters")
+        .await?;
+
+    let mut query = String::from("a in (");
+    for i in 0..1000 {
+        if i > 0 {
+            query.push(',');
+        }
+        query.push('\'');
+        query.push_str(&format!("value_{i}"));
+        query.push('\'');
+    }
+    query.push_str(",NULL)");
+
+    let exprs = parse_exprs(ctx.clone(), table, query.as_str())?;
+    assert_eq!(exprs.len(), 1);
+
+    match &exprs[0] {
+        Expr::FunctionCall(databend_common_expression::FunctionCall { function, args, .. }) => {
+            assert_eq!(function.signature.name, "or_filters");
+            assert_eq!(args.len(), 1001);
+        }
+        expr => panic!("expected top-level or_filters, got {expr:?}"),
+    }
+
     Ok(())
 }
