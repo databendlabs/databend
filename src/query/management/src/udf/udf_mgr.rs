@@ -175,7 +175,7 @@ impl UdfMgr {
     }
 
     fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {
-        if is_builtin_function(name) {
+        if is_builtin_function(&name.to_lowercase()) {
             return Err(UdfError::Exists {
                 tenant: self.tenant.tenant_name().to_string(),
                 name: name.to_string(),

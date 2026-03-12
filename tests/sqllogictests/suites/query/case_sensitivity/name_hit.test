@@ -81,5 +81,12 @@ SELECT COUNT(*) FROM numbers(10)
 statement ok
 SHOW SETTINGS LIKE '%case%'
 
+# UDF names that collide with builtin functions (case-insensitive) should be rejected.
+statement error (?s)2603.*builtin function
+CREATE FUNCTION Upper AS (x) -> x
+
+statement error (?s)2603.*builtin function
+CREATE FUNCTION UPPER AS (x) -> x
+
 statement ok
 set unquoted_ident_case_sensitive = 0
