@@ -1,0 +1,33 @@
+query IIII
+with g as (
+    select
+        'sapp'::string as a,
+        'ios'::string as os,
+        to_date('2026-03-02') as week_start,
+        1::decimal(38, 15) as bi_cost
+),
+target as (
+    select
+        week_start,
+        a,
+        os,
+        1.234567890123456::decimal(38, 15) as target_d6_roi
+    from (
+        select
+            'sapp'::string as a,
+            'ios'::string as os,
+            to_date('2026-03-02') as week_start
+    ) t
+    where false
+),
+cte_a as (
+    select g.*, target_d6_roi
+    from g
+    left join target
+        on g.os = target.os
+       and g.week_start = target.week_start
+       and target.a = g.a
+)
+select typeof(target_d6_roi) from cte_a order by week_start;
+----
+DECIMAL(38, 15) NULL
