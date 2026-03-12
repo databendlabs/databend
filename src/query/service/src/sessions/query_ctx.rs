@@ -34,6 +34,7 @@ use std::time::UNIX_EPOCH;
 use async_channel::Receiver;
 use async_channel::Sender;
 use dashmap::DashMap;
+use databend_base::uniq_id::GlobalUniq;
 use dashmap::mapref::multiple::RefMulti;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
@@ -214,6 +215,16 @@ impl QueryContext {
             block_threshold: Default::default(),
             m_cte_temp_table: Arc::new(RwLock::new(Vec::new())),
         })
+    }
+
+    pub fn get_or_create_logical_recursive_cte_runtime_id(
+        &self,
+        logical_recursive_cte_id: u32,
+    ) -> String {
+        let mut ids = self.shared.logical_recursive_cte_runtime_ids.write();
+        ids.entry(logical_recursive_cte_id)
+            .or_insert_with(GlobalUniq::unique)
+            .clone()
     }
 
     /// Build fuse/system normal table by table info.
@@ -2257,9 +2268,11 @@ impl TableContext for QueryContext {
     }
 
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
-        self.m_cte_temp_table
-            .write()
-            .push((database_name.to_string(), table_name.to_string()));
+        let entry = (database_name.to_string(), table_name.to_string());
+        let mut tables = self.m_cte_temp_table.write();
+        if !tables.contains(&entry) {
+            tables.push(entry);
+        }
     }
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {

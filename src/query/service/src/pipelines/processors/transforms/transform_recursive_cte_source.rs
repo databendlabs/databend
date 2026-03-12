@@ -15,9 +15,9 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::Table;
@@ -44,13 +44,13 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::Symbol;
 use databend_common_sql::plans::CreateTablePlan;
-use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use futures_util::StreamExt;
+use md5::Digest;
+use md5::Md5;
 
 use crate::interpreters::CreateTableInterpreter;
-use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::QueryFinishHooks;
 use crate::physical_plans::PhysicalPlan;
@@ -75,9 +75,9 @@ pub struct TransformRecursiveCteSource {
     cte_scan_tables: Vec<Arc<dyn Table>>,
     active_stream: Option<PullingExecutorStream>,
     active_stream_has_output: bool,
+    replay_blocks: Option<VecDeque<DataBlock>>,
+    owns_cache_population: bool,
 }
-
-static NEXT_R_CTE_SOURCE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 impl TransformRecursiveCteSource {
     pub fn try_create(
@@ -88,17 +88,14 @@ impl TransformRecursiveCteSource {
         let mut union_plan = union_plan;
 
         // Recursive CTE uses internal MEMORY tables addressed by name in the current database.
-        // If we keep using the stable scan name (cte name/alias), concurrent queries can interfere
-        // by creating/dropping/recreating the same table name, leading to wrong or flaky results.
-        //
-        // Make the internal table names unique by prefixing them with query id + source instance id.
-        // Query id alone is insufficient when one query has multiple recursive CTE sources running
-        // concurrently (e.g. multiple scalar subqueries each containing recursive CTE).
-        // This is purely internal and does not change user-visible semantics.
-        let source_instance_id = NEXT_R_CTE_SOURCE_INSTANCE_ID.fetch_add(1, Ordering::Relaxed);
-        let rcte_prefix = make_rcte_prefix(&ctx.get_id(), source_instance_id);
+        // Use a stable per-query/per-plan prefix so duplicated recursive sources produced by
+        // decorrelation can reuse the same internal tables and cached outputs.
+        let rcte_prefix = make_rcte_prefix(&ctx, &union_plan)?;
         let local_cte_scan_names = {
-            let names = collect_local_recursive_scan_names(&union_plan.right);
+            let names = collect_local_recursive_scan_names(
+                &union_plan.right,
+                union_plan.logical_recursive_cte_id,
+            );
             if names.is_empty() {
                 union_plan.cte_scan_names.clone()
             } else {
@@ -116,11 +113,13 @@ impl TransformRecursiveCteSource {
 
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.left,
+            union_plan.logical_recursive_cte_id,
             &local_cte_scan_name_set,
             &rcte_prefix,
         );
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.right,
+            union_plan.logical_recursive_cte_id,
             &local_cte_scan_name_set,
             &rcte_prefix,
         );
@@ -162,6 +161,8 @@ impl TransformRecursiveCteSource {
                 cte_scan_tables: vec![],
                 active_stream: None,
                 active_stream_has_output: false,
+                replay_blocks: None,
+                owns_cache_population: false,
             },
         )
     }
@@ -208,73 +209,169 @@ impl TransformRecursiveCteSource {
     }
 }
 
-fn make_rcte_prefix(query_id: &str, source_instance_id: u64) -> String {
-    // Keep it readable and safe as an identifier.
-    // Preserve full query-id entropy and add per-source uniqueness to avoid collisions across:
-    // 1) concurrent queries and 2) multiple recursive CTE sources within one query.
+fn make_rcte_prefix(ctx: &Arc<QueryContext>, union_plan: &UnionAll) -> Result<String> {
+    let query_id = ctx.get_id();
     let suffix = if query_id.is_empty() {
         "unknown"
     } else {
-        query_id
+        query_id.as_str()
     };
-    format!("__rcte_{suffix}_{source_instance_id}_")
+    if let Some(logical_recursive_cte_id) = union_plan.logical_recursive_cte_id {
+        let runtime_id =
+            ctx.get_or_create_logical_recursive_cte_runtime_id(logical_recursive_cte_id);
+        return Ok(format!(
+            "__rcte_{suffix}_{runtime_id}_{logical_recursive_cte_id}_"
+        ));
+    }
+    let mut names = union_plan.cte_scan_names.clone();
+    names.sort();
+    let digest = format!("{:x}", Md5::digest(names.join(",").as_bytes()));
+    Ok(format!("__rcte_{suffix}_{digest}_"))
+}
+
+fn same_logical_recursive_cte(left: Option<u32>, right: Option<u32>) -> bool {
+    left.zip(right).is_some_and(|(left, right)| left == right)
+}
+
+fn matches_logical_recursive_cte_scope(scope: Option<u32>, candidate: Option<u32>) -> bool {
+    scope.is_none() || same_logical_recursive_cte(scope, candidate)
 }
 
 fn rewrite_assign_and_strip_recursive_cte(
     plan: &mut PhysicalPlan,
+    logical_recursive_cte_id: Option<u32>,
     local_cte_scan_name_set: &HashSet<&str>,
     prefix: &str,
 ) {
     // Only nested recursive UNION nodes that reference the current recursive CTE should be
     // downgraded to normal unions to avoid nested recursive sources for the same table.
     if let Some(union_all) = UnionAll::from_mut_physical_plan(plan) {
+        let same_logical_recursive_cte = same_logical_recursive_cte(
+            logical_recursive_cte_id,
+            union_all.logical_recursive_cte_id,
+        );
         if !union_all.cte_scan_names.is_empty()
-            && union_all
-                .cte_scan_names
-                .iter()
-                .all(|name| local_cte_scan_name_set.contains(name.as_str()))
+            && (same_logical_recursive_cte
+                || union_all
+                    .cte_scan_names
+                    .iter()
+                    .all(|name| local_cte_scan_name_set.contains(name.as_str())))
         {
             union_all.cte_scan_names.clear();
         }
     }
 
     if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
-        if local_cte_scan_name_set.contains(recursive_cte_scan.table_name.as_str()) {
+        let same_logical_recursive_cte = same_logical_recursive_cte(
+            logical_recursive_cte_id,
+            recursive_cte_scan.logical_recursive_cte_id,
+        );
+        if same_logical_recursive_cte
+            || local_cte_scan_name_set.contains(recursive_cte_scan.table_name.as_str())
+        {
             recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
         }
     }
 
     for child in plan.children_mut() {
-        rewrite_assign_and_strip_recursive_cte(child, local_cte_scan_name_set, prefix);
+        rewrite_assign_and_strip_recursive_cte(
+            child,
+            logical_recursive_cte_id,
+            local_cte_scan_name_set,
+            prefix,
+        );
     }
 }
 
-fn collect_local_recursive_scan_names(plan: &PhysicalPlan) -> Vec<String> {
-    fn walk(plan: &PhysicalPlan, names: &mut Vec<String>, seen: &mut HashSet<String>) {
-        // Nested recursive unions belong to other recursive CTEs. Leave them to their own
-        // TransformRecursiveCteSource instance.
+fn collect_local_recursive_scan_names(
+    plan: &PhysicalPlan,
+    logical_recursive_cte_id: Option<u32>,
+) -> Vec<String> {
+    fn walk(
+        plan: &PhysicalPlan,
+        logical_recursive_cte_id: Option<u32>,
+        names: &mut Vec<String>,
+        seen: &mut HashSet<String>,
+    ) {
         if let Some(union_all) = UnionAll::from_physical_plan(plan) {
-            if !union_all.cte_scan_names.is_empty() {
+            let same_logical_recursive_cte = same_logical_recursive_cte(
+                logical_recursive_cte_id,
+                union_all.logical_recursive_cte_id,
+            );
+            if !union_all.cte_scan_names.is_empty() && !same_logical_recursive_cte {
                 return;
             }
         }
 
         if let Some(recursive_cte_scan) = RecursiveCteScan::from_physical_plan(plan) {
-            if seen.insert(recursive_cte_scan.table_name.clone()) {
+            let same_logical_recursive_cte = matches_logical_recursive_cte_scope(
+                logical_recursive_cte_id,
+                recursive_cte_scan.logical_recursive_cte_id,
+            );
+            if same_logical_recursive_cte && seen.insert(recursive_cte_scan.table_name.clone()) {
                 names.push(recursive_cte_scan.table_name.clone());
             }
             return;
         }
 
         for child in plan.children() {
-            walk(child, names, seen);
+            walk(child, logical_recursive_cte_id, names, seen);
         }
     }
 
     let mut names = Vec::new();
     let mut seen = HashSet::new();
-    walk(plan, &mut names, &mut seen);
+    walk(plan, logical_recursive_cte_id, &mut names, &mut seen);
     names
+}
+
+impl TransformRecursiveCteSource {
+    async fn try_prepare_cached_replay(&mut self) -> Result<bool> {
+        create_memory_table_for_cte_scan(&self.ctx, &self.union_plan.right).await?;
+        if self.cte_scan_tables.is_empty() {
+            for table_name in self.union_plan.cte_scan_names.iter() {
+                let table = self
+                    .ctx
+                    .get_table(
+                        &self.ctx.get_current_catalog(),
+                        &self.ctx.get_current_database(),
+                        table_name,
+                    )
+                    .await?;
+                self.cte_scan_tables.push(table);
+            }
+        }
+
+        let Some(first_table) = self.cte_scan_tables.first() else {
+            return Ok(false);
+        };
+        let memory_table = first_table
+            .as_any()
+            .downcast_ref::<RecursiveCteMemoryTable>()
+            .unwrap();
+        if memory_table.is_sealed() {
+            let replay_blocks = memory_table.cached_output_blocks();
+            self.replay_blocks = Some(VecDeque::from(replay_blocks));
+            return Ok(true);
+        }
+
+        if memory_table.begin_cache_population() {
+            self.owns_cache_population = true;
+            return Ok(false);
+        }
+
+        while memory_table.is_running() && !memory_table.is_sealed() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        if memory_table.is_sealed() {
+            let replay_blocks = memory_table.cached_output_blocks();
+            self.replay_blocks = Some(VecDeque::from(replay_blocks));
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
 }
 
 #[async_trait::async_trait]
@@ -283,7 +380,29 @@ impl AsyncSource for TransformRecursiveCteSource {
 
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         loop {
+            if let Some(replay_blocks) = self.replay_blocks.as_mut() {
+                if let Some(block) = replay_blocks.pop_front() {
+                    return Ok(Some(block));
+                }
+                self.replay_blocks = None;
+                return Ok(None);
+            }
+
             if self.active_stream.is_none() {
+                if self.recursive_step == 0 && self.try_prepare_cached_replay().await? {
+                    continue;
+                }
+
+                if self.recursive_step > 0 {
+                    for table in self.cte_scan_tables.iter() {
+                        let memory_table = table
+                            .as_any()
+                            .downcast_ref::<RecursiveCteMemoryTable>()
+                            .unwrap();
+                        memory_table.set_active_generation(self.recursive_step - 1);
+                    }
+                }
+
                 match Self::execute_r_cte(
                     self.ctx.clone(),
                     self.recursive_step,
@@ -299,8 +418,18 @@ impl AsyncSource for TransformRecursiveCteSource {
                         self.active_stream_has_output = false;
                     }
                     Err(e) => {
+                        if self.owns_cache_population {
+                            if let Some(first_table) = self.cte_scan_tables.first() {
+                                let memory_table = first_table
+                                    .as_any()
+                                    .downcast_ref::<RecursiveCteMemoryTable>()
+                                    .unwrap();
+                                memory_table.finish_cache_population(false);
+                            }
+                            self.owns_cache_population = false;
+                        }
                         return Err(ErrorCode::Internal(format!(
-                            "Failed to execute recursive cte: {:?}",
+                            "failed to start recursive cte step: {:?}",
                             e
                         )));
                     }
@@ -309,7 +438,25 @@ impl AsyncSource for TransformRecursiveCteSource {
 
             let next_block = {
                 let stream = self.active_stream.as_mut().unwrap();
-                stream.next().await.transpose()?
+                match stream.next().await.transpose() {
+                    Ok(block) => block,
+                    Err(err) => {
+                        if self.owns_cache_population {
+                            if let Some(first_table) = self.cte_scan_tables.first() {
+                                let memory_table = first_table
+                                    .as_any()
+                                    .downcast_ref::<RecursiveCteMemoryTable>()
+                                    .unwrap();
+                                memory_table.finish_cache_population(false);
+                            }
+                            self.owns_cache_population = false;
+                        }
+                        return Err(ErrorCode::Internal(format!(
+                            "recursive cte stream execution failed: {:?}",
+                            err
+                        )));
+                    }
+                }
             };
 
             match next_block {
@@ -337,45 +484,59 @@ impl AsyncSource for TransformRecursiveCteSource {
                         memory_table
                             .append_generation_block(self.recursive_step, projected_block.clone());
                     }
+
+                    let frontier_block = projected_block;
+
+                    if let Some(first_table) = self.cte_scan_tables.first() {
+                        let memory_table = first_table
+                            .as_any()
+                            .downcast_ref::<RecursiveCteMemoryTable>()
+                            .unwrap();
+                        memory_table.cache_output_block(frontier_block.clone());
+                    }
+
                     self.active_stream_has_output = true;
-                    return Ok(Some(projected_block));
+                    return Ok(Some(frontier_block));
                 }
                 None => {
                     self.active_stream = None;
-                    self.recursive_step += 1;
 
                     if self.active_stream_has_output {
+                        self.recursive_step += 1;
                         continue;
                     }
 
-                    let ctx = self.ctx.clone();
-                    let table_names = self.union_plan.cte_scan_names.clone();
-                    // Recursive end, remove all tables
-                    let _ = drop_tables(ctx, table_names).await?;
+                    if self.owns_cache_population {
+                        if let Some(first_table) = self.cte_scan_tables.first() {
+                            let memory_table = first_table
+                                .as_any()
+                                .downcast_ref::<RecursiveCteMemoryTable>()
+                                .unwrap();
+                            memory_table.finish_cache_population(true);
+                        }
+                        self.owns_cache_population = false;
+                    }
                     return Ok(None);
                 }
             }
         }
     }
-}
 
-async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result<()> {
-    for table_name in table_names {
-        let drop_table_plan = DropTablePlan {
-            if_exists: true,
-            tenant: Tenant {
-                tenant: ctx.get_tenant().tenant,
-            },
-            catalog: ctx.get_current_catalog(),
-            database: ctx.get_current_database(),
-            table: table_name.to_string(),
-            all: true,
-        };
-        let drop_table_interpreter =
-            DropTableInterpreter::try_create(ctx.clone(), drop_table_plan)?;
-        drop_table_interpreter.execute2().await?;
+    async fn on_finish(&mut self) -> Result<()> {
+        if self.owns_cache_population {
+            if let Some(first_table) = self.cte_scan_tables.first() {
+                let memory_table = first_table
+                    .as_any()
+                    .downcast_ref::<RecursiveCteMemoryTable>()
+                    .unwrap();
+                if !memory_table.is_sealed() {
+                    memory_table.finish_cache_population(false);
+                }
+            }
+            self.owns_cache_population = false;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 async fn create_memory_table_for_cte_scan(
@@ -459,9 +620,12 @@ async fn create_memory_table_for_cte_scan(
     };
 
     for create_table_plan in create_table_plans {
+        let table_name = create_table_plan.table.clone();
+        let database_name = create_table_plan.database.clone();
         let create_table_interpreter =
             CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
         create_table_interpreter.execute2().await?;
+        ctx.add_m_cte_temp_table(&database_name, &table_name);
     }
 
     Ok(())

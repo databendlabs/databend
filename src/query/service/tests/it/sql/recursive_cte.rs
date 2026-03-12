@@ -347,3 +347,140 @@ fn recursive_cte_issue_19498_stress_repro() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn recursive_cte_runtime_id_shared_across_child_contexts() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let ctx = fixture.new_query_ctx().await?;
+
+        let parent_runtime_id = ctx.get_or_create_logical_recursive_cte_runtime_id(7);
+        let child_ctx = QueryContext::create_from(ctx.as_ref());
+        let child_runtime_id = child_ctx.get_or_create_logical_recursive_cte_runtime_id(7);
+        let different_runtime_id = child_ctx.get_or_create_logical_recursive_cte_runtime_id(8);
+
+        if parent_runtime_id != child_runtime_id {
+            return Err(ErrorCode::Internal(format!(
+                "expected shared runtime id across query contexts, parent={parent_runtime_id}, child={child_runtime_id}"
+            )));
+        }
+
+        if parent_runtime_id == different_runtime_id {
+            return Err(ErrorCode::Internal(format!(
+                "expected different logical recursive cte ids to map to different runtime ids, got {different_runtime_id}"
+            )));
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn recursive_cte_reuse_with_multiple_correlated_subqueries_regression() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("create database if not exists {db}"))
+            .await?;
+
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.set_current_database(db).await?;
+        ctx.get_settings().set_max_threads(8)?;
+
+        let sql = "WITH RECURSIVE digits(z, lp) AS (
+                     SELECT '1', 1
+                     UNION ALL SELECT CAST(lp + 1 AS TEXT), lp + 1 FROM digits WHERE lp < 3
+                   ),
+                   x(s, ind) AS (
+                     SELECT '..', 1
+                     UNION ALL
+                     SELECT
+                       substr(s, 1, ind - 1) || z || substr(s, ind + 1),
+                       instr(substr(s, 1, ind - 1) || z || substr(s, ind + 1), '.')
+                     FROM x, digits AS z
+                     WHERE ind > 0
+                       AND NOT EXISTS (
+                         SELECT 1 FROM digits AS lp
+                         WHERE z.z = '1' AND lp.lp = 2
+                       )
+                       AND NOT EXISTS (
+                         SELECT 1 FROM digits AS lp2
+                         WHERE z.z = '2' AND lp2.lp = 3
+                       )
+                   )
+                   SELECT count(*) FROM x";
+
+        let got = run_query_single_u64(ctx, sql).await?;
+        if got != 3 {
+            return Err(ErrorCode::Internal(format!(
+                "expected 3 rows from multi-correlated recursive cte reuse query, got {got}"
+            )));
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn recursive_cte_reuse_in_correlated_subquery_regression() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("create database if not exists {db}"))
+            .await?;
+
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.set_current_database(db).await?;
+        ctx.get_settings().set_max_threads(8)?;
+
+        let sql = "WITH RECURSIVE digits(z, lp) AS (
+                     SELECT '1', 1
+                     UNION ALL SELECT CAST(lp + 1 AS TEXT), lp + 1 FROM digits WHERE lp < 3
+                   ),
+                   x(s, ind) AS (
+                     SELECT '..', 1
+                     UNION ALL
+                     SELECT
+                       substr(s, 1, ind - 1) || z || substr(s, ind + 1),
+                       instr(substr(s, 1, ind - 1) || z || substr(s, ind + 1), '.')
+                     FROM x, digits AS z
+                     WHERE ind > 0
+                       AND NOT EXISTS (
+                         SELECT 1 FROM digits AS lp
+                         WHERE z.z = '1' AND lp.lp = 2
+                       )
+                   )
+                   SELECT count(*) FROM x";
+
+        let got = run_query_single_u64(ctx, sql).await?;
+        if got != 7 {
+            return Err(ErrorCode::Internal(format!(
+                "expected 7 rows from recursive cte reuse query, got {got}"
+            )));
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}

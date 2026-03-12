@@ -24,7 +24,24 @@ use parking_lot::RwLock;
 /// Indexed by table id etc.
 pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 
-pub type InMemoryRecursiveData<K> = HashMap<K, Arc<RwLock<BTreeMap<usize, Vec<DataBlock>>>>>;
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RecursiveReaderState {
+    pub generation: Option<usize>,
+    pub block_index: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct InMemoryRecursiveState {
+    pub generations: BTreeMap<usize, Vec<DataBlock>>,
+    pub readers: HashMap<u64, RecursiveReaderState>,
+    pub next_reader_id: u64,
+    pub active_generation: Option<usize>,
+    pub cached_output: Vec<DataBlock>,
+    pub sealed: bool,
+    pub running: bool,
+}
+
+pub type InMemoryRecursiveData<K> = HashMap<K, Arc<RwLock<InMemoryRecursiveState>>>;
 
 pub static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<InMemoryDataKey>>>> =
     LazyLock::new(|| Arc::new(Default::default()));

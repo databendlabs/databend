@@ -218,6 +218,7 @@ pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
     pub recursive: bool,
+    pub logical_recursive_cte_id: Option<u32>,
     pub columns: Vec<ColumnBinding>,
     pub materialized_cte_info: Option<MaterializedCTEInfo>,
     pub user_specified_materialized: bool,

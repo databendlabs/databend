@@ -30,6 +30,7 @@ pub struct TransformRecursiveCteScan {
     ctx: Arc<QueryContext>,
     table: Option<Arc<dyn Table>>,
     table_name: String,
+    reader_id: Option<u64>,
 }
 
 impl TransformRecursiveCteScan {
@@ -45,6 +46,7 @@ impl TransformRecursiveCteScan {
                 ctx,
                 table: None,
                 table_name,
+                reader_id: None,
             },
         )
     }
@@ -74,7 +76,25 @@ impl AsyncSource for TransformRecursiveCteScan {
             .as_any()
             .downcast_ref::<RecursiveCteMemoryTable>()
             .unwrap();
-        let data = memory_table.take_one_block();
+        let reader_id = if let Some(reader_id) = self.reader_id {
+            reader_id
+        } else {
+            let reader_id = memory_table.register_reader();
+            self.reader_id = Some(reader_id);
+            reader_id
+        };
+        let data = memory_table.take_one_block(reader_id);
         Ok(data.filter(|block| block.num_rows() > 0))
+    }
+
+    async fn on_finish(&mut self) -> Result<()> {
+        if let (Some(table), Some(reader_id)) = (&self.table, self.reader_id.take()) {
+            let memory_table = table
+                .as_any()
+                .downcast_ref::<RecursiveCteMemoryTable>()
+                .unwrap();
+            memory_table.unregister_reader(reader_id);
+        }
+        Ok(())
     }
 }

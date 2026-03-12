@@ -478,6 +478,10 @@ fn union_all_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &UnionAll) -> 
                 .join(", ")
         )),
         FormatTreeNode::new(format!("cte_scan_names: {:?}", op.cte_scan_names)),
+        FormatTreeNode::new(format!(
+            "logical_recursive_cte_id: {:?}",
+            op.logical_recursive_cte_id
+        )),
     ];
 
     FormatTreeNode::with_children(format!("{:?}", op.rel_op()), children)

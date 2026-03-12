@@ -32,6 +32,7 @@ pub struct RecursiveCteScan {
     meta: PhysicalPlanMeta,
     pub output_schema: DataSchemaRef,
     pub table_name: String,
+    pub logical_recursive_cte_id: Option<u32>,
     pub stat: PlanStatsInfo,
 }
 
@@ -59,6 +60,7 @@ impl IPhysicalPlan for RecursiveCteScan {
             meta: self.meta.clone(),
             output_schema: self.output_schema.clone(),
             table_name: self.table_name.clone(),
+            logical_recursive_cte_id: self.logical_recursive_cte_id,
             stat: self.stat.clone(),
         })
     }
@@ -89,6 +91,7 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("RecursiveCteScan"),
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),
             table_name: recursive_cte_scan.table_name.clone(),
+            logical_recursive_cte_id: recursive_cte_scan.logical_recursive_cte_id,
             stat: stat_info,
         }))
     }
