@@ -776,7 +776,9 @@ impl<'a> TypeChecker<'a> {
                         self.resolve_function(*span, "contains", vec![], &args)
                     }
                 } else {
-                    let mut predicates = Vec::with_capacity(list.len());
+                    let mut predicate_levels =
+                        Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
+
                     for item in list {
                         let (predicate, _) = *self.resolve_binary_op_or_subquery(
                             span,
@@ -784,18 +786,13 @@ impl<'a> TypeChecker<'a> {
                             expr.as_ref(),
                             item,
                         )?;
-                        predicates.push(predicate);
+                        self.merge_or_level(*span, &mut predicate_levels, predicate)?;
                     }
 
-                    let (result, data_type) = *match predicates.len() {
-                        0 => unreachable!("IN list should not be empty"),
-                        1 => {
-                            let predicate = predicates.pop().unwrap();
-                            let data_type = predicate.data_type()?;
-                            Box::new((predicate, data_type))
-                        }
-                        _ => self.resolve_balanced_or(*span, predicates)?,
-                    };
+                    let result = self
+                        .fold_or_levels(*span, predicate_levels)?
+                        .expect("IN list should not be empty");
+                    let data_type = result.data_type()?;
 
                     if *not {
                         self.resolve_scalar_function_call(*span, "not", vec![], vec![result])
@@ -1549,34 +1546,54 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn resolve_balanced_or(
-        &self,
+    fn merge_or_level(
+        &mut self,
         span: Span,
-        mut predicates: Vec<ScalarExpr>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        debug_assert!(predicates.len() >= 2);
+        predicate_levels: &mut Vec<Option<ScalarExpr>>,
+        mut predicate: ScalarExpr,
+    ) -> Result<()> {
+        let mut level = 0;
 
-        while predicates.len() > 1 {
-            let mut next_level = Vec::with_capacity(predicates.len().div_ceil(2));
-            let mut iter = predicates.into_iter();
-
-            while let Some(left) = iter.next() {
-                if let Some(right) = iter.next() {
-                    let (predicate, _) =
-                        *self
-                            .resolve_scalar_function_call(span, "or", vec![], vec![left, right])?;
-                    next_level.push(predicate);
-                } else {
-                    next_level.push(left);
-                }
+        loop {
+            if predicate_levels.len() == level {
+                predicate_levels.push(Some(predicate));
+                return Ok(());
             }
 
-            predicates = next_level;
+            if let Some(left) = predicate_levels[level].take() {
+                let (or_predicate, _) =
+                    *self
+                        .resolve_scalar_function_call(span, "or", vec![], vec![left, predicate])?;
+                predicate = or_predicate;
+                level += 1;
+            } else {
+                predicate_levels[level] = Some(predicate);
+                return Ok(());
+            }
+        }
+    }
+
+    fn fold_or_levels(
+        &mut self,
+        span: Span,
+        predicate_levels: Vec<Option<ScalarExpr>>,
+    ) -> Result<Option<ScalarExpr>> {
+        let mut result = None;
+
+        for predicate in predicate_levels.into_iter().rev().flatten() {
+            result = Some(match result {
+                None => predicate,
+                Some(acc) => {
+                    let (or_predicate, _) =
+                        *self.resolve_scalar_function_call(span, "or", vec![], vec![
+                            acc, predicate,
+                        ])?;
+                    or_predicate
+                }
+            });
         }
 
-        let predicate = predicates.pop().unwrap();
-        let data_type = predicate.data_type()?;
-        Ok(Box::new((predicate, data_type)))
+        Ok(result)
     }
 
     fn resolve_scalar_subquery(
