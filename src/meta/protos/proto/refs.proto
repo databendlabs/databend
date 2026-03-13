@@ -12,36 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
-mod client_session;
-mod config;
-mod connection;
-mod data_mask;
-mod database;
-mod datetime;
-mod dictionary;
-mod file_format;
-mod id;
-mod index;
-mod least_visible_time;
-mod lock;
-mod mask_policy_table_id;
-mod owner;
-mod ownership;
-mod procedure;
-mod refs;
-mod role;
-mod row_access_policy;
-mod row_access_policy_table_id;
-mod schema;
-mod sequence;
-mod stage;
-mod table;
-mod tag;
-mod task;
-mod tenant_quota;
-mod tident;
-mod token;
-mod udf;
-mod user;
-mod vacuum_watermark;
+syntax = "proto3";
+
+package databend_proto;
+
+message TableTag {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  optional string expire_at = 1;
+  string snapshot_loc = 2;
+}

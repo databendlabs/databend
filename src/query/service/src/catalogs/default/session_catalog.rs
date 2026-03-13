@@ -42,6 +42,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -52,6 +53,7 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -79,6 +81,7 @@ use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -94,6 +97,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -421,6 +425,32 @@ impl Catalog for SessionCatalog {
                 include_expired,
             )
             .await
+    }
+
+    async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
+        self.inner.create_table_tag(req).await
+    }
+
+    async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {
+        self.inner.drop_table_tag(req).await
+    }
+
+    async fn get_table_tag_with_expire_ctl(
+        &self,
+        table_id: u64,
+        tag_name: &str,
+        include_expired: bool,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        self.inner
+            .get_table_tag_with_expire_ctl(table_id, tag_name, include_expired)
+            .await
+    }
+
+    async fn list_table_tags(
+        &self,
+        req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>> {
+        self.inner.list_table_tags(req).await
     }
 
     async fn mget_tables(
