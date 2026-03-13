@@ -39,6 +39,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -518,6 +520,23 @@ pub trait TableContext: Send + Sync {
     }
     fn merge_pruned_partitions_stats(&self, _other: &HashMap<u32, PartStatistics>) {
         unimplemented!()
+    }
+    /// Check the shared access gate for table-ref operations.
+    fn check_table_ref_access(&self) -> Result<()> {
+        if !self
+            .get_settings()
+            .get_enable_experimental_table_ref()
+            .unwrap_or_default()
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+            ));
+        }
+
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.get_license_key(), Feature::TableRef)?;
+
+        Ok(())
     }
 }
 

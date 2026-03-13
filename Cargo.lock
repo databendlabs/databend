@@ -3493,6 +3493,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
+ "databend-common-license",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-store",
@@ -5111,7 +5112,6 @@ dependencies = [
  "serde",
  "tempfile",
  "tokio",
- "uuid",
  "walkdir",
 ]
 

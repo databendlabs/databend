@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -49,6 +50,7 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
@@ -76,6 +78,7 @@ use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -91,6 +94,7 @@ use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
@@ -333,6 +337,47 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(format!(
             "'get_table_branch_no_expire' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn create_table_tag(&self, _req: CreateTableTagReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'create_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn drop_table_tag(&self, _req: DropTableTagReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'drop_table_tag' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn get_table_tag(&self, table_id: u64, tag_name: &str) -> Result<Option<SeqV<TableTag>>> {
+        self.get_table_tag_with_expire_ctl(table_id, tag_name, false)
+            .await
+    }
+
+    async fn get_table_tag_with_expire_ctl(
+        &self,
+        _table_id: u64,
+        _tag_name: &str,
+        _include_expired: bool,
+    ) -> Result<Option<SeqV<TableTag>>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_table_tag_with_expire_ctl' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn list_table_tags(
+        &self,
+        _req: ListTableTagsReq,
+    ) -> Result<Vec<(String, SeqV<TableTag>)>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_table_tags' not implemented for catalog {}",
             self.name()
         )))
     }
