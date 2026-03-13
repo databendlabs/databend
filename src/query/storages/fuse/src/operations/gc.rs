@@ -17,15 +17,20 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::Utc;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
+use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_meta_types::MatchSeq;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
@@ -112,7 +117,19 @@ impl FuseTable {
                 .await?;
         }
 
-        let segment_refs: Vec<&Location> = root_snapshot.segments.iter().collect();
+        let mut snapshot_files = snapshot_files;
+        // protected segments.
+        let mut segments = HashSet::from_iter(root_snapshot.segments.iter().cloned());
+        let protected_table_stats_locs = self
+            .process_tags_for_purge(
+                &catalog,
+                &root_snapshot_location,
+                &mut snapshot_files,
+                &mut segments,
+                dry_run,
+            )
+            .await?;
+        let segment_refs = segments.iter().collect::<Vec<_>>();
         let referenced_locations = self
             .get_block_locations(ctx.clone(), &segment_refs, true, false)
             .await?;
@@ -120,7 +137,7 @@ impl FuseTable {
             format_version: root_snapshot.format_version,
             snapshot_id: root_snapshot.snapshot_id,
             timestamp: root_snapshot.timestamp,
-            segments: HashSet::from_iter(root_snapshot.segments.clone()),
+            segments,
             table_statistics_location: root_snapshot.table_statistics_location(),
         });
 
@@ -194,7 +211,10 @@ impl FuseTable {
                 if s.table_statistics_location.is_some()
                     && s.table_statistics_location != base_ts_location_opt
                 {
-                    ts_to_be_purged.insert(s.table_statistics_location.unwrap());
+                    let stats_loc = s.table_statistics_location.unwrap();
+                    if !protected_table_stats_locs.contains(&stats_loc) {
+                        ts_to_be_purged.insert(stats_loc);
+                    }
                 }
             }
 
@@ -607,6 +627,68 @@ impl FuseTable {
         }
         self.try_purge_location_files(ctx, locations_to_be_purged)
             .await
+    }
+
+    /// Protect base segments referenced by tags and remove tagged snapshots from gc candidates.
+    pub async fn process_tags_for_purge(
+        &self,
+        catalog: &Arc<dyn Catalog>,
+        root_snapshot_location: &String,
+        snapshot_files_to_gc: &mut Vec<String>,
+        protected_segments: &mut HashSet<Location>,
+        dry_run: bool,
+    ) -> Result<HashSet<String>> {
+        let now = Utc::now();
+        let tags = catalog
+            .list_table_tags(ListTableTagsReq {
+                table_id: self.get_id(),
+                include_expired: true,
+            })
+            .await?;
+
+        let mut protected_snapshot_locs = HashSet::new();
+        let mut protected_table_stats_locs = HashSet::new();
+        for (tag_name, seq_tag) in tags {
+            if seq_tag
+                .data
+                .expire_at
+                .is_some_and(|expire_at| expire_at <= now)
+            {
+                if !dry_run {
+                    if let Err(e) = catalog
+                        .drop_table_tag(DropTableTagReq {
+                            table_id: self.get_id(),
+                            tag_name,
+                            seq: MatchSeq::Exact(seq_tag.seq),
+                        })
+                        .await
+                    {
+                        warn!(
+                            "drop expired tag failed, ignored, table: {}, err: {}",
+                            self.table_info.desc, e
+                        );
+                    }
+                }
+                continue;
+            }
+
+            let tag_snapshot_loc = seq_tag.data.snapshot_loc;
+            if &tag_snapshot_loc < root_snapshot_location {
+                if let Some(snapshot) =
+                    SnapshotsIO::read_snapshot_for_vacuum(self.get_operator(), &tag_snapshot_loc)
+                        .await?
+                {
+                    protected_segments.extend(snapshot.segments.iter().cloned());
+                    if let Some(stats_loc) = &snapshot.table_statistics_location {
+                        protected_table_stats_locs.insert(stats_loc.clone());
+                    }
+                }
+                protected_snapshot_locs.insert(tag_snapshot_loc);
+            }
+        }
+
+        snapshot_files_to_gc.retain(|path| !protected_snapshot_locs.contains(path));
+        Ok(protected_table_stats_locs)
     }
 
     #[async_backtrace::framed]
