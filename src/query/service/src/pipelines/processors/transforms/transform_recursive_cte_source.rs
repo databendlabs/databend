@@ -65,6 +65,11 @@ use crate::sessions::QueryContext;
 use crate::stream::PullingExecutorStream;
 
 // The whole recursive cte as source.
+enum CachedReplayAction {
+    Replay(VecDeque<DataBlock>),
+    Populate,
+}
+
 pub struct TransformRecursiveCteSource {
     ctx: Arc<QueryContext>,
     union_plan: UnionAll,
@@ -325,6 +330,24 @@ fn collect_local_recursive_scan_names(
     names
 }
 
+async fn prepare_cached_replay_action(
+    memory_table: &RecursiveCteMemoryTable,
+) -> CachedReplayAction {
+    loop {
+        if memory_table.is_sealed() {
+            return CachedReplayAction::Replay(VecDeque::from(memory_table.cached_output_blocks()));
+        }
+
+        if memory_table.begin_cache_population() {
+            return CachedReplayAction::Populate;
+        }
+
+        while memory_table.is_running() && !memory_table.is_sealed() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+}
+
 impl TransformRecursiveCteSource {
     async fn try_prepare_cached_replay(&mut self) -> Result<bool> {
         create_memory_table_for_cte_scan(&self.ctx, &self.union_plan.right).await?;
@@ -349,28 +372,16 @@ impl TransformRecursiveCteSource {
             .as_any()
             .downcast_ref::<RecursiveCteMemoryTable>()
             .unwrap();
-        if memory_table.is_sealed() {
-            let replay_blocks = memory_table.cached_output_blocks();
-            self.replay_blocks = Some(VecDeque::from(replay_blocks));
-            return Ok(true);
+        match prepare_cached_replay_action(memory_table).await {
+            CachedReplayAction::Replay(replay_blocks) => {
+                self.replay_blocks = Some(replay_blocks);
+                Ok(true)
+            }
+            CachedReplayAction::Populate => {
+                self.owns_cache_population = true;
+                Ok(false)
+            }
         }
-
-        if memory_table.begin_cache_population() {
-            self.owns_cache_population = true;
-            return Ok(false);
-        }
-
-        while memory_table.is_running() && !memory_table.is_sealed() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-
-        if memory_table.is_sealed() {
-            let replay_blocks = memory_table.cached_output_blocks();
-            self.replay_blocks = Some(VecDeque::from(replay_blocks));
-            return Ok(true);
-        }
-
-        Ok(false)
     }
 }
 
@@ -711,5 +722,69 @@ fn check_type(
         Err(ErrorCode::IllegalDataType(
             "The data type on both sides of the union does not match",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_catalog::table::Table;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_sql::plans::TableOptions;
+    use databend_common_storages_basic::RecursiveCteMemoryTable;
+    use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+
+    use super::*;
+
+    static NEXT_TEST_TABLE_ID: AtomicU64 = AtomicU64::new(1);
+
+    fn new_test_recursive_cte_memory_table() -> Arc<Box<dyn Table>> {
+        let table_id = NEXT_TEST_TABLE_ID.fetch_add(1, Ordering::Relaxed);
+        let mut table_info = TableInfo::default();
+        table_info.ident.table_id = table_id;
+        table_info.meta.options = TableOptions::default();
+        table_info.meta.options.insert(
+            OPT_KEY_TEMP_PREFIX.to_string(),
+            format!("rcte-test-{table_id}"),
+        );
+
+        Arc::new(RecursiveCteMemoryTable::try_create(table_info).unwrap())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_reacquires_population_after_unsealed_exit() {
+        let table = new_test_recursive_cte_memory_table();
+        let memory_table = table
+            .as_ref()
+            .as_any()
+            .downcast_ref::<RecursiveCteMemoryTable>()
+            .unwrap();
+        assert!(memory_table.begin_cache_population());
+
+        let waiter_table = table.clone();
+        let waiter = tokio::spawn(async move {
+            let waiter_memory_table = waiter_table
+                .as_ref()
+                .as_any()
+                .downcast_ref::<RecursiveCteMemoryTable>()
+                .unwrap();
+            prepare_cached_replay_action(waiter_memory_table).await
+        });
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        memory_table.finish_cache_population(false);
+
+        match waiter.await.unwrap() {
+            CachedReplayAction::Populate => {}
+            CachedReplayAction::Replay(_) => {
+                panic!("expected cache ownership to be reacquired after unsealed exit")
+            }
+        }
+
+        assert!(memory_table.is_running());
+        assert!(!memory_table.is_sealed());
+        memory_table.finish_cache_population(false);
     }
 }
