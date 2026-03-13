@@ -40,11 +40,10 @@ use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::is_uuid_v7;
 use log::info;
 use opendal::Entry;
 use opendal::ErrorKind;
-use uuid::Uuid;
-use uuid::Version;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum2(
@@ -451,11 +450,6 @@ async fn set_lvt(
         .await?
         .time;
     Ok(Some(lvt_point))
-}
-
-fn is_uuid_v7(uuid: &Uuid) -> bool {
-    let version = uuid.get_version();
-    version.is_some_and(|v| matches!(v, Version::SortRand))
 }
 
 async fn select_gc_root(

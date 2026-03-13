@@ -62,7 +62,16 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::StreamInfo(info) => self.navigate_to_stream(ctx, info).await,
-            NavigationPoint::TableTag(_) => Err(ErrorCode::Unimplemented("todo")),
+            NavigationPoint::TableTag(tag_name) => {
+                let snapshot_loc = self.get_tag_snapshot_location(ctx, tag_name).await?;
+                let (snapshot, format_version) =
+                    SnapshotsIO::read_snapshot(snapshot_loc, self.get_operator(), true).await?;
+                self.load_table_by_snapshot(
+                    snapshot.as_ref(),
+                    format_version,
+                    ctx.get_settings().get_s3_storage_class()?,
+                )
+            }
         }
     }
 
@@ -267,7 +276,10 @@ impl FuseTable {
                     Some(NavigationPoint::StreamInfo(info)) => {
                         self.list_by_stream(info, time_point).await
                     }
-                    Some(NavigationPoint::TableTag(_)) => unreachable!(),
+                    Some(NavigationPoint::TableTag(tag_name)) => {
+                        let snapshot_loc = self.get_tag_snapshot_location(ctx, &tag_name).await?;
+                        self.list_by_location(snapshot_loc, time_point).await
+                    }
                     None => self.list_by_time_point(time_point).await,
                 }?;
 
@@ -483,7 +495,10 @@ impl FuseTable {
                 }
                 Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
             }
-            NavigationPoint::TableTag(_) => Err(ErrorCode::Unimplemented("todo")),
+            NavigationPoint::TableTag(tag_name) => {
+                let snapshot_loc = self.get_tag_snapshot_location(&ctx, tag_name).await?;
+                Ok(Some(snapshot_loc))
+            }
         }
     }
 
@@ -566,5 +581,32 @@ impl FuseTable {
         }
 
         Ok(None)
+    }
+
+    async fn get_tag_snapshot_location(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        tag_name: &str,
+    ) -> Result<String> {
+        if !ctx
+            .get_settings()
+            .get_enable_experimental_table_ref()
+            .unwrap_or_default()
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
+            ));
+        }
+        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
+        let table_tag = catalog
+            .get_table_tag(self.table_info.ident.table_id, tag_name)
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::UnknownReference(format!(
+                    "Unknown TAG '{}' in table {}",
+                    tag_name, self.table_info.desc
+                ))
+            })?;
+        Ok(table_tag.data.snapshot_loc)
     }
 }

@@ -43,6 +43,7 @@ use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
+use databend_common_meta_app::schema::TableIdTagName;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
@@ -727,6 +728,24 @@ async fn update_txn_to_remove_table_history(
     Ok(())
 }
 
+async fn add_delete_table_ref_tag_ops(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    table_id: u64,
+    txn: &mut TxnRequest,
+) -> Result<(), MetaError> {
+    let tag_prefix = TableIdTagName::new(table_id, "");
+    let tag_dir = DirName::new(tag_prefix);
+    let mut tag_keys = kv_api
+        .list_pb_keys(ListOptions::unlimited(&tag_dir))
+        .await?;
+
+    while let Some(tag_key) = tag_keys.try_next().await? {
+        txn.if_then.push(txn_del(&tag_key));
+    }
+
+    Ok(())
+}
+
 /// Update TxnRequest to remove a dropped table's own data.
 ///
 /// This function returns the updated TxnRequest,
@@ -808,6 +827,9 @@ async fn remove_data_for_dropped_table(
 
         txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
     }
+
+    // Clean up table ref tags under `__fd_table_tag/<table_id>/...`.
+    add_delete_table_ref_tag_ops(kv_api, table_id.table_id, txn).await?;
 
     // Clean up tag references for the dropped table
     {
