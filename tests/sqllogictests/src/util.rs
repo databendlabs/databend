@@ -24,6 +24,7 @@ use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
 use clap::Parser;
 use redis::Commands;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -38,6 +39,8 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::mysql::Mysql;
 use testcontainers_modules::redis::REDIS_PORT;
 use testcontainers_modules::redis::Redis;
+use tokio::net::TcpStream;
+use tokio::time::sleep;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
@@ -49,6 +52,8 @@ use crate::error::Result;
 const CONTAINER_RETRY_TIMES: usize = 3;
 const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
+const TTC_READY_CHECK_INTERVAL_MILLIS: u64 = 200;
+const DATABEND_READY_CHECK_INTERVAL_MILLIS: u64 = 500;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpSessionConf {
@@ -275,13 +280,15 @@ pub async fn run_ttc_container(
         dsn = format!("{dsn}&query_result_format=arrow");
     }
 
+    wait_for_databend_ready(http_server_port).await?;
+
     let mut i = 1;
     loop {
         let log_consumer = LoggingConsumer::new();
 
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
-            .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+            .with_wait_for(WaitFor::millis(100))
             .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
             .with_network("host")
             .with_env_var("DATABEND_DSN", &dsn)
@@ -293,6 +300,21 @@ pub async fn run_ttc_container(
         let duration = start.elapsed().as_secs();
         match container_res {
             Ok(container) => {
+                if let Err(err) = wait_for_ttc_ready(port).await {
+                    eprintln!(
+                        "Started container {container_name} {} but TTC port was not ready: {err}",
+                        container.id(),
+                    );
+                    stop_container(docker, &container_name).await;
+                    if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
+                        break;
+                    }
+                    println!(
+                        "Retrying to start container {container_name} {i} after {duration} secs",
+                    );
+                    i += 1;
+                    continue;
+                }
                 println!(
                     "Started container {container_name} {} using {duration} secs",
                     container.id(),
@@ -317,6 +339,66 @@ pub async fn run_ttc_container(
         }
     }
     Err(format!("Start {container_name} failed").into())
+}
+
+async fn wait_for_databend_ready(http_server_port: u16) -> Result<()> {
+    let client = reqwest::Client::new();
+    let url = format!("http://127.0.0.1:{http_server_port}/v1/verify");
+    let start = Instant::now();
+    let timeout = Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS);
+
+    loop {
+        match client.post(&url).basic_auth("root", Some("")).send().await {
+            Ok(response) if response.status() == StatusCode::OK => return Ok(()),
+            Ok(response) => {
+                if start.elapsed() >= timeout {
+                    return Err(format!(
+                        "Databend verify endpoint {url} did not become ready within {}s: HTTP {}",
+                        CONTAINER_STARTUP_TIMEOUT_SECONDS,
+                        response.status()
+                    )
+                    .into());
+                }
+            }
+            Err(err) => {
+                if start.elapsed() >= timeout {
+                    return Err(format!(
+                        "Databend verify endpoint {url} did not become ready within {}s: {err}",
+                        CONTAINER_STARTUP_TIMEOUT_SECONDS
+                    )
+                    .into());
+                }
+            }
+        }
+
+        sleep(Duration::from_millis(DATABEND_READY_CHECK_INTERVAL_MILLIS)).await;
+    }
+}
+
+async fn wait_for_ttc_ready(port: u16) -> Result<()> {
+    let addr = format!("127.0.0.1:{port}");
+    let start = Instant::now();
+    let timeout = Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS);
+
+    loop {
+        match TcpStream::connect(&addr).await {
+            Ok(stream) => {
+                drop(stream);
+                return Ok(());
+            }
+            Err(err) => {
+                if start.elapsed() >= timeout {
+                    return Err(format!(
+                        "TTC did not accept TCP connections on {addr} within {}s: {err}",
+                        CONTAINER_STARTUP_TIMEOUT_SECONDS
+                    )
+                    .into());
+                }
+            }
+        }
+
+        sleep(Duration::from_millis(TTC_READY_CHECK_INTERVAL_MILLIS)).await;
+    }
 }
 
 #[allow(dead_code)]
