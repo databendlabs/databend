@@ -159,6 +159,29 @@ impl RecursiveCteMemoryTable {
         }
         block
     }
+
+    pub fn take_generation_blocks(&self, reader_id: u64) -> Vec<DataBlock> {
+        let mut state = self.blocks.write();
+        let mut reader = match state.readers.get(&reader_id).copied() {
+            Some(reader) => reader,
+            None => return Vec::new(),
+        };
+        if reader.block_index > 0 {
+            return Vec::new();
+        }
+        let generation = match reader.generation {
+            Some(generation) => generation,
+            None => return Vec::new(),
+        };
+        let blocks = state
+            .generations
+            .get(&generation)
+            .cloned()
+            .unwrap_or_default();
+        reader.block_index = blocks.len();
+        state.readers.insert(reader_id, reader);
+        blocks
+    }
 }
 
 #[async_trait::async_trait]

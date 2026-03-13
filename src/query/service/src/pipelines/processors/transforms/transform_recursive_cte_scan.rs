@@ -83,8 +83,12 @@ impl AsyncSource for TransformRecursiveCteScan {
             self.reader_id = Some(reader_id);
             reader_id
         };
-        let data = memory_table.take_one_block(reader_id);
-        Ok(data.filter(|block| block.num_rows() > 0))
+        let data = memory_table.take_generation_blocks(reader_id);
+        if data.is_empty() {
+            return Ok(None);
+        }
+        let data = DataBlock::concat(&data)?;
+        Ok((data.num_rows() > 0).then_some(data))
     }
 
     async fn on_finish(&mut self) -> Result<()> {
