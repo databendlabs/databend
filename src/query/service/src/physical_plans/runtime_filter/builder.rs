@@ -37,8 +37,8 @@ use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
 
 /// Type alias for probe keys with runtime filter information
-/// Contains: (RemoteExpr, scan_id, table_index, column_idx)
-type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, Symbol)>>;
+/// Contains: (RemoteExpr, scan_id, table_index, column_idx, is_null_equal)
+type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>;
 
 /// Check if a data type is supported for bloom filter
 ///
@@ -118,13 +118,29 @@ pub async fn build_runtime_filter(
     let probe_side = s_expr.probe_side_child();
 
     // Process each probe key that has runtime filter information
-    for (build_key, probe_key, scan_id, _table_index, column_idx, build_table_index) in build_keys
+    for (
+        build_key,
+        probe_key,
+        scan_id,
+        _table_index,
+        column_idx,
+        is_null_equal,
+        build_table_index,
+    ) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
         .zip(build_table_indexes.into_iter())
         .filter_map(|((b, p), table_idx)| {
-            p.map(|(p, scan_id, table_index, column_idx)| {
-                (b, p, scan_id, table_index, column_idx, table_idx)
+            p.map(|(p, scan_id, table_index, column_idx, is_null_equal)| {
+                (
+                    b,
+                    p,
+                    scan_id,
+                    table_index,
+                    column_idx,
+                    is_null_equal,
+                    table_idx,
+                )
             })
         })
     {
@@ -152,9 +168,11 @@ pub async fn build_runtime_filter(
             .remove_nullable();
         let id = metadata.write().next_runtime_filter_id();
 
-        let enable_bloom_runtime_filter = is_type_supported_for_bloom_filter(&data_type);
+        let enable_bloom_runtime_filter =
+            !is_null_equal && is_type_supported_for_bloom_filter(&data_type);
 
-        let enable_min_max_runtime_filter = is_type_supported_for_min_max_filter(&data_type);
+        let enable_min_max_runtime_filter =
+            !is_null_equal && is_type_supported_for_min_max_filter(&data_type);
 
         // Create and add the runtime filter
         let runtime_filter = PhysicalRuntimeFilter {
@@ -163,7 +181,7 @@ pub async fn build_runtime_filter(
             probe_targets,
             build_table_rows,
             enable_bloom_runtime_filter,
-            enable_inlist_runtime_filter: true,
+            enable_inlist_runtime_filter: !is_null_equal,
             enable_min_max_runtime_filter,
         };
         filters.push(runtime_filter);
