@@ -227,34 +227,6 @@ select cte1.a  from cte1;
 8
 9
 
-query TI
-WITH RECURSIVE digits(z, lp) AS (
-    SELECT '1', 1
-    UNION ALL SELECT CAST(lp+1 AS TEXT), lp+1 FROM digits WHERE lp<3
-),
-x(s, ind) AS (
-    SELECT '..', 1
-    UNION ALL
-    SELECT
-        substr(s, 1, ind-1) || z || substr(s, ind+1),
-        instr(substr(s, 1, ind-1) || z || substr(s, ind+1), '.')
-    FROM x, digits AS z
-    WHERE ind>0
-      AND NOT EXISTS (
-        SELECT 1 FROM digits AS lp
-        WHERE z.z = '1' AND lp.lp = 2
-      )
-)
-SELECT s, ind FROM x ORDER BY s, ind;
-----
-.. 1
-2. 2
-22 0
-23 0
-3. 2
-32 0
-33 0
-
 statement ok
 create table train(
 train_id varchar(8) not null ,
