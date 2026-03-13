@@ -330,25 +330,62 @@ fn collect_local_recursive_scan_names(
     names
 }
 
-async fn prepare_cached_replay_action(
-    memory_table: &RecursiveCteMemoryTable,
-) -> CachedReplayAction {
+fn recursive_cte_memory_table(table: &dyn Table) -> &RecursiveCteMemoryTable {
+    table
+        .as_any()
+        .downcast_ref::<RecursiveCteMemoryTable>()
+        .unwrap()
+}
+
+fn first_recursive_cte_memory_table(tables: &[Arc<dyn Table>]) -> Option<&RecursiveCteMemoryTable> {
+    tables
+        .first()
+        .map(|table| recursive_cte_memory_table(table.as_ref()))
+}
+
+fn finish_cache_population_for_tables(tables: &[Arc<dyn Table>], sealed: bool) {
+    for table in tables {
+        recursive_cte_memory_table(table.as_ref()).finish_cache_population(sealed);
+    }
+}
+
+async fn prepare_cached_replay_action_for_tables(tables: &[Arc<dyn Table>]) -> CachedReplayAction {
+    let Some(first_table) = first_recursive_cte_memory_table(tables) else {
+        return CachedReplayAction::Populate;
+    };
+
     loop {
-        if memory_table.is_sealed() {
-            return CachedReplayAction::Replay(VecDeque::from(memory_table.cached_output_blocks()));
+        if first_table.is_sealed() {
+            return CachedReplayAction::Replay(VecDeque::from(first_table.cached_output_blocks()));
         }
 
-        if memory_table.begin_cache_population() {
+        if first_table.begin_cache_population() {
+            for table in tables.iter().skip(1) {
+                let memory_table = recursive_cte_memory_table(table.as_ref());
+                memory_table.finish_cache_population(false);
+                let started = memory_table.begin_cache_population();
+                debug_assert!(
+                    started,
+                    "recursive CTE cache population should reset every scan table together"
+                );
+            }
             return CachedReplayAction::Populate;
         }
 
-        while memory_table.is_running() && !memory_table.is_sealed() {
+        while first_table.is_running() && !first_table.is_sealed() {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
 }
 
 impl TransformRecursiveCteSource {
+    fn finish_owned_cache_population(&mut self, sealed: bool) {
+        if self.owns_cache_population {
+            finish_cache_population_for_tables(&self.cte_scan_tables, sealed);
+            self.owns_cache_population = false;
+        }
+    }
+
     async fn try_prepare_cached_replay(&mut self) -> Result<bool> {
         create_memory_table_for_cte_scan(&self.ctx, &self.union_plan.right).await?;
         if self.cte_scan_tables.is_empty() {
@@ -365,14 +402,10 @@ impl TransformRecursiveCteSource {
             }
         }
 
-        let Some(first_table) = self.cte_scan_tables.first() else {
+        if self.cte_scan_tables.is_empty() {
             return Ok(false);
-        };
-        let memory_table = first_table
-            .as_any()
-            .downcast_ref::<RecursiveCteMemoryTable>()
-            .unwrap();
-        match prepare_cached_replay_action(memory_table).await {
+        }
+        match prepare_cached_replay_action_for_tables(&self.cte_scan_tables).await {
             CachedReplayAction::Replay(replay_blocks) => {
                 self.replay_blocks = Some(replay_blocks);
                 Ok(true)
@@ -406,10 +439,7 @@ impl AsyncSource for TransformRecursiveCteSource {
 
                 if self.recursive_step > 0 {
                     for table in self.cte_scan_tables.iter() {
-                        let memory_table = table
-                            .as_any()
-                            .downcast_ref::<RecursiveCteMemoryTable>()
-                            .unwrap();
+                        let memory_table = recursive_cte_memory_table(table.as_ref());
                         memory_table.set_active_generation(self.recursive_step - 1);
                     }
                 }
@@ -429,16 +459,7 @@ impl AsyncSource for TransformRecursiveCteSource {
                         self.active_stream_has_output = false;
                     }
                     Err(e) => {
-                        if self.owns_cache_population {
-                            if let Some(first_table) = self.cte_scan_tables.first() {
-                                let memory_table = first_table
-                                    .as_any()
-                                    .downcast_ref::<RecursiveCteMemoryTable>()
-                                    .unwrap();
-                                memory_table.finish_cache_population(false);
-                            }
-                            self.owns_cache_population = false;
-                        }
+                        self.finish_owned_cache_population(false);
                         return Err(ErrorCode::Internal(format!(
                             "failed to start recursive cte step: {:?}",
                             e
@@ -452,16 +473,7 @@ impl AsyncSource for TransformRecursiveCteSource {
                 match stream.next().await.transpose() {
                     Ok(block) => block,
                     Err(err) => {
-                        if self.owns_cache_population {
-                            if let Some(first_table) = self.cte_scan_tables.first() {
-                                let memory_table = first_table
-                                    .as_any()
-                                    .downcast_ref::<RecursiveCteMemoryTable>()
-                                    .unwrap();
-                                memory_table.finish_cache_population(false);
-                            }
-                            self.owns_cache_population = false;
-                        }
+                        self.finish_owned_cache_population(false);
                         return Err(ErrorCode::Internal(format!(
                             "recursive cte stream execution failed: {:?}",
                             err
@@ -488,22 +500,17 @@ impl AsyncSource for TransformRecursiveCteSource {
                     }
 
                     for table in self.cte_scan_tables.iter() {
-                        let memory_table = table
-                            .as_any()
-                            .downcast_ref::<RecursiveCteMemoryTable>()
-                            .unwrap();
+                        let memory_table = recursive_cte_memory_table(table.as_ref());
                         memory_table
                             .append_generation_block(self.recursive_step, projected_block.clone());
                     }
 
                     let frontier_block = projected_block;
 
-                    if let Some(first_table) = self.cte_scan_tables.first() {
-                        let memory_table = first_table
-                            .as_any()
-                            .downcast_ref::<RecursiveCteMemoryTable>()
-                            .unwrap();
-                        memory_table.cache_output_block(frontier_block.clone());
+                    if let Some(first_table) =
+                        first_recursive_cte_memory_table(&self.cte_scan_tables)
+                    {
+                        first_table.cache_output_block(frontier_block.clone());
                     }
 
                     self.active_stream_has_output = true;
@@ -517,16 +524,7 @@ impl AsyncSource for TransformRecursiveCteSource {
                         continue;
                     }
 
-                    if self.owns_cache_population {
-                        if let Some(first_table) = self.cte_scan_tables.first() {
-                            let memory_table = first_table
-                                .as_any()
-                                .downcast_ref::<RecursiveCteMemoryTable>()
-                                .unwrap();
-                            memory_table.finish_cache_population(true);
-                        }
-                        self.owns_cache_population = false;
-                    }
+                    self.finish_owned_cache_population(true);
                     return Ok(None);
                 }
             }
@@ -534,18 +532,7 @@ impl AsyncSource for TransformRecursiveCteSource {
     }
 
     async fn on_finish(&mut self) -> Result<()> {
-        if self.owns_cache_population {
-            if let Some(first_table) = self.cte_scan_tables.first() {
-                let memory_table = first_table
-                    .as_any()
-                    .downcast_ref::<RecursiveCteMemoryTable>()
-                    .unwrap();
-                if !memory_table.is_sealed() {
-                    memory_table.finish_cache_population(false);
-                }
-            }
-            self.owns_cache_population = false;
-        }
+        self.finish_owned_cache_population(false);
         Ok(())
     }
 }
@@ -740,7 +727,7 @@ mod tests {
 
     static NEXT_TEST_TABLE_ID: AtomicU64 = AtomicU64::new(1);
 
-    fn new_test_recursive_cte_memory_table() -> Arc<Box<dyn Table>> {
+    fn new_test_recursive_cte_memory_table() -> Arc<dyn Table> {
         let table_id = NEXT_TEST_TABLE_ID.fetch_add(1, Ordering::Relaxed);
         let mut table_info = TableInfo::default();
         table_info.ident.table_id = table_id;
@@ -750,27 +737,18 @@ mod tests {
             format!("rcte-test-{table_id}"),
         );
 
-        Arc::new(RecursiveCteMemoryTable::try_create(table_info).unwrap())
+        Arc::from(RecursiveCteMemoryTable::try_create(table_info).unwrap())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cached_replay_reacquires_population_after_unsealed_exit() {
         let table = new_test_recursive_cte_memory_table();
-        let memory_table = table
-            .as_ref()
-            .as_any()
-            .downcast_ref::<RecursiveCteMemoryTable>()
-            .unwrap();
+        let memory_table = recursive_cte_memory_table(table.as_ref());
         assert!(memory_table.begin_cache_population());
 
         let waiter_table = table.clone();
         let waiter = databend_common_base::runtime::spawn(async move {
-            let waiter_memory_table = waiter_table
-                .as_ref()
-                .as_any()
-                .downcast_ref::<RecursiveCteMemoryTable>()
-                .unwrap();
-            prepare_cached_replay_action(waiter_memory_table).await
+            prepare_cached_replay_action_for_tables(&[waiter_table]).await
         });
 
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -786,5 +764,46 @@ mod tests {
         assert!(memory_table.is_running());
         assert!(!memory_table.is_sealed());
         memory_table.finish_cache_population(false);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_reacquires_population_for_all_scan_tables() {
+        let first_table = new_test_recursive_cte_memory_table();
+        let second_table = new_test_recursive_cte_memory_table();
+        let first_memory_table = recursive_cte_memory_table(first_table.as_ref());
+        let second_memory_table = recursive_cte_memory_table(second_table.as_ref());
+
+        second_memory_table.append_generation_block(0, DataBlock::empty());
+        second_memory_table.set_active_generation(0);
+        let stale_reader = second_memory_table.register_reader();
+        assert!(second_memory_table.take_one_block(stale_reader).is_some());
+
+        assert!(first_memory_table.begin_cache_population());
+
+        let waiter_first_table = first_table.clone();
+        let waiter_second_table = second_table.clone();
+        let waiter = databend_common_base::runtime::spawn(async move {
+            prepare_cached_replay_action_for_tables(&[waiter_first_table, waiter_second_table])
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        first_memory_table.finish_cache_population(false);
+
+        match waiter.await.unwrap() {
+            CachedReplayAction::Populate => {}
+            CachedReplayAction::Replay(_) => {
+                panic!("expected cache ownership to be reacquired for every scan table")
+            }
+        }
+
+        assert!(first_memory_table.is_running());
+        assert!(second_memory_table.is_running());
+        assert!(!first_memory_table.is_sealed());
+        assert!(!second_memory_table.is_sealed());
+        assert!(second_memory_table.take_one_block(stale_reader).is_none());
+
+        first_memory_table.finish_cache_population(false);
+        second_memory_table.finish_cache_population(false);
     }
 }
