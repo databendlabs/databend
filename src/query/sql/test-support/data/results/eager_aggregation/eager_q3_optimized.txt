@@ -1,0 +1,37 @@
+Exchange(Merge)
+└── Aggregate(Final)
+    ├── group items: [orders.o_orderkey (#18) AS (#18)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
+    └── Aggregate(Partial)
+        ├── group items: [orders.o_orderkey (#18) AS (#18)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [orders.o_orderkey (#18)]
+            └── EvalScalar
+                ├── scalars: [sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17), orders.o_orderkey (#18) AS (#18), lineitem.l_orderkey (#0) AS (#29), orders.o_orderdate (#22) AS (#30)]
+                └── Join(Inner)
+                    ├── build keys: [orders.o_orderkey (#18)]
+                    ├── probe keys: [lineitem.l_orderkey (#0)]
+                    ├── other filters: []
+                    ├── Exchange(Broadcast)
+                    │   └── Scan
+                    │       ├── table: default.orders (#1)
+                    │       ├── filters: [gte(orders.o_orderdate (#22), '1995-05-01'), lte(orders.o_orderdate (#22), '1995-05-31')]
+                    │       ├── order by: []
+                    │       └── limit: NONE
+                    └── Aggregate(Final)
+                        ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+                        ├── aggregate functions: [sum(sum_arg_0 (#16)) AS (#17)]
+                        └── Aggregate(Partial)
+                            ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+                            ├── aggregate functions: [sum(sum_arg_0 (#16)) AS (#17)]
+                            └── Exchange(Hash)
+                                ├── Exchange(Hash): keys: [lineitem.l_orderkey (#0)]
+                                └── EvalScalar
+                                    ├── scalars: [lineitem.l_orderkey (#0) AS (#0), multiply(lineitem.l_extendedprice (#5), minus(1, lineitem.l_discount (#6))) AS (#16), lineitem.l_returnflag (#8) AS (#28)]
+                                    └── Scan
+                                        ├── table: default.lineitem (#0)
+                                        ├── filters: [eq(lineitem.l_returnflag (#8), 'R')]
+                                        ├── order by: []
+                                        └── limit: NONE
+

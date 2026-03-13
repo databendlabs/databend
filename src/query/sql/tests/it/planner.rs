@@ -22,9 +22,8 @@ use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
 
-use self::fixture::LiteTableContext;
-
 mod fixture;
+pub(crate) use self::fixture::LiteTableContext;
 
 struct LiteRunner(Arc<LiteTableContext>);
 
@@ -84,6 +83,30 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         warehouse_distribution: true,
         optimizer_skip_list: &[],
         default_node_num: 2,
+    },
+    LiteReplayCaseSpec {
+        name: "eager_q0",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "eager_q1",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "eager_q2",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "eager_q3",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
     },
 ];
 

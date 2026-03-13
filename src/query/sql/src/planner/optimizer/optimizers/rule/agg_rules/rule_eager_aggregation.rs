@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -29,6 +28,7 @@ use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::wrap_cast;
+use crate::match_op;
 use crate::optimizer::Optimizer;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -45,7 +45,6 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
-use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
@@ -142,114 +141,10 @@ impl RuleEagerAggregation {
             //     |
             //     *
             matchers: vec![
-                //     Expression
-                //         |
-                //  Aggregate(final)
-                //         |
-                // Aggregate(partial)
-                //         |
-                //        Join
-                //       /    \
-                //      *      *
-                Matcher::MatchOp {
-                    op_type: RelOp::EvalScalar,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Join,
-                                children: vec![Matcher::Leaf, Matcher::Leaf],
-                            }],
-                        }],
-                    }],
-                },
-                //     Expression
-                //         |
-                //  Aggregate(final)
-                //         |
-                // Aggregate(partial)
-                //         |
-                //     Expression
-                //         |
-                //        Join
-                //       /    \
-                //      *      *
-                Matcher::MatchOp {
-                    op_type: RelOp::EvalScalar,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Aggregate,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::EvalScalar,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Join,
-                                    children: vec![Matcher::Leaf, Matcher::Leaf],
-                                }],
-                            }],
-                        }],
-                    }],
-                },
-                //     Expression
-                //         |
-                //        Sort
-                //         |
-                //  Aggregate(final)
-                //         |
-                // Aggregate(partial)
-                //         |
-                //        Join
-                //       /    \
-                //      *      *
-                Matcher::MatchOp {
-                    op_type: RelOp::EvalScalar,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Sort,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Aggregate,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::Join,
-                                    children: vec![Matcher::Leaf, Matcher::Leaf],
-                                }],
-                            }],
-                        }],
-                    }],
-                },
-                //     Expression
-                //         |
-                //        Sort
-                //         |
-                //  Aggregate(final)
-                //         |
-                // Aggregate(partial)
-                //         |
-                //     Expression
-                //         |
-                //        Join
-                //       /    \
-                //      *      *
-                Matcher::MatchOp {
-                    op_type: RelOp::EvalScalar,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Sort,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Aggregate,
-                            children: vec![Matcher::MatchOp {
-                                op_type: RelOp::Aggregate,
-                                children: vec![Matcher::MatchOp {
-                                    op_type: RelOp::EvalScalar,
-                                    children: vec![Matcher::MatchOp {
-                                        op_type: RelOp::Join,
-                                        children: vec![Matcher::Leaf, Matcher::Leaf],
-                                    }],
-                                }],
-                            }],
-                        }],
-                    }],
-                },
+                match_op!(EvalScalar -> Aggregate -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
+                match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
             ],
             metadata,
         }
@@ -261,15 +156,6 @@ impl Rule for RuleEagerAggregation {
         RuleID::EagerAggregation
     }
 
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<(), ErrorCode> {
-        let i = self
-            .matchers
-            .iter()
-            .position(|matcher| matcher.matches(s_expr))
-            .unwrap();
-        self.apply_matcher(i, s_expr, state)
-    }
-
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
     }
@@ -278,33 +164,12 @@ impl Rule for RuleEagerAggregation {
         false
     }
 
-    fn apply_matcher(
-        &self,
-        i: usize,
-        s_expr: &SExpr,
-        state: &mut TransformResult,
-    ) -> Result<(), ErrorCode> {
-        let eval_scalar_expr = s_expr;
-        let (sort_expr, final_agg_expr, has_extra_eval) = {
-            let next = s_expr.unary_child();
-            match i {
-                0 => (None, next, false),
-                1 => (None, next, true),
-                2 => (Some(next), next.unary_child(), false),
-                3 => (Some(next), next.unary_child(), true),
-                _ => unreachable!(),
-            }
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<(), ErrorCode> {
+        let Some(input) = EagerInput::parse(s_expr) else {
+            return Ok(());
         };
 
-        let final_agg_partial_expr = final_agg_expr.unary_child();
-        let (extra_eval_scalar_expr, join_expr) = if has_extra_eval {
-            let next = final_agg_partial_expr.unary_child();
-            (Some(next), next.unary_child())
-        } else {
-            (None, final_agg_partial_expr.unary_child())
-        };
-
-        let join = join_expr.plan().as_join().unwrap();
+        let join = input.join_expr.plan().as_join().unwrap();
         // Only supports inner/cross join and equal conditions.
         if !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
             | !join.non_equi_conditions.is_empty()
@@ -312,105 +177,123 @@ impl Rule for RuleEagerAggregation {
             return Ok(());
         }
 
-        let eval_scalar = eval_scalar_expr.plan().as_eval_scalar().unwrap();
-        let final_agg = final_agg_expr.plan().as_aggregate().unwrap();
+        for analysis in input.analyze(&self.metadata)? {
+            if let Some(mut result) = analysis.apply(&self.metadata, &input)? {
+                result.set_applied_rule(&self.id());
+                state.add_result(result);
+            }
+        }
 
-        // Get the original column set from the left child and right child of join.
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct EagerInput<'a> {
+    eval_scalar: &'a EvalScalar,
+    sort_expr: Option<&'a SExpr>,
+    join_expr: &'a SExpr,
+    extra_eval_scalar: EvalScalar,
+    final_agg: Aggregate,
+}
+
+impl<'a> EagerInput<'a> {
+    fn parse(s_expr: &'a SExpr) -> Option<Self> {
+        let eval_scalar = s_expr.plan().as_eval_scalar()?;
+
+        let mut current = s_expr.unary_child();
+        let sort_expr = current.plan().as_sort().map(|_| {
+            let sort_expr = current;
+            current = sort_expr.unary_child();
+            sort_expr
+        });
+
+        let final_agg = current.plan().as_aggregate()?.clone();
+        current = current.unary_child();
+
+        current.plan().as_aggregate()?;
+        current = current.unary_child();
+
+        let extra_eval_scalar = current
+            .plan()
+            .as_eval_scalar()
+            .map(|eval| {
+                let eval = eval.clone();
+                current = current.unary_child();
+                eval
+            })
+            .unwrap_or_else(|| EvalScalar { items: vec![] });
+
+        current.plan().as_join()?;
+
+        Some(Self {
+            eval_scalar,
+            sort_expr,
+            join_expr: current,
+            extra_eval_scalar,
+            final_agg,
+        })
+    }
+
+    fn analyze(&self, metadata: &MetadataRef) -> Result<Vec<EagerAnalysis>, ErrorCode> {
         let mut join_columns = Pair::try_new_with(|side| {
             Ok::<_, ErrorCode>(
-                side.child(join_expr)
+                side.child(self.join_expr)
                     .derive_relational_prop()?
                     .output_columns
                     .clone(),
             )
         })?;
 
-        let extra_eval_scalar = match extra_eval_scalar_expr {
-            Some(expr) => expr.plan().clone().into_eval_scalar().unwrap(),
-            None => EvalScalar { items: vec![] },
+        let Some(eager_extra_eval_scalar_expr) =
+            self.split_extra_eval_scalar_items(&mut join_columns, metadata)?
+        else {
+            return Ok(vec![]);
         };
-        // Check if all extra eval scalars can be solved by one of the children.
-        let mut eager_extra_eval_scalar_expr = Pair {
-            left: EvalScalar { items: vec![] },
-            right: EvalScalar { items: vec![] },
-        };
-        if extra_eval_scalar_expr.is_some() {
-            for eval_item in &extra_eval_scalar.items {
-                let eval_used_columns = eval_item.scalar.used_columns();
-                if eval_used_columns
-                    .iter()
-                    .any(|column| self.metadata.read().is_removed_mark_index(*column))
-                {
-                    continue;
-                }
-                let mut resolved_by_one_child = false;
-                join_columns.for_each_mut(|side, columns_set| {
-                    if eval_used_columns.is_subset(columns_set) {
-                        eager_extra_eval_scalar_expr[side]
-                            .items
-                            .push(eval_item.clone());
-                        columns_set.insert(eval_item.index);
-                        resolved_by_one_child = true;
-                    }
-                });
-                if !resolved_by_one_child {
-                    return Ok(());
-                }
-            }
-        }
 
-        let eval_scalar_columns = eval_scalar
+        let eval_scalar_used_columns = self
+            .eval_scalar
             .items
             .iter()
-            .filter_map(|item| {
-                if let ScalarExpr::BoundColumnRef(column) = &item.scalar {
-                    Some(column.column.index)
-                } else {
-                    None
-                }
-            })
+            .flat_map(|item| item.scalar.used_columns())
             .collect::<ColumnSet>();
 
-        // Get all eager aggregate functions of the left child and right child.
         let function_factory = AggregateFunctionFactory::instance();
-        let eager_aggregations = Pair::new_with(|side| {
-            get_eager_aggregation_functions(
-                final_agg,
-                &join_columns[side],
-                &eval_scalar_columns,
-                function_factory,
-            )
-        });
+        let eager_candidates = EagerCandidates::collect(
+            &self.final_agg,
+            &join_columns,
+            &eval_scalar_used_columns,
+            function_factory,
+        );
 
-        // There are some aggregate functions that cannot be pushed down, if a func(x)
-        // cannot be pushed down, it means that we need to add x to the group by items
-        // of eager aggregation, it will change the semantics of the sql, So we should
-        // stop eager aggregation.
-        if eager_aggregations[Side::Left].len() + eager_aggregations[Side::Right].len()
-            != final_agg.aggregate_functions.len()
+        if eager_candidates.by_side[Side::Left].len()
+            + eager_candidates.by_side[Side::Right].len()
+            + eager_candidates.any_side.len()
+            != self.final_agg.aggregate_functions.len()
         {
-            return Ok(());
+            return Ok(vec![]);
         }
 
-        // Divide group by columns into two parts, where the left set comes from the left
-        // child and the right set comes from the right child.
         let mut eager_group_columns = Pair {
             left: ColumnSet::new(),
             right: ColumnSet::new(),
         };
-        for group_item in &final_agg.group_items {
+        for group_item in &self.final_agg.group_items {
             let ScalarExpr::BoundColumnRef(_) = &group_item.scalar else {
-                return Ok(());
+                return Ok(vec![]);
             };
-            join_columns.for_each(|side, join_columns| {
-                if join_columns.contains(&group_item.index) {
+            join_columns.for_each(|side, columns| {
+                if columns.contains(&group_item.index) {
                     eager_group_columns[side].insert(group_item.index);
                 }
             });
         }
 
-        // Using join conditions to propagate group item to another child.
-        let (left_conditions, right_conditions): (Vec<_>, _) = join
+        let (left_conditions, right_conditions): (Vec<_>, _) = self
+            .join_expr
+            .plan()
+            .as_join()
+            .unwrap()
             .equi_conditions
             .iter()
             .map(|condition| (&condition.left, &condition.right))
@@ -419,15 +302,15 @@ impl Rule for RuleEagerAggregation {
             left: left_conditions,
             right: right_conditions,
         };
-        let original_group_items_len = final_agg.group_items.len();
-        let mut final_agg = final_agg.clone();
 
-        for condition in &join.equi_conditions {
+        let original_group_items_len = self.final_agg.group_items.len();
+        let mut final_agg = self.final_agg.clone();
+        for condition in &self.join_expr.plan().as_join().unwrap().equi_conditions {
             let ScalarExpr::BoundColumnRef(left_column) = &condition.left else {
-                return Ok(());
+                return Ok(vec![]);
             };
             let ScalarExpr::BoundColumnRef(right_column) = &condition.right else {
-                return Ok(());
+                return Ok(vec![]);
             };
             let cond_column = Pair {
                 left: left_column.column.index,
@@ -447,413 +330,694 @@ impl Rule for RuleEagerAggregation {
             });
         }
 
-        // If a child's `can_eager` is true, its group_columns_set should include all
-        // join conditions related to the child.
         let can_eager = Pair::new_with(|side| {
             join_conditions[side]
                 .iter()
                 .all(|cond| cond.used_columns().is_subset(&eager_group_columns[side]))
         });
-
         if !can_eager[Side::Left] && !can_eager[Side::Right] {
-            return Ok(());
-        }
-
-        let mut ctx = EagerContext {
-            final_agg,
-            eval_scalar,
-            join_expr,
-            sort_expr,
-            extra_eval_scalar,
-            metadata: &self.metadata,
-            can_eager,
-            eager_aggregations,
-            eager_extra_eval_scalar_expr,
-            join_columns,
-            original_group_items_len,
-        };
-
-        for mut result in ctx.apply()? {
-            result.set_applied_rule(&self.id());
-            state.add_result(result);
-        }
-
-        Ok(())
-    }
-}
-
-struct EagerContext<'a> {
-    final_agg: Aggregate,
-    eval_scalar: &'a EvalScalar,
-    join_expr: &'a SExpr,
-    sort_expr: Option<&'a SExpr>,
-    extra_eval_scalar: EvalScalar,
-    metadata: &'a MetadataRef,
-    can_eager: Pair<bool>,
-    eager_aggregations: Pair<Vec<(usize, Symbol)>>,
-    eager_extra_eval_scalar_expr: Pair<EvalScalar>,
-    join_columns: Pair<ColumnSet>,
-    original_group_items_len: usize,
-}
-
-impl<'a> EagerContext<'a> {
-    fn apply(&mut self) -> Result<Vec<SExpr>, ErrorCode> {
-        let can_push_down = Pair {
-            left: !self.eager_aggregations[Side::Left].is_empty() && self.can_eager[Side::Left],
-            right: !self.eager_aggregations[Side::Right].is_empty() && self.can_eager[Side::Right],
-        };
-
-        let mut results = Vec::new();
-
-        if can_push_down[Side::Left]
-            && can_push_down[Side::Right]
-            && !self.apply_double_eager(Side::Left, &mut results)?
-        {
             return Ok(vec![]);
+        }
+
+        let eager_aggregation_variants = eager_candidates.assignments();
+        Ok(eager_aggregation_variants
+            .into_iter()
+            .flat_map(|assignment| {
+                self.expand_analyses(
+                    &final_agg,
+                    original_group_items_len,
+                    &join_columns,
+                    &eager_extra_eval_scalar_expr,
+                    &can_eager,
+                    assignment,
+                )
+            })
+            .collect())
+    }
+
+    fn expand_analyses(
+        &self,
+        final_agg: &Aggregate,
+        original_group_items_len: usize,
+        join_columns: &Pair<ColumnSet>,
+        eager_extra_eval_scalar_expr: &Pair<EvalScalar>,
+        can_eager: &Pair<bool>,
+        assignment: EagerAssignment,
+    ) -> Vec<EagerAnalysis> {
+        let can_push_down = Pair {
+            left: !assignment.eager_aggregations[Side::Left].is_empty() && can_eager[Side::Left],
+            right: !assignment.eager_aggregations[Side::Right].is_empty() && can_eager[Side::Right],
+        };
+
+        if can_push_down[Side::Left] && can_push_down[Side::Right] {
+            return vec![
+                EagerAnalysis {
+                    final_agg: final_agg.clone(),
+                    original_group_items_len,
+                    join_columns: join_columns.clone(),
+                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
+                    eager_aggregations: assignment.eager_aggregations.clone(),
+                    can_eager: can_eager.clone(),
+                    rewrite_kind: EagerRewriteKind::DoubleGroupByCount(Side::Left),
+                },
+                EagerAnalysis {
+                    final_agg: final_agg.clone(),
+                    original_group_items_len,
+                    join_columns: join_columns.clone(),
+                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
+                    eager_aggregations: assignment.eager_aggregations.clone(),
+                    can_eager: can_eager.clone(),
+                    rewrite_kind: EagerRewriteKind::DoubleSplit(Side::Left),
+                },
+            ];
         }
 
         let d = if can_push_down[Side::Left] {
             Side::Left
-        } else {
+        } else if can_push_down[Side::Right] {
             Side::Right
+        } else {
+            return vec![];
         };
-        if can_push_down[d]
-            && self.eager_aggregations[d.opposite()].is_empty()
-            && !self.apply_single_eager(d, &mut results)?
-        {
-            return Ok(vec![]);
+
+        if !assignment.eager_aggregations[d.opposite()].is_empty() {
+            return vec![];
         }
 
-        Ok(results)
+        let mut analyses = vec![EagerAnalysis {
+            final_agg: final_agg.clone(),
+            original_group_items_len,
+            join_columns: join_columns.clone(),
+            eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
+            eager_aggregations: assignment.eager_aggregations.clone(),
+            can_eager: can_eager.clone(),
+            rewrite_kind: EagerRewriteKind::SingleGroupBy(d),
+        }];
+
+        if can_eager[d.opposite()] {
+            if self.has_sum_aggregate(final_agg) {
+                analyses.push(EagerAnalysis {
+                    final_agg: final_agg.clone(),
+                    original_group_items_len,
+                    join_columns: join_columns.clone(),
+                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
+                    eager_aggregations: assignment.eager_aggregations.clone(),
+                    can_eager: can_eager.clone(),
+                    rewrite_kind: EagerRewriteKind::SingleCount(d),
+                });
+            }
+            if assignment.allow_double_eager
+                && self.needs_eager_count_sum(final_agg, &assignment, d)
+            {
+                analyses.push(EagerAnalysis {
+                    final_agg: final_agg.clone(),
+                    original_group_items_len,
+                    join_columns: join_columns.clone(),
+                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
+                    eager_aggregations: assignment.eager_aggregations.clone(),
+                    can_eager: can_eager.clone(),
+                    rewrite_kind: EagerRewriteKind::SingleDouble(d),
+                });
+            }
+        }
+
+        analyses
     }
 
-    fn apply_double_eager(&mut self, d: Side, results: &mut Vec<SExpr>) -> Result<bool, ErrorCode> {
-        // (1) apply eager split on d and d.opposite.
-        // (2) apply eager groupby-count on d.
-        // we use `final_eager_split` and `final_eager_groupby_count` to represent
-        // the (1) and (2) respectively, the structure of operators is as follows:
-        // final_eager_split / final_eager_groupby_count
-        // |
-        // join
-        // | \
-        // |  eager_group_by_and_eager_count
-        // eager_group_by_and_eager_count
+    fn has_sum_aggregate(&self, final_agg: &Aggregate) -> bool {
+        final_agg.aggregate_functions.iter().any(|agg| {
+            matches!(
+                &agg.scalar,
+                ScalarExpr::AggregateFunction(aggregate_function)
+                    if aggregate_function.func_name == "sum"
+            )
+        })
+    }
 
-        let original_final_agg = self.final_agg.clone();
-        let mut final_eager_split = self.final_agg.clone();
+    fn needs_eager_count_sum(
+        &self,
+        final_agg: &Aggregate,
+        assignment: &EagerAssignment,
+        d: Side,
+    ) -> bool {
+        self.has_sum_aggregate(final_agg)
+            || assignment.eager_aggregations[d].iter().any(|candidate| {
+                matches!(
+                    &final_agg.aggregate_functions[candidate.agg_index].scalar,
+                    ScalarExpr::AggregateFunction(aggregate_function)
+                        if aggregate_function.func_name == "count"
+                )
+            })
+    }
 
-        let mut count_to_be_removed = Vec::new();
-        let mut func_to_be_restored = Vec::new();
-
-        let eager_count_indexes = Pair::new_with(|side| {
-            let (index, vec_index) = add_eager_count(&mut final_eager_split, self.metadata);
-            self.eager_aggregations[side].push((vec_index, index));
-            (index, vec_index)
-        });
-
-        let mut eager_group_by_and_eager_count = Pair {
-            left: final_eager_split.clone(),
-            right: final_eager_split.clone(),
+    fn split_extra_eval_scalar_items(
+        &self,
+        join_columns: &mut Pair<ColumnSet>,
+        metadata: &MetadataRef,
+    ) -> Result<Option<Pair<EvalScalar>>, ErrorCode> {
+        let mut eager_extra_eval_scalar_expr = Pair {
+            left: EvalScalar { items: vec![] },
+            right: EvalScalar { items: vec![] },
         };
 
-        let mut eager_groupby_count_scalar = self.eval_scalar.clone();
-        let mut eager_split_eval_scalar = self.eval_scalar.clone();
+        for eval_item in &self.extra_eval_scalar.items {
+            let eval_used_columns = eval_item.scalar.used_columns();
+            if eval_used_columns
+                .iter()
+                .any(|column| metadata.read().is_removed_mark_index(*column))
+            {
+                continue;
+            }
 
-        let mut old_to_new = HashMap::new();
-        let mut func_from: HashMap<Symbol, Side> = HashMap::new();
+            let mut resolved_by_one_child = false;
+            join_columns.for_each_mut(|side, columns_set| {
+                if eval_used_columns.is_subset(columns_set) {
+                    eager_extra_eval_scalar_expr[side]
+                        .items
+                        .push(eval_item.clone());
+                    columns_set.insert(eval_item.index);
+                    resolved_by_one_child = true;
+                }
+            });
+            if !resolved_by_one_child {
+                return Ok(None);
+            }
+        }
+
+        Ok(Some(eager_extra_eval_scalar_expr))
+    }
+}
+
+struct EagerCandidates {
+    by_side: Pair<Vec<EagerAggregationCandidate>>,
+    any_side: Vec<EagerAggregationCandidate>,
+}
+
+struct EagerAssignment {
+    eager_aggregations: Pair<Vec<EagerAggregationCandidate>>,
+    allow_double_eager: bool,
+}
+
+impl EagerCandidates {
+    // In the current implementation, if an aggregation function can be eager,
+    // then it needs to satisfy the following constraints:
+    // (1) The args.len() must equal to 1 if func_name is not "count".
+    // (2) The aggregate function can be decomposed.
+    // (3) The output index of the aggregate function is referenced by the top eval scalar.
+    // (4) The data type of the aggregate column is either Number or Nullable(Number).
+    // Return eager aggregation candidates grouped by side, plus the count(*) candidates that can
+    // be assigned to either side.
+    fn collect(
+        agg_final: &Aggregate,
+        join_columns: &Pair<ColumnSet>,
+        eval_scalar_used_columns: &ColumnSet,
+        function_factory: &AggregateFunctionFactory,
+    ) -> Self {
+        let mut candidates = Self {
+            by_side: Pair::new_with(|_| vec![]),
+            any_side: vec![],
+        };
+
+        for (index, func) in agg_final.aggregate_functions.iter().enumerate() {
+            let ScalarExpr::AggregateFunction(aggregate_function) = &func.scalar else {
+                continue;
+            };
+            if !function_factory.is_decomposable(&aggregate_function.func_name)
+                || !eval_scalar_used_columns.contains(&func.index)
+            {
+                continue;
+            }
+
+            let candidate = EagerAggregationCandidate {
+                agg_index: index,
+                output_index: func.index,
+            };
+
+            if aggregate_function.func_name == "count" && aggregate_function.args.is_empty() {
+                candidates.any_side.push(candidate);
+                continue;
+            }
+
+            let [ScalarExpr::BoundColumnRef(column)] = &aggregate_function.args[..] else {
+                continue;
+            };
+            match &*column.column.data_type {
+                DataType::Number(_) | DataType::Decimal(_) => (),
+                DataType::Nullable(box DataType::Number(_) | box DataType::Decimal(_)) => {}
+                _ => continue,
+            }
+
+            for side in [Side::Left, Side::Right] {
+                if join_columns[side].contains(&column.column.index) {
+                    candidates.by_side[side].push(candidate);
+                    break;
+                }
+            }
+        }
+
+        candidates
+    }
+
+    fn assignments(&self) -> Vec<EagerAssignment> {
+        if self.any_side.is_empty() {
+            return vec![EagerAssignment {
+                eager_aggregations: self.by_side.clone(),
+                allow_double_eager: true,
+            }];
+        }
+
+        match (
+            self.by_side[Side::Left].is_empty(),
+            self.by_side[Side::Right].is_empty(),
+        ) {
+            // For count(*)-only cases, keep both single-side variants, but emit the symmetric
+            // double-eager rewrite only once from the canonical left assignment.
+            (true, true) => vec![
+                self.assignment(Side::Left, true),
+                self.assignment(Side::Right, false),
+            ],
+            // If the eagerable aggs already belong to one side, keep count(*) with them.
+            (false, true) => vec![self.assignment(Side::Left, true)],
+            (true, false) => vec![self.assignment(Side::Right, true)],
+            // Only keep both variants when both sides already have side-bound eager aggs.
+            (false, false) => vec![
+                self.assignment(Side::Left, true),
+                self.assignment(Side::Right, true),
+            ],
+        }
+    }
+
+    fn assignment(&self, side: Side, allow_double_eager: bool) -> EagerAssignment {
+        let mut eager_aggregations = self.by_side.clone();
+        eager_aggregations[side].extend(self.any_side.iter().copied());
+        EagerAssignment {
+            eager_aggregations,
+            allow_double_eager,
+        }
+    }
+}
+
+struct EagerAnalysis {
+    final_agg: Aggregate,
+    original_group_items_len: usize,
+    join_columns: Pair<ColumnSet>,
+    eager_extra_eval_scalar_expr: Pair<EvalScalar>,
+    eager_aggregations: Pair<Vec<EagerAggregationCandidate>>,
+    can_eager: Pair<bool>,
+    rewrite_kind: EagerRewriteKind,
+}
+
+#[derive(Clone, Copy)]
+enum EagerRewriteKind {
+    DoubleGroupByCount(Side),
+    DoubleSplit(Side),
+    SingleGroupBy(Side),
+    SingleCount(Side),
+    SingleDouble(Side),
+}
+
+#[derive(Clone, Copy, Debug)]
+struct EagerAggregationCandidate {
+    agg_index: usize,
+    output_index: Symbol,
+}
+
+impl EagerAnalysis {
+    fn apply(self, metadata: &MetadataRef, input: &EagerInput) -> Result<Option<SExpr>, ErrorCode> {
+        match self.rewrite_kind {
+            // EvalScalar
+            // └── Aggregate(Final: rewrite agg on child(d), keep agg on child(d^1) as count-adjusted)
+            //     └── Join
+            //         ├── child(d):     Aggregate(Final: eager group-by + eager count)
+            //         └── child(d^1):   original
+            EagerRewriteKind::DoubleGroupByCount(d) => {
+                self.apply_double_group_by_count(metadata, input, d)
+            }
+            // EvalScalar
+            // └── Aggregate(Final: rewrite aggs on both children, each multiplied by the opposite count)
+            //     └── Join
+            //         ├── child(d):     Aggregate(Final: eager group-by + eager count)
+            //         └── child(d^1):   Aggregate(Final: eager group-by + eager count)
+            EagerRewriteKind::DoubleSplit(d) => self.apply_double_split(metadata, input, d),
+            // EvalScalar
+            // └── Aggregate(Final: rewrite agg on child(d))
+            //     └── Join
+            //         ├── child(d):     Aggregate(Final: eager group-by)
+            //         └── child(d^1):   original
+            EagerRewriteKind::SingleGroupBy(d) => self.apply_single_group_by(metadata, input, d),
+            // EvalScalar
+            // └── Aggregate(Final: keep original agg, multiply by count from child(d^1))
+            //     └── Join
+            //         ├── child(d):     original
+            //         └── child(d^1):   Aggregate(Final: eager count)
+            EagerRewriteKind::SingleCount(d) => self.apply_single_count(metadata, input, d),
+            // EvalScalar
+            // └── Aggregate(Final: rewrite agg on child(d), then multiply by count from child(d^1))
+            //     └── Join
+            //         ├── child(d):     Aggregate(Final: eager group-by)
+            //         └── child(d^1):   Aggregate(Final: eager count)
+            EagerRewriteKind::SingleDouble(d) => self.apply_single_double(metadata, input, d),
+        }
+    }
+
+    fn apply_double_split(
+        self,
+        metadata: &MetadataRef,
+        input: &EagerInput,
+        d: Side,
+    ) -> Result<Option<SExpr>, ErrorCode> {
+        let mut final_eager_split = self.final_agg.clone();
+
+        let mut eager_split_eval_scalar = input.eval_scalar.clone();
+
+        let mut rewrites = EagerOutputRewriteMap::default();
         let mut success = false;
 
-        eager_count_indexes.try_for_each(|side, (_, idx)| {
-            for (index, _) in &self.eager_aggregations[side] {
-                if idx == index {
-                    continue;
-                }
-
-                let aggr_function = &mut final_eager_split.aggregate_functions[*index];
-                let eval_scalars_items =
-                    eager_split_eval_scalar
-                        .items
-                        .iter_mut()
-                        .chain(if side == d {
-                            eager_groupby_count_scalar.items.iter_mut()
-                        } else {
-                            [].iter_mut()
-                        });
-                let (cur_success, old_index, new_index) =
-                    update_aggregate_and_eval(aggr_function, self.metadata, eval_scalars_items)?;
-                success |= cur_success;
-
-                old_to_new.insert(old_index, new_index);
-                func_from.insert(old_index, side);
-                func_from.insert(new_index, side);
-
-                if side == d.opposite() {
-                    func_to_be_restored.push((new_index, *index));
-                }
+        [Side::Left, Side::Right].iter().try_for_each(|side| {
+            for candidate in &self.eager_aggregations[*side] {
+                let aggr_function = &mut final_eager_split.aggregate_functions[candidate.agg_index];
+                let eval_scalars_items = eager_split_eval_scalar.items.iter_mut();
+                let rewrite = Self::rewrite_aggregate_output(
+                    metadata,
+                    aggr_function,
+                    *side,
+                    eval_scalars_items,
+                )?;
+                success |= rewrite.rewritten_in_eval;
+                rewrites.record(rewrite.binding);
             }
             Ok::<_, ErrorCode>(())
         })?;
 
-        eager_count_indexes.for_each(|_, (eager_count_index, _)| {
-            final_eager_split
-                .aggregate_functions
-                .retain(|aggr| aggr.index != *eager_count_index);
+        let mut eager_split_count_sum = EvalScalar { items: vec![] };
+        let eager_group_by_and_eager_count = Pair::new_with(|side| {
+            let mut aggregate = self.pruned_aggregate_for_side(side);
+            let (count_index, _) = Self::add_eager_count(metadata, &mut aggregate);
+            (aggregate, count_index)
         });
 
-        let mut final_eager_groupby_count = final_eager_split.clone();
-        for i in &mut count_to_be_removed {
-            *i = old_to_new[i];
-        }
-        final_eager_groupby_count
-            .aggregate_functions
-            .retain(|agg| !count_to_be_removed.contains(&agg.index));
-
-        for (index, idx) in func_to_be_restored {
-            if let Some(aggr) = final_eager_groupby_count
-                .aggregate_functions
-                .iter_mut()
-                .find(|aggr| {
-                    aggr.index == index && idx < original_final_agg.aggregate_functions.len()
-                })
-            {
-                *aggr = original_final_agg.aggregate_functions[idx].clone();
+        for agg in final_eager_split.aggregate_functions.iter_mut() {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
+                if aggregate_function.func_name != "sum" {
+                    continue;
+                }
+                let Some(agg_side) = rewrites.source_side(agg.index) else {
+                    continue;
+                };
+                eager_split_count_sum
+                    .items
+                    .push(Self::create_eager_count_multiply_scalar_item(
+                        metadata,
+                        input,
+                        aggregate_function,
+                        eager_group_by_and_eager_count[agg_side.opposite()].1,
+                    )?);
             }
         }
 
-        let mut eager_split_count_sum = EvalScalar { items: vec![] };
-        let mut eager_groupby_count_count_sum = EvalScalar { items: vec![] };
-        {
-            let mut plans_and_counts = Pair {
-                left: (&mut final_eager_split, &mut eager_split_count_sum),
-                right: (
-                    &mut final_eager_groupby_count,
-                    &mut eager_groupby_count_count_sum,
+        if !success {
+            return Ok(None);
+        }
+
+        let split_join = input
+            .join_expr
+            .replace_side_child(
+                d,
+                d.build_join_child(
+                    input.join_expr,
+                    &self.eager_extra_eval_scalar_expr[d],
+                    eager_group_by_and_eager_count[d].0.clone(),
                 ),
-            };
-            plans_and_counts.try_for_each_mut(|side, (plan, count_sum)| {
-                for agg in plan.aggregate_functions.iter_mut() {
-                    if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
-                        if aggregate_function.func_name != "sum"
-                            || (side == Side::Right && func_from[&agg.index] == d)
-                        {
-                            continue;
-                        }
-                        count_sum
-                            .items
-                            .push(create_eager_count_multiply_scalar_item(
-                                aggregate_function,
-                                eager_count_indexes[func_from[&agg.index].opposite()].0,
-                                &self.extra_eval_scalar,
-                                self.metadata,
-                            )?);
-                    }
-                }
-                Ok::<_, ErrorCode>(())
-            })?;
+            )
+            .replace_side_child(
+                d.opposite(),
+                d.opposite().build_join_child(
+                    input.join_expr,
+                    &self.eager_extra_eval_scalar_expr[d.opposite()],
+                    eager_group_by_and_eager_count[d.opposite()].0.clone(),
+                ),
+            );
+
+        Ok(Some(self.build_result(
+            input,
+            split_join.build_unary(eager_split_count_sum),
+            final_eager_split,
+            eager_split_eval_scalar,
+        )))
+    }
+
+    fn apply_double_group_by_count(
+        self,
+        metadata: &MetadataRef,
+        input: &EagerInput,
+        d: Side,
+    ) -> Result<Option<SExpr>, ErrorCode> {
+        let mut final_eager_groupby_count = self.final_agg.clone();
+        let mut eager_groupby_count_scalar = input.eval_scalar.clone();
+        let mut rewrites = EagerOutputRewriteMap::default();
+        let mut success = false;
+
+        for candidate in &self.eager_aggregations[d] {
+            let aggr_function =
+                &mut final_eager_groupby_count.aggregate_functions[candidate.agg_index];
+            let rewrite = Self::rewrite_aggregate_output(
+                metadata,
+                aggr_function,
+                d,
+                eager_groupby_count_scalar.items.iter_mut(),
+            )?;
+            success |= rewrite.rewritten_in_eval;
+            rewrites.record(rewrite.binding);
         }
 
         if !success {
-            return Ok(false);
+            return Ok(None);
         }
 
-        eager_group_by_and_eager_count.for_each_mut(|side, plan| {
-            remove_group_by_items_and_aggregate_functions(
-                plan,
-                &self.join_columns[side],
-                &self.eager_aggregations[side.opposite()],
-            );
-        });
+        let mut eager_group_by_and_eager_count = self.pruned_aggregate_for_side(d);
+        let (eager_count_index, _) =
+            Self::add_eager_count(metadata, &mut eager_group_by_and_eager_count);
 
-        let groupby_count_join = self.join_expr.replace_side_child(
+        let mut eager_groupby_count_count_sum = EvalScalar { items: vec![] };
+        for agg in final_eager_groupby_count.aggregate_functions.iter_mut() {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
+                if aggregate_function.func_name != "sum"
+                    || rewrites.source_side(agg.index) == Some(d)
+                {
+                    continue;
+                }
+                eager_groupby_count_count_sum.items.push(
+                    Self::create_eager_count_multiply_scalar_item(
+                        metadata,
+                        input,
+                        aggregate_function,
+                        eager_count_index,
+                    )?,
+                );
+            }
+        }
+
+        let groupby_count_join = input.join_expr.replace_side_child(
             d,
             d.build_join_child(
-                self.join_expr,
+                input.join_expr,
                 &self.eager_extra_eval_scalar_expr[d],
-                eager_group_by_and_eager_count[d].clone(),
+                eager_group_by_and_eager_count,
             ),
         );
 
-        self.push_result(
-            results,
+        let groupby_count_join = if eager_groupby_count_count_sum.items.is_empty() {
             groupby_count_join
-                .clone()
-                .build_unary(eager_groupby_count_count_sum),
+        } else {
+            groupby_count_join.build_unary(eager_groupby_count_count_sum)
+        };
+
+        Ok(Some(self.build_result(
+            input,
+            groupby_count_join,
             final_eager_groupby_count,
             eager_groupby_count_scalar,
-        );
-
-        let opposite = d.opposite();
-        let eager_split_join = groupby_count_join
-            .replace_side_child(
-                opposite,
-                opposite.build_join_child(
-                    self.join_expr,
-                    &self.eager_extra_eval_scalar_expr[opposite],
-                    eager_group_by_and_eager_count[opposite].clone(),
-                ),
-            )
-            .build_unary(eager_split_count_sum);
-        self.push_result(
-            results,
-            eager_split_join,
-            final_eager_split,
-            eager_split_eval_scalar,
-        );
-
-        Ok(true)
+        )))
     }
 
-    fn apply_single_eager(&mut self, d: Side, results: &mut Vec<SExpr>) -> Result<bool, ErrorCode> {
-        // (1) Try to apply eager group-by on d.
-        // (2) Try to apply eager count on d.opposite 's sum aggregations.
-        // (3) If (1) and (2) success, apply double eager on d and d^1.
-        // we use `final_eager_group_by`, `final_eager_count` and `final_double_eager`
-        // to represent the (1), (2) and (3) respectively, the structure of operators
-        // is as follows:
-        // final_eager_group_by / final_eager_count / final_double_eager
-        // |
-        // join
-        // | \
-        // |  eager_count
-        // eager_group_by
-
-        let mut final_double_eager = self.final_agg.clone();
-        let mut final_eager_count = self.final_agg.clone();
-
-        let mut eager_count_index = None;
-        let mut eager_count_vec_idx = 0;
-        if self.can_eager[d.opposite()] {
-            let (index, vec_idx) = add_eager_count(&mut final_double_eager, self.metadata);
-            eager_count_index = Some(index);
-            eager_count_vec_idx = vec_idx;
-            self.eager_aggregations[d.opposite()].push((eager_count_vec_idx, index));
-        }
-
-        let mut eager_group_by = final_double_eager.clone();
-        let mut eager_count = final_double_eager.clone();
-        let mut double_eager_eval_scalar = self.eval_scalar.clone();
-        let mut old_to_new = HashMap::new();
+    fn apply_single_group_by(
+        self,
+        metadata: &MetadataRef,
+        input: &EagerInput,
+        d: Side,
+    ) -> Result<Option<SExpr>, ErrorCode> {
+        let mut final_eager_group_by = self.final_agg.clone();
+        let mut eager_group_by_eval_scalar = input.eval_scalar.clone();
         let mut success = false;
 
-        for (index, _) in &self.eager_aggregations[d] {
-            if self.can_eager[d.opposite()] && eager_count_vec_idx == *index {
-                continue;
-            }
-            let aggr_function = &mut final_double_eager.aggregate_functions[*index];
-            let (cur_success, old_index, new_index) = update_aggregate_and_eval(
+        for candidate in &self.eager_aggregations[d] {
+            let aggr_function = &mut final_eager_group_by.aggregate_functions[candidate.agg_index];
+            let rewrite = Self::rewrite_aggregate_output(
+                metadata,
                 aggr_function,
-                self.metadata,
-                double_eager_eval_scalar.items.iter_mut(),
+                d,
+                eager_group_by_eval_scalar.items.iter_mut(),
             )?;
-            success |= cur_success;
-            old_to_new.insert(old_index, new_index);
-        }
-
-        if self.can_eager[d.opposite()] {
-            final_double_eager
-                .aggregate_functions
-                .remove(eager_count_vec_idx);
-        }
-
-        let final_eager_group_by = final_double_eager.clone();
-
-        let mut need_eager_count = false;
-        let mut double_eager_count_sum = EvalScalar { items: vec![] };
-        let mut eager_count_sum = EvalScalar { items: vec![] };
-        if self.can_eager[d.opposite()] {
-            let eager_count_index =
-                eager_count_index.expect("eager count enabled without eager count index");
-            let mut plans_and_counts = Pair {
-                left: (&mut final_double_eager, &mut double_eager_count_sum),
-                right: (&mut final_eager_count, &mut eager_count_sum),
-            };
-            plans_and_counts.try_for_each_mut(|_, (plan, sum)| {
-                for agg in plan.aggregate_functions.iter_mut() {
-                    if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
-                        if aggregate_function.func_name == "sum" {
-                            sum.items.push(create_eager_count_multiply_scalar_item(
-                                aggregate_function,
-                                eager_count_index,
-                                &self.extra_eval_scalar,
-                                self.metadata,
-                            )?);
-                            need_eager_count = true;
-                        }
-                    }
-                }
-                Ok::<_, ErrorCode>(())
-            })?;
+            success |= rewrite.rewritten_in_eval;
         }
 
         if !success {
-            return Ok(false);
+            return Ok(None);
         }
 
-        let eager_group_by_eval_scalar = double_eager_eval_scalar.clone();
+        let eager_group_by = self.pruned_aggregate_for_side(d);
 
-        remove_group_by_items_and_aggregate_functions(
-            &mut eager_group_by,
-            &self.join_columns[d],
-            &self.eager_aggregations[d.opposite()],
+        let group_by_child = Arc::new(d.build_join_child(
+            input.join_expr,
+            &self.eager_extra_eval_scalar_expr[d],
+            eager_group_by,
+        ));
+
+        Ok(Some(self.build_result(
+            input,
+            input.join_expr.replace_side_child(d, group_by_child),
+            final_eager_group_by,
+            eager_group_by_eval_scalar,
+        )))
+    }
+
+    fn apply_single_count(
+        self,
+        metadata: &MetadataRef,
+        input: &EagerInput,
+        d: Side,
+    ) -> Result<Option<SExpr>, ErrorCode> {
+        if !self.can_eager[d.opposite()] {
+            return Ok(None);
+        }
+
+        let mut final_eager_count = self.final_agg.clone();
+        let mut eager_count = self.pruned_aggregate_for_side(d.opposite());
+        let (eager_count_index, _) = Self::add_eager_count(metadata, &mut eager_count);
+
+        let mut eager_count_sum = EvalScalar { items: vec![] };
+        for agg in final_eager_count.aggregate_functions.iter_mut() {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
+                && aggregate_function.func_name == "sum"
+            {
+                eager_count_sum
+                    .items
+                    .push(Self::create_eager_count_multiply_scalar_item(
+                        metadata,
+                        input,
+                        aggregate_function,
+                        eager_count_index,
+                    )?);
+            }
+        }
+
+        if eager_count_sum.items.is_empty() {
+            return Ok(None);
+        }
+
+        let new_join = input.join_expr.replace_side_child(
+            d.opposite(),
+            d.opposite().build_join_child(
+                input.join_expr,
+                &EvalScalar { items: vec![] },
+                eager_count,
+            ),
         );
-        if self.can_eager[d.opposite()] && need_eager_count {
-            remove_group_by_items_and_aggregate_functions(
-                &mut eager_count,
-                &self.join_columns[d.opposite()],
-                &self.eager_aggregations[d],
-            );
+
+        Ok(Some(self.build_result(
+            input,
+            new_join.build_unary(eager_count_sum),
+            final_eager_count,
+            input.eval_scalar.clone(),
+        )))
+    }
+
+    fn apply_single_double(
+        self,
+        metadata: &MetadataRef,
+        input: &EagerInput,
+        d: Side,
+    ) -> Result<Option<SExpr>, ErrorCode> {
+        if !self.can_eager[d.opposite()] {
+            return Ok(None);
+        }
+
+        let mut final_double_eager = self.final_agg.clone();
+        let mut double_eager_eval_scalar = input.eval_scalar.clone();
+        let mut success = false;
+
+        for candidate in &self.eager_aggregations[d] {
+            let aggr_function = &mut final_double_eager.aggregate_functions[candidate.agg_index];
+            let rewrite = Self::rewrite_aggregate_output(
+                metadata,
+                aggr_function,
+                d,
+                double_eager_eval_scalar.items.iter_mut(),
+            )?;
+            success |= rewrite.rewritten_in_eval;
+        }
+
+        if !success {
+            return Ok(None);
+        }
+
+        let eager_group_by = self.pruned_aggregate_for_side(d);
+
+        let mut eager_count = self.pruned_aggregate_for_side(d.opposite());
+        let (eager_count_index, _) = Self::add_eager_count(metadata, &mut eager_count);
+        let mut double_eager_count_sum = EvalScalar { items: vec![] };
+        for agg in final_double_eager.aggregate_functions.iter_mut() {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
+                && aggregate_function.func_name == "sum"
+            {
+                double_eager_count_sum
+                    .items
+                    .push(Self::create_eager_count_multiply_scalar_item(
+                        metadata,
+                        input,
+                        aggregate_function,
+                        eager_count_index,
+                    )?);
+            }
+        }
+
+        if double_eager_count_sum.items.is_empty() {
+            return Ok(None);
         }
 
         let group_by_child = Arc::new(d.build_join_child(
-            self.join_expr,
+            input.join_expr,
             &self.eager_extra_eval_scalar_expr[d],
-            eager_group_by.clone(),
+            eager_group_by,
         ));
-
-        self.push_result(
-            results,
-            self.join_expr.replace_side_child(d, group_by_child.clone()),
-            final_eager_group_by,
-            eager_group_by_eval_scalar,
+        let new_join = input.join_expr.replace_side_child(
+            d.opposite(),
+            d.opposite().build_join_child(
+                input.join_expr,
+                &EvalScalar { items: vec![] },
+                eager_count,
+            ),
         );
 
-        if self.can_eager[d.opposite()] && need_eager_count {
-            let new_join = self.join_expr.replace_side_child(
-                d.opposite(),
-                d.opposite().build_join_child(
-                    self.join_expr,
-                    &EvalScalar { items: vec![] },
-                    eager_count,
-                ),
-            );
-
-            self.push_result(
-                results,
-                new_join.clone().build_unary(eager_count_sum),
-                final_eager_count,
-                self.eval_scalar.clone(),
-            );
-
-            self.push_result(
-                results,
+        Ok(Some(
+            self.build_result(
+                input,
                 new_join
                     .replace_side_child(d, group_by_child)
                     .build_unary(double_eager_count_sum),
                 final_double_eager,
                 double_eager_eval_scalar,
-            );
-        }
-
-        Ok(true)
+            ),
+        ))
     }
 
-    fn push_result(
+    fn build_result(
         &self,
-        results: &mut Vec<SExpr>,
+        input: &EagerInput,
         s_expr: SExpr,
         mut final_aggr: Aggregate,
         eval_scalar: EvalScalar,
-    ) {
+    ) -> SExpr {
         final_aggr
             .group_items
             .truncate(self.original_group_items_len);
@@ -863,221 +1027,221 @@ impl<'a> EagerContext<'a> {
                 ..final_aggr.clone()
             })
             .build_unary(final_aggr);
-        let plan = match self.sort_expr {
+        let plan = match input.sort_expr {
             Some(sort_expr) => plan.build_unary(sort_expr.plan.clone()),
             None => plan,
         };
-        results.push(plan.build_unary(eval_scalar));
+        plan.build_unary(eval_scalar)
     }
-}
 
-// In the current implementation, if an aggregation function can be eager,
-// then it needs to satisfy the following constraints:
-// (1) The args.len() must equal to 1 if func_name is not "count".
-// (2) The aggregate function can be decomposed.
-// (3) The index of the aggregate function can be found in the column source of the eval scalar.
-// (4) The data type of the aggregate column is either Number or Nullable(Number).
-// Return the Vec(index, func index) for each eager aggregation function.
-fn get_eager_aggregation_functions(
-    agg_final: &Aggregate,
-    join_columns: &ColumnSet,
-    eval_scalar_columns: &ColumnSet,
-    function_factory: &AggregateFunctionFactory,
-) -> Vec<(usize, Symbol)> {
-    agg_final
-        .aggregate_functions
-        .iter()
-        .enumerate()
-        .filter_map(|(index, func)| {
-            let ScalarExpr::AggregateFunction(aggregate_function) = &func.scalar else {
-                return None;
-            };
-            let [ScalarExpr::BoundColumnRef(column)] = &aggregate_function.args[..] else {
-                return None;
-            };
-            match &*column.column.data_type {
-                DataType::Number(_) | DataType::Decimal(_) => (),
-                DataType::Nullable(box DataType::Number(_) | box DataType::Decimal(_)) => {}
-                _ => return None,
+    fn pruned_aggregate_for_side(&self, side: Side) -> Aggregate {
+        Aggregate {
+            group_items: self
+                .final_agg
+                .group_items
+                .iter()
+                .filter(|item| self.join_columns[side].contains(&item.index))
+                .cloned()
+                .collect(),
+            aggregate_functions: self
+                .final_agg
+                .aggregate_functions
+                .iter()
+                .filter(|item| {
+                    self.eager_aggregations[side.opposite()]
+                        .iter()
+                        .all(|candidate| candidate.output_index != item.index)
+                })
+                .cloned()
+                .collect(),
+            ..self.final_agg.clone()
+        }
+    }
+
+    fn add_eager_count(metadata: &MetadataRef, final_agg: &mut Aggregate) -> (Symbol, usize) {
+        let eager_count_vec_index = final_agg.aggregate_functions.len();
+        let eager_count_column = metadata.write().add_derived_column(
+            "count(*)".to_string(),
+            DataType::Number(NumberDataType::UInt64),
+        );
+        final_agg.aggregate_functions.push(ScalarItem {
+            index: eager_count_column,
+            scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                span: None,
+                func_name: "count".to_string(),
+                distinct: false,
+                params: vec![],
+                args: vec![],
+                return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                sort_descs: vec![],
+                display_name: "count(*)".to_string(),
+            }),
+        });
+        (eager_count_column, eager_count_vec_index)
+    }
+
+    fn rewrite_aggregate_output<'b>(
+        metadata: &MetadataRef,
+        aggr_function: &mut ScalarItem,
+        source_side: Side,
+        eval_scalar_items: impl Iterator<Item = &'b mut ScalarItem>,
+    ) -> Result<AggregateOutputRewrite, ErrorCode> {
+        let ScalarExpr::AggregateFunction(agg) = &mut aggr_function.scalar else {
+            unreachable!()
+        };
+        let was_count = agg.func_name == "count";
+
+        let old_index = aggr_function.index;
+        let new_index = metadata.write().add_derived_column(
+            format!("_eager_final_{}", agg.func_name),
+            *(agg.return_type).clone(),
+        );
+
+        Self::modify_final_aggregate_function(agg, old_index);
+        aggr_function.index = new_index;
+
+        let mut success = false;
+
+        for scalar_item in eval_scalar_items {
+            let hit_old_index = scalar_item.scalar.used_columns().contains(&old_index);
+            if let ScalarExpr::BoundColumnRef(column) = &mut scalar_item.scalar {
+                if column.column.index != old_index {
+                    continue;
+                }
+                let column_binding = &mut column.column;
+                column_binding.index = new_index;
+
+                if was_count {
+                    column_binding.data_type = Box::new(UInt64Type::data_type().wrap_nullable());
+                    scalar_item.scalar = wrap_cast(&scalar_item.scalar, &UInt64Type::data_type());
+                }
+                success = true;
+            } else {
+                scalar_item.scalar.replace_column(old_index, new_index)?;
+                success |= hit_old_index;
             }
-            if !function_factory.is_decomposable(&aggregate_function.func_name)
-                || !eval_scalar_columns.contains(&func.index)
-                || !join_columns.contains(&column.column.index)
-            {
-                return None;
-            }
-            Some((index, func.index))
+        }
+        Ok(AggregateOutputRewrite {
+            binding: EagerOutputRewrite {
+                source_side,
+                original_index: old_index,
+                rewritten_index: new_index,
+            },
+            rewritten_in_eval: success,
         })
-        .collect()
-}
-
-// Final aggregate functions's data type = eager aggregate functions's return_type
-// For COUNT, func_name: count => sum, return_type: Nullable(UInt64)
-fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: Symbol) {
-    if agg.func_name.as_str() == "count" {
-        agg.func_name = "sum".to_string();
-        agg.return_type = Box::new(UInt64Type::data_type().wrap_nullable());
     }
-    let agg_func = ScalarExpr::BoundColumnRef(BoundColumnRef {
-        span: None,
-        column: ColumnBindingBuilder::new(
-            "_eager".to_string(),
-            old_index,
-            agg.return_type.clone(),
-            Visibility::Visible,
-        )
-        .build(),
-    });
-    if agg.args.is_empty() {
-        // eager count
-        agg.args.push(agg_func);
-    } else {
-        agg.args[0] = agg_func;
-    }
-}
 
-fn remove_group_by_items_and_aggregate_functions(
-    agg_final: &mut Aggregate,
-    columns_set: &ColumnSet,
-    eager_aggregations: &[(usize, Symbol)],
-) {
-    // Remove group by items.
-    agg_final
-        .group_items
-        .retain(|item| columns_set.contains(&item.index));
-
-    // Remove aggregate functions.
-    agg_final
-        .aggregate_functions
-        .retain(|item| eager_aggregations.iter().all(|(_, i)| *i != item.index));
-}
-
-fn add_eager_count(final_agg: &mut Aggregate, metadata: &MetadataRef) -> (Symbol, usize) {
-    let eager_count_vec_index = final_agg.aggregate_functions.len();
-    let eager_count_column = metadata.write().add_derived_column(
-        "count(*)".to_string(),
-        DataType::Number(NumberDataType::UInt64),
-    );
-    final_agg.aggregate_functions.push(ScalarItem {
-        index: eager_count_column,
-        scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+    fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: Symbol) {
+        if agg.func_name.as_str() == "count" {
+            agg.func_name = "sum".to_string();
+            agg.return_type = Box::new(UInt64Type::data_type().wrap_nullable());
+        }
+        let agg_func = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
-            func_name: "count".to_string(),
-            distinct: false,
-            params: vec![],
-            args: vec![],
-            return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-            sort_descs: vec![],
-            display_name: "count(*)".to_string(),
-        }),
-    });
-    (eager_count_column, eager_count_vec_index)
-}
-
-fn update_aggregate_and_eval<'a>(
-    aggr_function: &mut ScalarItem,
-    metadata: &MetadataRef,
-    eval_scalar_items: impl Iterator<Item = &'a mut ScalarItem>,
-) -> Result<(bool, Symbol, Symbol), ErrorCode> {
-    let ScalarExpr::AggregateFunction(agg) = &mut aggr_function.scalar else {
-        unreachable!()
-    };
-
-    let old_index = aggr_function.index;
-    let new_index = metadata.write().add_derived_column(
-        format!("_eager_final_{}", agg.func_name),
-        *(agg.return_type).clone(),
-    );
-
-    // Modify final aggregate functions.
-    // final_aggregate_functions is currently a clone of eager aggregation.
-    modify_final_aggregate_function(agg, old_index);
-    // final_aggregate_functions is a final aggregation now.
-    aggr_function.index = new_index;
-
-    let mut success = false;
-
-    // Modify the eval scalars of all aggregate functions.
-    for scalar_item in eval_scalar_items {
-        if let ScalarExpr::BoundColumnRef(column) = &mut scalar_item.scalar {
-            if column.column.index != old_index {
-                continue;
-            }
-            // If it's already a column, we can just update the column_binding index
-            let column_binding = &mut column.column;
-            column_binding.index = new_index;
-
-            if agg.func_name == "count" {
-                column_binding.data_type = Box::new(UInt64Type::data_type().wrap_nullable());
-                scalar_item.scalar = wrap_cast(&scalar_item.scalar, &UInt64Type::data_type());
-            }
-            success = true;
+            column: ColumnBindingBuilder::new(
+                "_eager".to_string(),
+                old_index,
+                agg.return_type.clone(),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        if agg.args.is_empty() {
+            agg.args.push(agg_func);
         } else {
-            // Otherwise, we need to replace the column index recursively.
-            scalar_item.scalar.replace_column(old_index, new_index)?;
+            agg.args[0] = agg_func;
         }
     }
-    Ok((success, old_index, new_index))
+
+    fn create_eager_count_multiply_scalar_item(
+        metadata: &MetadataRef,
+        input: &EagerInput,
+        aggregate_function: &mut AggregateFunction,
+        eager_count_index: Symbol,
+    ) -> Result<ScalarItem, ErrorCode> {
+        let new_index = metadata.write().add_derived_column(
+            format!("{} * _eager_count", aggregate_function.display_name),
+            aggregate_function.args[0].data_type()?,
+        );
+
+        let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
+            let mut scalar_idx = input.extra_eval_scalar.items.len();
+            for (idx, eval_scalar) in input.extra_eval_scalar.items.iter().enumerate() {
+                if eval_scalar.index == column.column.index {
+                    scalar_idx = idx;
+                }
+            }
+            if scalar_idx != input.extra_eval_scalar.items.len() {
+                input.extra_eval_scalar.items[scalar_idx].scalar.clone()
+            } else {
+                aggregate_function.args[0].clone()
+            }
+        } else {
+            unreachable!()
+        };
+
+        let new_scalar_item = ScalarItem {
+            scalar: ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "multiply".to_string(),
+                params: vec![],
+                arguments: vec![
+                    new_scalar,
+                    wrap_cast(
+                        &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: ColumnBindingBuilder::new(
+                                "_eager_count".to_string(),
+                                eager_count_index,
+                                Box::new(DataType::Nullable(Box::new(DataType::Number(
+                                    NumberDataType::UInt64,
+                                )))),
+                                Visibility::Visible,
+                            )
+                            .build(),
+                        }),
+                        &DataType::Number(NumberDataType::UInt64),
+                    ),
+                ],
+            }),
+            index: new_index,
+        };
+        if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
+            column.column.index = new_index;
+            column.column.data_type = Box::new(new_scalar_item.scalar.data_type()?);
+        }
+        Ok(new_scalar_item)
+    }
 }
 
-fn create_eager_count_multiply_scalar_item(
-    aggregate_function: &mut AggregateFunction,
-    eager_count_index: Symbol,
-    extra_eval_scalar: &EvalScalar,
-    metadata: &MetadataRef,
-) -> Result<ScalarItem, ErrorCode> {
-    let new_index = metadata.write().add_derived_column(
-        format!("{} * _eager_count", aggregate_function.display_name),
-        aggregate_function.args[0].data_type()?,
-    );
+struct AggregateOutputRewrite {
+    binding: EagerOutputRewrite,
+    rewritten_in_eval: bool,
+}
 
-    let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
-        let mut scalar_idx = extra_eval_scalar.items.len();
-        for (idx, eval_scalar) in extra_eval_scalar.items.iter().enumerate() {
-            if eval_scalar.index == column.column.index {
-                scalar_idx = idx;
-            }
-        }
-        if scalar_idx != extra_eval_scalar.items.len() {
-            extra_eval_scalar.items[scalar_idx].scalar.clone()
-        } else {
-            aggregate_function.args[0].clone()
-        }
-    } else {
-        unreachable!()
-    };
+#[derive(Clone, Copy, Debug)]
+struct EagerOutputRewrite {
+    source_side: Side,
+    original_index: Symbol,
+    rewritten_index: Symbol,
+}
 
-    let new_scalar_item = ScalarItem {
-        scalar: ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "multiply".to_string(),
-            params: vec![],
-            arguments: vec![
-                new_scalar,
-                wrap_cast(
-                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: ColumnBindingBuilder::new(
-                            "_eager_count".to_string(),
-                            eager_count_index,
-                            Box::new(DataType::Nullable(Box::new(DataType::Number(
-                                NumberDataType::UInt64,
-                            )))),
-                            Visibility::Visible,
-                        )
-                        .build(),
-                    }),
-                    &DataType::Number(NumberDataType::UInt64),
-                ),
-            ],
-        }),
-        index: new_index,
-    };
-    if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
-        column.column.index = new_index;
-        column.column.data_type = Box::new(new_scalar_item.scalar.data_type()?);
+#[derive(Default)]
+struct EagerOutputRewriteMap {
+    rewrites: Vec<EagerOutputRewrite>,
+}
+
+impl EagerOutputRewriteMap {
+    fn record(&mut self, rewrite: EagerOutputRewrite) {
+        self.rewrites.push(rewrite);
     }
-    Ok(new_scalar_item)
+
+    fn source_side(&self, index: Symbol) -> Option<Side> {
+        self.rewrites.iter().find_map(|rewrite| {
+            ((rewrite.original_index == index) || (rewrite.rewritten_index == index))
+                .then_some(rewrite.source_side)
+        })
+    }
 }
 
 impl Side {
@@ -1133,20 +1297,6 @@ impl<T> Pair<T> {
     where F: FnMut(Side, &mut T) {
         f(Side::Left, &mut self.left);
         f(Side::Right, &mut self.right);
-    }
-
-    fn try_for_each<F, E>(&self, mut f: F) -> Result<(), E>
-    where F: FnMut(Side, &T) -> Result<(), E> {
-        f(Side::Left, &self.left)?;
-        f(Side::Right, &self.right)?;
-        Ok(())
-    }
-
-    fn try_for_each_mut<F, E>(&mut self, mut f: F) -> Result<(), E>
-    where F: FnMut(Side, &mut T) -> Result<(), E> {
-        f(Side::Left, &mut self.left)?;
-        f(Side::Right, &mut self.right)?;
-        Ok(())
     }
 }
 
