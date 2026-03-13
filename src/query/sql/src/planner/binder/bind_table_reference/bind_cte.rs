@@ -72,9 +72,7 @@ impl Binder {
                 .collect();
 
             let logical_recursive_cte_id = if with.recursive {
-                let logical_recursive_cte_id = self.next_logical_recursive_cte_id;
-                self.next_logical_recursive_cte_id += 1;
-                Some(logical_recursive_cte_id)
+                Some(self.metadata.write().allocate_logical_recursive_cte_id())
             } else {
                 None
             };

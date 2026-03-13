@@ -98,7 +98,6 @@ pub struct Binder {
     /// Name of the recursive CTE whose recursive branch is currently being bound.
     /// Only that CTE should treat self references as `RecursiveCteScan`.
     pub bind_recursive_cte: Option<String>,
-    pub next_logical_recursive_cte_id: u32,
     pub m_cte_table_name: HashMap<String, String>,
 
     pub enable_result_cache: bool,
@@ -126,7 +125,6 @@ impl Binder {
             metadata,
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: None,
-            next_logical_recursive_cte_id: 0,
             m_cte_table_name: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
