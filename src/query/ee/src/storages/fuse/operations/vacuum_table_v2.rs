@@ -22,13 +22,11 @@ use chrono::DateTime;
 use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::RetentionPolicy;
@@ -43,7 +41,6 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use log::info;
-use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
 use uuid::Uuid;
@@ -72,9 +69,6 @@ pub async fn do_vacuum2(
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
         return Ok(vec![]);
     };
-
-    // Process snapshot refs (branches and tags) before main vacuum
-    let mut ref_info = process_snapshot_refs(fuse_table, &ctx).await?;
 
     let start = std::time::Instant::now();
     let retention_policy = fuse_table.get_data_retention_policy(ctx.as_ref())?;
@@ -172,7 +166,7 @@ pub async fn do_vacuum2(
         slice_summary(&snapshots_before_lvt)
     ));
 
-    let Some((gc_root, snapshots_to_gc, mut gc_root_meta_ts)) = select_gc_root(
+    let Some((gc_root, snapshots_to_gc, gc_root_meta_ts)) = select_gc_root(
         &ctx,
         fuse_table,
         &snapshots_before_lvt,
@@ -195,23 +189,7 @@ pub async fn do_vacuum2(
         .await?;
     }
 
-    // After set_lvt, check for newly created refs to protect their snapshots
-    // This handles the race condition where a branch is created between initial scan and set_lvt
-    let new_refs_info = process_new_refs(fuse_table, &ctx).await?;
-    if !new_refs_info.ref_gc_roots.is_empty() {
-        ref_info.merge(new_refs_info);
-    }
-
-    // Use the oldest gc_root_meta_ts between main branch and refs
-    if let Some(ref_ts) = ref_info.gc_root_meta_ts {
-        gc_root_meta_ts = gc_root_meta_ts.min(ref_ts);
-    }
-    let gc_root_timestamp = ref_info
-        .gc_root_timestamp
-        .into_iter()
-        .chain(gc_root.timestamp)
-        .min()
-        .unwrap();
+    let gc_root_timestamp = gc_root.timestamp.unwrap();
     ctx.set_status_info(&format!(
         "Selected gc_root for table {}, elapsed: {:?}, gc_root: {:?}, snapshots_to_gc: {:?}",
         table_info.desc,
@@ -220,12 +198,11 @@ pub async fn do_vacuum2(
         slice_summary(&snapshots_to_gc)
     ));
 
-    let gc_root_segments: HashSet<_> = gc_root
+    let gc_root_segments = gc_root
         .segments
         .iter()
-        .chain(ref_info.ref_gc_roots.iter().flat_map(|r| r.segments.iter()))
-        .map(|(path, _)| path.clone())
-        .collect();
+        .map(|(path, _)| path)
+        .collect::<HashSet<_>>();
     let segments_before_gc_root = fuse_table
         .list_files_until_timestamp(
             fuse_table
@@ -278,17 +255,6 @@ pub async fn do_vacuum2(
     for segment in segments {
         gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
     }
-
-    // Collect blocks from ref gc_roots
-    for ref_gc_root in ref_info.ref_gc_roots {
-        let ref_segments = segments_io
-            .read_segments::<Arc<CompactSegmentInfo>>(&ref_gc_root.segments, false)
-            .await?;
-        for segment in ref_segments {
-            gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
-        }
-    }
-
     ctx.set_status_info(&format!(
         "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",
         table_info.desc,
@@ -401,18 +367,26 @@ pub async fn do_vacuum2(
     let op = Files::create(ctx.clone(), fuse_table.get_operator());
     op.remove_file_in_batch(&snapshots_to_gc).await?;
 
+    // Legacy branch/tag refs were removed without compatibility guarantees.
+    // Vacuum2 cleans up the old ref snapshot prefix opportunistically, and the
+    // operation is idempotent even if the prefix is already absent.
+    let legacy_ref_dir = fuse_table
+        .meta_location_generator()
+        .ref_snapshot_location_prefix();
+    let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
+
     let files_to_gc: Vec<_> = subject_files_to_gc
         .into_iter()
         .chain(snapshots_to_gc.into_iter())
         .chain(indexes_to_gc.into_iter())
-        .chain(ref_info.files_to_gc.into_iter())
         .collect();
     ctx.set_status_info(&format!(
         "Removed files for table {}, elapsed: {:?}, files_to_gc: {:?}",
         table_info.desc,
         start.elapsed(),
-        slice_summary(&files_to_gc)
+        slice_summary(&files_to_gc),
     ));
+
     Ok(files_to_gc)
 }
 
@@ -523,11 +497,9 @@ async fn select_gc_root(
             info!("anchor has no prev_snapshot_id, stop vacuuming");
             return Ok(None);
         };
-        let gc_root_path = fuse_table.meta_location_generator().gen_snapshot_location(
-            None,
-            &gc_root_id,
-            gc_root_ver,
-        )?;
+        let gc_root_path = fuse_table
+            .meta_location_generator()
+            .gen_snapshot_location(&gc_root_id, gc_root_ver)?;
         if !is_uuid_v7(&gc_root_id) {
             info!("gc_root {} is not v7", gc_root_path);
             return Ok(None);
@@ -613,334 +585,5 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
         )
     } else {
         format!("{:?}", s)
-    }
-}
-
-/// Result of vacuum processing for table refs (branches and tags)
-#[derive(Default)]
-struct RefVacuumInfo {
-    /// GC root snapshots from refs (to protect their segments and blocks)
-    ref_gc_roots: Vec<Arc<TableSnapshot>>,
-    /// The oldest gc_root_meta_ts among all refs
-    gc_root_meta_ts: Option<DateTime<Utc>>,
-    /// The oldest gc_root_ts among all refs
-    gc_root_timestamp: Option<DateTime<Utc>>,
-    /// The files(include snapshot and expired refs' dir) to be cleaned up
-    files_to_gc: Vec<String>,
-}
-
-impl RefVacuumInfo {
-    fn merge(&mut self, other: RefVacuumInfo) {
-        self.ref_gc_roots.extend(other.ref_gc_roots);
-        if let Some(other_ts) = other.gc_root_meta_ts {
-            self.gc_root_meta_ts = Some(
-                self.gc_root_meta_ts
-                    .map_or(other_ts, |cur| cur.min(other_ts)),
-            );
-        }
-        if let Some(other_ts) = other.gc_root_timestamp {
-            self.gc_root_timestamp = Some(
-                self.gc_root_timestamp
-                    .map_or(other_ts, |cur| cur.min(other_ts)),
-            );
-        }
-        self.files_to_gc.extend(other.files_to_gc);
-    }
-}
-
-#[async_backtrace::framed]
-async fn update_gc_root_times(
-    fuse_table: &FuseTable,
-    gc_root_location: &str,
-    gc_root_snapshot_ts: Option<DateTime<Utc>>,
-    gc_root_meta_ts: &mut Option<DateTime<Utc>>,
-    gc_root_timestamp: &mut Option<DateTime<Utc>>,
-) -> Result<()> {
-    let meta = fuse_table.get_operator_ref().stat(gc_root_location).await?;
-    let meta_ts = meta.last_modified().ok_or_else(|| {
-        ErrorCode::StorageOther(format!(
-            "Failed to get `last_modified` metadata of snapshot '{}'",
-            gc_root_location
-        ))
-    })?;
-    *gc_root_meta_ts = Some(gc_root_meta_ts.map_or(meta_ts, |cur| cur.min(meta_ts)));
-
-    let gc_root_ts = gc_root_snapshot_ts.unwrap();
-    *gc_root_timestamp = Some(gc_root_timestamp.map_or(gc_root_ts, |cur| cur.min(gc_root_ts)));
-    Ok(())
-}
-
-/// Process newly created refs after set_lvt to protect their snapshots
-#[async_backtrace::framed]
-async fn process_new_refs(
-    fuse_table: &FuseTable,
-    ctx: &Arc<dyn TableContext>,
-) -> Result<RefVacuumInfo> {
-    // Refresh table to get latest refs
-    let table_info = fuse_table.get_table_info();
-    // Record original ref IDs to detect newly created refs after set_lvt
-    let original_ref_ids: HashSet<u64> = table_info.meta.refs.values().map(|r| r.id).collect();
-    let refreshed_table = fuse_table.refresh(ctx.as_ref()).await?;
-    let refreshed_table_info = refreshed_table.get_table_info();
-    // Find newly created refs
-    let new_refs: Vec<_> = refreshed_table_info
-        .meta
-        .refs
-        .iter()
-        .filter(|(_, snapshot_ref)| !original_ref_ids.contains(&snapshot_ref.id))
-        .collect();
-
-    if new_refs.is_empty() {
-        return Ok(RefVacuumInfo::default());
-    }
-
-    info!(
-        "Found {} new refs created during vacuum for table {}: {:?}",
-        new_refs.len(),
-        table_info.desc,
-        new_refs.iter().map(|(name, _)| name).collect::<Vec<_>>()
-    );
-
-    let op = fuse_table.get_operator();
-    let mut ref_gc_roots = Vec::new();
-    let mut gc_root_meta_ts: Option<DateTime<Utc>> = None;
-    let mut gc_root_timestamp: Option<DateTime<Utc>> = None;
-    // Process each new ref
-    for (ref_name, snapshot_ref) in new_refs {
-        match snapshot_ref.typ {
-            SnapshotRefType::Tag => {
-                let (gc_root_snapshot, _) =
-                    SnapshotsIO::read_snapshot(snapshot_ref.loc.clone(), op.clone(), true).await?;
-                ref_gc_roots.push(gc_root_snapshot);
-            }
-            SnapshotRefType::Branch => {
-                let branch_id = snapshot_ref.id;
-                let gc_root_snap = fuse_table
-                    .find_earliest_snapshot_via_history(ref_name, snapshot_ref)
-                    .await?;
-                let gc_root_location = fuse_table.meta_location_generator().gen_snapshot_location(
-                    Some(branch_id),
-                    &gc_root_snap.snapshot_id,
-                    gc_root_snap.format_version,
-                )?;
-                if snapshot_ref.loc != gc_root_location {
-                    // Only collect snapshot timestamps when the GC root is NOT the head location.
-                    update_gc_root_times(
-                        fuse_table,
-                        &gc_root_location,
-                        gc_root_snap.timestamp,
-                        &mut gc_root_meta_ts,
-                        &mut gc_root_timestamp,
-                    )
-                    .await?;
-                }
-
-                ref_gc_roots.push(gc_root_snap);
-            }
-        }
-    }
-    Ok(RefVacuumInfo {
-        ref_gc_roots,
-        gc_root_meta_ts,
-        gc_root_timestamp,
-        files_to_gc: vec![],
-    })
-}
-
-/// Process snapshot refs (branches and tags) for vacuum
-#[async_backtrace::framed]
-async fn process_snapshot_refs(
-    fuse_table: &FuseTable,
-    ctx: &Arc<dyn TableContext>,
-) -> Result<RefVacuumInfo> {
-    let start = std::time::Instant::now();
-    let table_info = fuse_table.get_table_info();
-    let mut files_to_gc = match fuse_table.cleanup_orphan_ref_dirs().await {
-        Ok(paths) => paths,
-        Err(e) => {
-            warn!(
-                "Failed to clean orphan refs for table {}: {}",
-                table_info.desc, e
-            );
-            Vec::new()
-        }
-    };
-    let op = fuse_table.get_operator();
-    // Refs that expired and should be cleaned up
-    let mut expired_refs = HashSet::new();
-    let mut expired_ref_names = Vec::new();
-    // Ref snapshot paths to be cleaned up
-    let mut ref_snapshots_to_gc = Vec::new();
-    let mut ref_gc_roots = Vec::new();
-    let mut gc_root_meta_ts: Option<DateTime<Utc>> = None;
-    let mut gc_root_timestamp: Option<DateTime<Utc>> = None;
-
-    let now = Utc::now();
-    let (retention_time, num_snapshots_to_keep) =
-        fuse_table.get_refs_retention_policy(ctx.as_ref(), now)?;
-    // Process active refs
-    for (ref_name, snapshot_ref) in table_info.meta.refs.iter() {
-        if snapshot_ref.expire_at.is_some_and(|v| v < now) {
-            expired_refs.insert(snapshot_ref.id);
-            expired_ref_names.push(ref_name);
-            continue;
-        }
-
-        match snapshot_ref.typ {
-            SnapshotRefType::Tag => {
-                // Tag: read head snapshot as gc root to protect its segments and blocks
-                let (gc_root_snapshot, _) =
-                    SnapshotsIO::read_snapshot(snapshot_ref.loc.clone(), op.clone(), true).await?;
-                ref_gc_roots.push(gc_root_snapshot);
-            }
-            SnapshotRefType::Branch => {
-                let branch_id = snapshot_ref.id;
-                let snapshots_before_retention = fuse_table
-                    .list_branch_snapshots_with_fallback(
-                        branch_id,
-                        &snapshot_ref.loc,
-                        retention_time,
-                        num_snapshots_to_keep,
-                    )
-                    .await?;
-
-                let mut snapshots_to_gc = Vec::new();
-                let (gc_root_location, gc_root_snap) = match process_branch_gc_root(
-                    fuse_table,
-                    branch_id,
-                    &snapshot_ref.loc,
-                    &snapshots_before_retention,
-                    &mut snapshots_to_gc,
-                )
-                .await?
-                {
-                    Some((location, sn)) => (location, sn),
-                    None => {
-                        // No gc_root found, use snapshot history to find earliest
-                        let earliest_snap = fuse_table
-                            .find_earliest_snapshot_via_history(ref_name, snapshot_ref)
-                            .await?;
-                        let location = fuse_table.meta_location_generator().gen_snapshot_location(
-                            Some(branch_id),
-                            &earliest_snap.snapshot_id,
-                            earliest_snap.format_version,
-                        )?;
-                        (location, earliest_snap)
-                    }
-                };
-
-                if snapshot_ref.loc != gc_root_location {
-                    // Only collect snapshot timestamps when the GC root is NOT the head location.
-                    update_gc_root_times(
-                        fuse_table,
-                        &gc_root_location,
-                        gc_root_snap.timestamp,
-                        &mut gc_root_meta_ts,
-                        &mut gc_root_timestamp,
-                    )
-                    .await?;
-                }
-
-                ref_gc_roots.push(gc_root_snap);
-                ref_snapshots_to_gc.extend(snapshots_to_gc);
-            }
-        }
-    }
-
-    if !expired_refs.is_empty() {
-        let start_update = std::time::Instant::now();
-        let expired_ref_dirs = fuse_table
-            .update_table_refs_meta(ctx, &expired_refs)
-            .await?;
-        files_to_gc.extend(expired_ref_dirs);
-        ctx.set_status_info(&format!(
-            "Updated table meta for table {}, elapsed: {:?}",
-            table_info.desc,
-            start_update.elapsed()
-        ));
-    }
-
-    // Step 3: Purge ref snapshots
-    if !ref_snapshots_to_gc.is_empty() {
-        let file_op = Files::create(ctx.clone(), op);
-        file_op.remove_file_in_batch(&ref_snapshots_to_gc).await?;
-    }
-
-    ctx.set_status_info(&format!(
-        "Processed snapshot refs for table {}, elapsed: {:?}, expire_refs: {}, ref_snapshots_to_gc: {}, ref_gc_root_meta_ts: {:?}",
-        table_info.desc,
-        start.elapsed(),
-        slice_summary(&expired_ref_names),
-        slice_summary(&ref_snapshots_to_gc),
-        gc_root_meta_ts
-    ));
-
-    files_to_gc.extend(ref_snapshots_to_gc.into_iter());
-    Ok(RefVacuumInfo {
-        ref_gc_roots,
-        gc_root_meta_ts,
-        gc_root_timestamp,
-        files_to_gc,
-    })
-}
-
-/// Process branch gc_root: find gc_root, collect snapshots to GC, and update collections
-#[async_backtrace::framed]
-async fn process_branch_gc_root(
-    fuse_table: &FuseTable,
-    branch_id: u64,
-    head: &str,
-    snapshots_before_retention: &[Entry],
-    ref_snapshots_to_gc: &mut Vec<String>,
-) -> Result<Option<(String, Arc<TableSnapshot>)>> {
-    if snapshots_before_retention.is_empty() {
-        return Ok(None);
-    }
-
-    let op = fuse_table.get_operator();
-    // Read the last snapshot (oldest one)
-    let last_snapshot_path = snapshots_before_retention.last().unwrap().path();
-    let (last_snapshot, _) =
-        SnapshotsIO::read_snapshot(last_snapshot_path.to_string(), op.clone(), false).await?;
-    // If last_snapshot_path is head, use head as gc_root and clean up all snapshots before retention
-    if last_snapshot_path == head {
-        // All snapshots before retention can be cleaned up, except the last one (head itself as gc_root)
-        let len = snapshots_before_retention.len();
-        for snapshot in snapshots_before_retention.iter().take(len - 1) {
-            ref_snapshots_to_gc.push(snapshot.path().to_owned());
-        }
-        return Ok(Some((head.to_string(), last_snapshot)));
-    }
-
-    // Get its prev_snapshot_id as gc_root
-    let Some((gc_root_id, gc_root_ver)) = last_snapshot.prev_snapshot_id else {
-        return Ok(None);
-    };
-    let gc_root_path = fuse_table.meta_location_generator().gen_snapshot_location(
-        Some(branch_id),
-        &gc_root_id,
-        gc_root_ver,
-    )?;
-
-    // Try to read gc_root snapshot
-    match SnapshotsIO::read_snapshot(gc_root_path.clone(), op, false).await {
-        Ok((gc_root_snap, _)) => {
-            // Collect snapshots_to_gc
-            let mut gc_candidates = Vec::with_capacity(snapshots_before_retention.len());
-            for snapshot in snapshots_before_retention.iter() {
-                gc_candidates.push(snapshot.path().to_owned());
-            }
-
-            // Find gc_root position in candidates
-            let gc_root_idx = gc_candidates.binary_search(&gc_root_path).ok();
-            let snapshots_to_gc = if let Some(idx) = gc_root_idx {
-                gc_candidates[..idx].to_vec()
-            } else {
-                return Ok(None);
-            };
-            ref_snapshots_to_gc.extend(snapshots_to_gc);
-            Ok(Some((gc_root_path, gc_root_snap)))
-        }
-        Err(_) => Ok(None),
     }
 }

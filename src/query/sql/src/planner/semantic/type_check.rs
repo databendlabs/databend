@@ -1049,13 +1049,14 @@ impl<'a> TypeChecker<'a> {
                         lambda,
                     },
             } => {
-                let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
+                let func_name = name.name.to_lowercase();
                 let func_name = func_name.as_str();
                 let uni_case_func_name = Ascii::new(func_name);
                 if !is_builtin_function(func_name)
                     && !Self::all_sugar_functions().contains(&uni_case_func_name)
                 {
-                    if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
+                    let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
+                    if let Some(udf) = self.resolve_udf(*span, &udf_name, args)? {
                         return Ok(udf);
                     }
 

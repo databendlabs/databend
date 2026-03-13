@@ -382,7 +382,7 @@ impl ReportContext {
                     }
 
                     let mut table_info = table.table().get_table_info().clone();
-                    let schema = table.table().schema();
+                    let schema = table_info.schema();
 
                     if table_info.engine() == VIEW_ENGINE || table_info.engine() == STREAM_ENGINE {
                         return Err(ErrorCode::Unimplemented(

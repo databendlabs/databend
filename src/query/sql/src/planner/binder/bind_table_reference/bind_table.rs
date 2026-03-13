@@ -33,6 +33,7 @@ use databend_storages_common_table_meta::table::get_change_type;
 use crate::BindContext;
 use crate::binder::Binder;
 use crate::binder::util::TableIdentifier;
+use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 impl Binder {
     /// Bind a base table.
@@ -60,6 +61,15 @@ impl Binder {
         let table_name = table_identifier.table_name();
         let branch_name = table_identifier.branch_name();
         let table_name_alias = table_identifier.table_name_alias();
+
+        if let Some(branch_name) = branch_name.as_ref() {
+            // Keep parsing `<db>.<table>/<branch>` so the upcoming redesign can
+            // reuse the syntax without reviving the legacy implementation.
+            return Err(legacy_table_ref_removed_error(format!(
+                "table branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
+            ))
+            .set_span(*span));
+        }
 
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
             if cte_name == &table_name {

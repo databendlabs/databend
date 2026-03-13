@@ -111,7 +111,11 @@ impl Join for OuterLeftHashJoin {
                 .map(|x| x.data_type().clone())
                 .collect::<Vec<_>>();
 
-            let build_block = null_block(&types, data.num_rows());
+            let build_block = match null_block(&types, data.num_rows()) {
+                None => None,
+                Some(data_block) => Some(data_block.project(&self.desc.build_projection)),
+            };
+
             let probe_block = Some(data.project(&self.desc.probe_projection));
             let result_block = final_result_block(&self.desc, probe_block, build_block, num_rows);
             return Ok(Box::new(OneBlockJoinStream(Some(result_block))));

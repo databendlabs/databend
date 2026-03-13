@@ -717,11 +717,12 @@ impl TableContext for CtxDelegation {
     async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
         todo!()
     }
-    async fn get_table(
+    async fn get_table_with_branch(
         &self,
         _catalog: &str,
         _database: &str,
         _table: &str,
+        _branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
@@ -730,7 +731,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         _catalog: &str,
         _database: &str,

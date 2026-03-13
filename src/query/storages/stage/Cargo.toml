@@ -62,4 +62,4 @@ uuid = { workspace = true }
 workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "lance-encoding"]

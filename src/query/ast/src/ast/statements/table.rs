@@ -435,21 +435,6 @@ impl Display for AlterTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum SnapshotRefType {
-    Branch,
-    Tag,
-}
-
-impl Display for SnapshotRefType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SnapshotRefType::Branch => write!(f, "BRANCH"),
-            SnapshotRefType::Tag => write!(f, "TAG"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterTableAction {
     RenameTable {
         new_table: Identifier,
@@ -512,16 +497,23 @@ pub enum AlterTableAction {
     ModifyConnection {
         new_connection: BTreeMap<String, String>,
     },
-    CreateTableRef {
-        ref_type: SnapshotRefType,
-        ref_name: Identifier,
+    CreateTableBranch {
+        branch_name: Identifier,
         travel_point: Option<TimeTravelPoint>,
         #[drive(skip)]
         retain: Option<Duration>,
     },
-    DropTableRef {
-        ref_type: SnapshotRefType,
-        ref_name: Identifier,
+    CreateTableTag {
+        tag_name: Identifier,
+        travel_point: Option<TimeTravelPoint>,
+        #[drive(skip)]
+        retain: Option<Duration>,
+    },
+    DropTableBranch {
+        branch_name: Identifier,
+    },
+    DropTableTag {
+        tag_name: Identifier,
     },
 }
 
@@ -619,13 +611,12 @@ impl Display for AlterTableAction {
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
-            AlterTableAction::CreateTableRef {
-                ref_type,
-                ref_name,
+            AlterTableAction::CreateTableBranch {
+                branch_name,
                 travel_point,
                 retain,
             } => {
-                write!(f, "CREATE {ref_type} {ref_name}")?;
+                write!(f, "CREATE BRANCH {branch_name}")?;
                 if let Some(travel_point) = travel_point {
                     write!(f, " AT {travel_point}")?;
                 }
@@ -640,8 +631,31 @@ impl Display for AlterTableAction {
                     }
                 }
             }
-            AlterTableAction::DropTableRef { ref_type, ref_name } => {
-                write!(f, "DROP {ref_type} {ref_name}")?;
+            AlterTableAction::CreateTableTag {
+                tag_name,
+                travel_point,
+                retain,
+            } => {
+                write!(f, "CREATE TAG {tag_name}")?;
+                if let Some(travel_point) = travel_point {
+                    write!(f, " AT {travel_point}")?;
+                }
+                if let Some(retain) = retain {
+                    let days = Duration::from_secs(60 * 60 * 24);
+                    if retain >= &days {
+                        let days = retain.as_secs() / (60 * 60 * 24);
+                        write!(f, " RETAIN {days} DAYS ")?;
+                    } else {
+                        let seconds = retain.as_secs();
+                        write!(f, " RETAIN {seconds} SECONDS ")?;
+                    }
+                }
+            }
+            AlterTableAction::DropTableBranch { branch_name } => {
+                write!(f, "DROP BRANCH {branch_name}")?;
+            }
+            AlterTableAction::DropTableTag { tag_name } => {
+                write!(f, "DROP TAG {tag_name}")?;
             }
         };
         Ok(())

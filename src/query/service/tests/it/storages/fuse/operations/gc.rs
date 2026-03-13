@@ -85,11 +85,8 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> anyhow::Result<()> {
         let operator = fuse_table.get_operator();
         let location_gen = fuse_table.meta_location_generator();
         let orphan_snapshot_id = Uuid::new_v4();
-        let orphan_snapshot_location = location_gen.gen_snapshot_location(
-            None,
-            &orphan_snapshot_id,
-            TableSnapshot::VERSION,
-        )?;
+        let orphan_snapshot_location =
+            location_gen.gen_snapshot_location(&orphan_snapshot_id, TableSnapshot::VERSION)?;
         // orphan_snapshot is created by using `from_previous`, which guarantees
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
         let orphan_snapshot = TableSnapshot::try_from_previous(

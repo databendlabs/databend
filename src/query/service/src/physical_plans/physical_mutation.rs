@@ -162,7 +162,7 @@ impl IPhysicalPlan for Mutation {
 
         let tbl = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, &None, None)?;
+            .build_table_by_table_info(&self.table_info, None)?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
@@ -281,14 +281,20 @@ impl PhysicalPlanBuilder {
                 }
             }
         }
+        // Not-matched expressions are evaluated on the not-matched branch directly.
+        // That branch may bypass RowFetch, so these columns must be in the mutation input.
+        let mut unmatched_required = BTreeSet::new();
         for unmatched_evaluator in unmatched_evaluators {
             if let Some(condition) = &unmatched_evaluator.condition {
                 maybe_udfs.extend(condition.used_columns());
+                unmatched_required.extend(condition.used_columns());
             }
             for value in &unmatched_evaluator.values {
                 maybe_udfs.extend(value.used_columns());
+                unmatched_required.extend(value.used_columns());
             }
         }
+        required.extend(unmatched_required);
         for filter_value in direct_filter {
             maybe_udfs.extend(filter_value.used_columns());
         }
@@ -486,8 +492,10 @@ impl PhysicalPlanBuilder {
             );
 
         for item in unmatched_evaluators {
+            // The not-matched branch may bypass RowFetch (see RowFetch on MutationSplit),
+            // so expressions must be bound against the original mutation input schema.
             let filter = if let Some(filter_expr) = &item.condition {
-                Some(self.scalar_expr_to_remote_expr(filter_expr, output_schema.clone())?)
+                Some(self.scalar_expr_to_remote_expr(filter_expr, mutation_input_schema.clone())?)
             } else {
                 None
             };
@@ -495,8 +503,9 @@ impl PhysicalPlanBuilder {
             let mut values_exprs = Vec::<RemoteExpr>::with_capacity(item.values.len());
 
             for scalar_expr in &item.values {
-                values_exprs
-                    .push(self.scalar_expr_to_remote_expr(scalar_expr, output_schema.clone())?)
+                values_exprs.push(
+                    self.scalar_expr_to_remote_expr(scalar_expr, mutation_input_schema.clone())?,
+                )
             }
 
             unmatched.push((item.source_schema.clone(), filter, values_exprs))

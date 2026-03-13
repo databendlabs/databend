@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_sql::plans::CreateTableRefPlan;
+use databend_common_sql::plans::DropTableTagPlan;
 use databend_common_storages_fuse::TableContext;
 use databend_enterprise_table_ref_handler::get_table_ref_handler;
 
@@ -25,21 +25,21 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-pub struct CreateTableRefInterpreter {
+pub struct DropTableTagInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateTableRefPlan,
+    plan: DropTableTagPlan,
 }
 
-impl CreateTableRefInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTableRefPlan) -> Result<Self> {
-        Ok(CreateTableRefInterpreter { ctx, plan })
+impl DropTableTagInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTableTagPlan) -> Result<Self> {
+        Ok(DropTableTagInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateTableRefInterpreter {
+impl Interpreter for DropTableTagInterpreter {
     fn name(&self) -> &str {
-        "CreateTableRefInterpreter"
+        "DropTableTagInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -53,7 +53,7 @@ impl Interpreter for CreateTableRefInterpreter {
 
         let handler = get_table_ref_handler();
         handler
-            .do_create_table_ref(self.ctx.clone(), &self.plan)
+            .do_drop_table_tag(self.ctx.clone(), &self.plan)
             .await?;
 
         Ok(PipelineBuildResult::create())

@@ -850,11 +850,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_table(
+    async fn get_table_with_branch(
         &self,
         _catalog: &str,
         database: &str,
         table: &str,
+        _branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.ctx.get_tenant();
         let db = database.to_string();
@@ -888,7 +889,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
