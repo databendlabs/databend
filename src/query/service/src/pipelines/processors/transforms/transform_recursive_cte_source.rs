@@ -764,7 +764,7 @@ mod tests {
         assert!(memory_table.begin_cache_population());
 
         let waiter_table = table.clone();
-        let waiter = tokio::spawn(async move {
+        let waiter = databend_common_base::runtime::spawn(async move {
             let waiter_memory_table = waiter_table
                 .as_ref()
                 .as_any()
