@@ -61,7 +61,6 @@ impl FromToProto for mt::DatabaseMeta {
             drop_on: self.drop_on.to_pb_opt()?,
             gc_in_progress: self.gc_in_progress,
             comment: self.comment.clone(),
-            shared_by: vec![],
             from_share: None,
             using_share_endpoint: None,
             from_share_db_id: None,

@@ -1128,6 +1128,7 @@ fn test_statement_error() {
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
         r#"show columns from db1.t from ctl.db"#,
+        r#"alter table t1 create branch from_dev at (branch => dev)"#,
         r#"SELECT c a as FROM t"#,
         r#"SELECT c a as b FROM t"#,
         r#"SELECT top -1 c a as b FROM t"#,

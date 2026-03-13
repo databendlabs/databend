@@ -100,7 +100,6 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::schema::BranchInfo;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
@@ -220,7 +219,6 @@ impl QueryContext {
     pub fn build_table_by_table_info(
         &self,
         table_info: &TableInfo,
-        branch_info: &Option<BranchInfo>,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog_name = table_info.catalog();
@@ -232,7 +230,7 @@ impl QueryContext {
             ))?;
 
         let is_default = catalog.info().catalog_type() == CatalogType::Default;
-        let mut table = match (table_args, is_default) {
+        match (table_args, is_default) {
             (Some(table_args), true) => {
                 let default_catalog = self
                     .shared
@@ -280,13 +278,7 @@ impl QueryContext {
                 }
             }
             (None, false) => catalog.get_table_by_info(table_info),
-        }?;
-
-        if let Some(branch_info) = branch_info {
-            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            table = fuse_table.with_branch_info(branch_info.clone())?;
         }
-        Ok(table)
     }
 
     // Build external table by stage info, this is used in:
@@ -526,6 +518,16 @@ impl QueryContext {
         branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        if branch.is_some() {
+            // Legacy experimental table refs were removed. The parser still accepts
+            // `<db>.<table>/<branch>` so the upcoming redesign can reuse the syntax,
+            // but any remaining runtime entry point should still return a user-facing
+            // error instead of looking like an internal server bug.
+            return Err(ErrorCode::Unimplemented(
+                "Legacy experimental table refs were removed: table branch references are reserved for a future redesign and are intentionally rejected.",
+            ));
+        }
+
         let table = self
             .shared
             .get_table(catalog, database, table, max_batch_size)
@@ -547,27 +549,7 @@ impl QueryContext {
             }
             _ => table,
         };
-
-        if let Some(branch) = branch {
-            if !self
-                .get_settings()
-                .get_enable_experimental_table_ref()
-                .unwrap_or_default()
-            {
-                return Err(ErrorCode::Unimplemented(
-                    "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
-                ));
-            }
-            // TODO(zhyass): Branch are currently not allowed inside a transaction.
-            if self.txn_mgr().lock().is_active() {
-                return Err(ErrorCode::StorageUnsupported(
-                    "Branch operations are not supported within an active transaction",
-                ));
-            }
-            table.with_branch(branch)
-        } else {
-            Ok(table)
-        }
+        Ok(table)
     }
 
     pub fn mark_unload_callbacked(&self) -> bool {
@@ -864,11 +846,9 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(extend_info) => self.build_table_by_table_info(
-                &extend_info.table_info,
-                &extend_info.branch_info,
-                plan.tbl_args.clone(),
-            ),
+            DataSourceInfo::TableSource(table_info) => {
+                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
+            }
             DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
             }
@@ -1477,12 +1457,12 @@ impl TableContext for QueryContext {
     /// ```sql
     /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
     /// ```
-    #[async_backtrace::framed]
-    async fn get_table(
+    async fn get_table_with_branch(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
         // Queries to non-internal system_history databases require license checks to be enabled.
         if database.eq_ignore_ascii_case("system_history")
@@ -1499,8 +1479,7 @@ impl TableContext for QueryContext {
             }
         }
 
-        let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
-        self.get_table_from_shared(catalog, database, table, None, batch_size)
+        self.get_table_from_shared(catalog, database, table, branch, None)
             .await
     }
 
@@ -1509,7 +1488,7 @@ impl TableContext for QueryContext {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_with_batch(
+    async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
@@ -1882,13 +1861,12 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
-        let table_unique_id = table.get_unique_id();
 
         let cached_table_timestamps = {
             self.shared
                 .table_meta_timestamps
                 .lock()
-                .get(&table_unique_id)
+                .get(&table_id)
                 .copied()
         };
 
@@ -1940,7 +1918,7 @@ impl TableContext for QueryContext {
 
             if txn_mgr.is_active() {
                 // Transaction Timestamp Tracking:
-                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_unique_id);
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
 
                 if let Some(existing_ts) = existing_timestamp {
                     // Defensively check that:
@@ -1958,7 +1936,7 @@ impl TableContext for QueryContext {
                     // When a table is first mutated within an active transaction, record its
                     // segment_block_timestamp as the transaction's begin timestamp for this table.
                     txn_mgr.set_table_txn_begin_timestamp(
-                        table_unique_id,
+                        table_id,
                         table_meta_timestamps.segment_block_timestamp,
                     );
                 }
@@ -1967,7 +1945,7 @@ impl TableContext for QueryContext {
 
         {
             let mut cache = self.shared.table_meta_timestamps.lock();
-            cache.insert(table_unique_id, table_meta_timestamps);
+            cache.insert(table_id, table_meta_timestamps);
         }
 
         Ok(table_meta_timestamps)

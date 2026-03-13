@@ -39,7 +39,6 @@ pub trait SnapshotHistoryReader {
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
-        branch_id: Option<u64>,
     ) -> TableSnapshotStream;
 }
 
@@ -49,16 +48,10 @@ impl SnapshotHistoryReader for TableSnapshotReader {
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
-        branch_id: Option<u64>,
     ) -> TableSnapshotStream {
         let stream = stream::try_unfold(
-            (
-                self,
-                location_gen,
-                branch_id,
-                Some((location, format_version)),
-            ),
-            |(reader, loc_gen, branch_id, next)| async move {
+            (self, location_gen, Some((location, format_version))),
+            |(reader, loc_gen, next)| async move {
                 if let Some((loc, ver)) = next {
                     let params = LoadParams {
                         location: loc,
@@ -82,13 +75,12 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                     let next = snapshot
                         .prev_snapshot_id
                         .map(|(prev_id, prev_ver)| {
-                            let next_loc =
-                                loc_gen.gen_snapshot_location(branch_id, &prev_id, prev_ver);
+                            let next_loc = loc_gen.gen_snapshot_location(&prev_id, prev_ver);
                             next_loc.map(|loc| (loc, prev_ver))
                         })
                         .transpose()?;
 
-                    Ok(Some(((snapshot, ver), (reader, loc_gen, branch_id, next))))
+                    Ok(Some(((snapshot, ver), (reader, loc_gen, next))))
                 } else {
                     Ok(None)
                 }

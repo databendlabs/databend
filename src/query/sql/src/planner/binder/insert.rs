@@ -121,12 +121,11 @@ impl Binder {
 
         let table = self
             .ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &catalog_name,
                 &database_name,
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;

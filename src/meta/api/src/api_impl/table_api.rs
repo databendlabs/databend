@@ -354,7 +354,6 @@ where
                                 table_id_seq: None,
                                 db_id: *seq_db_id.data,
                                 new_table: false,
-                                spec_vec: None,
                                 prev_table_id: None,
                                 orphan_table_name: None,
                             });
@@ -514,7 +513,6 @@ where
                         table_id_seq,
                         db_id: *seq_db_id.data,
                         new_table: dbid_tbname_seq == 0,
-                        spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
                     });
@@ -1211,17 +1209,12 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for ((req, _), (tb_meta_seq, table_meta)) in
-            update_table_metas.iter_mut().zip(tb_meta_vec.iter())
-        {
+        for ((req, _), (tb_meta_seq, _)) in update_table_metas.iter_mut().zip(tb_meta_vec.iter()) {
             let tbid = TableId {
                 table_id: req.table_id,
             };
-            // `update_table_meta` MUST NOT modify `shared_by` field
-            let table_meta = table_meta.as_ref().unwrap();
 
-            let mut new_table_meta = req.new_table_meta.clone();
-            new_table_meta.shared_by = table_meta.shared_by.clone();
+            let new_table_meta = req.new_table_meta.clone();
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));

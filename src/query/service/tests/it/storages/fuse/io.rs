@@ -31,7 +31,7 @@ fn test_meta_locations() -> anyhow::Result<()> {
     let seg_loc = locs.gen_segment_info_location(test_table_meta_timestamps, false);
     assert!(seg_loc.starts_with(test_prefix));
     let uuid = Uuid::new_v4();
-    let snapshot_loc = locs.gen_snapshot_location(None, &uuid, TableSnapshot::VERSION)?;
+    let snapshot_loc = locs.gen_snapshot_location(&uuid, TableSnapshot::VERSION)?;
     assert!(snapshot_loc.starts_with(test_prefix));
     Ok(())
 }
