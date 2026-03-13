@@ -4924,49 +4924,48 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    // NOTE: `AT (BRANCH|TAG => ...)` travel-point syntax is only supported when
-    // creating a branch/tag via `ALTER TABLE ... CREATE`. It is intentionally not
-    // available for SELECT or other query statements, so keep the parsing rule scoped
-    // here to avoid implying broader support.
-    let create_snapshot_ref = map(
+    let create_table_branch = map(
         rule! {
-            CREATE ~ ( BRANCH | TAG ) ~ #ident ~ ( AT ~ ^(#travel_point | #at_table_ref) )? ~ (RETAIN ~ #literal_duration)?
+            CREATE ~ BRANCH ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
         },
-        |(_, token, ref_name, opt_travel_point, retain)| {
-            let ref_type = match token.kind {
-                TokenKind::BRANCH => SnapshotRefType::Branch,
-                TokenKind::TAG => SnapshotRefType::Tag,
-                _ => unreachable!(),
-            };
-
-            AlterTableAction::CreateTableRef {
-                ref_type,
-                ref_name,
-                travel_point: opt_travel_point.map(|(_, point)| point),
-                retain: retain.map(|(_, reatin)| reatin),
-            }
+        |(_, _, branch_name, opt_travel_point, retain)| AlterTableAction::CreateTableBranch {
+            branch_name,
+            travel_point: opt_travel_point.map(|(_, point)| point),
+            retain: retain.map(|(_, retain)| retain),
         },
     );
 
-    let drop_snapshot_ref = map(
+    let create_table_tag = map(
         rule! {
-            DROP ~ ( BRANCH | TAG ) ~ #ident
+            CREATE ~ TAG ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
         },
-        |(_, token, ref_name)| {
-            let ref_type = match token.kind {
-                TokenKind::BRANCH => SnapshotRefType::Branch,
-                TokenKind::TAG => SnapshotRefType::Tag,
-                _ => unreachable!(),
-            };
+        |(_, _, tag_name, opt_travel_point, retain)| AlterTableAction::CreateTableTag {
+            tag_name,
+            travel_point: opt_travel_point.map(|(_, point)| point),
+            retain: retain.map(|(_, retain)| retain),
+        },
+    );
 
-            AlterTableAction::DropTableRef { ref_type, ref_name }
+    let drop_table_branch = map(
+        rule! {
+            DROP ~ BRANCH ~ #ident
         },
+        |(_, _, branch_name)| AlterTableAction::DropTableBranch { branch_name },
+    );
+
+    let drop_table_tag = map(
+        rule! {
+            DROP ~ TAG ~ #ident
+        },
+        |(_, _, tag_name)| AlterTableAction::DropTableTag { tag_name },
     );
 
     // The action list is split to avoid the trait bound limit in `alt(...)`.
     let alter_table_action_primary = rule!(
-        #create_snapshot_ref
-            | #drop_snapshot_ref
+        #create_table_branch
+            | #create_table_tag
+            | #drop_table_branch
+            | #drop_table_tag
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint

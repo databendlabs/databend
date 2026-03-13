@@ -20,7 +20,6 @@ use chrono::Utc;
 use databend_common_expression as ce;
 use databend_common_meta_app::schema as mt;
 use fastrace::func_name;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -51,7 +50,6 @@ fn test_decode_v151_table_meta() -> anyhow::Result<()> {
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: None,
         column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
@@ -61,7 +59,6 @@ fn test_decode_v151_table_meta() -> anyhow::Result<()> {
         }),
         indexes: BTreeMap::default(),
         constraints: BTreeMap::default(),
-        refs: BTreeMap::default(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v151.as_slice(), 151, want())?;

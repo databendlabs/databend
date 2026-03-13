@@ -34,15 +34,12 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v163_snapshot_ref() -> anyhow::Result<()> {
-    let table_meta_v163 = vec![
-        10, 7, 160, 6, 163, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+fn test_decode_v168_table_meta() -> anyhow::Result<()> {
+    let table_meta_v168 = vec![
+        10, 7, 160, 6, 168, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
         56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49,
-        49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 163,
-        1, 168, 6, 24, 226, 1, 1, 1, 170, 2, 49, 10, 8, 98, 114, 97, 110, 99, 104, 95, 49, 18, 37,
-        8, 1, 18, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57,
-        32, 85, 84, 67, 34, 1, 97, 160, 6, 163, 1, 168, 6, 24, 170, 2, 23, 10, 5, 116, 97, 103, 95,
-        49, 18, 14, 8, 2, 24, 1, 34, 1, 99, 160, 6, 163, 1, 168, 6, 24, 160, 6, 163, 1, 168, 6, 24,
+        49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 168,
+        1, 168, 6, 24, 160, 6, 168, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableMeta {
@@ -70,10 +67,34 @@ fn test_decode_v163_snapshot_ref() -> anyhow::Result<()> {
         constraints: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
-
-    common::test_load_old(func_name!(), table_meta_v163.as_slice(), 163, want())?;
+    common::test_load_old(func_name!(), table_meta_v168.as_slice(), 168, want())?;
 
     Ok(())
+}
+
+#[test]
+fn test_decode_v168_database_meta() -> anyhow::Result<()> {
+    let database_meta_v168: Vec<u8> = vec![
+        34, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 42, 2, 52, 52, 50, 10, 10, 3, 97, 98,
+        99, 18, 3, 100, 101, 102, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50,
+        58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57,
+        32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111, 111, 32, 98, 97,
+        114, 160, 6, 168, 1, 168, 6, 24,
+    ];
+
+    let want = || mt::DatabaseMeta {
+        engine: "44".to_string(),
+        engine_options: btreemap! {s("abc") => s("def")},
+        options: btreemap! {s("xyz") => s("foo")},
+        created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
+        comment: "foo bar".to_string(),
+        drop_on: None,
+        gc_in_progress: false,
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), database_meta_v168.as_slice(), 168, want())
 }
 
 fn s(ss: impl ToString) -> String {

@@ -554,6 +554,18 @@ error:
 
 
 ---------- Input ----------
+alter table t1 create branch from_dev at (branch => dev)
+---------- Output ---------
+error: 
+  --> SQL:1:43
+  |
+1 | alter table t1 create branch from_dev at (branch => dev)
+  | -----                                     ^^^^^^ unexpected `branch`. it's reserved keyword, you may avoid using it, expecting `STREAM`, `SNAPSHOT`, `TAG`, `TIMESTAMP`, or `OFFSET`
+  | |                                          
+  | while parsing `ALTER TABLE [<database>.]<table> <action>`
+
+
+---------- Input ----------
 SELECT c a as FROM t
 ---------- Output ---------
 error: 

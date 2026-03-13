@@ -152,11 +152,9 @@ impl FuseTable {
                 let segment_len = segment_locs.len();
 
                 // snapshot.summary.block_count
-                let snapshot_loc = self.meta_location_generator.gen_snapshot_location(
-                    self.get_branch_id(),
-                    &snapshot.snapshot_id,
-                    snapshot.format_version,
-                )?;
+                let snapshot_loc = self
+                    .meta_location_generator
+                    .gen_snapshot_location(&snapshot.snapshot_id, snapshot.format_version)?;
 
                 let mut nodes_num = 1;
                 let cluster = ctx.get_cluster();

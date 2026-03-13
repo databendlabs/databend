@@ -204,35 +204,32 @@ impl<'a> FuseStatisticImpl<'a> {
         }
 
         // add virtual column statistics
-        if self.table.branch_info.is_none() {
-            if let (Some(virtual_col_stats), Some(virtual_schema)) = (
-                &summary.virtual_col_stats,
-                &self.table.table_info.meta.virtual_schema,
-            ) {
-                // convert to BTreeMap to keep the order of column ids
-                let virtual_col_stats = virtual_col_stats.iter().collect::<BTreeMap<_, _>>();
-                for (i, stats) in virtual_col_stats.iter() {
-                    // Get virtual column name by column id
-                    let Ok(virtual_field) = virtual_schema.field_of_column_id(**i) else {
-                        continue;
-                    };
-                    let Ok(source_field) =
-                        schema.field_of_column_id(virtual_field.source_column_id)
-                    else {
-                        continue;
-                    };
-                    let col_name = format!("{}{}", source_field.name, virtual_field.name);
-                    col_names.push(col_name);
-                    col_ndvs.push(stats.distinct_of_values);
-                    col_null_count.push(stats.null_count);
-                    col_avg_size.push(
-                        stats
-                            .in_memory_size
-                            .checked_div(summary.row_count)
-                            .unwrap_or(0),
-                    );
-                    col_his.push("".to_string());
-                }
+        if let (Some(virtual_col_stats), Some(virtual_schema)) = (
+            &summary.virtual_col_stats,
+            &self.table.table_info.meta.virtual_schema,
+        ) {
+            // convert to BTreeMap to keep the order of column ids
+            let virtual_col_stats = virtual_col_stats.iter().collect::<BTreeMap<_, _>>();
+            for (i, stats) in virtual_col_stats.iter() {
+                // Get virtual column name by column id
+                let Ok(virtual_field) = virtual_schema.field_of_column_id(**i) else {
+                    continue;
+                };
+                let Ok(source_field) = schema.field_of_column_id(virtual_field.source_column_id)
+                else {
+                    continue;
+                };
+                let col_name = format!("{}{}", source_field.name, virtual_field.name);
+                col_names.push(col_name);
+                col_ndvs.push(stats.distinct_of_values);
+                col_null_count.push(stats.null_count);
+                col_avg_size.push(
+                    stats
+                        .in_memory_size
+                        .checked_div(summary.row_count)
+                        .unwrap_or(0),
+                );
+                col_his.push("".to_string());
             }
         }
 

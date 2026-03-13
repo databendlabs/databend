@@ -62,7 +62,7 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::StreamInfo(info) => self.navigate_to_stream(ctx, info).await,
-            NavigationPoint::TableRef { .. } => unreachable!(),
+            NavigationPoint::TableTag(_) => Err(ErrorCode::Unimplemented("todo")),
         }
     }
 
@@ -72,18 +72,7 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         stream_info: &TableInfo,
     ) -> Result<Arc<FuseTable>> {
-        let options = stream_info.options();
-        let stream_table_id = options
-            .get(OPT_KEY_SOURCE_TABLE_ID)
-            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
-            .parse::<u64>()?;
-        if stream_table_id != self.table_info.ident.table_id {
-            return Err(ErrorCode::IllegalStream(format!(
-                "The stream '{}' is not match the table '{}'",
-                stream_info.desc, self.table_info.desc
-            )));
-        }
-        let location = options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
+        let location = self.stream_snapshot_location(stream_info)?;
         self.load_table_by_location(ctx, location).await
     }
 
@@ -171,36 +160,14 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         location: String,
-        mut pred: P,
+        pred: P,
     ) -> Result<Arc<FuseTable>>
     where
         P: FnMut(&TableSnapshot) -> bool,
     {
-        let abort_checker = ctx.clone().get_abort_checker();
-        let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        // grab the table history as stream
-        // snapshots are order by timestamp DESC.
-        let mut snapshot_stream = reader.snapshot_history(
-            location,
-            snapshot_version,
-            self.meta_location_generator().clone(),
-            self.get_branch_id(),
-        );
-
-        // Find the instant which matches the given `time_point`.
-        let mut instant = None;
-        while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
-            abort_checker
-                .try_check_aborting()
-                .with_context(|| "failed to find snapshot")?;
-            if pred(snapshot_with_version.0.as_ref()) {
-                instant = Some(snapshot_with_version);
-                break;
-            }
-        }
-
-        if let Some((snapshot, format_version)) = instant {
+        if let Some((snapshot, format_version)) =
+            self.find_snapshot_with_version(ctx, location, pred).await?
+        {
             self.load_table_by_snapshot(
                 snapshot.as_ref(),
                 format_version,
@@ -231,34 +198,20 @@ impl FuseTable {
 
         // 1. the table schema
         // 2. the table option `snapshot_location`
-        let loc = self.meta_location_generator.gen_snapshot_location(
-            self.get_branch_id(),
-            &snapshot.snapshot_id,
-            format_version,
-        )?;
+        let loc = self
+            .meta_location_generator
+            .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
         // Cluster key will be restored from the snapshot.
         // If the snapshot has no cluster key, means the table is currently unclustered.
         // We do NOT fall back to table-level cluster key metadata here, even if
         // the base table defines one. This is expected and by design.
-        let new_branch = match self.branch_info.as_ref() {
-            Some(branch) => {
-                let mut new_branch = branch.clone();
-                new_branch.info.loc = loc;
-                new_branch.schema = Arc::new(snapshot.schema.clone());
-                new_branch.cluster_key_meta = snapshot.cluster_key_meta.clone();
-                Some(new_branch)
-            }
-            None => {
-                table_info.meta.schema = Arc::new(snapshot.schema.clone());
-                table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
-                table_info
-                    .meta
-                    .options
-                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
-                None
-            }
-        };
+        table_info.meta.schema = Arc::new(snapshot.schema.clone());
+        table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
+        table_info
+            .meta
+            .options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
 
         // 3. The statistics
         let summary = &snapshot.summary;
@@ -277,8 +230,7 @@ impl FuseTable {
         };
 
         // let's instantiate it
-        let mut table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
-        table.branch_info = new_branch;
+        let table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
         Ok(table.into())
     }
 
@@ -315,7 +267,7 @@ impl FuseTable {
                     Some(NavigationPoint::StreamInfo(info)) => {
                         self.list_by_stream(info, time_point).await
                     }
-                    Some(NavigationPoint::TableRef { .. }) => unreachable!(),
+                    Some(NavigationPoint::TableTag(_)) => unreachable!(),
                     None => self.list_by_time_point(time_point).await,
                 }?;
 
@@ -356,11 +308,7 @@ impl FuseTable {
             return Err(ErrorCode::TableHistoricalDataNotFound("No historical data"));
         };
 
-        let prefix = format!(
-            "{}/{}/",
-            self.meta_location_generator().prefix(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-        );
+        let prefix = self.snapshot_prefix();
 
         let files = self
             .list_files(prefix, |_, modified| modified <= time_point)
@@ -382,11 +330,7 @@ impl FuseTable {
     ) -> Result<(String, Vec<String>)> {
         // TODO(Sky): unify location related logic into a single place
         let mut location = None;
-        let prefix = format!(
-            "{}/{}/",
-            self.meta_location_generator().prefix(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-        );
+        let prefix = self.snapshot_prefix();
         let prefix_loc = format!("{}{}", prefix, snapshot_id);
         let prefix_loc_v5 = format!("{}{}{}", prefix, VACUUM2_OBJECT_KEY_PREFIX, snapshot_id);
 
@@ -405,36 +349,27 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn list_by_stream(
+    async fn list_by_stream(
         &self,
         stream_info: TableInfo,
         retention_point: DateTime<Utc>,
     ) -> Result<(String, Vec<String>)> {
-        let options = stream_info.options();
-        let stream_table_id = options
-            .get(OPT_KEY_SOURCE_TABLE_ID)
-            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
-            .parse::<u64>()?;
-        if stream_table_id != self.table_info.ident.table_id {
-            return Err(ErrorCode::IllegalStream(format!(
-                "The stream '{}' is not match the table '{}'",
-                stream_info.desc, self.table_info.desc
-            )));
-        }
-
-        let snapshot_loc = options
-            .get(OPT_KEY_SNAPSHOT_LOCATION)
+        let snapshot_loc = self
+            .stream_snapshot_location(&stream_info)?
             .ok_or_else(|| {
                 ErrorCode::TableHistoricalDataNotFound("No historical data found at given point")
-            })?
-            .parse::<String>()?;
+            })?;
+        self.list_by_location(snapshot_loc, retention_point).await
+    }
 
+    #[async_backtrace::framed]
+    async fn list_by_location(
+        &self,
+        snapshot_loc: String,
+        retention_point: DateTime<Utc>,
+    ) -> Result<(String, Vec<String>)> {
         let mut found = false;
-        let prefix = format!(
-            "{}/{}/",
-            self.meta_location_generator().prefix(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-        );
+        let prefix = self.snapshot_prefix();
 
         let files = self
             .list_files(prefix, |loc, modified| {
@@ -548,17 +483,7 @@ impl FuseTable {
                 }
                 Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
             }
-            NavigationPoint::TableRef { typ, name } => {
-                let table_ref = self.table_info.get_table_ref(name)?;
-                let ref_type = &table_ref.typ;
-                if ref_type != typ {
-                    return Err(ErrorCode::MismatchedReferenceType(format!(
-                        "'{}' is a {}, please use 'AT({} => {})' instead.",
-                        name, ref_type, ref_type, name,
-                    )));
-                }
-                Ok(Some(table_ref.loc.clone()))
-            }
+            NavigationPoint::TableTag(_) => Err(ErrorCode::Unimplemented("todo")),
         }
     }
 
@@ -568,8 +493,54 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         location: String,
-        mut pred: P,
+        pred: P,
     ) -> Result<String>
+    where
+        P: FnMut(&TableSnapshot) -> bool,
+    {
+        let Some((snapshot, format_version)) =
+            self.find_snapshot_with_version(ctx, location, pred).await?
+        else {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "No historical data found at given point",
+            ));
+        };
+
+        let snapshot_location = self
+            .meta_location_generator
+            .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
+        Ok(snapshot_location)
+    }
+
+    fn snapshot_prefix(&self) -> String {
+        format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        )
+    }
+
+    fn stream_snapshot_location(&self, stream_info: &TableInfo) -> Result<Option<String>> {
+        let options = stream_info.options();
+        let stream_table_id = options
+            .get(OPT_KEY_SOURCE_TABLE_ID)
+            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
+            .parse::<u64>()?;
+        if stream_table_id != self.table_info.ident.table_id {
+            return Err(ErrorCode::IllegalStream(format!(
+                "The stream '{}' is not match the table '{}'",
+                stream_info.desc, self.table_info.desc
+            )));
+        }
+        Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
+    }
+
+    async fn find_snapshot_with_version<P>(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        location: String,
+        mut pred: P,
+    ) -> Result<Option<(Arc<TableSnapshot>, u64)>>
     where
         P: FnMut(&TableSnapshot) -> bool,
     {
@@ -582,7 +553,6 @@ impl FuseTable {
             location,
             snapshot_version,
             self.meta_location_generator().clone(),
-            self.get_branch_id(),
         );
 
         // Find the snapshot which matches the given `time_point`.
@@ -591,17 +561,10 @@ impl FuseTable {
                 .try_check_aborting()
                 .with_context(|| "failed to find snapshot")?;
             if pred(snapshot.as_ref()) {
-                let snapshot_location = self.meta_location_generator.gen_snapshot_location(
-                    None,
-                    &snapshot.snapshot_id,
-                    format_version,
-                )?;
-                return Ok(snapshot_location);
+                return Ok(Some((snapshot, format_version)));
             }
         }
 
-        Err(ErrorCode::TableHistoricalDataNotFound(
-            "No historical data found at given point",
-        ))
+        Ok(None)
     }
 }

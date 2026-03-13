@@ -23,7 +23,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema as mt;
 use fastrace::func_name;
 use maplit::btreemap;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -89,14 +88,12 @@ fn test_decode_v74_table_meta() -> anyhow::Result<()> {
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
         indexes: btreemap! {},
         row_access_policy_columns_ids: None,
         constraints: btreemap! {},
-        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v74.as_slice(), 74, want())?;
