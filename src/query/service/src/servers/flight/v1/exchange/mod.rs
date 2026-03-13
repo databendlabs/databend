@@ -34,7 +34,7 @@ mod statistics_sender;
 
 pub mod serde;
 
-const HASH_SEND_ROWS_THRESHOLD: usize = 4096;
+const HASH_SEND_ROWS_THRESHOLD: usize = 8192;
 const HASH_SEND_BYTES_THRESHOLD: usize = 4 * 1024 * 1024;
 
 pub use broadcast_recv_transform::ExchangeRecvTransform;

@@ -144,7 +144,7 @@ impl Display for Distribution {
             ),
             Distribution::GlobalHash(keys) => write!(
                 f,
-                "GlobalHash({})",
+                "Hash({})",
                 keys.iter()
                     .map(|s| s.as_raw_expr().to_string())
                     .collect::<Vec<_>>()

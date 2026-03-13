@@ -65,7 +65,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
                         .join(",")
                 ),
                 Exchange::GlobalHash(scalars) => format!(
-                    "GlobalHash({})",
+                    "Hash({})",
                     scalars
                         .iter()
                         .map(|s| s.as_raw_expr().to_string())

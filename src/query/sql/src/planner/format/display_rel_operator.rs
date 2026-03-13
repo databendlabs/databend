@@ -427,7 +427,7 @@ fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> F
         Exchange::Merge => "Exchange(Merge)",
         Exchange::MergeSort => "Exchange(MergeSort)",
         Exchange::NodeToNodeHash(_) => "Exchange(Hash)",
-        Exchange::GlobalHash(_) => "Exchange(GlobalHash)",
+        Exchange::GlobalHash(_) => "Exchange(Hash)",
     };
 
     match op {
