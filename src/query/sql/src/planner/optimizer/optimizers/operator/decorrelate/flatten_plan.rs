@@ -678,9 +678,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    for used_column in expr.used_columns() {
-                        expr.replace_column(used_column, self.get_derived(used_column)?)?;
-                    }
+                    expr.replace_column(old, new)?;
                 };
                 Ok((new, expr))
             })
@@ -706,9 +704,7 @@ impl SubqueryDecorrelatorOptimizer {
                     return Ok((old, expr));
                 };
                 if let Some(expr) = &mut expr {
-                    for used_column in expr.used_columns() {
-                        expr.replace_column(used_column, self.get_derived(used_column)?)?;
-                    }
+                    expr.replace_column(old, new)?;
                 };
                 Ok((new, expr))
             })
@@ -720,34 +716,6 @@ impl SubqueryDecorrelatorOptimizer {
         self.derived_columns.clear();
 
         let mut metadata = self.metadata.write();
-        let union_output_indexes = union_all.output_indexes.clone();
-        let union_output_map = union_output_indexes
-            .iter()
-            .copied()
-            .map(|old| {
-                let column_entry = metadata.column(old);
-                let name = column_entry.name().to_string();
-                let data_type = column_entry.data_type();
-                let new = metadata.add_derived_column(name, data_type);
-                self.derived_columns.insert(old, new);
-                (old, new)
-            })
-            .collect::<HashMap<_, _>>();
-
-        union_all.left_outputs = union_all
-            .left_outputs
-            .into_iter()
-            .map(|(old, expr)| (union_output_map.get(&old).copied().unwrap_or(old), expr))
-            .collect();
-        union_all.right_outputs = union_all
-            .right_outputs
-            .into_iter()
-            .map(|(old, expr)| (union_output_map.get(&old).copied().unwrap_or(old), expr))
-            .collect();
-        union_all.output_indexes = union_output_indexes
-            .into_iter()
-            .map(|old| union_output_map[&old])
-            .collect();
         union_all
             .output_indexes
             .extend(correlated_columns.iter().copied().map(|old| {
