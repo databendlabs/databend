@@ -380,7 +380,7 @@ impl PhysicalPlanBuilder {
         let pre_projection: Option<Vec<usize>> = if self.metadata.read().lazy_columns().is_empty() {
             sort.pre_projection
                 .as_ref()
-                .map(|projection| projection.iter().map(|index| index.as_usize()).collect())
+                .map(|projection| projection.iter().map(|_| unimplemented!()).collect())
         } else {
             None
         };

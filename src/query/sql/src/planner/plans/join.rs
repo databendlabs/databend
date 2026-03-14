@@ -324,8 +324,8 @@ impl Join {
     ) -> Result<f64> {
         let mut join_card = *left_cardinality * *right_cardinality;
         let mut join_card_updated = false;
-        let mut left_column_index = Symbol::new(0);
-        let mut right_column_index = Symbol::new(0);
+        let mut left_column_index = None;
+        let mut right_column_index = None;
         for condition in &self.equi_conditions {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -398,13 +398,17 @@ impl Join {
             if card < join_card {
                 join_card = card;
                 join_card_updated = true;
-                left_column_index = left_index;
-                right_column_index = right_index;
+                left_column_index = Some(left_index);
+                right_column_index = Some(right_index);
             }
         }
         if !join_card_updated {
             return Ok(join_card);
         }
+
+        let left_column_index = left_column_index.expect("join stats updated without left column");
+        let right_column_index =
+            right_column_index.expect("join stats updated without right column");
 
         for (idx, left) in left_statistics.column_stats.iter_mut() {
             if *idx != left_column_index || left.histogram.is_none() || left.ndv.value() as u64 <= 2

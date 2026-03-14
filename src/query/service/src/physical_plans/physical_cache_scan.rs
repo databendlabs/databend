@@ -75,38 +75,35 @@ impl IPhysicalPlan for CacheScan {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let max_threads = builder.settings.get_max_threads()?;
         let max_block_size = builder.settings.get_max_block_size()? as usize;
-        let cache_source_state = match &self.cache_source {
-            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
-                match builder.hash_join_states.get(cache_index) {
-                    Some(HashJoinStateRef::OldHashJoinState(hash_join_state)) => {
-                        CacheSourceState::OldHashJoinCacheState(HashJoinCacheState::new(
-                            column_indexes.clone(),
-                            hash_join_state.clone(),
-                            max_block_size,
-                        ))
-                    }
-                    Some(HashJoinStateRef::NewHashJoinState(hash_join_state, column_map)) => {
-                        let mut column_offsets = Vec::with_capacity(column_indexes.len());
-                        for index in column_indexes {
-                            let Some(offset) = column_map.get(index) else {
-                                return Err(ErrorCode::Internal(format!(
-                                    "Hash join cache column {} not found in build projection",
-                                    index
-                                )));
-                            };
-                            column_offsets.push(*offset);
-                        }
-                        CacheSourceState::NewHashJoinCacheState(NewHashJoinCacheState::new(
-                            column_offsets,
-                            hash_join_state.clone(),
-                        ))
-                    }
-                    None => {
-                        return Err(ErrorCode::Internal(
-                            "Hash join state not found during building cache scan".to_string(),
-                        ));
-                    }
+        let cache_source = &self.cache_source;
+        let cache_source_state = match builder.hash_join_states.get(&cache_source.cache_index) {
+            Some(HashJoinStateRef::OldHashJoinState(hash_join_state)) => {
+                CacheSourceState::OldHashJoinCacheState(HashJoinCacheState::new(
+                    cache_source.column_indices.clone(),
+                    hash_join_state.clone(),
+                    max_block_size,
+                ))
+            }
+            Some(HashJoinStateRef::NewHashJoinState(hash_join_state, column_map)) => {
+                let mut column_offsets = Vec::with_capacity(cache_source.column_indices.len());
+                for index in &cache_source.column_indices {
+                    let Some(offset) = column_map.get(index) else {
+                        return Err(ErrorCode::Internal(format!(
+                            "Hash join cache column {} not found in build projection",
+                            index
+                        )));
+                    };
+                    column_offsets.push(*offset);
                 }
+                CacheSourceState::NewHashJoinCacheState(NewHashJoinCacheState::new(
+                    column_offsets,
+                    hash_join_state.clone(),
+                ))
+            }
+            None => {
+                return Err(ErrorCode::Internal(
+                    "Hash join state not found during building cache scan".to_string(),
+                ));
             }
         };
 

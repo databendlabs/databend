@@ -22,7 +22,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
-use databend_common_expression::Symbol;
 use databend_common_meta_app::schema::Constraint;
 use parking_lot::RwLock;
 
@@ -52,10 +51,13 @@ impl ConstraintExprBinder {
         let settings = ctx.get_settings();
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
         let mut bind_context = BindContext::new();
-        for (index, field) in schema.fields().iter().enumerate() {
+        let mut metadata = Metadata::default();
+        for field in schema.fields().iter() {
+            let column_index =
+                metadata.add_derived_column(field.name().clone(), field.data_type().clone());
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                Symbol::new(index),
+                column_index,
                 Box::new(field.data_type().clone()),
                 Visibility::Visible,
             )
@@ -64,7 +66,7 @@ impl ConstraintExprBinder {
             bind_context.add_column_binding(column);
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let metadata = Arc::new(RwLock::new(metadata));
 
         Ok(ConstraintExprBinder {
             bind_context,

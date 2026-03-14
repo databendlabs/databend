@@ -16,19 +16,60 @@ use std::fmt::Debug;
 use std::fmt::Write;
 use std::hash::Hash;
 
+use num_traits::FromPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, num_derive::FromPrimitive)]
+#[repr(usize)]
+pub enum DummyColumnType {
+    Default = 0,
+    WindowFunction = 1,
+    AggregateFunction = 2,
+    Subquery = 3,
+    UDF = 4,
+    AsyncFunction = 5,
+    Other = 6,
+}
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct Symbol(usize);
 
 impl Symbol {
+    const MIN_DUMMY_COLUMN: Self = Self::new_dummy_column(DummyColumnType::Other);
+
+    pub const DUMMY_COLUMN: Self = Self::new_dummy_column(DummyColumnType::Default);
+
     pub const fn new(index: usize) -> Self {
         Self(index)
     }
 
+    pub const fn from_field_index(index: crate::FieldIndex) -> Self {
+        Self(index)
+    }
+
+    pub const fn new_dummy_column(dummy_type: DummyColumnType) -> Self {
+        Self(usize::MAX - dummy_type as usize)
+    }
+
     pub const fn as_usize(&self) -> usize {
         self.0
+    }
+
+    pub const fn as_field_index(&self) -> crate::FieldIndex {
+        self.0
+    }
+
+    pub const fn is_dummy_column(&self) -> bool {
+        self.0 >= Self::MIN_DUMMY_COLUMN.0
+    }
+
+    pub fn dummy_column_type(&self) -> Option<DummyColumnType> {
+        if !self.is_dummy_column() {
+            return None;
+        }
+
+        DummyColumnType::from_usize(usize::MAX - self.0)
     }
 }
 

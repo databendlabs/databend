@@ -319,44 +319,33 @@ impl Binder {
                     cache_scan_fields.push(field);
                 }
 
-                let cache_source = CacheSource::HashJoinBuild((
-                    scan.cache_index,
-                    cache_scan_column_indexes.clone(),
-                ));
-                let cache_scan = SExpr::create_leaf(Arc::new(RelOperator::CacheScan(CacheScan {
+                let cache_source = CacheSource {
+                    cache_index: scan.cache_index,
+                    column_indices: cache_scan_column_indexes.clone(),
+                };
+
+                // Wrap CacheScan with distinct to eliminate duplicates rows.
+                let group_items = cache_scan_column_indexes
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(i, index)| ScalarItem {
+                        scalar: cache_scan_columns[i].clone(),
+                        index,
+                    })
+                    .collect();
+
+                let s_expr = SExpr::create_leaf(CacheScan {
                     cache_source,
                     columns: ColumnSet::new(),
                     schema: DataSchemaRefExt::create(cache_scan_fields),
-                })));
-
-                let mut distinct_columns = Vec::new();
-                for column in scan.values[0].iter().skip(scan.num_scalar_columns) {
-                    distinct_columns.push(column);
-                }
-
-                // Wrap CacheScan with distinct to eliminate duplicates rows.
-                let mut group_items = Vec::with_capacity(cache_scan_column_indexes.len());
-                for (index, column_index) in cache_scan_column_indexes.iter().enumerate() {
-                    group_items.push(ScalarItem {
-                        scalar: cache_scan_columns[index].clone(),
-                        index: *column_index,
-                    });
-                }
-
-                let s_expr = SExpr::create_unary(
-                    Arc::new(RelOperator::ExpressionScan(scan)),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            Aggregate {
-                                mode: AggregateMode::Initial,
-                                group_items,
-                                ..Default::default()
-                            }
-                            .into(),
-                        ),
-                        Arc::new(cache_scan),
-                    )),
-                );
+                })
+                .build_unary(Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items,
+                    ..Default::default()
+                })
+                .build_unary(scan);
 
                 Ok((s_expr, join_condition_columns))
             }
@@ -546,17 +535,16 @@ pub fn bind_expression_scan(
     let mut column_indexes = Vec::with_capacity(num_columns + cache_columns.len());
     // Add column bindings for expression scan columns.
     for (idx, field) in expression_scan_fields.iter().take(num_columns).enumerate() {
-        let index = metadata.columns().len();
+        let index = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
         let column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx),
-            Symbol::new(index),
+            index,
             Box::new(field.data_type().clone()),
             Visibility::Visible,
         )
         .build();
-        let _ = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
         bind_context.add_column_binding(column_binding);
-        column_indexes.push(Symbol::new(index));
+        column_indexes.push(index);
     }
 
     // Add column bindings for cache columns.
@@ -572,24 +560,23 @@ pub fn bind_expression_scan(
         let column_entry = metadata.column(cache_column.index);
         let name = column_entry.name();
         let data_type = column_entry.data_type();
-        let new_column_index = metadata.columns().len();
+        let new_column_index = metadata.add_derived_column(name, data_type.clone());
         let new_column_binding = ColumnBindingBuilder::new(
             format!("expr_scan_{}", idx + num_columns),
-            Symbol::new(new_column_index),
+            new_column_index,
             Box::new(data_type.clone()),
             Visibility::Visible,
         )
         .build();
 
-        let _ = metadata.add_derived_column(name, data_type);
         bind_context.add_column_binding(new_column_binding);
-        column_indexes.push(Symbol::new(new_column_index));
+        column_indexes.push(new_column_index);
 
         // Record the mapping between original index (cache index in hash join build side) and derived index.
         expression_scan_info.add_expression_scan_column(
             expression_scan_index,
             cache_column.index,
-            Symbol::new(new_column_index),
+            new_column_index,
         );
     }
 
@@ -670,18 +657,18 @@ pub fn bind_constant_scan(
     let mut fields = Vec::with_capacity(num_values);
     let mut metadata = metadata.write();
     for value_field in value_schema.fields() {
-        let index = Symbol::new(metadata.columns().len());
-        columns.insert(index);
-        let column_binding = ColumnBindingBuilder::new(
-            value_field.name().clone(),
-            index,
-            Box::new(value_field.data_type().clone()),
-            Visibility::Visible,
-        )
-        .build();
-        let _ = metadata
+        let index = metadata
             .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
-        bind_context.add_column_binding(column_binding);
+        columns.insert(index);
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                value_field.name().clone(),
+                index,
+                Box::new(value_field.data_type().clone()),
+                Visibility::Visible,
+            )
+            .build(),
+        );
 
         let field = DataField::new(&index.to_string(), value_field.data_type().clone());
         fields.push(field);

@@ -174,7 +174,6 @@ use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
 use crate::optimizer::ir::RelExpr;
-use crate::optimizer::ir::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::expression::UDFValidator;
 use crate::planner::metadata::optimize_remove_count_args;
@@ -7094,23 +7093,17 @@ impl<'a> TypeChecker<'a> {
 
         assert_eq!(ctx.columns.len(), 1);
         // Wrap group by on `const_scan` to deduplicate values
-        let distinct_const_scan = SExpr::create_unary(
-            Arc::new(
-                Aggregate {
-                    mode: AggregateMode::Initial,
-                    group_items: vec![ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ctx.columns[0].clone(),
-                        }),
-                        index: Symbol::new(self.metadata.read().columns().len() - 1),
-                    }],
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            Arc::new(const_scan),
-        );
+        let distinct_const_scan = const_scan.build_unary(Aggregate {
+            mode: AggregateMode::Initial,
+            group_items: vec![ScalarItem {
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ctx.columns[0].clone(),
+                }),
+                index: ctx.columns[0].index,
+            }],
+            ..Default::default()
+        });
 
         let box mut data_type = ctx.columns[0].data_type.clone();
         let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);

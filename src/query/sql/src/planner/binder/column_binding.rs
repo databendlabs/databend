@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::ColumnIndex;
+use databend_common_expression::DummyColumnType;
 use databend_common_expression::types::DataType;
 
 use crate::IndexType;
@@ -44,32 +45,13 @@ pub struct ColumnBinding {
     pub is_srf: bool,
 }
 
-const DUMMY_INDEX: usize = usize::MAX;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u64)]
-pub enum DummyColumnType {
-    WindowFunction = 1,
-    AggregateFunction = 2,
-    Subquery = 3,
-    UDF = 4,
-    AsyncFunction = 5,
-    Other = 6,
-}
-
-impl DummyColumnType {
-    fn type_identifier(&self) -> Symbol {
-        Symbol::new(DUMMY_INDEX - (*self) as usize)
-    }
-}
-
 impl ColumnBinding {
     pub fn new_dummy_column(
         name: String,
         data_type: Box<DataType>,
         dummy_type: DummyColumnType,
     ) -> Self {
-        let index = dummy_type.type_identifier();
+        let index = Symbol::new_dummy_column(dummy_type);
         ColumnBinding {
             database_name: None,
             table_name: None,
@@ -85,7 +67,7 @@ impl ColumnBinding {
     }
 
     pub fn is_dummy(&self) -> bool {
-        self.index.as_usize() >= DummyColumnType::Other.type_identifier().as_usize()
+        self.index.is_dummy_column()
     }
 }
 

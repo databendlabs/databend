@@ -71,7 +71,6 @@ use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -106,6 +105,7 @@ use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::BindContext;
@@ -2238,10 +2238,14 @@ impl Binder {
 
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
-        for (index, field) in schema.fields().iter().enumerate() {
+        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
+        for field in schema.fields().iter() {
+            let column_index = metadata
+                .write()
+                .add_derived_column(field.name().clone(), DataType::from(field.data_type()));
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                Symbol::new(index),
+                column_index,
                 Box::new(DataType::from(field.data_type())),
                 Visibility::Visible,
             )
@@ -2253,7 +2257,7 @@ impl Binder {
             &mut bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
-            self.metadata.clone(),
+            metadata,
             &[],
         );
         // cluster keys cannot be a udf expression.
