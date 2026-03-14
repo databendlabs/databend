@@ -29,7 +29,6 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
-use crate::ast::SnapshotRefType;
 use crate::ast::TableRef;
 use crate::ast::WindowDefinition;
 use crate::ast::quote::QuotedString;
@@ -573,10 +572,7 @@ pub enum TimeTravelPoint {
         database: Option<Identifier>,
         name: Identifier,
     },
-    TableRef {
-        typ: SnapshotRefType,
-        name: Identifier,
-    },
+    TableTag(Identifier),
 }
 
 impl Display for TimeTravelPoint {
@@ -603,8 +599,8 @@ impl Display for TimeTravelPoint {
                 )?;
                 write!(f, ")")?;
             }
-            TimeTravelPoint::TableRef { typ, name } => {
-                write!(f, "({} => {})", typ, name)?;
+            TimeTravelPoint::TableTag(name) => {
+                write!(f, "(TAG => {name})")?;
             }
         }
 

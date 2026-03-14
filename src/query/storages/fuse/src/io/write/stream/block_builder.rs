@@ -601,8 +601,7 @@ impl StreamBlockProperties {
             .map(|v| v.column_id())
             .collect::<HashSet<_>>();
 
-        let inverted_index_builders =
-            create_inverted_index_builders(&table.table_info.meta.indexes, &schema);
+        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
         let enable_virtual_column = ctx
             .get_settings()

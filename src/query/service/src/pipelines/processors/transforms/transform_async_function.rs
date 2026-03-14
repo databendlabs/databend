@@ -972,26 +972,16 @@ impl AsyncTransform for TransformAsyncFunction {
                     .await?;
                 }
                 AsyncFunctionArgument::DictGetFunction(dict_arg) => {
-                    let arg_indices = async_func_desc
-                        .arg_indices
-                        .iter()
-                        .map(|idx| idx.as_usize())
-                        .collect::<Vec<_>>();
                     self.transform_dict_get(
                         i,
                         &mut data_block,
                         dict_arg,
-                        &arg_indices,
+                        &async_func_desc.arg_indices,
                         &async_func_desc.data_type,
                     )
                     .await?;
                 }
                 AsyncFunctionArgument::ReadFile(read_file_arg) => {
-                    let arg_indices = async_func_desc
-                        .arg_indices
-                        .iter()
-                        .map(|idx| idx.as_usize())
-                        .collect::<Vec<_>>();
                     let read_file_ctx = self.read_file_ctx.as_mut().ok_or_else(|| {
                         ErrorCode::Internal("read_file context is not initialized".to_string())
                     })?;
@@ -999,7 +989,7 @@ impl AsyncTransform for TransformAsyncFunction {
                         .transform_read_file(
                             self.ctx.clone(),
                             &mut data_block,
-                            &arg_indices,
+                            &async_func_desc.arg_indices,
                             &async_func_desc.data_type,
                             read_file_arg,
                         )

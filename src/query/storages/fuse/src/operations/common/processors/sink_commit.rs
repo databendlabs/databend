@@ -30,7 +30,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -83,7 +82,6 @@ enum State {
         table_stats_gen: TableStatsGenerator,
         cluster_key_meta: Option<ClusterKey>,
         table_info: TableInfo,
-        table_schema: Arc<TableSchema>,
     },
     TryCommit {
         data: Vec<u8>,
@@ -477,7 +475,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 table_stats_gen,
                 cluster_key_meta,
                 table_info,
-                table_schema,
             } => {
                 let change_tracking_enabled_during_commit = {
                     let no_change_tracking_at_beginning = !self.change_tracking;
@@ -508,8 +505,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // therefore, we can safely proceed.
 
                 match self.snapshot_gen.generate_new_snapshot(
-                    &table_info.ident,
-                    table_schema.as_ref(),
+                    &table_info,
                     cluster_key_meta,
                     previous,
                     self.ctx.txn_mgr(),
@@ -517,14 +513,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
-                        // No need enable auto compaction for table branch.
-                        if self.table.get_branch_info().is_none() {
-                            set_compaction_num_block_hint(
-                                self.ctx.as_ref(),
-                                table_info.name.as_str(),
-                                &snapshot.summary,
-                            );
-                        }
+                        set_compaction_num_block_hint(
+                            self.ctx.as_ref(),
+                            table_info.name.as_str(),
+                            &snapshot.summary,
+                        );
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
@@ -557,7 +550,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::FillDefault => {
-                let table_schema = self.table.schema();
+                let schema = self.table.schema();
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await.map_err(|e| {
@@ -591,16 +584,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let mut table_info = fuse_table.table_info.clone();
-                if fuse_table.branch_info.is_none() {
-                    // merge virtual schema
-                    let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                    let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
-                        old_virtual_schema,
-                        self.new_virtual_schema.clone(),
-                        self.new_virtual_schema_mode,
-                    );
-                    table_info.meta.virtual_schema = merged_virtual_schema;
-                }
+                // merge virtual schema
+                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
+                let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
+                    old_virtual_schema,
+                    self.new_virtual_schema.clone(),
+                    self.new_virtual_schema_mode,
+                );
+                table_info.meta.virtual_schema = merged_virtual_schema;
 
                 // check if snapshot has been changed
                 let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
@@ -615,7 +606,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     ));
                 } else {
                     self.snapshot_gen
-                        .fill_default_values(&table_schema, &previous)
+                        .fill_default_values(&schema, &previous)
                         .await?;
                     let table_stats_gen = fuse_table
                         .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
@@ -625,7 +616,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         table_stats_gen,
                         cluster_key_meta: fuse_table.cluster_key_meta(),
                         table_info,
-                        table_schema,
                     };
                 }
             }
@@ -635,12 +625,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 table_info,
             } => {
                 snapshot.ensure_segments_unique()?;
-                let branch_id = self.table.get_branch_info().map(|b| b.branch_id());
-                let location = self.location_gen.gen_snapshot_location(
-                    branch_id,
-                    &snapshot.snapshot_id,
-                    TableSnapshot::VERSION,
-                )?;
+                let location = self
+                    .location_gen
+                    .gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
                 self.dal.write(&location, data).await?;
 
                 // enable auto analyze.
@@ -796,23 +783,20 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let mut table_info = fuse_table.table_info.clone();
-                if fuse_table.branch_info.is_none() {
-                    // merge virtual schema
-                    let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                    let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
-                        old_virtual_schema,
-                        self.new_virtual_schema.clone(),
-                        self.new_virtual_schema_mode,
-                    );
-                    table_info.meta.virtual_schema = merged_virtual_schema;
-                }
+                // merge virtual schema
+                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
+                let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
+                    old_virtual_schema,
+                    self.new_virtual_schema.clone(),
+                    self.new_virtual_schema_mode,
+                );
+                table_info.meta.virtual_schema = merged_virtual_schema;
 
                 self.state = State::GenerateSnapshot {
                     previous,
                     table_stats_gen,
                     cluster_key_meta: fuse_table.cluster_key_meta(),
                     table_info,
-                    table_schema: fuse_table.schema(),
                 };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),

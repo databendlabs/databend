@@ -124,7 +124,8 @@ message TableMeta {
 
   optional string part_prefix = 27;
 
-  repeated uint64 shared_by = 28;
+  // repeated uint64 shared_by = 28;
+  reserved 28;
 
   map<string, string> column_mask_policy = 29;
 
@@ -142,25 +143,14 @@ message TableMeta {
   optional RowAccessPolicyColumnMap row_access_policy_columns_ids = 35;
   map<uint32, RowAccessPolicyColumnMap> column_mask_policy_columns_ids = 36;
 
-  map<string, SnapshotRef> refs = 37;
+  // Legacy experimental table refs were intentionally removed and are no longer
+  // part of table metadata compatibility. Do not reuse field 37 for the new
+  // branch/tag redesign.
+  // map<string, SnapshotRef> refs = 37;
+  reserved 37;
 
   // The main cluster key id.
   optional uint32 cluster_key_id = 38;
-}
-
-message SnapshotRef {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  enum RefType {
-    Branch = 0;
-    Tag = 1;
-  }
-
-  uint64 id = 1;
-  optional string expire_at = 2;
-  RefType typ = 3;
-  string loc = 4;
 }
 
 message RowAccessPolicyColumnMap {

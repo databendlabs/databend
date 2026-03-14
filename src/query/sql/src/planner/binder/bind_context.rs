@@ -314,6 +314,17 @@ impl BindContext {
         &self.columns
     }
 
+    // The column index may not be consecutive, and the length of columns
+    // cannot be used to calculate the column index of the lambda argument.
+    // We need to start from the current largest column index.
+    pub fn next_column_index(&self) -> Symbol {
+        self.columns
+            .iter()
+            .map(|column| column.index)
+            .max()
+            .map_or_else(|| Symbol::new(0), |index| Symbol::new(index.as_usize() + 1))
+    }
+
     pub fn add_column_binding(&mut self, column_binding: ColumnBinding) {
         self.columns.push(column_binding);
     }

@@ -72,7 +72,7 @@ impl Rule for RuleMergeFilterIntoMutation {
                 .metadata
                 .write()
                 .add_derived_column("_predicate".to_string(), DataType::Boolean);
-            mutation.predicate_column_index = Some(column_index.as_usize());
+            mutation.predicate_column_index = Some(column_index);
         }
 
         let new_expr = SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation)));

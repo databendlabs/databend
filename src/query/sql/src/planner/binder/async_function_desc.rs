@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::FieldIndex;
 use databend_common_expression::types::DataType;
 
 use crate::Symbol;
@@ -22,7 +23,7 @@ pub struct AsyncFunctionDesc {
     pub func_name: String,
     pub display_name: String,
     pub output_column: Symbol,
-    pub arg_indices: Vec<Symbol>,
+    pub arg_indices: Vec<FieldIndex>,
     pub data_type: Box<DataType>,
 
     pub func_arg: AsyncFunctionArgument,
