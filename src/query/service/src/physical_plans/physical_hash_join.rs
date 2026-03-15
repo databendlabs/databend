@@ -280,6 +280,10 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        if self.join_type.is_any_join() {
+            return Err(ErrorCode::Unimplemented("ANY JOIN is not supported yet"));
+        }
+
         let desc = Arc::new(HashJoinDesc::create(self)?);
         let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
