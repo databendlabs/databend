@@ -26,11 +26,12 @@ use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
@@ -69,6 +70,18 @@ impl FuseTable {
     ) -> Result<Option<Vec<String>>> {
         let mut counter = PurgeCounter::new();
 
+        let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
+        let branches = catalog
+            .list_history_table_branches(ListHistoryTableBranchesReq {
+                table_id: self.get_id(),
+                retention_boundary: None,
+            })
+            .await?;
+        if !branches.is_empty() {
+            return Err(ErrorCode::Unimplemented(
+                "Please use fuse_vacuum2 to vacuum table with branches",
+            ));
+        }
         let res = self
             .execute_purge(
                 ctx,

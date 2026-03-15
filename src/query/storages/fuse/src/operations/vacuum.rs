@@ -20,33 +20,32 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Duration;
-use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
-use databend_storages_common_table_meta::meta::is_uuid_v7;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
 use opendal::Entry;
-use opendal::ErrorKind;
 use opendal::Operator;
 use opendal::Scheme;
 
 use crate::FuseTable;
-use crate::RetentionPolicy;
+use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -89,106 +88,6 @@ pub struct SnapshotGcSelection {
     pub snapshots_to_gc: Vec<String>,
     pub gc_root_meta_ts: DateTime<Utc>,
     pub gc_root_path: String,
-}
-
-/// Object storage supported by Databend is expected to return entries sorted in ascending lexicographical
-/// order by object key. Databend leverages this property to enhance the efficiency and thoroughness
-/// of the vacuum process.
-///
-/// The safety of the vacuum algorithm does not depend on this ordering.
-async fn general_list_until_prefix(
-    dal: &Operator,
-    path: &str,
-    until: &str,
-    need_one_more: bool,
-    gc_root_meta_ts: Option<DateTime<Utc>>,
-) -> Result<Vec<Entry>> {
-    let mut lister = dal.lister(path).await?;
-    let mut paths = vec![];
-    while let Some(entry) = lister.try_next().await? {
-        if entry.metadata().is_dir() {
-            continue;
-        }
-        if entry.path() >= until {
-            info!("entry path: {} >= until: {}", entry.path(), until);
-            if need_one_more {
-                paths.push(entry);
-            }
-            break;
-        }
-        if gc_root_meta_ts.is_none()
-            || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
-        {
-            paths.push(entry);
-        }
-    }
-    Ok(paths)
-}
-
-/// If storage is backed by FS, we prioritize thoroughness over efficiency (though efficiency loss
-/// is usually not significant). All entries are fetched and sorted before extracting the prefix entries.
-async fn fs_list_until_prefix(
-    dal: &Operator,
-    path: &str,
-    until: &str,
-    need_one_more: bool,
-    gc_root_meta_ts: Option<DateTime<Utc>>,
-) -> Result<Vec<Entry>> {
-    // Fetch ALL entries from the path and sort them by path in lexicographical order.
-    let mut lister = dal.lister(path).await?;
-    let mut entries = Vec::new();
-    while let Some(item) = lister.try_next().await? {
-        if item.metadata().is_file() {
-            entries.push(item);
-        }
-    }
-    entries.sort_by(|l, r| l.path().cmp(r.path()));
-
-    // Extract entries up to the `until` path, respecting lexicographical order.
-    let mut res = Vec::new();
-    for entry in entries {
-        if entry.path() >= until {
-            info!("entry path: {} >= until: {}", entry.path(), until);
-            if need_one_more {
-                res.push(entry);
-            }
-            break;
-        }
-        if gc_root_meta_ts.is_none()
-            || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
-        {
-            res.push(entry);
-        }
-    }
-
-    Ok(res)
-}
-
-/// Check if an entry is a candidate for garbage collection
-async fn is_gc_candidate_segment_block(
-    entry: &Entry,
-    op: &Operator,
-    gc_root_meta_ts: DateTime<Utc>,
-) -> Result<bool> {
-    let path = entry.path();
-    let last_part = path.rsplit('/').next().unwrap();
-    if last_part.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
-        return Ok(true);
-    }
-    let last_modified = if let Some(v) = entry.metadata().last_modified() {
-        v
-    } else {
-        let path = entry.path();
-        let meta = op.stat(path).await?;
-        meta.last_modified().ok_or_else(|| {
-            ErrorCode::StorageOther(format!(
-                "Failed to get `last_modified` metadata of the entry '{}'",
-                path
-            ))
-        })?
-    };
-
-    Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
 
 impl FuseTable {
@@ -391,298 +290,72 @@ impl FuseTable {
         Ok(Some(segments))
     }
 
-    pub async fn prepare_snapshot_gc_selection(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        respect_flash_back: bool,
-    ) -> Result<Option<SnapshotGcSelection>> {
-        let Some(latest_snapshot) = self.read_table_snapshot().await? else {
-            info!(
-                "Table {} has no snapshot, stopping vacuum",
-                self.table_info.desc
-            );
+    /// Find the earliest snapshot via snapshot history traversal
+    #[async_backtrace::framed]
+    pub async fn find_earliest_snapshot_via_history(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let Some(head_location) = self.snapshot_loc() else {
             return Ok(None);
         };
+        let snapshot_version = TableMetaLocationGenerator::snapshot_version(&head_location);
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let mut snapshot_stream = reader.snapshot_history(
+            head_location,
+            snapshot_version,
+            self.meta_location_generator().clone(),
+        );
 
-        let start = std::time::Instant::now();
-        let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
-        let snapshot_location_prefix = self.meta_location_generator().snapshot_location_prefix();
-
-        let mut is_vacuum_all = false;
-        let mut need_update_lvt = false;
-        let mut respect_flash_back_with_lvt = None;
-
-        let snapshots_before_lvt = match retention_policy {
-            RetentionPolicy::ByTimePeriod(delta_duration) => {
-                info!("Using ByTimePeriod policy {:?}", delta_duration);
-                let retention_period = if self.is_transient() {
-                    // For transient table, keep no history data
-                    TimeDelta::zero()
-                } else {
-                    delta_duration
-                };
-
-                // A zero retention period indicates that we should vacuum all the historical snapshots
-                is_vacuum_all = retention_period.is_zero();
-
-                let Some(lvt) = self
-                    .set_lvt(latest_snapshot, ctx.as_ref(), retention_period)
-                    .await?
-                else {
-                    return Ok(None);
-                };
-
-                if respect_flash_back {
-                    respect_flash_back_with_lvt = Some(lvt);
-                }
-
-                ctx.set_status_info(&format!(
-                    "Set LVT for table {}, elapsed: {:?}, LVT: {:?}",
-                    self.table_info.desc,
-                    start.elapsed(),
-                    lvt
-                ));
-
-                if is_vacuum_all {
-                    self.list_files_until_prefix(
-                        snapshot_location_prefix,
-                        self.snapshot_loc().unwrap().as_str(),
-                        true,
-                        None,
-                    )
-                    .await?
-                } else {
-                    self.list_files_until_timestamp(snapshot_location_prefix, lvt, true, None)
-                        .await?
-                }
-            }
-            RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots_to_keep) => {
-                info!(
-                    "Using ByNumOfSnapshotsToKeep policy {:?}",
-                    num_snapshots_to_keep
-                );
-                // List the snapshot order by timestamp asc, till the current snapshot(inclusively).
-                let need_one_more = true;
-                let mut snapshots = self
-                    .list_files_until_prefix(
-                        snapshot_location_prefix,
-                        // Safe to unwrap here: we have checked that `fuse_table` has a snapshot
-                        self.snapshot_loc().unwrap().as_str(),
-                        need_one_more,
-                        None,
-                    )
-                    .await?;
-                let len = snapshots.len();
-                if len <= num_snapshots_to_keep {
-                    // Only the current snapshot is there, done
-                    return Ok(None);
-                }
-                if num_snapshots_to_keep == 1 {
-                    // Expecting only one snapshot left, which means that we can use the current snapshot
-                    // as gc root, this flag will be propagated to the select_gc_root func later.
-                    is_vacuum_all = true;
-                }
-                need_update_lvt = true;
-
-                // When selecting the GC root later, the last snapshot in `snapshots` (after truncation)
-                // is the candidate, but its commit status is uncertain, so its previous snapshot is used
-                // as the GC root instead (except in the is_vacuum_all case).
-
-                // Therefore, during snapshot truncation, we keep 2 extra snapshots;
-                // see `select_gc_root` for details.
-                let num_candidates = len - num_snapshots_to_keep + 2;
-                snapshots.truncate(num_candidates);
-                snapshots
-            }
-        };
-
-        let elapsed = start.elapsed();
-        ctx.set_status_info(&format!(
-            "Listed snapshots for table {}, elapsed: {:?}, snapshots_dir: {:?}, snapshots: {:?}",
-            self.table_info.desc,
-            elapsed,
-            snapshot_location_prefix,
-            slice_summary(&snapshots_before_lvt)
-        ));
-
-        let Some(selection) = self
-            .select_gc_root(
-                ctx,
-                &snapshots_before_lvt,
-                is_vacuum_all,
-                respect_flash_back_with_lvt,
-            )
-            .await?
-        else {
-            return Ok(None);
-        };
-
-        if need_update_lvt {
-            let cat = ctx.get_default_catalog()?;
-            cat.set_table_lvt(
-                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
-                &LeastVisibleTime::new(selection.gc_root.timestamp.unwrap()),
-            )
-            .await?;
+        let mut last_snapshot = None;
+        while let Some((snapshot, _version)) = snapshot_stream.try_next().await? {
+            last_snapshot = Some(snapshot);
         }
-
-        ctx.set_status_info(&format!(
-            "Selected gc_root for table {}, elapsed: {:?}, gc_root: {:?}, snapshots_to_gc: {:?}",
-            self.table_info.desc,
-            start.elapsed(),
-            selection.gc_root,
-            slice_summary(&selection.snapshots_to_gc)
-        ));
-        Ok(Some(selection))
+        Ok(last_snapshot)
     }
 
-    async fn select_gc_root(
+    /// List owner files that are eligible for gc under an optional `(root_ts, root_meta_ts)` cutoff.
+    pub async fn list_files_for_gc(
         &self,
-        ctx: &Arc<dyn TableContext>,
-        snapshots_before_lvt: &[Entry],
-        is_vacuum_all: bool,
-        respect_flash_back: Option<DateTime<Utc>>,
-    ) -> Result<Option<SnapshotGcSelection>> {
-        let op = self.get_operator();
-        let gc_root_path = if is_vacuum_all {
-            // safe to unwrap, or we should have stopped vacuuming in set_lvt()
-            self.snapshot_loc().unwrap()
-        } else if let Some(lvt) = respect_flash_back {
-            let latest_location = self.snapshot_loc().unwrap();
-            let gc_root = self
-                .find_location(ctx, latest_location, |snapshot| {
-                    snapshot.timestamp.is_some_and(|ts| ts <= lvt)
-                })
-                .await
-                .ok();
-            let Some(gc_root) = gc_root else {
-                info!("no gc_root found, stop vacuuming");
-                return Ok(None);
-            };
-            gc_root
-        } else {
-            if snapshots_before_lvt.is_empty() {
-                info!("no snapshots before lvt, stop vacuuming");
-                return Ok(None);
+        prefix: &str,
+        cutoff: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    ) -> Result<Vec<String>> {
+        match cutoff {
+            Some((root_timestamp, root_snapshot_meta_ts)) => {
+                let files = self
+                    .list_files_until_timestamp(
+                        prefix,
+                        root_timestamp,
+                        false,
+                        Some(root_snapshot_meta_ts),
+                    )
+                    .await?
+                    .into_iter()
+                    .map(|entry| entry.path().to_string())
+                    .collect();
+                Ok(files)
             }
-            let (anchor, _) = SnapshotsIO::read_snapshot(
-                snapshots_before_lvt.last().unwrap().path().to_owned(),
-                op.clone(),
-                false,
-            )
-            .await?;
-            let Some((gc_root_id, gc_root_ver)) = anchor.prev_snapshot_id else {
-                info!("anchor has no prev_snapshot_id, stop vacuuming");
-                return Ok(None);
-            };
-            let gc_root_path = self
-                .meta_location_generator()
-                .gen_snapshot_location(&gc_root_id, gc_root_ver)?;
-            if !is_uuid_v7(&gc_root_id) {
-                info!("gc_root {} is not v7", gc_root_path);
-                return Ok(None);
-            }
-            gc_root_path
-        };
-
-        let dal = self.get_operator_ref();
-        let gc_root = SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await;
-        let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
-            Ok(v) => v.last_modified().ok_or_else(|| {
-                ErrorCode::StorageOther(format!(
-                    "Failed to get `last_modified` metadata of the gc root object '{}'",
-                    gc_root_path
-                ))
-            })?,
-            Err(e) => {
-                return if e.kind() == ErrorKind::NotFound {
-                    // Concurrent vacuum, ignore it
-                    Ok(None)
-                } else {
-                    Err(e.into())
-                };
-            }
-        };
-
-        match gc_root {
-            Ok((gc_root, _)) => {
-                info!("gc_root found: {:?}", gc_root);
-                let mut gc_candidates = Vec::with_capacity(snapshots_before_lvt.len());
-
-                for snapshot in snapshots_before_lvt.iter() {
-                    let path = snapshot.path();
-                    let last_part = path.rsplit('/').next().unwrap();
-                    if last_part.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
-                        gc_candidates.push(path.to_owned());
-                    } else {
-                        // This snapshot is created by a node of the previous version which does not
-                        // support vacuum2, we rely on the `ASSUMPTION_MAX_TXN_DURATION` to identify if
-                        // it is available to be vacuumed.
-                        let last_modified = match snapshot.metadata().last_modified() {
-                            None => dal.stat(path).await?.last_modified().ok_or_else(|| {
-                                ErrorCode::StorageOther(format!(
-                                    "Failed to get `last_modified` metadata of the snapshot object '{}'",
-                                    gc_root_path
-                                ))
-                            })?,
-                            Some(v) => v,
-                        };
-                        if last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
-                            gc_candidates.push(path.to_owned());
-                        }
-                    }
-                }
-
-                let gc_root_idx = gc_candidates.binary_search(&gc_root_path).map_err(|_| {
-                    ErrorCode::Internal(format!(
-                        "gc root path {} should be one of the candidates, candidates: {:?}",
-                        gc_root_path, gc_candidates
-                    ))
-                })?;
-                let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
-                Ok(Some(SnapshotGcSelection {
-                    gc_root,
-                    snapshots_to_gc,
-                    gc_root_meta_ts,
-                    gc_root_path,
-                }))
-            }
-            Err(e) => {
-                info!("read gc_root {} failed: {:?}", gc_root_path, e);
-                Ok(None)
-            }
+            None => self.list_files(prefix.to_string(), |_, _| true).await,
         }
     }
 
-    /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).
-    ///
-    /// Return `None` means we stop vacuuming, but don't want to report error to user.
-    pub async fn set_lvt(
+    /// Remove snapshot objects after evicting snapshot cache entries on the local node.
+    pub async fn cleanup_snapshot_files(
         &self,
-        latest_snapshot: Arc<TableSnapshot>,
-        ctx: &dyn TableContext,
-        retention_period: TimeDelta,
-    ) -> Result<Option<DateTime<Utc>>> {
-        if !is_uuid_v7(&latest_snapshot.snapshot_id) {
-            info!(
-                "Latest snapshot is not v7, stopping vacuum: {:?}",
-                latest_snapshot.snapshot_id
-            );
-            return Ok(None);
+        ctx: &Arc<dyn TableContext>,
+        snapshot_files: &[String],
+        dry_run: bool,
+    ) -> Result<()> {
+        if dry_run || snapshot_files.is_empty() {
+            return Ok(());
         }
-        let catalog = ctx.get_default_catalog()?;
-        // safe to unwrap, as we have checked the version is v4
-        let latest_ts = latest_snapshot.timestamp.unwrap();
-        let lvt_point_candidate = std::cmp::min(Utc::now() - retention_period, latest_ts);
 
-        let lvt_point = catalog
-            .set_table_lvt(
-                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
-                &LeastVisibleTime::new(lvt_point_candidate),
-            )
-            .await?
-            .time;
-        Ok(Some(lvt_point))
+        if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
+            for path in snapshot_files {
+                snapshot_cache.evict(path);
+            }
+        }
+
+        Files::create(ctx.clone(), self.get_operator())
+            .remove_file_in_batch(snapshot_files)
+            .await
     }
 }
 
@@ -707,17 +380,102 @@ pub async fn vacuum_tables_from_info(
     Ok(())
 }
 
-pub fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
-    if s.len() > 10 {
-        let first_five = &s[..5];
-        let last_five = &s[s.len() - 5..];
-        format!(
-            "First five: {:?}, Last five: {:?},Len: {}",
-            first_five,
-            last_five,
-            s.len()
-        )
-    } else {
-        format!("{:?}", s)
+/// Object storage supported by Databend is expected to return entries sorted in ascending lexicographical
+/// order by object key. Databend leverages this property to enhance the efficiency and thoroughness
+/// of the vacuum process.
+///
+/// The safety of the vacuum algorithm does not depend on this ordering.
+async fn general_list_until_prefix(
+    dal: &Operator,
+    path: &str,
+    until: &str,
+    need_one_more: bool,
+    gc_root_meta_ts: Option<DateTime<Utc>>,
+) -> Result<Vec<Entry>> {
+    let mut lister = dal.lister(path).await?;
+    let mut paths = vec![];
+    while let Some(entry) = lister.try_next().await? {
+        if entry.metadata().is_dir() {
+            continue;
+        }
+        if entry.path() >= until {
+            info!("entry path: {} >= until: {}", entry.path(), until);
+            if need_one_more {
+                paths.push(entry);
+            }
+            break;
+        }
+        if gc_root_meta_ts.is_none()
+            || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
+        {
+            paths.push(entry);
+        }
     }
+    Ok(paths)
+}
+
+/// If storage is backed by FS, we prioritize thoroughness over efficiency (though efficiency loss
+/// is usually not significant). All entries are fetched and sorted before extracting the prefix entries.
+async fn fs_list_until_prefix(
+    dal: &Operator,
+    path: &str,
+    until: &str,
+    need_one_more: bool,
+    gc_root_meta_ts: Option<DateTime<Utc>>,
+) -> Result<Vec<Entry>> {
+    // Fetch ALL entries from the path and sort them by path in lexicographical order.
+    let mut lister = dal.lister(path).await?;
+    let mut entries = Vec::new();
+    while let Some(item) = lister.try_next().await? {
+        if item.metadata().is_file() {
+            entries.push(item);
+        }
+    }
+    entries.sort_by(|l, r| l.path().cmp(r.path()));
+
+    // Extract entries up to the `until` path, respecting lexicographical order.
+    let mut res = Vec::new();
+    for entry in entries {
+        if entry.path() >= until {
+            info!("entry path: {} >= until: {}", entry.path(), until);
+            if need_one_more {
+                res.push(entry);
+            }
+            break;
+        }
+        if gc_root_meta_ts.is_none()
+            || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
+        {
+            res.push(entry);
+        }
+    }
+
+    Ok(res)
+}
+
+/// Check if an entry is a candidate for garbage collection
+async fn is_gc_candidate_segment_block(
+    entry: &Entry,
+    op: &Operator,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<bool> {
+    let path = entry.path();
+    let last_part = path.rsplit('/').next().unwrap();
+    if last_part.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
+        return Ok(true);
+    }
+    let last_modified = if let Some(v) = entry.metadata().last_modified() {
+        v
+    } else {
+        let path = entry.path();
+        let meta = op.stat(path).await?;
+        meta.last_modified().ok_or_else(|| {
+            ErrorCode::StorageOther(format!(
+                "Failed to get `last_modified` metadata of the entry '{}'",
+                path
+            ))
+        })?
+    };
+
+    Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
