@@ -66,7 +66,7 @@ pub async fn hook_analyze(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 /// hook the analyze action with a on-finished callback.
 async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
     // evict the table from cache
-    ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table)?;
+    ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table, None)?;
     ctx.clear_table_meta_timestamps_cache();
 
     let table = ctx
