@@ -196,6 +196,8 @@ impl ExchangeTransform {
 
         let waker = pipeline.get_waker();
         let compression = ctx.get_settings().get_query_flight_compression()?;
+        let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
+        let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
 
         pipeline.resize(local_threads, false)?;
 
@@ -224,6 +226,8 @@ impl ExchangeTransform {
                 scatter.clone(),
                 remote_outbound.clone(),
                 waker.clone(),
+                rows_threshold,
+                bytes_threshold,
             ));
         }
 

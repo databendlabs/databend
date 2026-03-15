@@ -49,6 +49,8 @@ impl HashSendSink {
         scatter: Arc<Box<dyn FlightScatter>>,
         channels: Vec<Arc<dyn OutboundChannel>>,
         waker: Arc<ExecutorWaker>,
+        rows_threshold: usize,
+        bytes_threshold: usize,
     ) -> PipeItem {
         let input = InputPort::create();
         let scatter_size = channels.len();
@@ -58,8 +60,8 @@ impl HashSendSink {
             input: input.clone(),
             tasks: SyncTaskSet::new(worker_id, waker),
             partition_stream: BlockPartitionStream::create(
-                super::HASH_SEND_ROWS_THRESHOLD,
-                super::HASH_SEND_BYTES_THRESHOLD,
+                rows_threshold,
+                bytes_threshold,
                 scatter_size,
             ),
             handle: None,

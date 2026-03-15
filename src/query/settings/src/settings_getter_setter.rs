@@ -1004,6 +1004,14 @@ impl Settings {
         self.try_get_u64("flight_connection_retry_interval")
     }
 
+    pub fn get_hash_shuffle_rows_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_rows_threshold")? as usize)
+    }
+
+    pub fn get_hash_shuffle_bytes_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_bytes_threshold")? as usize)
+    }
+
     pub fn get_network_policy(&self) -> Result<String> {
         self.try_get_string("network_policy")
     }

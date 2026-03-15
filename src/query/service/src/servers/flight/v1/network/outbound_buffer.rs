@@ -64,34 +64,32 @@ impl Channel {
         self.pending_queue.len()
     }
 
-    fn pop_front(&mut self, _max_batch_bytes: usize) -> Option<FlightData> {
-        self.pending_queue.pop().map(|x| x.into_data()).ok()
-        // let mut items = Vec::new();
-        // let mut total = 0usize;
-        //
-        // while let Ok(next) = self.pending_queue.pop() {
-        //     let data = next.into_data();
-        //     total += data.data_body.len();
-        //     items.push(data);
-        //     if total >= max_batch_bytes {
-        //         break;
-        //     }
-        // }
-        //
-        // match items.len() {
-        //     0 => None,
-        //     1 => Some(items.into_iter().next().unwrap()),
-        //     _ => {
-        //         let tid_bytes: [u8; 2] = [items[0].app_metadata[0], items[0].app_metadata[1]];
-        //         Some(merge_flight_data_batch(tid_bytes, items))
-        //     }
-        // }
+    fn pop_front(&mut self, max_batch_bytes: usize) -> Option<FlightData> {
+        let mut items = Vec::new();
+        let mut total = 0usize;
+
+        while let Ok(next) = self.pending_queue.pop() {
+            let data = next.into_data();
+            total += data.data_body.len();
+            items.push(data);
+            if total >= max_batch_bytes {
+                break;
+            }
+        }
+
+        match items.len() {
+            0 => None,
+            1 => Some(items.into_iter().next().unwrap()),
+            _ => {
+                let tid_bytes: [u8; 2] = [items[0].app_metadata[0], items[0].app_metadata[1]];
+                Some(merge_flight_data_batch(tid_bytes, items))
+            }
+        }
     }
 }
 
 const BATCH_MARKER: u8 = 0x02;
 
-#[allow(unused)]
 fn merge_flight_data_batch(tid_bytes: [u8; 2], items: Vec<FlightData>) -> FlightData {
     let mut app_metadata = BytesMut::with_capacity(5);
     app_metadata.put_slice(&tid_bytes);
