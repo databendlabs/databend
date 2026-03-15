@@ -498,7 +498,10 @@ pub enum AlterTableAction {
         new_connection: BTreeMap<String, String>,
     },
     CreateTableBranch {
-        spec: CreateTableRefSpec,
+        branch_name: Identifier,
+        travel_point: Option<TimeTravelPoint>,
+        #[drive(skip)]
+        retain: Option<Duration>,
     },
     CreateTableTag {
         spec: CreateTableRefSpec,
@@ -605,8 +608,25 @@ impl Display for AlterTableAction {
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
-            AlterTableAction::CreateTableBranch { spec } => {
-                write!(f, "CREATE BRANCH {spec}")?;
+            AlterTableAction::CreateTableBranch {
+                branch_name,
+                travel_point,
+                retain,
+            } => {
+                write!(f, "CREATE BRANCH {branch_name}")?;
+                if let Some(travel_point) = travel_point {
+                    write!(f, " AT {travel_point}")?;
+                }
+                if let Some(retain) = retain {
+                    let days = Duration::from_secs(60 * 60 * 24);
+                    if retain >= &days {
+                        let days = retain.as_secs() / (60 * 60 * 24);
+                        write!(f, " RETAIN {days} DAYS ")?;
+                    } else {
+                        let seconds = retain.as_secs();
+                        write!(f, " RETAIN {seconds} SECONDS ")?;
+                    }
+                }
             }
             AlterTableAction::CreateTableTag { spec } => {
                 write!(f, "CREATE TAG {spec}")?;

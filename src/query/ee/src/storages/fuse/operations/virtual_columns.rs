@@ -31,6 +31,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VirtualDataSchema;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
@@ -68,6 +69,7 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -76,6 +78,9 @@ use log::debug;
 use log::info;
 use opendal::ErrorKind;
 use opendal::Operator;
+
+use super::common::StoragePrefixes;
+use super::common::owner_of_path;
 
 // Refresh virtual columns in two phases:
 // 1) Prepare virtual column files for selected blocks (slow path, no commit).
@@ -395,6 +400,206 @@ pub async fn commit_refresh_virtual_column(
     Ok(applied_blocks)
 }
 
+fn virtual_block_prefix(fuse_table: &FuseTable) -> String {
+    let table_data_prefix = fuse_table
+        .meta_location_generator()
+        .prefix()
+        .trim_start_matches('/');
+    format!("{}/{}/", table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
+}
+
+#[async_backtrace::framed]
+async fn collect_retainable_history_branch_tables(
+    fuse_table: &FuseTable,
+    ctx: &Arc<dyn TableContext>,
+) -> Result<Vec<databend_common_meta_app::schema::HistoryTableBranchMeta>> {
+    let catalog = ctx
+        .get_catalog(fuse_table.get_table_info().catalog())
+        .await?;
+    let retention_boundary = chrono::Utc::now()
+        - chrono::Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+    catalog
+        .list_history_table_branches(ListHistoryTableBranchesReq {
+            table_id: fuse_table.get_id(),
+            retention_boundary: Some(retention_boundary),
+        })
+        .await
+}
+
+#[async_backtrace::framed]
+async fn collect_referenced_virtual_locations_from_segments(
+    fuse_table: &FuseTable,
+    segment_locations: &HashSet<Location>,
+) -> Result<HashSet<String>> {
+    if segment_locations.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    let segment_reader =
+        MetaReaders::segment_info_reader(fuse_table.get_operator(), fuse_table.schema());
+    let mut referenced_virtual_locations = HashSet::new();
+    for (location, ver) in segment_locations {
+        let segment = segment_reader
+            .read(&LoadParams {
+                location: location.to_string(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+
+        for block_meta in segment.block_metas()?.into_iter() {
+            if let Some(virtual_block_meta) = &block_meta.virtual_block_meta {
+                let virtual_location = virtual_block_meta.virtual_location.0.as_str();
+                if !virtual_location.is_empty() {
+                    referenced_virtual_locations.insert(virtual_location.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(referenced_virtual_locations)
+}
+
+#[async_backtrace::framed]
+async fn collect_snapshot_referenced_segments(
+    ctx: Arc<dyn TableContext>,
+    fuse_table: &FuseTable,
+) -> Result<Option<HashSet<Location>>> {
+    fuse_table
+        .get_snapshot_referenced_segments(ctx.clone(), |status| ctx.set_status_info(&status))
+        .await
+}
+
+#[async_backtrace::framed]
+async fn vacuum_virtual_column_orphans(
+    ctx: Arc<dyn TableContext>,
+    fuse_table: &FuseTable,
+) -> Result<u64> {
+    // Step 1: Build owner maps (base table + all retainable branches).
+    let retain_branches = collect_retainable_history_branch_tables(fuse_table, &ctx).await?;
+    ctx.set_status_info(&format!(
+        "vacuum virtual columns: collected retainable history branches, table:{}, branches:{}",
+        fuse_table.get_table_info().desc,
+        retain_branches.len()
+    ));
+
+    let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
+    let base_id = fuse_table.get_id();
+    let base_prefix = format!(
+        "{}/",
+        FuseTable::parse_storage_prefix_from_table_info(fuse_table.get_table_info())?
+    );
+
+    let mut storage_prefixes: StoragePrefixes = HashMap::new();
+    storage_prefixes.insert(base_prefix, base_id);
+
+    // owners: table_id -> FuseTable (branches only; base uses fuse_table directly)
+    let mut owners: HashMap<u64, Box<FuseTable>> = HashMap::new();
+    for branch in retain_branches {
+        let branch_table = fuse_table.branch_table_from_meta(branch, &s3_storage_class)?;
+        let branch_id = branch_table.get_id();
+        let branch_prefix = format!(
+            "{}/",
+            FuseTable::parse_storage_prefix_from_table_info(branch_table.get_table_info())?
+        );
+        storage_prefixes.insert(branch_prefix, branch_id);
+        owners.insert(branch_id, branch_table);
+    }
+
+    // Step 2: Phase A — collect all referenced segments, classified by owning table.
+    let mut segments_by_owner: HashMap<u64, HashSet<Location>> = HashMap::new();
+
+    // Base table segments (includes tag-protected segments).
+    if let Some(base_segments) =
+        collect_snapshot_referenced_segments(ctx.clone(), fuse_table).await?
+    {
+        for segment in base_segments {
+            let owner_id = owner_of_path(&storage_prefixes, &segment.0).unwrap_or(base_id);
+            segments_by_owner
+                .entry(owner_id)
+                .or_default()
+                .insert(segment);
+        }
+    }
+
+    // Branch segments.
+    for (&branch_id, branch_table) in &owners {
+        let Some(branch_segments) =
+            collect_snapshot_referenced_segments(ctx.clone(), branch_table.as_ref()).await?
+        else {
+            continue;
+        };
+        for segment in branch_segments {
+            let owner_id = owner_of_path(&storage_prefixes, &segment.0).unwrap_or(branch_id);
+            segments_by_owner
+                .entry(owner_id)
+                .or_default()
+                .insert(segment);
+        }
+    }
+
+    // Step 3: Phase A — read segments per owner, collect referenced virtual locations.
+    let mut virtual_refs_by_owner: HashMap<u64, HashSet<String>> = HashMap::new();
+
+    for (owner_id, segments) in &segments_by_owner {
+        // Use the owner's FuseTable to read its segments (correct operator/schema).
+        let owner_table: &FuseTable = if *owner_id == base_id {
+            fuse_table
+        } else if let Some(t) = owners.get(owner_id) {
+            t.as_ref()
+        } else {
+            // Unknown owner (e.g. already-cleaned branch) — skip.
+            continue;
+        };
+
+        let virtual_locations =
+            collect_referenced_virtual_locations_from_segments(owner_table, segments).await?;
+        for vl in virtual_locations {
+            let vl_owner = owner_of_path(&storage_prefixes, &vl).unwrap_or(*owner_id);
+            virtual_refs_by_owner
+                .entry(vl_owner)
+                .or_default()
+                .insert(vl);
+        }
+    }
+
+    ctx.set_status_info(&format!(
+        "vacuum virtual columns: collected refs, table:{}, owners:{}, total_virtual_refs:{}",
+        fuse_table.get_table_info().desc,
+        owners.len() + 1,
+        virtual_refs_by_owner
+            .values()
+            .map(|s| s.len())
+            .sum::<usize>()
+    ));
+
+    // Step 4: Phase B — cleanup legacy files and orphan virtual files per owner.
+    let mut orphan_removed = 0_u64;
+
+    // Base table.
+    remove_legacy_virtual_column_files(fuse_table).await?;
+    orphan_removed += remove_orphan_virtual_column_files_with_referenced_locations(
+        ctx.clone(),
+        fuse_table,
+        virtual_refs_by_owner.remove(&base_id).unwrap_or_default(),
+    )
+    .await?;
+
+    // Branches.
+    for (branch_id, branch_table) in &owners {
+        remove_legacy_virtual_column_files(branch_table.as_ref()).await?;
+        orphan_removed += remove_orphan_virtual_column_files_with_referenced_locations(
+            ctx.clone(),
+            branch_table.as_ref(),
+            virtual_refs_by_owner.remove(branch_id).unwrap_or_default(),
+        )
+        .await?;
+    }
+
+    Ok(orphan_removed)
+}
+
 #[async_backtrace::framed]
 pub async fn do_vacuum_virtual_column(
     ctx: Arc<dyn TableContext>,
@@ -468,17 +673,12 @@ pub async fn do_vacuum_virtual_column(
         execute_complete_pipeline(ctx.clone(), build_res)?;
     }
 
-    // Unconditionally remove legacy virtual column files. Safe even if historical
-    // snapshots still reference them — missing virtual columns are tolerated and
-    // queries fall back to reading from the original variant column.
-    remove_legacy_virtual_column_files(fuse_table).await?;
-
     let orphan_removed = if need_commit {
         let latest_table = fuse_table.refresh(ctx.as_ref()).await?;
         let latest_fuse_table = FuseTable::try_from_table(latest_table.as_ref())?;
-        remove_orphan_virtual_column_files(ctx.clone(), latest_fuse_table).await?
+        vacuum_virtual_column_orphans(ctx.clone(), latest_fuse_table).await?
     } else {
-        remove_orphan_virtual_column_files(ctx.clone(), fuse_table).await?
+        vacuum_virtual_column_orphans(ctx.clone(), fuse_table).await?
     };
     removed_files += orphan_removed;
 
@@ -732,48 +932,14 @@ async fn remove_legacy_virtual_column_files(fuse_table: &FuseTable) -> Result<()
 }
 
 #[async_backtrace::framed]
-async fn remove_orphan_virtual_column_files(
+async fn remove_orphan_virtual_column_files_with_referenced_locations(
     ctx: Arc<dyn TableContext>,
     fuse_table: &FuseTable,
+    referenced_virtual_locations: HashSet<String>,
 ) -> Result<u64> {
-    let Some(snapshot_referenced_segments) = fuse_table
-        .get_snapshot_referenced_segments(ctx.clone(), |status| ctx.set_status_info(&status))
-        .await?
-    else {
-        return Ok(0);
-    };
-
-    let table_schema = fuse_table.schema();
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
-
-    let mut referenced_virtual_locations = HashSet::new();
-    for (location, ver) in &snapshot_referenced_segments {
-        let segment = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
-            .await?;
-
-        for block_meta in segment.block_metas()?.into_iter() {
-            if let Some(virtual_block_meta) = &block_meta.virtual_block_meta {
-                let virtual_location = virtual_block_meta.virtual_location.0.as_str();
-                if !virtual_location.is_empty() {
-                    referenced_virtual_locations.insert(virtual_location.to_string());
-                }
-            }
-        }
-    }
-
     let mut all_virtual_locations = Vec::new();
     let operator = fuse_table.get_operator();
-    let table_data_prefix = fuse_table
-        .meta_location_generator()
-        .prefix()
-        .trim_start_matches('/');
-    let v2_prefix = format!("{}/{}/", table_data_prefix, FUSE_TBL_VIRTUAL_BLOCK_PREFIX);
+    let v2_prefix = virtual_block_prefix(fuse_table);
     collect_virtual_locations(&operator, &v2_prefix, &mut all_virtual_locations).await?;
 
     let files_to_remove: Vec<_> = all_virtual_locations
