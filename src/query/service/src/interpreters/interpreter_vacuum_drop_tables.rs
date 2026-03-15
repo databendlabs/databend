@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -32,8 +33,10 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
@@ -53,6 +56,49 @@ pub struct VacuumDropTablesInterpreter {
 impl VacuumDropTablesInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: VacuumDropTablePlan) -> Result<Self> {
         Ok(VacuumDropTablesInterpreter { ctx, plan })
+    }
+
+    async fn collect_vacuum_drop_targets(
+        &self,
+        catalog: &Arc<dyn Catalog>,
+        base_tables: &[Arc<dyn Table>],
+    ) -> Result<(Vec<Arc<dyn Table>>, HashMap<u64, u64>)> {
+        let mut vacuum_targets = Vec::with_capacity(base_tables.len());
+        let mut target_to_base_table = HashMap::new();
+        let mut seen_target_ids = HashSet::new();
+
+        let s3_storage_class = self.ctx.get_settings().get_s3_storage_class()?;
+        for table in base_tables {
+            let base_table_id = table.get_id();
+            vacuum_targets.push(table.clone());
+            target_to_base_table.insert(base_table_id, base_table_id);
+            seen_target_ids.insert(base_table_id);
+
+            let Ok(base_fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
+                continue;
+            };
+
+            let table_id = base_fuse_table.get_id();
+            let history_branches = catalog
+                .list_history_table_branches(ListHistoryTableBranchesReq {
+                    table_id,
+                    retention_boundary: None,
+                })
+                .await?;
+
+            for branch in history_branches {
+                let branch_table_id = branch.branch_id.table_id;
+                if seen_target_ids.insert(branch_table_id) {
+                    let target =
+                        base_fuse_table.branch_table_from_meta(branch, &s3_storage_class)?;
+                    let target: Arc<FuseTable> = Arc::from(target);
+                    vacuum_targets.push(target);
+                }
+                target_to_base_table.insert(branch_table_id, base_table_id);
+            }
+        }
+
+        Ok((vacuum_targets, target_to_base_table))
     }
 
     /// Vacuum metadata of dropped tables and databases.
@@ -234,13 +280,15 @@ impl Interpreter for VacuumDropTablesInterpreter {
         );
 
         let tables_count = tables.len();
+        let (vacuum_targets, target_to_base_table) =
+            self.collect_vacuum_drop_targets(&catalog, &tables).await?;
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-        let (files_opt, failed_tables) = handler
+        let (files_opt, failed_targets) = handler
             .do_vacuum_drop_tables(
                 threads_nums,
-                tables,
+                vacuum_targets,
                 if self.plan.option.dry_run.is_some() {
                     Some(DRY_RUN_LIMIT)
                 } else {
@@ -249,10 +297,19 @@ impl Interpreter for VacuumDropTablesInterpreter {
             )
             .await?;
 
+        let failed_tables = failed_targets
+            .into_iter()
+            .map(|target_id| {
+                target_to_base_table
+                    .get(&target_id)
+                    .copied()
+                    .unwrap_or(target_id)
+            })
+            .collect::<HashSet<_>>();
+
         let failed_db_ids = failed_tables
             .iter()
-            // Safe unwrap: the map is built from drop_ids
-            .map(|id| *containing_db.get(id).unwrap())
+            .filter_map(|id| containing_db.get(id).copied())
             .collect::<HashSet<_>>();
 
         let mut num_meta_keys_removed = 0;

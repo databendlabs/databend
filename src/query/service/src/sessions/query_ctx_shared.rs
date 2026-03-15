@@ -88,7 +88,8 @@ pub struct MemoryUpdater {
     pub peek_memory_usage: AtomicUsize,
 }
 
-type DatabaseAndTable = (String, String, String);
+type StreamCacheKey = (String, String, String);
+type TableCacheKey = (String, String, String, Option<String>);
 
 /// Data that needs to be shared in a query context.
 pub struct QueryContextShared {
@@ -124,8 +125,8 @@ pub struct QueryContextShared {
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
-    pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
-    pub(super) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
+    pub(super) tables_refs: Arc<Mutex<HashMap<TableCacheKey, Arc<dyn Table>>>>,
+    pub(super) streams_refs: Arc<RwLock<HashMap<StreamCacheKey, bool>>>,
     affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(super) catalog_manager: Arc<CatalogManager>,
     pub(super) data_operator: DataOperator,
@@ -488,7 +489,12 @@ impl QueryContextShared {
 
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
         let mut tables_refs = self.tables_refs.lock();
-        let table_meta_key = (catalog.to_string(), database.to_string(), name.to_string());
+        let table_meta_key = (
+            catalog.to_string(),
+            database.to_string(),
+            name.to_string(),
+            None,
+        );
 
         if let Entry::Vacant(v) = tables_refs.entry(table_meta_key) {
             v.insert(table);
@@ -501,15 +507,21 @@ impl QueryContextShared {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
-        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let table_meta_key = (
+            catalog.to_string(),
+            database.to_string(),
+            table.to_string(),
+            branch.map(str::to_string),
+        );
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
         let res = match already_in_cache {
             false => {
-                self.get_table_to_cache(catalog, database, table, max_batch_size)
+                self.get_table_to_cache(catalog, database, table, branch, max_batch_size)
                     .await?
             }
             true => self
@@ -529,14 +541,16 @@ impl QueryContextShared {
         catalog_name: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        let tenant = self.get_tenant();
         let table_meta_key = (
             catalog_name.to_string(),
             database.to_string(),
             table.to_string(),
+            branch.map(str::to_string),
         );
+        let tenant = self.get_tenant();
         let catalog = self
             .catalog_manager
             .get_catalog(
@@ -545,7 +559,9 @@ impl QueryContextShared {
                 self.session.session_ctx.session_state()?,
             )
             .await?;
-        let cache_table = catalog.get_table(&tenant, database, table).await?;
+        let cache_table = catalog
+            .get_table_with_branch(&tenant, database, table, branch)
+            .await?;
         let cache_table = self
             .cache_stream_source_table(catalog, cache_table, max_batch_size)
             .await?;
@@ -577,6 +593,7 @@ impl QueryContextShared {
             catalog.name(),
             source_database_name.to_string(),
             source_table_name.to_string(),
+            None,
         );
         let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
         let source_table = match already_in_cache {
@@ -627,8 +644,19 @@ impl QueryContextShared {
         ))
     }
 
-    pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+    pub fn evict_table_from_cache(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+    ) -> Result<()> {
+        let table_meta_key = (
+            catalog.to_string(),
+            database.to_string(),
+            table.to_string(),
+            branch.map(String::from),
+        );
         let mut tables_refs = self.tables_refs.lock();
         tables_refs.remove(&table_meta_key);
         Ok(())

@@ -64,6 +64,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -133,10 +134,12 @@ use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
+use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
@@ -1087,9 +1090,11 @@ impl Binder {
             };
 
         if let Some(branch_name) = branch.as_ref() {
-            return Err(legacy_table_ref_removed_error(format!(
-                "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
-            )));
+            if !matches!(action, AlterTableAction::CreateTableBranch { .. }) {
+                return Err(legacy_table_ref_removed_error(format!(
+                    "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
+                )));
+            }
         }
 
         match action {
@@ -1276,6 +1281,7 @@ impl Binder {
                                 &catalog,
                                 &database,
                                 &table,
+                                branch.as_deref(),
                                 &LockTableOption::LockWithRetry,
                             )
                             .await?
@@ -1468,6 +1474,30 @@ impl Binder {
                     },
                 )))
             }
+            AlterTableAction::CreateTableBranch { spec } => {
+                let navigation = if let Some(point) = &spec.travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                if branch.is_some() && matches!(navigation, Some(NavigationPoint::TableTag(_))) {
+                    return Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table}/{}`",
+                        branch.as_ref().unwrap()
+                    )));
+                }
+                let branch_name = self.normalize_identifier(&spec.name).name;
+                Ok(Plan::CreateTableBranch(Box::new(CreateTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch,
+                    branch_name,
+                    navigation,
+                    retain: spec.retain,
+                })))
+            }
             AlterTableAction::CreateTableTag { spec } => {
                 let navigation = if let Some(point) = &spec.travel_point {
                     Some(self.resolve_data_travel_point(bind_context, point)?)
@@ -1495,13 +1525,15 @@ impl Binder {
                     name,
                 })))
             }
-            AlterTableAction::CreateTableBranch { .. }
-            | AlterTableAction::DropTableBranch { .. } => {
-                // Keep the grammar reserved for the upcoming redesign, but do
-                // not generate legacy branch/tag DDL plans anymore.
-                Err(legacy_table_ref_removed_error(
-                    "ALTER TABLE ... CREATE/DROP BRANCH",
-                ))
+            AlterTableAction::DropTableBranch { branch_name } => {
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::DropTableBranch(Box::new(DropTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch_name,
+                })))
             }
         }
     }
