@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableBranchMetaReq;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -39,6 +40,8 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReply;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -50,6 +53,7 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
@@ -427,8 +431,23 @@ impl Catalog for SessionCatalog {
             .await
     }
 
+    async fn create_table_branch(
+        &self,
+        req: CreateTableBranchReq,
+    ) -> Result<CreateTableBranchReply> {
+        self.inner.create_table_branch(req).await
+    }
+
+    async fn commit_table_branch_meta(&self, req: CommitTableBranchMetaReq) -> Result<()> {
+        self.inner.commit_table_branch_meta(req).await
+    }
+
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
         self.inner.create_table_tag(req).await
+    }
+
+    async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<()> {
+        self.inner.drop_table_branch(req).await
     }
 
     async fn drop_table_tag(&self, req: DropTableTagReq) -> Result<()> {

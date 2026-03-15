@@ -328,7 +328,13 @@ pub trait TableContext: Send + Sync {
             .await
     }
 
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
+    fn evict_table_from_cache(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<String>,
+    ) -> Result<()>;
 
     async fn filter_out_copied_files(
         &self,
@@ -447,6 +453,7 @@ pub trait TableContext: Send + Sync {
         catalog_name: &str,
         db_name: &str,
         tbl_name: &str,
+        branch: Option<&str>,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
 

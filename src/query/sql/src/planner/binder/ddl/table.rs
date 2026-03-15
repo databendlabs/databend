@@ -133,10 +133,12 @@ use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
+use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
@@ -1276,6 +1278,7 @@ impl Binder {
                                 &catalog,
                                 &database,
                                 &table,
+                                branch.as_deref(),
                                 &LockTableOption::LockWithRetry,
                             )
                             .await?
@@ -1468,6 +1471,28 @@ impl Binder {
                     },
                 )))
             }
+            AlterTableAction::CreateTableBranch {
+                branch_name,
+                travel_point,
+                retain,
+            } => {
+                let navigation = if let Some(point) = travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::CreateTableBranch(Box::new(CreateTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch,
+                    branch_name,
+                    navigation,
+                    retain: *retain,
+                })))
+            }
             AlterTableAction::CreateTableTag { spec } => {
                 let navigation = if let Some(point) = &spec.travel_point {
                     Some(self.resolve_data_travel_point(bind_context, point)?)
@@ -1495,13 +1520,15 @@ impl Binder {
                     name,
                 })))
             }
-            AlterTableAction::CreateTableBranch { .. }
-            | AlterTableAction::DropTableBranch { .. } => {
-                // Keep the grammar reserved for the upcoming redesign, but do
-                // not generate legacy branch/tag DDL plans anymore.
-                Err(legacy_table_ref_removed_error(
-                    "ALTER TABLE ... CREATE/DROP BRANCH",
-                ))
+            AlterTableAction::DropTableBranch { branch_name } => {
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::DropTableBranch(Box::new(DropTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch_name,
+                })))
             }
         }
     }

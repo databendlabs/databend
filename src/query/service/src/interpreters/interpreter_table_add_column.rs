@@ -215,7 +215,7 @@ impl Interpreter for AddTableColumnInterpreter {
         // update to refresh the value with default expr.
         if need_update {
             self.ctx
-                .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
+                .evict_table_from_cache(catalog_name, db_name, tbl_name, None)?;
             let query = format!(
                 "UPDATE `{}`.`{}` SET `{}` = {};",
                 db_name,

@@ -26,6 +26,33 @@ use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
+impl FromToProto for mt::TableBranch {
+    type PB = pb::TableBranch;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(Self {
+            expire_at: p.expire_at.from_pb_opt()?,
+            branch_id: p.branch_id,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            expire_at: self.expire_at.to_pb_opt()?,
+            branch_id: self.branch_id,
+        })
+    }
+}
+
 impl FromToProto for mt::TableTag {
     type PB = pb::TableTag;
 

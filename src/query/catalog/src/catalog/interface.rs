@@ -23,6 +23,7 @@ use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableBranchMetaReq;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -35,6 +36,8 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReply;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -47,6 +50,7 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
@@ -337,6 +341,30 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(format!(
             "'get_table_branch_no_expire' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn create_table_branch(
+        &self,
+        _req: CreateTableBranchReq,
+    ) -> Result<CreateTableBranchReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'create_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn commit_table_branch_meta(&self, _req: CommitTableBranchMetaReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'commit_table_branch_meta' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn drop_table_branch(&self, _req: DropTableBranchReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'drop_table_branch' not implemented for catalog {}",
             self.name()
         )))
     }
