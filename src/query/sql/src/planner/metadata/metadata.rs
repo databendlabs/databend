@@ -27,6 +27,7 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
+pub use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::display::display_tuple_field_name;
@@ -44,10 +45,9 @@ pub type IndexType = usize;
 
 /// Use IndexType::MAX to represent dummy table.
 pub const DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
-pub const DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
 
-/// ColumnSet represents a set of columns identified by its IndexType.
-pub type ColumnSet = BTreeSet<IndexType>;
+/// ColumnSet represents a set of columns identified by `Symbol`.
+pub type ColumnSet = BTreeSet<Symbol>;
 
 /// A Send & Send version of [`Metadata`].
 ///
@@ -74,18 +74,22 @@ pub struct Metadata {
     /// to prevent these cols to be pruned.
     non_lazy_columns: ColumnSet,
     /// Mappings from table index to _row_id column index.
-    table_row_id_index: HashMap<IndexType, IndexType>,
+    table_row_id_index: HashMap<IndexType, Symbol>,
     agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
     max_column_position: usize, // for CSV
 
     /// Scan id of each scan operator.
     next_scan_id: usize,
     /// Mappings from base column index to scan id.
-    base_column_scan_id: HashMap<IndexType, usize>,
+    base_column_scan_id: HashMap<Symbol, usize>,
     next_runtime_filter_id: usize,
 }
 
 impl Metadata {
+    fn next_column_index(&self) -> Symbol {
+        Symbol::new(self.columns.len())
+    }
+
     pub fn table(&self, index: IndexType) -> &TableEntry {
         self.tables.get(index).expect("metadata must contain table")
     }
@@ -127,9 +131,9 @@ impl Metadata {
             .map(|table| table.index)
     }
 
-    pub fn column(&self, index: IndexType) -> &ColumnEntry {
+    pub fn column(&self, index: Symbol) -> &ColumnEntry {
         self.columns
-            .get(index)
+            .get(index.as_usize())
             .expect("metadata must contain column")
     }
 
@@ -137,15 +141,15 @@ impl Metadata {
         self.columns.as_slice()
     }
 
-    pub fn add_removed_mark_index(&mut self, index: IndexType) {
+    pub fn add_removed_mark_index(&mut self, index: Symbol) {
         self.removed_mark_indexes.insert(index);
     }
 
-    pub fn is_removed_mark_index(&self, index: IndexType) -> bool {
+    pub fn is_removed_mark_index(&self, index: Symbol) -> bool {
         self.removed_mark_indexes.contains(&index)
     }
 
-    pub fn add_retained_column(&mut self, index: IndexType) {
+    pub fn add_retained_column(&mut self, index: Symbol) {
         self.retained_columns.insert(index);
     }
 
@@ -169,7 +173,7 @@ impl Metadata {
         self.table_source.get(table_index)
     }
 
-    pub fn is_lazy_column(&self, index: usize) -> bool {
+    pub fn is_lazy_column(&self, index: Symbol) -> bool {
         self.lazy_columns.contains(&index)
     }
 
@@ -178,7 +182,7 @@ impl Metadata {
             // `lazy_columns` is only allowed to be set once.
             return;
         }
-        debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
+        debug_assert!(indices.iter().all(|i| i.as_usize() < self.columns.len()));
         self.lazy_columns.extend(indices);
     }
 
@@ -187,7 +191,7 @@ impl Metadata {
     }
 
     pub fn add_non_lazy_columns(&mut self, indices: ColumnSet) {
-        debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
+        debug_assert!(indices.iter().all(|i| i.as_usize() < self.columns.len()));
         self.non_lazy_columns.extend(indices);
     }
 
@@ -199,15 +203,15 @@ impl Metadata {
         &self.non_lazy_columns
     }
 
-    pub fn set_table_row_id_index(&mut self, table_index: IndexType, row_id_index: IndexType) {
+    pub fn set_table_row_id_index(&mut self, table_index: IndexType, row_id_index: Symbol) {
         self.table_row_id_index.insert(table_index, row_id_index);
     }
 
-    pub fn row_id_index_by_table_index(&self, table_index: IndexType) -> Option<IndexType> {
+    pub fn row_id_index_by_table_index(&self, table_index: IndexType) -> Option<Symbol> {
         self.table_row_id_index.get(&table_index).copied()
     }
 
-    pub fn row_id_indexes(&self) -> Vec<IndexType> {
+    pub fn row_id_indexes(&self) -> Vec<Symbol> {
         self.table_row_id_index.values().copied().collect()
     }
 
@@ -253,8 +257,8 @@ impl Metadata {
         column_id: ColumnId,
         column_position: Option<usize>,
         virtual_expr: Option<String>,
-    ) -> IndexType {
-        let column_index = self.columns.len();
+    ) -> Symbol {
+        let column_index = self.next_column_index();
         let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
             column_name: name,
             column_position,
@@ -269,8 +273,8 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_derived_column(&mut self, alias: String, data_type: DataType) -> IndexType {
-        let column_index = self.columns.len();
+    pub fn add_derived_column(&mut self, alias: String, data_type: DataType) -> Symbol {
+        let column_index = self.next_column_index();
         let column_entry = ColumnEntry::DerivedColumn(DerivedColumn {
             column_index,
             alias,
@@ -284,8 +288,8 @@ impl Metadata {
         &mut self,
         table_index: IndexType,
         internal_column: InternalColumn,
-    ) -> IndexType {
-        let column_index = self.columns.len();
+    ) -> Symbol {
+        let column_index = self.next_column_index();
         self.columns
             .push(ColumnEntry::InternalColumn(TableInternalColumn {
                 table_index,
@@ -305,8 +309,8 @@ impl Metadata {
         key_paths: OwnedKeyPaths,
         data_type: TableDataType,
         is_try: bool,
-    ) -> IndexType {
-        let column_index = self.columns.len();
+    ) -> Symbol {
+        let column_index = self.next_column_index();
         let column = ColumnEntry::VirtualColumn(VirtualColumn {
             table_index,
             source_column_name,
@@ -469,10 +473,10 @@ impl Metadata {
         table_index
     }
 
-    pub fn change_derived_column_alias(&mut self, index: IndexType, alias: String) {
+    pub fn change_derived_column_alias(&mut self, index: Symbol, alias: String) {
         let derived_column = self
             .columns
-            .get_mut(index)
+            .get_mut(index.as_usize())
             .expect("metadata must contain column");
         if let ColumnEntry::DerivedColumn(column) = derived_column {
             column.alias = alias;
@@ -499,11 +503,11 @@ impl Metadata {
         next_runtime_filter_id
     }
 
-    pub fn add_base_column_scan_id(&mut self, base_column_scan_id: HashMap<usize, usize>) {
+    pub fn add_base_column_scan_id(&mut self, base_column_scan_id: HashMap<Symbol, usize>) {
         self.base_column_scan_id.extend(base_column_scan_id);
     }
 
-    pub fn base_column_scan_id(&self, column_index: usize) -> Option<usize> {
+    pub fn base_column_scan_id(&self, column_index: Symbol) -> Option<usize> {
         self.base_column_scan_id.get(&column_index).cloned()
     }
 
@@ -610,7 +614,7 @@ impl TableEntry {
 #[derive(Clone, Debug)]
 pub struct BaseTableColumn {
     pub table_index: IndexType,
-    pub column_index: IndexType,
+    pub column_index: Symbol,
     pub column_name: String,
     // column_position inside table schema
     pub column_position: Option<usize>,
@@ -626,7 +630,7 @@ pub struct BaseTableColumn {
 
 #[derive(Clone, Debug)]
 pub struct DerivedColumn {
-    pub column_index: IndexType,
+    pub column_index: Symbol,
     pub alias: String,
     pub data_type: DataType,
 }
@@ -634,7 +638,7 @@ pub struct DerivedColumn {
 #[derive(Clone, Debug)]
 pub struct TableInternalColumn {
     pub table_index: IndexType,
-    pub column_index: IndexType,
+    pub column_index: Symbol,
     pub internal_column: InternalColumn,
 }
 
@@ -644,7 +648,7 @@ pub struct VirtualColumn {
     pub source_column_name: String,
     pub source_column_id: u32,
     pub column_id: u32,
-    pub column_index: IndexType,
+    pub column_index: Symbol,
     pub column_name: String,
     pub key_paths: OwnedKeyPaths,
     pub data_type: TableDataType,
@@ -669,7 +673,7 @@ pub enum ColumnEntry {
 }
 
 impl ColumnEntry {
-    pub fn index(&self) -> IndexType {
+    pub fn index(&self) -> Symbol {
         match self {
             ColumnEntry::BaseTableColumn(base) => base.column_index,
             ColumnEntry::DerivedColumn(derived) => derived.column_index,

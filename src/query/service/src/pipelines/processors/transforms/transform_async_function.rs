@@ -63,7 +63,6 @@ use tokio::sync::Mutex;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
-use crate::sql::IndexType;
 use crate::sql::plans::AsyncFunctionArgument;
 use crate::sql::plans::ReadFileFunctionArgument;
 
@@ -656,7 +655,7 @@ impl ReadFileContext {
         &mut self,
         ctx: Arc<QueryContext>,
         data_block: &mut DataBlock,
-        arg_indices: &[IndexType],
+        arg_indices: &[usize],
         data_type: &DataType,
         read_file_arg: &ReadFileFunctionArgument,
     ) -> Result<()> {

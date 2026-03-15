@@ -1,0 +1,35 @@
+text      : st_intersects(g, to_geometry('POLYGON((20 20, 20 30, 30 30, 30 20, 20 20))'))
+expr      : st_intersects<Geometry, Geometry>(g, CAST<String>("POLYGON((20 20, 20 30, 30 30, 30 20, 20 20))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false }})
+keep      : false
+
+text      : st_intersects(g, to_geometry('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))
+expr      : st_intersects<Geometry, Geometry>(g, CAST<String>("POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false }})
+keep      : true
+
+text      : st_contains(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))
+expr      : st_contains<Geometry, Geometry>(g, CAST<String>("POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false }})
+keep      : false
+
+text      : st_contains(g, to_geometry('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'))
+expr      : st_contains<Geometry, Geometry>(g, CAST<String>("POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false }})
+keep      : true
+
+text      : st_equals(g, to_geometry('POINT(20 20)'))
+expr      : st_equals<Geometry, Geometry>(g, CAST<String>("POINT(20 20)" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false }})
+keep      : false
+
+text      : st_equals(g, to_geometry('POINT(5 5)'))
+expr      : st_equals<Geometry, Geometry>(g, CAST<String>("POINT(5 5)" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false }})
+keep      : true
+
+text      : st_intersects(g, to_geometry('POINT(1 1)'))
+expr      : st_intersects<Geometry, Geometry>(g, CAST<String>("POINT(1 1)" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 4326, has_null: false }})
+keep      : true
+

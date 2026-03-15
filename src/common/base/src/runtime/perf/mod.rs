@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod perf_counters;
 mod query_perf;
 
+pub use perf_counters::PerfConfig;
+pub use perf_counters::PerfCounters;
+pub use perf_counters::PerfEvent;
+pub use perf_counters::PerfValue;
 pub use query_perf::QueryPerf;
 pub use query_perf::QueryPerfGuard;

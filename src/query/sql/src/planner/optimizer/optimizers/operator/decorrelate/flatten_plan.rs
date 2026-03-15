@@ -19,15 +19,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 
 use crate::ColumnEntry;
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::Metadata;
+use crate::Symbol;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::FlattenInfo;
@@ -36,12 +39,15 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::ConstantTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::ExpressionScan;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
+use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
@@ -49,8 +55,14 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::plans::SortItem;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowFuncFrame;
+use crate::plans::WindowFuncFrameBound;
+use crate::plans::WindowFuncFrameUnits;
+use crate::plans::WindowFuncType;
+use crate::plans::WindowPartition;
 
 impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]
@@ -114,9 +126,10 @@ impl SubqueryDecorrelatorOptimizer {
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::Limit(_) => self.flatten_sub_limit(
+            RelOperator::Limit(limit) => self.flatten_sub_limit(
                 outer,
                 subquery,
+                limit,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
@@ -287,15 +300,16 @@ impl SubqueryDecorrelatorOptimizer {
         filter: &Filter,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
-        mut need_cross_join: bool,
+        need_cross_join: bool,
     ) -> Result<SExpr> {
         let mut predicates = Vec::with_capacity(filter.predicates.len());
-        if !need_cross_join {
-            need_cross_join = self.join_outer_inner_table(filter, correlated_columns)?;
-            if need_cross_join {
+        let need_cross_join = need_cross_join
+            || if self.join_outer_inner_table(filter, correlated_columns)? {
                 self.derived_columns.clear();
-            }
-        }
+                true
+            } else {
+                false
+            };
         let flatten_plan = self.flatten_plan(
             outer,
             subquery.unary_child(),
@@ -342,7 +356,7 @@ impl SubqueryDecorrelatorOptimizer {
         fn process_conditions(
             conditions: &[ScalarExpr],
             correlated_columns: &ColumnSet,
-            derived_columns: &HashMap<IndexType, IndexType>,
+            derived_columns: &HashMap<Symbol, Symbol>,
             need_cross_join: bool,
         ) -> Result<Vec<ScalarExpr>> {
             if need_cross_join {
@@ -574,21 +588,201 @@ impl SubqueryDecorrelatorOptimizer {
         &mut self,
         outer: &SExpr,
         subquery: &SExpr,
+        limit: &Limit,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         need_cross_join: bool,
     ) -> Result<SExpr> {
-        // Currently, we don't support limit contain subquery.
-        let flatten_plan = self.flatten_plan(
-            outer,
-            subquery.unary_child(),
-            correlated_columns,
-            flatten_info,
-            need_cross_join,
-        )?;
+        let (flatten_plan, order_by) = match subquery.unary_child().plan() {
+            RelOperator::Sort(sort) => {
+                let flatten_plan = self.flatten_plan(
+                    outer,
+                    subquery.unary_child().unary_child(),
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?;
+
+                if sort.items.iter().any(|item| {
+                    let metadata = self.metadata.read();
+                    let col = metadata.column(item.index);
+                    if let ColumnEntry::DerivedColumn(derived_col) = col {
+                        derived_col.alias.to_lowercase().starts_with("count")
+                    } else {
+                        false
+                    }
+                }) {
+                    flatten_info.from_count_func = false;
+                }
+
+                let metadata = self.metadata.read();
+                let order_by = sort
+                    .items
+                    .iter()
+                    .map(|item| {
+                        let index = self
+                            .derived_columns
+                            .get(&item.index)
+                            .copied()
+                            .unwrap_or(item.index);
+                        Ok(WindowOrderByInfo {
+                            order_by_item: Self::scalar_item_from_index(index, "", &metadata),
+                            asc: Some(item.asc),
+                            nulls_first: Some(item.nulls_first),
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                (flatten_plan, order_by)
+            }
+            _ => (
+                self.flatten_plan(
+                    outer,
+                    subquery.unary_child(),
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                )?,
+                vec![],
+            ),
+        };
+
+        if limit.limit.is_none() && limit.offset == 0 {
+            return Ok(flatten_plan);
+        }
+
+        let metadata = self.metadata.read();
+        let partition_by = correlated_columns
+            .iter()
+            .copied()
+            .map(|old| {
+                Ok(Self::scalar_item_from_index(
+                    self.get_derived(old)?,
+                    "outer.",
+                    &metadata,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        drop(metadata);
+
+        let row_number_type = DataType::Number(NumberDataType::UInt64);
+        let row_number_index = self.metadata.write().add_derived_column(
+            "correlated_limit_row_number".to_string(),
+            row_number_type.clone(),
+        );
+
+        let sort_settings = self.ctx.get_settings();
+        let default_nulls_first = sort_settings.get_nulls_first();
+
+        let mut sort_items = Vec::with_capacity(partition_by.len() + order_by.len());
+        for part in &partition_by {
+            sort_items.push(SortItem {
+                index: part.index,
+                asc: true,
+                nulls_first: default_nulls_first(true),
+            });
+        }
+        for order in &order_by {
+            let asc = order.asc.unwrap_or(true);
+            sort_items.push(SortItem {
+                index: order.order_by_item.index,
+                asc,
+                nulls_first: order
+                    .nulls_first
+                    .unwrap_or_else(|| default_nulls_first(asc)),
+            });
+        }
+
+        let window_plan = Window {
+            span: None,
+            index: row_number_index,
+            function: WindowFuncType::RowNumber,
+            arguments: vec![],
+            partition_by: partition_by.clone(),
+            order_by: order_by.clone(),
+            frame: WindowFuncFrame {
+                units: WindowFuncFrameUnits::Rows,
+                start_bound: WindowFuncFrameBound::Preceding(None),
+                end_bound: WindowFuncFrameBound::CurrentRow,
+            },
+            limit: None,
+        };
+
+        let window_child = if sort_items.is_empty() {
+            flatten_plan
+        } else {
+            SExpr::create_unary(
+                Arc::new(
+                    Sort {
+                        items: sort_items,
+                        limit: None,
+                        after_exchange: None,
+                        pre_projection: None,
+                        window_partition: if partition_by.is_empty() {
+                            None
+                        } else {
+                            Some(WindowPartition {
+                                partition_by: partition_by.clone(),
+                                top: None,
+                                func: WindowFuncType::RowNumber,
+                            })
+                        },
+                    }
+                    .into(),
+                ),
+                Arc::new(flatten_plan),
+            )
+        };
+
+        let row_number_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "correlated_limit_row_number".to_string(),
+                row_number_index,
+                Box::new(row_number_type),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+
+        let mut predicates = Vec::new();
+        if let Some(row_limit) = limit.limit {
+            predicates.push(ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "lte".to_string(),
+                params: vec![],
+                arguments: vec![
+                    row_number_column.clone(),
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(NumberScalar::UInt64(
+                            row_limit.saturating_add(limit.offset) as u64,
+                        )),
+                    }),
+                ],
+            }));
+        }
+
+        if limit.offset > 0 {
+            predicates.push(ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "gt".to_string(),
+                params: vec![],
+                arguments: vec![
+                    row_number_column,
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(NumberScalar::UInt64(limit.offset as u64)),
+                    }),
+                ],
+            }));
+        }
+
         Ok(SExpr::create_unary(
-            subquery.plan.clone(),
-            Arc::new(flatten_plan),
+            Arc::new(Filter { predicates }.into()),
+            Arc::new(SExpr::create_unary(
+                Arc::new(window_plan.into()),
+                Arc::new(window_child),
+            )),
         ))
     }
 
@@ -965,11 +1159,7 @@ impl SubqueryDecorrelatorOptimizer {
         }
     }
 
-    fn scalar_item_from_index(
-        index: IndexType,
-        name_prefix: &str,
-        metadata: &Metadata,
-    ) -> ScalarItem {
+    fn scalar_item_from_index(index: Symbol, name_prefix: &str, metadata: &Metadata) -> ScalarItem {
         let column_entry = metadata.column(index);
         let column = ColumnBindingBuilder::new(
             format!("{name_prefix}{}", column_entry.name()),
@@ -984,7 +1174,7 @@ impl SubqueryDecorrelatorOptimizer {
         }
     }
 
-    pub fn get_derived(&self, old: IndexType) -> Result<IndexType> {
+    pub fn get_derived(&self, old: Symbol) -> Result<Symbol> {
         self.derived_columns
             .get(&old)
             .copied()
@@ -994,5 +1184,5 @@ impl SubqueryDecorrelatorOptimizer {
 
 enum Item<'a> {
     Scalar(&'a ScalarItem),
-    Index(IndexType),
+    Index(Symbol),
 }

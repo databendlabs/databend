@@ -19,8 +19,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -123,7 +123,7 @@ impl Rule for RuleSemiToInnerJoin {
 
 fn find_group_by_keys(
     child: &SExpr,
-    group_by_keys: &mut HashMap<IndexType, Box<DataType>>,
+    group_by_keys: &mut HashMap<Symbol, Box<DataType>>,
 ) -> Result<()> {
     match child.plan() {
         RelOperator::EvalScalar(_) | RelOperator::Filter(_) | RelOperator::Window(_) => {
@@ -161,7 +161,7 @@ fn find_group_by_keys(
     Ok(())
 }
 
-fn add_column_idx(condition: &ScalarExpr, condition_cols: &mut HashSet<IndexType>) {
+fn add_column_idx(condition: &ScalarExpr, condition_cols: &mut HashSet<Symbol>) {
     match condition {
         ScalarExpr::BoundColumnRef(c) => {
             condition_cols.insert(c.column.index);

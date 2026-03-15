@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 
@@ -80,8 +81,12 @@ impl SegmentPruner {
                 pruning_stats.set_segments_range_pruning_before(1);
             }
 
+            let range_input = RangeIndexInput::new(
+                &info.summary().col_stats,
+                info.summary().spatial_stats.as_ref(),
+            );
             if pruning_cost.measure(PruningCostKind::SegmentsRange, || {
-                range_pruner.should_keep(&info.summary().col_stats, None)
+                range_pruner.should_keep(&range_input, None)
             }) {
                 // Perf.
                 {

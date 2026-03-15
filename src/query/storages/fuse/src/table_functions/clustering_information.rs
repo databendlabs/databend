@@ -114,17 +114,16 @@ impl SimpleArgFunc for ClusteringInformation {
         let (table_name, branch_name) = parse_table_name(args.table_name.as_str())?;
         let current_catalog = ctx.get_current_catalog();
         let tbl = ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &current_catalog,
                 args.database_name.as_str(),
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         ClusteringInformationImpl::new(ctx.clone(), tbl)
-            .get_clustering_info(&args.cluster_key, branch_name)
+            .get_clustering_info(&args.cluster_key)
             .await
     }
 }
@@ -147,19 +146,12 @@ impl<'a> ClusteringInformationImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn get_clustering_info(
-        &self,
-        cluster_key: &Option<String>,
-        branch_name: Option<String>,
-    ) -> Result<DataBlock> {
+    async fn get_clustering_info(&self, cluster_key: &Option<String>) -> Result<DataBlock> {
         match (self.table.cluster_type(), cluster_key) {
             (Some(ClusterType::Hilbert), None) => self.get_hilbert_clustering_info().await,
             (None, None) => Err(ErrorCode::UnclusteredTable(format!(
-                "Unclustered table {}{}",
+                "Unclustered table {}",
                 self.table.table_info.desc,
-                branch_name
-                    .map(|b| format!(" on branch '{}'", b))
-                    .unwrap_or_default(),
             ))),
             _ => {
                 // Enforces linear clustering evaluation of keys, allowing users to examine clustering
@@ -182,7 +174,12 @@ impl<'a> ClusteringInformationImpl<'a> {
                     .iter()
                     .map(|k| {
                         k.project_column_ref(|index| {
-                            Ok(self.table.schema().field(*index).name().to_string())
+                            Ok(self
+                                .table
+                                .schema()
+                                .field(index.as_usize())
+                                .name()
+                                .to_string())
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;

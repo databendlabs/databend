@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -22,8 +24,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::ColumnSet;
-
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone, Debug)]
 pub enum BlockOperator {
@@ -31,7 +31,7 @@ pub enum BlockOperator {
     Map {
         exprs: Vec<Expr>,
         /// The index of the output columns, based on the exprs.
-        projections: Option<ColumnSet>,
+        projections: Option<BTreeSet<usize>>,
     },
 
     /// Reorganize the input [`DataBlock`] with `projection`.

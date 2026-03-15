@@ -35,7 +35,7 @@ use super::Finder;
 use super::sort::OrderItem;
 use crate::ColumnEntry;
 use crate::ColumnSet;
-use crate::IndexType;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
@@ -403,8 +403,8 @@ impl Binder {
         mut coercion_types: Vec<DataType>,
     ) -> Result<(
         BindContext,
-        Vec<(IndexType, Option<ScalarExpr>)>,
-        Vec<(IndexType, Option<ScalarExpr>)>,
+        Vec<(Symbol, Option<ScalarExpr>)>,
+        Vec<(Symbol, Option<ScalarExpr>)>,
     )> {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
@@ -487,7 +487,7 @@ impl Binder {
         &self,
         bind_context: &BindContext,
         stmt: &SelectStmt,
-        scalar_items: &HashMap<IndexType, ScalarItem>,
+        scalar_items: &HashMap<Symbol, ScalarItem>,
         select_list: &SelectList,
         where_scalar: &Option<ScalarExpr>,
         order_by: &[OrderItem],

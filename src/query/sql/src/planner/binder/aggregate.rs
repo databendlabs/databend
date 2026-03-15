@@ -35,8 +35,8 @@ use super::ExprContext;
 use super::Finder;
 use super::prune_by_children;
 use crate::BindContext;
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
@@ -114,7 +114,7 @@ pub struct GroupingSetsInfo {
     /// Index for virtual column `grouping_id`.
     pub grouping_id_column: ColumnBinding,
     /// Each grouping set is a list of column indices in `group_items`.
-    pub sets: Vec<Vec<IndexType>>,
+    pub sets: Vec<Vec<Symbol>>,
     /// The indices generated to identify the duplicate group items in the execution of the `GROUPING SETS` plan (not including `_grouping_id`).
     ///
     /// If the aggregation function argument is an item in the grouping set, for example:
@@ -124,7 +124,7 @@ pub struct GroupingSetsInfo {
     /// ```
     ///
     /// we should use the original column `a` data instead of the column data after filling dummy NULLs.
-    pub dup_group_items: Vec<(IndexType, DataType)>,
+    pub dup_group_items: Vec<(Symbol, DataType)>,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]

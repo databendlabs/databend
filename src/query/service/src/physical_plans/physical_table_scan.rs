@@ -35,8 +35,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::RemoteExpr;
@@ -52,12 +52,12 @@ use databend_common_pipeline_transforms::columns::TransformAddInternalColumns;
 use databend_common_sql::BaseTableColumn;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::DUMMY_COLUMN_INDEX;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_sql::DerivedColumn;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TableInternalColumn;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::VirtualColumn;
@@ -85,7 +85,7 @@ use crate::pipelines::PipelineBuilder;
 pub struct TableScan {
     pub meta: PhysicalPlanMeta,
     pub scan_id: usize,
-    pub name_mapping: BTreeMap<String, IndexType>,
+    pub name_mapping: BTreeMap<String, String>,
     pub source: Box<DataSourcePlan>,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
@@ -108,26 +108,7 @@ impl IPhysicalPlan for TableScan {
 
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
-        let schema = self.source.schema();
-        let mut fields = Vec::with_capacity(self.name_mapping.len());
-        let mut name_and_ids = self
-            .name_mapping
-            .iter()
-            .map(|(name, id)| {
-                let index = schema.index_of(name)?;
-                Ok((name, id, index))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        // Make the order of output fields the same as their indexes in te table schema.
-        name_and_ids.sort_by_key(|(_, _, index)| *index);
-
-        for (name, id, _) in name_and_ids {
-            let orig_field = schema.field_with_name(name)?;
-            let data_type = DataType::from(orig_field.data_type());
-            fields.push(DataField::new(&id.to_string(), data_type));
-        }
-
-        Ok(DataSchemaRefExt::create(fields))
+        Self::output_fields(self.source.schema(), &self.name_mapping).map(DataSchema::new_ref)
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -250,7 +231,7 @@ impl IPhysicalPlan for TableScan {
 impl TableScan {
     pub fn create(
         scan_id: usize,
-        name_mapping: BTreeMap<String, IndexType>,
+        name_mapping: BTreeMap<String, String>,
         source: Box<DataSourcePlan>,
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
@@ -277,7 +258,7 @@ impl TableScan {
 
     pub fn output_fields(
         schema: TableSchemaRef,
-        name_mapping: &BTreeMap<String, IndexType>,
+        name_mapping: &BTreeMap<String, String>,
     ) -> Result<Vec<DataField>> {
         let mut fields = Vec::with_capacity(name_mapping.len());
         let mut name_and_ids = name_mapping
@@ -293,7 +274,7 @@ impl TableScan {
         for (name, id, _) in name_and_ids {
             let orig_field = schema.field_with_name(name)?;
             let data_type = DataType::from(orig_field.data_type());
-            fields.push(DataField::new(&id.to_string(), data_type));
+            fields.push(DataField::new(id, data_type));
         }
         Ok(fields)
     }
@@ -365,7 +346,7 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         let mut has_inner_column = false;
         let mut name_mapping = BTreeMap::new();
-        let mut project_internal_columns = BTreeMap::new();
+        let mut project_internal_columns: BTreeMap<FieldIndex, InternalColumn> = BTreeMap::new();
         let mut project_virtual_columns = BTreeMap::new();
         let metadata = self.metadata.read().clone();
 
@@ -383,7 +364,7 @@ impl PhysicalPlanBuilder {
                 ColumnEntry::InternalColumn(TableInternalColumn {
                     internal_column, ..
                 }) => {
-                    project_internal_columns.insert(*index, internal_column.to_owned());
+                    project_internal_columns.insert(index.as_usize(), internal_column.to_owned());
                 }
                 ColumnEntry::VirtualColumn(virtual_column) => {
                     project_virtual_columns.insert(*index, virtual_column.clone());
@@ -395,10 +376,10 @@ impl PhysicalPlanBuilder {
                 // if there is a prewhere optimization,
                 // we can prune `PhysicalScan`'s output schema.
                 if prewhere.output_columns.contains(index) {
-                    name_mapping.insert(column.name().to_string(), *index);
+                    name_mapping.insert(column.name().to_string(), index.to_string());
                 }
             } else {
-                name_mapping.insert(column.name().to_string(), *index);
+                name_mapping.insert(column.name().to_string(), index.to_string());
             }
         }
 
@@ -408,8 +389,8 @@ impl PhysicalPlanBuilder {
                 let internal_column = INTERNAL_COLUMN_FACTORY
                     .get_internal_column(ROW_ID_COL_NAME)
                     .unwrap();
-                name_mapping.insert(ROW_ID_COL_NAME.to_string(), index);
-                project_internal_columns.insert(index, internal_column);
+                name_mapping.insert(ROW_ID_COL_NAME.to_string(), index.to_string());
+                project_internal_columns.insert(index.as_usize(), internal_column);
             }
         }
 
@@ -584,7 +565,7 @@ impl PhysicalPlanBuilder {
 
         Ok(TableScan::create(
             DUMMY_TABLE_INDEX,
-            BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
+            BTreeMap::from([("dummy".to_string(), Symbol::DUMMY_COLUMN.to_string())]),
             Box::new(source),
             Some(DUMMY_TABLE_INDEX),
             Some(PlanStatsInfo {
@@ -598,7 +579,7 @@ impl PhysicalPlanBuilder {
         &self,
         scan: &databend_common_sql::plans::Scan,
         table_schema: &TableSchema,
-        virtual_columns: BTreeMap<IndexType, VirtualColumn>,
+        virtual_columns: BTreeMap<Symbol, VirtualColumn>,
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
@@ -672,7 +653,7 @@ impl PhysicalPlanBuilder {
                     .columns
                     .difference(&prewhere.prewhere_columns)
                     .copied()
-                    .collect::<HashSet<usize>>();
+                    .collect::<HashSet<Symbol>>();
 
                 let output_columns = Self::build_projection(
                     &metadata,
@@ -817,7 +798,7 @@ impl PhysicalPlanBuilder {
 
     fn build_virtual_column(
         &self,
-        virtual_columns: BTreeMap<IndexType, VirtualColumn>,
+        virtual_columns: BTreeMap<Symbol, VirtualColumn>,
     ) -> Result<Option<VirtualColumnInfo>> {
         if virtual_columns.is_empty() {
             return Ok(None);
@@ -915,7 +896,7 @@ impl PhysicalPlanBuilder {
     pub fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
-        columns: impl Iterator<Item = &'a IndexType>,
+        columns: impl Iterator<Item = &'a Symbol>,
         has_inner_column: bool,
         ignore_internal_column: bool,
         add_virtual_source_column: bool,
@@ -969,20 +950,21 @@ impl PhysicalPlanBuilder {
                         ..
                     }) => match path_indices {
                         Some(path_indices) => {
-                            col_indices.insert(column.index(), path_indices.to_vec());
+                            col_indices.insert(column.index().as_usize(), path_indices.to_vec());
                         }
                         None => {
                             let idx = schema.index_of(column_name).unwrap();
-                            col_indices.insert(column.index(), vec![idx]);
+                            col_indices.insert(column.index().as_usize(), vec![idx]);
                         }
                     },
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => {
                         let idx = schema.index_of(alias).unwrap();
-                        col_indices.insert(column.index(), vec![idx]);
+                        col_indices.insert(column.index().as_usize(), vec![idx]);
                     }
                     ColumnEntry::InternalColumn(TableInternalColumn { column_index, .. }) => {
                         if !ignore_internal_column {
-                            col_indices.insert(*column_index, vec![*column_index]);
+                            col_indices
+                                .insert(column_index.as_usize(), vec![column_index.as_usize()]);
                         }
                     }
                     ColumnEntry::VirtualColumn(VirtualColumn {

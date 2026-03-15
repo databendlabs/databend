@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Write;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -24,6 +25,7 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Symbol;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
@@ -46,6 +48,12 @@ impl ColumnIndex for usize {
 }
 
 impl ColumnIndex for String {
+    fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+impl ColumnIndex for Symbol {
     fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
         write!(f, "{self}")
     }

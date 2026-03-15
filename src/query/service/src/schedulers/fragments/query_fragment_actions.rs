@@ -18,7 +18,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_base::runtime::QueryPerf;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -195,8 +194,6 @@ impl QueryFragmentsActions {
         self.fragments_connections(&mut builder)?;
         self.statistics_connections(&mut builder)?;
 
-        let perf_flag = QueryPerf::flag();
-
         Ok(QueryEnv {
             workload_group,
             query_id: self.ctx.get_id(),
@@ -210,7 +207,7 @@ impl QueryFragmentsActions {
                 .ctx
                 .get_settings()
                 .get_create_query_flight_client_with_current_rt()?,
-            perf_flag,
+            perf_config: self.ctx.get_perf_config(),
             user: self.ctx.get_current_user()?,
         })
     }

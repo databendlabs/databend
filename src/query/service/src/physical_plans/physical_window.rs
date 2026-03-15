@@ -31,8 +31,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
@@ -64,10 +64,10 @@ use crate::pipelines::processors::transforms::WindowSortDesc;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
     pub meta: PhysicalPlanMeta,
-    pub index: IndexType,
+    pub index: Symbol,
     pub input: PhysicalPlan,
     pub func: WindowFunction,
-    pub partition_by: Vec<IndexType>,
+    pub partition_by: Vec<Symbol>,
     pub order_by: Vec<SortDesc>,
     pub window_frame: WindowFuncFrame,
     pub limit: Option<usize>,
@@ -292,7 +292,10 @@ impl PhysicalPlanBuilder {
                 _ => None,
             };
 
-            let mut common_ty = order_by.type_check(&*input_schema)?.data_type().clone();
+            let mut common_ty = order_by
+                .type_check(input_schema.as_ref())?
+                .data_type()
+                .clone();
             if common_ty.remove_nullable().is_timestamp() {
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let scalar_ty = scalar.as_ref().infer_data_type();

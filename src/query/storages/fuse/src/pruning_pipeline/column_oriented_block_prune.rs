@@ -31,6 +31,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -167,32 +168,32 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
-                    if !range_pruner.should_keep(&columns_stat, None) {
+                    let range_input = RangeIndexInput::from_columns(&columns_stat);
+                    if !range_pruner.should_keep(&range_input, None) {
                         return Ok::<_, ()>(());
                     }
 
                     let row_count = row_count_col[block_idx];
                     let compression = Compression::from_u8(compression_col[block_idx]);
                     let block_size = block_size_col[block_idx];
+                    let location_scalar = bloom_index_location_col.index(block_idx).unwrap();
+                    let bloom_filter_index_location = match location_scalar {
+                        ScalarRef::Null => None,
+                        ScalarRef::Tuple(tuple) => {
+                            if tuple.len() != 2 {
+                                unreachable!()
+                            }
+                            Some((
+                                tuple[0].as_string().unwrap().to_string(),
+                                *tuple[1].as_number().unwrap().as_u_int64().unwrap(),
+                            ))
+                        }
+                        _ => unreachable!(),
+                    };
+                    let bloom_filter_index_size = bloom_index_size_col[block_idx];
 
                     // Bloom filter pruning
                     if let Some(bloom_pruner) = bloom_pruner {
-                        let location_scalar = bloom_index_location_col.index(block_idx).unwrap();
-                        let index_location = match location_scalar {
-                            ScalarRef::Null => None,
-                            ScalarRef::Tuple(tuple) => {
-                                if tuple.len() != 2 {
-                                    unreachable!()
-                                }
-                                Some((
-                                    tuple[0].as_string().unwrap().to_string(),
-                                    *tuple[1].as_number().unwrap().as_u_int64().unwrap(),
-                                ))
-                            }
-                            _ => unreachable!(),
-                        };
-                        let index_size = bloom_index_size_col[block_idx];
-
                         // used to rebuild bloom index
                         let block_read_info = BlockReadInfo {
                             location: location_path.clone(),
@@ -204,8 +205,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                         if !bloom_pruner
                             .should_keep(
-                                &index_location,
-                                index_size,
+                                &bloom_filter_index_location,
+                                bloom_filter_index_size,
                                 &columns_stat,
                                 column_ids.clone(),
                                 &block_read_info,
@@ -263,6 +264,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
                     let part_info = FuseBlockPartInfo::create(
                         location_path,
+                        bloom_filter_index_location,
+                        bloom_filter_index_size,
                         row_count,
                         columns_meta,
                         Some(columns_stat),

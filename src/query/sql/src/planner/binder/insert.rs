@@ -121,12 +121,11 @@ impl Binder {
 
         let table = self
             .ctx
-            .get_table_with_batch(
+            .get_table_with_branch(
                 &catalog_name,
                 &database_name,
                 &table_name,
                 branch_name.as_deref(),
-                None,
             )
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
@@ -203,6 +202,11 @@ impl Binder {
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,
                 )?;
+                if matches!(file_format_params, FileFormatParams::Lance(_)) {
+                    return Err(ErrorCode::IllegalFileFormat(
+                        "LANCE file format is only supported in COPY INTO <location>".to_string(),
+                    ));
+                }
                 match location.as_str() {
                     STAGE_PLACEHOLDER => {
                         if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {

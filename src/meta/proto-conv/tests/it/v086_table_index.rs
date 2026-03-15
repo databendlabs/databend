@@ -24,7 +24,6 @@ use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::TableIndexType;
 use fastrace::func_name;
 use maplit::btreemap;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -94,7 +93,6 @@ fn test_decode_v86_table_meta() -> anyhow::Result<()> {
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
@@ -108,7 +106,6 @@ fn test_decode_v86_table_meta() -> anyhow::Result<()> {
         }},
         row_access_policy_columns_ids: None,
         constraints: btreemap! {},
-        refs: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v86.as_slice(), 86, want())?;

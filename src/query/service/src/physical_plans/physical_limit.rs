@@ -25,6 +25,7 @@ use databend_common_pipeline_transforms::filters::TransformLimit;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -178,7 +179,7 @@ impl PhysicalPlanBuilder {
         // There may be more than one `LIMIT` plan, we don't need to fetch the same columns multiple times.
         // See the case in tests/sqllogictests/suites/crdb/limit:
         // SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
-        let mut lazy_columns_by_table: HashMap<IndexType, Vec<IndexType>> = HashMap::new();
+        let mut lazy_columns_by_table: HashMap<IndexType, Vec<Symbol>> = HashMap::new();
         for index in limit.lazy_columns.iter() {
             if input_schema.has_field(&index.to_string()) {
                 continue;
@@ -234,7 +235,7 @@ impl PhysicalPlanBuilder {
         }
 
         for table_index in table_indexes {
-            let lazy_columns: &[IndexType] = match lazy_columns_by_table.get(&table_index) {
+            let lazy_columns: &[Symbol] = match lazy_columns_by_table.get(&table_index) {
                 Some(columns) => columns,
                 None => continue,
             };

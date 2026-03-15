@@ -31,8 +31,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
-use databend_common_meta_app::schema::BranchInfo;
-use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -54,7 +52,6 @@ use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
-use crate::plan::ExtendedTableInfo;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
@@ -84,8 +81,7 @@ pub trait Table: Sync + Send {
     }
 
     fn schema(&self) -> Arc<TableSchema> {
-        self.get_branch_info()
-            .map_or_else(|| self.get_table_info().schema(), |v| v.schema.clone())
+        self.get_table_info().schema()
     }
 
     fn options(&self) -> &BTreeMap<String, String> {
@@ -100,21 +96,6 @@ pub trait Table: Sync + Send {
         self.get_table_info().ident.table_id
     }
 
-    /// Returns the effective unique ID for this table reference.
-    ///
-    /// - If this is a branch, returns the branch ID.
-    /// - Otherwise, returns the physical table ID.
-    ///
-    /// NOTE:
-    /// - `branch_id` is **globally unique across all tables**, not scoped per table.
-    /// - Branch IDs are allocated from a global ID generator and do NOT collide
-    ///   even for branches created on different tables.
-    /// - Therefore, using `branch_id` alone as a cache key namespace is safe.
-    fn get_unique_id(&self) -> u64 {
-        self.get_branch_info()
-            .map_or(self.get_id(), |v| v.branch_id())
-    }
-
     fn distribution_level(&self) -> DistributionLevel {
         DistributionLevel::Local
     }
@@ -123,15 +104,8 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
-    fn get_branch_info(&self) -> Option<&BranchInfo> {
-        None
-    }
-
     fn get_data_source_info(&self) -> DataSourceInfo {
-        DataSourceInfo::TableSource(ExtendedTableInfo {
-            table_info: self.get_table_info().clone(),
-            branch_info: self.get_branch_info().cloned(),
-        })
+        DataSourceInfo::TableSource(self.get_table_info().clone())
     }
 
     /// get_data_metrics will get data metrics from table.
@@ -159,16 +133,12 @@ pub trait Table: Sync + Send {
 
     fn cluster_type(&self) -> Option<ClusterType> {
         self.cluster_key_meta()?;
-        if self.get_branch_info().is_some() {
-            Some(ClusterType::Linear)
-        } else {
-            let cluster_type = self
-                .options()
-                .get(OPT_KEY_CLUSTER_TYPE)
-                .and_then(|s| s.parse::<ClusterType>().ok())
-                .unwrap_or(ClusterType::Linear);
-            Some(cluster_type)
-        }
+        let cluster_type = self
+            .options()
+            .get(OPT_KEY_CLUSTER_TYPE)
+            .and_then(|s| s.parse::<ClusterType>().ok())
+            .unwrap_or(ClusterType::Linear);
+        Some(cluster_type)
     }
 
     fn resolve_cluster_keys(&self) -> Option<Vec<Expr>> {
@@ -391,15 +361,6 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
-        let _ = branch_name;
-        Err(ErrorCode::Unimplemented(format!(
-            "Table branch is not supported for the table '{}', which uses the '{}' engine.",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
     async fn generate_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -563,25 +524,14 @@ pub trait TableExt: Table {
             meta,
             ..table_info.clone()
         };
-        let table = catalog.get_table_by_info(&table_info)?;
-        if let Some(branch) = self.get_branch_info() {
-            let branch_name = branch.branch_name();
-            table.with_branch(branch_name)
-        } else {
-            Ok(table)
-        }
+        catalog.get_table_by_info(&table_info)
     }
 
     fn check_mutable(&self) -> Result<()> {
         if self.is_read_only() {
-            let branch_info = self
-                .get_branch_info()
-                .map(|v| format!(" (Tag: '{}')", v.branch_name()))
-                .unwrap_or_default();
             Err(ErrorCode::InvalidOperation(format!(
-                "Modification not permitted: Table '{}'{} is READ ONLY, preventing any changes or updates.",
-                self.get_table_info().name,
-                branch_info
+                "Modification not permitted: Table {} is READ ONLY, preventing any changes or updates.",
+                self.get_table_info().desc,
             )))
         } else {
             Ok(())
@@ -606,7 +556,7 @@ pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),
     StreamInfo(TableInfo),
-    TableRef { typ: SnapshotRefType, name: String },
+    TableTag(String),
 }
 
 #[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize)]

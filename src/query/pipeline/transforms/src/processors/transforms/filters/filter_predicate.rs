@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -26,14 +27,13 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_sql::ColumnSet;
 
 use crate::BlockingTransform;
 use crate::BlockingTransformer;
 
 /// Filter the input [`DataBlock`] with the predicate `expr`.
 pub struct TransformFilter {
-    projections: ColumnSet,
+    projections: BTreeSet<usize>,
     output_data_blocks: VecDeque<DataBlock>,
     max_block_size: usize,
     filter: FilterExecutor,
@@ -44,7 +44,7 @@ impl TransformFilter {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         expr: Expr,
-        projections: ColumnSet,
+        projections: BTreeSet<usize>,
         func_ctx: FunctionContext,
         max_block_size: usize,
     ) -> Box<dyn Processor> {

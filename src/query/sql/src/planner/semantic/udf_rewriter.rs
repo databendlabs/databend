@@ -25,8 +25,8 @@ use derive_visitor::VisitorMut as StatementVisitorMut;
 use itertools::Itertools;
 
 use crate::ColumnBindingBuilder;
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::plans::BoundColumnRef;
@@ -50,7 +50,7 @@ pub(crate) struct UdfRewriter {
     udf_functions_map: HashMap<String, BoundColumnRef>,
     /// Mapping: (udf function display name) -> (derived index)
     /// This is used to reuse already generated derived columns
-    udf_functions_index_map: HashMap<String, IndexType>,
+    udf_functions_index_map: HashMap<String, Symbol>,
     script_udf: bool,
 }
 

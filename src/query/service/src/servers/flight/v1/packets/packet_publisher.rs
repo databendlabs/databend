@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_base::runtime::PerfConfig;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
@@ -161,7 +162,8 @@ pub struct QueryEnv {
     pub request_server_id: String,
     pub workload_group: Option<String>,
     pub create_rpc_clint_with_current_rt: bool,
-    pub perf_flag: bool,
+    #[serde(default)]
+    pub perf_config: PerfConfig,
     pub user: UserInfo,
 }
 

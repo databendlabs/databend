@@ -25,7 +25,7 @@ use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 
 use crate::ColumnSet;
-use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
@@ -208,7 +208,7 @@ impl Display for JoinType {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HashJoinBuildCacheInfo {
     pub cache_idx: usize,
-    pub columns: Vec<usize>,
+    pub columns: Vec<Symbol>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -264,7 +264,7 @@ pub struct Join {
     pub non_equi_conditions: Vec<ScalarExpr>,
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
-    pub marker_index: Option<IndexType>,
+    pub marker_index: Option<Symbol>,
     pub from_correlated_subquery: bool,
     // if we execute distributed merge into, we need to hold the
     // hash table to get not match data from source.
@@ -324,8 +324,8 @@ impl Join {
     ) -> Result<f64> {
         let mut join_card = *left_cardinality * *right_cardinality;
         let mut join_card_updated = false;
-        let mut left_column_index = 0;
-        let mut right_column_index = 0;
+        let mut left_column_index = None;
+        let mut right_column_index = None;
         for condition in &self.equi_conditions {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -398,13 +398,17 @@ impl Join {
             if card < join_card {
                 join_card = card;
                 join_card_updated = true;
-                left_column_index = left_index;
-                right_column_index = right_index;
+                left_column_index = Some(left_index);
+                right_column_index = Some(right_index);
             }
         }
         if !join_card_updated {
             return Ok(join_card);
         }
+
+        let left_column_index = left_column_index.expect("join stats updated without left column");
+        let right_column_index =
+            right_column_index.expect("join stats updated without right column");
 
         for (idx, left) in left_statistics.column_stats.iter_mut() {
             if *idx != left_column_index || left.histogram.is_none() || left.ndv.value() as u64 <= 2
@@ -515,7 +519,7 @@ impl Join {
         }))
     }
 
-    pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
+    pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
         for condition in &mut self.equi_conditions {
             condition.left.replace_column(old, new)?;
             condition.right.replace_column(old, new)?;
@@ -1005,9 +1009,19 @@ fn update_statistic(
     left_condition: &ScalarExpr,
     right_condition: &ScalarExpr,
     new_stat: NewStatistic,
-) -> (usize, usize) {
-    let left_index = *left_condition.used_columns().iter().next().unwrap();
-    let right_index = *right_condition.used_columns().iter().next().unwrap();
+) -> (Symbol, Symbol) {
+    let left_index = left_condition
+        .used_columns()
+        .iter()
+        .next()
+        .copied()
+        .unwrap();
+    let right_index = right_condition
+        .used_columns()
+        .iter()
+        .next()
+        .copied()
+        .unwrap();
     let left_col_stat = left_statistics.column_stats.get_mut(&left_index).unwrap();
     let right_col_stat = right_statistics.column_stats.get_mut(&right_index).unwrap();
 

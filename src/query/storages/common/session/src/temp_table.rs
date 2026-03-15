@@ -153,7 +153,6 @@ impl TempTblMgr {
             table_id_seq: Some(0),
             db_id,
             new_table,
-            spec_vec: None,
             prev_table_id: None,
             orphan_table_name,
         })

@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_sql::Symbol;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::SExpr;
 
@@ -39,7 +40,7 @@ pub struct MaterializedCTE {
     pub stat_info: Option<PlanStatsInfo>,
     pub input: PhysicalPlan,
     pub cte_name: String,
-    pub cte_output_columns: Option<Vec<usize>>,
+    pub cte_output_columns: Option<Vec<Symbol>>,
     pub ref_count: usize,
     pub channel_size: Option<usize>,
     pub meta: PhysicalPlanMeta,
