@@ -335,7 +335,6 @@ impl StreamBlockBuilder {
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state =
             ColumnStatisticsState::new(&properties.stats_columns, &properties.distinct_columns);
-
         Ok(StreamBlockBuilder {
             properties,
             block_writer,
@@ -470,15 +469,16 @@ impl StreamBlockBuilder {
         let vector_index_size = vector_index_state.as_ref().map(|v| v.size);
         let vector_index_location = vector_index_state.as_ref().map(|v| v.location.clone());
 
-        let spatial_index_state =
+        let (spatial_index_state, spatial_stats) =
             if let Some(ref mut spatial_index_builder) = self.spatial_index_builder {
                 let spatial_index_location = self
                     .properties
                     .meta_locations
                     .block_spatial_index_location();
-                spatial_index_builder.finalize(&spatial_index_location)?
+                let spatial_result = spatial_index_builder.finalize(&spatial_index_location)?;
+                (spatial_result.index_state, spatial_result.spatial_stats)
             } else {
-                None
+                (None, None)
             };
         let spatial_index_size = spatial_index_state.as_ref().map(|v| v.size);
         let spatial_index_location = spatial_index_state.as_ref().map(|v| v.location.clone());
@@ -516,6 +516,7 @@ impl StreamBlockBuilder {
             vector_index_location,
             spatial_index_size,
             spatial_index_location,
+            spatial_stats,
             create_on: Some(Utc::now()),
             ngram_filter_index_size: bloom_index_state
                 .as_ref()
@@ -600,8 +601,7 @@ impl StreamBlockProperties {
             .map(|v| v.column_id())
             .collect::<HashSet<_>>();
 
-        let inverted_index_builders =
-            create_inverted_index_builders(&table.table_info.meta.indexes, &schema);
+        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
         let enable_virtual_column = ctx
             .get_settings()

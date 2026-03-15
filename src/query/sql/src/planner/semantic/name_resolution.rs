@@ -41,7 +41,7 @@ pub enum NameResolutionSuggest {
 
 impl NameResolutionContext {
     pub fn not_found_suggest(&self, ident: &Identifier) -> Option<NameResolutionSuggest> {
-        if !ident.name.chars().any(|c| c.is_ascii_uppercase()) {
+        if !ident.name.chars().any(|c| c.is_uppercase()) {
             return None;
         }
         match (

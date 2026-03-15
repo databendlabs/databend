@@ -18,25 +18,19 @@ databend_common_tracing::register_module_tag!("[VACUUM]");
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use backoff::backoff::Backoff;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
-use databend_meta_types::MatchSeq;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use futures_util::TryStreamExt;
-use log::error;
 use log::info;
 use log::warn;
 use opendal::Entry;
@@ -47,7 +41,6 @@ use crate::FuseTable;
 use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::set_backoff;
 
 /// An assumption of the maximum duration from the time the first block is written to the time the
 /// snapshot is written.
@@ -351,14 +344,12 @@ impl FuseTable {
             segments: HashSet::from_iter(root_snapshot.segments.clone()),
             table_statistics_location: root_snapshot.table_statistics_location(),
         });
-        drop(root_snapshot);
 
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.get_operator());
         let operator = self.get_operator();
-        let table_info = self.get_table_info();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
-        // 2. Collect segments from main branch
+        // 2. Collect segments
         let mut segments = HashSet::new();
         Self::collect_snapshots_segments(
             &snapshots_io,
@@ -371,188 +362,7 @@ impl FuseTable {
         )
         .await?;
 
-        // 3. Collect segments from branches and tags
-        for snapshot_ref in table_info.meta.refs.values() {
-            match snapshot_ref.typ {
-                SnapshotRefType::Tag => {
-                    // Read tag snapshot and collect its segments
-                    match SnapshotsIO::read_snapshot_for_vacuum(operator.clone(), &snapshot_ref.loc)
-                        .await?
-                    {
-                        Some(snapshot) => {
-                            for seg_loc in &snapshot.segments {
-                                segments.insert(seg_loc.clone());
-                            }
-                        }
-                        None => {
-                            return Ok(None);
-                        }
-                    }
-                }
-                SnapshotRefType::Branch => {
-                    // Read branch head snapshot to create branch-specific root_snapshot_lite
-                    match SnapshotsIO::read_snapshot_for_vacuum(operator.clone(), &snapshot_ref.loc)
-                        .await?
-                    {
-                        Some(snapshot) => {
-                            let branch_root_snapshot_lite = Arc::new(SnapshotLiteExtended {
-                                format_version: TableMetaLocationGenerator::snapshot_version(
-                                    &snapshot_ref.loc,
-                                ),
-                                snapshot_id: snapshot.snapshot_id,
-                                timestamp: snapshot.timestamp,
-                                segments: HashSet::from_iter(snapshot.segments.clone()),
-                                table_statistics_location: snapshot.table_statistics_location(),
-                            });
-
-                            // Collect segments from all branch snapshots using branch's own root_snapshot_lite
-                            Self::collect_snapshots_segments(
-                                &snapshots_io,
-                                &operator,
-                                &snapshot_ref.loc,
-                                branch_root_snapshot_lite,
-                                max_threads,
-                                &mut segments,
-                                &status_callback,
-                            )
-                            .await?;
-                        }
-                        None => {
-                            return Ok(None);
-                        }
-                    }
-                }
-            }
-        }
-
-        info!(
-            "gc orphan: collected segments from {} refs, total segments: {}",
-            table_info.meta.refs.len(),
-            segments.len()
-        );
-
         Ok(Some(segments))
-    }
-
-    /// Update table metadata with updated refs (expired refs removed)
-    #[async_backtrace::framed]
-    pub async fn update_table_refs_meta(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        expired_refs: &HashSet<u64>,
-    ) -> Result<Vec<String>> {
-        let catalog = ctx.get_default_catalog()?;
-
-        let mut retries = 0;
-        let mut backoff = set_backoff(None, None, None);
-        let mut latest_table_info = self.get_table_info();
-        // holding the reference of latest table during retries
-        let mut latest_table_ref: Arc<dyn Table>;
-        // Step 1: Update table meta if refs changed
-        loop {
-            let mut new_table_meta = latest_table_info.meta.clone();
-            new_table_meta
-                .refs
-                .retain(|_, val| !expired_refs.contains(&val.id));
-            let req = UpdateTableMetaReq {
-                table_id: latest_table_info.ident.table_id,
-                seq: MatchSeq::Exact(latest_table_info.ident.seq),
-                new_table_meta,
-                base_snapshot_location: self.snapshot_loc(),
-                lvt_check: None,
-            };
-            match catalog
-                .update_single_table_meta(req, latest_table_info)
-                .await
-            {
-                Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
-                    match backoff.next_backoff() {
-                        Some(d) => {
-                            tokio::time::sleep(d).await;
-                            latest_table_ref = self.refresh(ctx.as_ref()).await?;
-                            latest_table_info = latest_table_ref.get_table_info();
-                            retries += 1;
-                            continue;
-                        }
-                        None => {
-                            return Err(ErrorCode::StorageOther(format!(
-                                "update table meta failed after {} retries",
-                                retries
-                            )));
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-                Ok(_) => {
-                    break;
-                }
-            }
-        }
-
-        // Step 2: Cleanup expired ref directories
-        let mut dir_to_gc = Vec::with_capacity(expired_refs.len());
-        let ref_snapshot_location_prefix = self
-            .meta_location_generator()
-            .ref_snapshot_location_prefix();
-        let op = self.get_operator();
-        for ref_id in expired_refs {
-            let dir = format!("{}{}/", ref_snapshot_location_prefix, *ref_id);
-            op.remove_all(&dir).await.inspect_err(|err| {
-                error!("Failed to remove expired ref directory {}: {}", dir, err);
-            })?;
-            dir_to_gc.push(dir);
-        }
-        Ok(dir_to_gc)
-    }
-
-    pub async fn cleanup_orphan_ref_dirs(&self) -> Result<Vec<String>> {
-        let prefix = self
-            .meta_location_generator()
-            .ref_snapshot_location_prefix();
-        let op = self.get_operator();
-        let table_info = self.get_table_info();
-        let table_seq = table_info.ident.seq;
-        let active_ids = table_info
-            .meta
-            .refs
-            .values()
-            .map(|snapshot_ref| snapshot_ref.id)
-            .collect::<HashSet<_>>();
-        let mut removed = Vec::new();
-        let mut lister = op.lister(prefix).await?;
-        while let Some(entry) = lister.try_next().await? {
-            if !entry.metadata().is_dir() {
-                continue;
-            }
-
-            let dir_path = entry.path();
-            let id_str = dir_path.trim_end_matches('/').rsplit('/').next().unwrap();
-            let Ok(ref_id) = id_str.parse::<u64>() else {
-                continue;
-            };
-            if table_seq <= ref_id || active_ids.contains(&ref_id) {
-                continue;
-            }
-
-            match op.remove_all(dir_path).await {
-                Ok(_) => {
-                    info!(
-                        "Removed orphan ref directory '{}' for table {}",
-                        dir_path, table_info.desc
-                    );
-                    removed.push(dir_path.to_string());
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to remove orphan ref directory '{}' for table {}: {}",
-                        dir_path, table_info.desc, e
-                    );
-                }
-            }
-        }
-        Ok(removed)
     }
 }
 

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableSchema;
 
 use super::ScalarExpr;
@@ -40,7 +41,7 @@ pub struct MutationSource {
     pub table_index: IndexType,
     pub mutation_type: MutationType,
     pub predicates: Vec<ScalarExpr>,
-    pub predicate_column_index: Option<usize>,
+    pub predicate_column_index: Option<Symbol>,
     pub read_partition_columns: ColumnSet,
 }
 

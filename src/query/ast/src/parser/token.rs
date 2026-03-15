@@ -137,6 +137,45 @@ impl<'a> Iterator for Tokenizer<'a> {
     }
 }
 
+/// Returns true if `c` can start an unquoted identifier.
+///
+/// ASCII letters and underscore are accepted, plus any Unicode character with
+/// the Alphabetic derived property (`char::is_alphabetic()` — covers CJK,
+/// Cyrillic, Arabic, etc. while excluding separators, punctuation, and symbols).
+pub fn is_ident_start(c: char) -> bool {
+    c == '_' || c.is_alphabetic()
+}
+
+/// Returns true if `c` can continue an unquoted identifier.
+///
+/// Same as `is_ident_start`, plus ASCII digits and `$`.
+/// Non-ASCII digits are also accepted via `char::is_alphanumeric()`.
+pub fn is_ident_continue(c: char) -> bool {
+    c == '_' || c == '$' || c.is_alphanumeric()
+}
+
+fn bump_ident_continue(lex: &mut Lexer<TokenKind>) {
+    loop {
+        match lex.remainder().chars().next() {
+            Some(c) if is_ident_continue(c) => lex.bump(c.len_utf8()),
+            _ => break,
+        }
+    }
+}
+
+fn lex_ascii_ident(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    bump_ident_continue(lex);
+    logos::FilterResult::Emit(())
+}
+
+fn lex_unicode_ident(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    if !is_ident_start(lex.slice().chars().next().unwrap()) {
+        return logos::FilterResult::Error;
+    }
+    bump_ident_continue(lex);
+    logos::FilterResult::Emit(())
+}
+
 fn lex_comment_block(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
     let remainder = lex.remainder().as_bytes();
 
@@ -167,7 +206,8 @@ pub enum TokenKind {
     #[token("/*", lex_comment_block)]
     CommentBlock,
 
-    #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
+    #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#, lex_ascii_ident)]
+    #[regex(r"[^\x00-\x7f]", lex_unicode_ident)]
     Ident,
 
     #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
@@ -857,6 +897,8 @@ pub enum TokenKind {
     L1DISTANCE,
     #[token("<->")]
     L2DISTANCE,
+    #[token("LANCE", ignore(ascii_case))]
+    LANCE,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]

@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use databend_common_expression::ColumnIndex;
+use databend_common_expression::DummyColumnType;
 use databend_common_expression::types::DataType;
 
 use crate::IndexType;
+use crate::Symbol;
 use crate::Visibility;
 
 // Please use `ColumnBindingBuilder` to construct a new `ColumnBinding`
@@ -31,7 +33,7 @@ pub struct ColumnBinding {
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
-    pub index: IndexType,
+    pub index: Symbol,
 
     pub data_type: Box<DataType>,
 
@@ -43,32 +45,13 @@ pub struct ColumnBinding {
     pub is_srf: bool,
 }
 
-const DUMMY_INDEX: usize = usize::MAX;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u64)]
-pub enum DummyColumnType {
-    WindowFunction = 1,
-    AggregateFunction = 2,
-    Subquery = 3,
-    UDF = 4,
-    AsyncFunction = 5,
-    Other = 6,
-}
-
-impl DummyColumnType {
-    fn type_identifier(&self) -> usize {
-        DUMMY_INDEX - (*self) as usize
-    }
-}
-
 impl ColumnBinding {
     pub fn new_dummy_column(
         name: String,
         data_type: Box<DataType>,
         dummy_type: DummyColumnType,
     ) -> Self {
-        let index = dummy_type.type_identifier();
+        let index = Symbol::new_dummy_column(dummy_type);
         ColumnBinding {
             database_name: None,
             table_name: None,
@@ -84,7 +67,7 @@ impl ColumnBinding {
     }
 
     pub fn is_dummy(&self) -> bool {
-        self.index >= DummyColumnType::Other.type_identifier()
+        self.index.is_dummy_column()
     }
 }
 
@@ -106,7 +89,7 @@ pub struct ColumnBindingBuilder {
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
-    pub index: IndexType,
+    pub index: Symbol,
 
     pub data_type: Box<DataType>,
 
@@ -119,7 +102,7 @@ pub struct ColumnBindingBuilder {
 impl ColumnBindingBuilder {
     pub fn new(
         column_name: String,
-        index: IndexType,
+        index: Symbol,
         data_type: Box<DataType>,
         visibility: Visibility,
     ) -> ColumnBindingBuilder {

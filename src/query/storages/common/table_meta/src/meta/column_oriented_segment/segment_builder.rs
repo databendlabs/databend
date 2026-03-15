@@ -367,6 +367,7 @@ impl ColumnOrientedSegmentBuilder {
             virtual_column_size: None,
             col_stats,
             virtual_col_stats: None,
+            spatial_stats: None,
             cluster_stats,
             virtual_block_count: Some(virtual_block_count),
             additional_stats_meta,

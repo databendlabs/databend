@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 
 use super::ExprContext;
 use crate::BindContext;
-use crate::IndexType;
+use crate::Symbol;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::aggregate::AggregateRewriter;
@@ -50,7 +50,7 @@ pub struct OrderItems {
 
 #[derive(Debug)]
 pub struct OrderItem {
-    pub index: IndexType,
+    pub index: Symbol,
     pub asc: bool,
     pub nulls_first: bool,
     pub name: String,
@@ -60,7 +60,7 @@ impl Binder {
     pub fn analyze_order_items(
         &mut self,
         bind_context: &mut BindContext,
-        scalar_items: &mut HashMap<IndexType, ScalarItem>,
+        scalar_items: &mut HashMap<Symbol, ScalarItem>,
         aliases: &[(String, ScalarExpr)],
         projections: &[ColumnBinding],
         order_by: &[OrderByExpr],

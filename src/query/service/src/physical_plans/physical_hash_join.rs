@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -39,6 +40,7 @@ use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
@@ -77,15 +79,15 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<(RemoteExpr<String>, usize, usize, IndexType)>>,
+    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol)>>,
     Vec<((usize, bool), usize)>,
     Vec<Option<IndexType>>,
 );
 
 type ProjectionsResult = (
-    ColumnSet,
-    ColumnSet,
-    Option<(usize, HashMap<IndexType, usize>)>,
+    BTreeSet<usize>,
+    BTreeSet<usize>,
+    Option<(usize, HashMap<Symbol, usize>)>,
 );
 
 /// Type alias for runtime filter expression result
@@ -94,7 +96,7 @@ type RuntimeFilterExpr = Option<(
     databend_common_expression::Expr<String>,
     usize,
     usize,
-    IndexType,
+    Symbol,
 )>;
 
 type MergedFieldsResult = (
@@ -117,9 +119,9 @@ pub struct HashJoin {
     // and build_projections to build_datablock, which can help us reduce memory usage and calls
     // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
     // we will use projections for final column elimination.
-    pub projections: ColumnSet,
-    pub probe_projections: ColumnSet,
-    pub build_projections: ColumnSet,
+    pub projections: BTreeSet<usize>,
+    pub probe_projections: BTreeSet<usize>,
+    pub build_projections: BTreeSet<usize>,
 
     pub build: PhysicalPlan,
     pub probe: PhysicalPlan,
@@ -128,7 +130,7 @@ pub struct HashJoin {
     pub is_null_equal: Vec<bool>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
-    pub marker_index: Option<IndexType>,
+    pub marker_index: Option<Symbol>,
     pub from_correlated_subquery: bool,
     // Use the column of probe side to construct build side column.
     // (probe index, (is probe column nullable, is build column nullable))
@@ -147,7 +149,7 @@ pub struct HashJoin {
 
     // Hash join build side cache information for ExpressionScan, which includes the cache index and
     // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
-    pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
+    pub build_side_cache_info: Option<(usize, HashMap<Symbol, usize>)>,
 
     pub runtime_filter: PhysicalRuntimeFilters,
     pub broadcast_id: Option<u32>,
@@ -553,7 +555,7 @@ impl PhysicalPlanBuilder {
         &self,
         required: &mut ColumnSet,
         others_required: &mut ColumnSet,
-    ) -> (Vec<IndexType>, Vec<IndexType>) {
+    ) -> (Vec<Symbol>, Vec<Symbol>) {
         {
             let metadata = self.metadata.read();
             let retained_columns = metadata.get_retained_column();
@@ -763,9 +765,9 @@ impl PhysicalPlanBuilder {
         right_condition: &ScalarExpr,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        column_projections: &[IndexType],
+        column_projections: &[Symbol],
         probe_to_build_index: &mut Vec<((usize, bool), usize)>,
-        pre_column_projections: &mut Vec<IndexType>,
+        pre_column_projections: &mut Vec<Symbol>,
     ) -> Result<()> {
         if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
             (left_condition, right_condition)
@@ -812,8 +814,8 @@ impl PhysicalPlanBuilder {
         join: &Join,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        column_projections: &[IndexType],
-        pre_column_projections: &mut Vec<IndexType>,
+        column_projections: &[Symbol],
+        pre_column_projections: &mut Vec<Symbol>,
     ) -> Result<JoinConditionsResult> {
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
@@ -954,7 +956,7 @@ impl PhysicalPlanBuilder {
         join: &Join,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        pre_column_projections: &[IndexType],
+        pre_column_projections: &[Symbol],
         probe_to_build_index: &mut Vec<((usize, bool), usize)>,
     ) -> Result<ProjectionsResult> {
         // Handle cache columns
@@ -966,8 +968,8 @@ impl PhysicalPlanBuilder {
         };
 
         // Prepare projections
-        let mut probe_projections = ColumnSet::new();
-        let mut build_projections = ColumnSet::new();
+        let mut probe_projections = BTreeSet::new();
+        let mut build_projections = BTreeSet::new();
 
         for column in pre_column_projections.iter() {
             if let Some((index, _)) = probe_schema.column_with_name(&column.to_string()) {
@@ -1007,8 +1009,8 @@ impl PhysicalPlanBuilder {
         &self,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
-        probe_projections: &ColumnSet,
-        build_projections: &mut ColumnSet,
+        probe_projections: &BTreeSet<usize>,
+        build_projections: &mut BTreeSet<usize>,
         probe_to_build_index: &mut [((usize, bool), usize)],
     ) -> Result<MergedFieldsResult> {
         let mut merged_fields =
@@ -1079,8 +1081,8 @@ impl PhysicalPlanBuilder {
         join: &Join,
         probe_fields: Vec<DataField>,
         build_fields: Vec<DataField>,
-        column_projections: &[IndexType],
-    ) -> Result<(Vec<DataField>, DataSchemaRef, ColumnSet)> {
+        column_projections: &[Symbol],
+    ) -> Result<(Vec<DataField>, DataSchemaRef, BTreeSet<usize>)> {
         // Create merged fields based on join type
         let merged_fields = match join.join_type {
             JoinType::Cross
@@ -1109,7 +1111,7 @@ impl PhysicalPlanBuilder {
                 // Check for invalid column access in ANTI or SEMI joins
                 for field in dropped_fields.iter() {
                     if result_fields.iter().all(|x| x.name() != field.name())
-                        && let Ok(index) = field.name().parse::<usize>()
+                        && let Ok(index) = field.name().parse::<Symbol>()
                         && column_projections.contains(&index)
                     {
                         let metadata = self.metadata.read();
@@ -1165,7 +1167,7 @@ impl PhysicalPlanBuilder {
         };
 
         // Create projections and output schema
-        let mut projections = ColumnSet::new();
+        let mut projections = BTreeSet::new();
         let projected_schema = DataSchema::new(merged_fields.clone());
 
         for column in column_projections.iter() {

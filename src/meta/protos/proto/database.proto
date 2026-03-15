@@ -75,7 +75,8 @@ message DatabaseMeta {
   // If it is in progress, the database should not be un-dropped, because the data may be incomplete.
   bool gc_in_progress = 29;
 
-  repeated uint64 shared_by = 24;
+  // repeated uint64 shared_by = 24;
+  reserved 24;
 
   optional TIdent from_share = 25;
 

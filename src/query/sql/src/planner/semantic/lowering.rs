@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::RawExpr;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
@@ -26,8 +27,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ColumnBinding;
 use crate::ColumnEntry;
-use crate::IndexType;
 use crate::Metadata;
+use crate::Symbol;
 use crate::binder::DummyColumnType;
 use crate::plans::ScalarExpr;
 
@@ -35,8 +36,8 @@ pub trait TypeProvider<ColumnID: ColumnIndex> {
     fn get_type(&self, column_id: &ColumnID) -> Result<DataType>;
 }
 
-impl TypeProvider<IndexType> for Metadata {
-    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
+impl TypeProvider<Symbol> for Metadata {
+    fn get_type(&self, column_id: &Symbol) -> Result<DataType> {
         let column_entry = self.column(*column_id);
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
@@ -53,8 +54,15 @@ impl TypeProvider<ColumnBinding> for Metadata {
     }
 }
 
-impl TypeProvider<IndexType> for DataSchema {
-    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
+impl TypeProvider<usize> for DataSchema {
+    fn get_type(&self, column_id: &usize) -> Result<DataType> {
+        let column = self.field_with_name(&column_id.to_string())?;
+        Ok(column.data_type().clone())
+    }
+}
+
+impl TypeProvider<Symbol> for DataSchema {
+    fn get_type(&self, column_id: &Symbol) -> Result<DataType> {
         let column = self.field_with_name(&column_id.to_string())?;
         Ok(column.data_type().clone())
     }
@@ -162,8 +170,8 @@ impl<ColumnID: ColumnIndex> TypeCheck<ColumnID> for RawExpr<ColumnID> {
     }
 }
 
-impl TypeCheck<IndexType> for ScalarExpr {
-    fn type_check(&self, type_provider: &impl TypeProvider<IndexType>) -> Result<Expr<IndexType>> {
+impl TypeCheck<Symbol> for ScalarExpr {
+    fn type_check(&self, type_provider: &impl TypeProvider<Symbol>) -> Result<Expr<Symbol>> {
         let raw_expr = self.as_raw_expr().project_column_ref(|col| col.index);
         raw_expr.type_check(type_provider)
     }
@@ -292,6 +300,22 @@ impl ScalarExpr {
 
     pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
         type_check::check(&self.as_raw_expr(), &BUILTIN_FUNCTIONS)
+    }
+
+    pub fn as_symbol_expr(&self) -> Result<Expr<Symbol>> {
+        type_check::check(
+            &self.as_raw_expr().project_column_ref(|col| col.index),
+            &BUILTIN_FUNCTIONS,
+        )
+    }
+
+    pub fn as_field_index_expr(&self) -> Result<Expr<FieldIndex>> {
+        type_check::check(
+            &self
+                .as_raw_expr()
+                .project_column_ref(|col| col.index.as_field_index()),
+            &BUILTIN_FUNCTIONS,
+        )
     }
 
     pub fn is_column_ref(&self) -> bool {

@@ -26,8 +26,8 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_functions::aggregates::AggregateCountFunction;
 
 use crate::Binder;
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::binder::wrap_cast;
@@ -62,8 +62,8 @@ use crate::plans::WindowFuncType;
 #[derive(Debug)]
 pub enum UnnestResult {
     // Semi/Anti Join, Cross join for EXISTS
-    SimpleJoin { output_index: Option<IndexType> },
-    MarkJoin { marker_index: IndexType },
+    SimpleJoin { output_index: Option<Symbol> },
+    MarkJoin { marker_index: Symbol },
     SingleJoin,
 }
 
@@ -144,7 +144,7 @@ pub struct FlattenInfo {
 pub struct SubqueryDecorrelatorOptimizer {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
-    pub(crate) derived_columns: HashMap<IndexType, IndexType>,
+    pub(crate) derived_columns: HashMap<Symbol, Symbol>,
     pub(crate) binder: Option<Binder>,
 }
 

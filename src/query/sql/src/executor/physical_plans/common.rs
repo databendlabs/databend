@@ -18,10 +18,10 @@ use std::fmt::Formatter;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::Symbol;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 
-use crate::IndexType;
 use crate::plans::UDFField;
 use crate::plans::UDFType;
 
@@ -40,11 +40,11 @@ pub struct AggregateFunctionSignature {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionDesc {
     pub sig: AggregateFunctionSignature,
-    pub output_column: IndexType,
+    pub output_column: Symbol,
     /// Bound indices of arguments. Only used in partial aggregation.
-    pub arg_indices: Vec<IndexType>,
+    pub arg_indices: Vec<Symbol>,
     /// Bound indices of sort description. Only used in partial aggregation.
-    pub sort_desc_indices: Vec<IndexType>,
+    pub sort_desc_indices: Vec<Symbol>,
     pub display: String,
 }
 
@@ -52,7 +52,7 @@ pub struct AggregateFunctionDesc {
 pub struct SortDesc {
     pub asc: bool,
     pub nulls_first: bool,
-    pub order_by: IndexType,
+    pub order_by: Symbol,
     pub display_name: String,
 }
 

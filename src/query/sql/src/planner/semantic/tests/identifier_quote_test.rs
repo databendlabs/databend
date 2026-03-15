@@ -15,6 +15,7 @@
 mod tests {
 
     use databend_common_ast::ast::Identifier;
+    use databend_common_ast::ast::quote::display_ident;
     use databend_common_ast::parser::Dialect;
     use databend_common_ast::parser::parse_sql;
     use databend_common_ast::parser::tokenize_sql;
@@ -182,6 +183,40 @@ mod tests {
 
         // The name should be lowercase due to the case insensitive context
         assert_eq!(third_norm.name, "mixedcaseidentifier");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_display_ident_quotes_unicode_uppercase_when_case_sensitive() -> anyhow::Result<()> {
+        let context = NameResolutionContext {
+            unquoted_ident_case_sensitive: false,
+            quoted_ident_case_sensitive: true,
+            deny_column_reference: false,
+        };
+
+        let rendered = display_ident(
+            "Ж",
+            false,
+            context.quoted_ident_case_sensitive,
+            Dialect::PostgreSQL,
+        );
+        assert_eq!(
+            rendered, r#""Ж""#,
+            "Unicode uppercase identifiers must stay quoted in output"
+        );
+
+        let reparsed_unquoted = Identifier {
+            span: Default::default(),
+            name: "Ж".to_string(),
+            quote: None,
+            ident_type: Default::default(),
+        };
+        let normalized = normalize_identifier(&reparsed_unquoted, &context);
+        assert_eq!(
+            normalized.name, "ж",
+            "Unquoted reparsing lowercases the identifier, so output must preserve quotes"
+        );
 
         Ok(())
     }

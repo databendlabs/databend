@@ -44,8 +44,8 @@ use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use super::AggregateInfo;
-use crate::IndexType;
 use crate::NameResolutionContext;
+use crate::Symbol;
 use crate::TypeChecker;
 use crate::WindowChecker;
 use crate::binder::ExprContext;
@@ -90,7 +90,7 @@ impl Binder {
         agg_info: &AggregateInfo,
         window_info: &WindowInfo,
         select_list: &SelectList,
-    ) -> Result<(HashMap<IndexType, ScalarItem>, Vec<ColumnBinding>)> {
+    ) -> Result<(HashMap<Symbol, ScalarItem>, Vec<ColumnBinding>)> {
         let mut columns = Vec::with_capacity(select_list.items.len());
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
@@ -172,7 +172,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         columns: &[ColumnBinding],
-        scalars: &HashMap<IndexType, ScalarItem>,
+        scalars: &HashMap<Symbol, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::SelectClause);

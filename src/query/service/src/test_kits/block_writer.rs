@@ -44,6 +44,7 @@ use parquet::format::FileMetaData;
 use uuid::Uuid;
 
 use super::old_version_generator;
+
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
@@ -118,6 +119,7 @@ impl<'a> BlockWriter<'a> {
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
+            None,
             None,
             None,
             None,

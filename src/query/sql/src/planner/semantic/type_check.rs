@@ -85,6 +85,7 @@ use databend_common_expression::RawExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
+use databend_common_expression::Symbol;
 use databend_common_expression::TableDataType;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::cast_scalar;
@@ -156,6 +157,7 @@ use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
+use crate::ColumnSet;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -195,6 +197,7 @@ use crate::plans::NthValueFunction;
 use crate::plans::NtileFunction;
 use crate::plans::ReadFileFunctionArgument;
 use crate::plans::RedisSource;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SqlSource;
@@ -1046,13 +1049,14 @@ impl<'a> TypeChecker<'a> {
                         lambda,
                     },
             } => {
-                let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
+                let func_name = name.name.to_lowercase();
                 let func_name = func_name.as_str();
                 let uni_case_func_name = Ascii::new(func_name);
                 if !is_builtin_function(func_name)
                     && !Self::all_sugar_functions().contains(&uni_case_func_name)
                 {
-                    if let Some(udf) = self.resolve_udf(*span, func_name, args)? {
+                    let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
+                    if let Some(udf) = self.resolve_udf(*span, &udf_name, args)? {
                         return Ok(udf);
                     }
 
@@ -2539,7 +2543,7 @@ impl<'a> TypeChecker<'a> {
             _ => {
                 struct LambdaVisitor<'a> {
                     bind_context: &'a BindContext,
-                    arg_index: HashSet<IndexType>,
+                    arg_index: HashSet<Symbol>,
                     args: Vec<ScalarExpr>,
                     fields: Vec<DataField>,
                 }
@@ -4070,6 +4074,193 @@ impl<'a> TypeChecker<'a> {
         child_expr: Option<Expr>,
         compare_op: Option<SubqueryComparisonOp>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ScalarOutputKind {
+            OuterOnlyNoAggregate,
+            OuterOnlyWithAggregate,
+            Other,
+        }
+
+        fn merge_scalar_output_kind(
+            lhs: ScalarOutputKind,
+            rhs: ScalarOutputKind,
+        ) -> ScalarOutputKind {
+            match (lhs, rhs) {
+                (ScalarOutputKind::Other, _) | (_, ScalarOutputKind::Other) => {
+                    ScalarOutputKind::Other
+                }
+                (ScalarOutputKind::OuterOnlyWithAggregate, _)
+                | (_, ScalarOutputKind::OuterOnlyWithAggregate) => {
+                    ScalarOutputKind::OuterOnlyWithAggregate
+                }
+                _ => ScalarOutputKind::OuterOnlyNoAggregate,
+            }
+        }
+
+        fn find_output_scalar(s_expr: &SExpr, target: Symbol) -> Option<ScalarExpr> {
+            fn is_identity_projection(target: Symbol, scalar: &ScalarExpr) -> bool {
+                matches!(
+                    scalar,
+                    ScalarExpr::BoundColumnRef(column_ref) if column_ref.column.index == target
+                )
+            }
+
+            match s_expr.plan() {
+                RelOperator::EvalScalar(eval_scalar) => {
+                    if let Some(item) = eval_scalar.items.iter().find(|item| item.index == target)
+                        && !is_identity_projection(target, &item.scalar)
+                    {
+                        return Some(item.scalar.clone());
+                    }
+                }
+                RelOperator::Aggregate(aggregate) => {
+                    if let Some(item) = aggregate
+                        .aggregate_functions
+                        .iter()
+                        .find(|item| item.index == target)
+                        && !is_identity_projection(target, &item.scalar)
+                    {
+                        return Some(item.scalar.clone());
+                    }
+                    if let Some(item) = aggregate
+                        .group_items
+                        .iter()
+                        .find(|item| item.index == target)
+                        && !is_identity_projection(target, &item.scalar)
+                    {
+                        return Some(item.scalar.clone());
+                    }
+                }
+                _ => {}
+            }
+
+            for child in s_expr.children() {
+                if let Some(scalar) = find_output_scalar(child, target) {
+                    return Some(scalar);
+                }
+            }
+
+            None
+        }
+
+        fn classify_scalar_output(
+            s_expr: &SExpr,
+            scalar: &ScalarExpr,
+            outer_columns: &ColumnSet,
+            visiting: &mut HashSet<Symbol>,
+        ) -> ScalarOutputKind {
+            match scalar {
+                ScalarExpr::BoundColumnRef(column_ref) => {
+                    let index = column_ref.column.index;
+                    if outer_columns.contains(&index) {
+                        return ScalarOutputKind::OuterOnlyNoAggregate;
+                    }
+
+                    if !visiting.insert(index) {
+                        return ScalarOutputKind::Other;
+                    }
+
+                    let kind = find_output_scalar(s_expr, index)
+                        .map(|scalar| {
+                            classify_scalar_output(s_expr, &scalar, outer_columns, visiting)
+                        })
+                        .unwrap_or(ScalarOutputKind::Other);
+                    visiting.remove(&index);
+                    kind
+                }
+                ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => {
+                    ScalarOutputKind::OuterOnlyNoAggregate
+                }
+                ScalarExpr::AggregateFunction(aggregate) => {
+                    let used_columns = aggregate
+                        .exprs()
+                        .flat_map(|expr| expr.used_columns())
+                        .collect::<ColumnSet>();
+                    if !used_columns.is_empty() && used_columns.is_subset(outer_columns) {
+                        ScalarOutputKind::OuterOnlyWithAggregate
+                    } else {
+                        ScalarOutputKind::Other
+                    }
+                }
+                ScalarExpr::UDAFCall(udaf) => {
+                    let used_columns = udaf
+                        .arguments
+                        .iter()
+                        .flat_map(|expr| expr.used_columns())
+                        .collect::<ColumnSet>();
+                    if !used_columns.is_empty() && used_columns.is_subset(outer_columns) {
+                        ScalarOutputKind::OuterOnlyWithAggregate
+                    } else {
+                        ScalarOutputKind::Other
+                    }
+                }
+                ScalarExpr::FunctionCall(func) => {
+                    let mut kind = ScalarOutputKind::OuterOnlyNoAggregate;
+                    for arg in &func.arguments {
+                        kind = merge_scalar_output_kind(
+                            kind,
+                            classify_scalar_output(s_expr, arg, outer_columns, visiting),
+                        );
+                    }
+                    kind
+                }
+                ScalarExpr::CastExpr(cast) => {
+                    classify_scalar_output(s_expr, &cast.argument, outer_columns, visiting)
+                }
+                ScalarExpr::LambdaFunction(lambda) => {
+                    let mut kind = ScalarOutputKind::OuterOnlyNoAggregate;
+                    for arg in &lambda.args {
+                        kind = merge_scalar_output_kind(
+                            kind,
+                            classify_scalar_output(s_expr, arg, outer_columns, visiting),
+                        );
+                    }
+                    kind
+                }
+                ScalarExpr::UDFCall(udf) => {
+                    let mut kind = ScalarOutputKind::OuterOnlyNoAggregate;
+                    for arg in &udf.arguments {
+                        kind = merge_scalar_output_kind(
+                            kind,
+                            classify_scalar_output(s_expr, arg, outer_columns, visiting),
+                        );
+                    }
+                    kind
+                }
+                ScalarExpr::UDFLambdaCall(udf_lambda) => {
+                    classify_scalar_output(s_expr, &udf_lambda.scalar, outer_columns, visiting)
+                }
+                ScalarExpr::AsyncFunctionCall(async_call) => {
+                    let mut kind = ScalarOutputKind::OuterOnlyNoAggregate;
+                    for arg in &async_call.arguments {
+                        kind = merge_scalar_output_kind(
+                            kind,
+                            classify_scalar_output(s_expr, arg, outer_columns, visiting),
+                        );
+                    }
+                    kind
+                }
+                ScalarExpr::WindowFunction(_) | ScalarExpr::SubqueryExpr(_) => {
+                    ScalarOutputKind::Other
+                }
+            }
+        }
+
+        fn has_outer_only_aggregate_output(
+            s_expr: &SExpr,
+            output_column: Symbol,
+            outer_columns: &ColumnSet,
+        ) -> bool {
+            let Some(output_scalar) = find_output_scalar(s_expr, output_column) else {
+                return false;
+            };
+
+            matches!(
+                classify_scalar_output(s_expr, &output_scalar, outer_columns, &mut HashSet::new()),
+                ScalarOutputKind::OuterOnlyWithAggregate
+            )
+        }
+
         let mut binder = Binder::new(
             self.ctx.clone(),
             CatalogManager::instance(),
@@ -4126,6 +4317,22 @@ impl<'a> TypeChecker<'a> {
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
+
+        if typ == SubqueryType::Scalar
+            && contain_agg == Some(true)
+            && !rel_prop.outer_columns.is_empty()
+            && has_outer_only_aggregate_output(
+                &s_expr,
+                output_context.columns[0].index,
+                &rel_prop.outer_columns,
+            )
+        {
+            return Err(ErrorCode::SemanticError(
+                "unsupported scalar subquery: aggregate output references only outer columns"
+                    .to_string(),
+            )
+            .set_span(subquery.span));
+        }
 
         let mut child_scalar = None;
         if let Some(expr) = child_expr {
@@ -4924,7 +5131,7 @@ impl<'a> TypeChecker<'a> {
         let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = &args[0] else {
             return None;
         };
-        if column.index >= self.metadata.read().columns().len() {
+        if column.index.as_usize() >= self.metadata.read().columns().len() {
             return None;
         }
         // only rewrite when arg[1] is path
@@ -6686,7 +6893,7 @@ impl<'a> TypeChecker<'a> {
         // If it is a tuple column, convert it to the internal column specified by the paths.
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            if column.index < self.metadata.read().columns().len() {
+            if column.index.as_usize() < self.metadata.read().columns().len() {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
                     column_entry
@@ -6887,23 +7094,17 @@ impl<'a> TypeChecker<'a> {
 
         assert_eq!(ctx.columns.len(), 1);
         // Wrap group by on `const_scan` to deduplicate values
-        let distinct_const_scan = SExpr::create_unary(
-            Arc::new(
-                Aggregate {
-                    mode: AggregateMode::Initial,
-                    group_items: vec![ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ctx.columns[0].clone(),
-                        }),
-                        index: self.metadata.read().columns().len() - 1,
-                    }],
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            Arc::new(const_scan),
-        );
+        let distinct_const_scan = const_scan.build_unary(Aggregate {
+            mode: AggregateMode::Initial,
+            group_items: vec![ScalarItem {
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ctx.columns[0].clone(),
+                }),
+                index: ctx.columns[0].index,
+            }],
+            ..Default::default()
+        });
 
         let box mut data_type = ctx.columns[0].data_type.clone();
         let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);
@@ -7015,7 +7216,7 @@ impl<'a> TypeChecker<'a> {
 
         // try rewrite as virtual column and pushdown to storage layer.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            if column.index < self.metadata.read().columns().len() {
+            if column.index.as_usize() < self.metadata.read().columns().len() {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
                     if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(

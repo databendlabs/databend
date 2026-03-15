@@ -36,6 +36,7 @@ use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::decimal::Decimal256Type;
 use databend_common_expression::types::decimal::DecimalDomain;
@@ -47,9 +48,15 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
+use geo::Point;
+use geo::Rect;
 
 use super::eliminate_cast::*;
 use crate::Index;
+use crate::SpatialOp;
+use crate::SpatialPredicate;
+use crate::collect_spatial_predicates;
 
 #[derive(Clone)]
 pub struct RangeIndex {
@@ -59,6 +66,7 @@ pub struct RangeIndex {
 
     // Default stats for each column if no stats are available (e.g. for new-add columns)
     default_stats: StatisticsOfColumns,
+    predicates: Vec<SpatialPredicate>,
 }
 
 impl RangeIndex {
@@ -68,11 +76,16 @@ impl RangeIndex {
         schema: TableSchemaRef,
         default_stats: StatisticsOfColumns,
     ) -> Result<Self> {
+        let (expr, predicates) = match collect_spatial_predicates(schema.clone(), expr, None)? {
+            Some(result) => (result.expr, result.predicates),
+            None => (expr.clone(), Vec::new()),
+        };
         Ok(Self {
-            expr: expr.clone(),
+            expr,
             func_ctx,
             schema,
             default_stats,
+            predicates,
         })
     }
 
@@ -87,9 +100,16 @@ impl RangeIndex {
         ))
     }
 
-    pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
-    where F: Fn(&ColumnId) -> bool {
-        let input_domains = self
+    pub fn apply<F>(
+        &self,
+        stats: &StatisticsOfColumns,
+        spatial_stats: Option<&StatisticsOfSpatialColumns>,
+        column_is_default: F,
+    ) -> Result<bool>
+    where
+        F: Fn(&ColumnId) -> bool,
+    {
+        let mut input_domains: HashMap<String, Domain> = self
             .expr
             .column_refs()
             .into_iter()
@@ -126,6 +146,10 @@ impl RangeIndex {
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
+
+        for (name, domain) in self.spatial_predicate_domains(spatial_stats) {
+            input_domains.insert(name, domain);
+        }
 
         let mut visitor = RewriteVisitor {
             input_domains,
@@ -167,13 +191,75 @@ impl RangeIndex {
             func_ctx: self.func_ctx.clone(),
             schema: self.schema.clone(),
             default_stats: self.default_stats.clone(),
+            predicates: self.predicates.clone(),
         }
-        .apply(stats, |_| false)
+        .apply(stats, None, |_| false)
     }
 
     pub fn supported_table_type(data_type: &TableDataType) -> bool {
         let data_type = DataType::from(data_type);
         Self::supported_type(&data_type)
+    }
+
+    fn spatial_predicate_domains(
+        &self,
+        spatial_stats: Option<&StatisticsOfSpatialColumns>,
+    ) -> HashMap<String, Domain> {
+        let mut domains = HashMap::new();
+        let Some(spatial_stats) = spatial_stats else {
+            return domains;
+        };
+        for predicate in &self.predicates {
+            let Some(stats) = spatial_stats.get(&predicate.column_id) else {
+                continue;
+            };
+            if stats.srid != predicate.query_srid {
+                continue;
+            }
+            let block_rect = Rect::new(
+                Point::new(stats.min_x.into_inner(), stats.min_y.into_inner()),
+                Point::new(stats.max_x.into_inner(), stats.max_y.into_inner()),
+            );
+            if !rects_intersect(&block_rect, &predicate.query_rect)
+                || (matches!(predicate.op, SpatialOp::Contains | SpatialOp::Equals)
+                    && !rect_contains(&block_rect, &predicate.query_rect))
+            {
+                domains.insert(
+                    predicate.placeholder.clone(),
+                    spatial_false_domain(&predicate.return_type, stats.has_null),
+                );
+            }
+        }
+        domains
+    }
+}
+
+fn rects_intersect(block_rect: &Rect<f64>, query_rect: &Rect<f64>) -> bool {
+    block_rect.min().x <= query_rect.max().x
+        && block_rect.max().x >= query_rect.min().x
+        && block_rect.min().y <= query_rect.max().y
+        && block_rect.max().y >= query_rect.min().y
+}
+
+fn rect_contains(block_rect: &Rect<f64>, query_rect: &Rect<f64>) -> bool {
+    block_rect.min().x <= query_rect.min().x
+        && block_rect.min().y <= query_rect.min().y
+        && block_rect.max().x >= query_rect.max().x
+        && block_rect.max().y >= query_rect.max().y
+}
+
+fn spatial_false_domain(return_type: &DataType, has_null: bool) -> Domain {
+    let bool_domain = Domain::Boolean(BooleanDomain {
+        has_false: true,
+        has_true: false,
+    });
+    if return_type.is_nullable() {
+        Domain::Nullable(NullableDomain {
+            has_null,
+            value: Some(Box::new(bool_domain)),
+        })
+    } else {
+        bool_domain
     }
 }
 

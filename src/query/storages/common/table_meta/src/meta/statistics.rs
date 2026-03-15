@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 use crate::meta::ColumnStatistics;
 use crate::meta::SegmentStatistics;
+use crate::meta::SpatialStatistics;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
@@ -35,6 +36,7 @@ pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
+pub type StatisticsOfSpatialColumns = HashMap<ColumnId, SpatialStatistics>;
 pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
 pub type RawBlockHLL = Vec<u8>;
 

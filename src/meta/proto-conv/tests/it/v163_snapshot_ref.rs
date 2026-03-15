@@ -18,11 +18,8 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_expression as ce;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::schema::SnapshotRef;
-use databend_common_meta_app::schema::SnapshotRefType;
 use fastrace::func_name;
 use maplit::btreemap;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -65,27 +62,12 @@ fn test_decode_v163_snapshot_ref() -> anyhow::Result<()> {
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
-        shared_by: btreeset! {1},
         column_mask_policy: None,
         column_mask_policy_columns_ids: btreemap! {},
         row_access_policy: None,
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
-        refs: btreemap! {
-            "branch_1".to_string() => SnapshotRef {
-                id: 1,
-                expire_at: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap()),
-                typ: SnapshotRefType::Branch,
-                loc: "a".to_string(),
-            },
-            "tag_1".to_string() => SnapshotRef {
-                id: 2,
-                expire_at: None,
-                typ: SnapshotRefType::Tag,
-                loc: "c".to_string(),
-            }
-        },
     };
     common::test_pb_from_to(func_name!(), want())?;
 

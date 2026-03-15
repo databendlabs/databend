@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::marker::PhantomPinned;
@@ -27,7 +28,6 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::ColumnSet;
 use log::info;
 
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
@@ -44,7 +44,7 @@ pub struct TransformHashJoin {
     join: Box<dyn Join>,
     joined_data: Option<DataBlock>,
     stage_sync_barrier: Arc<Barrier>,
-    projection: ColumnSet,
+    projection: BTreeSet<usize>,
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
     instant: Instant,
@@ -58,7 +58,7 @@ impl TransformHashJoin {
         joined_port: Arc<OutputPort>,
         join: Box<dyn Join>,
         stage_sync_barrier: Arc<Barrier>,
-        projection: ColumnSet,
+        projection: BTreeSet<usize>,
         rf_desc: Arc<RuntimeFiltersDesc>,
     ) -> Result<ProcessorPtr> {
         let runtime_filter_builder = RuntimeFilterLocalBuilder::try_create(

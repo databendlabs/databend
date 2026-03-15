@@ -23,6 +23,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 
 use crate::physical_plans::PhysicalPlanMeta;
@@ -209,9 +210,9 @@ pub fn format_output_columns(
     output_schema
         .fields()
         .iter()
-        .map(|field| match field.name().parse::<usize>() {
+        .map(|field| match field.name().parse::<Symbol>() {
             Ok(column_index) => {
-                if column_index == usize::MAX {
+                if column_index.is_dummy_column() {
                     return String::from("dummy value");
                 }
                 let column_entry = metadata.column(column_index);

@@ -51,6 +51,8 @@ impl AggIndexReader {
                     .collect();
                 let part = FuseBlockPartInfo::create(
                     loc.to_string(),
+                    None,
+                    0,
                     num_rows,
                     columns_meta,
                     None,

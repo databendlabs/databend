@@ -554,6 +554,18 @@ error:
 
 
 ---------- Input ----------
+alter table t1 create branch from_dev at (branch => dev)
+---------- Output ---------
+error: 
+  --> SQL:1:43
+  |
+1 | alter table t1 create branch from_dev at (branch => dev)
+  | -----                                     ^^^^^^ unexpected `branch`. it's reserved keyword, you may avoid using it, expecting `STREAM`, `SNAPSHOT`, `TAG`, `TIMESTAMP`, or `OFFSET`
+  | |                                          
+  | while parsing `ALTER TABLE [<database>.]<table> <action>`
+
+
+---------- Input ----------
 SELECT c a as FROM t
 ---------- Output ---------
 error: 
@@ -753,7 +765,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -785,7 +797,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -805,7 +817,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -825,7 +837,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -845,7 +857,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -865,7 +877,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -885,7 +897,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -905,7 +917,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -928,7 +940,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -1284,7 +1296,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO | ORC | JSON | LANCE } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`

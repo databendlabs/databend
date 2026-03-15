@@ -33,7 +33,7 @@ use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 
 use crate::ColumnBinding;
-use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::HistogramBuilder;
@@ -598,13 +598,13 @@ impl SelectivityVisitor<'_> {
         ))
     }
 
-    fn get_column_stat(&self, index: IndexType) -> Option<&ColumnStat> {
+    fn get_column_stat(&self, index: Symbol) -> Option<&ColumnStat> {
         self.overrides
             .get(&index)
             .or_else(|| self.column_stats.get(&index))
     }
 
-    fn ensure_column_stat(&mut self, index: IndexType) -> Option<&mut ColumnStat> {
+    fn ensure_column_stat(&mut self, index: Symbol) -> Option<&mut ColumnStat> {
         if !self.overrides.contains_key(&index) {
             let stat = self.column_stats.get(&index)?.clone();
             self.overrides.insert(index, stat);
@@ -878,7 +878,7 @@ mod tests {
                 let (name, data_type) = &columns[index];
                 let column = ColumnBindingBuilder::new(
                     name.to_string(),
-                    index,
+                    Symbol::new(index),
                     Box::new(data_type.clone()),
                     Visibility::Visible,
                 )
@@ -928,14 +928,14 @@ mod tests {
 
     fn test_comparison(file: &mut impl Write) -> Result<()> {
         let column_stats = ColumnStatSet::from_iter([
-            (0, ColumnStat {
+            (Symbol::new(0), ColumnStat {
                 min: Datum::UInt(10),
                 max: Datum::UInt(20),
                 ndv: Ndv::Stat(10.0),
                 null_count: 0,
                 histogram: None,
             }),
-            (1, ColumnStat {
+            (Symbol::new(1), ColumnStat {
                 min: Datum::UInt(10),
                 max: Datum::UInt(20),
                 ndv: Ndv::Stat(10.0),
@@ -982,14 +982,14 @@ mod tests {
 
     fn test_logic(file: &mut impl Write) -> Result<()> {
         let column_stats = ColumnStatSet::from_iter([
-            (0, ColumnStat {
+            (Symbol::new(0), ColumnStat {
                 min: Datum::UInt(0),
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
                 null_count: 0,
                 histogram: None,
             }),
-            (1, ColumnStat {
+            (Symbol::new(1), ColumnStat {
                 min: Datum::UInt(0),
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
@@ -1029,14 +1029,14 @@ mod tests {
 
     fn test_mod(file: &mut impl Write) -> Result<()> {
         let column_stats = ColumnStatSet::from_iter([
-            (0, ColumnStat {
+            (Symbol::new(0), ColumnStat {
                 min: Datum::UInt(0),
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
                 null_count: 0,
                 histogram: None,
             }),
-            (1, ColumnStat {
+            (Symbol::new(1), ColumnStat {
                 min: Datum::UInt(0),
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
@@ -1053,7 +1053,7 @@ mod tests {
 
     fn test_like(file: &mut impl Write) -> Result<()> {
         let columns = &[("s", DataType::String)];
-        let column_stats = ColumnStatSet::from_iter([(0, ColumnStat {
+        let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
             min: Datum::Bytes("aa".as_bytes().to_vec()),
             max: Datum::Bytes("zz".as_bytes().to_vec()),
             ndv: Ndv::Stat(52.0),

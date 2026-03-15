@@ -1595,6 +1595,26 @@ select try_to_timestamp('10000-09-09 01:46:39', '%Y-%m-%d %H:%M:%S');
 ----
 NULL
 
+query ?
+select try_to_timestamp('2026-01-01 00:00:61');
+----
+NULL
+
+query ?
+select try_to_timestamp('2026-01-01 00:00:-1');
+----
+NULL
+
+query ?
+select try_to_timestamp('2026-01-01 25:00:00');
+----
+NULL
+
+query ?
+select try_to_timestamp('2026-01-01 00:60:00');
+----
+NULL
+
 statement error 1006
 select to_date('2022-02-02', '%m');
 

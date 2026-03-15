@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -26,7 +28,9 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use goldenfile::Mint;
 
 use super::eliminate_cast::parse_expr;
@@ -184,6 +188,65 @@ fn test_range_index_strings() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_range_index_spatial() -> anyhow::Result<()> {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("test_range_index_spatial.txt").unwrap();
+
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "g",
+        TableDataType::Geometry,
+    )]));
+    let spatial_stats = build_spatial_stats(&schema, 0.0, 0.0, 10.0, 10.0, 0, false);
+
+    run_text_spatial(
+        file,
+        "st_intersects(g, to_geometry('POLYGON((20 20, 20 30, 30 30, 30 20, 20 20))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_intersects(g, to_geometry('POLYGON((5 5, 5 15, 15 15, 15 5, 5 5))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_contains(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_contains(g, to_geometry('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_equals(g, to_geometry('POINT(20 20)'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_equals(g, to_geometry('POINT(5 5)'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+
+    let spatial_stats_4326 = build_spatial_stats(&schema, 0.0, 0.0, 10.0, 10.0, 4326, false);
+    run_text_spatial(
+        file,
+        "st_intersects(g, to_geometry('POINT(1 1)'))",
+        schema.clone(),
+        Some(spatial_stats_4326),
+    );
+
+    Ok(())
+}
+
 fn run_text_with_schema(
     file: &mut impl Write,
     text: &str,
@@ -205,7 +268,7 @@ fn run_text_with_schema(
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(&stats, |_| false) {
+    match index.apply(&stats, None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
@@ -252,7 +315,7 @@ fn run_text(file: &mut impl Write, text: &str, domains: &[(&str, Scalar, Scalar)
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();
 
-    match index.apply(&stats, |_| false) {
+    match index.apply(&stats, None, |_| false) {
         Err(err) => {
             writeln!(file, "err       : {err}").unwrap();
         }
@@ -262,4 +325,53 @@ fn run_text(file: &mut impl Write, text: &str, domains: &[(&str, Scalar, Scalar)
         }
     };
     writeln!(file).unwrap();
+}
+
+fn run_text_spatial(
+    file: &mut impl Write,
+    text: &str,
+    schema: Arc<TableSchema>,
+    spatial_stats: Option<StatisticsOfSpatialColumns>,
+) {
+    let func_ctx = FunctionContext::default();
+    let stats = HashMap::new();
+
+    let columns = [("g", DataType::Geometry)];
+    let expr = parse_expr(text, &columns);
+    let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
+
+    writeln!(file, "text      : {text}").unwrap();
+    writeln!(file, "expr      : {expr}").unwrap();
+    writeln!(file, "spatial   : {spatial_stats:?}").unwrap();
+
+    match index.apply(&stats, spatial_stats.as_ref(), |_| false) {
+        Err(err) => {
+            writeln!(file, "err       : {err}").unwrap();
+        }
+        Ok(keep) => {
+            writeln!(file, "keep      : {keep}").unwrap();
+        }
+    };
+    writeln!(file).unwrap();
+}
+
+fn build_spatial_stats(
+    schema: &TableSchema,
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+    srid: i32,
+    has_null: bool,
+) -> StatisticsOfSpatialColumns {
+    let column_id = schema.column_id_of("g").unwrap();
+    let stats = SpatialStatistics {
+        min_x: OrderedFloat(min_x),
+        min_y: OrderedFloat(min_y),
+        max_x: OrderedFloat(max_x),
+        max_y: OrderedFloat(max_y),
+        srid,
+        has_null,
+    };
+    [(column_id, stats)].into_iter().collect()
 }

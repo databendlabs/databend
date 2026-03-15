@@ -67,6 +67,7 @@ mod kernels;
 mod projected_block;
 mod property;
 mod stat_evaluator;
+mod symbol;
 
 pub mod row_encoding;
 pub mod sampler;
@@ -97,6 +98,7 @@ pub use crate::property::*;
 pub use crate::row_encoding::*;
 pub use crate::schema::*;
 pub use crate::stat_evaluator::*;
+pub use crate::symbol::*;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;
 pub use crate::values::*;

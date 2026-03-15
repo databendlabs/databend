@@ -384,6 +384,17 @@ pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     fn override_block_schema(&self) -> Option<DataSchemaRef> {
         None
     }
+
+    // For meta-only blocks, this can provide profile statistics hints.
+    fn output_stats(&self) -> Option<BlockProfileStatistics> {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockProfileStatistics {
+    pub rows: usize,
+    pub bytes: usize,
 }
 
 pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
@@ -578,6 +589,16 @@ impl DataBlock {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.columns().iter().map(|entry| entry.memory_size()).sum()
+    }
+
+    #[inline]
+    pub fn profile_statistics(&self) -> BlockProfileStatistics {
+        self.get_meta()
+            .and_then(|meta| meta.output_stats())
+            .unwrap_or(BlockProfileStatistics {
+                rows: self.num_rows(),
+                bytes: self.memory_size(),
+            })
     }
 
     pub fn data_type(&self, offset: usize) -> DataType {

@@ -120,7 +120,7 @@ impl IPhysicalPlan for MutationSource {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let table = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, &None, None)?;
+            .build_table_by_table_info(&self.table_info, None)?;
 
         let table = FuseTable::try_from_table(table.as_ref())?.clone();
         let is_delete = self.input_type == MutationType::Delete;
@@ -145,8 +145,11 @@ impl IPhysicalPlan for MutationSource {
             );
         }
 
-        let read_partition_columns: Vec<usize> =
-            self.read_partition_columns.clone().into_iter().collect();
+        let read_partition_columns: Vec<usize> = self
+            .read_partition_columns
+            .iter()
+            .map(|idx| idx.as_field_index())
+            .collect();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
         if is_lazy {
@@ -193,7 +196,11 @@ impl IPhysicalPlan for MutationSource {
         } else {
             MutationAction::Update
         };
-        let col_indices = self.read_partition_columns.clone().into_iter().collect();
+        let col_indices = self
+            .read_partition_columns
+            .iter()
+            .map(|idx| idx.as_field_index())
+            .collect();
         let update_mutation_with_filter =
             self.input_type == MutationType::Update && filter.is_some();
         table.add_mutation_source(

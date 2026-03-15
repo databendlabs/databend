@@ -23,6 +23,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Exchange;
@@ -37,7 +38,7 @@ use super::types::PhysicalRuntimeFilters;
 
 /// Type alias for probe keys with runtime filter information
 /// Contains: (RemoteExpr, scan_id, table_index, column_idx)
-type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, IndexType)>>;
+type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, Symbol)>>;
 
 /// Check if a data type is supported for bloom filter
 ///
@@ -61,6 +62,7 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
     matches!(
         join_type,
         JoinType::Inner
+            | JoinType::LeftSemi
             | JoinType::Right
             | JoinType::RightSemi
             | JoinType::RightAnti
@@ -196,10 +198,10 @@ fn find_probe_targets(
     s_expr: &SExpr,
     probe_key: &RemoteExpr<String>,
     probe_scan_id: usize,
-    probe_key_col_idx: IndexType,
+    probe_key_col_idx: Symbol,
 ) -> Result<Vec<(RemoteExpr<String>, usize)>> {
     let mut uf = UnionFind::new();
-    let mut column_to_remote: HashMap<IndexType, (RemoteExpr<String>, usize)> = HashMap::new();
+    let mut column_to_remote: HashMap<Symbol, (RemoteExpr<String>, usize)> = HashMap::new();
     column_to_remote.insert(probe_key_col_idx, (probe_key.clone(), probe_scan_id));
 
     let equi_conditions = collect_equi_conditions(s_expr)?;
@@ -248,7 +250,7 @@ fn collect_equi_conditions(s_expr: &SExpr) -> Result<Vec<JoinEquiCondition>> {
 fn scalar_to_remote_expr(
     metadata: &MetadataRef,
     scalar: &ScalarExpr,
-) -> Result<Option<(RemoteExpr<String>, usize, IndexType)>> {
+) -> Result<Option<(RemoteExpr<String>, usize, Symbol)>> {
     if scalar.used_columns().iter().all(|idx| {
         matches!(
             metadata.read().column(*idx),
@@ -274,7 +276,7 @@ fn scalar_to_remote_expr(
 }
 
 struct UnionFind {
-    parent: HashMap<IndexType, IndexType>,
+    parent: HashMap<Symbol, Symbol>,
 }
 
 impl UnionFind {
@@ -284,7 +286,7 @@ impl UnionFind {
         }
     }
 
-    fn find(&mut self, x: IndexType) -> IndexType {
+    fn find(&mut self, x: Symbol) -> Symbol {
         if !self.parent.contains_key(&x) {
             self.parent.insert(x, x);
             return x;
@@ -298,7 +300,7 @@ impl UnionFind {
         *self.parent.get(&x).unwrap()
     }
 
-    fn union(&mut self, x: IndexType, y: IndexType) {
+    fn union(&mut self, x: Symbol, y: Symbol) {
         let root_x = self.find(x);
         let root_y = self.find(y);
         if root_x != root_y {
@@ -306,9 +308,9 @@ impl UnionFind {
         }
     }
 
-    fn get_equivalence_class(&mut self, x: IndexType) -> Vec<IndexType> {
+    fn get_equivalence_class(&mut self, x: Symbol) -> Vec<Symbol> {
         let root = self.find(x);
-        let all_keys: Vec<IndexType> = self.parent.keys().copied().collect();
+        let all_keys: Vec<_> = self.parent.keys().copied().collect();
         all_keys
             .into_iter()
             .filter(|&k| self.find(k) == root)

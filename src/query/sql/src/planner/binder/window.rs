@@ -26,8 +26,8 @@ use itertools::Itertools;
 use super::select::SelectList;
 use crate::BindContext;
 use crate::Binder;
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
@@ -211,7 +211,7 @@ impl WindowInfo {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WindowFunctionInfo {
     pub span: Span,
-    pub index: IndexType,
+    pub index: Symbol,
     pub func: WindowFuncType,
     pub display_name: String,
     pub arguments: Vec<ScalarItem>,

@@ -371,6 +371,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("inlist_runtime_bloom_prune_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(64),
+                    desc: "Sets the maximum number of values in an IN list for runtime block bloom pruning.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("bloom_runtime_filter_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3000000),
                     desc: "Sets the maximum number of rows for bloom runtime filter generation.",

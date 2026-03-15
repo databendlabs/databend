@@ -31,8 +31,8 @@ use serde::Serialize;
 use super::AggregateFunction;
 use super::NthValueFunction;
 use crate::ColumnSet;
-use crate::IndexType;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
@@ -53,7 +53,7 @@ pub struct Window {
 
     // aggregate scalar expressions, such as: sum(col1), count(*);
     // or general window functions, such as: row_number(), rank();
-    pub index: IndexType,
+    pub index: Symbol,
     pub function: WindowFuncType,
     pub arguments: Vec<ScalarItem>,
 

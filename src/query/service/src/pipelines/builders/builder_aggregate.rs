@@ -18,12 +18,12 @@ use databend_common_exception::Result;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::SymbolOrOffset;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_sql::IndexType;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::plans::UDFType;
-use itertools::Itertools;
 
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -32,7 +32,7 @@ use crate::pipelines::processors::transforms::aggregator::create_udaf_script_fun
 impl PipelineBuilder {
     pub fn build_aggregator_params(
         input_schema: DataSchemaRef,
-        group_by: &[IndexType],
+        group_by: &[Symbol],
         agg_funcs: &[AggregateFunctionDesc],
         cluster_aggregator: bool,
         max_spill_io_requests: usize,
@@ -64,12 +64,15 @@ impl PipelineBuilder {
                     arg_indexes.push(*p);
                 }
                 for (i, desc) in agg_func.sig.sort_descs.iter().enumerate() {
+                    let sort_index = desc.index.as_symbol().unwrap();
                     // sort_desc will reuse existing columns, so only need to insert new columns.
-                    if agg_func.sig.sort_descs[i].is_reuse_index && args.contains(&desc.index) {
+                    if agg_func.sig.sort_descs[i].is_reuse_index
+                        && arg_indexes.contains(&sort_index)
+                    {
                         continue;
                     }
-                    args.push(input_schema.index_of(&desc.index.to_string())?);
-                    arg_indexes.push(desc.index);
+                    args.push(input_schema.index_of(&sort_index.to_string())?);
+                    arg_indexes.push(sort_index);
                 }
                 agg_args.push(args);
 
@@ -78,20 +81,17 @@ impl PipelineBuilder {
                     .sort_descs
                     .iter()
                     .map(|desc| {
-                        let index = arg_indexes
-                            .iter()
-                            .find_position(|i| **i == desc.index)
-                            .map(|(i, _)| i)
-                            .unwrap_or(desc.index);
-                        Ok(AggregateFunctionSortDesc {
-                            index,
+                        let sort_index = desc.index.as_symbol().unwrap();
+                        let offset = arg_indexes.iter().position(|i| *i == sort_index).unwrap();
+                        AggregateFunctionSortDesc {
+                            index: SymbolOrOffset::Offset(offset),
                             is_reuse_index: desc.is_reuse_index,
                             data_type: desc.data_type.clone(),
                             nulls_first: desc.nulls_first,
                             asc: desc.asc,
-                        })
+                        }
                     })
-                    .collect::<Result<Vec<_>>>()?;
+                    .collect::<Vec<_>>();
 
                 match &agg_func.sig.udaf {
                     None => AggregateFunctionFactory::instance().get(

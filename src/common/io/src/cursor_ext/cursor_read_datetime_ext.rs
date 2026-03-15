@@ -437,7 +437,11 @@ fn get_local_time(tz: &TimeZone, d: &Date, times: &mut Vec<u32>) -> Result<Zoned
     if let Some(zoned) = fast_local_to_zoned(tz, d, hour, minute, second, 0) {
         return Ok(zoned);
     }
-    tz.to_zoned(d.at(hour as i8, minute as i8, second as i8, 0))
+    let time = Time::new(hour as i8, minute as i8, second as i8, 0)
+        .map_err_to_code(ErrorCode::BadBytes, || {
+            format!("Invalid time {:02}:{:02}:{:02}", hour, minute, second)
+        })?;
+    tz.to_zoned(d.to_datetime(time))
         .map_err_to_code(ErrorCode::BadBytes, || {
             format!("Invalid time provided in times: {:?}", times)
         })
@@ -490,9 +494,23 @@ fn build_zoned_from_components(
     if let Some(zoned) = fast_local_to_zoned(tz, date, hour, minute, second, micro) {
         return Ok(zoned);
     }
+    let time = Time::new(hour as i8, minute as i8, second as i8, 0).map_err_to_code(
+        ErrorCode::BadBytes,
+        || {
+            format!(
+                "Invalid local time {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                i32::from(date.year()),
+                date.month(),
+                date.day(),
+                hour,
+                minute,
+                second
+            )
+        },
+    )?;
 
     let base = tz
-        .to_zoned(date.at(hour as i8, minute as i8, second as i8, 0))
+        .to_zoned(date.to_datetime(time))
         .map_err_to_code(ErrorCode::BadBytes, || {
             format!(
                 "Invalid local time {:04}-{:02}-{:02} {:02}:{:02}:{:02}",

@@ -23,7 +23,6 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
-use databend_common_ast::ast::ClusterType;
 use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
@@ -106,6 +105,7 @@ use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
+use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::BindContext;
@@ -120,6 +120,7 @@ use crate::binder::Visibility;
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
+use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
@@ -133,14 +134,12 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
-use crate::plans::CreateTableRefPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
-use crate::plans::DropTableRefPlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
@@ -1085,31 +1084,10 @@ impl Binder {
                 ));
             };
 
-        if branch.is_some() {
-            if !self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_table_ref()
-                .unwrap_or_default()
-            {
-                return Err(ErrorCode::Unimplemented(
-                    "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
-                ));
-            }
-
-            if !matches!(
-                action,
-                AlterTableAction::AddColumn { .. }
-                    | AlterTableAction::ModifyColumn { .. }
-                    | AlterTableAction::DropColumn { .. }
-                    | AlterTableAction::RenameColumn { .. }
-                    | AlterTableAction::AlterTableClusterKey { .. }
-                    | AlterTableAction::DropTableClusterKey
-            ) {
-                return Err(ErrorCode::SemanticError(
-                    "ALTER TABLE <table>/<branch> only supports ADD/MODIFY/DROP/RENAME COLUMN, ALTER/DROP CLUSTER KEY",
-                ));
-            }
+        if let Some(branch_name) = branch.as_ref() {
+            return Err(legacy_table_ref_removed_error(format!(
+                "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
+            )));
         }
 
         match action {
@@ -1158,7 +1136,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
                 let (new_schema, old_column, new_column) = self
@@ -1181,7 +1159,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
@@ -1302,13 +1280,7 @@ impl Binder {
                             .map(SharedLockGuard::new);
                         let schema = self
                             .ctx
-                            .get_table_with_batch(
-                                &catalog,
-                                &database,
-                                &table,
-                                branch.as_deref(),
-                                None,
-                            )
+                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                             .await?
                             .schema();
                         for column in column_def_vec {
@@ -1322,13 +1294,7 @@ impl Binder {
                         let mut field_and_comment = Vec::with_capacity(column_comments.len());
                         let schema = self
                             .ctx
-                            .get_table_with_batch(
-                                &catalog,
-                                &database,
-                                &table,
-                                branch.as_deref(),
-                                None,
-                            )
+                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                             .await?
                             .schema();
 
@@ -1363,18 +1329,8 @@ impl Binder {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 let tbl = self
                     .ctx
-                    .get_table_with_batch(&catalog, &database, &table, branch.as_deref(), None)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?;
-                // Branch tables currently only support LINEAR cluster key.
-                if tbl.get_branch_info().is_some()
-                    && !matches!(cluster_by.cluster_type, ClusterType::Linear)
-                {
-                    return Err(ErrorCode::AlterTableError(format!(
-                        "Cluster key type '{}' is not supported for table branch. Only LINEAR is supported",
-                        cluster_by.cluster_type,
-                    )));
-                }
-
                 let cluster_keys = self.analyze_cluster_keys(cluster_by, tbl.schema()).await?;
 
                 Ok(Plan::AlterTableClusterKey(Box::new(
@@ -1510,39 +1466,15 @@ impl Binder {
                     },
                 )))
             }
-            AlterTableAction::CreateTableRef {
-                ref_type,
-                ref_name,
-                travel_point,
-                retain,
-            } => {
-                let navigation = if let Some(point) = travel_point {
-                    Some(self.resolve_data_travel_point(bind_context, point)?)
-                } else {
-                    None
-                };
-                let ref_name = self.normalize_identifier(ref_name).name;
-                Ok(Plan::CreateTableRef(Box::new(CreateTableRefPlan {
-                    tenant,
-                    catalog,
-                    database,
-                    table,
-                    ref_type: ref_type.into(),
-                    ref_name,
-                    navigation,
-                    retain: *retain,
-                })))
-            }
-            AlterTableAction::DropTableRef { ref_type, ref_name } => {
-                let ref_name = self.normalize_identifier(ref_name).name;
-                Ok(Plan::DropTableRef(Box::new(DropTableRefPlan {
-                    tenant,
-                    catalog,
-                    database,
-                    table,
-                    ref_type: ref_type.into(),
-                    ref_name,
-                })))
+            AlterTableAction::CreateTableBranch { .. }
+            | AlterTableAction::CreateTableTag { .. }
+            | AlterTableAction::DropTableBranch { .. }
+            | AlterTableAction::DropTableTag { .. } => {
+                // Keep the grammar reserved for the upcoming redesign, but do
+                // not generate legacy branch/tag DDL plans anymore.
+                Err(legacy_table_ref_removed_error(
+                    "ALTER TABLE ... CREATE/DROP BRANCH|TAG",
+                ))
             }
         }
     }
@@ -2306,10 +2238,14 @@ impl Binder {
 
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
-        for (index, field) in schema.fields().iter().enumerate() {
+        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
+        for field in schema.fields().iter() {
+            let column_index = metadata
+                .write()
+                .add_derived_column(field.name().clone(), DataType::from(field.data_type()));
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                column_index,
                 Box::new(DataType::from(field.data_type())),
                 Visibility::Visible,
             )
@@ -2321,7 +2257,7 @@ impl Binder {
             &mut bind_context,
             self.ctx.clone(),
             &self.name_resolution_ctx,
-            self.metadata.clone(),
+            metadata,
             &[],
         );
         // cluster keys cannot be a udf expression.

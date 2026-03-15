@@ -51,10 +51,13 @@ impl ConstraintExprBinder {
         let settings = ctx.get_settings();
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
         let mut bind_context = BindContext::new();
-        for (index, field) in schema.fields().iter().enumerate() {
+        let mut metadata = Metadata::default();
+        for field in schema.fields().iter() {
+            let column_index =
+                metadata.add_derived_column(field.name().clone(), field.data_type().clone());
             let column = ColumnBindingBuilder::new(
                 field.name().clone(),
-                index,
+                column_index,
                 Box::new(field.data_type().clone()),
                 Visibility::Visible,
             )
@@ -63,7 +66,7 @@ impl ConstraintExprBinder {
             bind_context.add_column_binding(column);
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let metadata = Arc::new(RwLock::new(metadata));
 
         Ok(ConstraintExprBinder {
             bind_context,
@@ -103,8 +106,9 @@ impl ConstraintExprBinder {
         let mut constraint_name = format!("{}_", table);
 
         for i in used_columns.iter() {
-            constraint_name
-                .push_str(format!("{}_", self.bind_context.columns[*i].column_name).as_str());
+            constraint_name.push_str(
+                format!("{}_", self.bind_context.columns[i.as_usize()].column_name).as_str(),
+            );
         }
         match constraint {
             Constraint::Check(_) => constraint_name.push_str("check"),

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Instant;
 
@@ -38,6 +39,7 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use geo::algorithm::bounding_rect::BoundingRect;
 use geo_index::rtree::RTreeBuilder;
@@ -49,11 +51,19 @@ use log::info;
 use parquet::file::metadata::KeyValue;
 use roaring::RoaringBitmap;
 
+use crate::statistics::SpatialStatsBuilder;
+
 #[derive(Debug, Clone)]
 pub struct SpatialIndexState {
     pub location: Location,
     pub size: u64,
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SpatialIndexBuildResult {
+    pub index_state: Option<SpatialIndexState>,
+    pub spatial_stats: Option<StatisticsOfSpatialColumns>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,7 +80,10 @@ pub struct SpatialIndexBuilder {
     field_offsets_set: HashSet<usize>,
 
     // Collected spatial index columns
-    columns: BTreeMap<usize, Vec<Column>>,
+    columns: HashMap<usize, Vec<Column>>,
+
+    stats_only_offsets: Vec<(usize, ColumnId)>,
+    spatial_stats: HashMap<ColumnId, SpatialStatsBuilder>,
 }
 
 impl SpatialIndexBuilder {
@@ -79,6 +92,22 @@ impl SpatialIndexBuilder {
         schema: TableSchemaRef,
         is_sync: bool,
     ) -> Option<SpatialIndexBuilder> {
+        let mut spatial_columns = HashSet::new();
+        let mut spatial_offsets = Vec::new();
+        for (offset, field) in schema.fields.iter().enumerate() {
+            let data_type = field.data_type().remove_nullable();
+            if matches!(
+                data_type,
+                TableDataType::Geometry | TableDataType::Geography
+            ) {
+                spatial_columns.insert(field.column_id());
+                spatial_offsets.push((offset, field.column_id()));
+            }
+        }
+        if spatial_columns.is_empty() {
+            return None;
+        }
+
         let mut index_params = Vec::with_capacity(table_indexes.len());
         let mut field_offsets = Vec::with_capacity(table_indexes.len());
         let mut field_offsets_set = HashSet::new();
@@ -120,21 +149,29 @@ impl SpatialIndexBuilder {
             index_params.push(index_param);
         }
 
-        let mut columns = BTreeMap::new();
+        let mut columns = HashMap::new();
         for offset in &field_offsets_set {
             columns.insert(*offset, vec![]);
         }
 
-        if !field_offsets.is_empty() {
-            Some(SpatialIndexBuilder {
-                index_params,
-                field_offsets,
-                field_offsets_set,
-                columns,
-            })
-        } else {
-            None
-        }
+        let indexed_columns = field_offsets
+            .iter()
+            .flatten()
+            .map(|(_, column_id)| *column_id)
+            .collect::<HashSet<_>>();
+        let stats_only_offsets = spatial_offsets
+            .into_iter()
+            .filter(|(_, column_id)| !indexed_columns.contains(column_id))
+            .collect::<Vec<_>>();
+
+        Some(SpatialIndexBuilder {
+            index_params,
+            field_offsets,
+            field_offsets_set,
+            columns,
+            stats_only_offsets,
+            spatial_stats: HashMap::new(),
+        })
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -148,68 +185,94 @@ impl SpatialIndexBuilder {
                 return Err(ErrorCode::Internal("Can't find spatial index column"));
             }
         }
+        for (offset, column_id) in &self.stats_only_offsets {
+            let block_entry = block.get_by_offset(*offset);
+            let spatial_stat = self.spatial_stats.entry(*column_id).or_default();
+            if spatial_stat.is_srid_mixed() {
+                continue;
+            }
+            match block_entry {
+                BlockEntry::Const(scalar, _, _) => {
+                    spatial_stat.update_value(scalar.as_ref())?;
+                }
+                BlockEntry::Column(col) => {
+                    for value in col.iter() {
+                        spatial_stat.update_value(value)?;
+                        if spatial_stat.is_srid_mixed() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
-    pub fn finalize(&mut self, location: &Location) -> Result<Option<SpatialIndexState>> {
-        let start = Instant::now();
-        info!(
-            "Start build spatial R-Tree index for location: {}",
-            location.0
-        );
+    pub fn finalize(&mut self, location: &Location) -> Result<SpatialIndexBuildResult> {
+        let mut index_state = None;
+        if !self.field_offsets.is_empty() {
+            let start = Instant::now();
+            info!(
+                "Start build spatial R-Tree index for location: {}",
+                location.0
+            );
 
-        let Some(result) = self.build_spatial_index()? else {
-            return Ok(None);
-        };
-        let SpatialIndexResult {
-            index_fields,
-            index_columns,
-            metadata,
-        } = result;
+            if let Some(result) = self.build_spatial_index()? {
+                let SpatialIndexResult {
+                    index_fields,
+                    index_columns,
+                    metadata,
+                } = result;
 
-        let index_schema = TableSchemaRefExt::create(index_fields);
-        let index_block = DataBlock::new(index_columns, 1);
+                let index_schema = TableSchemaRefExt::create(index_fields);
+                let index_block = DataBlock::new(index_columns, 1);
 
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            &mut data,
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for spatial index
-            false,
-            Some(metadata),
-        )?;
+                let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+                let _ = blocks_to_parquet(
+                    index_schema.as_ref(),
+                    vec![index_block],
+                    &mut data,
+                    // Zstd has the best compression ratio
+                    TableCompression::Zstd,
+                    // No dictionary page for spatial index
+                    false,
+                    Some(metadata),
+                )?;
 
-        let size = data.len() as u64;
-        let state = SpatialIndexState {
-            location: location.clone(),
-            size,
-            data,
-        };
+                let size = data.len() as u64;
+                index_state = Some(SpatialIndexState {
+                    location: location.clone(),
+                    size,
+                    data,
+                });
 
-        // Perf.
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_spatial_index_generate_milliseconds(elapsed_ms);
+                // Perf.
+                let elapsed_ms = start.elapsed().as_millis() as u64;
+                {
+                    metrics_inc_block_spatial_index_generate_milliseconds(elapsed_ms);
+                }
+                info!(
+                    "Finish build spatial index: location={}, size={} bytes in {} ms",
+                    location.0, size, elapsed_ms
+                );
+            }
         }
-        info!(
-            "Finish build spatial index: location={}, size={} bytes in {} ms",
-            location.0, size, elapsed_ms
-        );
 
-        Ok(Some(state))
+        let spatial_stats = self.finalize_spatial_stats();
+        Ok(SpatialIndexBuildResult {
+            index_state,
+            spatial_stats,
+        })
     }
 
     fn build_spatial_index(&mut self) -> Result<Option<SpatialIndexResult>> {
-        let mut columns = BTreeMap::new();
+        let mut columns = HashMap::new();
         for offset in &self.field_offsets_set {
             columns.insert(*offset, vec![]);
         }
         std::mem::swap(&mut self.columns, &mut columns);
 
-        let mut concated_columns = BTreeMap::new();
+        let mut concated_columns = HashMap::new();
         for (offset, columns) in columns.into_iter() {
             let concated_column = if columns.len() == 1 {
                 columns[0].clone()
@@ -230,8 +293,8 @@ impl SpatialIndexBuilder {
                     return Err(ErrorCode::Internal("Can't find spatial index column"));
                 };
 
-                let mut column_srid = None;
-                let mut srid_mixed = false;
+                let spatial_stat = self.spatial_stats.entry(*column_id).or_default();
+
                 let mut builder = RTreeBuilder::<f64>::new(column.len() as u32);
                 // Track rows that cannot be indexed (null, empty, or invalid geometry).
                 let mut invalid_rows_rb = RoaringBitmap::new();
@@ -250,19 +313,16 @@ impl SpatialIndexBuilder {
                         _ => {
                             invalid_rows_rb.insert(row_idx as u32);
                             builder.add(0.0, 0.0, 0.0, 0.0);
+                            spatial_stat.mark_null();
                             continue;
                         }
                     };
-                    if let Some(prev) = column_srid {
-                        if prev != srid {
-                            debug!("Mixed SRID {} and {}", prev, srid);
-                            srid_mixed = true;
-                            break;
-                        }
-                    } else {
-                        column_srid = Some(srid);
+                    let rect = geo.bounding_rect();
+                    spatial_stat.update_rect_with_srid(rect, srid);
+                    if spatial_stat.is_srid_mixed() {
+                        break;
                     }
-                    if let Some(rec) = geo.bounding_rect() {
+                    if let Some(rec) = rect {
                         let min = rec.min();
                         let max = rec.max();
                         builder.add(min.x, min.y, max.x, max.y);
@@ -272,10 +332,10 @@ impl SpatialIndexBuilder {
                     }
                 }
                 // Don't build index if the column SRID is mixed,
-                if srid_mixed {
+                if spatial_stat.is_srid_mixed() {
                     continue;
                 }
-                let Some(srid) = column_srid else {
+                let Some(srid) = spatial_stat.srid() else {
                     continue;
                 };
                 let tree = builder.finish::<HilbertSort>();
@@ -335,6 +395,19 @@ impl SpatialIndexBuilder {
             metadata,
         };
         Ok(Some(result))
+    }
+
+    fn finalize_spatial_stats(&mut self) -> Option<StatisticsOfSpatialColumns> {
+        if self.spatial_stats.is_empty() {
+            return None;
+        }
+        let mut statistics = HashMap::new();
+        for (column_id, spatial_stat) in std::mem::take(&mut self.spatial_stats) {
+            if let Some(spatial_stat) = spatial_stat.finalize() {
+                statistics.insert(column_id, spatial_stat);
+            }
+        }
+        (!statistics.is_empty()).then_some(statistics)
     }
 }
 

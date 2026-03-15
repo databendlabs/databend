@@ -218,6 +218,8 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:numbers.number (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -238,6 +240,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 1.00
 
 query T
@@ -282,6 +285,8 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:numbers.number (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -302,6 +307,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 1.00
 
 query T
@@ -339,6 +345,8 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:numbers.number (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.25
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
@@ -367,6 +375,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [numbers.number (#0) < 10], limit: NONE]
+        ├── apply join filters: [#0]
         └── estimated rows: 1.00
 
 query T
@@ -379,6 +388,8 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t.number (#0) < numbers.number (#1)]
+├── build join filters:
+│   └── filter id:0, build key:numbers.number (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -399,6 +410,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 1.00
 
 query T
@@ -411,6 +423,8 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:numbers.number (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -431,6 +445,7 @@ HashJoin
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 1.00
 
 query T
@@ -875,3 +890,143 @@ HashJoin
 
 statement ok
 drop table if exists t;
+
+statement ok
+create or replace database issue_13716_explain;
+
+statement ok
+use issue_13716_explain;
+
+statement ok
+create or replace table aa_issue_13716(a int);
+
+statement ok
+insert into aa_issue_13716 values (1), (2), (3);
+
+statement ok
+create or replace table xx_issue_13716(x int);
+
+statement ok
+insert into xx_issue_13716 values (10), (20), (30);
+
+query T
+explain decorrelated SELECT a, (SELECT sum(a + x) FROM xx_issue_13716 LIMIT 1) FROM aa_issue_13716 ORDER BY a;
+----
+Sort
+├── sort keys: [aa_issue_13716.a (#0) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [aa_issue_13716.a (#0) AS (#0), sum(a + x) (#3) AS (#4)]
+    └── Join(Left)
+        ├── build keys: [a (#5)]
+        ├── probe keys: [aa_issue_13716.a (#0)]
+        ├── other filters: []
+        ├── Filter
+        │   ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+        │   └── Window
+        │       ├── aggregate function: row_number
+        │       ├── partition items: [a (#5) AS (#5)]
+        │       ├── order by items: []
+        │       ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │       └── Sort
+        │           ├── sort keys: [a (#5) ASC NULLS LAST]
+        │           ├── limit: [NONE]
+        │           ├── window top: NONE
+        │           ├── window function: RowNumber
+        │           └── EvalScalar
+        │               ├── scalars: [sum(a + x) (#3) AS (#3), a (#5) AS (#5)]
+        │               └── Aggregate(Initial)
+        │                   ├── group items: [a (#5) AS (#5)]
+        │                   ├── aggregate functions: [sum(sum_arg_0 (#2)) AS (#3)]
+        │                   └── EvalScalar
+        │                       ├── scalars: [plus(a (#5), xx_issue_13716.x (#1)) AS (#2), a (#5) AS (#5)]
+        │                       └── Join(Cross)
+        │                           ├── build keys: []
+        │                           ├── probe keys: []
+        │                           ├── other filters: []
+        │                           ├── Scan
+        │                           │   ├── table: issue_13716_explain.xx_issue_13716 (#1)
+        │                           │   ├── filters: []
+        │                           │   ├── order by: []
+        │                           │   └── limit: NONE
+        │                           └── Aggregate(Initial)
+        │                               ├── group items: [a (#5) AS (#5)]
+        │                               ├── aggregate functions: []
+        │                               └── Scan
+        │                                   ├── table: issue_13716_explain.aa_issue_13716 (#0)
+        │                                   ├── filters: []
+        │                                   ├── order by: []
+        │                                   └── limit: NONE
+        └── Scan
+            ├── table: issue_13716_explain.aa_issue_13716 (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+statement ok
+create or replace table aa_issue_13716_limit(a int);
+
+statement ok
+insert into aa_issue_13716_limit values (1), (11), (21);
+
+query T
+explain decorrelated SELECT a, (SELECT x FROM xx_issue_13716 WHERE x > aa_issue_13716_limit.a ORDER BY x ASC LIMIT 1)
+FROM aa_issue_13716_limit
+ORDER BY a;
+----
+Sort
+├── sort keys: [aa_issue_13716_limit.a (#0) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [aa_issue_13716_limit.a (#0) AS (#0), xx_issue_13716.x (#1) AS (#2)]
+    └── Join(LeftSingle)
+        ├── build keys: [a (#3)]
+        ├── probe keys: [aa_issue_13716_limit.a (#0)]
+        ├── other filters: []
+        ├── Filter
+        │   ├── filters: [lte(correlated_limit_row_number (#4), 1)]
+        │   └── Window
+        │       ├── aggregate function: row_number
+        │       ├── partition items: [a (#3) AS (#3)]
+        │       ├── order by items: [xx_issue_13716.x (#1) AS (#1) ASC NULLS LAST]
+        │       ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │       └── Sort
+        │           ├── sort keys: [a (#3) ASC NULLS LAST, xx_issue_13716.x (#1) ASC NULLS LAST]
+        │           ├── limit: [NONE]
+        │           ├── window top: NONE
+        │           ├── window function: RowNumber
+        │           └── EvalScalar
+        │               ├── scalars: [xx_issue_13716.x (#1) AS (#1), a (#3) AS (#3)]
+        │               └── Filter
+        │                   ├── filters: [gt(xx_issue_13716.x (#1), a (#3))]
+        │                   └── Join(Cross)
+        │                       ├── build keys: []
+        │                       ├── probe keys: []
+        │                       ├── other filters: []
+        │                       ├── Scan
+        │                       │   ├── table: issue_13716_explain.xx_issue_13716 (#1)
+        │                       │   ├── filters: []
+        │                       │   ├── order by: []
+        │                       │   └── limit: NONE
+        │                       └── Aggregate(Initial)
+        │                           ├── group items: [a (#3) AS (#3)]
+        │                           ├── aggregate functions: []
+        │                           └── Scan
+        │                               ├── table: issue_13716_explain.aa_issue_13716_limit (#0)
+        │                               ├── filters: []
+        │                               ├── order by: []
+        │                               └── limit: NONE
+        └── Scan
+            ├── table: issue_13716_explain.aa_issue_13716_limit (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+query error unsupported scalar subquery: aggregate output references only outer columns
+explain SELECT (SELECT sum(a) FROM xx_issue_13716 LIMIT 1) FROM aa_issue_13716;
+
+statement ok
+use default;
+
+statement ok
+drop database issue_13716_explain;

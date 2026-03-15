@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 
 use super::WindowPartition;
 use crate::ColumnSet;
-use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -38,7 +38,7 @@ pub struct Sort {
 
     /// The columns needed by the plan after the sort plan.
     /// It's used to build a projection operation before building the sort operator.
-    pub pre_projection: Option<Vec<IndexType>>,
+    pub pre_projection: Option<Vec<Symbol>>,
 
     /// If sort is for window clause, we need the input to exchange by partitions
     pub window_partition: Option<WindowPartition>,
@@ -63,7 +63,7 @@ impl Sort {
             .collect()
     }
 
-    pub fn replace_column(&mut self, old: IndexType, new: IndexType) {
+    pub fn replace_column(&mut self, old: Symbol, new: Symbol) {
         for item in &mut self.items {
             if item.index == old {
                 item.index = new
@@ -86,7 +86,7 @@ impl Sort {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SortItem {
-    pub index: IndexType,
+    pub index: Symbol,
     pub asc: bool,
     pub nulls_first: bool,
 }
