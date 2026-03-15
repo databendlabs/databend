@@ -34,7 +34,9 @@ use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
+use databend_common_meta_app::schema::DroppedBranchIdent;
 use databend_common_meta_app::schema::DroppedId;
+use databend_common_meta_app::schema::GcDroppedTableBranchReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -42,6 +44,7 @@ use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableIdBranchName;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdTagName;
 use databend_common_meta_app::schema::TableIdToName;
@@ -67,6 +70,7 @@ use display_more::DisplaySliceExt;
 use fastrace::func_name;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use itertools::Itertools;
 use log::debug;
 use log::error;
 use log::info;
@@ -116,6 +120,91 @@ where
             }
         }
         Ok(num_meta_key_removed)
+    }
+
+    /// Garbage collect one non-retainable branch generation.
+    ///
+    /// This removes branch table metadata and related kvs, and removes the
+    /// branch id from branch history.
+    #[fastrace::trace]
+    async fn gc_drop_table_branch(
+        &self,
+        req: GcDroppedTableBranchReq,
+    ) -> Result<usize, KVAppError> {
+        let branch_table_id = TableId {
+            table_id: req.branch_id,
+        };
+        let key_dropped_branch =
+            DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
+
+        let seq_dropped = self.get_pb(&key_dropped_branch).await?;
+        let Some(seq_dropped) = seq_dropped else {
+            return Ok(0);
+        };
+        if seq_dropped.data.drop_on >= req.retention_boundary {
+            return Ok(0);
+        }
+
+        // Copied-file markers are independent from the dropped-branch key lifecycle.
+        // Remove them once up front so retries only need to protect branch metadata cleanup.
+        //
+        // This API is only called from vacuum_table_v2::final_gc_branch(), which only final-gcs
+        // branches after they are already past the retention boundary. Branch undrop is blocked
+        // once that boundary is crossed, and copied-file dedup markers are best-effort metadata
+        // with their own TTL, so removing them eagerly outside the retry loop is acceptable here.
+        let num_removed_copied_files =
+            remove_copied_files_for_dropped_table(self, &branch_table_id).await?;
+
+        let mut trials = txn_backoff(None, func_name!());
+        let mut maybe_seq_dropped = Some(seq_dropped);
+        loop {
+            trials.next().unwrap()?.await;
+
+            let mut txn = TxnRequest::default();
+
+            // 1) Remove the dropped-branch entry.
+            let seq_dropped = if let Some(seq_dropped) = maybe_seq_dropped.take() {
+                seq_dropped
+            } else {
+                let seq = self.get_pb(&key_dropped_branch).await?;
+                let Some(seq_dropped) = seq else {
+                    return Ok(num_removed_copied_files);
+                };
+                if seq_dropped.data.drop_on >= req.retention_boundary {
+                    return Ok(num_removed_copied_files);
+                }
+                seq_dropped
+            };
+            txn.condition
+                .push(txn_cond_eq_seq(&key_dropped_branch, seq_dropped.seq));
+            txn.if_then.push(txn_del(&key_dropped_branch));
+
+            // 2) Remove the branch table metadata and branch-owned auxiliary kvs.
+            //    If the table meta is already gone (e.g. a previous partial GC removed it
+            //    but crashed before deleting the dropped-branch marker), we still proceed
+            //    to step 2 to clean up the stale dropped-branch key.
+            let _ = remove_data_for_dropped_table_impl(
+                self,
+                &req.tenant,
+                // todo: support ownership for table branch.
+                None,
+                &branch_table_id,
+                &mut txn,
+            )
+            .await?;
+
+            let mut num_meta_keys_removed = num_removed_copied_files;
+            for op in &txn.if_then {
+                if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
+                    num_meta_keys_removed += 1;
+                }
+            }
+
+            let (succ, _responses) = send_txn(self, txn).await?;
+            if succ {
+                return Ok(num_meta_keys_removed);
+            }
+        }
     }
 
     /// Fetch and conditionally set the vacuum retention timestamp.
@@ -482,7 +571,6 @@ async fn gc_dropped_db_by_id(
         let mut chunks = key_stream.chunks(batch_size);
         while let Some(targets) = chunks.next().await {
             let mut txn = TxnRequest::default();
-            use itertools::Itertools;
             let targets: Vec<DBIdTableName> = targets.into_iter().try_collect()?;
             num_db_id_table_name_keys_removed += targets.len();
             for target in &targets {
@@ -533,9 +621,7 @@ async fn gc_dropped_db_by_id(
         for tb_id in table_history.id_list.iter() {
             let table_id_ident = TableId { table_id: *tb_id };
 
-            let num_removed_copied_files =
-                remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
-            let _ = remove_data_for_dropped_table(
+            if let Some(removed) = remove_data_for_dropped_table(
                 kv_api,
                 tenant,
                 catalog,
@@ -543,8 +629,12 @@ async fn gc_dropped_db_by_id(
                 &table_id_ident,
                 &mut txn,
             )
-            .await?;
-            num_meta_keys_removed += num_removed_copied_files;
+            .await?
+            {
+                num_meta_keys_removed += removed;
+            }
+            num_meta_keys_removed +=
+                remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
         }
 
         txn.condition
@@ -625,7 +715,7 @@ async fn gc_dropped_table_by_id(
 ) -> Result<usize, KVAppError> {
     // First remove all copied files for the dropped table.
     // These markers are not part of the table and can be removed in separate transactions.
-    let num_removed_copied_files =
+    let mut copied_files_removed =
         remove_copied_files_for_dropped_table(kv_api, table_id_ident).await?;
 
     let mut trials = txn_backoff(None, func_name!());
@@ -634,8 +724,10 @@ async fn gc_dropped_table_by_id(
 
         let mut txn = TxnRequest::default();
 
-        // 1)
-        let _ = remove_data_for_dropped_table(
+        // 1) Remove the base table data (including active/dropped branch metas) in the main GC txn.
+        // Note: remove_data_for_dropped_table enumerates active branch names to discover branch
+        // table ids, so branch name keys must still exist at this point.
+        if let Some(removed) = remove_data_for_dropped_table(
             kv_api,
             tenant,
             catalog,
@@ -643,9 +735,12 @@ async fn gc_dropped_table_by_id(
             table_id_ident,
             &mut txn,
         )
-        .await?;
+        .await?
+        {
+            copied_files_removed += removed;
+        };
 
-        // 2)
+        // 2) Remove the base table name history.
         let table_id_history_ident = TableIdHistoryIdent {
             database_id: db_id_table_name.db_id,
             table_name: db_id_table_name.table_name.clone(),
@@ -659,18 +754,12 @@ async fn gc_dropped_table_by_id(
         )
         .await?;
 
-        // 3)
-
-        remove_index_for_dropped_table(kv_api, tenant, table_id_ident, &mut txn).await?;
-
-        // Count removed keys (approximate for DeleteByPrefix operations)
-        let mut num_meta_keys_removed = 0;
+        let mut num_meta_keys_removed = copied_files_removed;
         for op in &txn.if_then {
             if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
                 num_meta_keys_removed += 1;
             }
         }
-        num_meta_keys_removed += num_removed_copied_files;
 
         let (succ, _responses) = send_txn(kv_api, txn).await?;
 
@@ -728,36 +817,17 @@ async fn update_txn_to_remove_table_history(
     Ok(())
 }
 
-async fn add_delete_table_ref_tag_ops(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    table_id: u64,
-    txn: &mut TxnRequest,
-) -> Result<(), MetaError> {
-    let tag_prefix = TableIdTagName::new(table_id, "");
-    let tag_dir = DirName::new(tag_prefix);
-    let mut tag_keys = kv_api
-        .list_pb_keys(ListOptions::unlimited(&tag_dir))
-        .await?;
-
-    while let Some(tag_key) = tag_keys.try_next().await? {
-        txn.if_then.push(txn_del(&tag_key));
-    }
-
-    Ok(())
-}
-
-/// Update TxnRequest to remove a dropped table's own data.
-///
-/// This function returns the updated TxnRequest,
-/// or Err of the reason in string if it can not proceed.
-async fn remove_data_for_dropped_table(
+async fn remove_data_for_dropped_table_impl(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
-    catalog: &String,
-    db_id: u64,
+    ownership: Option<OwnershipObject>,
     table_id: &TableId,
     txn: &mut TxnRequest,
-) -> Result<Result<(), String>, MetaError> {
+) -> Result<Result<(), String>, KVAppError> {
+    // Index cleanup only needs table_id, so do it first to avoid orphan index metadata
+    // when table meta is already gone (partial GC).
+    remove_index_for_dropped_table(kv_api, tenant, table_id, txn).await?;
+
     let seq_meta = kv_api.get_pb(table_id).await?;
 
     let Some(seq_meta) = seq_meta else {
@@ -773,17 +843,6 @@ async fn remove_data_for_dropped_table(
     //     return Ok(Err(err));
     // }
     txn_delete_exact(txn, table_id, seq_meta.seq);
-
-    // Get id -> name mapping
-    let id_to_name = TableIdToName {
-        table_id: table_id.table_id,
-    };
-    let seq_name = kv_api.get_pb(&id_to_name).await?;
-
-    // consider only when TableIdToName exist
-    if let Some(seq_name) = seq_name {
-        txn_delete_exact(txn, &id_to_name, seq_name.seq);
-    }
 
     // Remove table auto increment sequences
     {
@@ -801,35 +860,22 @@ async fn remove_data_for_dropped_table(
             txn.if_then.push(txn_del(&auto_increment_ident));
         }
     }
+
     // Remove table ownership
-    {
-        let table_ownership = OwnershipObject::Table {
-            // if catalog is default, encode_key is b.push_raw("table-by-id").push_u64(*table_id)
-            // else encode_key is b.push_raw("table-by-catalog-id").push_str(catalog_name).push_u64(*table_id)
-            catalog_name: catalog.to_string(),
-            db_id,
-            table_id: table_id.table_id,
-        };
-
-        let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, table_ownership);
-        let table_ownership_seq_meta = {
-            let seq_meta = kv_api.get_pb(&table_ownership_key).await?;
-            let Some(seq_meta) = seq_meta else {
-                let err = format!(
-                    "cannot find OwnershipInfo of object: {:?}, ",
-                    table_ownership_key.to_string_key()
-                );
-                error!("{}", err);
-                return Ok(Err(err));
-            };
-            seq_meta
-        };
-
-        txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
+    if let Some(ownership) = ownership {
+        let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, ownership);
+        let seq_meta = kv_api.get_pb(&table_ownership_key).await?;
+        if let Some(seq_meta) = seq_meta {
+            txn_delete_exact(txn, &table_ownership_key, seq_meta.seq);
+        } else {
+            // Ownership may have been pre-deleted (e.g. CREATE OR REPLACE TABLE).
+            // This is a normal intermediate state — continue cleaning the rest.
+            warn!(
+                "ownership key already gone for {:?}, skipping",
+                table_ownership_key.to_string_key()
+            );
+        }
     }
-
-    // Clean up table ref tags under `__fd_table_tag/<table_id>/...`.
-    add_delete_table_ref_tag_ops(kv_api, table_id.table_id, txn).await?;
 
     // Clean up tag references for the dropped table
     {
@@ -896,6 +942,92 @@ async fn remove_data_for_dropped_table(
     }
 
     Ok(Ok(()))
+}
+
+/// Update TxnRequest to remove a dropped table's own data.
+///
+/// This function returns the updated TxnRequest,
+/// or Err of the reason in string if it can not proceed.
+async fn remove_data_for_dropped_table(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
+    catalog: &String,
+    db_id: u64,
+    table_id: &TableId,
+    txn: &mut TxnRequest,
+) -> Result<Option<usize>, KVAppError> {
+    let table_ownership = OwnershipObject::Table {
+        // if catalog is default, encode_key is b.push_raw("table-by-id").push_u64(*table_id)
+        // else encode_key is b.push_raw("table-by-catalog-id").push_str(catalog_name).push_u64(*table_id)
+        catalog_name: catalog.to_string(),
+        db_id,
+        table_id: table_id.table_id,
+    };
+    if let Err(e) =
+        remove_data_for_dropped_table_impl(kv_api, tenant, Some(table_ownership), table_id, txn)
+            .await?
+    {
+        warn!("skip table cleanup for {}: {}", table_id, e);
+        return Ok(None);
+    };
+
+    // Get id -> name mapping
+    let id_to_name = TableIdToName {
+        table_id: table_id.table_id,
+    };
+    let seq_name = kv_api.get_pb(&id_to_name).await?;
+    // consider only when TableIdToName exist
+    if let Some(seq_name) = seq_name {
+        txn_delete_exact(txn, &id_to_name, seq_name.seq);
+    }
+
+    // Clean up table ref tags under `__fd_table_tag/<table_id>/...`.
+    let tag_prefix = TableIdTagName::new(table_id.table_id, "");
+    let tag_dir = DirName::new(tag_prefix);
+    let mut tag_keys = kv_api
+        .list_pb_keys(ListOptions::unlimited(&tag_dir))
+        .await?;
+    while let Some(tag_key) = tag_keys.try_next().await? {
+        txn.if_then.push(txn_del(&tag_key));
+    }
+
+    let mut current_removed = 0;
+
+    // Remove branch-table metas and branch name keys for active branches.
+    let active_branch_prefix = TableIdBranchName::new(table_id.table_id, "");
+    let active_branch_dir = DirName::new(active_branch_prefix);
+    let active_branches = kv_api
+        .list_pb_vec(ListOptions::unlimited(&active_branch_dir))
+        .await?;
+    for (key, seq_branch) in &active_branches {
+        let branch_table_id = TableId {
+            table_id: seq_branch.data.branch_id,
+        };
+        current_removed += remove_copied_files_for_dropped_table(kv_api, &branch_table_id).await?;
+        let _ =
+            remove_data_for_dropped_table_impl(kv_api, tenant, None, &branch_table_id, txn).await?;
+        txn.condition.push(txn_cond_eq_seq(key, seq_branch.seq));
+        txn.if_then.push(txn_del(key));
+    }
+
+    // Remove branch-table metas and dropped-branch entries for dropped branches.
+    let dropped_branch_prefix = DroppedBranchIdent::new(table_id.table_id, "dummy", 0);
+    let dropped_branch_dir = DirName::new_with_level(dropped_branch_prefix, 2);
+    let dropped_branches = kv_api
+        .list_pb_vec(ListOptions::unlimited(&dropped_branch_dir))
+        .await?;
+    for (key, seq_dropped) in &dropped_branches {
+        let branch_table_id = TableId {
+            table_id: key.branch_id,
+        };
+        current_removed += remove_copied_files_for_dropped_table(kv_api, &branch_table_id).await?;
+        let _ =
+            remove_data_for_dropped_table_impl(kv_api, tenant, None, &branch_table_id, txn).await?;
+        txn.condition.push(txn_cond_eq_seq(key, seq_dropped.seq));
+        txn.if_then.push(txn_del(key));
+    }
+
+    Ok(Some(current_removed))
 }
 
 async fn remove_index_for_dropped_table(

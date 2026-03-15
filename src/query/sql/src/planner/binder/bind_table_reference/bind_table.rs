@@ -21,6 +21,7 @@ use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
@@ -33,9 +34,22 @@ use databend_storages_common_table_meta::table::get_change_type;
 use crate::BindContext;
 use crate::binder::Binder;
 use crate::binder::util::TableIdentifier;
-use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 impl Binder {
+    fn reject_branch_qualified_cte_reference(
+        span: Span,
+        cte_name: &str,
+        branch_name: Option<&str>,
+    ) -> Result<()> {
+        if let Some(branch_name) = branch_name {
+            return Err(ErrorCode::SemanticError(format!(
+                "CTE `{cte_name}` does not support branch-qualified reference `{cte_name}/{branch_name}`"
+            ))
+            .set_span(span));
+        }
+        Ok(())
+    }
+
     /// Bind a base table.
     /// A base table is a table that is not a view or CTE.
     #[allow(clippy::too_many_arguments)]
@@ -62,15 +76,6 @@ impl Binder {
         let branch_name = table_identifier.branch_name();
         let table_name_alias = table_identifier.table_name_alias();
 
-        if let Some(branch_name) = branch_name.as_ref() {
-            // Keep parsing `<db>.<table>/<branch>` so the upcoming redesign can
-            // reuse the syntax without reviving the legacy implementation.
-            return Err(legacy_table_ref_removed_error(format!(
-                "table branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
-            ))
-            .set_span(*span));
-        }
-
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
             if cte_name == &table_name {
                 return Err(ErrorCode::SemanticError(format!(
@@ -94,6 +99,11 @@ impl Binder {
         let mut cte_suffix_name = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
+            Self::reject_branch_qualified_cte_reference(
+                *span,
+                &table_name,
+                branch_name.as_deref(),
+            )?;
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
                 return self.bind_cte_consumer(
                     bind_context,
@@ -135,6 +145,30 @@ impl Binder {
         }
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
+        if let Some(branch_name) = branch_name.as_ref() {
+            // Branch-qualified reads are feature/license gated during table resolution in
+            // QueryContext::get_table_from_shared() before any branch table is loaded. Keep the
+            // binder-side branch handling here focused on syntax/semantic validation.
+            // Branch reads are supported in FROM, but TAG navigation stays bound to the base table
+            // namespace (`db.table AT (TAG => ...)`). Reject the mixed form early in binder.
+            if matches!(
+                navigation.as_ref(),
+                Some(TimeNavigation::TimeTravel(NavigationPoint::TableTag(_)))
+                    | Some(TimeNavigation::Changes {
+                        at: NavigationPoint::TableTag(_),
+                        ..
+                    })
+                    | Some(TimeNavigation::Changes {
+                        end: Some(NavigationPoint::TableTag(_)),
+                        ..
+                    })
+            ) {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
+                ))
+                .set_span(*span));
+            }
+        }
 
         // Resolve table with catalog
         let table_meta = {
@@ -162,6 +196,11 @@ impl Binder {
                         let bind_context = parent.unwrap().as_mut();
                         let cte_map = bind_context.cte_context.cte_map.clone();
                         if let Some(cte_info) = cte_map.get(&table_name) {
+                            Self::reject_branch_qualified_cte_reference(
+                                *span,
+                                &table_name,
+                                branch_name.as_deref(),
+                            )?;
                             return self.bind_cte(
                                 *span,
                                 bind_context,

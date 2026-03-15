@@ -322,7 +322,7 @@ impl Binder {
         self.ctx.add_m_cte_temp_table(&database, &table_name);
 
         self.ctx
-            .evict_table_from_cache(&catalog, &database, &table_name)
+            .evict_table_from_cache(&catalog, &database, &table_name, None)
     }
 }
 
