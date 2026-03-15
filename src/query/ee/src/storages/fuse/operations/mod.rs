@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod common;
 pub mod handler;
 pub mod vacuum_drop_tables;
 pub mod vacuum_table;

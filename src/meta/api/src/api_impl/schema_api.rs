@@ -638,7 +638,7 @@ pub async fn handle_undrop_table(
 /// This function handles two cases:
 /// 1. Policy exists: Restore the table-policy reference (deleted during drop_table)
 /// 2. Policy missing: Clean up the policy reference from table_meta
-async fn restore_policy_references_on_undrop(
+pub(crate) async fn restore_policy_references_on_undrop(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
     table_id: u64,
