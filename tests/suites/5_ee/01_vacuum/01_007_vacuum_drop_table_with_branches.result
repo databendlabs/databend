@@ -1,0 +1,25 @@
+>>>> create or replace database test_vacuum_drop_table_with_branches
+>>>> create or replace table test_vacuum_drop_table_with_branches.a(c int) 'fs:///tmp/test_vacuum_drop_table_with_branches/'
+>>>> insert into test_vacuum_drop_table_with_branches.a values (1),(2)
+2
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_live
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_mixed
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a drop branch b_mixed
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_mixed
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_drop
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a drop branch b_drop
+before vacuum drop table
+6
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_drop_table_with_branches.a/b_live order by c
+1
+2
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_drop_table_with_branches.a/b_mixed order by c
+1
+2
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_drop_table_with_branches.a/b_drop order by c
+<<<< expected failure happened
+>>>> drop table test_vacuum_drop_table_with_branches.a
+after vacuum drop table
+1
+>>>> undrop table test_vacuum_drop_table_with_branches.a
+<<<< expected failure happened
