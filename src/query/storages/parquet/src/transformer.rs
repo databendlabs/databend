@@ -26,8 +26,10 @@ use arrow_schema::Schema;
 use arrow_schema::SchemaRef;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ParquetFieldId;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::is_internal_column_id;
+use databend_common_expression::parquet_field_id_from_column_id;
 use parquet::arrow::PARQUET_FIELD_ID_META_KEY;
 
 #[derive(Debug)]
@@ -77,7 +79,7 @@ struct TableFieldMapping {
     column_path: Vec<String>,
 }
 
-type FieldIdToArrowSchemaMap = HashMap<ColumnId, (FieldRef, usize, Vec<usize>)>;
+type ParquetFieldIdToArrowSchemaMap = HashMap<ParquetFieldId, (FieldRef, usize, Vec<usize>)>;
 
 impl RecordBatchTransformer {
     pub fn build(table_schema: TableSchemaRef) -> Self {
@@ -220,7 +222,7 @@ impl RecordBatchTransformer {
 
     pub fn build_field_id_to_arrow_schema_map(
         source_schema: &SchemaRef,
-    ) -> databend_common_exception::Result<FieldIdToArrowSchemaMap> {
+    ) -> databend_common_exception::Result<ParquetFieldIdToArrowSchemaMap> {
         let mut field_id_to_source_schema = HashMap::new();
         for (source_field_idx, source_field) in source_schema.fields.iter().enumerate() {
             let mut current_index_path = Vec::new();
@@ -238,15 +240,19 @@ impl RecordBatchTransformer {
         field: &FieldRef,
         source_field_idx: usize,
         current_index_path: &mut Vec<usize>,
-        field_id_to_source_schema: &mut HashMap<ColumnId, (FieldRef, usize, Vec<usize>)>,
+        field_id_to_source_schema: &mut HashMap<ParquetFieldId, (FieldRef, usize, Vec<usize>)>,
     ) -> databend_common_exception::Result<()> {
         let this_field_id = field
             .metadata()
             .get(PARQUET_FIELD_ID_META_KEY)
             .ok_or_else(|| ErrorCode::InvalidDate("field id not present in parquet metadata"))?
-            .parse()
+            .parse::<u32>()
+            .map(ParquetFieldId::new)
             .map_err(|e| {
-                ErrorCode::InvalidDate(format!("field id not parseable as an column id: {}", e))
+                ErrorCode::InvalidDate(format!(
+                    "field id not parseable as a parquet field id: {}",
+                    e
+                ))
             })?;
 
         field_id_to_source_schema.insert(
@@ -355,7 +361,11 @@ impl RecordBatchTransformer {
             let source_entry = source_path_map
                 .get(&mapping.column_path)
                 .cloned()
-                .or_else(|| source_map.get(&mapping.column_id).cloned());
+                .or_else(|| {
+                    source_map
+                        .get(&parquet_field_id_from_column_id(mapping.column_id))
+                        .cloned()
+                });
 
             let Some((source_field, source_index, nested_indices)) = source_entry else {
                 let path = if mapping.column_path.is_empty() {
@@ -364,8 +374,10 @@ impl RecordBatchTransformer {
                     mapping.column_path.join(":")
                 };
                 return Err(ErrorCode::TableSchemaMismatch(format!(
-                    "The field with field_id: {} (path: {path}) does not exist in the source schema: {:#?}.",
-                    mapping.column_id, source
+                    "The field with column_id: {} (parquet_field_id: {}) (path: {path}) does not exist in the source schema: {:#?}.",
+                    mapping.column_id,
+                    parquet_field_id_from_column_id(mapping.column_id).as_u32(),
+                    source
                 )));
             };
 
@@ -407,6 +419,7 @@ mod test {
     use arrow_schema::FieldRef;
     use arrow_schema::Fields;
     use arrow_schema::Schema;
+    use databend_common_expression::ParquetFieldId;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
@@ -425,9 +438,18 @@ mod test {
             RecordBatchTransformer::build_field_id_to_arrow_schema_map(&arrow_schema).unwrap();
 
         let expected = HashMap::from_iter([
-            (11, (arrow_schema.fields()[0].clone(), 0, vec![])),
-            (12, (arrow_schema.fields()[1].clone(), 1, vec![])),
-            (14, (arrow_schema.fields()[2].clone(), 2, vec![])),
+            (
+                ParquetFieldId::new(11),
+                (arrow_schema.fields()[0].clone(), 0, vec![]),
+            ),
+            (
+                ParquetFieldId::new(12),
+                (arrow_schema.fields()[1].clone(), 1, vec![]),
+            ),
+            (
+                ParquetFieldId::new(14),
+                (arrow_schema.fields()[2].clone(), 2, vec![]),
+            ),
         ]);
 
         assert!(result.eq(&expected));
@@ -452,11 +474,23 @@ mod test {
         let nested_child_fields = nested_children.iter().cloned().collect::<Vec<FieldRef>>();
 
         let expected = HashMap::from_iter([
-            (30, (arrow_schema.fields()[0].clone(), 0, vec![])),
-            (40, (struct_field.clone(), 1, vec![])),
-            (41, (struct_child_fields[0].clone(), 1, vec![0])),
-            (42, (nested_struct_field.clone(), 1, vec![1])),
-            (43, (nested_child_fields[0].clone(), 1, vec![1, 0])),
+            (
+                ParquetFieldId::new(30),
+                (arrow_schema.fields()[0].clone(), 0, vec![]),
+            ),
+            (ParquetFieldId::new(40), (struct_field.clone(), 1, vec![])),
+            (
+                ParquetFieldId::new(41),
+                (struct_child_fields[0].clone(), 1, vec![0]),
+            ),
+            (
+                ParquetFieldId::new(42),
+                (nested_struct_field.clone(), 1, vec![1]),
+            ),
+            (
+                ParquetFieldId::new(43),
+                (nested_child_fields[0].clone(), 1, vec![1, 0]),
+            ),
         ]);
 
         assert!(result.eq(&expected));
