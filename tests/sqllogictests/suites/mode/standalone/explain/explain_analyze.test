@@ -201,10 +201,11 @@ HashJoin
 └── TableScan(Probe)
     ├── cpu time: <slt:ignore>
     ├── wait time: <slt:ignore>
-    ├── output rows: 6
-    ├── output bytes: 120.00 B
-    ├── bytes scanned: 120.00 B
-    ├── read from remote: 672.00 B
+    ├── output rows: 1
+    ├── output bytes: 20.00 B
+    ├── bytes scanned: 20.00 B
+    ├── read from remote: 112.00 B
+    ├── parts pruned by runtime filter: 5
     ├── runtime filter bloom time: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article

@@ -65,18 +65,6 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
-        if !should_enable_runtime_filter(
-            desc,
-            self.build_key_column.len(),
-            self.selectivity_threshold,
-        ) {
-            return Ok(RuntimeFilterPacket {
-                id: desc.id,
-                inlist: None,
-                min_max: None,
-                bloom: None,
-            });
-        }
         let start = Instant::now();
 
         let min_max_start = Instant::now();
@@ -135,6 +123,14 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
 
     fn enable_bloom(&self, desc: &RuntimeFilterDesc) -> bool {
         if !desc.enable_bloom_runtime_filter {
+            return false;
+        }
+
+        if !should_enable_runtime_filter(
+            desc,
+            self.build_key_column.len(),
+            self.selectivity_threshold,
+        ) {
             return false;
         }
 
@@ -213,7 +209,7 @@ pub(super) fn should_enable_runtime_filter(
 
     let Some(build_table_rows) = desc.build_table_rows else {
         log::info!(
-            "RUNTIME-FILTER: Disable runtime filter {} - no build table statistics available",
+            "RUNTIME-FILTER: Disable bloom runtime filter {} - no build table statistics available",
             desc.id
         );
         return false;
@@ -223,7 +219,7 @@ pub(super) fn should_enable_runtime_filter(
 
     if selectivity_pct < selectivity_threshold as f64 {
         log::info!(
-            "RUNTIME-FILTER: Enable runtime filter {} - low selectivity: {:.2}% < {}% (build_rows={}, build_table_rows={})",
+            "RUNTIME-FILTER: Enable bloom runtime filter {} - low selectivity: {:.2}% < {}% (build_rows={}, build_table_rows={})",
             desc.id,
             selectivity_pct,
             selectivity_threshold,
@@ -233,7 +229,7 @@ pub(super) fn should_enable_runtime_filter(
         true
     } else {
         log::info!(
-            "RUNTIME-FILTER: Disable runtime filter {} - high selectivity: {:.2}% >= {}% (build_rows={}, build_table_rows={})",
+            "RUNTIME-FILTER: Disable bloom runtime filter {} - high selectivity: {:.2}% >= {}% (build_rows={}, build_table_rows={})",
             desc.id,
             selectivity_pct,
             selectivity_threshold,

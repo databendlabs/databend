@@ -79,7 +79,7 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol)>>,
+    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
     Vec<((usize, bool), usize)>,
     Vec<Option<IndexType>>,
 );
@@ -901,8 +901,17 @@ impl PhysicalPlanBuilder {
             // Process runtime filter expressions
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter
                 .map(|(expr, scan_id, table_index, column_idx)| {
-                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS)
-                        .map(|casted_expr| (casted_expr, scan_id, table_index, column_idx))
+                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS).map(
+                        |casted_expr| {
+                            (
+                                casted_expr,
+                                scan_id,
+                                table_index,
+                                column_idx,
+                                condition.is_null_equal,
+                            )
+                        },
+                    )
                 })
                 .transpose()?;
 
@@ -912,23 +921,31 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter =
-                left_expr_for_runtime_filter.map(|(expr, scan_id, table_index, column_idx)| {
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(
+                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
                     (
                         ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
                         scan_id,
                         table_index,
                         column_idx,
+                        is_null_equal,
                     )
-                });
+                },
+            );
 
             // Add to result collections
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
             left_join_conditions_rt.push(left_expr_for_runtime_filter.map(
-                |(expr, scan_id, table_index, column_idx)| {
-                    (expr.as_remote_expr(), scan_id, table_index, column_idx)
+                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
+                    (
+                        expr.as_remote_expr(),
+                        scan_id,
+                        table_index,
+                        column_idx,
+                        is_null_equal,
+                    )
                 },
             ));
             build_table_indexes.push(build_table_index);
