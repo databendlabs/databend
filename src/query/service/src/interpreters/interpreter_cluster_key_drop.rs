@@ -71,10 +71,8 @@ impl Interpreter for DropTableClusterKeyInterpreter {
                 if let Some(snapshot) = snapshot_opt {
                     snapshot.cluster_key_meta = None;
                 }
-                if plan.branch.is_none() {
-                    meta.options.remove(OPT_KEY_CLUSTER_TYPE);
-                    meta.cluster_key_v2 = None;
-                }
+                meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+                meta.cluster_key_v2 = None;
             },
         )
         .await?;

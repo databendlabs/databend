@@ -21,6 +21,7 @@ use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
@@ -61,15 +62,6 @@ impl Binder {
         let table_name = table_identifier.table_name();
         let branch_name = table_identifier.branch_name();
         let table_name_alias = table_identifier.table_name_alias();
-
-        if let Some(branch_name) = branch_name.as_ref() {
-            // Keep parsing `<db>.<table>/<branch>` so the upcoming redesign can
-            // reuse the syntax without reviving the legacy implementation.
-            return Err(legacy_table_ref_removed_error(format!(
-                "table branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
-            ))
-            .set_span(*span));
-        }
 
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
             if cte_name == &table_name {
@@ -135,6 +127,27 @@ impl Binder {
         }
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
+        if let Some(branch_name) = branch_name.as_ref() {
+            // Branch reads are supported in FROM, but TAG navigation stays bound to the base table
+            // namespace (`db.table AT (TAG => ...)`). Reject the mixed form early in binder.
+            if matches!(
+                navigation.as_ref(),
+                Some(TimeNavigation::TimeTravel(NavigationPoint::TableTag(_)))
+                    | Some(TimeNavigation::Changes {
+                        at: NavigationPoint::TableTag(_),
+                        ..
+                    })
+                    | Some(TimeNavigation::Changes {
+                        end: Some(NavigationPoint::TableTag(_)),
+                        ..
+                    })
+            ) {
+                return Err(legacy_table_ref_removed_error(format!(
+                    "TAG navigation on branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
+                ))
+                .set_span(*span));
+            }
+        }
 
         // Resolve table with catalog
         let table_meta = {

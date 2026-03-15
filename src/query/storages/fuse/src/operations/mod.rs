@@ -58,4 +58,5 @@ pub use snapshot_hint::*;
 pub use table_index::do_refresh_table_index;
 pub use util::*;
 pub use vacuum::ASSUMPTION_MAX_TXN_DURATION;
+pub use vacuum::SnapshotGcSelection;
 pub use vacuum::vacuum_tables_from_info;
