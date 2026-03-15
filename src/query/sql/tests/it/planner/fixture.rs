@@ -1240,7 +1240,13 @@ impl TableContext for LiteTableContext {
             .get_table(&self.tenant, database, table)
             .await
     }
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+    fn evict_table_from_cache(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+    ) -> Result<()> {
         Ok(())
     }
     async fn get_table_with_branch(
@@ -1397,6 +1403,7 @@ impl TableContext for LiteTableContext {
         _catalog_name: &str,
         _db_name: &str,
         _tbl_name: &str,
+        _branch: Option<&str>,
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         Ok(None)

@@ -15,6 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_protos::pb;
 
@@ -25,6 +27,33 @@ use crate::MIN_READER_VER;
 use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
+
+impl FromToProto for mt::TableBranch {
+    type PB = pb::TableBranch;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(Self {
+            expire_at: p.expire_at.from_pb_opt()?,
+            branch_id: p.branch_id,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            expire_at: self.expire_at.to_pb_opt()?,
+            branch_id: self.branch_id,
+        })
+    }
+}
 
 impl FromToProto for mt::TableTag {
     type PB = pb::TableTag;
@@ -49,6 +78,33 @@ impl FromToProto for mt::TableTag {
             min_reader_ver: MIN_READER_VER,
             expire_at: self.expire_at.to_pb_opt()?,
             snapshot_loc: self.snapshot_loc.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::DroppedBranchMeta {
+    type PB = pb::DroppedBranchMeta;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(Self {
+            drop_on: DateTime::<Utc>::from_pb(p.drop_on)?,
+            expire_at: p.expire_at.from_pb_opt()?,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            drop_on: self.drop_on.to_pb()?,
+            expire_at: self.expire_at.to_pb_opt()?,
         })
     }
 }
