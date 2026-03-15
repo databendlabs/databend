@@ -24,8 +24,6 @@ use databend_common_sql::plans::DropTableBranchPlan;
 use databend_common_sql::plans::DropTableTagPlan;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
-use databend_meta_client::types::MatchSeq;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 
 pub struct RealTableRefHandler {}
 
