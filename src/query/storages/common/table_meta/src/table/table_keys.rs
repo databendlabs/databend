@@ -16,6 +16,9 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::LazyLock;
+
+use databend_common_frozen_api::FrozenAPI;
+
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
@@ -63,6 +66,18 @@ pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
 
+/// Table Branch
+///
+/// The option key for storing the base table id in a branch's TableMeta.
+pub const OPT_KEY_BASE_TABLE_ID: &str = "base_table_id";
+/// The option key for storing the table ids referenced by a branch's snapshot segments.
+/// Comma-separated list of u64 table ids (source + inherited). Set once at branch creation, never updated.
+/// Not set when snapshot is empty (no segments to protect).
+/// - Created from base table with data: "base_id"
+/// - Created from branch A (refs "base_id"): "A_id,base_id"
+/// - Created from branch B (refs "A_id,base_id"): "B_id,A_id,base_id"
+pub const OPT_KEY_REFERENCED_BRANCH_IDS: &str = "referenced_branch_ids";
+
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL
 /// - Should not be shown in `show create table` statement
@@ -71,6 +86,8 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_BASE_TABLE_ID);
+    r.insert(OPT_KEY_REFERENCED_BRANCH_IDS);
     r
 });
 
@@ -83,6 +100,8 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_BASE_TABLE_ID);
+    r.insert(OPT_KEY_REFERENCED_BRANCH_IDS);
     r
 });
 
@@ -94,10 +113,10 @@ pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy, FrozenAPI)]
 pub enum ClusterType {
-    Linear,
-    Hilbert,
+    Linear = 0,
+    Hilbert = 1,
 }
 
 impl Display for ClusterType {

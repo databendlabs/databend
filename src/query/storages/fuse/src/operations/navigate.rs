@@ -17,15 +17,21 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -42,6 +48,112 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::check_table_ref_access;
 
 impl FuseTable {
+    pub fn apply_snapshot_metadata_to_meta(
+        &self,
+        table_meta: &mut TableMeta,
+        snapshot: &TableSnapshot,
+    ) -> Result<()> {
+        let snapshot_cluster_key_meta = snapshot.cluster_key_meta.clone();
+        let cluster_type = if let Some(cluster_type) = snapshot.cluster_type {
+            Some(cluster_type)
+        } else if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_v2 {
+            // Historical snapshots written before cluster_type was persisted may still share the
+            // same cluster-key version as the current table. Reuse the current cluster_type only
+            // in that compatibility case.
+            self.cluster_type()
+        } else {
+            // Intentionally do not expose partial cluster metadata here. When the historical
+            // snapshot predates cluster_type persistence and its cluster-key version no longer
+            // matches the current table, we cannot reconstruct the exact historical clustering
+            // mode safely. Clearing the cluster metadata avoids fabricating a misleading mode for
+            // time-travel/branch planning on an upgraded table.
+            None
+        };
+
+        if let Some(cluster_type) = cluster_type {
+            table_meta.cluster_key_v2 = snapshot_cluster_key_meta;
+            table_meta.options.insert(
+                OPT_KEY_CLUSTER_TYPE.to_owned(),
+                cluster_type.to_string().to_lowercase(),
+            );
+        } else {
+            table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+            table_meta.cluster_key_v2 = None;
+        }
+
+        if table_meta.schema.as_ref() == &snapshot.schema {
+            return Ok(());
+        }
+
+        let snapshot_leaf_column_ids = snapshot.schema.to_leaf_column_id_set();
+        table_meta.fill_field_comments();
+        let comment_by_column_id = table_meta
+            .schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                (
+                    field.column_id(),
+                    table_meta
+                        .field_comments
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default(),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+
+        table_meta.schema = Arc::new(snapshot.schema.clone());
+        table_meta.field_comments = snapshot
+            .schema
+            .fields()
+            .iter()
+            .map(|field| {
+                comment_by_column_id
+                    .get(&field.column_id())
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .collect();
+        table_meta.virtual_schema = None;
+        table_meta.column_mask_policy = None;
+        table_meta.row_access_policy = None;
+        table_meta.constraints.clear();
+        table_meta.options.remove(OPT_KEY_APPROX_DISTINCT_COLUMNS);
+        table_meta.options.remove(OPT_KEY_BLOOM_INDEX_COLUMNS);
+
+        table_meta.indexes.retain(|_, index| {
+            index
+                .column_ids
+                .iter()
+                .all(|column_id| snapshot_leaf_column_ids.contains(column_id))
+        });
+        table_meta
+            .column_mask_policy_columns_ids
+            .retain(|column_id, policy_map| {
+                snapshot_leaf_column_ids.contains(column_id)
+                    && policy_map
+                        .columns_ids
+                        .iter()
+                        .all(|policy_column_id| snapshot_leaf_column_ids.contains(policy_column_id))
+            });
+        if table_meta
+            .row_access_policy_columns_ids
+            .as_ref()
+            .is_some_and(|policy_map| {
+                !policy_map
+                    .columns_ids
+                    .iter()
+                    .all(|column_id| snapshot_leaf_column_ids.contains(column_id))
+            })
+        {
+            table_meta.row_access_policy_columns_ids = None;
+        }
+
+        Ok(())
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn navigate_to_point(
@@ -212,12 +324,7 @@ impl FuseTable {
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
-        // Cluster key will be restored from the snapshot.
-        // If the snapshot has no cluster key, means the table is currently unclustered.
-        // We do NOT fall back to table-level cluster key metadata here, even if
-        // the base table defines one. This is expected and by design.
-        table_info.meta.schema = Arc::new(snapshot.schema.clone());
-        table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
+        self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot)?;
         table_info
             .meta
             .options
@@ -590,6 +697,18 @@ impl FuseTable {
         tag_name: &str,
     ) -> Result<String> {
         check_table_ref_access(ctx.as_ref())?;
+        // Tags are only stored on the base table. Reject tag navigation on branches
+        // to avoid confusing "Unknown TAG" errors.
+        if self
+            .table_info
+            .meta
+            .options
+            .contains_key(OPT_KEY_BASE_TABLE_ID)
+        {
+            return Err(ErrorCode::Unimplemented(
+                "tag navigation is not supported on table branches",
+            ));
+        }
         let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let table_tag = catalog
             .get_table_tag(self.table_info.ident.table_id, tag_name, false)
