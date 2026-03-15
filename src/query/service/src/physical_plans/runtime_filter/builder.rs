@@ -107,7 +107,10 @@ pub async fn build_runtime_filter(
     if build_side_data_distribution.as_ref().is_some_and(|e| {
         !matches!(
             e,
-            Exchange::Broadcast | Exchange::NodeToNodeHash(_) | Exchange::Merge
+            Exchange::Broadcast
+                | Exchange::NodeToNodeHash(_)
+                | Exchange::GlobalHash(_)
+                | Exchange::Merge
         )
     }) {
         return Ok(Default::default());

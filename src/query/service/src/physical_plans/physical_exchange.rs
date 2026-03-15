@@ -100,7 +100,9 @@ impl PhysicalPlanBuilder {
         mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        if let databend_common_sql::plans::Exchange::NodeToNodeHash(exprs) = exchange {
+        if let databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)
+        | databend_common_sql::plans::Exchange::GlobalHash(exprs) = exchange
+        {
             for expr in exprs {
                 required.extend(expr.used_columns());
             }
@@ -121,6 +123,16 @@ impl PhysicalPlanBuilder {
                     keys.push(expr.as_remote_expr());
                 }
                 FragmentKind::Normal
+            }
+            databend_common_sql::plans::Exchange::GlobalHash(scalars) => {
+                for scalar in scalars {
+                    let expr = scalar
+                        .type_check(input_schema.as_ref())?
+                        .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
+                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    keys.push(expr.as_remote_expr());
+                }
+                FragmentKind::GlobalShuffle
             }
             databend_common_sql::plans::Exchange::Broadcast => FragmentKind::Expansive,
             databend_common_sql::plans::Exchange::Merge => FragmentKind::Merge,

@@ -1127,6 +1127,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["None".into(), "LZ4".into(), "ZSTD".into()])),
                 }),
+                ("hash_shuffle_rows_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8192),
+                    desc: "Sets the max rows threshold for hash shuffle block partition stream.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("hash_shuffle_bytes_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(4 * 1024 * 1024),
+                    desc: "Sets the max bytes threshold for hash shuffle block partition stream.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Refresh aggregating index after new data written",

@@ -20,6 +20,7 @@ pub enum DataExchange {
     Merge(MergeExchange),
     Broadcast(BroadcastExchange),
     NodeToNodeExchange(NodeToNodeExchange),
+    GlobalShuffleExchange(NodeToNodeExchange),
 }
 
 impl DataExchange {
@@ -28,6 +29,7 @@ impl DataExchange {
             DataExchange::Merge(exchange) => &exchange.id,
             DataExchange::Broadcast(exchange) => &exchange.id,
             DataExchange::NodeToNodeExchange(exchange) => &exchange.id,
+            DataExchange::GlobalShuffleExchange(exchange) => &exchange.id,
         }
     }
 
@@ -36,6 +38,7 @@ impl DataExchange {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
             DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
             DataExchange::NodeToNodeExchange(exchange) => exchange.destination_ids.clone(),
+            DataExchange::GlobalShuffleExchange(exchange) => exchange.destination_ids.clone(),
         }
     }
 
@@ -51,7 +54,8 @@ impl DataExchange {
 
                 vec![]
             }
-            DataExchange::NodeToNodeExchange(exchange) => {
+            DataExchange::NodeToNodeExchange(exchange)
+            | DataExchange::GlobalShuffleExchange(exchange) => {
                 for (to, channels) in &exchange.destination_channels {
                     if to == destination {
                         return channels.clone();
@@ -65,7 +69,10 @@ impl DataExchange {
 
     /// Whether this exchange type uses do_exchange (ping-pong) instead of do_get.
     pub fn use_do_exchange(&self) -> bool {
-        matches!(self, DataExchange::Broadcast(_))
+        matches!(
+            self,
+            DataExchange::Broadcast(_) | DataExchange::GlobalShuffleExchange(_)
+        )
     }
 
     pub fn get_parallel(&self) -> usize {
