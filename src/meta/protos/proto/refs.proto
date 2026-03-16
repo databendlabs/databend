@@ -20,6 +20,7 @@ message TableTag {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
+  // Option<DateTime<Utc>>.
   optional string expire_at = 1;
   string snapshot_loc = 2;
 }

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_expression as ce;
@@ -96,22 +95,6 @@ fn test_decode_v168_database_meta() -> anyhow::Result<()> {
 
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), database_meta_v168.as_slice(), 168, want())
-}
-
-#[test]
-fn test_decode_v168_table_tag() -> anyhow::Result<()> {
-    let table_tag_v168: Vec<u8> = vec![
-        10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
-        84, 67, 18, 8, 97, 95, 118, 52, 46, 109, 112, 107, 160, 6, 168, 1, 168, 6, 24,
-    ];
-
-    let want = || mt::TableTag {
-        expire_at: DateTime::<Utc>::from_timestamp(1702603569, 0),
-        snapshot_loc: "a_v4.mpk".to_string(),
-    };
-
-    common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), table_tag_v168.as_slice(), 168, want())
 }
 
 fn s(ss: impl ToString) -> String {

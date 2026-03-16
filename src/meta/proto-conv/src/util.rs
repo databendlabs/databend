@@ -197,7 +197,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (165, "2026-01-24: Add: add cluster_key_v2 on TableMeta"),
     (166, "2026-02-13: Add: UserOption::default_warehouse"),
     (167, "2026-02-28: Add: file_format.proto Lance file format"),
-    (168, "2026-03-11: Remove: share_by in TableMeta/DatabaseMeta and refs in TableMeta, Remove SnapshotRef, Add TableTag")
+    (168, "2026-03-11: Remove: share_by in TableMeta/DatabaseMeta and refs in TableMeta, Remove SnapshotRef"),
+    (169, "2026-03-16: Add: TableTag")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
