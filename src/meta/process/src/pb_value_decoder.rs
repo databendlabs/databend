@@ -605,6 +605,7 @@ mod tests {
             request: Some(Request::Put(TxnPutRequest {
                 key: "__fd_db_id_list/1".to_string(),
                 value: buf,
+                prev_value: false,
                 match_seq: None,
                 expire_at: Some(1700000000),
                 ttl_ms: None,
@@ -631,6 +632,7 @@ mod tests {
             request: Some(Request::Put(TxnPutRequest {
                 key: "__fd_db_id_list/1".to_string(),
                 value: buf,
+                prev_value: false,
                 match_seq: None,
                 expire_at: Some(1700000000),
                 ttl_ms: Some(30000),
