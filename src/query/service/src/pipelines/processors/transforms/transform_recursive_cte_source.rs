@@ -385,8 +385,11 @@ async fn prepare_cached_replay_action_for_tables(tables: &[Arc<dyn Table>]) -> C
         }
 
         if first_table.begin_cache_population() {
-            for table in tables.iter().skip(1) {
+            for table in tables {
                 let memory_table = recursive_cte_memory_table(table.as_ref());
+                if memory_table.get_id() == first_table.get_id() {
+                    continue;
+                }
                 memory_table.finish_cache_population(false);
                 let started = memory_table.begin_cache_population();
                 debug_assert!(
@@ -824,6 +827,58 @@ mod tests {
                 panic!("expected sealed cache replay to be independent of scan-table order")
             }
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_reacquires_population_for_noncanonical_first_scan_table() {
+        let noncanonical_first_table = new_named_test_recursive_cte_memory_table("z_scan");
+        let canonical_second_table = new_named_test_recursive_cte_memory_table("a_scan");
+        let noncanonical_first_memory_table =
+            recursive_cte_memory_table(noncanonical_first_table.as_ref());
+        let canonical_second_memory_table =
+            recursive_cte_memory_table(canonical_second_table.as_ref());
+
+        noncanonical_first_memory_table.append_generation_block(0, DataBlock::empty());
+        noncanonical_first_memory_table.set_active_generation(0);
+        let stale_reader = noncanonical_first_memory_table.register_reader();
+        assert!(
+            noncanonical_first_memory_table
+                .take_one_block(stale_reader)
+                .is_some()
+        );
+
+        assert!(canonical_second_memory_table.begin_cache_population());
+
+        let waiter_noncanonical_first_table = noncanonical_first_table.clone();
+        let waiter_canonical_second_table = canonical_second_table.clone();
+        let waiter = databend_common_base::runtime::spawn(async move {
+            prepare_cached_replay_action_for_tables(&[
+                waiter_noncanonical_first_table,
+                waiter_canonical_second_table,
+            ])
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        canonical_second_memory_table.finish_cache_population(false);
+
+        match waiter.await.unwrap() {
+            CachedReplayAction::Populate => {}
+            CachedReplayAction::Replay(_) => {
+                panic!("expected cache ownership to be reacquired for every scan table")
+            }
+        }
+
+        assert!(canonical_second_memory_table.is_running());
+        assert!(noncanonical_first_memory_table.is_running());
+        assert!(
+            noncanonical_first_memory_table
+                .take_one_block(stale_reader)
+                .is_none()
+        );
+
+        canonical_second_memory_table.finish_cache_population(false);
+        noncanonical_first_memory_table.finish_cache_population(false);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
