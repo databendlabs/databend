@@ -40,7 +40,7 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::memory::basic::BasicHashJoin;
+use super::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;

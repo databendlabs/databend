@@ -12,7 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod unpartitioned;
-pub mod partitioned;
+pub(crate) mod basic;
+mod basic_state;
+mod inner_join;
+pub mod left_join;
+mod left_join_anti;
+mod left_join_semi;
+mod right_join;
+mod right_join_anti;
+mod right_join_semi;
+mod nested_loop;
 
-pub use unpartitioned::*;
+pub use basic_state::BasicHashJoinState;
+pub use inner_join::InnerHashJoin;
+pub use left_join_anti::AntiLeftHashJoin;
+pub use left_join_semi::SemiLeftHashJoin;
+pub use right_join::OuterRightHashJoin;
+pub use right_join_anti::AntiRightHashJoin;
+pub use right_join_semi::SemiRightHashJoin;
+pub use nested_loop::*;

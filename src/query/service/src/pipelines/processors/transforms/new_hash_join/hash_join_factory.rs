@@ -45,6 +45,13 @@ use crate::pipelines::processors::transforms::memory::OuterRightHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedInnerJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedLeftJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedLeftAntiJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedLeftSemiJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedRightJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedRightAntiJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedRightSemiJoin;
 use crate::sessions::QueryContext;
 
 pub struct HashJoinFactory {
@@ -404,5 +411,58 @@ impl HashJoinFactory {
             memory_join,
             typ,
         ))
+    }
+
+    /// Create a partitioned (per-thread) join for hash shuffle mode.
+    /// No shared state — each thread independently builds and probes.
+    pub fn create_partitioned_join(self: &Arc<Self>, typ: JoinType) -> Result<Box<dyn Join>> {
+        let settings = self.ctx.get_settings();
+        let max_block_size = settings.get_max_block_size()? as usize;
+
+        match typ {
+            JoinType::Inner => Ok(Box::new(PartitionedInnerJoin::create(
+                self.hash_method.clone(),
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                max_block_size,
+            ))),
+            JoinType::Left => Ok(Box::new(PartitionedLeftJoin::create(
+                self.hash_method.clone(),
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                max_block_size,
+            ))),
+            JoinType::LeftAnti => Ok(Box::new(PartitionedLeftAntiJoin::create(
+                self.hash_method.clone(),
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                max_block_size,
+            ))),
+            JoinType::LeftSemi => Ok(Box::new(PartitionedLeftSemiJoin::create(
+                self.hash_method.clone(),
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                max_block_size,
+            ))),
+            JoinType::Right => Ok(Box::new(PartitionedRightJoin::create(
+                self.hash_method.clone(),
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                max_block_size,
+            ))),
+            JoinType::RightSemi => Ok(Box::new(PartitionedRightSemiJoin::create(
+                self.hash_method.clone(),
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                max_block_size,
+            ))),
+            JoinType::RightAnti => Ok(Box::new(PartitionedRightAntiJoin::create(
+                self.hash_method.clone(),
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                max_block_size,
+            ))),
+            _ => unreachable!(),
+        }
     }
 }

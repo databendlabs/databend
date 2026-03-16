@@ -488,7 +488,11 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                factory.create_hash_join(self.join_type, 0)?,
+                if self.broadcast_id.is_some() {
+                    factory.create_partitioned_join(self.join_type)?
+                } else {
+                    factory.create_hash_join(self.join_type, 0)?
+                },
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
