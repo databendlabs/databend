@@ -31,21 +31,16 @@ use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_meta_kvapi::kvapi;
 use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::Key;
-use databend_meta_kvapi::kvapi::KvApiExt;
 use databend_meta_kvapi::kvapi::ListOptions;
 use databend_meta_types::ConditionResult::Eq;
 use databend_meta_types::MatchSeqExt;
 use databend_meta_types::MetaError;
 use databend_meta_types::SeqV;
 use databend_meta_types::TxnCondition;
-use databend_meta_types::TxnGetResponse;
 use databend_meta_types::TxnRequest;
-use databend_meta_types::protobuf as pb;
 use fastrace::func_name;
 use log::debug;
 
-use crate::deserialize_struct_get_response;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
@@ -57,13 +52,9 @@ use crate::txn_put_pb;
 async fn build_lvt_condition(
     kv_api: &(impl KVPbApi<Error = MetaError> + ?Sized),
     table_id: u64,
-    lvt_check: Option<&TableLvtCheck>,
+    lvt_check: &TableLvtCheck,
 ) -> Result<Option<TxnCondition>, KVAppError> {
-    let Some(check) = lvt_check else {
-        return Ok(None);
-    };
-
-    let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, table_id);
+    let lvt_ident = LeastVisibleTimeIdent::new(&lvt_check.tenant, table_id);
     let res = kv_api.get_pb(&lvt_ident).await?;
     let (lvt_seq, current_lvt) = match res {
         Some(v) => (v.seq, Some(v.data)),
@@ -71,13 +62,13 @@ async fn build_lvt_condition(
     };
 
     if let Some(current_lvt) = current_lvt {
-        if current_lvt.time > check.time {
+        if current_lvt.time > lvt_check.time {
             return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
                 TableSnapshotExpired::new(
                     table_id,
                     format!(
                         "snapshot timestamp {:?} is older than the table's least visible time {:?}",
-                        check.time, current_lvt.time
+                        lvt_check.time, current_lvt.time
                     ),
                 ),
             )));
@@ -107,42 +98,22 @@ where
         let table_id = req.table_id;
         let key_table_id = TableId { table_id };
         let key_tag = TableIdTagName::new(table_id, &req.tag_name);
-        let keys = vec![key_table_id.to_string_key(), key_tag.to_string_key()];
-        let mut data = {
-            let values = self.mget_kv(&keys).await?;
-            keys.iter()
-                .zip(values.into_iter())
-                .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
-                .collect::<Vec<_>>()
+        let table_tag = TableTag {
+            expire_at: req.expire_at,
+            snapshot_loc: req.snapshot_loc.clone(),
         };
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            if data.is_empty() {
-                data = {
-                    let values = self.mget_kv(&keys).await?;
-                    keys.iter()
-                        .zip(values.into_iter())
-                        .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
-                        .collect::<Vec<_>>()
-                };
-            }
-
             // Ensure the base table exists and has not changed.
-            let seq_table_meta = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableId>(d)?;
-                assert_eq!(key_table_id, k);
-                v
-            };
+            let seq_table_meta = self.get_pb(&key_table_id).await?;
             let Some(seq_table_meta) = seq_table_meta else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(table_id, "create_table_tag"),
                 )));
             };
-
             // Reject tags on soft-deleted tables so dropped-table cleanup cannot race with
             // a late tag creation that still sees the old table seq.
             if seq_table_meta.data.drop_on.is_some() {
@@ -150,7 +121,6 @@ where
                     UnknownTableId::new(table_id, "create_table_tag"),
                 )));
             }
-
             // Check seq matches caller's expectation.
             if req.seq.match_seq(&seq_table_meta).is_err() {
                 return Err(KVAppError::AppError(AppError::from(
@@ -164,22 +134,12 @@ where
             }
 
             // Check if tag already exists.
-            let seq_tag = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableIdTagName>(d)?;
-                assert_eq!(key_tag, k);
-                v
-            };
+            let seq_tag = self.get_pb(&key_tag).await?;
             if seq_tag.is_some() {
                 return Err(KVAppError::AppError(AppError::from(
                     ReferenceAlreadyExists::new(format!("Tag '{}' already exists", req.tag_name)),
                 )));
             }
-
-            let table_tag = TableTag {
-                expire_at: req.expire_at,
-                snapshot_loc: req.snapshot_loc.clone(),
-            };
 
             let mut conditions = vec![
                 // Table must not change.
@@ -187,7 +147,7 @@ where
                 // Tag must not already exist.
                 txn_cond_seq(&key_tag, Eq, 0),
             ];
-            if let Some(cond) = build_lvt_condition(self, table_id, req.lvt_check.as_ref()).await? {
+            if let Some(cond) = build_lvt_condition(self, table_id, &req.lvt_check).await? {
                 conditions.push(cond);
             }
 
@@ -196,7 +156,6 @@ where
             if succ {
                 return Ok(());
             }
-            data = vec![];
         }
     }
 

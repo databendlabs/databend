@@ -111,10 +111,10 @@ impl TableRefHandler for RealTableRefHandler {
                 tag_name: plan.name.clone(),
                 snapshot_loc,
                 expire_at: plan.retain.map(|v| Utc::now() + v),
-                lvt_check: Some(TableLvtCheck {
+                lvt_check: TableLvtCheck {
                     tenant: ctx.get_tenant(),
                     time: snapshot_timestamp,
-                }),
+                },
             })
             .await
     }

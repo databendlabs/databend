@@ -64,8 +64,8 @@ pub struct CreateTableTagReq {
     pub tag_name: String,
     pub snapshot_loc: String,
     pub expire_at: Option<DateTime<Utc>>,
-    /// Optional optimistic LVT check against the base table.
-    pub lvt_check: Option<TableLvtCheck>,
+    /// optimistic LVT check against the base table.
+    pub lvt_check: TableLvtCheck,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
