@@ -27,7 +27,6 @@ use sqllogictest::Location;
 use sqllogictest::QueryExpect;
 use sqllogictest::Record;
 use sqllogictest::Runner;
-use sqllogictest::TestError;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
 use testcontainers::ContainerAsync;
@@ -40,8 +39,11 @@ use crate::client::ClientType;
 use crate::client::HttpClient;
 use crate::client::MySQLClient;
 use crate::client::QueryResultFormat;
+use crate::diagnostics::capture_failure_diagnostics;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use crate::report::ErrorRecord;
+use crate::report::RunReport;
 use crate::util::ColumnType;
 use crate::util::collect_lazy_dir;
 use crate::util::get_files;
@@ -51,7 +53,9 @@ use crate::util::run_ttc_container;
 
 mod arg;
 mod client;
+mod diagnostics;
 mod error;
+mod report;
 mod util;
 
 const HANDLER_MYSQL: &str = "mysql";
@@ -326,6 +330,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
             files.push(suit_file);
         }
     }
+    let selected_files = files.len();
 
     if !args.bench {
         // lazy load test data
@@ -370,15 +375,25 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                 run_file_async(&client_type, args.bench, file.unwrap().path()).await
             });
         }
-        // Run all tasks parallel
-        run_parallel_async(tasks, num_of_tests).await?;
+        let error_records = run_parallel_async(tasks).await;
+        let report = RunReport::new(
+            selected_files,
+            num_of_tests,
+            num_of_tests > 0,
+            args.no_fail_fast,
+            start.elapsed(),
+            error_records,
+        );
+        println!("{}", report.render());
+
+        if report.has_failures() {
+            return Err(DSqlLogicTestError::SelfError(
+                "sqllogictest failed".to_string(),
+            ));
+        }
     }
     let duration = start.elapsed();
-    println!(
-        "Run all tests[{}] using {} ms",
-        num_of_tests,
-        duration.as_millis()
-    );
+    println!("Run all tests[{}] using {} ms", num_of_tests, duration.as_millis());
 
     Ok(())
 }
@@ -411,29 +426,23 @@ fn column_validator(loc: Location, actual: Vec<ColumnType>, expected: Vec<Column
 }
 
 async fn run_parallel_async(
-    tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
-    num_of_tests: usize,
-) -> Result<()> {
+    tasks: Vec<impl Future<Output = std::result::Result<Vec<ErrorRecord>, ErrorRecord>>>,
+ ) -> Vec<ErrorRecord> {
     let args = SqlLogicTestArgs::parse();
     let jobs = tasks.len().clamp(1, args.parallel);
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
     let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {
-        let errors = tasks
+        tasks
             .filter_map(|result| async { result.err() })
             .collect()
-            .await;
-        handle_error_records(errors, no_fail_fast, num_of_tests)
+            .await
     } else {
-        let errors: Vec<Vec<TestError>> = tasks
+        let errors: Vec<Vec<ErrorRecord>> = tasks
             .filter_map(|result| async { result.ok() })
             .collect()
-            .await;
-        handle_error_records(
-            errors.into_iter().flatten().collect(),
-            no_fail_fast,
-            num_of_tests,
-        )
+        .await;
+        errors.into_iter().flatten().collect()
     }
 }
 
@@ -441,7 +450,7 @@ async fn run_file_async(
     client_type: &ClientType,
     bench: bool,
     filename: impl AsRef<Path>,
-) -> std::result::Result<Vec<TestError>, TestError> {
+) -> std::result::Result<Vec<ErrorRecord>, ErrorRecord> {
     let start = Instant::now();
 
     let mut error_records = vec![];
@@ -482,10 +491,18 @@ async fn run_file_async(
                     continue;
                 }
 
+                let diagnostics = capture_failure_diagnostics(&mut runner).await;
+                let error_record = ErrorRecord::new(
+                    filename.to_string(),
+                    e,
+                    diagnostics.query_id,
+                    diagnostics.non_default_settings,
+                );
+
                 if no_fail_fast {
-                    error_records.push(e);
+                    error_records.push(error_record);
                 } else {
-                    return Err(e);
+                    return Err(error_record);
                 }
             }
             _ => {}
@@ -506,28 +523,4 @@ async fn run_file_async(
         );
     }
     Ok(error_records)
-}
-
-fn handle_error_records(
-    error_records: Vec<TestError>,
-    no_fail_fast: bool,
-    num_of_tests: usize,
-) -> Result<()> {
-    if error_records.is_empty() {
-        return Ok(());
-    }
-
-    println!(
-        "Test finished, fail fast {}, {} out of {} records failed to run",
-        if no_fail_fast { "disabled" } else { "enabled" },
-        error_records.len(),
-        num_of_tests
-    );
-    for (idx, error_record) in error_records.iter().enumerate() {
-        println!("{idx}: {}", error_record.display(true));
-    }
-
-    Err(DSqlLogicTestError::SelfError(
-        "sqllogictest failed".to_string(),
-    ))
 }
