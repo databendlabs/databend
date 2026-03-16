@@ -30,12 +30,12 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 
+use super::basic::BasicHashJoin;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
-use super::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;

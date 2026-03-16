@@ -30,6 +30,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 
+use super::basic::BasicHashJoin;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
@@ -40,7 +41,6 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
-use super::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;

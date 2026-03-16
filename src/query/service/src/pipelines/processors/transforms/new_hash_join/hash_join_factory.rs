@@ -46,11 +46,11 @@ use crate::pipelines::processors::transforms::memory::SemiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::partitioned::PartitionedInnerJoin;
-use crate::pipelines::processors::transforms::memory::partitioned::PartitionedLeftJoin;
 use crate::pipelines::processors::transforms::memory::partitioned::PartitionedLeftAntiJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedLeftJoin;
 use crate::pipelines::processors::transforms::memory::partitioned::PartitionedLeftSemiJoin;
-use crate::pipelines::processors::transforms::memory::partitioned::PartitionedRightJoin;
 use crate::pipelines::processors::transforms::memory::partitioned::PartitionedRightAntiJoin;
+use crate::pipelines::processors::transforms::memory::partitioned::PartitionedRightJoin;
 use crate::pipelines::processors::transforms::memory::partitioned::PartitionedRightSemiJoin;
 use crate::sessions::QueryContext;
 
