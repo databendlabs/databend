@@ -451,7 +451,8 @@ fn recursive_cte_temp_table_cleanup_drops_catalog_and_in_memory_state() -> anyho
         };
         assert!(IN_MEMORY_R_CTE_DATA.read().contains_key(&key));
 
-        ctx.add_recursive_cte_temp_table(&db, table_name);
+        let catalog = ctx.get_current_catalog();
+        ctx.add_recursive_cte_temp_table(&catalog, &db, table_name);
         ctx.drop_recursive_cte_temp_table().await?;
 
         let check_ctx = fixture.new_query_ctx().await?;

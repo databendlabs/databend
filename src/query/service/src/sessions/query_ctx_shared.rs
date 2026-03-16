@@ -197,7 +197,7 @@ pub struct QueryContextShared {
     // This must be shared across QueryContext instances created from the same query,
     // otherwise cleanup hooks running on the parent context cannot see registrations
     // performed inside child contexts.
-    pub(super) recursive_cte_temp_tables: Arc<RwLock<Vec<(String, String)>>>,
+    pub(super) recursive_cte_temp_tables: Arc<RwLock<Vec<(String, String, String)>>>,
     pub(super) logical_recursive_cte_runtime_ids: Arc<RwLock<HashMap<u32, String>>>,
 }
 

@@ -932,7 +932,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_recursive_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+    fn add_recursive_cte_temp_table(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+    ) {
         todo!()
     }
 

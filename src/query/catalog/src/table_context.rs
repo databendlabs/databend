@@ -462,7 +462,12 @@ pub trait TableContext: Send + Sync {
 
     async fn drop_m_cte_temp_table(&self) -> Result<()>;
 
-    fn add_recursive_cte_temp_table(&self, database_name: &str, table_name: &str);
+    fn add_recursive_cte_temp_table(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+    );
 
     async fn drop_recursive_cte_temp_table(&self) -> Result<()>;
 

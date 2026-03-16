@@ -220,11 +220,29 @@ impl QueryContext {
     }
 
     async fn drop_cte_temp_tables(&self, tables: &[(String, String)]) -> Result<()> {
+        let registered_tables = tables
+            .iter()
+            .map(|(db_name, table_name)| {
+                (
+                    CATALOG_DEFAULT.to_string(),
+                    db_name.clone(),
+                    table_name.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        self.drop_registered_cte_temp_tables(&registered_tables)
+            .await
+    }
+
+    async fn drop_registered_cte_temp_tables(
+        &self,
+        tables: &[(String, String, String)],
+    ) -> Result<()> {
         let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
         let tenant = self.get_tenant();
-        let catalog = self.get_catalog(CATALOG_DEFAULT).await?;
-        for (db_name, table_name) in tables.iter() {
-            let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
+        for (catalog_name, db_name, table_name) in tables.iter() {
+            let catalog = self.get_catalog(catalog_name).await?;
+            let table = self.get_table(catalog_name, db_name, table_name).await?;
             let db = catalog.get_database(&tenant, db_name).await?;
             let temp_prefix = table
                 .options()
@@ -2316,8 +2334,17 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
-    fn add_recursive_cte_temp_table(&self, database_name: &str, table_name: &str) {
-        let entry = (database_name.to_string(), table_name.to_string());
+    fn add_recursive_cte_temp_table(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+    ) {
+        let entry = (
+            catalog_name.to_string(),
+            database_name.to_string(),
+            table_name.to_string(),
+        );
         let mut tables = self.shared.recursive_cte_temp_tables.write();
         if !tables.contains(&entry) {
             tables.push(entry);
@@ -2326,7 +2353,7 @@ impl TableContext for QueryContext {
 
     async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
         let recursive_cte_temp_tables = self.shared.recursive_cte_temp_tables.read().clone();
-        self.drop_cte_temp_tables(&recursive_cte_temp_tables)
+        self.drop_registered_cte_temp_tables(&recursive_cte_temp_tables)
             .await?;
         self.shared.recursive_cte_temp_tables.write().clear();
         Ok(())
