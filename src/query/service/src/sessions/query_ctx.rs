@@ -184,9 +184,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    // Temp table for materialized CTE, first string is the database_name, second string is the table_name
-    // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
-    m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
 impl QueryContext {
@@ -212,7 +209,6 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             written_segment_locs: Default::default(),
             block_threshold: Default::default(),
-            m_cte_temp_table: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -2247,7 +2243,7 @@ impl TableContext for QueryContext {
 
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
         let entry = (database_name.to_string(), table_name.to_string());
-        let mut tables = self.m_cte_temp_table.write();
+        let mut tables = self.shared.m_cte_temp_tables.write();
         if !tables.contains(&entry) {
             tables.push(entry);
         }
@@ -2255,7 +2251,7 @@ impl TableContext for QueryContext {
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
         let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
-        let m_cte_temp_table = self.m_cte_temp_table.read().clone();
+        let m_cte_temp_table = self.shared.m_cte_temp_tables.read().clone();
         let tenant = self.get_tenant();
         for (db_name, table_name) in m_cte_temp_table.iter() {
             let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
@@ -2292,7 +2288,7 @@ impl TableContext for QueryContext {
                 txn_mgr.clear_temp_table_by_id(table_id);
             }
         }
-        let mut m_cte_temp_table = self.m_cte_temp_table.write();
+        let mut m_cte_temp_table = self.shared.m_cte_temp_tables.write();
         m_cte_temp_table.clear();
         Ok(())
     }

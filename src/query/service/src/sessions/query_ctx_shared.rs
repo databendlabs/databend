@@ -193,6 +193,11 @@ pub struct QueryContextShared {
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
     pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
+    // Temp tables created for materialized/recursive CTE cleanup.
+    // This must be shared across QueryContext instances created from the same query,
+    // otherwise cleanup hooks running on the parent context cannot see registrations
+    // performed inside child contexts.
+    pub(super) m_cte_temp_tables: Arc<RwLock<Vec<(String, String)>>>,
     pub(super) logical_recursive_cte_runtime_ids: Arc<RwLock<HashMap<u32, String>>>,
 }
 
@@ -278,6 +283,7 @@ impl QueryContextShared {
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
+            m_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
         }))
     }
