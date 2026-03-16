@@ -134,6 +134,8 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_blocks::memory::IN_MEMORY_R_CTE_DATA;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::drop_table_by_id;
@@ -141,6 +143,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotTimestampValidationContext;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::Zoned;
 use jiff::tz::TimeZone;
@@ -219,19 +222,17 @@ impl QueryContext {
     async fn drop_cte_temp_tables(&self, tables: &[(String, String)]) -> Result<()> {
         let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
         let tenant = self.get_tenant();
+        let catalog = self.get_catalog(CATALOG_DEFAULT).await?;
         for (db_name, table_name) in tables.iter() {
             let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
-            let db = self
-                .get_catalog(CATALOG_DEFAULT)
-                .await?
-                .get_database(&tenant, db_name)
-                .await?;
+            let db = catalog.get_database(&tenant, db_name).await?;
             let temp_prefix = table
                 .options()
                 .get(OPT_KEY_TEMP_PREFIX)
                 .cloned()
                 .unwrap_or_default();
             let table_id = table.get_table_info().ident.table_id;
+            let is_recursive_cte = table.options().contains_key(OPT_KEY_RECURSIVE_CTE);
             let drop_table_req = DropTableByIdReq {
                 if_exists: true,
                 tenant: tenant.clone(),
@@ -242,15 +243,30 @@ impl QueryContext {
                 engine: table.engine().to_string(),
                 temp_prefix: temp_prefix.clone(),
             };
-            if drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req)
+            if temp_prefix.is_empty() {
+                catalog.drop_table_by_id(drop_table_req).await?;
+            } else if drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req)
                 .await?
                 .is_some()
             {
-                ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix, &temp_tbl_mgr);
+                ClientSessionManager::instance()
+                    .remove_temp_tbl_mgr(temp_prefix.clone(), &temp_tbl_mgr);
 
                 let txn_mgr_ref = self.txn_mgr();
                 let mut txn_mgr = txn_mgr_ref.lock();
                 txn_mgr.clear_temp_table_by_id(table_id);
+            }
+
+            if is_recursive_cte {
+                let key = InMemoryDataKey {
+                    temp_prefix: if temp_prefix.is_empty() {
+                        None
+                    } else {
+                        Some(temp_prefix.clone())
+                    },
+                    table_id,
+                };
+                IN_MEMORY_R_CTE_DATA.write().remove(&key);
             }
         }
         Ok(())
