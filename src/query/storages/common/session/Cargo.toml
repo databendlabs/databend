@@ -10,7 +10,7 @@ edition = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
-databend-meta-types = { workspace = true }
+databend-meta-client = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 

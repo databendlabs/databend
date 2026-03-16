@@ -28,7 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
-use databend_meta_types::NodeInfo;
+use databend_meta_client::types::NodeInfo;
 use log::debug;
 use petgraph::Graph;
 use petgraph::dot::Dot;

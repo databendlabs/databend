@@ -48,7 +48,7 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_factory::Table;
 use databend_common_users::UserApiProvider;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use fastrace::func_name;
 
 pub struct TenantQuotaTable {

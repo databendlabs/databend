@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_types::ConditionResult;
-use databend_meta_types::TxnCondition;
-use databend_meta_types::txn_condition::Target;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::types::ConditionResult;
+use databend_meta_client::types::TxnCondition;
+use databend_meta_client::types::txn_condition::Target;
 
 /// Build a TxnCondition that compares the seq of a record.
 pub fn txn_cond_eq_seq(key: &impl kvapi::Key, seq: u64) -> TxnCondition {

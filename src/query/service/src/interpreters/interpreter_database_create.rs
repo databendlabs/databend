@@ -22,7 +22,7 @@ use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use log::debug;
 
 use crate::interpreters::Interpreter;

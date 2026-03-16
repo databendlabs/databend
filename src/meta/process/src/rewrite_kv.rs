@@ -16,7 +16,7 @@ use databend_common_meta_api::kv_pb_api::decode_pb;
 use databend_common_meta_api::kv_pb_api::encode_pb;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
-use databend_meta_kvapi::kvapi::Key;
+use databend_meta_client::kvapi::Key;
 
 /// Convert old version TableMeta protobuf message to new version.
 ///
