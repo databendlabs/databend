@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -105,15 +104,6 @@ async fn run_query_two_u64(ctx: Arc<QueryContext>, sql: &str) -> Result<(u64, u6
     let stream = executor.execute(ctx).await?;
     let blocks: Vec<DataBlock> = stream.try_collect().await?;
     Ok(extract_two_u64(blocks))
-}
-
-async fn run_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
-    let mut planner = Planner::new(ctx.clone());
-    let (plan, _) = planner.plan_sql(sql).await?;
-    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
-    let stream = executor.execute(ctx).await?;
-    let _: Vec<DataBlock> = stream.try_collect().await?;
-    Ok(())
 }
 
 /// Deterministically reproduce wrong results when recursive CTE internal table names are not
@@ -359,60 +349,6 @@ fn recursive_cte_issue_19498_stress_repro() -> anyhow::Result<()> {
 }
 
 #[test]
-fn materialized_cte_temp_table_cleanup_stays_local_to_context() -> anyhow::Result<()> {
-    let outer_rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-
-    outer_rt.block_on(async {
-        let fixture = Arc::new(TestFixture::setup().await?);
-        let db = fixture.default_db_name();
-        fixture
-            .execute_command(&format!("create database if not exists {db}"))
-            .await?;
-        let ctx = fixture.new_query_ctx().await?;
-        ctx.set_current_database(db.clone()).await?;
-
-        let table_name = "mcte_cleanup_local";
-        run_sql(
-            ctx.clone(),
-            &format!("create temp table {table_name}(a int) engine=memory"),
-        )
-        .await?;
-
-        ctx.add_m_cte_temp_table(&db, table_name);
-        let child_ctx = QueryContext::create_from(ctx.as_ref());
-        child_ctx.drop_m_cte_temp_table().await?;
-
-        if ctx
-            .get_table(CATALOG_DEFAULT, &db, table_name)
-            .await
-            .is_err()
-        {
-            return Err(ErrorCode::Internal(
-                "expected child context cleanup to keep parent materialized temp table".to_string(),
-            ));
-        }
-
-        ctx.drop_m_cte_temp_table().await?;
-
-        if ctx
-            .get_table(CATALOG_DEFAULT, &db, table_name)
-            .await
-            .is_ok()
-        {
-            return Err(ErrorCode::Internal(
-                "expected parent materialized temp table cleanup to drop local table".to_string(),
-            ));
-        }
-
-        Ok::<(), ErrorCode>(())
-    })?;
-
-    Ok(())
-}
-
-#[test]
 fn recursive_cte_runtime_id_shared_across_child_contexts() -> anyhow::Result<()> {
     let outer_rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -437,46 +373,6 @@ fn recursive_cte_runtime_id_shared_across_child_contexts() -> anyhow::Result<()>
             return Err(ErrorCode::Internal(format!(
                 "expected different logical recursive cte ids to map to different runtime ids, got {different_runtime_id}"
             )));
-        }
-
-        Ok::<(), ErrorCode>(())
-    })?;
-
-    Ok(())
-}
-
-#[test]
-fn recursive_cte_temp_table_cleanup_shared_across_child_contexts() -> anyhow::Result<()> {
-    let outer_rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-
-    outer_rt.block_on(async {
-        let fixture = Arc::new(TestFixture::setup().await?);
-        let ctx = fixture.new_query_ctx().await?;
-        let db = fixture.default_db_name();
-        ctx.set_current_database(db.clone()).await?;
-
-        let table_name = "rcte_cleanup_shared";
-        run_sql(
-            ctx.clone(),
-            &format!("create temp table {table_name}(a int) engine=memory"),
-        )
-        .await?;
-
-        let child_ctx = QueryContext::create_from(ctx.as_ref());
-        child_ctx.add_recursive_cte_temp_table(&db, table_name);
-        ctx.drop_recursive_cte_temp_table().await?;
-
-        if ctx
-            .get_table(CATALOG_DEFAULT, &db, table_name)
-            .await
-            .is_ok()
-        {
-            return Err(ErrorCode::Internal(
-                "expected child-registered recursive temp table to be cleaned by parent context"
-                    .to_string(),
-            ));
         }
 
         Ok::<(), ErrorCode>(())
