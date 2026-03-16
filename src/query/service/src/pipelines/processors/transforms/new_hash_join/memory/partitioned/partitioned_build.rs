@@ -26,13 +26,16 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::types::DataType;
 use databend_common_expression::with_hash_method;
 
+use super::chunk_accumulator::FixedSizeChunkAccumulator;
 use super::compact_hash_table::CompactJoinHashTable;
+use super::compact_probe_stream::create_compact_probe;
+use super::compact_probe_stream::create_compact_probe_matched;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 
 pub const CHUNK_BITS: usize = 16;
 pub const CHUNK_SIZE: usize = 1 << CHUNK_BITS; // 65536
-const CHUNK_MASK: usize = CHUNK_SIZE - 1;
 
 /// Convert a 1-based flat index to RowPtr (chunk_index, row_offset).
 #[inline(always)]
@@ -40,7 +43,7 @@ pub fn flat_to_row_ptr(flat_index: usize) -> RowPtr {
     let zero_based = flat_index - 1;
     RowPtr {
         chunk_index: (zero_based >> CHUNK_BITS) as u32,
-        row_index: (zero_based & CHUNK_MASK) as u32,
+        row_index: (zero_based & (CHUNK_SIZE - 1)) as u32,
     }
 }
 
@@ -64,9 +67,10 @@ pub struct PartitionedBuild {
     pub desc: Arc<HashJoinDesc>,
     /// Function context.
     pub function_ctx: FunctionContext,
-    /// Accumulator for fixed-size chunks.
-    squash_buffer: Vec<DataBlock>,
-    squash_rows: usize,
+    /// Visited bitmap for right outer/semi/anti joins (1-based indexing, index 0 unused).
+    pub visited: Vec<u8>,
+    /// Fixed-size chunk accumulator using mutable columns.
+    accumulator: FixedSizeChunkAccumulator,
 }
 
 impl PartitionedBuild {
@@ -85,8 +89,8 @@ impl PartitionedBuild {
             method,
             desc,
             function_ctx,
-            squash_buffer: Vec::new(),
-            squash_rows: 0,
+            visited: Vec::new(),
+            accumulator: FixedSizeChunkAccumulator::new(CHUNK_SIZE),
         }
     }
 
@@ -94,57 +98,59 @@ impl PartitionedBuild {
     pub fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         match data {
             Some(block) if !block.is_empty() => {
-                self.squash_rows += block.num_rows();
-                self.squash_buffer.push(block);
-                while self.squash_rows >= CHUNK_SIZE {
-                    self.flush_one_chunk()?;
+                let flushed = self.accumulator.accumulate(block);
+                for chunk in flushed {
+                    self.ingest_chunk(chunk)?;
                 }
             }
             _ => {
-                if !self.squash_buffer.is_empty() {
-                    let block = DataBlock::concat(&std::mem::take(&mut self.squash_buffer))?;
-                    if !block.is_empty() {
-                        self.num_rows += block.num_rows();
-                        self.chunks.push(block);
-                    }
-                    self.squash_rows = 0;
+                if let Some(chunk) = self.accumulator.flush() {
+                    self.ingest_chunk(chunk)?;
                 }
             }
         }
         Ok(())
     }
 
-    /// Finalize build: extract keys, compute hashes, build compact hash table, extract ColumnVec.
+    /// Process a flushed chunk: compute KeysState immediately.
+    fn ingest_chunk(&mut self, chunk: DataBlock) -> Result<()> {
+        let num_rows = chunk.num_rows();
+        with_hash_method!(|T| match &self.method {
+            HashMethodKind::T(method) => {
+                let keys_entries = self.desc.build_key(&chunk, &self.function_ctx)?;
+                let mut keys_block = DataBlock::new(keys_entries, num_rows);
+                self.desc.remove_keys_nullable(&mut keys_block);
+                let keys = ProjectedBlock::from(keys_block.columns());
+                let keys_state = method.build_keys_state(keys, num_rows)?;
+                self.build_keys_states.push(keys_state);
+            }
+        });
+        self.num_rows += num_rows;
+        self.chunks.push(chunk);
+        Ok(())
+    }
+
+    /// Finalize build: build hash table chunk by chunk, extract ColumnVec.
     pub fn final_build(&mut self) -> Result<()> {
         if self.num_rows == 0 {
             return Ok(());
         }
 
-        let mut all_keys_states = Vec::with_capacity(self.chunks.len());
-        let mut all_hashes = Vec::with_capacity(self.num_rows);
+        // Allocate hash table with known total rows
+        self.hash_table = CompactJoinHashTable::new(self.num_rows);
 
+        // Process one chunk at a time: compute hashes, insert into table
+        let mut row_offset = 1; // 1-based indexing
         with_hash_method!(|T| match &self.method {
             HashMethodKind::T(method) => {
-                for chunk in &self.chunks {
-                    let keys_entries = self.desc.build_key(chunk, &self.function_ctx)?;
-                    let mut keys_block = DataBlock::new(keys_entries, chunk.num_rows());
-                    self.desc.remove_keys_nullable(&mut keys_block);
-                    let keys = ProjectedBlock::from(keys_block.columns());
-                    let keys_state = method.build_keys_state(keys, chunk.num_rows())?;
-                    method.build_keys_hashes(&keys_state, &mut all_hashes);
-                    all_keys_states.push(keys_state);
+                for keys_state in &self.build_keys_states {
+                    let mut hashes = Vec::new();
+                    method.build_keys_hashes(keys_state, &mut hashes);
+                    self.hash_table.insert_chunk(&hashes, row_offset);
+                    row_offset += hashes.len();
                 }
             }
         });
-
-        // Build compact hash table (1-indexed)
-        let mut bucket_nums = vec![0usize; self.num_rows + 1];
-        self.hash_table = CompactJoinHashTable::new(self.num_rows);
-        let bucket_mask = self.hash_table.bucket_mask();
-        for (i, h) in all_hashes.iter().enumerate() {
-            bucket_nums[i + 1] = (*h as usize) & bucket_mask;
-        }
-        self.hash_table.build(&bucket_nums);
 
         // Project build columns and extract ColumnVec
         if let Some(first_chunk) = self.chunks.first() {
@@ -172,21 +178,6 @@ impl PartitionedBuild {
             self.columns = columns;
         }
 
-        self.build_keys_states = all_keys_states;
-        Ok(())
-    }
-
-    fn flush_one_chunk(&mut self) -> Result<()> {
-        let concat = DataBlock::concat(&std::mem::take(&mut self.squash_buffer))?;
-        let chunk = concat.slice(0..CHUNK_SIZE).maybe_gc();
-        let remain_rows = concat.num_rows() - CHUNK_SIZE;
-        if remain_rows > 0 {
-            let remain = concat.slice(CHUNK_SIZE..concat.num_rows()).maybe_gc();
-            self.squash_buffer.push(remain);
-        }
-        self.squash_rows = remain_rows;
-        self.num_rows += chunk.num_rows();
-        self.chunks.push(chunk);
         Ok(())
     }
 
@@ -197,131 +188,57 @@ impl PartitionedBuild {
         self.columns.clear();
         self.column_types.clear();
         self.num_rows = 0;
-        self.squash_buffer.clear();
-        self.squash_rows = 0;
+        self.visited.clear();
+        self.accumulator.reset();
     }
 
-    /// Probe the hash table with a data block. Returns matched pairs and unmatched probe indices.
-    /// For each probe row, walks the hash chain and compares keys.
-    pub fn probe(
-        &self,
+    /// Create a probe stream that only tracks matched rows (for inner, left semi, right series).
+    pub fn create_probe_matched<'a>(
+        &'a self,
         data: &DataBlock,
-    ) -> Result<(Vec<u64>, Vec<RowPtr>, Vec<u64>)> {
-        if self.num_rows == 0 {
-            let unmatched: Vec<u64> = (0..data.num_rows() as u64).collect();
-            return Ok((vec![], vec![], unmatched));
-        }
-
-        let probe_keys_entries = self.desc.probe_key(data, &self.function_ctx)?;
-        let mut probe_keys_block = DataBlock::new(probe_keys_entries, data.num_rows());
-        self.desc.remove_keys_nullable(&mut probe_keys_block);
-
-        let mut matched_probe = Vec::new();
-        let mut matched_build = Vec::new();
-        let mut has_match = vec![false; data.num_rows()];
-
-        with_hash_method!(|T| match &self.method {
-            HashMethodKind::T(method) => {
-                let keys = ProjectedBlock::from(probe_keys_block.columns());
-                let probe_ks = method.build_keys_state(keys, data.num_rows())?;
-                let mut probe_hashes = Vec::with_capacity(data.num_rows());
-                method.build_keys_hashes(&probe_ks, &mut probe_hashes);
-
-                let probe_acc = method.build_keys_accessor(probe_ks)?;
-                let build_accs: Vec<_> = self
-                    .build_keys_states
-                    .iter()
-                    .map(|ks| method.build_keys_accessor(ks.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-
-                let bucket_mask = self.hash_table.bucket_mask();
-                for probe_idx in 0..data.num_rows() {
-                    let bucket = (probe_hashes[probe_idx] as usize) & bucket_mask;
-                    let mut build_idx = self.hash_table.first_index(bucket);
-                    while build_idx != 0 {
-                        let bi = build_idx as usize;
-                        let chunk_idx = (bi - 1) >> CHUNK_BITS;
-                        let offset = (bi - 1) & CHUNK_MASK;
-                        let build_key = unsafe { build_accs[chunk_idx].key_unchecked(offset) };
-                        let probe_key = unsafe { probe_acc.key_unchecked(probe_idx) };
-                        if build_key == probe_key {
-                            has_match[probe_idx] = true;
-                            matched_probe.push(probe_idx as u64);
-                            matched_build.push(flat_to_row_ptr(bi));
-                        }
-                        build_idx = self.hash_table.next_index(build_idx);
-                    }
-                }
-            }
-        });
-
-        let unmatched: Vec<u64> = has_match
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| !**m)
-            .map(|(i, _)| i as u64)
-            .collect();
-
-        Ok((matched_probe, matched_build, unmatched))
+    ) -> Result<Box<dyn ProbeStream + Send + Sync + 'a>> {
+        create_compact_probe_matched(
+            &self.hash_table,
+            &self.build_keys_states,
+            &self.method,
+            &self.desc,
+            &self.function_ctx,
+            data,
+        )
     }
 
-    /// Probe and mark visited build rows (for right join types).
-    pub fn probe_and_mark_visited(
-        &mut self,
+    /// Create a probe stream that also tracks unmatched rows (for left, left anti).
+    pub fn create_probe<'a>(
+        &'a self,
         data: &DataBlock,
-    ) -> Result<(Vec<u64>, Vec<RowPtr>)> {
-        if self.num_rows == 0 {
-            return Ok((vec![], vec![]));
-        }
-
-        let probe_keys_entries = self.desc.probe_key(data, &self.function_ctx)?;
-        let mut probe_keys_block = DataBlock::new(probe_keys_entries, data.num_rows());
-        self.desc.remove_keys_nullable(&mut probe_keys_block);
-
-        let mut matched_probe = Vec::new();
-        let mut matched_build = Vec::new();
-
-        with_hash_method!(|T| match &self.method {
-            HashMethodKind::T(method) => {
-                let keys = ProjectedBlock::from(probe_keys_block.columns());
-                let probe_ks = method.build_keys_state(keys, data.num_rows())?;
-                let mut probe_hashes = Vec::with_capacity(data.num_rows());
-                method.build_keys_hashes(&probe_ks, &mut probe_hashes);
-
-                let probe_acc = method.build_keys_accessor(probe_ks)?;
-                let build_accs: Vec<_> = self
-                    .build_keys_states
-                    .iter()
-                    .map(|ks| method.build_keys_accessor(ks.clone()))
-                    .collect::<Result<Vec<_>>>()?;
-
-                let bucket_mask = self.hash_table.bucket_mask();
-                for probe_idx in 0..data.num_rows() {
-                    let bucket = (probe_hashes[probe_idx] as usize) & bucket_mask;
-                    let mut build_idx = self.hash_table.first_index(bucket);
-                    while build_idx != 0 {
-                        let bi = build_idx as usize;
-                        let chunk_idx = (bi - 1) >> CHUNK_BITS;
-                        let offset = (bi - 1) & CHUNK_MASK;
-                        let build_key = unsafe { build_accs[chunk_idx].key_unchecked(offset) };
-                        let probe_key = unsafe { probe_acc.key_unchecked(probe_idx) };
-                        if build_key == probe_key {
-                            matched_probe.push(probe_idx as u64);
-                            matched_build.push(flat_to_row_ptr(bi));
-                            self.hash_table.set_visited(build_idx);
-                        }
-                        build_idx = self.hash_table.next_index(build_idx);
-                    }
-                }
-            }
-        });
-
-        Ok((matched_probe, matched_build))
+    ) -> Result<Box<dyn ProbeStream + Send + Sync + 'a>> {
+        create_compact_probe(
+            &self.hash_table,
+            &self.build_keys_states,
+            &self.method,
+            &self.desc,
+            &self.function_ctx,
+            data,
+        )
     }
 
     /// Initialize visited tracking for right-side join types.
     pub fn init_visited(&mut self) {
-        self.hash_table.init_visited(self.num_rows);
+        self.visited = vec![0u8; self.num_rows + 1];
+    }
+
+    /// Mark a build row as visited (1-based index).
+    #[inline(always)]
+    pub fn set_visited(&mut self, row_index: usize) {
+        unsafe {
+            *self.visited.get_unchecked_mut(row_index) = 1;
+        }
+    }
+
+    /// Check if a build row has been visited (1-based index).
+    #[inline(always)]
+    pub fn is_visited(&self, row_index: usize) -> bool {
+        unsafe { *self.visited.get_unchecked(row_index) != 0 }
     }
 
     /// Gather build columns for the given row pointers.

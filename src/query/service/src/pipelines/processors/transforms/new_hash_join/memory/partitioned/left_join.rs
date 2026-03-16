@@ -24,21 +24,35 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NullableColumn;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::inner_join::result_block;
 use super::partitioned_build::PartitionedBuild;
 use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::wrap_true_validity;
+
+pub fn null_block(types: &[DataType], num_rows: usize) -> Option<DataBlock> {
+    if types.is_empty() {
+        return None;
+    }
+    let columns = types
+        .iter()
+        .map(|t| BlockEntry::new_const_column(t.wrap_nullable(), Scalar::Null, num_rows))
+        .collect::<Vec<_>>();
+    Some(DataBlock::new(columns, num_rows))
+}
 
 pub struct PartitionedLeftJoin {
     build: PartitionedBuild,
     filter_executor: Option<FilterExecutor>,
+    max_block_size: usize,
 }
 
 impl PartitionedLeftJoin {
@@ -61,6 +75,137 @@ impl PartitionedLeftJoin {
         PartitionedLeftJoin {
             build: PartitionedBuild::create(method, desc, function_ctx),
             filter_executor,
+            max_block_size,
+        }
+    }
+}
+
+fn wrap_nullable_build(build_block: DataBlock, num_rows: usize) -> DataBlock {
+    let true_validity = Bitmap::new_constant(true, num_rows);
+    let entries = build_block
+        .columns()
+        .iter()
+        .map(|c| wrap_true_validity(c, num_rows, &true_validity));
+    DataBlock::from_iter(entries, num_rows)
+}
+
+struct PartitionedLeftJoinStream<'a> {
+    desc: Arc<HashJoinDesc>,
+    probe_data_block: DataBlock,
+    build: &'a PartitionedBuild,
+    probe_stream: Box<dyn ProbeStream + Send + Sync + 'a>,
+    probed_rows: ProbedRows,
+    filter_executor: Option<&'a mut FilterExecutor>,
+    max_block_size: usize,
+    // Accumulated unmatched probe indices (no hash match)
+    unmatched_indices: Vec<u64>,
+    // Per-probe-row state for filter case: 0=unseen, 1=matched-no-pass, 2=passed
+    row_state: Vec<u8>,
+    has_filter: bool,
+    probe_done: bool,
+    unmatched_offset: usize,
+}
+
+impl<'a> PartitionedLeftJoinStream<'a> {
+    fn output_unmatched(&mut self) -> Result<Option<DataBlock>> {
+        // Collect all unmatched indices: from ProbeStream + filter-failed matched rows
+        if self.unmatched_offset == 0 && self.has_filter {
+            for i in 0..self.row_state.len() {
+                if self.row_state[i] == 1 {
+                    self.unmatched_indices.push(i as u64);
+                }
+            }
+        }
+
+        if self.unmatched_offset >= self.unmatched_indices.len() {
+            return Ok(None);
+        }
+
+        let end = (self.unmatched_offset + self.max_block_size).min(self.unmatched_indices.len());
+        let batch = &self.unmatched_indices[self.unmatched_offset..end];
+        self.unmatched_offset = end;
+
+        let probe_block = match self.probe_data_block.num_columns() {
+            0 => None,
+            _ => Some(DataBlock::take(&self.probe_data_block, batch)?),
+        };
+        let build_block = null_block(&self.build.column_types, batch.len());
+        Ok(Some(result_block(
+            &self.desc,
+            probe_block,
+            build_block,
+            batch.len(),
+        )))
+    }
+}
+
+impl<'a> JoinStream for PartitionedLeftJoinStream<'a> {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        if self.probe_done {
+            return self.output_unmatched();
+        }
+
+        loop {
+            self.probed_rows.clear();
+            self.probe_stream
+                .advance(&mut self.probed_rows, self.max_block_size)?;
+
+            if self.probed_rows.is_empty() {
+                self.probe_done = true;
+                return self.output_unmatched();
+            }
+
+            // Save unmatched indices
+            self.unmatched_indices
+                .extend_from_slice(&self.probed_rows.unmatched);
+
+            if self.probed_rows.matched_probe.is_empty() {
+                continue;
+            }
+
+            let num_matched = self.probed_rows.matched_probe.len();
+            let probe_block = match self.probe_data_block.num_columns() {
+                0 => None,
+                _ => Some(DataBlock::take(
+                    &self.probe_data_block,
+                    self.probed_rows.matched_probe.as_slice(),
+                )?),
+            };
+
+            let build_block = self
+                .build
+                .gather_build_block(&self.probed_rows.matched_build);
+            let build_block = build_block.map(|b| wrap_nullable_build(b, num_matched));
+
+            let mut block = result_block(&self.desc, probe_block, build_block, num_matched);
+
+            if let Some(filter) = self.filter_executor.as_mut() {
+                // Track matched rows
+                for &idx in &self.probed_rows.matched_probe {
+                    let i = idx as usize;
+                    if self.row_state[i] == 0 {
+                        self.row_state[i] = 1;
+                    }
+                }
+
+                let count = filter.select(&block)?;
+                if count == 0 {
+                    continue;
+                }
+
+                let true_sel = filter.true_selection();
+                for &sel_idx in true_sel.iter().take(count) {
+                    let probe_idx = self.probed_rows.matched_probe[sel_idx as usize] as usize;
+                    self.row_state[probe_idx] = 2;
+                }
+
+                let origin_rows = block.num_rows();
+                block = filter.take(block, origin_rows, count)?;
+            }
+
+            if !block.is_empty() {
+                return Ok(Some(block));
+            }
         }
     }
 }
@@ -90,137 +235,40 @@ impl Join for PartitionedLeftJoin {
                 .iter()
                 .map(|x| x.data_type().clone())
                 .collect();
-            let build_block = null_block(&types, num_rows)
-                .map(|b| b.project(&desc.build_projection));
+            let build_block =
+                null_block(&types, num_rows).map(|b| b.project(&desc.build_projection));
             let probe_block = Some(data.project(&desc.probe_projection));
-            let result = final_result_block(desc, probe_block, build_block, num_rows);
-            return Ok(Box::new(OneBlockJoinStream(Some(result))));
+            let block = result_block(desc, probe_block, build_block, num_rows);
+            return Ok(Box::new(OneBlockJoinStream(Some(block))));
         }
 
-        let (matched_probe, matched_build, unmatched) = self.build.probe(&data)?;
-        let num_rows = data.num_rows();
-        let probe_projected = data.project(&desc.probe_projection);
+        let num_probe_rows = data.num_rows();
+        let has_filter = self.filter_executor.is_some();
+        let probe_stream = self.build.create_probe(&data)?;
+        let probe_data_block = data.project(&desc.probe_projection);
 
-        // Build matched result
-        let mut result_blocks = Vec::new();
-
-        if !matched_probe.is_empty() {
-            let probe_block = match probe_projected.num_columns() {
-                0 => None,
-                _ => Some(DataBlock::take(&probe_projected, matched_probe.as_slice())?),
-            };
-
-            let build_block = self.build.gather_build_block(&matched_build);
-            let build_block = build_block.map(|b| {
-                let true_validity = Bitmap::new_constant(true, matched_build.len());
-                let entries = b
-                    .columns()
-                    .iter()
-                    .map(|c| wrap_true_validity(c, matched_build.len(), &true_validity));
-                DataBlock::from_iter(entries, matched_build.len())
-            });
-
-            let mut matched_result = final_result_block(
-                desc,
-                probe_block,
-                build_block,
-                matched_build.len(),
-            );
-
-            if let Some(filter) = self.filter_executor.as_mut() {
-                let count = filter.select(&matched_result)?;
-                if count > 0 {
-                    // Track which probe rows passed the filter
-                    let true_sel = filter.true_selection();
-                    let mut passed = vec![false; num_rows];
-                    for idx in true_sel.iter().take(count) {
-                        passed[matched_probe[*idx as usize] as usize] = true;
-                    }
-
-                    let origin_rows = matched_result.num_rows();
-                    matched_result = filter.take(matched_result, origin_rows, count)?;
-                    result_blocks.push(matched_result);
-
-                    // Unmatched = original unmatched + matched rows that failed ALL filter checks
-                    let mut all_unmatched: Vec<u64> = unmatched;
-                    // Rows that were matched but never passed filter
-                    let mut matched_set = vec![false; num_rows];
-                    for idx in &matched_probe {
-                        matched_set[*idx as usize] = true;
-                    }
-                    for i in 0..num_rows {
-                        if matched_set[i] && !passed[i] {
-                            all_unmatched.push(i as u64);
-                        }
-                    }
-
-                    if !all_unmatched.is_empty() {
-                        let unmatched_probe = match probe_projected.num_columns() {
-                            0 => None,
-                            _ => Some(DataBlock::take(&probe_projected, all_unmatched.as_slice())?),
-                        };
-                        let types = &self.build.column_types;
-                        let unmatched_build = null_block(types, all_unmatched.len());
-                        result_blocks.push(final_result_block(
-                            desc,
-                            unmatched_probe,
-                            unmatched_build,
-                            all_unmatched.len(),
-                        ));
-                    }
-                } else {
-                    // All matched rows failed filter, treat all as unmatched
-                    let all_indices: Vec<u64> = (0..num_rows as u64).collect();
-                    let unmatched_probe = match probe_projected.num_columns() {
-                        0 => None,
-                        _ => Some(DataBlock::take(&probe_projected, all_indices.as_slice())?),
-                    };
-                    let types = &self.build.column_types;
-                    let unmatched_build = null_block(types, all_indices.len());
-                    result_blocks.push(final_result_block(
-                        desc,
-                        unmatched_probe,
-                        unmatched_build,
-                        all_indices.len(),
-                    ));
-                }
+        Ok(Box::new(PartitionedLeftJoinStream {
+            desc: self.build.desc.clone(),
+            probe_data_block,
+            build: &self.build,
+            probe_stream,
+            probed_rows: ProbedRows::new(
+                Vec::with_capacity(self.max_block_size),
+                Vec::with_capacity(self.max_block_size),
+                Vec::with_capacity(self.max_block_size),
+            ),
+            filter_executor: self.filter_executor.as_mut(),
+            max_block_size: self.max_block_size,
+            unmatched_indices: Vec::new(),
+            row_state: if has_filter {
+                vec![0u8; num_probe_rows]
             } else {
-                result_blocks.push(matched_result);
-
-                // Append unmatched rows with NULL build side
-                if !unmatched.is_empty() {
-                    let unmatched_probe = match probe_projected.num_columns() {
-                        0 => None,
-                        _ => Some(DataBlock::take(&probe_projected, unmatched.as_slice())?),
-                    };
-                    let types = &self.build.column_types;
-                    let unmatched_build = null_block(types, unmatched.len());
-                    result_blocks.push(final_result_block(
-                        desc,
-                        unmatched_probe,
-                        unmatched_build,
-                        unmatched.len(),
-                    ));
-                }
-            }
-        } else {
-            // All rows unmatched
-            let unmatched_probe = match probe_projected.num_columns() {
-                0 => None,
-                _ => Some(DataBlock::take(&probe_projected, unmatched.as_slice())?),
-            };
-            let types = &self.build.column_types;
-            let unmatched_build = null_block(types, unmatched.len());
-            result_blocks.push(final_result_block(
-                desc,
-                unmatched_probe,
-                unmatched_build,
-                unmatched.len(),
-            ));
-        }
-
-        let result = DataBlock::concat(&result_blocks)?;
-        Ok(Box::new(OneBlockJoinStream(Some(result))))
+                Vec::new()
+            },
+            has_filter,
+            probe_done: false,
+            unmatched_offset: 0,
+        }))
     }
 }
 
@@ -228,56 +276,4 @@ impl GraceMemoryJoin for PartitionedLeftJoin {
     fn reset_memory(&mut self) {
         self.build.reset();
     }
-}
-
-pub fn final_result_block(
-    desc: &HashJoinDesc,
-    probe_block: Option<DataBlock>,
-    build_block: Option<DataBlock>,
-    num_rows: usize,
-) -> DataBlock {
-    let mut result_block = match (probe_block, build_block) {
-        (Some(mut probe_block), Some(build_block)) => {
-            probe_block.merge_block(build_block);
-            probe_block
-        }
-        (Some(probe_block), None) => probe_block,
-        (None, Some(build_block)) => build_block,
-        (None, None) => DataBlock::new(vec![], num_rows),
-    };
-
-    if !desc.probe_to_build.is_empty() {
-        for (index, (is_probe_nullable, is_build_nullable)) in desc.probe_to_build.iter() {
-            let entry = match (is_probe_nullable, is_build_nullable) {
-                (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
-                (true, false) => result_block.get_by_offset(*index).clone().remove_nullable(),
-                (false, true) => {
-                    let entry = result_block.get_by_offset(*index);
-                    let col = entry.to_column();
-                    match col.is_null() || col.is_nullable() {
-                        true => entry.clone(),
-                        false => BlockEntry::from(NullableColumn::new_column(
-                            col,
-                            Bitmap::new_constant(true, result_block.num_rows()),
-                        )),
-                    }
-                }
-            };
-            result_block.add_entry(entry);
-        }
-    }
-    result_block
-}
-
-pub fn null_block(types: &[DataType], num_rows: usize) -> Option<DataBlock> {
-    if types.is_empty() {
-        return None;
-    }
-    let columns = types
-        .iter()
-        .map(|column_type| {
-            BlockEntry::new_const_column(column_type.wrap_nullable(), Scalar::Null, num_rows)
-        })
-        .collect::<Vec<_>>();
-    Some(DataBlock::new(columns, num_rows))
 }

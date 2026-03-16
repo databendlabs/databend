@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Doris-style compact hash table for join.
-///
 /// Index 0 is a sentinel (empty/chain-end). Actual rows are indexed from 1.
 /// Memory per row: 4 bytes (next chain) vs current ~32 bytes (pointer-based entry).
 ///
 /// The table is single-threaded (no atomics) — designed for per-thread use
 /// under hash shuffle where each thread independently builds and probes.
 /// Trait for row index types. Supports u32 (up to ~4B rows) and u64.
-pub trait RowIndex:
-    Copy + Default + Eq + Send + Sync + 'static + std::fmt::Debug
-{
+pub trait RowIndex: Copy + Default + Eq + Send + Sync + 'static + std::fmt::Debug {
     const ZERO: Self;
     fn from_usize(v: usize) -> Self;
     fn to_usize(self) -> usize;
@@ -62,8 +58,6 @@ pub struct CompactJoinHashTable<I: RowIndex = u32> {
     first: Vec<I>,
     /// Chain array: next[row_index] = next row in same bucket (0 = end)
     next: Vec<I>,
-    /// Visited bitmap for right outer/semi/anti joins
-    visited: Vec<u8>,
     /// Bucket count minus one, for masking
     bucket_mask: usize,
 }
@@ -77,7 +71,6 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
             first: vec![I::ZERO; bucket_count],
             // Index 0 is sentinel, so we need num_rows + 1 entries
             next: vec![I::ZERO; num_rows + 1],
-            visited: Vec::new(),
             bucket_mask: bucket_count - 1,
         }
     }
@@ -98,6 +91,18 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         }
     }
 
+    /// Insert a chunk of rows starting at `row_offset` (1-based).
+    /// `hashes[i]` is the hash for the row at flat index `row_offset + i`.
+    pub fn insert_chunk(&mut self, hashes: &[u64], row_offset: usize) {
+        let mask = self.bucket_mask;
+        for (i, h) in hashes.iter().enumerate() {
+            let row_index = row_offset + i;
+            let bucket = (*h as usize) & mask;
+            self.next[row_index] = self.first[bucket];
+            self.first[bucket] = I::from_usize(row_index);
+        }
+    }
+
     /// Get the first row index in the given bucket.
     #[inline(always)]
     pub fn first_index(&self, bucket: usize) -> I {
@@ -110,37 +115,12 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         unsafe { *self.next.get_unchecked(row_index.to_usize()) }
     }
 
-    /// Initialize visited array for right-side join types.
-    pub fn init_visited(&mut self, num_rows: usize) {
-        self.visited = vec![0u8; num_rows + 1];
-    }
-
-    /// Mark a row as visited.
-    #[inline(always)]
-    pub fn set_visited(&mut self, row_index: I) {
-        unsafe {
-            *self.visited.get_unchecked_mut(row_index.to_usize()) = 1;
-        }
-    }
-
-    /// Check if a row has been visited.
-    #[inline(always)]
-    pub fn is_visited(&self, row_index: usize) -> bool {
-        unsafe { *self.visited.get_unchecked(row_index) != 0 }
-    }
-
-    /// Get a reference to the visited array (for final_probe scanning).
-    pub fn visited(&self) -> &[u8] {
-        &self.visited
-    }
-
     fn calc_bucket_count(num_rows: usize) -> usize {
         if num_rows == 0 {
             return 1;
         }
-        // Doris formula: num_elem + (num_elem - 1) / 7, then round up to power of 2
+
         let target = num_rows + (num_rows.saturating_sub(1)) / 7;
         target.next_power_of_two()
     }
 }
-
