@@ -31,7 +31,7 @@ use crate::common;
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v169_table_tag() -> anyhow::Result<()> {
-    let table_tag_v168: Vec<u8> = vec![
+    let table_tag_v169: Vec<u8> = vec![
         10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
         84, 67, 18, 8, 97, 95, 118, 52, 46, 109, 112, 107, 160, 6, 169, 1, 168, 6, 24,
     ];
@@ -42,5 +42,5 @@ fn test_decode_v169_table_tag() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), table_tag_v168.as_slice(), 169, want())
+    common::test_load_old(func_name!(), table_tag_v169.as_slice(), 169, want())
 }
