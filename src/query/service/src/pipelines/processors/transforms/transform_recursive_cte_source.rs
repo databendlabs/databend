@@ -390,7 +390,7 @@ async fn prepare_cached_replay_action_for_tables(tables: &[Arc<dyn Table>]) -> C
             return CachedReplayAction::Populate;
         }
 
-        wait_for_recursive_cte_cache_state_change(&first_table, &mut state_changes).await;
+        wait_for_recursive_cte_cache_state_change(first_table, &mut state_changes).await;
     }
 }
 
