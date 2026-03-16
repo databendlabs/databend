@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::Runtime;
@@ -355,10 +354,23 @@ fn finish_cache_population_for_tables(tables: &[Arc<dyn Table>], sealed: bool) {
     }
 }
 
+async fn wait_for_recursive_cte_cache_state_change(
+    first_table: &RecursiveCteMemoryTable,
+    state_changes: &mut tokio::sync::watch::Receiver<u64>,
+) {
+    if !first_table.is_running() {
+        tokio::task::yield_now().await;
+        return;
+    }
+
+    let _ = state_changes.changed().await;
+}
+
 async fn prepare_cached_replay_action_for_tables(tables: &[Arc<dyn Table>]) -> CachedReplayAction {
     let Some(first_table) = first_recursive_cte_memory_table(tables) else {
         return CachedReplayAction::Populate;
     };
+    let mut state_changes = first_table.subscribe_cache_population_change();
 
     loop {
         if first_table.is_sealed() {
@@ -378,9 +390,7 @@ async fn prepare_cached_replay_action_for_tables(tables: &[Arc<dyn Table>]) -> C
             return CachedReplayAction::Populate;
         }
 
-        while first_table.is_running() && !first_table.is_sealed() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        wait_for_recursive_cte_cache_state_change(&first_table, &mut state_changes).await;
     }
 }
 
@@ -743,7 +753,7 @@ mod tests {
             prepare_cached_replay_action_for_tables(&[waiter_table]).await
         });
 
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::task::yield_now().await;
         memory_table.finish_cache_population(false);
 
         match waiter.await.unwrap() {
@@ -779,7 +789,7 @@ mod tests {
                 .await
         });
 
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::task::yield_now().await;
         first_memory_table.finish_cache_population(false);
 
         match waiter.await.unwrap() {

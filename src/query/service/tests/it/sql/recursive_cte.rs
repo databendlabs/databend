@@ -406,9 +406,7 @@ fn recursive_cte_temp_table_cleanup_shared_across_child_contexts() -> anyhow::Re
         let table_name = "rcte_cleanup_shared";
         run_sql(
             ctx.clone(),
-            &format!(
-                "create temp table {table_name}(a int) engine=memory"
-            ),
+            &format!("create temp table {table_name}(a int) engine=memory"),
         )
         .await?;
 
@@ -416,7 +414,11 @@ fn recursive_cte_temp_table_cleanup_shared_across_child_contexts() -> anyhow::Re
         child_ctx.add_m_cte_temp_table(&db, table_name);
         ctx.drop_m_cte_temp_table().await?;
 
-        if ctx.get_table(CATALOG_DEFAULT, &db, table_name).await.is_ok() {
+        if ctx
+            .get_table(CATALOG_DEFAULT, &db, table_name)
+            .await
+            .is_ok()
+        {
             return Err(ErrorCode::Internal(
                 "expected child-registered recursive temp table to be cleaned by parent context"
                     .to_string(),

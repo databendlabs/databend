@@ -29,16 +29,17 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::IN_MEMORY_R_CTE_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
+use databend_storages_common_blocks::memory::InMemoryRecursiveDataEntry;
 use databend_storages_common_blocks::memory::InMemoryRecursiveState;
 use databend_storages_common_blocks::memory::RecursiveReaderState;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ChangeType;
-use parking_lot::RwLock;
+use tokio::sync::watch;
 
 pub struct RecursiveCteMemoryTable {
     table_info: TableInfo,
-    blocks: Arc<RwLock<InMemoryRecursiveState>>,
+    blocks: Arc<InMemoryRecursiveDataEntry>,
     data_metrics: Arc<StorageMetrics>,
 }
 
@@ -57,7 +58,7 @@ impl RecursiveCteMemoryTable {
             };
             in_mem_data
                 .entry(key)
-                .or_insert_with(|| Arc::new(RwLock::new(InMemoryRecursiveState::default())))
+                .or_insert_with(|| Arc::new(InMemoryRecursiveDataEntry::default()))
                 .clone()
         };
 
@@ -77,13 +78,13 @@ impl RecursiveCteMemoryTable {
     }
 
     pub fn set_active_generation(&self, generation: usize) {
-        let mut state = self.blocks.write();
+        let mut state = self.blocks.state.write();
         state.active_generation = Some(generation);
         Self::cleanup_stale_generations(&mut state);
     }
 
     pub fn register_reader(&self) -> u64 {
-        let mut state = self.blocks.write();
+        let mut state = self.blocks.state.write();
         let reader_id = state.next_reader_id;
         let generation = state.active_generation;
         state.next_reader_id += 1;
@@ -95,11 +96,12 @@ impl RecursiveCteMemoryTable {
     }
 
     pub fn unregister_reader(&self, reader_id: u64) {
-        self.blocks.write().readers.remove(&reader_id);
+        self.blocks.state.write().readers.remove(&reader_id);
     }
 
     pub fn append_generation_block(&self, generation: usize, block: DataBlock) {
         self.blocks
+            .state
             .write()
             .generations
             .entry(generation)
@@ -108,23 +110,26 @@ impl RecursiveCteMemoryTable {
     }
 
     pub fn cache_output_block(&self, block: DataBlock) {
-        self.blocks.write().cached_output.push(block);
+        self.blocks.state.write().cached_output.push(block);
     }
 
     pub fn cached_output_blocks(&self) -> Vec<DataBlock> {
-        self.blocks.read().cached_output.clone()
+        self.blocks.state.read().cached_output.clone()
     }
 
     pub fn seal(&self) {
-        self.blocks.write().sealed = true;
+        self.blocks.state.write().sealed = true;
+        self.blocks
+            .state_change_tx
+            .send_modify(|version| *version += 1);
     }
 
     pub fn is_sealed(&self) -> bool {
-        self.blocks.read().sealed
+        self.blocks.state.read().sealed
     }
 
     pub fn begin_cache_population(&self) -> bool {
-        let mut state = self.blocks.write();
+        let mut state = self.blocks.state.write();
         if state.sealed || state.running {
             return false;
         }
@@ -138,17 +143,25 @@ impl RecursiveCteMemoryTable {
     }
 
     pub fn is_running(&self) -> bool {
-        self.blocks.read().running
+        self.blocks.state.read().running
     }
 
     pub fn finish_cache_population(&self, sealed: bool) {
-        let mut state = self.blocks.write();
+        let mut state = self.blocks.state.write();
         state.running = false;
         state.sealed = sealed;
+        drop(state);
+        self.blocks
+            .state_change_tx
+            .send_modify(|version| *version += 1);
+    }
+
+    pub fn subscribe_cache_population_change(&self) -> watch::Receiver<u64> {
+        self.blocks.state_change_tx.subscribe()
     }
 
     pub fn take_one_block(&self, reader_id: u64) -> Option<DataBlock> {
-        let mut state = self.blocks.write();
+        let mut state = self.blocks.state.write();
         let mut reader = *state.readers.get(&reader_id)?;
         let generation = reader.generation?;
         let blocks = state.generations.get(&generation)?;
@@ -161,7 +174,7 @@ impl RecursiveCteMemoryTable {
     }
 
     pub fn take_generation_blocks(&self, reader_id: u64) -> Vec<DataBlock> {
-        let mut state = self.blocks.write();
+        let mut state = self.blocks.state.write();
         let mut reader = match state.readers.get(&reader_id).copied() {
             Some(reader) => reader,
             None => return Vec::new(),
@@ -262,7 +275,7 @@ impl Table for RecursiveCteMemoryTable {
 
     #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
-        let mut state = self.blocks.write();
+        let mut state = self.blocks.state.write();
         state.generations.clear();
         state.readers.clear();
         state.next_reader_id = 0;
@@ -270,6 +283,10 @@ impl Table for RecursiveCteMemoryTable {
         state.cached_output.clear();
         state.sealed = false;
         state.running = false;
+        drop(state);
+        self.blocks
+            .state_change_tx
+            .send_modify(|version| *version += 1);
         Ok(())
     }
 
@@ -279,7 +296,7 @@ impl Table for RecursiveCteMemoryTable {
         _require_fresh: bool,
         _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let state = self.blocks.read();
+        let state = self.blocks.state.read();
         let mut num_rows = 0u64;
         let mut data_bytes = 0u64;
         for blocks in state.generations.values() {
