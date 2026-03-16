@@ -184,7 +184,8 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    // Temp tables for materialized CTE are scoped to the current QueryContext.
+    // Temp table for materialized CTE, first string is the database_name, second string is the table_name
+    // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
