@@ -29,6 +29,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::statistics_to_domain;
+use databend_storages_common_io::ReadSettings;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -41,6 +42,7 @@ pub struct ExprRuntimePruner {
     func_ctx: FunctionContext,
     table_schema: TableSchemaRef,
     dal: Operator,
+    settings: ReadSettings,
     inlist_bloom_prune_threshold: usize,
     exprs: Vec<RuntimeFilterExpr>,
 }
@@ -66,6 +68,7 @@ impl ExprRuntimePruner {
         func_ctx: FunctionContext,
         table_schema: TableSchemaRef,
         dal: Operator,
+        settings: ReadSettings,
         inlist_bloom_prune_threshold: usize,
         exprs: Vec<RuntimeFilterExpr>,
     ) -> Self {
@@ -73,6 +76,7 @@ impl ExprRuntimePruner {
             func_ctx,
             table_schema,
             dal,
+            settings,
             inlist_bloom_prune_threshold,
             exprs,
         }
@@ -191,6 +195,7 @@ impl ExprRuntimePruner {
         should_prune_runtime_inlist_by_bloom_index(
             &self.func_ctx,
             &self.dal,
+            &self.settings,
             &self.table_schema,
             filter,
             part,
@@ -203,6 +208,8 @@ impl ExprRuntimePruner {
 mod tests {
     use std::collections::BTreeMap;
     use std::sync::OnceLock;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     use databend_common_base::base::GlobalInstance;
     use databend_common_base::base::tokio;
@@ -225,12 +232,21 @@ mod tests {
     use databend_storages_common_cache::CacheManager;
     use databend_storages_common_index::BloomIndexBuilder;
     use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_io::ReadSettings;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
 
     use super::*;
+
+    fn test_read_settings() -> ReadSettings {
+        ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 0,
+            parquet_fast_read_bytes: u64::MAX,
+        }
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_runtime_inlist_prunes_by_bloom_index() -> Result<()> {
@@ -242,15 +258,20 @@ mod tests {
         let part = make_part(&schema, index_location, index_size, 10, 40);
         let expr = inlist_expr("y", &[11, 21, 31])?;
         let stats = Arc::new(RuntimeFilterStats::default());
-        let pruner = ExprRuntimePruner::new(FunctionContext::default(), schema, operator, 3, vec![
-            RuntimeFilterExpr {
+        let pruner = ExprRuntimePruner::new(
+            FunctionContext::default(),
+            schema,
+            operator,
+            test_read_settings(),
+            3,
+            vec![RuntimeFilterExpr {
                 filter_id: 0,
                 kind: RuntimeFilterExprKind::Inlist,
                 inlist_value_count: 3,
                 expr,
                 stats: stats.clone(),
-            },
-        ]);
+            }],
+        );
 
         assert!(pruner.prune(&part).await?);
 
@@ -268,15 +289,20 @@ mod tests {
         let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
         let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
         let part = make_part(&schema, index_location, index_size, 10, 40);
-        let pruner = ExprRuntimePruner::new(FunctionContext::default(), schema, operator, 3, vec![
-            RuntimeFilterExpr {
+        let pruner = ExprRuntimePruner::new(
+            FunctionContext::default(),
+            schema,
+            operator,
+            test_read_settings(),
+            3,
+            vec![RuntimeFilterExpr {
                 filter_id: 0,
                 kind: RuntimeFilterExprKind::Inlist,
                 inlist_value_count: 3,
                 expr: inlist_expr("y", &[11, 20, 31])?,
                 stats: Arc::new(RuntimeFilterStats::default()),
-            },
-        ]);
+            }],
+        );
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -288,15 +314,20 @@ mod tests {
         let schema = test_schema();
         let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
         let part = make_part(&schema, None, 0, 10, 40);
-        let pruner = ExprRuntimePruner::new(FunctionContext::default(), schema, operator, 3, vec![
-            RuntimeFilterExpr {
+        let pruner = ExprRuntimePruner::new(
+            FunctionContext::default(),
+            schema,
+            operator,
+            test_read_settings(),
+            3,
+            vec![RuntimeFilterExpr {
                 filter_id: 0,
                 kind: RuntimeFilterExprKind::Inlist,
                 inlist_value_count: 3,
                 expr: inlist_expr("y", &[11, 21, 31])?,
                 stats: Arc::new(RuntimeFilterStats::default()),
-            },
-        ]);
+            }],
+        );
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -391,6 +422,7 @@ mod tests {
         schema: &TableSchemaRef,
         block: &DataBlock,
     ) -> Result<(Option<(String, u64)>, u64)> {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
         let (_, field) = schema.column_with_name("y").unwrap();
         let bloom_columns_map = BTreeMap::from([(0usize, field.clone())]);
         let mut builder =
@@ -399,7 +431,10 @@ mod tests {
         let bloom_index = builder.finalize()?.unwrap();
 
         let index_block = bloom_index.serialize_to_data_block()?;
-        let location = ("block_bloom".to_string(), BlockFilter::VERSION);
+        let location = (
+            format!("block_bloom_{}", NEXT_ID.fetch_add(1, Ordering::Relaxed)),
+            BlockFilter::VERSION,
+        );
         let mut data = Vec::new();
         let _ = blocks_to_parquet(
             &bloom_index.filter_schema,
@@ -422,15 +457,20 @@ mod tests {
         let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
         let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
         let part = make_part(&schema, index_location, index_size, 10, 40);
-        let pruner = ExprRuntimePruner::new(FunctionContext::default(), schema, operator, 2, vec![
-            RuntimeFilterExpr {
+        let pruner = ExprRuntimePruner::new(
+            FunctionContext::default(),
+            schema,
+            operator,
+            test_read_settings(),
+            2,
+            vec![RuntimeFilterExpr {
                 filter_id: 0,
                 kind: RuntimeFilterExprKind::Inlist,
                 inlist_value_count: 3,
                 expr: inlist_expr("y", &[11, 21, 31])?,
                 stats: Arc::new(RuntimeFilterStats::default()),
-            },
-        ]);
+            }],
+        );
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -447,16 +487,20 @@ mod tests {
         let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
         let (index_location, index_size) = write_bloom_index(&operator, &schema, &block).await?;
         let part = make_part_u64(&schema, index_location, index_size, 42, 99942);
-        let pruner =
-            ExprRuntimePruner::new(FunctionContext::default(), schema, operator, 10, vec![
-                RuntimeFilterExpr {
-                    filter_id: 0,
-                    kind: RuntimeFilterExprKind::Inlist,
-                    inlist_value_count: 10,
-                    expr: inlist_expr_u64("y", &(50000u64..50010).collect::<Vec<_>>())?,
-                    stats: Arc::new(RuntimeFilterStats::default()),
-                },
-            ]);
+        let pruner = ExprRuntimePruner::new(
+            FunctionContext::default(),
+            schema,
+            operator,
+            test_read_settings(),
+            10,
+            vec![RuntimeFilterExpr {
+                filter_id: 0,
+                kind: RuntimeFilterExprKind::Inlist,
+                inlist_value_count: 10,
+                expr: inlist_expr_u64("y", &(50000u64..50010).collect::<Vec<_>>())?,
+                stats: Arc::new(RuntimeFilterStats::default()),
+            }],
+        );
 
         assert!(pruner.prune(&part).await?);
         Ok(())
