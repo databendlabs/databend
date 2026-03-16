@@ -45,8 +45,8 @@ use crate::error::Result;
 use crate::report::ErrorRecord;
 use crate::report::RunReport;
 use crate::util::ColumnType;
+use crate::util::collect_files;
 use crate::util::collect_lazy_dir;
-use crate::util::get_files;
 use crate::util::lazy_prepare_data;
 use crate::util::lazy_run_dictionary_containers;
 use crate::util::run_ttc_container;
@@ -290,45 +290,31 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     let mut lazy_dirs = HashSet::new();
     let mut files = vec![];
     let start = Instant::now();
-    // Walk each suit dir and read all files in it
-    // After get a slt file, set the file name to databend
-    let suits = std::fs::read_dir(args.suites).unwrap();
-    for suit in suits {
-        // Get a suit and find all slt files in the suit
-        let suit = suit.unwrap().path();
-        // Parse the suit and find all slt files
-        let suit_files = get_files(suit)?;
-        for suit_file in suit_files.into_iter() {
-            let file_name = suit_file
-                .as_ref()
-                .unwrap()
-                .path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+    for suit_file in collect_files(&args)?.into_iter() {
+        let file_name = suit_file
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
 
-            if !file_name.ends_with(".test") {
-                continue;
-            }
-            if let Some(ref specific_file) = args.file
-                && !specific_file.split(',').any(|f| f.eq(&file_name))
-            {
-                continue;
-            }
-            if let Some(ref skip_file) = args.skipped_file
-                && skip_file.split(',').any(|f| f.eq(&file_name))
-            {
-                continue;
-            }
-            num_of_tests += parse_file::<ColumnType>(suit_file.as_ref().unwrap().path())
-                .unwrap()
-                .len();
-
-            collect_lazy_dir(suit_file.as_ref().unwrap().path(), &mut lazy_dirs)?;
-            files.push(suit_file);
+        if !file_name.ends_with(".test") {
+            continue;
         }
+        if let Some(ref specific_file) = args.file
+            && !specific_file.split(',').any(|f| f.eq(&file_name))
+        {
+            continue;
+        }
+        if let Some(ref skip_file) = args.skipped_file
+            && skip_file.split(',').any(|f| f.eq(&file_name))
+        {
+            continue;
+        }
+        num_of_tests += parse_file::<ColumnType>(&suit_file).unwrap().len();
+
+        collect_lazy_dir(&suit_file, &mut lazy_dirs)?;
+        files.push(suit_file);
     }
     let selected_files = files.len();
 
@@ -342,9 +328,6 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     if args.complete {
         for file in files {
             let file_name = file
-                .as_ref()
-                .unwrap()
-                .path()
                 .file_name()
                 .unwrap()
                 .to_str()
@@ -358,7 +341,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
             // todo: The behavior of normalizer for multi line string is incorrect
             runner
                 .update_test_file(
-                    file.unwrap().path(),
+                    &file,
                     col_separator,
                     validator,
                     sqllogictest::default_normalizer,
@@ -371,9 +354,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         let mut tasks = Vec::with_capacity(files.len());
         for file in files {
             let client_type = client_type.clone();
-            tasks.push(async move {
-                run_file_async(&client_type, args.bench, file.unwrap().path()).await
-            });
+            tasks.push(async move { run_file_async(&client_type, args.bench, file).await });
         }
         let error_records = run_parallel_async(tasks).await;
         let report = RunReport::new(
