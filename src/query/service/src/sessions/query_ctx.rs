@@ -184,6 +184,8 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    // Temp tables for materialized CTE are scoped to the current QueryContext.
+    m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
 impl QueryContext {
@@ -209,7 +211,48 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             written_segment_locs: Default::default(),
             block_threshold: Default::default(),
+            m_cte_temp_table: Arc::new(RwLock::new(Vec::new())),
         })
+    }
+
+    async fn drop_cte_temp_tables(&self, tables: &[(String, String)]) -> Result<()> {
+        let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
+        let tenant = self.get_tenant();
+        for (db_name, table_name) in tables.iter() {
+            let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
+            let db = self
+                .get_catalog(CATALOG_DEFAULT)
+                .await?
+                .get_database(&tenant, db_name)
+                .await?;
+            let temp_prefix = table
+                .options()
+                .get(OPT_KEY_TEMP_PREFIX)
+                .cloned()
+                .unwrap_or_default();
+            let table_id = table.get_table_info().ident.table_id;
+            let drop_table_req = DropTableByIdReq {
+                if_exists: true,
+                tenant: tenant.clone(),
+                tb_id: table_id,
+                table_name: table_name.to_string(),
+                db_id: db.get_db_info().database_id.db_id,
+                db_name: db.name().to_string(),
+                engine: table.engine().to_string(),
+                temp_prefix: temp_prefix.clone(),
+            };
+            if drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req)
+                .await?
+                .is_some()
+            {
+                ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix, &temp_tbl_mgr);
+
+                let txn_mgr_ref = self.txn_mgr();
+                let mut txn_mgr = txn_mgr_ref.lock();
+                txn_mgr.clear_temp_table_by_id(table_id);
+            }
+        }
+        Ok(())
     }
 
     pub fn get_or_create_logical_recursive_cte_runtime_id(
@@ -2243,53 +2286,32 @@ impl TableContext for QueryContext {
 
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
         let entry = (database_name.to_string(), table_name.to_string());
-        let mut tables = self.shared.m_cte_temp_tables.write();
+        let mut tables = self.m_cte_temp_table.write();
         if !tables.contains(&entry) {
             tables.push(entry);
         }
     }
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
-        let m_cte_temp_table = self.shared.m_cte_temp_tables.read().clone();
-        let tenant = self.get_tenant();
-        for (db_name, table_name) in m_cte_temp_table.iter() {
-            let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
-            let db = self
-                .get_catalog(CATALOG_DEFAULT)
-                .await?
-                .get_database(&tenant, db_name)
-                .await?;
-            let temp_prefix = table
-                .options()
-                .get(OPT_KEY_TEMP_PREFIX)
-                .cloned()
-                .unwrap_or_default();
-            let table_id = table.get_table_info().ident.table_id;
-            let drop_table_req = DropTableByIdReq {
-                if_exists: true,
-                tenant: tenant.clone(),
-                tb_id: table_id,
-                table_name: table_name.to_string(),
-                db_id: db.get_db_info().database_id.db_id,
-                db_name: db.name().to_string(),
-                engine: table.engine().to_string(),
-                temp_prefix: temp_prefix.clone(),
-            };
-            if drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req)
-                .await?
-                .is_some()
-            {
-                ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix, &temp_tbl_mgr);
+        let m_cte_temp_table = self.m_cte_temp_table.read().clone();
+        self.drop_cte_temp_tables(&m_cte_temp_table).await?;
+        self.m_cte_temp_table.write().clear();
+        Ok(())
+    }
 
-                // Clear the temp table state from TxnBuffer
-                let txn_mgr_ref = self.txn_mgr();
-                let mut txn_mgr = txn_mgr_ref.lock();
-                txn_mgr.clear_temp_table_by_id(table_id);
-            }
+    fn add_recursive_cte_temp_table(&self, database_name: &str, table_name: &str) {
+        let entry = (database_name.to_string(), table_name.to_string());
+        let mut tables = self.shared.recursive_cte_temp_tables.write();
+        if !tables.contains(&entry) {
+            tables.push(entry);
         }
-        let mut m_cte_temp_table = self.shared.m_cte_temp_tables.write();
-        m_cte_temp_table.clear();
+    }
+
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
+        let recursive_cte_temp_tables = self.shared.recursive_cte_temp_tables.read().clone();
+        self.drop_cte_temp_tables(&recursive_cte_temp_tables)
+            .await?;
+        self.shared.recursive_cte_temp_tables.write().clear();
         Ok(())
     }
 

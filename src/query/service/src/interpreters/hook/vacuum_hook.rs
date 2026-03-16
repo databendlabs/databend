@@ -106,6 +106,7 @@ pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
 pub fn hook_clear_m_cte_temp_table(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let _ = GlobalIORuntime::instance().block_on(async move {
         query_ctx.drop_m_cte_temp_table().await?;
+        query_ctx.drop_recursive_cte_temp_table().await?;
         Ok(())
     });
     Ok(())

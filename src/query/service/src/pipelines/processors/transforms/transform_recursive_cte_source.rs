@@ -625,7 +625,7 @@ async fn create_memory_table_for_cte_scan(
         let create_table_interpreter =
             CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
         create_table_interpreter.execute2().await?;
-        ctx.add_m_cte_temp_table(&database_name, &table_name);
+        ctx.add_recursive_cte_temp_table(&database_name, &table_name);
     }
 
     Ok(())

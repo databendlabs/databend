@@ -1058,6 +1058,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn add_recursive_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+
     fn get_table_meta_timestamps(
         &self,
         table: &dyn Table,
