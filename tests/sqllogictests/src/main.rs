@@ -291,12 +291,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     let mut files = vec![];
     let start = Instant::now();
     for suit_file in collect_files(&args)?.into_iter() {
-        let file_name = suit_file
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+        let file_name = suit_file.file_name().unwrap().to_str().unwrap().to_string();
 
         if !file_name.ends_with(".test") {
             continue;
@@ -327,12 +322,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
 
     if args.complete {
         for file in files {
-            let file_name = file
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+            let file_name = file.file_name().unwrap().to_str().unwrap().to_string();
 
             let col_separator = " ";
             let validator = default_validator;
@@ -374,7 +364,11 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         }
     }
     let duration = start.elapsed();
-    println!("Run all tests[{}] using {} ms", num_of_tests, duration.as_millis());
+    println!(
+        "Run all tests[{}] using {} ms",
+        num_of_tests,
+        duration.as_millis()
+    );
 
     Ok(())
 }
@@ -408,7 +402,7 @@ fn column_validator(loc: Location, actual: Vec<ColumnType>, expected: Vec<Column
 
 async fn run_parallel_async(
     tasks: Vec<impl Future<Output = std::result::Result<Vec<ErrorRecord>, ErrorRecord>>>,
- ) -> Vec<ErrorRecord> {
+) -> Vec<ErrorRecord> {
     let args = SqlLogicTestArgs::parse();
     let jobs = tasks.len().clamp(1, args.parallel);
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
@@ -422,7 +416,7 @@ async fn run_parallel_async(
         let errors: Vec<Vec<ErrorRecord>> = tasks
             .filter_map(|result| async { result.ok() })
             .collect()
-        .await;
+            .await;
         errors.into_iter().flatten().collect()
     }
 }

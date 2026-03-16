@@ -243,30 +243,23 @@ mod tests {
 
     #[test]
     fn render_report_groups_failures_by_file() {
-        let report = RunReport::new(
-            3,
-            8,
-            true,
-            false,
-            Duration::from_millis(19),
-            vec![
-                ErrorRecord {
-                    filename: "b.test".to_string(),
-                    query_id: None,
-                    non_default_settings: vec![],
-                    detail: "second error".to_string(),
-                },
-                ErrorRecord {
-                    filename: "a.test".to_string(),
-                    query_id: Some("query-1".to_string()),
-                    non_default_settings: vec![
-                        NonDefaultSetting::new("max_threads", "8", "16", "SESSION"),
-                        NonDefaultSetting::new("timezone", "UTC", "SYSTEM", "SESSION"),
-                    ],
-                    detail: "first error\nwith more detail".to_string(),
-                },
-            ],
-        );
+        let report = RunReport::new(3, 8, true, false, Duration::from_millis(19), vec![
+            ErrorRecord {
+                filename: "b.test".to_string(),
+                query_id: None,
+                non_default_settings: vec![],
+                detail: "second error".to_string(),
+            },
+            ErrorRecord {
+                filename: "a.test".to_string(),
+                query_id: Some("query-1".to_string()),
+                non_default_settings: vec![
+                    NonDefaultSetting::new("max_threads", "8", "16", "SESSION"),
+                    NonDefaultSetting::new("timezone", "UTC", "SYSTEM", "SESSION"),
+                ],
+                detail: "first error\nwith more detail".to_string(),
+            },
+        ]);
 
         let rendered = report.render();
 
