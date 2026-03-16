@@ -342,9 +342,16 @@ fn recursive_cte_memory_table(table: &dyn Table) -> &RecursiveCteMemoryTable {
         .unwrap()
 }
 
-fn first_recursive_cte_memory_table(tables: &[Arc<dyn Table>]) -> Option<&RecursiveCteMemoryTable> {
+fn canonical_recursive_cte_memory_table(
+    tables: &[Arc<dyn Table>],
+) -> Option<&RecursiveCteMemoryTable> {
     tables
-        .first()
+        .iter()
+        .min_by(|left, right| {
+            left.name()
+                .cmp(right.name())
+                .then_with(|| left.get_id().cmp(&right.get_id()))
+        })
         .map(|table| recursive_cte_memory_table(table.as_ref()))
 }
 
@@ -367,7 +374,7 @@ async fn wait_for_recursive_cte_cache_state_change(
 }
 
 async fn prepare_cached_replay_action_for_tables(tables: &[Arc<dyn Table>]) -> CachedReplayAction {
-    let Some(first_table) = first_recursive_cte_memory_table(tables) else {
+    let Some(first_table) = canonical_recursive_cte_memory_table(tables) else {
         return CachedReplayAction::Populate;
     };
     let mut state_changes = first_table.subscribe_cache_population_change();
@@ -514,7 +521,9 @@ impl AsyncSource for TransformRecursiveCteSource {
                         .append_generation_block(self.recursive_step, projected_block.clone());
                 }
 
-                if let Some(first_table) = first_recursive_cte_memory_table(&self.cte_scan_tables) {
+                if let Some(first_table) =
+                    canonical_recursive_cte_memory_table(&self.cte_scan_tables)
+                {
                     first_table.cache_output_block(projected_block.clone());
                 }
 
@@ -729,10 +738,11 @@ mod tests {
 
     static NEXT_TEST_TABLE_ID: AtomicU64 = AtomicU64::new(1);
 
-    fn new_test_recursive_cte_memory_table() -> Arc<dyn Table> {
+    fn new_named_test_recursive_cte_memory_table(name: &str) -> Arc<dyn Table> {
         let table_id = NEXT_TEST_TABLE_ID.fetch_add(1, Ordering::Relaxed);
         let mut table_info = TableInfo::default();
         table_info.ident.table_id = table_id;
+        table_info.name = name.to_string();
         table_info.meta.options = TableOptions::default();
         table_info.meta.options.insert(
             OPT_KEY_TEMP_PREFIX.to_string(),
@@ -740,6 +750,11 @@ mod tests {
         );
 
         Arc::from(RecursiveCteMemoryTable::try_create(table_info).unwrap())
+    }
+
+    fn new_test_recursive_cte_memory_table() -> Arc<dyn Table> {
+        let table_id = NEXT_TEST_TABLE_ID.load(Ordering::Relaxed);
+        new_named_test_recursive_cte_memory_table(&format!("rcte_test_{table_id}"))
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -766,6 +781,48 @@ mod tests {
         assert!(memory_table.is_running());
         assert!(!memory_table.is_sealed());
         memory_table.finish_cache_population(false);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_uses_canonical_scan_table_name() {
+        let later_named_table = new_named_test_recursive_cte_memory_table("z_scan");
+        let earlier_named_table = new_named_test_recursive_cte_memory_table("a_scan");
+        let memory_table = recursive_cte_memory_table(earlier_named_table.as_ref());
+
+        assert!(memory_table.begin_cache_population());
+        memory_table.cache_output_block(DataBlock::empty());
+        memory_table.finish_cache_population(true);
+
+        match prepare_cached_replay_action_for_tables(&[later_named_table, earlier_named_table])
+            .await
+        {
+            CachedReplayAction::Replay(replay_blocks) => {
+                assert_eq!(replay_blocks.len(), 1);
+            }
+            CachedReplayAction::Populate => {
+                panic!("expected sealed cache replay to choose the canonical scan-table name")
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_uses_canonical_scan_table_order() {
+        let first_table = new_test_recursive_cte_memory_table();
+        let second_table = new_test_recursive_cte_memory_table();
+        let first_memory_table = recursive_cte_memory_table(first_table.as_ref());
+
+        assert!(first_memory_table.begin_cache_population());
+        first_memory_table.cache_output_block(DataBlock::empty());
+        first_memory_table.finish_cache_population(true);
+
+        match prepare_cached_replay_action_for_tables(&[second_table, first_table]).await {
+            CachedReplayAction::Replay(replay_blocks) => {
+                assert_eq!(replay_blocks.len(), 1);
+            }
+            CachedReplayAction::Populate => {
+                panic!("expected sealed cache replay to be independent of scan-table order")
+            }
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
