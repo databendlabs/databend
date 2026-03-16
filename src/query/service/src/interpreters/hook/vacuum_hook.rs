@@ -104,10 +104,18 @@ pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 pub fn hook_clear_m_cte_temp_table(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    let _ = GlobalIORuntime::instance().block_on(async move {
-        query_ctx.drop_m_cte_temp_table().await?;
-        query_ctx.drop_recursive_cte_temp_table().await?;
-        Ok(())
-    });
+    let (m_cte_cleanup_result, recursive_cte_cleanup_result) = GlobalIORuntime::instance()
+        .block_on(async move {
+            let m_cte_cleanup_result = query_ctx.drop_m_cte_temp_table().await;
+            let recursive_cte_cleanup_result = query_ctx.drop_recursive_cte_temp_table().await;
+            Ok::<_, ErrorCode>((m_cte_cleanup_result, recursive_cte_cleanup_result))
+        })?;
+
+    if let Err(err) = m_cte_cleanup_result {
+        warn!("failed to clean up materialized CTE temp tables: {:?}", err);
+    }
+    if let Err(err) = recursive_cte_cleanup_result {
+        warn!("failed to clean up recursive CTE temp tables: {:?}", err);
+    }
     Ok(())
 }
