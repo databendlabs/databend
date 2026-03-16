@@ -5269,8 +5269,8 @@ dependencies = [
 
 [[package]]
 name = "databend-meta"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyerror",
  "anyhow",
@@ -5279,13 +5279,13 @@ dependencies = [
  "backon",
  "chrono",
  "databend-base",
- "databend-meta-client 260312.1.0",
- "databend-meta-kvapi 260312.1.0",
+ "databend-meta-client 260312.2.0",
+ "databend-meta-kvapi 260312.2.0",
  "databend-meta-raft-store",
- "databend-meta-runtime-api 260312.1.0",
+ "databend-meta-runtime-api 260312.2.0",
  "databend-meta-sled-store",
- "databend-meta-types 260312.1.0",
- "databend-meta-version 260312.1.0",
+ "databend-meta-types 260312.2.0",
+ "databend-meta-version 260312.2.0",
  "deepsize",
  "derive_more 2.1.1",
  "display-more 0.2.5",
@@ -5348,8 +5348,8 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-base"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyerror",
  "deepsize",
@@ -5452,8 +5452,8 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-client"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyerror",
  "arrow-flight",
@@ -5461,11 +5461,11 @@ dependencies = [
  "async-trait",
  "chrono",
  "databend-base",
- "databend-meta-kvapi 260312.1.0",
- "databend-meta-kvapi-test-suite 260312.1.0",
- "databend-meta-runtime-api 260312.1.0",
- "databend-meta-types 260312.1.0",
- "databend-meta-version 260312.1.0",
+ "databend-meta-client-types",
+ "databend-meta-kvapi 260312.2.0",
+ "databend-meta-kvapi-test-suite 260312.2.0",
+ "databend-meta-runtime-api 260312.2.0",
+ "databend-meta-version 260312.2.0",
  "derive_more 2.1.1",
  "display-more 0.2.5",
  "fastrace",
@@ -5479,6 +5479,24 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tonic 0.13.1",
+]
+
+[[package]]
+name = "databend-meta-client-types"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
+dependencies = [
+ "anyerror",
+ "databend-meta-proto",
+ "log",
+ "map-api",
+ "openraft",
+ "serde",
+ "serde_json",
+ "state-machine-api",
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.13.1",
@@ -5515,13 +5533,13 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-kvapi"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyhow",
  "async-trait",
  "databend-base",
- "databend-meta-types 260312.1.0",
+ "databend-meta-client-types",
  "display-more 0.2.5",
  "futures-util",
  "log",
@@ -5547,12 +5565,12 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-kvapi-test-suite"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyhow",
- "databend-meta-kvapi 260312.1.0",
- "databend-meta-types 260312.1.0",
+ "databend-meta-client-types",
+ "databend-meta-kvapi 260312.2.0",
  "display-more 0.2.5",
  "fastrace",
  "futures-util",
@@ -5603,8 +5621,8 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-proto"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyerror",
  "databend-meta-base",
@@ -5626,18 +5644,18 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-raft-store"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyerror",
  "anyhow",
  "async-trait",
  "bincode 2.0.1",
  "databend-base",
- "databend-meta-kvapi 260312.1.0",
- "databend-meta-runtime-api 260312.1.0",
+ "databend-meta-kvapi 260312.2.0",
+ "databend-meta-runtime-api 260312.2.0",
  "databend-meta-sled-store",
- "databend-meta-types 260312.1.0",
+ "databend-meta-types 260312.2.0",
  "deepsize",
  "derive_more 2.1.1",
  "display-more 0.2.5",
@@ -5695,8 +5713,8 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-runtime-api"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "env_logger 0.11.8",
  "hickory-resolver",
@@ -5708,12 +5726,12 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-sled-store"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyerror",
  "byteorder",
- "databend-meta-types 260312.1.0",
+ "databend-meta-types 260312.2.0",
  "fastrace",
  "log",
  "serde",
@@ -5726,14 +5744,14 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-test-harness"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyhow",
  "databend-base",
  "databend-meta",
- "databend-meta-runtime-api 260312.1.0",
- "databend-meta-types 260312.1.0",
+ "databend-meta-runtime-api 260312.2.0",
+ "databend-meta-types 260312.2.0",
  "fastrace",
  "log",
  "tempfile",
@@ -5771,8 +5789,8 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-types"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "anyerror",
  "databend-meta-base",
@@ -5814,8 +5832,8 @@ dependencies = [
 
 [[package]]
 name = "databend-meta-version"
-version = "260312.1.0"
-source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.1.0#e218acf65a155909e5708c6ad6f95640f9622835"
+version = "260312.2.0"
+source = "git+https://github.com/databendlabs/databend-meta?tag=v260312.2.0#8afe3c8f17e73cfb561df7d5155902212705acb3"
 dependencies = [
  "semver",
 ]
