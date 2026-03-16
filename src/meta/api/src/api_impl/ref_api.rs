@@ -53,7 +53,7 @@ async fn build_lvt_condition(
     kv_api: &(impl KVPbApi<Error = MetaError> + ?Sized),
     table_id: u64,
     lvt_check: &TableLvtCheck,
-) -> Result<Option<TxnCondition>, KVAppError> {
+) -> Result<TxnCondition, KVAppError> {
     let lvt_ident = LeastVisibleTimeIdent::new(&lvt_check.tenant, table_id);
     let res = kv_api.get_pb(&lvt_ident).await?;
     let (lvt_seq, current_lvt) = match res {
@@ -75,7 +75,7 @@ async fn build_lvt_condition(
         }
     }
 
-    Ok(Some(txn_cond_seq(&lvt_ident, Eq, lvt_seq)))
+    Ok(txn_cond_seq(&lvt_ident, Eq, lvt_seq))
 }
 
 #[async_trait::async_trait]
@@ -141,15 +141,14 @@ where
                 )));
             }
 
-            let mut conditions = vec![
+            let conditions = vec![
                 // Table must not change.
                 txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
                 // Tag must not already exist.
                 txn_cond_seq(&key_tag, Eq, 0),
+                // Check table lvt.
+                build_lvt_condition(self, table_id, &req.lvt_check).await?,
             ];
-            if let Some(cond) = build_lvt_condition(self, table_id, &req.lvt_check).await? {
-                conditions.push(cond);
-            }
 
             let txn = TxnRequest::new(conditions, vec![txn_put_pb(&key_tag, &table_tag)?]);
             let (succ, _responses) = send_txn(self, txn).await?;
