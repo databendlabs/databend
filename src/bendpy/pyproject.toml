@@ -51,4 +51,3 @@ test = [
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "databend.databend"
-strip = true
