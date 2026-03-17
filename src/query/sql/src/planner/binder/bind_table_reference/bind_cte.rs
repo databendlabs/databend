@@ -71,10 +71,17 @@ impl Binder {
                 .map(|ident| self.normalize_identifier(ident).name)
                 .collect();
 
+            let logical_recursive_cte_id = if with.recursive {
+                Some(self.metadata.write().allocate_logical_recursive_cte_id())
+            } else {
+                None
+            };
+
             let cte_info = CteInfo {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 recursive: with.recursive,
+                logical_recursive_cte_id,
                 columns: vec![],
                 materialized_cte_info,
                 user_specified_materialized: cte.user_specified_materialized,

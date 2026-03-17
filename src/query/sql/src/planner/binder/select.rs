@@ -287,11 +287,19 @@ impl Binder {
         }
 
         let output_indexes = new_bind_context.columns.iter().map(|x| x.index).collect();
+        let logical_recursive_cte_id = cte_name.as_ref().and_then(|cte_name| {
+            new_bind_context
+                .cte_context
+                .cte_map
+                .get(cte_name)
+                .and_then(|cte_info| cte_info.logical_recursive_cte_id)
+        });
 
         let union_plan = UnionAll {
             left_outputs,
             right_outputs,
             cte_scan_names,
+            logical_recursive_cte_id,
             output_indexes,
         };
 

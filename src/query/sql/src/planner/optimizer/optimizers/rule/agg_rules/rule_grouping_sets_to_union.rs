@@ -209,6 +209,7 @@ impl Rule for RuleGroupingSetsToUnion {
                         left_outputs,
                         right_outputs,
                         cte_scan_names: vec![],
+                        logical_recursive_cte_id: None,
                         output_indexes: eval_scalar.items.iter().map(|x| x.index).collect(),
                     };
                     result = SExpr::create_binary(Arc::new(union_plan.into()), result, other);

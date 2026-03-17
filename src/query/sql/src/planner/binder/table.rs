@@ -316,6 +316,7 @@ impl Binder {
             SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
                 fields,
                 table_name,
+                logical_recursive_cte_id: cte_info.logical_recursive_cte_id,
             }))),
             new_bind_ctx,
         ))

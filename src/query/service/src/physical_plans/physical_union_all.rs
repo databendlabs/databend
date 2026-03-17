@@ -53,6 +53,7 @@ pub struct UnionAll {
     pub right_outputs: Vec<(Symbol, Option<RemoteExpr>)>,
     pub schema: DataSchemaRef,
     pub cte_scan_names: Vec<String>,
+    pub logical_recursive_cte_id: Option<u32>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -109,6 +110,7 @@ impl IPhysicalPlan for UnionAll {
             right_outputs: self.right_outputs.clone(),
             schema: self.schema.clone(),
             cte_scan_names: self.cte_scan_names.clone(),
+            logical_recursive_cte_id: self.logical_recursive_cte_id,
             stat_info: self.stat_info.clone(),
         })
     }
@@ -299,6 +301,7 @@ impl PhysicalPlanBuilder {
             schema: DataSchemaRefExt::create(fields),
 
             cte_scan_names: union_all.cte_scan_names.clone(),
+            logical_recursive_cte_id: union_all.logical_recursive_cte_id,
             stat_info: Some(stat_info),
         }))
     }
