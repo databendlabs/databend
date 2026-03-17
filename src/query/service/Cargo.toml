@@ -104,10 +104,8 @@ databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-meta-client = { workspace = true }
-databend-meta-kvapi = { workspace = true }
 databend-meta-plugin-semaphore = { workspace = true }
 databend-meta-runtime = { workspace = true }
-databend-meta-types = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-index = { workspace = true }

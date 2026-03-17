@@ -124,6 +124,7 @@ impl AsyncTransform for ReadParquetDataTransform {
                         self.func_ctx.clone(),
                         self.table_schema.clone(),
                         self.block_reader.operator(),
+                        ReadSettings::from_ctx(&self.context)?,
                         inlist_bloom_prune_threshold,
                         runtime_filters
                             .iter()

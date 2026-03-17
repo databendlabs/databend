@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_version::DATABEND_COMMIT_VERSION;
-use databend_meta_types::NodeInfo;
+use databend_meta_client::types::NodeInfo;
 
 /// A descriptor for a cluster.
 #[derive(Clone)]

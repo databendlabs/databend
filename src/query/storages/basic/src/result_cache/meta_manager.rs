@@ -17,14 +17,14 @@ use std::time::Duration;
 
 use databend_common_exception::Result;
 use databend_common_meta_store::MetaStore;
-use databend_meta_kvapi::kvapi::KVApi;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_kvapi::kvapi::ListOptions;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::MetaSpec;
-use databend_meta_types::Operation;
-use databend_meta_types::SeqV;
-use databend_meta_types::UpsertKV;
+use databend_meta_client::kvapi::KVApi;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaSpec;
+use databend_meta_client::types::Operation;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::UpsertKV;
 
 use crate::meta_service_error;
 use crate::result_cache::common::ResultCacheValue;

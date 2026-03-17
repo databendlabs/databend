@@ -55,9 +55,9 @@ use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_proto_conv::FromToProto;
-use databend_meta_types::Cmd;
-use databend_meta_types::Operation;
-use databend_meta_types::txn_op::Request;
+use databend_meta::types::Cmd;
+use databend_meta::types::Operation;
+use databend_meta::types::txn_op::Request;
 
 fn decode_as<T>(bytes: &[u8]) -> Result<String, String>
 where
@@ -175,7 +175,7 @@ fn format_put_meta(expire_at: Option<u64>, ttl_ms: Option<u64>) -> String {
 }
 
 /// Decode a single TxnOp, returning a formatted line if it contains a value.
-fn decode_txn_op(prefix: &str, idx: usize, op: &databend_meta_types::TxnOp) -> Option<String> {
+fn decode_txn_op(prefix: &str, idx: usize, op: &databend_meta::types::TxnOp) -> Option<String> {
     match &op.request {
         Some(Request::Put(put)) => {
             let decoded = decode_pb_value(&put.key, &put.value);
@@ -252,7 +252,7 @@ pub fn raw_cmd_values(cmd: &Cmd) -> Vec<String> {
 }
 
 /// Extract raw bytes from a single TxnOp, returning a formatted line if it contains a value.
-fn raw_txn_op(prefix: &str, idx: usize, op: &databend_meta_types::TxnOp) -> Option<String> {
+fn raw_txn_op(prefix: &str, idx: usize, op: &databend_meta::types::TxnOp) -> Option<String> {
     match &op.request {
         Some(Request::Put(put)) => Some(format!(
             "    {prefix}[{idx}].put {key} raw:\n      {}",
@@ -312,8 +312,8 @@ pub fn decode_cmd_values(cmd: &Cmd) -> Vec<String> {
 mod tests {
     use databend_common_meta_api::kv_pb_api;
     use databend_common_proto_conv::FromToProto;
-    use databend_meta_types::TxnOp;
-    use databend_meta_types::TxnRequest;
+    use databend_meta::types::TxnOp;
+    use databend_meta::types::TxnRequest;
 
     use super::*;
 
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn test_cmd_upsert_kv_update() {
         let buf = encode_pb(&DatabaseMeta::default());
-        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::update(
+        let cmd = Cmd::UpsertKV(databend_meta::types::UpsertKV::update(
             "__fd_database_by_id/123",
             &buf,
         ));
@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn test_cmd_upsert_kv_delete() {
-        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::delete(
+        let cmd = Cmd::UpsertKV(databend_meta::types::UpsertKV::delete(
             "__fd_database_by_id/1",
         ));
         assert_eq!(decode_cmd_values(&cmd), Vec::<String>::new());
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_cmd_upsert_kv_unknown_prefix() {
-        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::update("__unknown/key", &[
+        let cmd = Cmd::UpsertKV(databend_meta::types::UpsertKV::update("__unknown/key", &[
             1, 2, 3,
         ]));
         let lines = decode_cmd_values(&cmd);
@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     fn test_cmd_upsert_kv_decode_error() {
-        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::update(
+        let cmd = Cmd::UpsertKV(databend_meta::types::UpsertKV::update(
             "__fd_database_by_id/bad",
             &[0xff, 0xff],
         ));
@@ -598,14 +598,15 @@ mod tests {
 
     #[test]
     fn test_cmd_txn_put_with_expire_at() {
-        use databend_meta_types::protobuf::TxnPutRequest;
+        use databend_meta::types::protobuf::TxnPutRequest;
 
         let buf = encode_pb(&DbIdList::default());
-        let op = databend_meta_types::TxnOp {
+        let op = databend_meta::types::TxnOp {
             request: Some(Request::Put(TxnPutRequest {
                 key: "__fd_db_id_list/1".to_string(),
                 value: buf,
-                prev_value: true,
+                prev_value: false,
+                match_seq: None,
                 expire_at: Some(1700000000),
                 ttl_ms: None,
             })),
@@ -624,14 +625,15 @@ mod tests {
 
     #[test]
     fn test_cmd_txn_put_with_both_expire_at_and_ttl() {
-        use databend_meta_types::protobuf::TxnPutRequest;
+        use databend_meta::types::protobuf::TxnPutRequest;
 
         let buf = encode_pb(&DbIdList::default());
-        let op = databend_meta_types::TxnOp {
+        let op = databend_meta::types::TxnOp {
             request: Some(Request::Put(TxnPutRequest {
                 key: "__fd_db_id_list/1".to_string(),
                 value: buf,
-                prev_value: true,
+                prev_value: false,
+                match_seq: None,
                 expire_at: Some(1700000000),
                 ttl_ms: Some(30000),
             })),
@@ -671,10 +673,10 @@ mod tests {
 
     #[test]
     fn test_cmd_txn_put_sequential_with_ttl() {
-        use databend_meta_types::protobuf::PutSequential;
+        use databend_meta::types::protobuf::PutSequential;
 
         let buf = encode_pb(&DbIdList::default());
-        let op = databend_meta_types::TxnOp {
+        let op = databend_meta::types::TxnOp {
             request: Some(Request::PutSequential(PutSequential {
                 prefix: "__fd_db_id_list/".to_string(),
                 sequence_key: "__seq/db".to_string(),
@@ -699,8 +701,8 @@ mod tests {
 
     #[test]
     fn test_cmd_txn_operations_branch_with_put() {
-        use databend_meta_types::protobuf::BooleanExpression;
-        use databend_meta_types::protobuf::TxnCondition;
+        use databend_meta::types::protobuf::BooleanExpression;
+        use databend_meta::types::protobuf::TxnCondition;
 
         let buf = encode_pb(&DbIdList::default());
         let txn = TxnRequest::new(vec![], vec![]).push_branch(
@@ -722,8 +724,8 @@ mod tests {
 
     #[test]
     fn test_cmd_txn_operations_multiple_branches() {
-        use databend_meta_types::protobuf::BooleanExpression;
-        use databend_meta_types::protobuf::TxnCondition;
+        use databend_meta::types::protobuf::BooleanExpression;
+        use databend_meta::types::protobuf::TxnCondition;
 
         let db_buf = encode_pb(&DatabaseMeta::default());
         let list_buf = encode_pb(&DbIdList::default());
@@ -767,8 +769,8 @@ mod tests {
 
     #[test]
     fn test_cmd_txn_operations_and_if_then_and_else_then() {
-        use databend_meta_types::protobuf::BooleanExpression;
-        use databend_meta_types::protobuf::TxnCondition;
+        use databend_meta::types::protobuf::BooleanExpression;
+        use databend_meta::types::protobuf::TxnCondition;
 
         let buf1 = encode_pb(&DbIdList::default());
         let buf2 = encode_pb(&DbIdList::default());
@@ -807,9 +809,9 @@ mod tests {
 
     #[test]
     fn test_cmd_txn_delete_by_prefix_skipped() {
-        use databend_meta_types::protobuf::TxnDeleteByPrefixRequest;
+        use databend_meta::types::protobuf::TxnDeleteByPrefixRequest;
 
-        let op = databend_meta_types::TxnOp {
+        let op = databend_meta::types::TxnOp {
             request: Some(Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
                 prefix: "__fd_database_by_id/".to_string(),
             })),
@@ -848,7 +850,7 @@ mod tests {
     #[test]
     fn test_raw_cmd_upsert_kv_update() {
         let bytes = vec![10, 0, 26, 12];
-        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::update(
+        let cmd = Cmd::UpsertKV(databend_meta::types::UpsertKV::update(
             "__fd_database_by_id/123",
             &bytes,
         ));
@@ -862,7 +864,7 @@ mod tests {
 
     #[test]
     fn test_raw_cmd_upsert_kv_delete() {
-        let cmd = Cmd::UpsertKV(databend_meta_types::UpsertKV::delete(
+        let cmd = Cmd::UpsertKV(databend_meta::types::UpsertKV::delete(
             "__fd_database_by_id/1",
         ));
         assert_eq!(raw_cmd_values(&cmd), Vec::<String>::new());

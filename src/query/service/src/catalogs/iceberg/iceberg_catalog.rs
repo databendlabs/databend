@@ -102,8 +102,8 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_iceberg::IcebergMutableCatalog;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
