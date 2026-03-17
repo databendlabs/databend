@@ -60,6 +60,7 @@ zerocopy = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }
+databend-common-sql-test-support = { workspace = true }
 
 anyhow = { workspace = true }
 divan = { workspace = true }

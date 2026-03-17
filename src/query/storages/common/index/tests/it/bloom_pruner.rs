@@ -51,7 +51,7 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::map::KvColumn;
 use databend_common_expression::types::map::KvPair;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::test_utils::parse_raw_expr;
+use databend_common_sql_test_support::parse_raw_expr;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::FilterEvalResult;
@@ -507,7 +507,7 @@ fn eval_text(
         .map(|f| (f.name.as_str(), f.data_type().into()))
         .collect::<Vec<(&str, DataType)>>();
 
-    let raw_expr = parse_raw_expr(text, &columns);
+    let raw_expr = parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS);
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
     let expr = type_check::rewrite_function_to_cast(expr);
     let expr = expr
