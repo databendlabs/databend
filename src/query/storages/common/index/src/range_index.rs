@@ -36,7 +36,6 @@ use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::decimal::Decimal256Type;
 use databend_common_expression::types::decimal::DecimalDomain;
@@ -57,6 +56,9 @@ use crate::Index;
 use crate::SpatialOp;
 use crate::SpatialPredicate;
 use crate::collect_spatial_predicates;
+use crate::rect_contains;
+use crate::rects_intersect;
+use crate::spatial_false_domain;
 
 #[derive(Clone)]
 pub struct RangeIndex {
@@ -231,43 +233,6 @@ impl RangeIndex {
             }
         }
         domains
-    }
-}
-
-fn rects_intersect(block_rect: &Rect<f64>, query_rect: &Option<Rect<f64>>) -> bool {
-    if let Some(query_rect) = query_rect {
-        block_rect.min().x <= query_rect.max().x
-            && block_rect.max().x >= query_rect.min().x
-            && block_rect.min().y <= query_rect.max().y
-            && block_rect.max().y >= query_rect.min().y
-    } else {
-        false
-    }
-}
-
-fn rect_contains(block_rect: &Rect<f64>, query_rect: &Option<Rect<f64>>) -> bool {
-    if let Some(query_rect) = query_rect {
-        block_rect.min().x <= query_rect.min().x
-            && block_rect.min().y <= query_rect.min().y
-            && block_rect.max().x >= query_rect.max().x
-            && block_rect.max().y >= query_rect.max().y
-    } else {
-        false
-    }
-}
-
-fn spatial_false_domain(return_type: &DataType, has_null: bool) -> Domain {
-    let bool_domain = Domain::Boolean(BooleanDomain {
-        has_false: true,
-        has_true: false,
-    });
-    if return_type.is_nullable() {
-        Domain::Nullable(NullableDomain {
-            has_null,
-            value: Some(Box::new(bool_domain)),
-        })
-    } else {
-        bool_domain
     }
 }
 

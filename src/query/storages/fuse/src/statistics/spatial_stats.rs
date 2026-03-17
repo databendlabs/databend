@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
-use databend_common_io::ewkb_to_geo;
+use databend_common_expression::types::geometry::extract_geo_and_srid;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use geo::BoundingRect;
-use geozero::ToGeo;
-use geozero::wkb::Ewkb;
 use log::debug;
 
 #[derive(Clone)]
@@ -57,21 +54,9 @@ impl SpatialStatsBuilder {
     }
 
     pub fn update_value(&mut self, value: ScalarRef) -> Result<()> {
-        let (geo, srid) = match value {
-            ScalarRef::Geometry(buf) => {
-                let (geo, srid) = ewkb_to_geo(&mut Ewkb(buf))?;
-                (geo, srid.unwrap_or(0))
-            }
-            ScalarRef::Geography(buf) => {
-                let geo = Ewkb(buf.0)
-                    .to_geo()
-                    .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-                (geo, 4326)
-            }
-            _ => {
-                self.has_null = true;
-                return Ok(());
-            }
+        let Some((geo, srid)) = extract_geo_and_srid(value)? else {
+            self.has_null = true;
+            return Ok(());
         };
 
         let rect = geo.bounding_rect();

@@ -25,6 +25,7 @@ use databend_common_catalog::sbbf::SbbfAtomic;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
@@ -79,10 +80,8 @@ pub async fn build_runtime_filter_infos(
                 let spatial_rtrees = &spatial_packet.rtrees;
                 if spatial_valid && !spatial_rtrees.is_empty() && spatial_srid.is_some() {
                     let rtree_bounds = rtree_bounds_from_bytes(spatial_rtrees)?;
-                    let column_name = match probe_key {
-                        Expr::ColumnRef(col) => col.id.to_string(),
-                        _ => unreachable!(),
-                    };
+                    let probe_column = resolve_probe_column_ref(probe_key);
+                    let column_name = probe_column.id.to_string();
                     let spatial = RuntimeFilterSpatial {
                         column_name,
                         srid: spatial_srid.unwrap(),
@@ -157,15 +156,7 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<(Expr
             0,
         ));
     }
-    let probe_key = match probe_key {
-        Expr::ColumnRef(col) => col,
-        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
-        Expr::Cast(cast) => match cast.expr.as_ref() {
-            Expr::ColumnRef(col) => col,
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
+    let probe_key = resolve_probe_column_ref(probe_key);
 
     let probe_data_type = probe_key.data_type.clone();
     let raw_probe_key = RawExpr::ColumnRef {
@@ -293,16 +284,8 @@ async fn build_bloom_filter(
     max_threads: usize,
     filter_id: usize,
 ) -> Result<RuntimeFilterBloom> {
-    let probe_key = match probe_key {
-        Expr::ColumnRef(col) => col,
-        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
-        Expr::Cast(cast) => match cast.expr.as_ref() {
-            Expr::ColumnRef(col) => col,
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
-    let column_name = probe_key.id.to_string();
+    let probe_column = resolve_probe_column_ref(probe_key);
+    let column_name = probe_column.id.to_string();
     let total_items = bloom.len();
 
     if total_items < 3_000_000 {
@@ -330,6 +313,18 @@ async fn build_bloom_filter(
         column_name,
         filter: Arc::new(filter),
     })
+}
+
+fn resolve_probe_column_ref(probe_key: &Expr<String>) -> &ColumnRef<String> {
+    match probe_key {
+        Expr::ColumnRef(col) => col,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
+        Expr::Cast(cast) => match cast.expr.as_ref() {
+            Expr::ColumnRef(col) => col,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    }
 }
 
 #[cfg(test)]

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -24,13 +23,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::geometry::extract_geo_and_srid;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_io::ewkb_to_geo;
 use geo::algorithm::bounding_rect::BoundingRect;
-use geozero::ToGeo;
-use geozero::wkb::Ewkb;
 
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
@@ -171,18 +167,8 @@ impl SingleFilterBuilder {
         }
 
         for value in column.iter() {
-            let (geo, srid) = match value {
-                ScalarRef::Geometry(v) => {
-                    let (geo, srid) = ewkb_to_geo(&mut Ewkb(v))?;
-                    (geo, srid.unwrap_or(0))
-                }
-                ScalarRef::Geography(v) => {
-                    let geo = Ewkb(v.0)
-                        .to_geo()
-                        .map_err(|e| ErrorCode::Internal(format!("Invalid geo ewkb value: {e}")))?;
-                    (geo, 4326)
-                }
-                _ => continue,
+            let Some((geo, srid)) = extract_geo_and_srid(value)? else {
+                continue;
             };
 
             if let Some(prev) = self.spatial_srid {

@@ -26,9 +26,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::expr::Constant;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::SpatialPredicate;
 use databend_storages_common_index::collect_spatial_predicates;
@@ -38,6 +35,7 @@ use geo_index::rtree::RTreeIndex;
 use geo_index::rtree::RTreeRef;
 use opendal::Operator;
 
+use crate::index::spatial_false_domain;
 use crate::io::read::SpatialIndexReader;
 
 pub struct SpatialIndexPruner {
@@ -157,20 +155,5 @@ impl SpatialIndexPruner {
                 ..
             })
         ))
-    }
-}
-
-fn spatial_false_domain(return_type: &DataType, has_null: bool) -> Domain {
-    let bool_domain = Domain::Boolean(BooleanDomain {
-        has_false: true,
-        has_true: false,
-    });
-    if return_type.is_nullable() {
-        Domain::Nullable(NullableDomain {
-            has_null,
-            value: Some(Box::new(bool_domain)),
-        })
-    } else {
-        bool_domain
     }
 }

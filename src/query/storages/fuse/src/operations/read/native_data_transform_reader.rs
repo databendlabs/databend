@@ -139,10 +139,8 @@ impl AsyncTransform for ReadNativeDataTransform {
                         &runtime_filters,
                     )?;
                     for part in parts.into_iter() {
-                        if let Some(runtime_filter) = &runtime_filter {
-                            if runtime_filter.prune(&part).await? {
-                                continue;
-                            }
+                        if runtime_filter.prune(&part).await? {
+                            continue;
                         }
                         if let Some(spatial_runtime_pruner) = &spatial_runtime_pruner {
                             if spatial_runtime_pruner.prune(&part).await? {

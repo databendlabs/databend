@@ -15,7 +15,13 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::ewkb_to_geo;
+use geo::Geometry;
+use geozero::ToGeo;
+use geozero::wkb::Ewkb;
 use geozero::wkb::FromWkb;
 use geozero::wkb::WkbDialect;
 use geozero::wkt::Ewkt;
@@ -214,4 +220,23 @@ pub(crate) fn compare_geometry(left: &[u8], right: &[u8]) -> Option<Ordering> {
         (Err(_), Ok(_)) => Some(Ordering::Less),
         (Err(_), Err(_)) => Some(left.cmp(right)),
     }
+}
+
+pub fn extract_geo_and_srid(value: ScalarRef) -> Result<Option<(Geometry<f64>, i32)>> {
+    let (geo, srid) = match value {
+        ScalarRef::Geometry(buf) => {
+            let (geo, srid) = ewkb_to_geo(&mut Ewkb(buf))?;
+            (geo, srid.unwrap_or(0))
+        }
+        ScalarRef::Geography(buf) => {
+            let geo = Ewkb(buf.0)
+                .to_geo()
+                .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+            (geo, GEOGRAPHY_SRID)
+        }
+        _ => {
+            return Ok(None);
+        }
+    };
+    Ok(Some((geo, srid)))
 }

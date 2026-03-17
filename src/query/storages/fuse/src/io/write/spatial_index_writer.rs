@@ -30,8 +30,8 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::geometry::extract_geo_and_srid;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
-use databend_common_io::ewkb_to_geo;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
@@ -42,8 +42,6 @@ use databend_storages_common_table_meta::table::TableCompression;
 use geo::algorithm::bounding_rect::BoundingRect;
 use geo_index::rtree::RTreeBuilder;
 use geo_index::rtree::sort::HilbertSort;
-use geozero::ToGeo;
-use geozero::wkb::Ewkb;
 use log::debug;
 use log::info;
 use parquet::file::metadata::KeyValue;
@@ -294,21 +292,9 @@ impl SpatialIndexBuilder {
 
                 let mut rects = Vec::with_capacity(column.len());
                 for value in column.iter() {
-                    let (geo, srid) = match value {
-                        ScalarRef::Geometry(v) => {
-                            let (geo, srid) = ewkb_to_geo(&mut Ewkb(v))?;
-                            (geo, srid.unwrap_or(0))
-                        }
-                        ScalarRef::Geography(v) => {
-                            let geo = Ewkb(v.0).to_geo().map_err(|e| {
-                                ErrorCode::Internal(format!("Invalid geo ewkb value: {e}"))
-                            })?;
-                            (geo, 4326)
-                        }
-                        _ => {
-                            let _ = spatial_stat.update_value(ScalarRef::Null);
-                            continue;
-                        }
+                    let Some((geo, srid)) = extract_geo_and_srid(value)? else {
+                        let _ = spatial_stat.update_value(ScalarRef::Null);
+                        continue;
                     };
                     let rect = geo.bounding_rect();
                     spatial_stat.update_rect_with_srid(rect, srid);

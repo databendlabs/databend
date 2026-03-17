@@ -98,7 +98,7 @@ INSERT INTO districts VALUES
 (4, 'North', TO_GEOMETRY('POLYGON((-2 18, -2 32, 2 32, 2 18, -2 18))'));
 
 query TT
-SELECT d.district_name, s.store_name AS store_count FROM districts d JOIN spatial_stores s ON st_within(s.location, d.geom);
+SELECT d.district_name, s.store_name FROM districts d JOIN spatial_stores s ON st_within(s.location, d.geom);
 ----
 Central Starbucks
 Central Costa

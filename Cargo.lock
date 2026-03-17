@@ -10592,6 +10592,7 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-types",
+ "protobuf-src",
  "rand 0.9.2",
  "snafu",
  "strum 0.26.3",

@@ -101,7 +101,7 @@ INSERT INTO districts VALUES
 (4, 'North', TO_GEOMETRY('POLYGON((-2 18, -2 32, 2 32, 2 18, -2 18))'));
 
 query T
-EXPLAIN SELECT d.district_name, s.store_name AS store_count FROM districts d JOIN stores s ON st_within(s.location, d.geom);
+EXPLAIN SELECT d.district_name, s.store_name FROM districts d JOIN stores s ON st_within(s.location, d.geom);
 ----
 HashJoin
 ├── output columns: [s.store_name (#5), d.district_name (#1)]
@@ -182,6 +182,66 @@ AggregateFinal
             ├── push downs: [filters: [], limit: NONE]
             ├── apply join filters: [#0]
             └── estimated rows: 14.00
+
+query T
+EXPLAIN ANALYZE SELECT d.district_name, s.store_name FROM districts d JOIN stores s ON st_within(s.location, d.geom);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [s.store_name (#5), d.district_name (#1)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [st_within(s.location (#7), d.geom (#2))]
+├── build join filters:
+│   └── filter id:0, build key:d.geom (#2), probe targets:[s.location (#7)@scan1], filter type:spatial
+├── estimated rows: 56.00
+├── TableScan(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── wait time: <slt:ignore>
+│   ├── output rows: 4
+│   ├── output bytes: <slt:ignore>
+│   ├── bytes scanned: <slt:ignore>
+│   ├── read from remote: <slt:ignore>
+│   ├── runtime filter bloom time: <slt:ignore>
+│   ├── runtime filter inlist/min-max time: <slt:ignore>
+│   ├── table: default.test_spatial_index_db.districts
+│   ├── scan id: 0
+│   ├── output columns: [district_name (#1), geom (#2)]
+│   ├── read rows: 4
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 8
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── read from data cache: <slt:ignore>
+    ├── parts pruned by runtime filter: 3
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── runtime filter spatial time: <slt:ignore>
+    ├── table: default.test_spatial_index_db.stores
+    ├── scan id: 1
+    ├── output columns: [store_name (#5), location (#7)]
+    ├── read rows: 14
+    ├── read size: < 1 KiB
+    ├── partitions total: 7
+    ├── partitions scanned: 7
+    ├── pruning stats: [segments: <range pruning: 7 to 7 <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 14.00
 
 statement ok
 CREATE TABLE t_nullable (id INT, category String, location Nullable(Geometry), SPATIAL INDEX idx (location)) row_per_block=2 block_per_segment=1

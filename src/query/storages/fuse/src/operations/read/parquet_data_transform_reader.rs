@@ -160,39 +160,29 @@ impl AsyncTransform for ReadParquetDataTransform {
                     )?;
                     for part in parts.into_iter() {
                         self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);
-                        if let Some(runtime_filter) = &runtime_filter {
-                            let prune_start = Instant::now();
-                            if runtime_filter.prune(&part).await? {
-                                self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
-                                let prune_duration = prune_start.elapsed();
-                                Profile::record_usize_profile(
-                                    ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
-                                    prune_duration.as_nanos() as usize,
-                                );
-                                continue;
-                            }
-                            let prune_duration = prune_start.elapsed();
-                            Profile::record_usize_profile(
-                                ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
-                                prune_duration.as_nanos() as usize,
-                            );
+                        let prune_start = Instant::now();
+                        let prune_result = runtime_filter.prune(&part).await?;
+                        let prune_duration = prune_start.elapsed();
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
+                            prune_duration.as_nanos() as usize,
+                        );
+                        if prune_result {
+                            self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
+                            continue;
                         }
                         if let Some(spatial_runtime_pruner) = &spatial_runtime_pruner {
-                            let prune_start = Instant::now();
-                            if spatial_runtime_pruner.prune(&part).await? {
-                                self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
-                                let prune_duration = prune_start.elapsed();
-                                Profile::record_usize_profile(
-                                    ProfileStatisticsName::RuntimeFilterSpatialTime,
-                                    prune_duration.as_nanos() as usize,
-                                );
-                                continue;
-                            }
-                            let prune_duration = prune_start.elapsed();
+                            let spatial_prune_start = Instant::now();
+                            let spatial_prune_result = spatial_runtime_pruner.prune(&part).await?;
+                            let spatial_prune_duration = spatial_prune_start.elapsed();
                             Profile::record_usize_profile(
                                 ProfileStatisticsName::RuntimeFilterSpatialTime,
-                                prune_duration.as_nanos() as usize,
+                                spatial_prune_duration.as_nanos() as usize,
                             );
+                            if spatial_prune_result {
+                                self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
+                                continue;
+                            }
                         }
 
                         fuse_part_infos.push(part.clone());

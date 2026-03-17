@@ -71,24 +71,24 @@ impl ExprRuntimePruner {
         settings: ReadSettings,
         inlist_bloom_prune_threshold: usize,
         exprs: Vec<RuntimeFilterExpr>,
-    ) -> Option<Self> {
-        if !exprs.is_empty() {
-            Some(Self {
-                func_ctx,
-                table_schema,
-                dal,
-                settings,
-                inlist_bloom_prune_threshold,
-                exprs,
-            })
-        } else {
-            None
+    ) -> Self {
+        Self {
+            func_ctx,
+            table_schema,
+            dal,
+            settings,
+            inlist_bloom_prune_threshold,
+            exprs,
         }
     }
 
     /// Prune a partition based on expressions.
     /// Returns true if the partition should be pruned.
     pub async fn prune(&self, part: &PartInfoPtr) -> Result<bool> {
+        if self.exprs.is_empty() {
+            return Ok(false);
+        }
+
         let part = FuseBlockPartInfo::from_part(part)?;
         let mut partition_pruned = false;
         for entry in self.exprs.iter() {
@@ -272,8 +272,6 @@ mod tests {
                 stats: stats.clone(),
             }],
         );
-        assert!(pruner.is_some());
-        let pruner = pruner.unwrap();
 
         assert!(pruner.prune(&part).await?);
 
@@ -305,8 +303,6 @@ mod tests {
                 stats: Arc::new(RuntimeFilterStats::default()),
             }],
         );
-        assert!(pruner.is_some());
-        let pruner = pruner.unwrap();
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -332,8 +328,6 @@ mod tests {
                 stats: Arc::new(RuntimeFilterStats::default()),
             }],
         );
-        assert!(pruner.is_some());
-        let pruner = pruner.unwrap();
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -480,8 +474,6 @@ mod tests {
                 stats: Arc::new(RuntimeFilterStats::default()),
             }],
         );
-        assert!(pruner.is_some());
-        let pruner = pruner.unwrap();
 
         assert!(!pruner.prune(&part).await?);
         Ok(())
@@ -512,8 +504,6 @@ mod tests {
                 stats: Arc::new(RuntimeFilterStats::default()),
             }],
         );
-        assert!(pruner.is_some());
-        let pruner = pruner.unwrap();
 
         assert!(pruner.prune(&part).await?);
         Ok(())

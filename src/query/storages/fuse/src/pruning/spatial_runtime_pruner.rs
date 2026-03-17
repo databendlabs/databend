@@ -17,6 +17,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
@@ -34,6 +36,7 @@ use geo_index::rtree::RTreeRef;
 use opendal::Operator;
 
 use crate::FuseBlockPartInfo;
+use crate::index::rects_intersect;
 use crate::io::read::SpatialIndexReader;
 
 struct SpatialRuntimeFilter {
@@ -138,6 +141,7 @@ impl SpatialRuntimePruner {
                     part.nums_rows as u64,
                     1,
                 );
+                Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
                 return Ok(true);
             }
             filter
@@ -164,10 +168,10 @@ impl SpatialRuntimePruner {
             let Some(bounds) = filter.rtree_bounds else {
                 continue;
             };
-            let query_rect = Rect::new(
+            let query_rect = Some(Rect::new(
                 Point::new(bounds[0], bounds[1]),
                 Point::new(bounds[2], bounds[3]),
-            );
+            ));
             let block_rect = Rect::new(
                 Point::new(stat.min_x.into_inner(), stat.min_y.into_inner()),
                 Point::new(stat.max_x.into_inner(), stat.max_y.into_inner()),
@@ -178,6 +182,7 @@ impl SpatialRuntimePruner {
                     part.nums_rows as u64,
                     1,
                 );
+                Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
                 return Ok(true);
             }
             filter
@@ -186,13 +191,6 @@ impl SpatialRuntimePruner {
         }
         Ok(false)
     }
-}
-
-fn rects_intersect(block_rect: &Rect<f64>, query_rect: &Rect<f64>) -> bool {
-    block_rect.min().x <= query_rect.max().x
-        && block_rect.max().x >= query_rect.min().x
-        && block_rect.min().y <= query_rect.max().y
-        && block_rect.max().y >= query_rect.min().y
 }
 
 fn rtree_intersects_with_search(tree: RTreeRef<f64>, query_tree: RTreeRef<f64>) -> Result<bool> {
