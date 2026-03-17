@@ -1396,6 +1396,16 @@ impl TableContext for LiteTableContext {
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
         Ok(())
     }
+    fn add_recursive_cte_temp_table(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+    ) {
+    }
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
+        Ok(())
+    }
     fn get_next_broadcast_id(&self) -> u32 {
         0
     }
