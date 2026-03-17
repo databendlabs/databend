@@ -1,129 +1,154 @@
-# codec uncompressed
-statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/UNCOMPRESSED.parquet' (FORMAT 'parquet', CODEC 'UNCOMPRESSED');
-
-query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/UNCOMPRESSED.parquet');
-----
-42	hello
-
-statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-UNCOMPRESSED.parquet' (FORMAT 'parquet', CODEC 'UNCOMPRESSED', ROW_GROUP_SIZE 10);
-
-statement ok
-FROM "{TEMP_DIR}/userdata-UNCOMPRESSED.parquet";
-
+# DuckDB writes parquet directly to local file paths and verifies them with parquet_scan(...).
+# Databend's documented parquet workflow is stage/external-location based rather than direct local
+# file writes plus direct local parquet scans.
+# DuckDB docs: https://duckdb.org/docs/stable/data/parquet/overview.html
+# Databend docs:
+# https://docs.databend.cn/guides/load-data/transform/querying-parquet
+# https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# https://docs.databend.cn/guides/unload-data/
 
 # codec uncompressed
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/UNCOMPRESSED.parquet' (FORMAT 'parquet', CODEC 'UNCOMPRESSED');
 
-statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/SNAPPY.parquet' (FORMAT 'parquet', CODEC 'SNAPPY');
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{TEMP_DIR}/UNCOMPRESSED.parquet');
+# ----
+# 42	hello
 
-query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/SNAPPY.parquet');
-----
-42	hello
+# TODO: unsupported feature
+# statement ok
+# COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-UNCOMPRESSED.parquet' (FORMAT 'parquet', CODEC 'UNCOMPRESSED', ROW_GROUP_SIZE 10);
 
-statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-SNAPPY.parquet' (FORMAT 'parquet', CODEC 'SNAPPY', ROW_GROUP_SIZE 10);
+# TODO: unsupported feature
+# statement ok
+# FROM "{TEMP_DIR}/userdata-UNCOMPRESSED.parquet";
 
-statement ok
-FROM "{TEMP_DIR}/userdata-SNAPPY.parquet";
+# codec snappy
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/SNAPPY.parquet' (FORMAT 'parquet', CODEC 'SNAPPY');
 
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{TEMP_DIR}/SNAPPY.parquet');
+# ----
+# 42	hello
 
-# codec uncompressed
+# TODO: unsupported feature
+# statement ok
+# COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-SNAPPY.parquet' (FORMAT 'parquet', CODEC 'SNAPPY', ROW_GROUP_SIZE 10);
 
-statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/GZIP.parquet' (FORMAT 'parquet', CODEC 'GZIP');
+# TODO: unsupported feature
+# statement ok
+# FROM "{TEMP_DIR}/userdata-SNAPPY.parquet";
 
-query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/GZIP.parquet');
-----
-42	hello
+# codec gzip
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/GZIP.parquet' (FORMAT 'parquet', CODEC 'GZIP');
 
-statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-GZIP.parquet' (FORMAT 'parquet', CODEC 'GZIP', ROW_GROUP_SIZE 10);
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{TEMP_DIR}/GZIP.parquet');
+# ----
+# 42	hello
 
-statement ok
-FROM "{TEMP_DIR}/userdata-GZIP.parquet";
+# TODO: unsupported feature
+# statement ok
+# COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-GZIP.parquet' (FORMAT 'parquet', CODEC 'GZIP', ROW_GROUP_SIZE 10);
 
+# TODO: unsupported feature
+# statement ok
+# FROM "{TEMP_DIR}/userdata-GZIP.parquet";
 
-# codec uncompressed
+# codec zstd
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/ZSTD.parquet' (FORMAT 'parquet', CODEC 'ZSTD');
 
-statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/ZSTD.parquet' (FORMAT 'parquet', CODEC 'ZSTD');
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{TEMP_DIR}/ZSTD.parquet');
+# ----
+# 42	hello
 
-query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/ZSTD.parquet');
-----
-42	hello
+# TODO: unsupported feature
+# statement ok
+# COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-ZSTD.parquet' (FORMAT 'parquet', CODEC 'ZSTD', ROW_GROUP_SIZE 10);
 
-statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-ZSTD.parquet' (FORMAT 'parquet', CODEC 'ZSTD', ROW_GROUP_SIZE 10);
+# TODO: unsupported feature
+# statement ok
+# FROM "{TEMP_DIR}/userdata-ZSTD.parquet";
 
-statement ok
-FROM "{TEMP_DIR}/userdata-ZSTD.parquet";
+# codec lz4
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/LZ4.parquet' (FORMAT 'parquet', CODEC 'LZ4');
 
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{TEMP_DIR}/LZ4.parquet');
+# ----
+# 42	hello
 
-# codec uncompressed
+# TODO: unsupported feature
+# statement ok
+# COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-LZ4.parquet' (FORMAT 'parquet', CODEC 'LZ4', ROW_GROUP_SIZE 10);
 
-statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/LZ4.parquet' (FORMAT 'parquet', CODEC 'LZ4');
+# TODO: unsupported feature
+# statement ok
+# FROM "{TEMP_DIR}/userdata-LZ4.parquet";
 
-query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/LZ4.parquet');
-----
-42	hello
+# codec lz4_raw
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/LZ4_RAW.parquet' (FORMAT 'parquet', CODEC 'LZ4_RAW');
 
-statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-LZ4.parquet' (FORMAT 'parquet', CODEC 'LZ4', ROW_GROUP_SIZE 10);
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{TEMP_DIR}/LZ4_RAW.parquet');
+# ----
+# 42	hello
 
-statement ok
-FROM "{TEMP_DIR}/userdata-LZ4.parquet";
+# TODO: unsupported feature
+# statement ok
+# COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-LZ4_RAW.parquet' (FORMAT 'parquet', CODEC 'LZ4_RAW', ROW_GROUP_SIZE 10);
 
+# TODO: unsupported feature
+# statement ok
+# FROM "{TEMP_DIR}/userdata-LZ4_RAW.parquet";
 
-# codec uncompressed
+# codec brotli
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/BROTLI.parquet' (FORMAT 'parquet', CODEC 'BROTLI');
 
-statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/LZ4_RAW.parquet' (FORMAT 'parquet', CODEC 'LZ4_RAW');
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{TEMP_DIR}/BROTLI.parquet');
+# ----
+# 42	hello
 
-query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/LZ4_RAW.parquet');
-----
-42	hello
+# TODO: unsupported feature
+# statement ok
+# COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-BROTLI.parquet' (FORMAT 'parquet', CODEC 'BROTLI', ROW_GROUP_SIZE 10);
 
-statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-LZ4_RAW.parquet' (FORMAT 'parquet', CODEC 'LZ4_RAW', ROW_GROUP_SIZE 10);
-
-statement ok
-FROM "{TEMP_DIR}/userdata-LZ4_RAW.parquet";
-
-
-# codec uncompressed
-
-statement ok
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/BROTLI.parquet' (FORMAT 'parquet', CODEC 'BROTLI');
-
-query II
-SELECT * FROM parquet_scan('{TEMP_DIR}/BROTLI.parquet');
-----
-42	hello
-
-statement ok
-COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-BROTLI.parquet' (FORMAT 'parquet', CODEC 'BROTLI', ROW_GROUP_SIZE 10);
-
-statement ok
-FROM "{TEMP_DIR}/userdata-BROTLI.parquet";
-
-
+# TODO: unsupported feature
+# statement ok
+# FROM "{TEMP_DIR}/userdata-BROTLI.parquet";
 
 # unsupported codec
+# TODO: unsupported feature
+# statement error
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
 
-statement error
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
+# TODO: unsupported feature
+# statement error
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC);
 
-statement error
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC);
-
-statement error
-COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 3);
+# TODO: unsupported feature
+# statement error
+# COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 3);

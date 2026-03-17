@@ -1,48 +1,48 @@
 statement ok
-DROP TABLE IF EXISTS tbl
+DROP TABLE IF EXISTS test_last_noninlined_tbl
 
 statement ok
-CREATE TABLE tbl(a INTEGER, b VARCHAR)
+CREATE TABLE test_last_noninlined_tbl(a INTEGER, b VARCHAR)
 
 statement ok
-INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')
+INSERT INTO test_last_noninlined_tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')
 
 # non-grouped aggregate
 
 # TODO: unsupported feature
 # query T
-# SELECT LAST(b) FROM tbl WHERE a=2
+# SELECT LAST(b) FROM test_last_noninlined_tbl WHERE a=2
 # ----
 # thisisalongstring
 
 # TODO: unsupported feature
 # query T
-# SELECT LAST(b) FROM tbl WHERE a=1
+# SELECT LAST(b) FROM test_last_noninlined_tbl WHERE a=1
 # ----
 # NULL
 
 # TODO: unsupported feature
 # query T
-# SELECT LAST(b) FROM tbl WHERE a=1 GROUP BY a
+# SELECT LAST(b) FROM test_last_noninlined_tbl WHERE a=1 GROUP BY a
 # ----
 # NULL
 
 # TODO: unsupported feature
 # query T
-# SELECT LAST(b) FROM tbl WHERE a=0
+# SELECT LAST(b) FROM test_last_noninlined_tbl WHERE a=0
 # ----
 # NULL
 
 # TODO: unsupported feature
 # query T
-# SELECT LAST(b) FROM tbl WHERE a=0 GROUP BY b
+# SELECT LAST(b) FROM test_last_noninlined_tbl WHERE a=0 GROUP BY b
 # ----
 
 # grouped aggregate
 
 # TODO: unsupported feature
 # query IT
-# SELECT a, LAST(b) FROM tbl GROUP BY a ORDER BY a
+# SELECT a, LAST(b) FROM test_last_noninlined_tbl GROUP BY a ORDER BY a
 # ----
 # 1
 # NULL

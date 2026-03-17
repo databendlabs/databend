@@ -1,26 +1,26 @@
 statement ok
-DROP TABLE IF EXISTS dates
+DROP TABLE IF EXISTS test_perfect_ht_dates
 
 statement ok
-DROP TABLE IF EXISTS manycolumns
+DROP TABLE IF EXISTS test_perfect_ht_manycolumns
 
 statement ok
-DROP TABLE IF EXISTS smallints
+DROP TABLE IF EXISTS test_perfect_ht_smallints
 
 statement ok
-DROP TABLE IF EXISTS timeseries
+DROP TABLE IF EXISTS test_perfect_ht_timeseries
 
 statement ok
-DROP TABLE IF EXISTS tinyints
+DROP TABLE IF EXISTS test_perfect_ht_tinyints
 
 statement ok
-CREATE OR REPLACE TABLE timeseries(year INTEGER, val INTEGER);
+CREATE OR REPLACE TABLE test_perfect_ht_timeseries(year INTEGER, val INTEGER);
 
 statement ok
-INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
+INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
 
 query IIII
-SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, SUM(val), COUNT(val), COUNT(*) FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 30 2 3
 1997 12 1 1
@@ -30,7 +30,7 @@ NULL 1 1 1
 # use aggregates with destructors
 
 query I?T
-SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 [10,20] 10,20
 1997 [12] 12
@@ -41,13 +41,13 @@ NULL [1] 1
 # we run these tests with and without compressed materialization to make sure we cover all types
 
 statement ok
-CREATE OR REPLACE TABLE timeseries(year INTEGER, val INTEGER);
+CREATE OR REPLACE TABLE test_perfect_ht_timeseries(year INTEGER, val INTEGER);
 
 statement ok
-INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
+INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
 
 query IIII
-SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, SUM(val), COUNT(val), COUNT(*) FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 30 2 3
 1997 12 1 1
@@ -57,7 +57,7 @@ NULL 1 1 1
 # use aggregates with destructors
 
 query I?T
-SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 [10,20] 10,20
 1997 [12] 12
@@ -74,10 +74,10 @@ NULL [1] 1
 # CREATE OR REPLACE TABLE timeseries(year UINTEGER, val UINTEGER);
 
 statement ok
-INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
+INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
 
 query IIII
-SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, SUM(val), COUNT(val), COUNT(*) FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 60 4 6
 1997 24 2 2
@@ -87,7 +87,7 @@ NULL 2 2 2
 # use aggregates with destructors
 
 query I?T
-SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 [10,20,10,20] 10,20,10,20
 1997 [12,12] 12,12
@@ -128,13 +128,13 @@ NULL [1,1,1] 1,1,1
 # we run these tests with and without compressed materialization to make sure we cover all types
 
 statement ok
-CREATE OR REPLACE TABLE timeseries(year BIGINT, val BIGINT);
+CREATE OR REPLACE TABLE test_perfect_ht_timeseries(year BIGINT, val BIGINT);
 
 statement ok
-INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
+INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
 
 query IIII
-SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, SUM(val), COUNT(val), COUNT(*) FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 30 2 3
 1997 12 1 1
@@ -144,7 +144,7 @@ NULL 1 1 1
 # use aggregates with destructors
 
 query I?T
-SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 [10,20] 10,20
 1997 [12] 12
@@ -155,13 +155,13 @@ NULL [1] 1
 # we run these tests with and without compressed materialization to make sure we cover all types
 
 statement ok
-CREATE OR REPLACE TABLE timeseries(year BIGINT, val BIGINT);
+CREATE OR REPLACE TABLE test_perfect_ht_timeseries(year BIGINT, val BIGINT);
 
 statement ok
-INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
+INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
 
 query IIII
-SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, SUM(val), COUNT(val), COUNT(*) FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 30 2 3
 1997 12 1 1
@@ -171,7 +171,7 @@ NULL 1 1 1
 # use aggregates with destructors
 
 query I?T
-SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 [10,20] 10,20
 1997 [12] 12
@@ -188,10 +188,10 @@ NULL [1] 1
 # CREATE OR REPLACE TABLE timeseries(year UBIGINT, val UBIGINT);
 
 statement ok
-INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
+INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
 
 query IIII
-SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, SUM(val), COUNT(val), COUNT(*) FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 60 4 6
 1997 24 2 2
@@ -201,7 +201,7 @@ NULL 2 2 2
 # use aggregates with destructors
 
 query I?T
-SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY year ORDER BY year;
+SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_timeseries GROUP BY year ORDER BY year;
 ----
 1996 [10,20,10,20] 10,20,10,20
 1997 [12,12] 12,12

@@ -1,16 +1,8 @@
-statement ok
-DROP TABLE IF EXISTS integers
+# TODO: unsupported feature
+# statement ok
+# PREPARE query AS SELECT * FROM integers
 
-statement ok
-CREATE TABLE integers(i INTEGER, j INTEGER)
-
-statement ok
-INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
-
-statement ok
-PREPARE query AS SELECT * FROM integers
-
-query II
-EXPLAIN EXECUTE query
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query I
+# EXPLAIN EXECUTE query
+# ----

@@ -1,4 +1,7 @@
-query II
-select * from '{DATA_DIR}/parquet-testing/timetz_4byte_stats.parquet' order by 1;
-----
-00:00:00+00	00:00:00+00
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# select * from '{DATA_DIR}/parquet-testing/timetz_4byte_stats.parquet' order by 1;
+# ----
+# 00:00:00+00	00:00:00+00

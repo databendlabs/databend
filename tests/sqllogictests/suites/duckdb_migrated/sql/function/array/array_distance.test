@@ -1,32 +1,38 @@
 statement ok
 DROP TABLE IF EXISTS arrays
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT array_distance([1, 2, 3]::FLOAT[3], [1, 2, 3]::FLOAT[3]);
 # ----
 # 0.0
 
-statement ok
-CREATE OR REPLACE TABLE arrays (l FLOAT[3]);
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE arrays (l FLOAT[3]);
 
-statement ok
-INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
 
-query I
-SELECT array_distance(l, [1, 2, 3]::FLOAT[3]) FROM arrays;
-----
-0.0
-1.0
-10.392304
-7.483315
-NULL
+# TODO: unsupported feature
+# query I
+# SELECT array_distance(l, [1, 2, 3]::FLOAT[3]) FROM arrays;
+# ----
+# 0.0
+# 1.0
+# 10.392304
+# 7.483315
+# NULL
 
-statement error
-SELECT array_distance([1, NULL, 3]::FLOAT[3], [1, 2, 3]::FLOAT[3]);
+# TODO: unsupported feature
+# statement error
+# SELECT array_distance([1, NULL, 3]::FLOAT[3], [1, 2, 3]::FLOAT[3]);
 
-statement error
-SELECT array_distance([1, 2, 3]::FLOAT[3], [1, NULL, 3]::FLOAT[3]);
+# TODO: unsupported feature
+# statement error
+# SELECT array_distance([1, 2, 3]::FLOAT[3], [1, NULL, 3]::FLOAT[3]);
 
-statement error
-SELECT array_distance([1, 2, 3]::FLOAT[3], [1, 2, 3, 4]::FLOAT[4]);
+# TODO: unsupported feature
+# statement error
+# SELECT array_distance([1, 2, 3]::FLOAT[3], [1, 2, 3, 4]::FLOAT[4]);

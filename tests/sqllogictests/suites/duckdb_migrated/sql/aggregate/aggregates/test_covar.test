@@ -1,5 +1,5 @@
 statement ok
-DROP TABLE IF EXISTS integers
+DROP TABLE IF EXISTS test_covar_integers
 
 # test incorrect usage of COVAR_POP function
 statement error
@@ -65,14 +65,14 @@ SELECT COVAR_SAMP(COVAR_SAMP(1))
 # test population covariance on a set of values
 
 statement ok
-CREATE TABLE integers(x INTEGER, y INTEGER);
+CREATE TABLE test_covar_integers(x INTEGER, y INTEGER);
 
 statement ok
-INSERT INTO integers VALUES (10,NULL), (10,11), (20,22), (25,NULL), (30,35)
+INSERT INTO test_covar_integers VALUES (10,NULL), (10,11), (20,22), (25,NULL), (30,35)
 
 # TODO: result differs
 # query RRRRR
-# SELECT COVAR_POP(x,y), COVAR_POP(x,1), COVAR_POP(1,y), COVAR_POP(x,NULL), COVAR_POP(NULL,y) FROM integers
+# SELECT COVAR_POP(x,y), COVAR_POP(x,1), COVAR_POP(1,y), COVAR_POP(x,NULL), COVAR_POP(NULL,y) FROM test_covar_integers
 # ----
 # 80.000000
 # 0.000000
@@ -82,7 +82,7 @@ INSERT INTO integers VALUES (10,NULL), (10,11), (20,22), (25,NULL), (30,35)
 
 # TODO: result differs
 # query RRRRR
-# SELECT COVAR_SAMP(x,y), COVAR_SAMP(x,1), COVAR_SAMP(1,y), COVAR_SAMP(x,NULL), COVAR_SAMP(NULL,y) FROM integers
+# SELECT COVAR_SAMP(x,y), COVAR_SAMP(x,1), COVAR_SAMP(1,y), COVAR_SAMP(x,NULL), COVAR_SAMP(NULL,y) FROM test_covar_integers
 # ----
 # 120.000000
 # 0.000000
@@ -93,7 +93,7 @@ INSERT INTO integers VALUES (10,NULL), (10,11), (20,22), (25,NULL), (30,35)
 # test covar on empty set
 
 query RR
-SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100
+SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM test_covar_integers WHERE x > 100
 ----
 NULL NULL
 
@@ -101,7 +101,7 @@ NULL NULL
 
 # TODO: result differs
 # query RR
-# SELECT COVAR_POP(NULL, NULL), COVAR_SAMP(NULL, NULL) FROM integers
+# SELECT COVAR_POP(NULL, NULL), COVAR_SAMP(NULL, NULL) FROM test_covar_integers
 # ----
 # NULL
 # NULL

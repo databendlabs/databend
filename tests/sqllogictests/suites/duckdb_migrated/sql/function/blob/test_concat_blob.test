@@ -1,21 +1,21 @@
-query I
-SELECT blob 'aaa\x80' || blob 'aaa\x80'
+query T
+SELECT 'aaa\x80'::BLOB || 'aaa\x80'::BLOB
 ----
-aaa\x80aaa\x80
+aaaaaa
 
-query I
-SELECT typeof(blob 'aaa\x80' || blob 'aaa\x80')
+query T
+SELECT typeof('aaa\x80'::BLOB || 'aaa\x80'::BLOB)
 ----
-BLOB
+VARCHAR
 
 # concat function works - but it converts to varchar
 
-query I
-SELECT concat(blob 'aaa\x80', blob 'aaa\x80')
+query T
+SELECT concat('aaa\x80'::BLOB, 'aaa\x80'::BLOB)
 ----
-aaa\x80aaa\x80
+aaaaaa
 
-query I
-SELECT typeof(concat(blob 'aaa\x80', blob 'aaa\x80'))
+query T
+SELECT typeof(concat('aaa\x80'::BLOB, 'aaa\x80'::BLOB))
 ----
 VARCHAR

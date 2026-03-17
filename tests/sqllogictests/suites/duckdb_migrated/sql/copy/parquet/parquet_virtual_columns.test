@@ -1,48 +1,69 @@
 # file_index
-query I
-SELECT file_index FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet'
-----
-0
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query I
+# SELECT file_index FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet'
+# ----
+# 0
 
-query III
-SELECT file_index, i, j FROM read_parquet(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet', '{DATA_DIR}/parquet-testing/glob2/t1.parquet'])
-----
-0	1	a
-1	2	b
-2	3	c
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query III
+# SELECT file_index, i, j FROM read_parquet(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet', '{DATA_DIR}/parquet-testing/glob2/t1.parquet'])
+# ----
+# 0	1	a
+# 1	2	b
+# 2	3	c
 
-query III
-SELECT file_index, i, j
-FROM read_parquet(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet', '{DATA_DIR}/parquet-testing/glob2/t1.parquet'])
-WHERE file_index=1
-----
-1	2	b
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query III
+# SELECT file_index, i, j
+# FROM read_parquet(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet', '{DATA_DIR}/parquet-testing/glob2/t1.parquet'])
+# WHERE file_index=1
+# ----
+# 1	2	b
 
 # Filename without the filename option
 
-statement ok
-select filename from '{DATA_DIR}/parquet-testing/glob/t1.parquet'
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# statement ok
+# select filename from '{DATA_DIR}/parquet-testing/glob/t1.parquet'
 
-query III
-select i, j, parse_path(filename)[-2:] from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' order by i;
-----
-1	a	[glob, t1.parquet]
-2	b	[glob, t2.parquet]
-3	c	[glob2, t1.parquet]
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query III
+# select i, j, parse_path(filename)[-2:] from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' order by i;
+# ----
+# 1	a	[glob, t1.parquet]
+# 2	b	[glob, t2.parquet]
+# 3	c	[glob2, t1.parquet]
 
 # not projected in *
 
-query II
-select * from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' order by i;
-----
-1	a
-2	b
-3	c
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# select * from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' order by i;
+# ----
+# 1	a
+# 2	b
+# 3	c
 
 
 # filename in filter
 
-query III
-select i, j, parse_path(filename)[-2:] from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' where filename='{DATA_DIR}/parquet-testing/glob/t1.parquet'
-----
-1	a	[glob, t1.parquet]
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query III
+# select i, j, parse_path(filename)[-2:] from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' where filename='{DATA_DIR}/parquet-testing/glob/t1.parquet'
+# ----
+# 1	a	[glob, t1.parquet]

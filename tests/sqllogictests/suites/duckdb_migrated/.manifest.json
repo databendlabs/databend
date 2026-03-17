@@ -21055,8 +21055,8 @@
     "test/sql/copy/csv/test_null_padding_projection.test": {
       "source_sha": "32b534a1780923ce3c2c0e4f03811a13ef76057a",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/csv/test_null_padding_projection.test",
-      "status": "fail",
-      "commented_out": 10,
+      "status": "partial",
+      "commented_out": 19,
       "total_records": 21,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21071,7 +21071,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 19
+      },
+      "gate": "partial"
     },
     "test/sql/copy/csv/test_comment_option.test": {
       "source_sha": "d9931017a27a001723999b3d2ca3fc5cda73d09c",
@@ -21127,8 +21130,8 @@
     "test/sql/copy/parquet/parquet_go.test": {
       "source_sha": "a836cbccefb2d490c29f957824b78638cbd2f57c",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_go.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 1,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21143,13 +21146,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_hive.test": {
       "source_sha": "09d9822270611f4a9d6b37a4a43f66ca2e24b33b",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_hive.test",
-      "status": "fail",
-      "commented_out": 21,
+      "status": "partial",
+      "commented_out": 28,
       "total_records": 43,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21164,6 +21170,10 @@
         "unknown function",
         "unsupported feature"
       ],
+      "todo_breakdown": {
+        "unsupported_feature": 28,
+        "other": 11
+      },
       "gate": "fail"
     },
     "test/sql/copy/parquet/parquet_hive2.test": {
@@ -21190,8 +21200,8 @@
     "test/sql/copy/parquet/parquet_hive_empty.test": {
       "source_sha": "6199e547a8e91a7475c4f6c95d3846508ab3d447",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_hive_empty.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 4,
       "total_records": 4,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21206,7 +21216,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_hive_null.test": {
       "source_sha": "8ec04292428be5294887e88e2aaa6ae1322a06ac",
@@ -21232,8 +21245,8 @@
     "test/sql/copy/parquet/parquet_late_materialization.test": {
       "source_sha": "a8b3780c322c17bbcfd09b63f2ec5b27888a9bb9",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_late_materialization.test",
-      "status": "fail",
-      "commented_out": 8,
+      "status": "partial",
+      "commented_out": 18,
       "total_records": 18,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21248,7 +21261,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 18
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_list.test": {
       "source_sha": "c9763221b4c4bbd7ad304bf981aaa7da6730529c",
@@ -21322,8 +21338,8 @@
     "test/sql/copy/parquet/parquet_metadata_cache.test": {
       "source_sha": "d12b050aea004838e687f85c310ae76dc830934c",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_metadata_cache.test",
-      "status": "fail",
-      "commented_out": 2,
+      "status": "partial",
+      "commented_out": 9,
       "total_records": 9,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21338,13 +21354,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 9
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_nan.test": {
       "source_sha": "8a9b5925e2edef17ee19217478c921496e1502e1",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_nan.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 5,
       "total_records": 5,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21359,7 +21378,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_nullbyte.test": {
       "source_sha": "30d97354f6430386c8c060acd08829348bd87b45",
@@ -21458,8 +21480,8 @@
     "test/sql/copy/parquet/parquet_schema_num_children_fix.test": {
       "source_sha": "d62d012f43884644ca27beffe3c03248f1858d3b",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_schema_num_children_fix.test",
-      "status": "fail",
-      "commented_out": 2,
+      "status": "partial",
+      "commented_out": 14,
       "total_records": 20,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21474,7 +21496,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 14
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_silly.test": {
       "source_sha": "7595c83274118339b6b9d99a351745c1b69d044e",
@@ -21548,8 +21573,8 @@
     "test/sql/copy/parquet/parquet_virtual_columns.test": {
       "source_sha": "db1b02b8cd1d8372c80a1659e88904ba601e2f84",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_virtual_columns.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 7,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21564,13 +21589,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_virtual_file_row_number.test": {
       "source_sha": "5c572781159a2b66c072c1b8d41c67821831d609",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_virtual_file_row_number.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21585,13 +21613,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_write_codecs.test": {
       "source_sha": "c91ba682e6e91230c0f08f616369219acb33f9ed",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/parquet_write_codecs.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 31,
       "total_records": 31,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21606,7 +21637,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 31
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/parquet_write_repeated_lists.test": {
       "source_sha": "338741c871efb9a2f8bb68a72d90cfee1782dda3",
@@ -21677,8 +21711,8 @@
     "test/sql/copy/parquet/read_parquet_parameter.test": {
       "source_sha": "f1d42707517c921d64612e0069ddac7dc2b1d9dd",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/read_parquet_parameter.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21693,7 +21727,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/recursive_parquet_union_by_name.test": {
       "source_sha": "3524eba2ec13e8647a7bc341b73d4ecc8ba25d07",
@@ -21743,8 +21780,8 @@
     "test/sql/copy/parquet/rle_bool.test": {
       "source_sha": "f1f3685ecd011dcaf40f2a82ab1c3fb6fd6ae8d0",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/rle_bool.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 2,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21759,7 +21796,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/shredded_variant_stats.test": {
       "source_sha": "e123498950b907e1b5c71d20830fe1fc5ca6a010",
@@ -21785,8 +21825,8 @@
     "test/sql/copy/parquet/spark_v2.test": {
       "source_sha": "8af051b10b6002d9d9d64052df4601e900a2b2b1",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/spark_v2.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -21801,7 +21841,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/struct_column_reader_skip.test": {
       "source_sha": "3999c98f4161ab095e1c9b0b3fa9b775f0b3d4d3",
@@ -22069,8 +22112,8 @@
     "test/sql/copy/parquet/timestamp_ms_stats.test": {
       "source_sha": "b361eda41f380707910432099b6cb07c0bc1a1ff",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/timestamp_ms_stats.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 2,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22085,12 +22128,15 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/timestamp_s.test": {
       "source_sha": "0a0104a626f26676c854738c09c1abf8e0d468de",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/timestamp_s.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 4,
       "last_synced": "2026-03-17",
@@ -22106,13 +22152,13 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/copy/parquet/timetz_parquet.test": {
       "source_sha": "6358d55a30ff388c6bcd6e07bb62c0306bf89a76",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/timetz_parquet.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 1,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22127,13 +22173,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/timezone.test": {
       "source_sha": "4fab64936087128d0637d4838ffce7d01647eb42",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/timezone.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 2,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22148,13 +22197,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/union_by_name_hive_partitioning.test": {
       "source_sha": "138ba65564e5e2bf91d5ae1ab9fcb8e029dbcdc0",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/union_by_name_hive_partitioning.test",
-      "status": "fail",
-      "commented_out": 11,
+      "status": "partial",
+      "commented_out": 12,
       "total_records": 15,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22169,7 +22221,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 12
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/union_by_name_pushdown.test": {
       "source_sha": "8ca6c510d3efd9cbac12efa6e0b97da78d7fa476",
@@ -22195,8 +22250,8 @@
     "test/sql/copy/parquet/writer/parquet_test_all_types.test": {
       "source_sha": "514488717a2cb8244293ed5781bcfeaf3bd8c351",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_test_all_types.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22211,7 +22266,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/parquet_write_booleans.test": {
       "source_sha": "bc1766f5f7994572ff70d63cb817b69702fb0dd3",
@@ -22306,8 +22364,8 @@
     "test/sql/copy/parquet/writer/parquet_write_enums.test": {
       "source_sha": "8374f92be5714f953102d076cb9be2e06d63eb90",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_enums.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 5,
       "total_records": 6,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22322,7 +22380,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/parquet_write_field_id.test": {
       "source_sha": "0715c50d61b1097bc3ee13ac430213f080bd2b21",
@@ -22348,8 +22409,8 @@
     "test/sql/copy/parquet/writer/parquet_write_home_directory.test": {
       "source_sha": "0099afbd1809d184aceb8636d493049b54c97890",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_home_directory.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 4,
       "total_records": 8,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22364,13 +22425,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/parquet_write_hugeint.test": {
       "source_sha": "3000230ff5dbae48757f574d6fe937561c42d40a",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_hugeint.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22385,7 +22449,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/parquet_write_interval.test": {
       "source_sha": "34dab93d6b41e985705bffa01849e24160f199dc",
@@ -22411,7 +22478,7 @@
     "test/sql/copy/parquet/writer/parquet_write_issue_5779.test": {
       "source_sha": "ecff4097dfa780f6abbf222022271f4e95929902",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_issue_5779.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 9,
       "last_synced": "2026-03-17",
@@ -22427,7 +22494,7 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/copy/parquet/writer/parquet_write_memory_usage.test": {
       "source_sha": "0725da621e595644df2014b8e9f13de4e779eb80",
@@ -22537,8 +22604,8 @@
     "test/sql/copy/parquet/writer/parquet_write_timestamp.test": {
       "source_sha": "e953f82fc0d53553e85e61211b221ea4494281dc",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_timestamp.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 13,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22553,13 +22620,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/parquet_write_uhugeint.test": {
       "source_sha": "3bb3fe7d88b45b84765333785d9cfd7a98726d2e",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_uhugeint.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22574,13 +22644,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/parquet_write_unsigned.test": {
       "source_sha": "b4e3565c2236ae04bf6154618b152ed4d6574196",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_unsigned.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 17,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22595,13 +22668,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/parquet_write_uuid.test": {
       "source_sha": "2a8e06fd62c9f65d2ce345db6d721fef2fa1b1e7",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/parquet_write_uuid.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 5,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22616,7 +22692,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/partition_without_hive.test": {
       "source_sha": "e4c37b45fe9c02d98e1eddbc60d6883e40a09374",
@@ -22727,10 +22806,10 @@
       "gate": "pass"
     },
     "test/sql/copy/parquet/writer/test_parquet_write_complex.test": {
-      "source_sha": "e4651959fc3525cb41829688d7cd3e054cf28221",
+      "source_sha": "3e58f4396a65e28bb77460874e51c5443bf1d4a6",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/test_parquet_write_complex.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 17,
       "total_records": 17,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22745,7 +22824,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 17
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/write_complex_nested.test": {
       "source_sha": "04f495841acce739eeb60bee8d62d8f2e0441843",
@@ -22795,8 +22877,8 @@
     "test/sql/copy/parquet/writer/write_map.test": {
       "source_sha": "e95dd6c9848cdd6323d77233c769837c80b82238",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/parquet/writer/write_map.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 12,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22811,7 +22893,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/copy/parquet/writer/write_stats_big_string.test": {
       "source_sha": "08e89dfa621b8e609173a8aa3a960432b71c7716",
@@ -22922,10 +23007,10 @@
       "gate": "pass"
     },
     "test/sql/copy/partitioned/hive_partition_case_insensitive_column.test": {
-      "source_sha": "741248a77090e39137845463b265564eb6a48b28",
+      "source_sha": "f6be9f17f4bb8c3c98e11f36394418d0dc55f3e9",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/partitioned/hive_partition_case_insensitive_column.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 1,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22940,7 +23025,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/copy/partitioned/hive_partition_compression.test": {
       "source_sha": "f3aea2634aa410006e5681831f9152bacffd890c",
@@ -22966,8 +23054,8 @@
     "test/sql/copy/partitioned/hive_partition_duplicate_name.test": {
       "source_sha": "d3459abd1c3fa92226c8002d981ec050b705b740",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/partitioned/hive_partition_duplicate_name.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 1,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -22982,7 +23070,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/copy/partitioned/hive_partition_escape.test": {
       "source_sha": "49e4c5ec709d69d2ae0c2e81200347b78018a6c0",
@@ -23009,9 +23100,9 @@
       "gate": "partial"
     },
     "test/sql/copy/partitioned/hive_partition_join_pushdown.test": {
-      "source_sha": "7f6c9ad698742e22afc2fe0750f4e60d87050d2e",
+      "source_sha": "c94a66270fb6f93e25dbbc36f0344fc97a20d0de",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/partitioned/hive_partition_join_pushdown.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 4,
       "last_synced": "2026-03-17",
@@ -23027,7 +23118,7 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/copy/partitioned/hive_partition_recursive_cte.test": {
       "source_sha": "02f9f26058bcd466c14e357bc8de6db737bb9b70",
@@ -23117,11 +23208,11 @@
       "gate": "pass"
     },
     "test/sql/copy/partitioned/partitioned_group_by.test": {
-      "source_sha": "c9a8de5c6c2266f83e86230aff60c41120afcbc1",
+      "source_sha": "a5b8ef85320b3385d210023110780fd79cdd70f0",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/partitioned/partitioned_group_by.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 18,
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 16,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -23135,7 +23226,11 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "result_differs": 1,
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/copy/partitioned/skip_partition_column_writes.test": {
       "source_sha": "3aac39f8078339f505a0c136773ecfb66ca7bbfd",
@@ -23180,10 +23275,10 @@
       "gate": "pass"
     },
     "test/sql/copy/return_files.test": {
-      "source_sha": "984c0652394dd666e41b64a127f495b9d727fbee",
+      "source_sha": "b76bc973d40dd94a7593ca6f461c3f0507f9bf35",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/return_files.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 4,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23198,13 +23293,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/copy/return_stats.test": {
-      "source_sha": "72973e588c065d3a375b7e8f7d66731908832679",
+      "source_sha": "2d4e0387104dbd7ff48e1e65b0e8e5f6df1d1408",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy/return_stats.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 46,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23219,7 +23317,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
     },
     "test/sql/copy/return_stats_truncate.test": {
       "source_sha": "df15c179a1478ceea0300f75c2e671f9db28d885",
@@ -23287,9 +23388,9 @@
     "test/sql/copy_database/copy_database_different_types.test": {
       "source_sha": "a623cd7d68b4857da2698776a144e0e523ba7578",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_different_types.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 23,
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 4,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -23303,14 +23404,17 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
     },
     "test/sql/copy_database/copy_database_errors.test": {
       "source_sha": "97a1d2b748f86acd3098103e828e5ac92666711f",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_errors.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 12,
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -23324,7 +23428,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/copy_database/copy_database_fk.test": {
       "source_sha": "c893358fbbb9786bea907f927a18b8a91405800d",
@@ -23350,8 +23457,153 @@
     "test/sql/copy_database/copy_database_gen_col.test": {
       "source_sha": "2602c044c5038a3d550e3d85a42b07e66a89f2ce",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_gen_col.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 2,
+      "last_synced": "2026-03-17",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/copy_database/copy_database_index.test": {
+      "source_sha": "01c87821ce999eedbd36dcc398d4ce3e68fbfe98",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_index.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 3,
+      "last_synced": "2026-03-17",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2,
+        "result_differs": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/copy_database/copy_database_multiple.test": {
+      "source_sha": "cbe1a7ea341824f8cbfc209b126e1db6edbc9511",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_multiple.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 3,
+      "last_synced": "2026-03-17",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/copy_database/copy_database_simple.test": {
+      "source_sha": "8a007786dbc69d5f40db2bcc1b468a4e912daef4",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_simple.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 3,
+      "last_synced": "2026-03-17",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/copy_database/copy_database_with_index.test": {
+      "source_sha": "c8191b7279a6bcf4cc82f96f274283929219c9a2",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_with_index.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 5,
+      "last_synced": "2026-03-17",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/copy_database/copy_database_with_unique_index.test": {
+      "source_sha": "3c08929c729d898985a44de02f62255e004c78ed",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_with_unique_index.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 4,
+      "last_synced": "2026-03-17",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/copy_database/copy_table_with_sequence.test": {
+      "source_sha": "b73cbf96e98bfeb69c14e7754eaf678a2fdadf7f",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_table_with_sequence.test",
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 6,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23366,139 +23618,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
-    },
-    "test/sql/copy_database/copy_database_index.test": {
-      "source_sha": "01c87821ce999eedbd36dcc398d4ce3e68fbfe98",
-      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_index.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 13,
-      "last_synced": "2026-03-17",
-      "todo_whitelist": [
-        "hugeint",
-        "lambda",
-        "printf not supported",
-        "format not supported",
-        "type difference",
-        "result differs",
-        "wrong_result",
-        "type_error",
-        "unknown function",
-        "unsupported feature"
-      ],
-      "gate": "fail"
-    },
-    "test/sql/copy_database/copy_database_multiple.test": {
-      "source_sha": "cbe1a7ea341824f8cbfc209b126e1db6edbc9511",
-      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_multiple.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 7,
-      "last_synced": "2026-03-17",
-      "todo_whitelist": [
-        "hugeint",
-        "lambda",
-        "printf not supported",
-        "format not supported",
-        "type difference",
-        "result differs",
-        "wrong_result",
-        "type_error",
-        "unknown function",
-        "unsupported feature"
-      ],
-      "gate": "fail"
-    },
-    "test/sql/copy_database/copy_database_simple.test": {
-      "source_sha": "8a007786dbc69d5f40db2bcc1b468a4e912daef4",
-      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_simple.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 7,
-      "last_synced": "2026-03-17",
-      "todo_whitelist": [
-        "hugeint",
-        "lambda",
-        "printf not supported",
-        "format not supported",
-        "type difference",
-        "result differs",
-        "wrong_result",
-        "type_error",
-        "unknown function",
-        "unsupported feature"
-      ],
-      "gate": "fail"
-    },
-    "test/sql/copy_database/copy_database_with_index.test": {
-      "source_sha": "c8191b7279a6bcf4cc82f96f274283929219c9a2",
-      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_with_index.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 10,
-      "last_synced": "2026-03-17",
-      "todo_whitelist": [
-        "hugeint",
-        "lambda",
-        "printf not supported",
-        "format not supported",
-        "type difference",
-        "result differs",
-        "wrong_result",
-        "type_error",
-        "unknown function",
-        "unsupported feature"
-      ],
-      "gate": "fail"
-    },
-    "test/sql/copy_database/copy_database_with_unique_index.test": {
-      "source_sha": "3c08929c729d898985a44de02f62255e004c78ed",
-      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_database_with_unique_index.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 12,
-      "last_synced": "2026-03-17",
-      "todo_whitelist": [
-        "hugeint",
-        "lambda",
-        "printf not supported",
-        "format not supported",
-        "type difference",
-        "result differs",
-        "wrong_result",
-        "type_error",
-        "unknown function",
-        "unsupported feature"
-      ],
-      "gate": "fail"
-    },
-    "test/sql/copy_database/copy_table_with_sequence.test": {
-      "source_sha": "b73cbf96e98bfeb69c14e7754eaf678a2fdadf7f",
-      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/copy_database/copy_table_with_sequence.test",
-      "status": "fail",
-      "commented_out": 3,
-      "total_records": 25,
-      "last_synced": "2026-03-17",
-      "todo_whitelist": [
-        "hugeint",
-        "lambda",
-        "printf not supported",
-        "format not supported",
-        "type difference",
-        "result differs",
-        "wrong_result",
-        "type_error",
-        "unknown function",
-        "unsupported feature"
-      ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
     },
     "test/sql/create/create_as.test": {
       "source_sha": "50799dee1dd3cc2e72ab6e7c6c69b8f76ef5b15e",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/create/create_as.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 10,
       "total_records": 39,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23513,13 +23642,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
     },
     "test/sql/create/create_as_issue_11968.test": {
       "source_sha": "04ec83c2d7aa42fb5f2ab6a7c0a32995f58648be",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/create/create_as_issue_11968.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 6,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23534,7 +23666,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/create/create_as_partition_sorted_options.test": {
       "source_sha": "3d48b3c9c326bd22e3122ab48dd3dbe00eb25ade",
@@ -23584,8 +23719,8 @@
     "test/sql/create/create_index_on_issue_13643.test": {
       "source_sha": "7ae069d66b5475d4c5632cfa9d9aaf1e87e8797d",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/create/create_index_on_issue_13643.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 7,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23600,7 +23735,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
     },
     "test/sql/create/create_objects_readonly.test": {
       "source_sha": "c38a001f56be49f789ae0454e08a1ec6e72ec81e",
@@ -23699,8 +23837,8 @@
     "test/sql/create/create_table_compression.test": {
       "source_sha": "76ab3aaf94fa7acf765761cdd08c0d7402105ba6",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/create/create_table_compression.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 17,
       "total_records": 33,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23715,7 +23853,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 17
+      },
+      "gate": "partial"
     },
     "test/sql/create/create_table_empty_name.test": {
       "source_sha": "bcb86ea851f66b1fdbc960167caf14de4fdb6987",
@@ -23766,8 +23907,8 @@
     "test/sql/create/create_table_with_arraybounds.test": {
       "source_sha": "bffa9c99daff0957d20c4c47c347606c0882366d",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/create/create_table_with_arraybounds.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 13,
       "total_records": 16,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23782,7 +23923,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 13
+      },
+      "gate": "partial"
     },
     "test/sql/create/create_using_index.test": {
       "source_sha": "643b2ae5a346ae90cd4b1ad4d34d0e82ad6a678c",
@@ -23853,8 +23997,8 @@
     "test/sql/cte/cte_describe.test": {
       "source_sha": "c2f13d2e9046fb786d14a2e7253a792464602d81",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/cte_describe.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 8,
       "total_records": 8,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23869,12 +24013,15 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
     },
     "test/sql/cte/cte_issue_17311.test": {
       "source_sha": "94f8d021a2ffeae676f1a42e7c99ab5572330a93",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/cte_issue_17311.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 2,
       "last_synced": "2026-03-17",
@@ -23890,12 +24037,12 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/cte/cte_null_values.test": {
       "source_sha": "d442a66dd3d2e0af6c7b7edc9f7bb412e39d6086",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/cte_null_values.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 1,
       "last_synced": "2026-03-17",
@@ -23911,13 +24058,13 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/cte/cte_on_conflict_issue.test": {
       "source_sha": "2c97bd4d6d76ffea31974a9cac8ba6641e62ce7a",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/cte_on_conflict_issue.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 5,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -23932,7 +24079,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/cte/cte_schema.test": {
       "source_sha": "cc7a18093030d187bfb3b0187102964ea96e95e9",
@@ -24180,8 +24330,8 @@
     "test/sql/cte/materialized/materialized_cte_modifiers.test": {
       "source_sha": "6dc54e4d79aef2860c4fe34340a40be557ee113d",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/materialized_cte_modifiers.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 2,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24196,13 +24346,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/materialized_cte_prepared.test": {
       "source_sha": "a0800eba0cb40c1abea41b7efc8f99a53b0ad54a",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/materialized_cte_prepared.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 9,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24217,13 +24370,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/recursive_array_slice_materialized.test": {
       "source_sha": "104339a551ac509878023652847b59d39f27c6a4",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/recursive_array_slice_materialized.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 4,
       "total_records": 7,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24238,13 +24394,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/recursive_cte_complex_pipelines.test": {
       "source_sha": "b1e5c1417639e40642ad092accc1e3a72c0fcbbf",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/recursive_cte_complex_pipelines.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 9,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24259,7 +24418,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/recursive_cte_error_materialized.test": {
       "source_sha": "6ab3b1344ab1c64b005989068aadf8e692b91250",
@@ -24330,8 +24492,8 @@
     "test/sql/cte/materialized/test_correlated_recursive_cte_materialized.test": {
       "source_sha": "4763e8e999687ee62560ed37615b159446a6efd5",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/test_correlated_recursive_cte_materialized.test",
-      "status": "fail",
-      "commented_out": 4,
+      "status": "partial",
+      "commented_out": 12,
       "total_records": 12,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24346,7 +24508,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 12
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/test_cte_in_cte_materialized.test": {
       "source_sha": "f79f4fc21fe0aeff66cb9606e3e4cece997859e0",
@@ -24375,8 +24540,8 @@
     "test/sql/cte/materialized/test_cte_materialized.test": {
       "source_sha": "7cccdc813a1bd3cd061dc87b24123f4f2f9d1e2e",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/test_cte_materialized.test",
-      "status": "fail",
-      "commented_out": 6,
+      "status": "partial",
+      "commented_out": 8,
       "total_records": 26,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24391,7 +24556,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/test_cte_overflow_materialized.test": {
       "source_sha": "c4fd7affcae61cc102e45b38650597e263623055",
@@ -24444,7 +24612,7 @@
     "test/sql/cte/materialized/test_materialized_cte.test": {
       "source_sha": "3895d16cdf9458e15ea2137f7a4f6e51dfa4adcd",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/test_materialized_cte.test",
-      "status": "fail",
+      "status": "partial",
       "commented_out": 1,
       "total_records": 10,
       "last_synced": "2026-03-17",
@@ -24460,7 +24628,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/test_nested_recursive_cte_materialized.test": {
       "source_sha": "d6edee00ca18972c57113ff60567bd2bba9a6304",
@@ -24513,8 +24684,8 @@
     "test/sql/cte/materialized/test_recursive_cte_tutorial_materialized.test": {
       "source_sha": "7733e1f2306e2aa940a87cc6feddb53b621e6a26",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/materialized/test_recursive_cte_tutorial_materialized.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 10,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24529,7 +24700,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
     },
     "test/sql/cte/materialized/test_recursive_cte_union_all_materialized.test": {
       "source_sha": "6c01b010ff1b4d4eeb8d24b80ce38b196a79e485",
@@ -24582,8 +24756,8 @@
     "test/sql/cte/recursive_array_slice.test": {
       "source_sha": "2d6deb18274fe2bad0ae5ecab1d716022f033033",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/recursive_array_slice.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 7,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24598,13 +24772,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
     },
     "test/sql/cte/recursive_cte_complex_pipelines.test": {
       "source_sha": "9fbe836958a7d8fa3451b5cd1e07ab452c2bfbfd",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/recursive_cte_complex_pipelines.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 8,
       "total_records": 9,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24619,7 +24796,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
     },
     "test/sql/cte/recursive_cte_error.test": {
       "source_sha": "f07ec37080aa0b5a08f2b33897c3a438be9ce011",
@@ -24645,8 +24825,8 @@
     "test/sql/cte/recursive_cte_key_aggregation.test": {
       "source_sha": "268c7b57c461bde9f791a2b09fa8e3895ae49aa6",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/recursive_cte_key_aggregation.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 39,
       "total_records": 58,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24661,13 +24841,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 39
+      },
+      "gate": "partial"
     },
     "test/sql/cte/recursive_cte_key_hll_aggregation.test": {
       "source_sha": "27da3e42f364ff741be750665789d5a047c02357",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/recursive_cte_key_hll_aggregation.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 4,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24682,7 +24865,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/cte/recursive_hang_2745.test": {
       "source_sha": "167cc22fb14cf1de572d194fcbe5aff6d86227d1",
@@ -24732,8 +24918,8 @@
     "test/sql/cte/test_cte.test": {
       "source_sha": "044df3572b112309fc1287d62dba4cf510d6be6e",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/test_cte.test",
-      "status": "fail",
-      "commented_out": 2,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 32,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24748,7 +24934,11 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6,
+        "result_differs": 1
+      },
+      "gate": "partial"
     },
     "test/sql/cte/test_cte_in_cte.test": {
       "source_sha": "8dff5822e80d43576174f302755ea555351e2406",
@@ -24891,8 +25081,8 @@
     "test/sql/cte/test_recursive_cte_recurring.test": {
       "source_sha": "502daca9d1c3edd8aefa84926a8641fcc14e51f7",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/test_recursive_cte_recurring.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 3,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24907,13 +25097,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/cte/test_recursive_cte_tutorial.test": {
       "source_sha": "cdd6638871325d9a9da519fa9eccd1be915d3485",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/test_recursive_cte_tutorial.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 10,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24928,7 +25121,11 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 5,
+        "result_differs": 2
+      },
+      "gate": "partial"
     },
     "test/sql/cte/test_recursive_cte_union.test": {
       "source_sha": "c0be14093ca8468271060944ea6544d5709a0d3a",
@@ -24957,8 +25154,8 @@
     "test/sql/cte/test_recursive_cte_union_all.test": {
       "source_sha": "4210f3192604fd60c9830bc77b76baced03a9d02",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/test_recursive_cte_union_all.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 16,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24973,13 +25170,17 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2,
+        "result_differs": 4
+      },
+      "gate": "partial"
     },
     "test/sql/cte/warn_deprecated_union_in_using_key.test": {
       "source_sha": "9b55532db4936341709ba7be9dce0f24d956e802",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/cte/warn_deprecated_union_in_using_key.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 10,
       "total_records": 10,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -24994,7 +25195,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
     },
     "test/sql/delete/cleanup_delete_on_conflict.test": {
       "source_sha": "99abf9d33f9978ac43d51fbaff04b410da9b766a",
@@ -25044,7 +25248,7 @@
     "test/sql/delete/list_delete.test": {
       "source_sha": "388fa7e34f42653f5a1b8f0c8d1dac7d7c11fa59",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/delete/list_delete.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 7,
       "last_synced": "2026-03-17",
@@ -25060,7 +25264,7 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/delete/test_delete.test": {
       "source_sha": "a55fc3ee29f919e20ba204a98cd0ecd9e594cf78",
@@ -25086,8 +25290,8 @@
     "test/sql/delete/test_delete_indexed.test": {
       "source_sha": "f1ad4706537a716e0ee61ff386bd465e52975171",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/delete/test_delete_indexed.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 65,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25102,7 +25306,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/delete/test_large_delete.test": {
       "source_sha": "08b39b7a20c6d77015f7f6c6fd7108a4386af346",
@@ -25149,9 +25356,9 @@
     "test/sql/delete/test_segment_deletes.test": {
       "source_sha": "f40f0298781169a1f1b72cb6fcd5d9a21dbb3996",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/delete/test_segment_deletes.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 57,
+      "status": "partial",
+      "commented_out": 13,
+      "total_records": 61,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25165,13 +25372,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 13
+      },
+      "gate": "partial"
     },
     "test/sql/delete/test_truncate.test": {
       "source_sha": "aca9bbf2128a4f92df86c7213c4196315c268aa5",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/delete/test_truncate.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 4,
       "total_records": 13,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25186,14 +25396,18 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "result_differs": 1,
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/delete/test_using_delete.test": {
       "source_sha": "7071b50ef25033c761d47bdae561ad6b22a8348c",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/delete/test_using_delete.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 17,
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 4,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25207,14 +25421,17 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
     },
     "test/sql/delete/test_using_delete_duplicates.test": {
       "source_sha": "bd996e49b3504e17fa22fb0e09c6aec04c3b3b5c",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/delete/test_using_delete_duplicates.test",
-      "status": "fail",
-      "commented_out": 2,
-      "total_records": 42,
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 4,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25228,7 +25445,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
     },
     "test/sql/detailed_profiler/test_detailed_profiler.test": {
       "source_sha": "d307c66cbc23e2356057d7d01258272e5ae67f88",
@@ -25380,8 +25600,8 @@
     "test/sql/error/incorrect_sql.test": {
       "source_sha": "6c0dfd2bb881274f691f3cd0092e7304d6848986",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/error/incorrect_sql.test",
-      "status": "fail",
-      "commented_out": 2,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 38,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25396,7 +25616,11 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "result_differs": 3,
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/error/lineitem_errors.test": {
       "source_sha": "7da8a32110c94a0afc23669e94195808e98dfda3",
@@ -25464,8 +25688,8 @@
     "test/sql/error/qualified_column_error.test": {
       "source_sha": "c97435feaa71cf36c75ed33545142dd057ba8f7c",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/error/qualified_column_error.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 8,
       "total_records": 13,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25480,7 +25704,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
     },
     "test/sql/error/subquery_single_column.test": {
       "source_sha": "6e0abb04e3ceec90ec2a5e524394fe89d2d5c7c9",
@@ -25548,9 +25775,9 @@
     "test/sql/explain/explain_all_statements.test": {
       "source_sha": "268ead8cddad46972baccf079ccbb6a85a6202de",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/explain/explain_all_statements.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 32,
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 1,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25564,14 +25791,17 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/explain/explain_execute.test": {
       "source_sha": "1b1df1ff8ec4b215a78833b4fba72db7fa253454",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/explain/explain_execute.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 5,
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 2,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25585,14 +25815,17 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/explain/test_explain.test": {
       "source_sha": "8e6d34336d95f69b757ef604f23c72db2d7d2eb7",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/explain/test_explain.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 12,
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 1,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25606,34 +25839,17 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/explain/test_explain_analyze.test": {
       "source_sha": "21c459d84f0b7c9ba07bd08035fcc9844f49a753",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/explain/test_explain_analyze.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 15,
-      "last_synced": "2026-03-17",
-      "todo_whitelist": [
-        "hugeint",
-        "lambda",
-        "printf not supported",
-        "format not supported",
-        "type difference",
-        "result differs",
-        "wrong_result",
-        "type_error",
-        "unknown function",
-        "unsupported feature"
-      ]
-    },
-    "test/sql/explain/test_explain_limit.test": {
-      "source_sha": "b4452f4d99b626c89b6df1c3ec0b3d9f8fdc0601",
-      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/explain/test_explain_limit.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 5,
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 1,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25647,7 +25863,34 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "result_differs": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/explain/test_explain_limit.test": {
+      "source_sha": "b4452f4d99b626c89b6df1c3ec0b3d9f8fdc0601",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/explain/test_explain_limit.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 1,
+      "last_synced": "2026-03-17",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/explain/test_explain_table_scan.test": {
       "source_sha": "e33f9220cff1570670746f18013a89750741c849",
@@ -25718,9 +25961,9 @@
     "test/sql/export/export_database.test": {
       "source_sha": "3f79e53aff4bdc8129e9db455590d21113d3d8d2",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_database.test",
-      "status": "fail",
-      "commented_out": 1,
-      "total_records": 70,
+      "status": "partial",
+      "commented_out": 36,
+      "total_records": 73,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -25734,7 +25977,11 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 29,
+        "result_differs": 7
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_external_access.test": {
       "source_sha": "abfec8409f1bde081d6fdba1c359e68c7c344d60",
@@ -25760,8 +26007,8 @@
     "test/sql/export/export_functions.test": {
       "source_sha": "609cfd0d8b3bf7887dcb1a865583f6f2cf691813",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_functions.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 4,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25776,13 +26023,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_generated_columns.test": {
       "source_sha": "174c8650d322761edcdf4924f86369108d56966d",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_generated_columns.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 9,
       "total_records": 12,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25797,7 +26047,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 9
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_hive_path.test": {
       "source_sha": "1c644206130fc621c5b5d1cb14863bce324be6d1",
@@ -25823,8 +26076,8 @@
     "test/sql/export/export_indexes.test": {
       "source_sha": "4552455fbe501ed9c493df8a647c6a9ad99388ea",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_indexes.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 8,
       "total_records": 11,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25839,13 +26092,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_macros.test": {
       "source_sha": "8c2bb087d7c3f86750ead9a815bd7b16d37f3760",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_macros.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 9,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25860,13 +26116,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_quoted_enum.test": {
       "source_sha": "d80b4c61c30b3c82f2f7637fbd5e47130c704167",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_quoted_enum.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 5,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25881,13 +26140,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_quoted_structs.test": {
       "source_sha": "319459a94d7cc46d50d4b5c3d987fb8b4e81dc75",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_quoted_structs.test",
-      "status": "fail",
-      "commented_out": 5,
+      "status": "partial",
+      "commented_out": 9,
       "total_records": 12,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25902,13 +26164,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 9
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_quoted_union.test": {
       "source_sha": "f5c0008b0e0eb71c496587dd60f3589d7bd20bd2",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/export_quoted_union.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 5,
       "total_records": 8,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25923,7 +26188,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
     },
     "test/sql/export/export_types.test": {
       "source_sha": "1913be340995f4c3f22640b8b1e1c24b56428467",
@@ -25973,8 +26241,8 @@
     "test/sql/export/parquet/export_parquet_enum.test": {
       "source_sha": "9db27d42275d2816eece4683268a7d31bd4e6b80",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/parquet/export_parquet_enum.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 8,
       "total_records": 12,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -25989,7 +26257,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
     },
     "test/sql/export/parquet/export_parquet_hugeint.test": {
       "source_sha": "3c55241bf697f4e7242fcd8c80f44b875f2bae33",
@@ -26045,8 +26316,8 @@
     "test/sql/export/parquet/export_parquet_list.test": {
       "source_sha": "772870a5976dbbd8d2697923520fb3e771ea79d9",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/parquet/export_parquet_list.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 6,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26061,13 +26332,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/export/parquet/export_parquet_map.test": {
       "source_sha": "16a9aef925f2eea0762f40d61cd05a5bceb9a723",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/parquet/export_parquet_map.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 10,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26082,13 +26356,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
     },
     "test/sql/export/parquet/export_parquet_struct.test": {
       "source_sha": "a68bcfa3671e4a61fc5850c1f045084b2b7ca784",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/parquet/export_parquet_struct.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 3,
       "total_records": 6,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26103,13 +26380,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
     },
     "test/sql/export/parquet/export_parquet_union.test": {
       "source_sha": "b4f1217c3df880a674fbd9e5a42d4e0eec353008",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/export/parquet/export_parquet_union.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 11,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26124,7 +26404,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
     },
     "test/sql/export/parquet_export.test": {
       "source_sha": "28d44e4593421eb6f897fac2e340d93094a3788f",
@@ -26216,8 +26499,8 @@
     "test/sql/extensions/permissions_duckdb_extension.test": {
       "source_sha": "979869e1dcfe6f4156ae8a1881acb958311df5f7",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/extensions/permissions_duckdb_extension.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 7,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26232,7 +26515,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
     },
     "test/sql/extensions/sqlite_alter_table_add_pk.test": {
       "source_sha": "f40b237fc76a3750a59d0797c67c3b6a41a8a971",
@@ -26419,8 +26705,8 @@
     "test/sql/filter/test_or_pushdown.test": {
       "source_sha": "021125bd7770ac8cb578b26479c88880a4016937",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/filter/test_or_pushdown.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 16,
       "total_records": 16,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26435,13 +26721,17 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "result_differs": 1,
+        "unsupported_feature": 15
+      },
+      "gate": "partial"
     },
     "test/sql/filter/test_struct_pushdown.test": {
       "source_sha": "f219b8d36899dbc3ca2d9a164cd1a7160848db66",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/filter/test_struct_pushdown.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 25,
       "total_records": 33,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26456,12 +26746,15 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 25
+      },
+      "gate": "partial"
     },
     "test/sql/filter/test_transitive_filters.test": {
       "source_sha": "92ff22269b17ce53e422d3c2ec7eba4e6f3f3d59",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/filter/test_transitive_filters.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 51,
       "last_synced": "2026-03-17",
@@ -26476,7 +26769,8 @@
         "type_error",
         "unknown function",
         "unsupported feature"
-      ]
+      ],
+      "gate": "pass"
     },
     "test/sql/filter/test_try_filter_doesnt_mutate_columns.test": {
       "source_sha": "975593f789dd98cab424fb2ed767c53629deab7f",
@@ -26507,8 +26801,8 @@
     "test/sql/filter/test_variant_filter.test": {
       "source_sha": "8840f09a2a91e61f50c62af83bff86dfb76f3717",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/filter/test_variant_filter.test",
-      "status": "fail",
-      "commented_out": 4,
+      "status": "partial",
+      "commented_out": 10,
       "total_records": 10,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26523,7 +26817,11 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "result_differs": 1,
+        "unsupported_feature": 9
+      },
+      "gate": "partial"
     },
     "test/sql/filter/test_zonemap_segment.test": {
       "source_sha": "b41a822155dac2ae8b080dd6771e823361503d51",
@@ -26575,8 +26873,8 @@
     "test/sql/function/array/array_cosine_distance.test": {
       "source_sha": "71ecc7909fe4928d25f484f11db0dcdcd02d186e",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/array/array_cosine_distance.test",
-      "status": "fail",
-      "commented_out": 2,
+      "status": "partial",
+      "commented_out": 16,
       "total_records": 17,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26591,13 +26889,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 16
+      },
+      "gate": "partial"
     },
     "test/sql/function/array/array_cosine_similarity.test": {
       "source_sha": "0d0e5724c5577946b2c6163564789e94495eca37",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/array/array_cosine_similarity.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 14,
       "total_records": 15,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26612,7 +26913,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 14
+      },
+      "gate": "partial"
     },
     "test/sql/function/array/array_cross_product.test": {
       "source_sha": "36cfc4418936effe9bbc50205c0c2c66fb024baa",
@@ -26644,8 +26948,8 @@
     "test/sql/function/array/array_distance.test": {
       "source_sha": "cb28c3b7f7e7dd174305387090f16ccc7c477d95",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/array/array_distance.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 7,
       "total_records": 8,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26660,7 +26964,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
     },
     "test/sql/function/array/array_flatten.test": {
       "source_sha": "0edd7eab80366153c8a7d250c225328d2bb7f5e9",
@@ -26689,8 +26996,8 @@
     "test/sql/function/array/array_inner_product.test": {
       "source_sha": "3d4f9aab563b150233a78d9d7f954541a5a57df8",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/array/array_inner_product.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 14,
       "total_records": 18,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26705,13 +27012,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 14
+      },
+      "gate": "partial"
     },
     "test/sql/function/array/array_length.test": {
-      "source_sha": "63d483a1ec7d8f0e93facc2739952fe342c3fd50",
+      "source_sha": "4d5c94b86523725d7ed73815bd47fe5b1349db73",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/array/array_length.test",
-      "status": "fail",
-      "commented_out": 1,
+      "status": "partial",
+      "commented_out": 2,
       "total_records": 12,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26726,13 +27036,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
     },
     "test/sql/function/array/array_list_functions.test": {
-      "source_sha": "d038282def7e1db35ba7d190198b223a07ec729f",
+      "source_sha": "af1b600bfa9bc2ceb020b71636e882ba6fd5ff5c",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/array/array_list_functions.test",
-      "status": "fail",
-      "commented_out": 3,
+      "status": "partial",
+      "commented_out": 16,
       "total_records": 16,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26747,7 +27060,21 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unknown_function": [
+          "list_distinct",
+          "list_sort",
+          "list_slice",
+          "list_transform",
+          "list_filter",
+          "list_concat",
+          "list_resize",
+          "list_position",
+          "list_contains",
+          "list_extract"
+        ]
+      },
+      "gate": "partial"
     },
     "test/sql/function/autocomplete/alter_table.test": {
       "source_sha": "99872864e5a11f32099605f4432d5c87f3aa5296",
@@ -26824,8 +27151,8 @@
     "test/sql/function/autocomplete/create_schema.test": {
       "source_sha": "b0afe0b99bdf36959c4b8ecdd6ca3e4ed9929be5",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/autocomplete/create_schema.test",
-      "status": "fail",
-      "commented_out": 4,
+      "status": "partial",
+      "commented_out": 6,
       "total_records": 6,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26840,7 +27167,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
     },
     "test/sql/function/autocomplete/create_secret.test": {
       "source_sha": "27e5bca2d236035ea86b353c4eea573d1733ccc8",
@@ -26890,8 +27220,8 @@
     "test/sql/function/autocomplete/create_table.test": {
       "source_sha": "c30f810d6f87eadcda174fc0c35355ee07df2f6b",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/autocomplete/create_table.test",
-      "status": "fail",
-      "commented_out": 20,
+      "status": "partial",
+      "commented_out": 23,
       "total_records": 24,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -26906,7 +27236,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 23
+      },
+      "gate": "partial"
     },
     "test/sql/function/autocomplete/create_type.test": {
       "source_sha": "01fb13718499ff5a2f0447793b9eb5e372dfb715",
@@ -27199,9 +27532,9 @@
     "test/sql/function/autocomplete/tpch.test": {
       "source_sha": "3a6447b98a63a3bde69e7f2e7ddd5d41d6782dd4",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/autocomplete/tpch.test",
-      "status": "fail",
-      "commented_out": 0,
-      "total_records": 19,
+      "status": "partial",
+      "commented_out": 18,
+      "total_records": 30,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -27215,7 +27548,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 18
+      },
+      "gate": "partial"
     },
     "test/sql/function/autocomplete/window.test": {
       "source_sha": "b34dc0410df76bd843e7872eb116a0e0b913ea31",
@@ -27272,8 +27608,8 @@
     "test/sql/function/blob/create_sort_key.test": {
       "source_sha": "7ae4c1ffac03ad4e022af762ee825886529ac029",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/blob/create_sort_key.test",
-      "status": "fail",
-      "commented_out": 8,
+      "status": "partial",
+      "commented_out": 26,
       "total_records": 50,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -27288,7 +27624,13 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 22,
+        "unknown_function": [
+          "create_sort_key"
+        ]
+      },
+      "gate": "partial"
     },
     "test/sql/function/blob/encode.test": {
       "source_sha": "9b55c2241c37ee9008b98972a0336063b81d8298",
@@ -27320,8 +27662,8 @@
     "test/sql/function/blob/test_blob_array_slice.test": {
       "source_sha": "3b0d16a02756e4d1a7a9edf2fc45c8cfaede45ce",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/blob/test_blob_array_slice.test",
-      "status": "fail",
-      "commented_out": 2,
+      "status": "partial",
+      "commented_out": 10,
       "total_records": 11,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -27336,12 +27678,15 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
     },
     "test/sql/function/blob/test_concat_blob.test": {
       "source_sha": "e635f7d26e47d5652a410e3286d27bea3af68138",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/blob/test_concat_blob.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 4,
       "last_synced": "2026-03-17",
@@ -27357,12 +27702,12 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/function/date/date_add.test": {
       "source_sha": "8dd6403db4ef5350f7d8b27bc3219d33459feea0",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/date/date_add.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 5,
       "last_synced": "2026-03-17",
@@ -27378,13 +27723,13 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/function/date/date_part_stats.test": {
       "source_sha": "d2daca2d99cef9dfb8872c67955484d8a725a4ec",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/date/date_part_stats.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 21,
       "total_records": 44,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -27399,6 +27744,13 @@
         "unknown function",
         "unsupported feature"
       ],
+      "todo_breakdown": {
+        "unknown_function": [
+          "weekday",
+          "stats"
+        ],
+        "other": 20
+      },
       "gate": "fail"
     },
     "test/sql/function/date/date_trunc_4202.test": {
@@ -27473,9 +27825,9 @@
     "test/sql/function/date/test_date_trunc.test": {
       "source_sha": "1f92ca00dc3ef0122983f2be3748cd8f64901db5",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/date/test_date_trunc.test",
-      "status": "fail",
+      "status": "partial",
       "commented_out": 1,
-      "total_records": 72,
+      "total_records": 8,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -27489,13 +27841,16 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/function/date/test_extract.test": {
       "source_sha": "7daef627ea6f538b36f0d6bf4b4299f0371b2959",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/date/test_extract.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 1,
       "total_records": 21,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -27510,12 +27865,15 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
     },
     "test/sql/function/date/test_extract_edge_cases.test": {
       "source_sha": "1db31792b5f42c5578205edde1f9bdef2dbc225b",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/date/test_extract_edge_cases.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
       "total_records": 66,
       "last_synced": "2026-03-17",
@@ -27531,7 +27889,7 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/function/date/test_extract_month.test": {
       "source_sha": "3f79ced88984d3a864505a8c21499270f54b925e",
@@ -27581,9 +27939,9 @@
     "test/sql/function/date/test_strftime.test": {
       "source_sha": "aebfda539eb1e0fb4a9ea71cae9613fb189eb8f0",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/date/test_strftime.test",
-      "status": "fail",
-      "commented_out": 2,
-      "total_records": 28,
+      "status": "partial",
+      "commented_out": 9,
+      "total_records": 29,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -27597,14 +27955,21 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 6,
+        "result_differs": 2,
+        "unknown_function": [
+          "strftime"
+        ]
+      },
+      "gate": "partial"
     },
     "test/sql/function/date/test_strftime_exhaustive.test": {
       "source_sha": "a05a1167975d34121e4531c6c12c1ad1b83ddff4",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/date/test_strftime_exhaustive.test",
-      "status": "fail",
+      "status": "pass",
       "commented_out": 0,
-      "total_records": 46,
+      "total_records": 19,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
         "hugeint",
@@ -27618,7 +27983,7 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "gate": "pass"
     },
     "test/sql/function/date/test_time_bucket_date.test": {
       "source_sha": "5d64c4756189a3f16f5d3c84b2073758536a0cd9",
@@ -27650,8 +28015,8 @@
     "test/sql/function/enum/test_enum_code.test": {
       "source_sha": "3a3632753de479701f6085aa7865b0ec05428ab8",
       "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/function/enum/test_enum_code.test",
-      "status": "fail",
-      "commented_out": 0,
+      "status": "partial",
+      "commented_out": 9,
       "total_records": 10,
       "last_synced": "2026-03-17",
       "todo_whitelist": [
@@ -27666,7 +28031,10 @@
         "unknown function",
         "unsupported feature"
       ],
-      "gate": "fail"
+      "todo_breakdown": {
+        "unsupported_feature": 9
+      },
+      "gate": "partial"
     }
   },
   "checkpoints": {

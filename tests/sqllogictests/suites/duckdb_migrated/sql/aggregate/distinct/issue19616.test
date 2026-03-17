@@ -1,8 +1,8 @@
 statement ok
-DROP TABLE IF EXISTS test
+DROP TABLE IF EXISTS test_distinct_issue19616_data
 
 statement ok
-CREATE TABLE test (
+CREATE TABLE test_distinct_issue19616_data (
 	col1 int,
 	col2 int,
 	col3 int
@@ -18,7 +18,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -32,7 +32,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -46,7 +46,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -60,7 +60,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -74,7 +74,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -88,7 +88,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -102,7 +102,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -116,7 +116,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -130,7 +130,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;
@@ -144,7 +144,7 @@ query I
 SELECT *
 FROM (
 	SELECT DISTINCT col2
-	FROM test
+FROM test_distinct_issue19616_data
 	GROUP BY ROLLUP (col1, col2, col3)
 )
 ORDER BY col2;

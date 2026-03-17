@@ -2,10 +2,10 @@ statement ok
 DROP TABLE IF EXISTS enums
 
 statement ok
-DROP TABLE IF EXISTS hist_data
+DROP TABLE IF EXISTS test_histogram_hist_data
 
 statement ok
-DROP TABLE IF EXISTS names
+DROP TABLE IF EXISTS test_histogram_names
 
 # TODO: type_error
 # query I
@@ -38,24 +38,24 @@ SELECT histogram(2) FROM range(0, 100);
 [{"lower":"2","upper":"2","ndv":1,"count":100,"pre_sum":0}]
 
 statement ok
-CREATE TABLE hist_data (g INTEGER, e INTEGER)
+CREATE TABLE test_histogram_hist_data (g INTEGER, e INTEGER)
 
 statement ok
-INSERT INTO hist_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)
+INSERT INTO test_histogram_hist_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)
 
 query T
-SELECT histogram(g) from hist_data
+SELECT histogram(g) from test_histogram_hist_data
 ----
 [{"lower":"1","upper":"1","ndv":1,"count":2,"pre_sum":0},{"lower":"2","upper":"2","ndv":1,"count":3,"pre_sum":2},{"lower":"3","upper":"3","ndv":1,"count":1,"pre_sum":5},{"lower":"5","upper":"5","ndv":1,"count":1,"pre_sum":6}]
 
 query T
-SELECT histogram(e) from hist_data
+SELECT histogram(e) from test_histogram_hist_data
 ----
 [{"lower":"1","upper":"1","ndv":1,"count":1,"pre_sum":0},{"lower":"2","upper":"2","ndv":1,"count":1,"pre_sum":1},{"lower":"3","upper":"3","ndv":1,"count":1,"pre_sum":2},{"lower":"4","upper":"4","ndv":1,"count":1,"pre_sum":3},{"lower":"5","upper":"5","ndv":1,"count":1,"pre_sum":4},{"lower":"6","upper":"6","ndv":1,"count":1,"pre_sum":5}]
 
 query T
 select histogram(g)
-    from hist_data
+    from test_histogram_hist_data
     group by g%2=0 ORDER BY g%2=0
 ----
 [{"lower":"1","upper":"1","ndv":1,"count":2,"pre_sum":0},{"lower":"3","upper":"3","ndv":1,"count":1,"pre_sum":2},{"lower":"5","upper":"5","ndv":1,"count":1,"pre_sum":3}]
@@ -63,19 +63,19 @@ select histogram(g)
 
 query T
 select histogram(g)
-    from hist_data
+    from test_histogram_hist_data
     where g < 3
 ----
 [{"lower":"1","upper":"1","ndv":1,"count":2,"pre_sum":0},{"lower":"2","upper":"2","ndv":1,"count":3,"pre_sum":2}]
 
 statement ok
-create table names (name string)
+create table test_histogram_names (name string)
 
 statement ok
-insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),('mark'),(null),('Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.');
+insert into test_histogram_names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),('mark'),(null),('Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.');
 
 query T
-select histogram(name) from names;
+select histogram(name) from test_histogram_names;
 ----
 [{"lower":"'Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.'","upper":"'Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.'","ndv":1,"count":1,"pre_sum":0},{"lower":"'hannes'","upper":"'hannes'","ndv":1,"count":2,"pre_sum":1},{"lower":"'mark'","upper":"'mark'","ndv":1,"count":1,"pre_sum":3},{"lower":"'pedro'","upper":"'pedro'","ndv":1,"count":3,"pre_sum":4}]
 
@@ -118,7 +118,7 @@ SELECT histogram(CAST('2022-01-02' AS DATE));
 
 query IT rowsort
 select g,histogram(g) over (partition by g%2)
-    from hist_data;
+    from test_histogram_hist_data;
 ----
 1 [{"lower":"1","upper":"1","ndv":1,"count":2,"pre_sum":0},{"lower":"3","upper":"3","ndv":1,"count":1,"pre_sum":2},{"lower":"5","upper":"5","ndv":1,"count":1,"pre_sum":3}]
 1 [{"lower":"1","upper":"1","ndv":1,"count":2,"pre_sum":0},{"lower":"3","upper":"3","ndv":1,"count":1,"pre_sum":2},{"lower":"5","upper":"5","ndv":1,"count":1,"pre_sum":3}]

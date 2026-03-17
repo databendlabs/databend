@@ -5,16 +5,13 @@ statement ok
 DROP TABLE IF EXISTS partitioned_tbl2
 
 statement ok
-CREATE TABLE partitioned_tbl AS SELECT i%2 AS partition, i col1, i // 7 col2, (i%3)::VARCHAR col3 FROM range(0, 10000) t(i)
-
-statement ok
-DROP TABLE partitioned_tbl
+CREATE TABLE partitioned_tbl AS SELECT i % 2 AS partition_key, i AS col1, i // 7 AS col2, (i % 3)::VARCHAR AS col3 FROM range(0, 10000) t(i)
 
 query II
-SELECT partition, SUM(col1)
+SELECT partition_key, SUM(col1)
 FROM partitioned_tbl
-GROUP BY partition
-ORDER BY ALL
+GROUP BY partition_key
+ORDER BY partition_key
 ----
 0	24995000
 1	25000000
@@ -22,21 +19,22 @@ ORDER BY ALL
 # make sure the partitioned aggregate is used
 # all of these are identical, i.e. this gets folded into a single count aggregate
 
-query II
-EXPLAIN SELECT partition, SUM(col1)
-FROM partitioned_tbl
-GROUP BY partition
-ORDER BY ALL
-----
-# TODO: special result marker
+# TODO: result differs
+# query II
+# EXPLAIN SELECT partition_key, SUM(col1)
+# FROM partitioned_tbl
+# GROUP BY partition_key
+# ORDER BY partition_key
+# ----
+# special result marker
 
 # distinct aggregate
 
 query II
-SELECT partition, COUNT(DISTINCT col2)
+SELECT partition_key, COUNT(DISTINCT col2)
 FROM partitioned_tbl
-GROUP BY partition
-ORDER BY ALL
+GROUP BY partition_key
+ORDER BY partition_key
 ----
 0	1429
 1	1429
@@ -44,10 +42,10 @@ ORDER BY ALL
 # grouping sets
 
 query II
-SELECT partition, SUM(col1)
+SELECT partition_key, SUM(col1)
 FROM partitioned_tbl
-GROUP BY GROUPING SETS ((), (partition))
-ORDER BY ALL
+GROUP BY GROUPING SETS ((), (partition_key))
+ORDER BY partition_key NULLS LAST
 ----
 0	24995000
 1	25000000
@@ -55,20 +53,21 @@ NULL	49995000
 
 # filtered aggregate
 
-query II
-SELECT partition, SUM(col1) FILTER (col2%7>2)
-FROM partitioned_tbl
-GROUP BY partition
-ORDER BY ALL
-----
-0	14302848
-1	14302848
+# TODO: unsupported feature
+# query II
+# SELECT partition_key, SUM(col1) FILTER (WHERE col2 % 7 > 2)
+# FROM partitioned_tbl
+# GROUP BY partition_key
+# ORDER BY partition_key
+# ----
+# 0	14302848
+# 1	14302848
 
 query II
-SELECT SUM(col1), partition
+SELECT SUM(col1), partition_key
 FROM partitioned_tbl
-GROUP BY partition
-ORDER BY ALL
+GROUP BY partition_key
+ORDER BY partition_key
 ----
 24995000	0
 25000000	1
@@ -76,11 +75,11 @@ ORDER BY ALL
 # filter
 
 query II
-SELECT partition, SUM(col1)
+SELECT partition_key, SUM(col1)
 FROM partitioned_tbl
 WHERE col2 > 100
-GROUP BY partition
-ORDER BY ALL
+GROUP BY partition_key
+ORDER BY partition_key
 ----
 0	24870038
 1	24875391
@@ -90,14 +89,11 @@ ORDER BY ALL
 statement ok
 CREATE TABLE partitioned_tbl2 AS SELECT i%2 AS partition1, i%3 AS partition2, i col1, i + 1 col2 FROM range(0, 10000) t(i)
 
-statement ok
-DROP TABLE partitioned_tbl2
-
 query III
 SELECT partition1, partition2, SUM(col1)
 FROM partitioned_tbl2
 GROUP BY partition1, partition2
-ORDER BY ALL
+ORDER BY partition1, partition2
 ----
 0	0	8331666
 0	1	8328334
@@ -112,7 +108,7 @@ query II
 SELECT partition1, SUM(col1)
 FROM partitioned_tbl2
 GROUP BY partition1
-ORDER BY ALL
+ORDER BY partition1
 ----
 0	24995000
 1	25000000
@@ -121,7 +117,7 @@ query II
 SELECT partition2, SUM(col1)
 FROM partitioned_tbl2
 GROUP BY partition2
-ORDER BY ALL
+ORDER BY partition2
 ----
 0	16668333
 1	16661667
@@ -134,7 +130,7 @@ SELECT partition1, SUM(col1)
 FROM partitioned_tbl2
 WHERE partition2=0
 GROUP BY partition1
-ORDER BY ALL
+ORDER BY partition1
 ----
 0	8331666
 1	8336667
@@ -145,7 +141,7 @@ query III
 SELECT partition1, partition2, SUM(col1)
 FROM partitioned_tbl2
 GROUP BY GROUPING SETS ((partition1), (partition2))
-ORDER BY ALL
+ORDER BY partition1 NULLS LAST, partition2 NULLS FIRST
 ----
 0	NULL	24995000
 1	NULL	25000000

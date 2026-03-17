@@ -5,17 +5,18 @@ statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
-CREATE TABLE t (id INT PRIMARY KEY, s TEXT, j BIGINT);
+CREATE TABLE t (id INT, s TEXT, j BIGINT);
 
-statement ok
-CREATE INDEX idx ON t(j);
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx ON t(j);
 
 statement ok
 INSERT INTO t VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30);
 
 # verify initial state
 
-query III
+query ITI
 SELECT * FROM t ORDER BY id;
 ----
 1	a	10
@@ -27,7 +28,7 @@ SELECT * FROM t ORDER BY id;
 statement ok
 DELETE FROM t WHERE id = 2;
 
-query III
+query ITI
 SELECT * FROM t ORDER BY id;
 ----
 1	a	10
@@ -38,7 +39,7 @@ SELECT * FROM t ORDER BY id;
 statement ok
 DELETE FROM t WHERE j = 30;
 
-query III
+query ITI
 SELECT * FROM t ORDER BY id;
 ----
 1	a	10
@@ -56,7 +57,7 @@ BEGIN TRANSACTION
 statement ok
 DELETE FROM t WHERE j > 10;
 
-query III
+query ITI
 SELECT * FROM t ORDER BY id;
 ----
 1	a	10
@@ -64,7 +65,7 @@ SELECT * FROM t ORDER BY id;
 statement ok
 ROLLBACK
 
-query III
+query ITI
 SELECT * FROM t ORDER BY id;
 ----
 1	a	10
@@ -99,14 +100,14 @@ DELETE FROM t WHERE j >= 20;
 statement ok
 INSERT INTO t VALUES (2, 'new_20', 20), (3, 'new_30', 30);
 
-# verify index lookup during transaction
+# verify lookup during transaction
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	new_20	20
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 30;
 ----
 3	new_30	30
@@ -114,14 +115,14 @@ SELECT * FROM t WHERE j = 30;
 statement ok
 COMMIT;
 
-# verify index lookups after commit
+# verify lookups after commit
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	new_20	20
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 30;
 ----
 3	new_30	30
@@ -141,14 +142,14 @@ DELETE FROM t WHERE j >= 20;
 statement ok
 INSERT INTO t VALUES (2, 'tmp_20', 20), (3, 'tmp_30', 30);
 
-# verify index lookup during transaction
+# verify lookup during transaction
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	tmp_20	20
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 30;
 ----
 3	tmp_30	30
@@ -156,28 +157,28 @@ SELECT * FROM t WHERE j = 30;
 statement ok
 ROLLBACK;
 
-# verify index lookups after rollback
+# verify lookups after rollback
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	new_20	20
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 30;
 ----
 3	new_30	30
 
-# verify range queries on index
+# verify range queries
 
-query III
+query ITI
 SELECT * FROM t WHERE j >= 20 ORDER BY j;
 ----
 2	new_20	20
 3	new_30	30
 
 # -----------------------------------------------------------------------------
-# MERGE INTO DELETE with indexed table
+# MERGE INTO DELETE with table
 # -----------------------------------------------------------------------------
 
 # reset table
@@ -202,7 +203,7 @@ statement ok
 MERGE INTO t USING source ON t.id = source.id
 WHEN MATCHED THEN DELETE;
 
-query III
+query ITI
 SELECT * FROM t ORDER BY id;
 ----
 1	a	10
@@ -212,7 +213,7 @@ SELECT * FROM t ORDER BY id;
 statement ok
 INSERT INTO t VALUES (2, 'new_b', 25), (3, 'new_c', 35);
 
-query III
+query ITI
 SELECT * FROM t ORDER BY id;
 ----
 1	a	10
@@ -221,7 +222,7 @@ SELECT * FROM t ORDER BY id;
 
 # verify index lookup works
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 25;
 ----
 2	new_b	25
@@ -258,12 +259,12 @@ INSERT INTO t VALUES (2, 'merge_20', 20), (3, 'merge_30', 30);
 
 # verify index lookup during transaction
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	merge_20	20
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 30;
 ----
 3	merge_30	30
@@ -273,12 +274,12 @@ COMMIT;
 
 # verify index lookups after commit
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	merge_20	20
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 30;
 ----
 3	merge_30	30
@@ -303,7 +304,7 @@ INSERT INTO t VALUES (2, 'tmp_20', 20), (3, 'tmp_30', 30);
 
 # verify during transaction
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	tmp_20	20
@@ -313,12 +314,12 @@ ROLLBACK;
 
 # verify index lookups after rollback - should see original values
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 20;
 ----
 2	merge_20	20
 
-query III
+query ITI
 SELECT * FROM t WHERE j = 30;
 ----
 3	merge_30	30

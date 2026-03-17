@@ -1,8 +1,11 @@
 statement ok
-CREATE RECURSIVE VIEW nums (n) AS
+CREATE VIEW nums AS
+WITH RECURSIVE nums_cte(n) AS (
     VALUES (1)
 UNION ALL
-    SELECT n+1 FROM nums WHERE n < 5;
+    SELECT n+1 FROM nums_cte WHERE n < 5
+)
+SELECT * FROM nums_cte;
 
 query I
 FROM nums

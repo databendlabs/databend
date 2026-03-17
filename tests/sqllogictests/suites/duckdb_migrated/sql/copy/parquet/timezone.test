@@ -1,10 +1,16 @@
-query I
-select typeof(TimeRecStart) from '{DATA_DIR}/parquet-testing/tz.parquet' limit 1;
-----
-TIMESTAMP WITH TIME ZONE
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query I
+# select typeof(TimeRecStart) from '{DATA_DIR}/parquet-testing/tz.parquet' limit 1;
+# ----
+# TIMESTAMP WITH TIME ZONE
 
-query I
-select TimeRecStart from '{DATA_DIR}/parquet-testing/tz.parquet';
-----
-2022-10-17 21:52:27+00
-2022-10-17 21:52:27+00
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query I
+# select TimeRecStart from '{DATA_DIR}/parquet-testing/tz.parquet';
+# ----
+# 2022-10-17 21:52:27+00
+# 2022-10-17 21:52:27+00

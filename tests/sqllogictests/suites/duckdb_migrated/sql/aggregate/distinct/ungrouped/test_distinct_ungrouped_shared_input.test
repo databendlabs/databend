@@ -1,11 +1,11 @@
 statement ok
-DROP TABLE IF EXISTS tbl
+DROP TABLE IF EXISTS test_distinct_ungrouped_shared_input_tbl
 
 statement ok
-create table tbl as select i%50 as i from range(0, 1000000) tbl(i);
+create table test_distinct_ungrouped_shared_input_tbl as select i%50 as i from range(0, 1000000) tbl(i);
 
 # TODO: unknown function
 # query IIIII
-# select count(distinct i), min(distinct i), max(distinct i), sum(distinct i), product(distinct i) from tbl;
+# select count(distinct i), min(distinct i), max(distinct i), sum(distinct i), product(distinct i) from test_distinct_ungrouped_shared_input_tbl;
 # ----
 # 50	0	49	1225	0.0

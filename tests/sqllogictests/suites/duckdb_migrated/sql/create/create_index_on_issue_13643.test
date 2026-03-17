@@ -1,20 +1,26 @@
 statement ok
 DROP TABLE IF EXISTS t0
 
-statement ok
-CREATE SCHEMA db0;
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA db0;
 
-statement ok
-USE db0;
+# TODO: unsupported feature
+# statement ok
+# USE db0;
 
-statement ok
-CREATE TABLE t0 (a BIGINT PRIMARY KEY, b INT, c INT);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t0 (a BIGINT PRIMARY KEY, b INT, c INT);
 
-statement ok
-CREATE INDEX t0_idx ON t0 (b);
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX t0_idx ON t0 (b);
 
-statement ok
-CREATE UNIQUE INDEX t0_uidx ON t0 (c);
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX t0_uidx ON t0 (c);
 
-statement ok
-CREATE UNIQUE INDEX t0_uidx2 ON db0.t0 (c);
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX t0_uidx2 ON db0.t0 (c);

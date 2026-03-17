@@ -1,18 +1,23 @@
+# DuckDB's test relies on the test_all_types() generator together with SELECT * EXCLUDE/REPLACE
+# rewriting over DuckDB-specific all-types columns.
+
 statement ok
 DROP TABLE IF EXISTS all_types
 
-statement ok
-CREATE TABLE all_types AS
-SELECT * EXCLUDE (bit, "union") REPLACE (
-	case when extract(month from interval) <> 0 then interval '1 month 1 day 12:13:34.123' else interval end AS interval
-)
-FROM test_all_types();
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE all_types AS
+# SELECT * EXCLUDE (bit, "union") REPLACE (
+# 	case when extract(month from interval) <> 0 then interval '1 month 1 day 12:13:34.123' else interval end AS interval
+# )
+# FROM test_all_types();
 
-query I nosort alltypes
-SELECT * REPLACE (
-	hugeint::DOUBLE AS hugeint,
-	uhugeint::DOUBLE AS uhugeint,
-	time_tz::TIME::TIMETZ AS time_tz
-)
-FROM all_types
-----
+# TODO: unsupported feature
+# query I nosort alltypes
+# SELECT * REPLACE (
+# 	hugeint::DOUBLE AS hugeint,
+# 	uhugeint::DOUBLE AS uhugeint,
+# 	time_tz::TIME::TIMETZ AS time_tz
+# )
+# FROM all_types
+# ----

@@ -1,11 +1,11 @@
 statement ok
-DROP TABLE IF EXISTS args
+DROP TABLE IF EXISTS test_arg_min_max_null_args
 
 statement ok
-DROP TABLE IF EXISTS blobs
+DROP TABLE IF EXISTS test_arg_min_max_null_blobs
 
 statement ok
-DROP TABLE IF EXISTS names
+DROP TABLE IF EXISTS test_arg_min_max_null_names
 
 statement error
 select arg_min_null()
@@ -68,36 +68,36 @@ select arg_max_null(*)
 # NULL
 
 statement ok
-create table args (a integer, b integer)
+create table test_arg_min_max_null_args (a integer, b integer)
 
 statement ok
-insert into args values (1,1), (2,2), (8,8), (10,10)
+insert into test_arg_min_max_null_args values (1,1), (2,2), (8,8), (10,10)
 
 # TODO: unknown function
 # query II
-# select arg_min_null(a,b), arg_max_null(a,b) from args;
+# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args;
 # ----
 # 1.000000	10.000000
 
 # TODO: unknown function
 # query II
-# select arg_min_null(a,b), arg_max_null(a,b) from args group by a%2 ORDER BY arg_min_null(a,b);
+# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args group by a%2 ORDER BY arg_min_null(a,b);
 # ----
 # 1	1
 # 2	10
 
 statement ok
-insert into args values (NULL, 0), (NULL, 12)
+insert into test_arg_min_max_null_args values (NULL, 0), (NULL, 12)
 
 # TODO: unknown function
 # query II
-# select arg_min_null(a,b), arg_max_null(a,b) from args;
+# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args;
 # ----
 # NULL	NULL
 
 # TODO: unknown function
 # query II
-# select arg_min_null(a,b), arg_max_null(a,b) from args group by a%2 ORDER BY arg_min_null(a,b);
+# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args group by a%2 ORDER BY arg_min_null(a,b);
 # ----
 # 1	1
 # 2	10
@@ -127,7 +127,7 @@ insert into args values (NULL, 0), (NULL, 12)
 
 # TODO: unknown function
 # query I rowsort
-# select arg_min_null(a,b) over ( partition by a%2) from args;
+# select arg_min_null(a,b) over ( partition by a%2) from test_arg_min_max_null_args;
 # ----
 # 1
 # 2
@@ -138,7 +138,7 @@ insert into args values (NULL, 0), (NULL, 12)
 
 # TODO: unknown function
 # query I rowsort
-# select arg_max_null(a,b) over ( partition by a%2) from args;
+# select arg_max_null(a,b) over ( partition by a%2) from test_arg_min_max_null_args;
 # ----
 # 1
 # 10
@@ -148,19 +148,19 @@ insert into args values (NULL, 0), (NULL, 12)
 # NULL
 
 statement ok
-create table names (name string, salary integer)
+create table test_arg_min_max_null_names (name string, salary integer)
 
 statement ok
-insert into names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
+insert into test_arg_min_max_null_names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
 
 # TODO: unknown function
 # query II
-# select arg_min_null(name,salary),arg_max_null(name,salary)  from names;
+# select arg_min_null(name,salary),arg_max_null(name,salary)  from test_arg_min_max_null_names;
 # ----
 # Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
 
 # TODO: unknown function
 # query II
-# select arg_min_null(salary,name),arg_max_null(salary,name)  from names;
+# select arg_min_null(salary,name),arg_max_null(salary,name)  from test_arg_min_max_null_names;
 # ----
 # 20	10

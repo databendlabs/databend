@@ -1,8 +1,11 @@
 # we just use the first partitioning key by default
-query III
-select *
-from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/duplicate_names/**/*.parquet')
-ORDER BY ALL
-----
-1	value1	1
-2	value2	2
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query III
+# select *
+# from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/duplicate_names/**/*.parquet')
+# ORDER BY ALL
+# ----
+# 1	value1	1
+# 2	value2	2

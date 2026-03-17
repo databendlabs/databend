@@ -82,55 +82,65 @@ CREATE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 statement error
 CREATE OR REPLACE TABLE tbl4 IF NOT EXISTS AS SELECT 4;
 
-statement ok
-CREATE TABLE tbl4(col1, col2) AS SELECT 1, 'hello';
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl4(col1, col2) AS SELECT 1, 'hello';
 
-query II
-SELECT * FROM tbl4;
-----
-1	hello
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl4;
+# ----
+# 1	hello
 
-statement ok
-CREATE OR REPLACE TABLE tbl4(col1, col2) AS SELECT 2, 'duck';
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE tbl4(col1, col2) AS SELECT 2, 'duck';
 
-query II
-SELECT * FROM tbl4;
-----
-2	duck
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl4;
+# ----
+# 2	duck
 
-statement ok
-CREATE TABLE IF NOT EXISTS tbl5(col1, col2) AS SELECT 3, 'database';
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS tbl5(col1, col2) AS SELECT 3, 'database';
 
-query II
-SELECT * FROM tbl5;
-----
-3	database
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl5;
+# ----
+# 3	database
 
 # define a column name need quote
 
-statement ok
-CREATE OR REPLACE TABLE tbl5(col1, "col need ' quote") AS SELECT 3.5, 'quote';
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE tbl5(col1, "col need ' quote") AS SELECT 3.5, 'quote';
 
-query II
-SELECT * FROM tbl5;
-----
-3.5	quote
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl5;
+# ----
+# 3.5	quote
 
 #colname and query mismatch
 
-statement ok
-CREATE TABLE tbl6(col1) AS SELECT 4 ,'mismatch';
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl6(col1) AS SELECT 4 ,'mismatch';
 
-query II
-SELECT * FROM tbl6;
-----
-4	mismatch
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl6;
+# ----
+# 4	mismatch
 
 statement error
 CREATE TABLE tbl7(col1, col2) AS SELECT 5;
 
 statement ok
-CREATE TABLE tbl8 AS SELECT 42 WITH NO DATA
+CREATE TABLE tbl8 AS SELECT 42 WHERE FALSE
 
 query I
 SELECT COUNT(*) FROM tbl8;
@@ -138,7 +148,7 @@ SELECT COUNT(*) FROM tbl8;
 0
 
 statement ok
-CREATE TABLE tbl9 AS SELECT 42 WITH DATA
+CREATE TABLE tbl9 AS SELECT 42
 
 query I
 SELECT COUNT(*) FROM tbl9;

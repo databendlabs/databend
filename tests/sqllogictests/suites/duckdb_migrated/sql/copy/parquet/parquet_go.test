@@ -1,8 +1,11 @@
-query II
-SELECT * FROM '{DATA_DIR}/parquet-testing/parquet_go.parquet'
-----
-John	Hello World
-John	Hello World
-John	Hello World
-John	Hello World
-John	Hello World
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# SELECT * FROM '{DATA_DIR}/parquet-testing/parquet_go.parquet'
+# ----
+# John	Hello World
+# John	Hello World
+# John	Hello World
+# John	Hello World
+# John	Hello World

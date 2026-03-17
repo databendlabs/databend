@@ -1,5 +1,5 @@
 statement ok
-DROP TABLE IF EXISTS integers
+DROP TABLE IF EXISTS test_count_integers
 
 query IIIII
 SELECT COUNT(*), COUNT(1), COUNT(100), COUNT(NULL), COUNT(DISTINCT 1)
@@ -9,13 +9,13 @@ SELECT COUNT(*), COUNT(1), COUNT(100), COUNT(NULL), COUNT(DISTINCT 1)
 # test counts on a set of values
 
 statement ok
-CREATE TABLE integers(i INTEGER);
+CREATE TABLE test_count_integers(i INTEGER);
 
 statement ok
-INSERT INTO integers VALUES (1), (2), (NULL)
+INSERT INTO test_count_integers VALUES (1), (2), (NULL)
 
 query IIIIII
-SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), COUNT(DISTINCT 1) FROM integers
+SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), COUNT(DISTINCT 1) FROM test_count_integers
 ----
 3 3 2 3 2 1
 
@@ -31,4 +31,4 @@ SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), C
 
 # TODO: unsupported feature
 # statement error
-# SELECT COUNT(DISTINCT *) FROM integers
+# SELECT COUNT(DISTINCT *) FROM test_count_integers

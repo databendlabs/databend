@@ -11,29 +11,35 @@ begin transaction;
 # statement ok
 # create table tbl as select "union" from test_all_types(), range(0, 3);
 
-statement ok
-create table tbl2 (a UNION(a bit, b bool));
+# TODO: unsupported feature
+# statement ok
+# create table tbl2 (a UNION(a bit, b bool));
 
-statement ok
-insert into tbl2 VALUES ('00101010'::BIT), (True::BOOL), (NULL::BIT);
+# TODO: unsupported feature
+# statement ok
+# insert into tbl2 VALUES ('00101010'::BIT), (True::BOOL), (NULL::BIT);
 
-query I nosort result1
-select * from tbl;
-----
+# TODO: unsupported feature
+# query I nosort result1
+# select * from tbl;
+# ----
 
-query I nosort result2
-select * from tbl2;
-----
+# TODO: unsupported feature
+# query I nosort result2
+# select * from tbl2;
+# ----
 
 # now export the db
 
 statement ok
 ROLLBACK
 
-query I nosort result1
-select * from tbl;
-----
+# TODO: unsupported feature
+# query I nosort result1
+# select * from tbl;
+# ----
 
-query I nosort result2
-select * from tbl2;
-----
+# TODO: unsupported feature
+# query I nosort result2
+# select * from tbl2;
+# ----

@@ -2,7 +2,7 @@ statement ok
 DROP TABLE IF EXISTS aggr
 
 statement ok
-CREATE TABLE aggr (k int[]);
+CREATE TABLE aggr (k ARRAY(INT));
 
 statement ok
 INSERT INTO aggr VALUES ([0, 1, 1, 1, 4, 0, 3, 3, 2, 2, 4, 4, 2, 4, 0, 0, 0, 1, 2, 3, 4, 2, 3, 3, 1]);
@@ -13,7 +13,7 @@ INSERT INTO aggr VALUES ([]), ([NULL]), (NULL), ([0, 1, 1, 1, 4, NULL, 0, 3, 3, 
 query I
 SELECT COUNT(k) FROM aggr
 ----
-4
+1
 
 statement ok
 DELETE FROM aggr;

@@ -65,7 +65,7 @@ WITH t(x) AS MATERIALIZED (SELECT x FROM generate_series(1,10) AS _(x) limit 4) 
 query I
 WITH t(x) AS MATERIALIZED (SELECT 1),
      u(x) AS MATERIALIZED (SELECT x+1 FROM t)
-  TABLE u UNION ALL TABLE t;
+  SELECT * FROM u UNION ALL SELECT * FROM t;
 ----
 2
 1

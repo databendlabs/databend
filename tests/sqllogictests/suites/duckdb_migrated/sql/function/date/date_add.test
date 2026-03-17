@@ -10,11 +10,11 @@ INSERT INTO dates VALUES (DATE '1992-01-01')
 # date_add, bigquery
 
 query I
-SELECT DATE_ADD(DATE '2008-12-25', INTERVAL 5 DAY) AS five_days_later;
+SELECT DATE_ADD(day, 5, DATE '2008-12-25') AS five_days_later;
 ----
-2008-12-30 00:00:00
+2008-12-30
 
 query I
-SELECT DATE_ADD(TIMESTAMP '2008-12-25 00:00:00', INTERVAL 5 DAY) AS five_days_later;
+SELECT DATE_ADD(day, 5, TIMESTAMP '2008-12-25 00:00:00') AS five_days_later;
 ----
-2008-12-30 00:00:00
+2008-12-30 00:00:00.000000

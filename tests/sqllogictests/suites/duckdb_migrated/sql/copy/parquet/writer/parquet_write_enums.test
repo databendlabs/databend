@@ -1,24 +1,29 @@
 statement ok
 DROP TABLE IF EXISTS enums
 
-statement ok
-CREATE TYPE mood AS ENUM ('joy', 'ok', 'happy');
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('joy', 'ok', 'happy');
 
-statement ok
-CREATE TABLE enums(m mood);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE enums(m mood);
 
-statement ok
-INSERT INTO enums VALUES
-	('happy'), ('happy'), ('joy'), ('joy'),
-	('happy'), ('happy'), ('joy'), ('joy'),
-    ('happy'), ('happy'), ('joy'), ('joy'),
-    ('happy'), ('happy'), ('joy'), ('joy'),
-    ('happy'), ('happy'), ('joy'), ('joy'),
-    ('happy'), ('happy'), ('joy'), ('joy'),
-    ('happy'), ('happy'), ('joy'), ('joy'), ('joy')
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO enums VALUES
+# 	('happy'), ('happy'), ('joy'), ('joy'),
+# 	('happy'), ('happy'), ('joy'), ('joy'),
+#     ('happy'), ('happy'), ('joy'), ('joy'),
+#     ('happy'), ('happy'), ('joy'), ('joy'),
+#     ('happy'), ('happy'), ('joy'), ('joy'),
+#     ('happy'), ('happy'), ('joy'), ('joy'),
+#     ('happy'), ('happy'), ('joy'), ('joy'), ('joy')
 
-statement ok
-UPDATE enums SET m=NULL WHERE m='joy'
+# TODO: unsupported feature
+# statement ok
+# UPDATE enums SET m=NULL WHERE m='joy'
 
-statement ok
-UPDATE enums SET m=NULL
+# TODO: unsupported feature
+# statement ok
+# UPDATE enums SET m=NULL

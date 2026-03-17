@@ -7,43 +7,47 @@ DROP TABLE IF EXISTS integers_load
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(0, 10)
 
-query I
-SELECT * FROM '~/integers.parquet'
-----
-0
-1
-2
-3
-4
-5
-6
-7
-8
-9
+# TODO: unsupported feature
+# query I
+# SELECT * FROM '~/integers.parquet'
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5
+# 6
+# 7
+# 8
+# 9
 
 statement ok
 CREATE TABLE integers_load(i INTEGER);
 
-statement ok
-COPY integers_load FROM '~/integers.parquet'
+# TODO: unsupported feature
+# statement ok
+# COPY integers_load FROM '~/integers.parquet'
 
-query I
-SELECT * FROM integers_load
-----
-0
-1
-2
-3
-4
-5
-6
-7
-8
-9
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers_load
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5
+# 6
+# 7
+# 8
+# 9
 
 # glob from home directory
 
-query I
-SELECT COUNT(*) FROM '~/homedir_integers*.parquet'
-----
-20
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM '~/homedir_integers*.parquet'
+# ----
+# 20

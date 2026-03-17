@@ -1,95 +1,95 @@
 statement ok
-DROP TABLE IF EXISTS bigints
+DROP TABLE IF EXISTS test_sum_bigints
 
 statement ok
-DROP TABLE IF EXISTS doubles
+DROP TABLE IF EXISTS test_sum_doubles
 
 statement ok
-DROP TABLE IF EXISTS integers
+DROP TABLE IF EXISTS test_sum_integers
 
 statement ok
-CREATE TABLE integers(i INTEGER);
+CREATE TABLE test_sum_integers(i INTEGER);
 
 statement ok
-INSERT INTO integers SELECT * FROM range(0, 1000, 1);
+INSERT INTO test_sum_integers SELECT * FROM range(0, 1000, 1);
 
 # positive numbers
 
 query I
-SELECT SUM(i) FROM integers;
+SELECT SUM(i) FROM test_sum_integers;
 ----
 499500
 
 # negative numbers
 
 statement ok
-INSERT INTO integers SELECT * FROM range(0, -1000, -1);
+INSERT INTO test_sum_integers SELECT * FROM range(0, -1000, -1);
 
 query I
-SELECT SUM(i) FROM integers;
+SELECT SUM(i) FROM test_sum_integers;
 ----
 0
 
 # more negative numbers
 
 statement ok
-INSERT INTO integers SELECT * FROM range(0, -1000, -1);
+INSERT INTO test_sum_integers SELECT * FROM range(0, -1000, -1);
 
 query I
-SELECT SUM(i) FROM integers;
+SELECT SUM(i) FROM test_sum_integers;
 ----
 -499500
 
 # now perform sum of a constant
 
 query I
-SELECT SUM(1) FROM integers;
+SELECT SUM(1) FROM test_sum_integers;
 ----
 3000
 
 # negative constant
 
 query I
-SELECT SUM(-1) FROM integers;
+SELECT SUM(-1) FROM test_sum_integers;
 ----
 -3000
 
 # negative constant with a low amount of values
 
 query I
-SELECT SUM(-1) FROM integers WHERE i=-1;
+SELECT SUM(-1) FROM test_sum_integers WHERE i=-1;
 ----
 -2
 
 # no values
 
 query I
-SELECT SUM(-1) FROM integers WHERE i>10000;
+SELECT SUM(-1) FROM test_sum_integers WHERE i>10000;
 ----
 NULL
 
 # bigint sum
 
 statement ok
-CREATE TABLE bigints(b BIGINT);
+CREATE TABLE test_sum_bigints(b BIGINT);
 
 # a bunch of huge values
 
 statement ok
-INSERT INTO bigints SELECT * FROM range(4611686018427387904, 4611686018427388904, 1);
+INSERT INTO test_sum_bigints SELECT * FROM range(4611686018427387904, 4611686018427388904, 1);
 
 # sum them up
 
 # TODO: unsupported feature
 # query I
-# SELECT SUM(b) FROM bigints
+# SELECT SUM(b) FROM test_sum_bigints
 # ----
 # 4611686018427388403500
 
 # this is too big for a bigint
 
 statement error
-SELECT SUM(b)::BIGINT FROM bigints
+SELECT SUM(b)::BIGINT FROM test_sum_bigints
 
 # TODO: unsupported feature
 # query T
@@ -152,20 +152,20 @@ SELECT SUM(b)::BIGINT FROM bigints
 #
 
 statement ok
-CREATE TABLE doubles(n DOUBLE);
+CREATE TABLE test_sum_doubles(n DOUBLE);
 
 statement ok
-INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
+INSERT INTO test_sum_doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
 
 # Correct result when ordered by size
 
 # TODO: unsupported feature
 # query I
-# SELECT sum(n ORDER BY ABS(n))::BIGINT FROM doubles;
+# SELECT sum(n ORDER BY ABS(n))::BIGINT FROM test_sum_doubles;
 # ----
 # 9007199254740994
 
 # Error as an ordered aggregate
 
 statement error
-SELECT (sum(n) WITHIN GROUP(ORDER BY ABS(n)))::BIGINT FROM doubles;
+SELECT (sum(n) WITHIN GROUP(ORDER BY ABS(n)))::BIGINT FROM test_sum_doubles;

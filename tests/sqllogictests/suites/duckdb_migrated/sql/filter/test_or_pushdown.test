@@ -1,88 +1,220 @@
-statement ok
-DROP TABLE IF EXISTS t1
+# TODO: result differs
+# statement ok
+# DROP TABLE IF EXISTS t1
 
 # no force storage otherwise test to check scanned tupls fails
-statement ok
-create table t1 as select range a, 'foo' || (range%100)::VARCHAR b, 100000-range c, timestamp '1992-01-01' + interval (range * 20) minute d from range(0, 900000);
+# TODO: unsupported feature
+# statement ok
+# create table t1 as
+# select
+#   i as a,
+#   'foo' || (i % 100)::VARCHAR as b,
+#   100000 - i as c,
+#   timestamp '1992-01-01' + interval (i * 20) minute as d
+# from range(0, 900000) t(i);
 
-query I
-select count(*) from t1 where a < 5 or b = 'foo8';
-----
-9005
+# TODO: unsupported feature
+# query I
+# select count(*) from t1 where a < 5 or b = 'foo8';
+# ----
+# 9005
 
-query II
-explain select * from t1 where a<5 or b = 'foo8';
-----
-physical_plan	<!REGEX>:.*optional.*
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where a<5 or b = 'foo8';
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.a (#0) < 5 or t1.b (#1) = 'foo8'], limit: NONE]
+# └── estimated rows: 8828.48
 
 # columns are different
 
-query II
-explain select * from t1 where a<5 or c>8000;
-----
-physical_plan	<!REGEX>:.*optional.*
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where a<5 or c>8000;
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.a (#0) < 5 or t1.c (#2) > 8000], limit: NONE]
+# └── estimated rows: 92004.49
 
 # two different row groups can be propagated here.
 
-query I
-select a from t1 where a=5 or a=899999;
-----
-5
-899999
+# TODO: unsupported feature
+# query I
+# select a from t1 where a=5 or a=899999;
+# ----
+# 5
+# 899999
 
 # check that multiple rows from mulitple row groups are being projected and not just 2.
 
-query II
-explain select * from t1 where a<5 or a>10;
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where a<5 or a>10;
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.a (#0) < 5 or t1.a (#0) > 10], limit: NONE]
+# └── estimated rows: 899989.00
 
 # need to flip the comparison
 
-query II
-explain select * from t1 where 5>a or 10<a;
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where 5>a or 10<a;
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [5 > t1.a (#0) or 10 < t1.a (#0)], limit: NONE]
+# └── estimated rows: 899989.00
 
-query II
-explain select * from t1 where 5>=a or 10<=a;
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where 5>=a or 10<=a;
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [5 >= t1.a (#0) or 10 <= t1.a (#0)], limit: NONE]
+# └── estimated rows: 899990.00
 
-query II
-explain select * from t1 where a in (1, 5, 10);
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where a in (1, 5, 10);
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.a (#0) = 1 or t1.a (#0) = 5 or t1.a (#0) = 10], limit: NONE]
+# └── estimated rows: 3.25
 
-query II
-explain select * from t1 where a = 1 or a = 5 or a = 10;
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where a = 1 or a = 5 or a = 10;
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.a (#0) = 1 or t1.a (#0) = 5 or t1.a (#0) = 10], limit: NONE]
+# └── estimated rows: 3.25
 
-query II
-explain select * from t1 where a in (1, 2, 3);
-----
-physical_plan	<!REGEX>:.*optional.*
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where a in (1, 2, 3);
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.a (#0) = 1 or t1.a (#0) = 2 or t1.a (#0) = 3], limit: NONE]
+# └── estimated rows: 3.25
 
-query II
-explain select * from t1 where a in (1);
-----
-physical_plan	<!REGEX>:.*optional.*
+# TODO: unsupported feature
+# query T
+# explain select * from t1 where a in (1);
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0), b (#1), c (#2), d (#3)]
+# ├── read rows: 900000
+# ├── read size: 13.62 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [is_true(t1.a (#0) = 1)], limit: NONE]
+# └── estimated rows: 1.08
 
-query II
-explain select b from t1 where b = 'foo9' or b = 'foo10';
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query T
+# explain select b from t1 where b = 'foo9' or b = 'foo10';
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [b (#1)]
+# ├── read rows: 900000
+# ├── read size: 1.03 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.b (#1) = 'foo9' or t1.b (#1) = 'foo10'], limit: NONE]
+# └── estimated rows: 17560.55
 
 # two different row groups can be propagated here.
 
-query I
-select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
-----
-5
-899999
+# TODO: unsupported feature
+# query I
+# select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
+# ----
+# 5
+# 899999
 
-query II
-explain select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
-----
-# TODO: special result marker
+# TODO: unsupported feature
+# query II
+# explain select a from t1 where d=timestamp '1992-01-01 01:40:00' or d=timestamp '2026-03-22 23:40:00'
+# ----
+# TableScan
+# ├── table: default.default.t1
+# ├── scan id: 0
+# ├── output columns: [a (#0)]
+# ├── read rows: 900000
+# ├── read size: 9.04 MiB
+# ├── partitions total: 1
+# ├── partitions scanned: 1
+# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+# ├── push downs: [filters: [t1.d (#3) = '1992-01-01 01:40:00.000000' or t1.d (#3) = '2026-03-22 23:40:00.000000'], limit: NONE]
+# └── estimated rows: 2.36

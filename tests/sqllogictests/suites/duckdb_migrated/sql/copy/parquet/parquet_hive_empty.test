@@ -1,31 +1,43 @@
-query II
-select * 
-from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
-ORDER BY ALL
-----
-a	a
-b	(empty)
-c	NULL
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# select * 
+# from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+# ORDER BY ALL
+# ----
+# a	a
+# b	(empty)
+# c	NULL
 
 # filter on hive partitioning with NULL values
 
-query II
-select *
-from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
-WHERE key IS NULL
-----
-c	NULL
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# select *
+# from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+# WHERE key IS NULL
+# ----
+# c	NULL
 
-query II
-select *
-from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
-WHERE key='a'
-----
-a	a
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# select *
+# from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+# WHERE key='a'
+# ----
+# a	a
 
-query II
-select *
-from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
-WHERE key=''
-----
-b	(empty)
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# select *
+# from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
+# WHERE key=''
+# ----
+# b	(empty)

@@ -1,19 +1,7 @@
-statement ok
-DROP TABLE IF EXISTS test
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (x INT, y AS (x + 100));
 
-statement ok
-CREATE TABLE test (x INT, y AS (x + 100));
-
-statement ok
-insert into test VALUES (42);
-
-statement ok
-FROM test;
-
-statement ok
-COPY FROM DATABASE mydb TO myotherdb;
-
-query II
-select * from myotherdb.test;
-----
-42	142
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE mydb TO myotherdb;

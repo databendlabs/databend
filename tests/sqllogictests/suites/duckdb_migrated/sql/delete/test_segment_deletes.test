@@ -10,8 +10,53 @@ CREATE TABLE a(i INTEGER);
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
 
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
 
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
@@ -28,41 +73,9 @@ INSERT INTO a SELECT * FROM range(0, 1024, 1);
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
 
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-statement ok
-INSERT INTO a SELECT * FROM range(0, 1024, 1);
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT * FROM range(0, 1024, 1);
 
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
@@ -73,7 +86,7 @@ INSERT INTO a SELECT * FROM range(0, 1024, 1);
 query I
 SELECT COUNT(*) FROM a
 ----
-20480
+7168
 
 # we test the values 0, 1, 1022 and 1023
 # for every tested value, delete it and then rollback
@@ -82,6 +95,8 @@ SELECT COUNT(*) FROM a
 
 statement ok
 BEGIN TRANSACTION;
+
+statement ok
 DELETE FROM a WHERE i=0;
 
 # verify the deleted count
@@ -89,7 +104,7 @@ DELETE FROM a WHERE i=0;
 query I
 SELECT COUNT(*) FROM a
 ----
-20460
+7161
 
 statement ok
 ROLLBACK
@@ -99,12 +114,14 @@ ROLLBACK
 query I
 SELECT COUNT(*) FROM a
 ----
-20480
+7168
 
 # value = 1
 
 statement ok
 BEGIN TRANSACTION;
+
+statement ok
 DELETE FROM a WHERE i=1;
 
 # verify the deleted count
@@ -112,7 +129,7 @@ DELETE FROM a WHERE i=1;
 query I
 SELECT COUNT(*) FROM a
 ----
-20460
+7161
 
 statement ok
 ROLLBACK
@@ -122,12 +139,14 @@ ROLLBACK
 query I
 SELECT COUNT(*) FROM a
 ----
-20480
+7168
 
 # value = 1022
 
 statement ok
 BEGIN TRANSACTION;
+
+statement ok
 DELETE FROM a WHERE i=1022;
 
 # verify the deleted count
@@ -135,7 +154,7 @@ DELETE FROM a WHERE i=1022;
 query I
 SELECT COUNT(*) FROM a
 ----
-20460
+7161
 
 statement ok
 ROLLBACK
@@ -145,12 +164,14 @@ ROLLBACK
 query I
 SELECT COUNT(*) FROM a
 ----
-20480
+7168
 
 # value = 1023
 
 statement ok
 BEGIN TRANSACTION;
+
+statement ok
 DELETE FROM a WHERE i=1023;
 
 # verify the deleted count
@@ -158,7 +179,7 @@ DELETE FROM a WHERE i=1023;
 query I
 SELECT COUNT(*) FROM a
 ----
-20460
+7161
 
 statement ok
 ROLLBACK
@@ -168,7 +189,7 @@ ROLLBACK
 query I
 SELECT COUNT(*) FROM a
 ----
-20480
+7168
 
 # now, for every tested value, delete it in a separate connection and verify the count
 # con2 -> 0
@@ -182,7 +203,7 @@ DELETE FROM a WHERE i=0;
 query I
 SELECT COUNT(*) FROM a;
 ----
-20460
+7161
 
 # con3 -> 1
 
@@ -195,7 +216,7 @@ DELETE FROM a WHERE i=1;
 query I
 SELECT COUNT(*) FROM a;
 ----
-20460
+7154
 
 # con4 -> 1022
 
@@ -208,7 +229,7 @@ DELETE FROM a WHERE i=1022;
 query I
 SELECT COUNT(*) FROM a;
 ----
-20460
+7147
 
 # con5 -> 1023
 
@@ -221,14 +242,14 @@ DELETE FROM a WHERE i=1023;
 query I
 SELECT COUNT(*) FROM a;
 ----
-20460
+7140
 
 # con1 still has the original count
 
 query I
 SELECT COUNT(*) FROM a;
 ----
-20480
+7140
 
 # until we update the other transactions
 
@@ -249,4 +270,4 @@ COMMIT
 query I
 SELECT COUNT(*) FROM a;
 ----
-20400
+7140

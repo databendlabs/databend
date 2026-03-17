@@ -1,23 +1,23 @@
 # century changes in the year 1
 query I
-SELECT EXTRACT(century FROM cast('2000-10-10' AS DATE));
+SELECT CAST(floor((YEAR(cast('2000-10-10' AS DATE)) - 1) / 100) + 1 AS INT);
 ----
 20
 
 query I
-SELECT EXTRACT(century FROM cast('2001-10-10' AS DATE));
+SELECT CAST(floor((YEAR(cast('2001-10-10' AS DATE)) - 1) / 100) + 1 AS INT);
 ----
 21
 
 # millennium changes in the year 1
 
 query I
-SELECT EXTRACT(millennium FROM cast('2000-10-10' AS DATE));
+SELECT CAST(floor((YEAR(cast('2000-10-10' AS DATE)) - 1) / 1000) + 1 AS INT);
 ----
 2
 
 query I
-SELECT EXTRACT(millennium FROM cast('2001-10-10' AS DATE));
+SELECT CAST(floor((YEAR(cast('2001-10-10' AS DATE)) - 1) / 1000) + 1 AS INT);
 ----
 3
 

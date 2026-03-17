@@ -166,29 +166,38 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 
 # Without hive partitioning we just read the files, note the mismatch here between the hive partition in the filename and the col in the file
 
-query III
-SELECT a, b, parse_path(filename)[-3:] filename FROM parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=0, FILENAME=1) order by filename;
-----
-1	2	[hive_col_also_in_file, 'a=5', test.parquet]
-3	4	[hive_col_also_in_file, 'a=6', test.parquet]
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query III
+# SELECT a, b, parse_path(filename)[-3:] filename FROM parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=0, FILENAME=1) order by filename;
+# ----
+# 1	2	[hive_col_also_in_file, 'a=5', test.parquet]
+# 3	4	[hive_col_also_in_file, 'a=6', test.parquet]
 
 # Hive col from path overrides col in file
 
-query III
-SELECT a, b, parse_path(filename)[-3:] filename FROM parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) order by filename;
-----
-5	2	[hive_col_also_in_file, 'a=5', test.parquet]
-6	4	[hive_col_also_in_file, 'a=6', test.parquet]
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query III
+# SELECT a, b, parse_path(filename)[-3:] filename FROM parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) order by filename;
+# ----
+# 5	2	[hive_col_also_in_file, 'a=5', test.parquet]
+# 6	4	[hive_col_also_in_file, 'a=6', test.parquet]
 
 # Test handling missing files
 
-query IIII
-select id, value, part, date
-from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/missing/*/*/test.parquet', HIVE_PARTITIONING=1)
-order by id
-----
-3	value3	c	2014-01-01
-4	value4	d	2015-01-01
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query IIII
+# select id, value, part, date
+# from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/missing/*/*/test.parquet', HIVE_PARTITIONING=1)
+# order by id
+# ----
+# 3	value3	c	2014-01-01
+# 4	value4	d	2015-01-01
 
 
 # check cases where there are file filters AND table filters
@@ -197,51 +206,63 @@ statement ok
 Create table t1 (a int, b int, c int);
 
 statement ok
-insert into t1 (select range, 0*10, 0*100 from range(0,10));
+insert into t1 (select i, 0*10, 0*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 1*10, 1*100 from range(0,10));
+insert into t1 (select i, 1*10, 1*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 2*10, 2*100 from range(0,10));
+insert into t1 (select i, 2*10, 2*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 3*10, 3*100 from range(0,10));
+insert into t1 (select i, 3*10, 3*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 4*10, 4*100 from range(0,10));
+insert into t1 (select i, 4*10, 4*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 5*10, 5*100 from range(0,10));
+insert into t1 (select i, 5*10, 5*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 6*10, 6*100 from range(0,10));
+insert into t1 (select i, 6*10, 6*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 7*10, 7*100 from range(0,10));
+insert into t1 (select i, 7*10, 7*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 8*10, 8*100 from range(0,10));
+insert into t1 (select i, 8*10, 8*100 from range(0,10) as r(i));
 
 statement ok
-insert into t1 (select range, 9*10, 9*100 from range(0,10));
+insert into t1 (select i, 9*10, 9*100 from range(0,10) as r(i));
 
-statement ok
-COPY (SELECT * FROM t1) TO '{TEMP_DIR}/hive_filters' (FORMAT PARQUET, PARTITION_BY c);
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# statement ok
+# COPY (SELECT * FROM t1) TO '{TEMP_DIR}/hive_filters' (FORMAT PARQUET, PARTITION_BY c);
 
-statement ok
-COPY (SELECT * FROM t1) TO '{TEMP_DIR}/hive_filters_2' (FORMAT PARQUET, PARTITION_BY (c, b));
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# statement ok
+# COPY (SELECT * FROM t1) TO '{TEMP_DIR}/hive_filters_2' (FORMAT PARQUET, PARTITION_BY (c, b));
 
 # There should be Table Filters (id < 50) and regular filters
 
-query II
-EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT=500 and a::INT < 4;
-----
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT=500 and a::INT < 4;
+# ----
 # TODO: special result marker
 
 # unsatisfiable file filters also show up
 
-query II
-EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters_2/*/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT > 500 and c::INT < 500;
-----
+# TODO: unsupported feature
+# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
+# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# query II
+# EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters_2/*/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT > 500 and c::INT < 500;
+# ----
 # TODO: special result marker

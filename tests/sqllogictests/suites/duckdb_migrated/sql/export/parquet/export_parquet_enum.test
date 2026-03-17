@@ -7,38 +7,46 @@ DROP TABLE IF EXISTS tbl2
 statement ok
 begin transaction;
 
-statement ok
-create type my_enum as enum ('1', '2', '3')
+# TODO: unsupported feature
+# statement ok
+# create type my_enum as enum ('1', '2', '3')
 
-statement ok
-create table tbl (a my_enum);
+# TODO: unsupported feature
+# statement ok
+# create table tbl (a my_enum);
 
-statement ok
-create table tbl2 as select 'hello''world'::enum('hello''world');
+# TODO: unsupported feature
+# statement ok
+# create table tbl2 as select 'hello''world'::enum('hello''world');
 
-statement ok
-insert into tbl VALUES
-	('1'),
-	(NULL),
-	('3');
+# TODO: unsupported feature
+# statement ok
+# insert into tbl VALUES
+# 	('1'),
+# 	(NULL),
+# 	('3');
 
-query I nosort result1
-select * from tbl;
-----
+# TODO: unsupported feature
+# query I nosort result1
+# select * from tbl;
+# ----
 
-query I nosort result2
-select * from tbl2;
-----
+# TODO: unsupported feature
+# query I nosort result2
+# select * from tbl2;
+# ----
 
 # now export the db
 
 statement ok
 ROLLBACK
 
-query I nosort result1
-select * from tbl;
-----
+# TODO: unsupported feature
+# query I nosort result1
+# select * from tbl;
+# ----
 
-query I nosort result2
-select * from tbl2;
-----
+# TODO: unsupported feature
+# query I nosort result2
+# select * from tbl2;
+# ----

@@ -20,7 +20,7 @@ NULL
 2020-09-27 13:12:01.000000
 
 statement ok
-CREATE OR REPLACE TABLE timestamps(d TIMESTAMP_MS)
+CREATE OR REPLACE TABLE timestamps(d TIMESTAMP)
 
 statement ok
 INSERT INTO timestamps VALUES
@@ -32,35 +32,46 @@ INSERT INTO timestamps VALUES
 query I nosort ts_scan
 SELECT * FROM timestamps
 ----
-
-statement ok
-CREATE OR REPLACE TABLE timestamps(d TIMESTAMP_S)
-
-statement ok
-INSERT INTO timestamps VALUES
-    (TIMESTAMP '1992-01-01 12:03:27'),
-    (TIMESTAMP '1900-01-01 03:08:47'),
-    (NULL),
-    (TIMESTAMP '2020-09-27 13:12:01')
-
-query I nosort ts_scan
-SELECT * FROM timestamps
-----
-
-statement ok
-CREATE OR REPLACE TABLE timestamps(d TIMESTAMP_NS)
-
-statement ok
-INSERT INTO timestamps VALUES
-    ('1992-01-01 12:03:27.123456789'),
-    ('1900-01-01 03:08:47.987654321'),
-    (NULL),
-    ('2020-09-27 13:12:01')
-
-query I nosort ns_scan
-SELECT * FROM timestamps
-----
-1992-01-01 12:03:27.123456789
-1900-01-01 03:08:47.987654321
+1992-01-01 12:03:27.000000
+1900-01-01 03:08:47.000000
 NULL
-2020-09-27 13:12:01
+2020-09-27 13:12:01.000000
+
+statement ok
+CREATE OR REPLACE TABLE timestamps(d TIMESTAMP)
+
+statement ok
+INSERT INTO timestamps VALUES
+    (TIMESTAMP '1992-01-01 12:03:27'),
+    (TIMESTAMP '1900-01-01 03:08:47'),
+    (NULL),
+    (TIMESTAMP '2020-09-27 13:12:01')
+
+query I nosort ts_scan
+SELECT * FROM timestamps
+----
+1992-01-01 12:03:27.000000
+1900-01-01 03:08:47.000000
+NULL
+2020-09-27 13:12:01.000000
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE timestamps(d TIMESTAMP_NS)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamps VALUES
+#     ('1992-01-01 12:03:27.123456789'),
+#     ('1900-01-01 03:08:47.987654321'),
+#     (NULL),
+#     ('2020-09-27 13:12:01')
+
+# TODO: unsupported feature
+# query I nosort ns_scan
+# SELECT * FROM timestamps
+# ----
+# 1992-01-01 12:03:27.123456789
+# 1900-01-01 03:08:47.987654321
+# NULL
+# 2020-09-27 13:12:01

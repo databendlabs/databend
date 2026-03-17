@@ -25,10 +25,12 @@
 # attached database
 # suggest a catalog
 
-statement ok
-ATTACH ':memory:' AS attached_in_memory;
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS attached_in_memory;
 
-query II
-SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SCHEMA attac') LIMIT 1;
-----
-attached_in_memory.	14
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE SCHEMA attac') LIMIT 1;
+# ----
+# attached_in_memory.	14

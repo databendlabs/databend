@@ -14,41 +14,42 @@ statement ok
 DROP TABLE IF EXISTS values_UTINYINT
 
 statement ok
-CREATE TABLE values_UTINYINT AS SELECT d::UTINYINT d FROM (VALUES
+CREATE TABLE values_UTINYINT AS SELECT d::UInt8 d FROM (VALUES
     (0), (42), (NULL), (255)) tbl (d);
 
 statement ok
-CREATE TABLE values_USMALLINT AS SELECT d::USMALLINT d FROM (VALUES
+CREATE TABLE values_USMALLINT AS SELECT d::UInt16 d FROM (VALUES
     (0), (42), (NULL), (65535)) tbl (d);
 
 statement ok
-CREATE TABLE values_UINTEGER AS SELECT d::UINTEGER d FROM (VALUES
+CREATE TABLE values_UINTEGER AS SELECT d::UInt32 d FROM (VALUES
     (0), (42), (NULL), (4294967295)) tbl (d);
 
 statement ok
-CREATE TABLE values_UBIGINT AS SELECT d::UBIGINT d FROM (VALUES
+CREATE TABLE values_UBIGINT AS SELECT d::UInt64 d FROM (VALUES
     (0), (42), (NULL), (18446744073709551615)) tbl (d);
 
 statement ok
-CREATE OR REPLACE TABLE unsigned(d UTINYINT)
+CREATE OR REPLACE TABLE unsigned(d UInt8)
 
 statement ok
 INSERT INTO unsigned SELECT * FROM values_UTINYINT
 
 statement ok
-CREATE OR REPLACE TABLE unsigned(d USMALLINT)
+CREATE OR REPLACE TABLE unsigned(d UInt16)
 
 statement ok
 INSERT INTO unsigned SELECT * FROM values_USMALLINT
 
 statement ok
-CREATE OR REPLACE TABLE unsigned(d UINTEGER)
+CREATE OR REPLACE TABLE unsigned(d UInt32)
 
 statement ok
 INSERT INTO unsigned SELECT * FROM values_UINTEGER
 
 statement ok
-CREATE OR REPLACE TABLE unsigned(d UBIGINT)
+CREATE OR REPLACE TABLE unsigned(d UInt64)
 
-statement ok
-INSERT INTO unsigned SELECT * FROM values_UBIGINT
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unsigned SELECT * FROM values_UBIGINT

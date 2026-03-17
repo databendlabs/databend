@@ -1,3 +1,4 @@
-statement maybe
-FROM read_csv('{DATA_DIR}/csv/afl/4172/case_4.csv', ignore_errors=true, buffer_size=1, store_rejects=false);
-----
+# TODO: unsupported feature
+# statement maybe
+# FROM read_csv('{DATA_DIR}/csv/afl/4172/case_4.csv', ignore_errors=true, buffer_size=1, store_rejects=false);
+# ----

@@ -1,6 +1,6 @@
 query I
 WITH
-  cte1 AS (SELECT NULL AS y),
-  cte1_filter AS (SELECT y FROM cte1 WHERE y < '2025-12-01'::TIMESTAMPTZ)
+  cte1 AS (SELECT CAST(NULL AS TIMESTAMP) AS y),
+  cte1_filter AS (SELECT y FROM cte1 WHERE y < CAST('2025-12-01' AS TIMESTAMP))
 SELECT * FROM cte1_filter;
 ----
