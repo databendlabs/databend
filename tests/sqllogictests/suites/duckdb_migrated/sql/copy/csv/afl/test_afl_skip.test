@@ -1,0 +1,7 @@
+statement maybe
+FROM read_csv('{DATA_DIR}/csv/afl/skip/1.csv', skip=1)
+----
+
+statement maybe
+FROM read_csv('{DATA_DIR}/csv/afl/skip/2.csv', skip=1)
+----

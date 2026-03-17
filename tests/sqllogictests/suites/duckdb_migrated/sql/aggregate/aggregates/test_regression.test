@@ -170,11 +170,13 @@ select regr_sxy()
 # ----
 # 0
 
-statement error
-select regr_syy(*)
+# TODO: unsupported feature
+# statement error
+# select regr_syy(*)
 
-statement error
-select regr_intercept()
+# TODO: unsupported feature
+# statement error
+# select regr_intercept()
 
 # TODO: unknown function
 # query I
@@ -188,14 +190,17 @@ select regr_intercept()
 # ----
 # NULL
 
-statement error
-select regr_intercept(*)
+# TODO: unsupported feature
+# statement error
+# select regr_intercept(*)
 
-statement ok
-create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
+# TODO: unsupported feature
+# statement ok
+# create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
 
-statement ok
-insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
+# TODO: unsupported feature
+# statement ok
+# insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
 
 # TODO: unsupported feature
 # query II
@@ -225,35 +230,35 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 # 1	NULL
 # 2	0.831409
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query II
 # select k, regr_r2(v, v2) from aggr group by k ORDER BY ALL;
 # ----
 # 1	NULL
 # 2	0.997691
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query II
 # select k, regr_sxx(v, v2) from aggr group by k ORDER BY ALL;
 # ----
 # 1	NULL
 # 2	288.666667
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query II
 # select k, regr_syy(v, v2) from aggr group by k ORDER BY ALL;
 # ----
 # 1	NULL
 # 2	200.000000
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query II
 # select k, regr_sxy(v, v2) from aggr group by k ORDER BY ALL;
 # ----
 # 1	NULL
 # 2	240.000000
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query II
 # select k, regr_intercept(v, v2) from aggr group by k ORDER BY ALL;
 # ----
@@ -284,7 +289,7 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 # ----
 # 0.831409
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # select regr_r2(v, v2) from aggr ;
 # ----
@@ -296,7 +301,7 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 # ----
 # 288.666667
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # select regr_syy(v, v2) from aggr ;
 # ----
@@ -383,7 +388,7 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 # 288.666667
 # NULL
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I rowsort
 # select  regr_syy(v, v2) over (partition by k)
 #     from aggr;
@@ -394,7 +399,7 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 # 200.000000
 # NULL
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I rowsort
 # select  regr_sxy(v, v2) over (partition by k)
 #     from aggr;
@@ -405,7 +410,7 @@ insert into aggr values(1, 10, null), (2, 10, 11), (2, 20, 22), (2, 25, null), (
 # 240.000000
 # NULL
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I rowsort
 # select  regr_intercept(v, v2) over (partition by k)
 #     from aggr;

@@ -1,8 +1,10 @@
-statement ok
-DROP TABLE IF EXISTS numerics
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS numerics
 
-statement ok
-DROP TABLE IF EXISTS tinys
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tinys
 
 # TODO: unknown function
 # query II
@@ -259,19 +261,19 @@ DROP TABLE IF EXISTS tinys
 # ----
 # 0
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT mad(r::decimal(24,1)) FROM numerics
 # ----
 # 2500
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT mad(NULL::decimal(24,1)) FROM numerics
 # ----
 # NULL
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT mad(42::decimal(24,1)) FROM numerics
 # ----
@@ -282,7 +284,7 @@ DROP TABLE IF EXISTS tinys
 # Temporal
 #
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT mad(('2018-01-01'::DATE + INTERVAL (r) DAY)::DATE) FROM numerics
 # ----
@@ -310,7 +312,7 @@ DROP TABLE IF EXISTS tinys
 # ----
 # 127
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # select mad(x) from (values ('32767'::DECIMAL(5,0)), ('-32768'::DECIMAL(5,0))) tbl(x);
 # ----

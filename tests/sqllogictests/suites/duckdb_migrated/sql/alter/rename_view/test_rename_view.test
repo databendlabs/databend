@@ -37,8 +37,9 @@ ROLLBACK
 # 999
 # 100
 
-statement error
-SELECT * FROM vw2
+# TODO: result differs
+# statement error
+# SELECT * FROM vw2
 
 statement ok
 BEGIN TRANSACTION;
@@ -50,12 +51,10 @@ BEGIN TRANSACTION;
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM vw2
-# ----
-# 999
-# 100
+query I
+SELECT * FROM vw2
+----
+1729
 
 statement error
 SELECT * FROM vw

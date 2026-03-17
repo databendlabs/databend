@@ -1,0 +1,97 @@
+statement ok
+DROP VIEW IF EXISTS test_view
+
+statement ok
+DROP TABLE IF EXISTS test_table
+
+statement ok
+CREATE TABLE test_table as SELECT 1 as test_table_column
+
+### Comment on column from table
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_table_column';
+# ----
+# NULL
+
+statement ok
+COMMENT ON COLUMN test_table.test_table_column IS 'very gezellige column'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_table_column';
+# ----
+# very gezellige column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_table_column';
+# ----
+# very gezellige column
+
+statement ok
+CREATE VIEW test_view AS SELECT test_table_column as test_view_column FROM test_table;
+
+### Comment on column from table
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_view_column';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN test_view.test_view_column IS 'very gezellige view column'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_view_column';
+# ----
+# very gezellige view column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_view_column';
+# ----
+# very gezellige view column
+
+# TODO: unsupported feature
+# query IIII
+# SELECT database_name, table_name, column_name, comment FROM duckdb_columns() where internal is false
+# ----
+# comment_on_column	test_table	test_table_column	very gezellige column
+# comment_on_column	test_view	test_view_column	very gezellige view column
+
+# check some erroneous inputs
+
+statement error
+COMMENT ON COLUMN bla.bloe.blie.blo IS NULL
+
+statement error
+COMMENT ON COLUMN blie.blo IS NULL
+
+statement error
+COMMENT ON COLUMN test_view.test_table_column IS NULL
+
+statement error
+COMMENT ON COLUMN test_table.test_view_column IS NULL
+
+statement ok
+CREATE TEMPORARY TABLE temp_comment_test(x INTEGER)
+
+# TODO: unsupported feature
+# query TTI
+# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_comment_test'
+# ----
+# temp_comment_test	temp	1
+
+statement ok
+COMMENT ON COLUMN temp_comment_test.x IS 'test comment'
+
+# TODO: unsupported feature
+# query TTI
+# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_comment_test'
+# ----
+# temp_comment_test	temp	1

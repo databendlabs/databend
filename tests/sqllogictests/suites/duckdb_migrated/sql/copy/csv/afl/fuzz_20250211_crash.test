@@ -1,0 +1,3 @@
+statement maybe
+FROM read_csv('{DATA_DIR}/csv/afl/20250211_csv_fuzz_crash/case_53.csv', buffer_size=42);
+----

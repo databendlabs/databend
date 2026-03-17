@@ -1,0 +1,72 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers (a INT)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO subquery(a) AS (SELECT a)
+
+# TODO: unknown function
+# query T
+# SELECT subquery(1)
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT subquery(NULL)
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# SELECT subquery(3) + a FROM integers
+# ----
+# 4
+
+# TODO: unknown function
+# query T
+# SELECT subquery(a) FROM integers
+# ----
+# 1
+
+# macro parameters and column names should not conflict
+
+statement error
+CREATE MACRO a1(a) AS (SELECT a + a FROM integers)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO a1(b) AS (SELECT a + a FROM integers)
+
+# TODO: unknown function
+# query T
+# SELECT a1(3)
+# ----
+# 2
+
+# TODO: unknown function
+# query T
+# SELECT a1(3) + a FROM integers
+# ----
+# 3
+
+# never allow columns with the same name as parameters
+
+statement error
+CREATE MACRO a2(a) AS (SELECT i.a + a FROM integers i)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO a2(b) AS (SELECT i.a + b FROM integers i)
+
+# TODO: unknown function
+# query T
+# SELECT a2(3)
+# ----
+# 4

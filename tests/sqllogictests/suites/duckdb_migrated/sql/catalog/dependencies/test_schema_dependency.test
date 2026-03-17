@@ -1,0 +1,121 @@
+statement ok
+DROP TABLE IF EXISTS s1.dummy
+
+statement ok
+DROP TABLE IF EXISTS s1.integers
+
+# single schema and dependencies
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE s1.integers(i INTEGER)
+
+# TODO: result differs
+# query I
+# SELECT * FROM s1.integers
+# ----
+
+# can't drop: dependency
+
+# TODO: unsupported feature
+# statement error
+# DROP SCHEMA s1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM s1.integers
+# ----
+
+# we can drop with cascade though
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA s1 CASCADE
+
+# this also drops the table
+
+statement error
+SELECT * FROM s1.integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1
+
+statement ok
+CREATE TABLE s1.integers(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+# drop the table in con1
+
+# TODO: result differs
+# statement ok
+# DROP TABLE s1.integers
+
+# we can't drop the schema from con2 because the table still exists for con2!
+
+# TODO: result differs
+# statement error
+# DROP SCHEMA s1
+
+statement ok
+ROLLBACK
+
+statement ok
+ROLLBACK
+
+# the table exists again
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM s1.integers
+# ----
+
+# try again, but this time we commit
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# drop the schema entirely now
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA s1 CASCADE
+
+# we can still query the table from con2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM s1.integers
+# ----
+
+# even after we commit
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM s1.integers
+# ----
+
+# however if we end the transaction in con2 the schema is gone
+
+statement ok
+ROLLBACK
+
+# TODO: result differs
+# statement error
+# CREATE TABLE s1.dummy(i INTEGER)

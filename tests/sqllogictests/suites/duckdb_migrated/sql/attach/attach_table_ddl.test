@@ -1,11 +1,14 @@
-statement ok
-DROP TABLE IF EXISTS new_database.integers
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS new_database.integers
 
-statement ok
-DROP TABLE IF EXISTS new_database.s1
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS new_database.s1
 
-statement ok
-DROP TABLE IF EXISTS new_database.t1
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS new_database.t1
 
 # TODO: unsupported feature
 # statement ok

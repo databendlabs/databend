@@ -1,0 +1,30 @@
+statement ok
+DROP VIEW IF EXISTS vw
+
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+create table tbl (a varchar);
+
+# Create the view
+
+statement ok
+create view vw as select * from tbl;
+
+# Create a table macro that references the view
+
+# TODO: unsupported feature
+# statement ok
+# create macro static_table() as table select * from vw;
+
+# Rename the view (Postgres 16.0 does not block this ALTER)
+
+# TODO: unsupported feature
+# statement ok
+# alter view vw rename to vw2;
+
+# Our table macro now errors
+
+statement error
+select * from static_table();

@@ -1,0 +1,83 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v AS SELECT SUM(i) FROM integers
+
+# begin a transaction in con2
+
+statement ok
+BEGIN TRANSACTION
+
+# now drop the table in con, with a cascading drop
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers CASCADE
+
+# we can still execute v in con2
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v
+
+# if we try to drop integers we get a conflict though
+
+statement error
+DROP TABLE integers CASCADE
+
+statement ok
+ROLLBACK
+
+# now we can't use the prepared statement anymore
+
+statement error
+EXECUTE v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+# begin a transaction and create a prepared statement
+
+statement ok
+BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v AS SELECT SUM(i) FROM integers
+
+# use the prepared statement
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v
+
+# integers has a prepared statement depending on it, but we can still drop it
+
+statement ok
+DROP TABLE integers
+
+# using the prepared statement after the table is still works: we are inside a transaction that uses an old version
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v
+
+statement ok
+COMMIT
+
+# after committing we can no longer use the prepared statement
+
+statement error
+EXECUTE v

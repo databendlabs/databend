@@ -13,9 +13,8 @@ BEGIN TRANSACTION
 statement ok
 INSERT INTO t1 VALUES (2)
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE t1 RENAME TO t2
+statement ok
+ALTER TABLE t1 RENAME TO t2
 
 statement ok
 COMMIT
@@ -23,5 +22,5 @@ COMMIT
 query I
 SELECT * FROM t2
 ----
-2
 1
+2

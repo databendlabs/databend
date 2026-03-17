@@ -1,0 +1,41 @@
+# TODO: unsupported feature
+# statement ok
+# create or replace macro my_macro(a:=true) as a;
+
+# TODO: unknown function
+# query I
+# select my_macro()
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# create or replace macro my_macro(a:=false) as a;
+
+# TODO: unknown function
+# query I
+# select my_macro()
+# ----
+# 0
+
+# bonus: we can also use struct/list as default parameters now
+
+# TODO: unsupported feature
+# statement ok
+# create or replace macro my_macro(a:={duck:42}) as a;
+
+# TODO: unknown function
+# query I
+# select my_macro()
+# ----
+# {'duck': 42}
+
+# TODO: unsupported feature
+# statement ok
+# create or replace macro my_macro(a:=[42]) as a;
+
+# TODO: unknown function
+# query I
+# select my_macro()
+# ----
+# [42]

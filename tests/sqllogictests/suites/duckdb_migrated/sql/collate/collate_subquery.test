@@ -1,0 +1,18 @@
+statement ok
+DROP TABLE IF EXISTS t0
+
+statement ok
+create table t0(c1 varchar);
+
+statement ok
+insert into t0 values ('XXX');
+
+query I
+select (select c1 from t0) collate nocase;
+----
+XXX
+
+query I
+select (select c1 from t0) collate nocase='xxx';
+----
+1

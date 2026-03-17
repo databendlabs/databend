@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMP MACRO m1(x, y) AS (
+#     SELECT list_has_all(x, y) AND list_has_all(y, x)
+# );
+
+# TODO: unknown function
+# query I
+# SELECT m1([1, 2], [1, 2]);
+# ----
+# 1

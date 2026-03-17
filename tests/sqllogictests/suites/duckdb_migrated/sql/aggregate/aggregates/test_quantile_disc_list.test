@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS quantiles
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS quantiles
 
 # TODO: unsupported feature
 # statement ok
@@ -66,7 +67,7 @@ DROP TABLE IF EXISTS quantiles
 # TODO: unsupported feature
 # query I
 # SELECT quantile_disc(col, [-.25, -.5, -.75])
-# FROM VALUES (11000), (3100), (2900), (2800), (2600), (2500) AS tab(col);
+# FROM (VALUES (11000), (3100), (2900), (2800), (2600), (2500)) AS tab(col);
 # ----
 # [3100, 2900, 2600]
 
@@ -209,11 +210,11 @@ DROP TABLE IF EXISTS quantiles
 # TODO: unsupported feature
 # query I
 # SELECT quantile_disc(col, [0.1, 0.32, 0.33, 0.34, 0.49, .5, .51, 0.75, 0.9, 0.999, 1])
-# FROM VALUES (0), (1), (2), (10) AS tab(col);
+# FROM (VALUES (0), (1), (2), (10)) AS tab(col);
 # ----
 # [0, 1, 1, 1, 1, 1, 2, 2, 10, 10, 10]
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT quantile_disc(42::UTINYINT, 0.5);
 # ----
@@ -221,10 +222,10 @@ DROP TABLE IF EXISTS quantiles
 
 # Array arguments
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT quantile_disc(col, ARRAY_VALUE(0.5, 0.4, 0.1)) AS percentile 
-# FROM VALUES (0), (1), (2), (10) AS tab(col);
+# FROM (VALUES (0), (1), (2), (10)) AS tab(col);
 # ----
 # [1, 1, 0]
 

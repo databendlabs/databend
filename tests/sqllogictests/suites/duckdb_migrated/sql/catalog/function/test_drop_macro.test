@@ -1,0 +1,34 @@
+# create scalar and table macro with same name
+# TODO: unsupported feature
+# statement ok
+# create macro m() as 42;
+
+# TODO: unsupported feature
+# statement ok
+# create macro m() as table (select 42 i);
+
+# table macros are explicitly dropped with "drop macro table"
+# however, we also want to support dropping them with drop macro
+# we disambiguate by first trying to drop the scalar macro, then the table macro
+
+# TODO: unsupported feature
+# statement ok
+# drop macro m;
+
+# scalar macros are dropped first so this fails
+
+statement error
+select m();
+
+# TODO: unsupported feature
+# query I
+# from m();
+# ----
+# 42
+
+# TODO: unsupported feature
+# statement ok
+# drop macro m;
+
+statement error
+from m();

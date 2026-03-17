@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS primary_table
+
+statement ok
+DROP TABLE IF EXISTS secondary_table
+
+statement ok
+CREATE TABLE primary_table (id INT PRIMARY KEY)
+
+statement ok
+CREATE TABLE secondary_table (primary_id INT, FOREIGN KEY (primary_id) REFERENCES primary_table(id))
+
+statement ok
+INSERT INTO primary_table VALUES (42)
+
+statement ok
+BEGIN
+
+statement ok
+SELECT id FROM primary_table LIMIT 1
+
+statement ok
+DELETE FROM primary_table WHERE id = 42
+
+statement error
+INSERT INTO secondary_table VALUES (42)

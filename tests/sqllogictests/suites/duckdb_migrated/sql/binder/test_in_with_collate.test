@@ -1,0 +1,91 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+# create table with collation
+statement ok
+create table tbl (str varchar);
+
+# insert data with nocase
+
+statement ok
+insert into tbl values ('ABCDE'), ('aBcDe');
+
+# insert data with noaccent
+
+statement ok
+insert into tbl values ('àbcdë');
+
+# insert data with noaccent and nocase
+
+statement ok
+insert into tbl values ('ÀbCdÈ');
+
+# query IN without collation
+
+query T
+select * from tbl where str in ('AbCdE');
+----
+
+# query IN with nocase collation
+
+# TODO: unsupported feature
+# query I
+# select * from tbl where str collate nocase in ('abcde');
+# ----
+# ABCDE
+# aBcDe
+
+# query IN with noaccent collation
+
+# TODO: unsupported feature
+# query I
+# select * from tbl where str collate noaccent in ('abcde');
+# ----
+# àbcdë
+
+# query IN with nocase.noaccent collation
+
+# TODO: unsupported feature
+# query I
+# select * from tbl where str collate nocase.noaccent in ('abcde');
+# ----
+# ABCDE
+# aBcDe
+# àbcdë
+# ÀbCdÈ
+
+# query NOT IN without collation
+
+query T
+select * from tbl where str not in ('abcde');
+----
+ÀbCdÈ
+ABCDE
+aBcDe
+àbcdë
+
+# query NOT IN with nocase collation
+
+# TODO: unsupported feature
+# query I
+# select * from tbl where str collate nocase not in ('abcde');
+# ----
+# àbcdë
+# ÀbCdÈ
+
+# query NOT IN with noaccent collation
+
+# TODO: unsupported feature
+# query I
+# select * from tbl where str collate noaccent not in ('abcde');
+# ----
+# ABCDE
+# aBcDe
+# ÀbCdÈ
+
+# query NOT IN with nocase.noaccent collation
+
+# TODO: unsupported feature
+# query I
+# select * from tbl where str collate nocase.noaccent not in ('abcde');
+# ----

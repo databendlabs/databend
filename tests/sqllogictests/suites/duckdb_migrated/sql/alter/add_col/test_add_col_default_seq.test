@@ -25,8 +25,9 @@ SELECT * FROM test
 # statement ok
 # ALTER TABLE test ADD COLUMN n INTEGER DEFAULT currval('seq')
 
-query II
-SELECT * FROM test
-----
-1 1
-2 2
+# TODO: unknown function
+# query IIII
+# SELECT * FROM test
+# ----
+# 1 1
+# 2 2

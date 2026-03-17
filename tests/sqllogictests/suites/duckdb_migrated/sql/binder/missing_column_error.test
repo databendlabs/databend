@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS customers
+
+statement ok
+DROP TABLE IF EXISTS zipcodes
+
+statement ok
+create table customers (name varchar, age integer, something_easy_to_type_wrong integer, city varchar);
+
+statement ok
+create table zipcodes (city varchar, zipcode varchar);
+
+statement error
+with cte as (
+  select *,
+	  rank() over (order by something_easy_to_typo_wrong) as rk
+  from customers
+  where age <= 42
+)
+select *
+from zipcodes
+join cte
+using (city);

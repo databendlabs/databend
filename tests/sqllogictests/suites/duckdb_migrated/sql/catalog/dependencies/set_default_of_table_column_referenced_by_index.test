@@ -1,0 +1,12 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+create table tbl(a varchar, b integer);
+
+# TODO: unsupported feature
+# statement ok
+# create index idx on tbl(a);
+
+statement error
+alter table tbl alter a set default 'test';

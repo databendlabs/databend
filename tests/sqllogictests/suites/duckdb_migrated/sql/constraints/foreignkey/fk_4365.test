@@ -1,0 +1,18 @@
+statement ok
+DROP TABLE IF EXISTS x
+
+statement ok
+DROP TABLE IF EXISTS y
+
+statement ok
+create table x (c1 integer, primary key (c1));
+
+# This should not add a second NOT NULL constraint, because it already exists
+
+statement ok
+create table y (c1 integer, foreign key (c1) references x (c1));
+
+query I
+select count(*) from duckdb_constraints() where constraint_type = 'NOT NULL';
+----
+1

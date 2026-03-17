@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# create sequence xx start 100 increment by 2;
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('xx')
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('xx')
+# ----
+# 102

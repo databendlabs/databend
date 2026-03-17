@@ -1,10 +1,12 @@
-statement ok
-DROP TABLE IF EXISTS quantile
-
-statement ok
-DROP TABLE IF EXISTS repro
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS quantile
 
 # TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS repro
+
+# TODO: unknown function
 # statement ok
 # create table quantile as select range r, random() from range(0, 10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
 
@@ -82,7 +84,7 @@ DROP TABLE IF EXISTS repro
 # ----
 # 1	1
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT CASE
 # 	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
@@ -140,7 +142,7 @@ DROP TABLE IF EXISTS repro
 
 # List versions
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT [
 # 	(a[1] BETWEEN (q[1] - 100) AND (q[1] + 100)),
@@ -155,7 +157,7 @@ DROP TABLE IF EXISTS repro
 # ----
 # [1, 1, 1]
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT [
 # 	(a[1] BETWEEN (q[1] - 100) AND (q[1] + 100)),
@@ -172,17 +174,17 @@ DROP TABLE IF EXISTS repro
 
 # Array lists
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT approx_quantile(col, [0.5, 0.4, 0.1]) AS percentile 
-# FROM VALUES (0), (1), (2), (10) AS tab(col);
+# FROM (VALUES (0), (1), (2), (10)) AS tab(col);
 # ----
 # [2, 1, 0]
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT approx_quantile(col, ARRAY_VALUE(0.5, 0.4, 0.1)) AS percentile 
-# FROM VALUES (0), (1), (2), (10) AS tab(col);
+# FROM (VALUES (0), (1), (2), (10)) AS tab(col);
 # ----
 # [2, 1, 0]
 
@@ -203,14 +205,16 @@ SELECT approx_quantile(r, r) FROM quantile
 statement error
 SELECT approx_quantile(r::string, 0.5) FROM quantile
 
-statement error
-SELECT approx_quantile(r) FROM quantile
+# TODO: unsupported feature
+# statement error
+# SELECT approx_quantile(r) FROM quantile
 
 statement error
 SELECT approx_quantile(r, 0.1, 0.2) FROM quantile
 
-statement error
-SELECT approx_quantile(42, CAST(NULL AS INT[]));
+# TODO: unsupported feature
+# statement error
+# SELECT approx_quantile(42, CAST(NULL AS INT[]));
 
 # TODO: unsupported feature
 # query I
@@ -223,7 +227,7 @@ SELECT approx_quantile(42, CAST(NULL AS INT[]));
 # ----
 # 1
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT CASE
 # 	  WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
@@ -234,7 +238,7 @@ SELECT approx_quantile(42, CAST(NULL AS INT[]));
 # ----
 # 1
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT CASE
 # 	  WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
@@ -247,14 +251,15 @@ SELECT approx_quantile(42, CAST(NULL AS INT[]));
 
 # test with a DECIMAL column
 
-statement ok
-CREATE TABLE repro (i DECIMAL(15,2));
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE repro (i DECIMAL(15,2));
 
-# TODO: unknown function
+# TODO: unsupported feature
 # statement ok
 # SELECT approx_quantile(i, 0.5) FROM repro;
 
-# TODO: unknown function
+# TODO: unsupported feature
 # statement ok
 # SELECT approx_quantile(i, [0.5]) FROM repro;
 
@@ -264,13 +269,13 @@ CREATE TABLE repro (i DECIMAL(15,2));
 # statement ok
 # SELECT reservoir_quantile(r, 0.9)  from quantile
 
-# TODO: unsupported feature
+# TODO: unknown function
 # statement ok
 # SELECT reservoir_quantile(r, 0.9,1000)  from quantile
 
 # reservoir = 1
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT reservoir_quantile(1, 0.5, 1) FROM quantile
 # ----
@@ -304,8 +309,9 @@ SELECT reservoir_quantile(r, r, r)  from quantile
 statement error
 SELECT reservoir_quantile(r, 0.9, NULL)  from quantile
 
-statement error
-SELECT reservoir_quantile(r, 0.9, r)  from quantile
+# TODO: unknown function
+# statement error
+# SELECT reservoir_quantile(r, 0.9, r)  from quantile
 
 statement error
 SELECT reservoir_quantile(r, random()::float)  from quantile

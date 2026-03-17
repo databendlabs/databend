@@ -1,0 +1,31 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+statement ok
+USE db1;
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1 (
+  cache_key VARCHAR PRIMARY KEY,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+);
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2 (
+  cache_key VARCHAR NOT NULL,
+  dose DOUBLE NOT NULL,
+  PRIMARY KEY (cache_key, dose),
+  FOREIGN KEY (cache_key) REFERENCES t1 (cache_key)
+);
+
+statement ok
+ATTACH ':memory:' AS other;
+
+statement ok
+USE other;
+
+statement ok
+DETACH db1;

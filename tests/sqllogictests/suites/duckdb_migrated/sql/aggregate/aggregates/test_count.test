@@ -29,5 +29,6 @@ SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), C
 
 # cannot do DISTINCT *
 
-statement error
-SELECT COUNT(DISTINCT *) FROM integers
+# TODO: unsupported feature
+# statement error
+# SELECT COUNT(DISTINCT *) FROM integers

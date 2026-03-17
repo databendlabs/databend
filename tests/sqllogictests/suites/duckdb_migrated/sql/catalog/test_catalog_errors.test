@@ -1,0 +1,86 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS integers
+
+statement ok
+DROP VIEW IF EXISTS vintegers
+
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+CREATE VIEW vintegers AS SELECT 42;
+
+# cannot CREATE OR REPLACE a table with a view
+
+# TODO: result differs
+# statement error
+# CREATE OR REPLACE VIEW integers AS SELECT 42;
+
+# TODO: result differs
+# statement error
+# DROP VIEW integers
+
+statement error
+DROP TABLE blabla
+
+statement error
+ALTER TABLE blabla RENAME COLUMN i TO k
+
+statement error
+DROP TABLE IF EXISTS vintegers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i);
+
+# cannot create an index that already exists
+
+statement error
+CREATE INDEX i_index ON integers(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX IF NOT EXISTS i_index ON integers(i);
+
+# drop the index
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index
+
+# cannot drop the index again: it no longer exists
+
+statement error
+DROP INDEX i_index
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX IF EXISTS i_index
+
+# create the index again, but as unique to exercise special handling due to indexes generated column constraints
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX i_index ON integers(i);
+
+# cannot create an index that already exists
+
+statement error
+CREATE UNIQUE INDEX i_index ON integers(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX IF NOT EXISTS i_index ON integers(i);
+
+# dropping the table also drops the index
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+statement error
+DROP INDEX i_index

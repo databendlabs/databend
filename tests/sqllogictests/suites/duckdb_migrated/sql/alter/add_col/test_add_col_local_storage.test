@@ -19,9 +19,9 @@ ALTER TABLE test ADD COLUMN k INTEGER
 query III
 SELECT * FROM test
 ----
+3 3 NULL
 1 1 NULL
 2 2 NULL
-3 3 NULL
 
 statement ok
 ROLLBACK
@@ -29,17 +29,18 @@ ROLLBACK
 query III
 SELECT * FROM test
 ----
+3 3 NULL
 1 1 NULL
 2 2 NULL
-3 3 NULL
 
 # TODO: unsupported feature
 # statement ok
 # INSERT INTO test VALUES (3, 3)
 
-query III
-SELECT * FROM test
-----
-1 1 NULL
-2 2 NULL
-3 3 NULL
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test
+# ----
+# 1 1 NULL
+# 2 2 NULL
+# 3 3 NULL

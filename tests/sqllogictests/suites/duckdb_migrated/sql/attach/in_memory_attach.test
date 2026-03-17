@@ -1,0 +1,64 @@
+statement ok
+DROP TABLE IF EXISTS new_database.integers
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS new_database;
+
+# specify database but use a default schema
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE new_database.integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO new_database.integers VALUES (42);
+
+# plus schema
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO new_database.main.integers VALUES (84);
+
+# not in search path
+
+statement error
+SELECT * FROM integers
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_database.integers ORDER BY i
+# ----
+# 42
+# 84
+
+# plus schema
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_database.main.integers ORDER BY i
+# ----
+# 42
+# 84
+
+# database + column name does not work
+
+statement error
+SELECT * FROM new_database.integers ORDER BY new_database.i
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_database.integers ORDER BY new_database.integers.i
+# ----
+# 42
+# 84
+
+# database + schema name + table name + column name works as well
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_database.main.integers ORDER BY new_database.main.integers.i
+# ----
+# 42
+# 84

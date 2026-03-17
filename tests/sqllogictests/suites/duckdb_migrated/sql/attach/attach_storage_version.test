@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS default_version.tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS default_version.tbl
 
 # TODO: unsupported feature
 # query I

@@ -1,0 +1,14 @@
+statement ok
+DROP VIEW IF EXISTS v1
+
+# create a table
+statement ok
+CREATE VIEW v1 AS SELECT 42
+
+statement ok
+CREATE VIEW IF NOT EXISTS v1 AS SELECT 84;
+
+query I
+SELECT * FROM v1
+----
+42

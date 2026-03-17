@@ -1,0 +1,77 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS b
+
+statement ok
+DROP TABLE IF EXISTS a
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+### Create some test data
+statement ok
+CREATE TABLE t1 AS SELECT 1 as c1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX test_index ON t1 using art(c1)
+
+statement ok
+COMMENT ON TABLE t1 IS 'very niceee'
+
+# Create a table
+
+statement ok
+CREATE TABLE a (i INTEGER)
+
+# Create a view that depends on the table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW b AS SELECT i::STRING AS j FROM a
+
+# Comment on the table
+
+statement ok
+COMMENT ON TABLE a IS 'a table'
+
+# Comment on the table's column
+
+statement ok
+COMMENT ON COLUMN a.i IS 'a column'
+
+# Comment on the view
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON VIEW b IS 'a view'
+
+# Comment on the view's column
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN b.j IS 'a column'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='i';
+# ----
+# a column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='a';
+# ----
+# a table
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_views() where view_name='b';
+# ----
+# a view
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='j';
+# ----
+# a column

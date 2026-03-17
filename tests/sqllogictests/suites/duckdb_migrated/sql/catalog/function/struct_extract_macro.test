@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_extract(x) AS x.a.b
+
+# TODO: unknown function
+# query I
+# SELECT my_extract({'a': {'b': 42}})
+# ----
+# 42

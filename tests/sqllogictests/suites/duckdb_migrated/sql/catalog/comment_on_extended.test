@@ -1,0 +1,193 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db1.s1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db2.s2
+
+### Create some test data
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA db1.s1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA db2.s2;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.s1.t1 AS SELECT 1 as c1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.s2.t2 AS SELECT 2 as c2
+
+# some extra tables to index on (since we can not comment on tables with dependencies)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.s1.t3 AS SELECT 3 as c3
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.s2.t4 AS SELECT 4 as c4
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX test_index ON db1.s1.t3 using art(c3)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX test_index ON db2.s2.t4 using art(c4)
+
+### Confirm we have no comments yet
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) from duckdb_tables() where comment IS NOT NULL;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) from duckdb_columns() where comment IS NOT NULL;
+# ----
+# 0
+
+### Tables with fully qualified names
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON TABLE db1.s1.t1 IS 'very gezellige table 1'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='t1';
+# ----
+# very gezellige table 1
+
+# just table
+
+# TODO: unsupported feature
+# statement ok
+# USE db2.s2
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON TABLE t2 IS 'very gezellige table 2'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='t2';
+# ----
+# very gezellige table 2
+
+# db.table
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON TABLE db2.t2 IS 'another very gezellige table 2'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='t2';
+# ----
+# another very gezellige table 2
+
+# schema.table
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON TABLE s2.t2 IS 'yet another very gezellige table 2'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='t2';
+# ----
+# yet another very gezellige table 2
+
+
+### Index with fully qualified name
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON INDEX db1.s1.test_index IS 'very gezellige index 1'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_indexes() where index_name='test_index' and database_name='db1';
+# ----
+# very gezellige index 1
+
+# db.index
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON INDEX db2.test_index IS 'very gezellige index 2'
+
+# TODO: unsupported feature
+# query III
+# select database_name, schema_name, comment from duckdb_indexes() where index_name='test_index' order by comment;
+# ----
+# db1	s1	very gezellige index 1
+# db2	s2	very gezellige index 2
+
+### Fully qualified column
+
+# TODO: unsupported feature
+# statement error
+# COMMENT ON COLUMN col1 IS 'no bueno'
+
+# TODO: unsupported feature
+# statement error
+# COMMENT ON COLUMN galaxy.db.schema.table.col1 IS 'no bueno'
+
+statement error
+COMMENT ON COLUMN table_blablabla.col1 IS 'bla'
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN db1.s1.t1.c1 IS 'very gezellige column 1'
+
+# TODO: unsupported feature
+# query IIII
+# select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c1' order by comment;
+# ----
+# db1	s1	t1	very gezellige column 1
+
+# Using db.tbl.col
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN db2.t2.c2 IS 'very gezellige column 2'
+
+# TODO: unsupported feature
+# query IIII
+# select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c2' order by comment;
+# ----
+# db2	s2	t2	very gezellige column 2
+
+# Using schema.tbl.col
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN s2.t2.c2 IS 'another very gezellige column 2'
+
+# TODO: unsupported feature
+# query IIII
+# select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c2' order by comment;
+# ----
+# db2	s2	t2	another very gezellige column 2
+
+# Using tbl.col
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN t2.c2 IS 'yet another very gezellige column 2'
+
+# TODO: unsupported feature
+# query IIII
+# select database_name, schema_name, table_name, comment from duckdb_columns() where column_name='c2' order by comment;
+# ----
+# db2	s2	t2	yet another very gezellige column 2

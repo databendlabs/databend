@@ -1,0 +1,27 @@
+statement ok
+DROP VIEW IF EXISTS vw
+
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+create table tbl(a varchar default 'abc');
+
+statement ok
+insert into tbl values(DEFAULT);
+
+statement ok
+create view vw as select * from tbl;
+
+query T
+select * from vw;
+----
+abc
+
+statement ok
+alter table tbl add column b integer default 5;
+
+query TI
+select * from vw;
+----
+abc	5

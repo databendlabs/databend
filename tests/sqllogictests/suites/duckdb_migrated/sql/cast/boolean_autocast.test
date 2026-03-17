@@ -1,0 +1,143 @@
+query B
+SELECT true=1;
+----
+1
+
+query B
+SELECT true=0;
+----
+0
+
+query B
+SELECT false=0;
+----
+1
+
+query B
+SELECT false=1;
+----
+0
+
+query B
+SELECT 1=true;
+----
+1
+
+query B
+SELECT 0=true;
+----
+0
+
+query B
+SELECT 0=false;
+----
+1
+
+query B
+SELECT 1=false;
+----
+0
+
+# boolean <-> string
+
+# TODO: unsupported feature
+# query T
+# SELECT true='1';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT true='1'::VARCHAR;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT true='0';
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT false='0';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT false='1';
+# ----
+# 0
+
+query B
+SELECT true='true';
+----
+1
+
+query B
+SELECT true='false';
+----
+0
+
+query B
+SELECT false='false';
+----
+1
+
+query B
+SELECT false='true';
+----
+0
+
+# TODO: unsupported feature
+# query T
+# SELECT '1'=true;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT '0'=true;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT '0'=false;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT '1'=false;
+# ----
+# 0
+
+query B
+SELECT true='true';
+----
+1
+
+query B
+SELECT true='false';
+----
+0
+
+query B
+SELECT false='false';
+----
+1
+
+query B
+SELECT false='true';
+----
+0
+
+# failed to auto cast
+
+statement error
+SELECT false='unknownbool';
+
+statement error
+SELECT 'unknownbool'=false;

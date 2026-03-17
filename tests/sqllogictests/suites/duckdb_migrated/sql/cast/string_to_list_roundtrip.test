@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# query III
+# select $$[\"abc\", def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a = b
+# ----
+# ['"abc"', def, ghi]	['"abc"', def, ghi]	1
+
+# TODO: unsupported feature
+# query III
+# select $$["  \"abc\"  ", def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a = b
+# ----
+# ['  "abc"  ', def, ghi]	['  "abc"  ', def, ghi]	1
+
+# Escaping backslashes
+
+# TODO: unsupported feature
+# query III
+# select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a = b
+# ----
+# [\  \\abc\\ \, def, ghi]	[\  \\abc\\ \, def, ghi]	1
+
+# Escaping backslashes
+
+# TODO: unsupported feature
+# query III
+# select $$["\  \\abc\\ \ ", def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a = b
+# ----
+# ['  \\abc\\  ', def, ghi]	['  \\abc\\  ', def, ghi]	1
+
+# Escaping '{' and '}'
+
+# TODO: unsupported feature
+# query III
+# select $$[{}]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a = b
+# ----
+# ['{}']	['{}']	1

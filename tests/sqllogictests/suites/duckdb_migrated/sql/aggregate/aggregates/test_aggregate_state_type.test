@@ -10,17 +10,21 @@ DROP TABLE IF EXISTS t1_HUGEINT
 statement ok
 DROP TABLE IF EXISTS t1_INTEGER
 
-statement ok
-DROP TABLE IF EXISTS t1_SMALLINT
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1_SMALLINT
 
-statement ok
-DROP TABLE IF EXISTS t2_count_int
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2_count_int
 
-statement ok
-DROP TABLE IF EXISTS t3_product
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t3_product
 
-statement ok
-DROP TABLE IF EXISTS t_regr_count
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t_regr_count
 
 # We know that forward compatibility won't be preserved
 # avg() has the new get_state_type callback
@@ -313,7 +317,7 @@ DROP TABLE IF EXISTS t_regr_count
 
 # bit_xor is now opted-in to struct-based state
 
-# TODO: unsupported feature
+# TODO: type_error
 # query T
 # SELECT typeof(bit_xor(1::BIGINT) EXPORT_STATE) = 'AGGREGATE_STATE<bit_xor(BIGINT)::BIGINT, STRUCT(is_set BOOLEAN, "value" BIGINT)>';
 # ----
@@ -337,7 +341,7 @@ DROP TABLE IF EXISTS t_regr_count
 
 # Test with TIMESTAMP type
 
-# TODO: type_error
+# TODO: unsupported feature
 # query T
 # SELECT typeof(avg(TIMESTAMP '2020-01-01 00:00:00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIMESTAMP)::TIMESTAMP, STRUCT(count UBIGINT, "value" TIMESTAMP)>';
 # ----
@@ -434,7 +438,7 @@ DROP TABLE IF EXISTS t_regr_count
 
 # Casting first state to struct should work
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query T
 # SELECT (first(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
 # ----
@@ -458,7 +462,7 @@ DROP TABLE IF EXISTS t_regr_count
 
 # product() has the new get_state_type callback
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query T
 # SELECT typeof(product(1.0::DOUBLE) EXPORT_STATE) = 'AGGREGATE_STATE<product(DOUBLE)::DOUBLE, STRUCT(empty BOOLEAN, val DOUBLE)>';
 # ----

@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS numbers
+
+statement ok
+CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b))
+
+# insert two conflicting pairs at the same time
+
+statement error
+INSERT INTO numbers VALUES (1,1,1,1,1), (1,1,1,1,1)
+
+statement ok
+INSERT INTO numbers VALUES (1,1,1,1,1),(1,2,1,1,1),(2,1,2,1,1),(2,2,2,2,2)
+
+# insert a duplicate value as part of a chain of values
+
+statement error
+INSERT INTO numbers VALUES (1,1,1,1,1),(1,5,1,1,4);
+
+statement ok
+INSERT INTO numbers VALUES (1,5,1,1,4);
+
+# this should  work since is not part of primary key
+
+statement ok
+UPDATE numbers SET c=1 WHERE c=2
+
+# this should  fail since is will cause a duplicate
+
+statement error
+UPDATE numbers SET b=1 WHERE b=2
+
+statement ok
+UPDATE numbers SET b=3 WHERE b=2

@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+create table tbl(a varchar);
+
+# TODO: unsupported feature
+# statement ok
+# create index idx on tbl(a);
+
+# TODO: result differs
+# statement error
+# alter table tbl rename a to b;

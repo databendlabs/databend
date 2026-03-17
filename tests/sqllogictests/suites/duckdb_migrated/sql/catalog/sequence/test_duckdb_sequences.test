@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# create sequence my_seq;
+
+# TODO: unsupported feature
+# query I
+# select nextval('my_seq');
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select last_value from duckdb_sequences();
+# ----
+# 1

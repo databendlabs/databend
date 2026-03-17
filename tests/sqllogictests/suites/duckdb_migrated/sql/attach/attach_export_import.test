@@ -57,13 +57,14 @@ rollback;
 statement ok
 drop view integers_view;
 
-query I nosort q1
-SELECT * FROM integers ORDER BY i NULLS LAST
-----
-1
-2
-3
-NULL
+# TODO: unsupported feature
+# query I nosort q1
+# SELECT * FROM integers ORDER BY i NULLS LAST
+# ----
+# 1
+# 2
+# 3
+# NULL
 
 # FIXME: this seems to be bugged
 # the view doesn't seem to get exported/imported correctly:

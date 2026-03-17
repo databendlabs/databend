@@ -1,0 +1,771 @@
+query I
+select '1e2'::tinyint;
+----
+100
+
+query I
+select '1.23e2'::tinyint;
+----
+123
+
+query I
+select '1.234e2'::tinyint;
+----
+123
+
+query I
+select '1.235e2'::tinyint;
+----
+124
+
+# Positive Number - Negative Exponent
+
+query I
+select '1e-2'::tinyint;
+----
+0
+
+query I
+select '123.456e-2'::tinyint;
+----
+1
+
+query I
+select '1584.92e-2'::tinyint;
+----
+16
+
+query I
+select '1214.235e-2'::tinyint;
+----
+12
+
+# Out of range
+
+statement error
+select '10e40'::tinyint;
+
+query I
+select '1e2'::smallint;
+----
+100
+
+query I
+select '1.23e2'::smallint;
+----
+123
+
+query I
+select '1.234e2'::smallint;
+----
+123
+
+query I
+select '1.235e2'::smallint;
+----
+124
+
+# Positive Number - Negative Exponent
+
+query I
+select '1e-2'::smallint;
+----
+0
+
+query I
+select '123.456e-2'::smallint;
+----
+1
+
+query I
+select '1584.92e-2'::smallint;
+----
+16
+
+query I
+select '1214.235e-2'::smallint;
+----
+12
+
+# Out of range
+
+statement error
+select '10e40'::smallint;
+
+query I
+select '1e2'::integer;
+----
+100
+
+query I
+select '1.23e2'::integer;
+----
+123
+
+query I
+select '1.234e2'::integer;
+----
+123
+
+query I
+select '1.235e2'::integer;
+----
+124
+
+# Positive Number - Negative Exponent
+
+query I
+select '1e-2'::integer;
+----
+0
+
+query I
+select '123.456e-2'::integer;
+----
+1
+
+query I
+select '1584.92e-2'::integer;
+----
+16
+
+query I
+select '1214.235e-2'::integer;
+----
+12
+
+# Out of range
+
+statement error
+select '10e40'::integer;
+
+query I
+select '1e2'::bigint;
+----
+100
+
+query I
+select '1.23e2'::bigint;
+----
+123
+
+query I
+select '1.234e2'::bigint;
+----
+123
+
+query I
+select '1.235e2'::bigint;
+----
+124
+
+# Positive Number - Negative Exponent
+
+query I
+select '1e-2'::bigint;
+----
+0
+
+query I
+select '123.456e-2'::bigint;
+----
+1
+
+query I
+select '1584.92e-2'::bigint;
+----
+16
+
+query I
+select '1214.235e-2'::bigint;
+----
+12
+
+# Out of range
+
+statement error
+select '10e40'::bigint;
+
+# TODO: unsupported feature
+# query I
+# select '1e2'::utinyint;
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# select '1.23e2'::utinyint;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.234e2'::utinyint;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.235e2'::utinyint;
+# ----
+# 124
+
+# Positive Number - Negative Exponent
+
+# TODO: unsupported feature
+# query I
+# select '1e-2'::utinyint;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '123.456e-2'::utinyint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1584.92e-2'::utinyint;
+# ----
+# 16
+
+# TODO: unsupported feature
+# query I
+# select '1214.235e-2'::utinyint;
+# ----
+# 12
+
+# Out of range
+
+statement error
+select '10e40'::utinyint;
+
+# TODO: unsupported feature
+# query I
+# select '1e2'::usmallint;
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# select '1.23e2'::usmallint;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.234e2'::usmallint;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.235e2'::usmallint;
+# ----
+# 124
+
+# Positive Number - Negative Exponent
+
+# TODO: unsupported feature
+# query I
+# select '1e-2'::usmallint;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '123.456e-2'::usmallint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1584.92e-2'::usmallint;
+# ----
+# 16
+
+# TODO: unsupported feature
+# query I
+# select '1214.235e-2'::usmallint;
+# ----
+# 12
+
+# Out of range
+
+statement error
+select '10e40'::usmallint;
+
+# TODO: unsupported feature
+# query I
+# select '1e2'::uinteger;
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# select '1.23e2'::uinteger;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.234e2'::uinteger;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.235e2'::uinteger;
+# ----
+# 124
+
+# Positive Number - Negative Exponent
+
+# TODO: unsupported feature
+# query I
+# select '1e-2'::uinteger;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '123.456e-2'::uinteger;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1584.92e-2'::uinteger;
+# ----
+# 16
+
+# TODO: unsupported feature
+# query I
+# select '1214.235e-2'::uinteger;
+# ----
+# 12
+
+# Out of range
+
+statement error
+select '10e40'::uinteger;
+
+# TODO: unsupported feature
+# query I
+# select '1e2'::ubigint;
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# select '1.23e2'::ubigint;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.234e2'::ubigint;
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# select '1.235e2'::ubigint;
+# ----
+# 124
+
+# Positive Number - Negative Exponent
+
+# TODO: unsupported feature
+# query I
+# select '1e-2'::ubigint;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '123.456e-2'::ubigint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1584.92e-2'::ubigint;
+# ----
+# 16
+
+# TODO: unsupported feature
+# query I
+# select '1214.235e-2'::ubigint;
+# ----
+# 12
+
+# Out of range
+
+statement error
+select '10e40'::ubigint;
+
+query I
+select '-1e2'::tinyint;
+----
+-100
+
+query I
+select '-1.23456e2'::tinyint;
+----
+-123
+
+query I
+select '-0.158492e2'::tinyint;
+----
+-16
+
+query I
+select '-1.235e2'::tinyint;
+----
+-124
+
+# Negative Number - Negative Exponent
+
+query I
+select '-100e-2'::tinyint;
+----
+-1
+
+query I
+select '-50.23456e-2'::tinyint;
+----
+-1
+
+query I
+select '-1584.92e-2'::tinyint;
+----
+-16
+
+query I
+select '-1.235e-2'::tinyint;
+----
+0
+
+query I
+select '5.5e-1'::bigint;
+----
+1
+
+query I
+select '9.5e-5'::tinyint;
+----
+0
+
+statement error
+select '-10e40'::tinyint;
+
+query I
+select '-1e2'::smallint;
+----
+-100
+
+query I
+select '-1.23456e2'::smallint;
+----
+-123
+
+query I
+select '-0.158492e2'::smallint;
+----
+-16
+
+query I
+select '-1.235e2'::smallint;
+----
+-124
+
+# Negative Number - Negative Exponent
+
+query I
+select '-100e-2'::smallint;
+----
+-1
+
+query I
+select '-50.23456e-2'::smallint;
+----
+-1
+
+query I
+select '-1584.92e-2'::smallint;
+----
+-16
+
+query I
+select '-1.235e-2'::smallint;
+----
+0
+
+query I
+select '5.5e-1'::bigint;
+----
+1
+
+query I
+select '9.5e-5'::smallint;
+----
+0
+
+statement error
+select '-10e40'::smallint;
+
+query I
+select '-1e2'::integer;
+----
+-100
+
+query I
+select '-1.23456e2'::integer;
+----
+-123
+
+query I
+select '-0.158492e2'::integer;
+----
+-16
+
+query I
+select '-1.235e2'::integer;
+----
+-124
+
+# Negative Number - Negative Exponent
+
+query I
+select '-100e-2'::integer;
+----
+-1
+
+query I
+select '-50.23456e-2'::integer;
+----
+-1
+
+query I
+select '-1584.92e-2'::integer;
+----
+-16
+
+query I
+select '-1.235e-2'::integer;
+----
+0
+
+query I
+select '5.5e-1'::bigint;
+----
+1
+
+query I
+select '9.5e-5'::integer;
+----
+0
+
+statement error
+select '-10e40'::integer;
+
+query I
+select '-1e2'::bigint;
+----
+-100
+
+query I
+select '-1.23456e2'::bigint;
+----
+-123
+
+query I
+select '-0.158492e2'::bigint;
+----
+-16
+
+query I
+select '-1.235e2'::bigint;
+----
+-124
+
+# Negative Number - Negative Exponent
+
+query I
+select '-100e-2'::bigint;
+----
+-1
+
+query I
+select '-50.23456e-2'::bigint;
+----
+-1
+
+query I
+select '-1584.92e-2'::bigint;
+----
+-16
+
+query I
+select '-1.235e-2'::bigint;
+----
+0
+
+query I
+select '5.5e-1'::bigint;
+----
+1
+
+query I
+select '9.5e-5'::bigint;
+----
+0
+
+statement error
+select '-10e40'::bigint;
+
+query II
+select '12.7e1'::TINYINT, '-12.8e1'::TINYINT;
+----
+127	-128
+
+query II
+select '3276.7e1'::SMALLINT, '-3276.8e1'::SMALLINT;
+----
+32767	-32768
+
+query II
+select '214748364.7e1'::INTEGER, '-214748364.8e1'::INTEGER;
+----
+2147483647	-2147483648
+
+query II
+select '922337203685477580.7e1'::BIGINT, '-922337203685477580.8e1'::BIGINT;
+----
+9223372036854775807	-9223372036854775808
+
+# TODO: unsupported feature
+# query II
+# select '17014118346046923173168730371588410572.7e1'::HUGEINT, '-17014118346046923173168730371588410572.8e1'::HUGEINT;
+# ----
+# 170141183460469231731687303715884105727	-170141183460469231731687303715884105728
+
+# Check limits (unsigned)
+
+# TODO: unsupported feature
+# query I
+# select '25.5e1'::UTINYINT;
+# ----
+# 255
+
+# TODO: unsupported feature
+# query I
+# select '6553.5e1'::USMALLINT;
+# ----
+# 65535
+
+# TODO: unsupported feature
+# query I
+# select '429496729.5e1'::UINTEGER;
+# ----
+# 4294967295
+
+# TODO: unsupported feature
+# query I
+# select '1844674407370955161.5e1'::UBIGINT;
+# ----
+# 18446744073709551615
+
+# TODO: unsupported feature
+# query I
+# select '34028236692093846346337460743176821145.5e1'::UHUGEINT;
+# ----
+# 340282366920938463463374607431768211455
+
+# going over limit should error (signed)
+
+statement error
+select '12.8e1'::TINYINT;
+
+statement error
+select '3276.8e1'::SMALLINT;
+
+statement error
+select '214748364.8e1'::INTEGER;
+
+statement error
+select '922337203685477580.8e1'::BIGINT;
+
+statement error
+select '17014118346046923173168730371588410572.8e1'::HUGEINT;
+
+statement error
+select '-12.9e1'::TINYINT;
+
+statement error
+select '-3276.9e1'::SMALLINT;
+
+statement error
+select '-214748364.9e1'::INTEGER;
+
+statement error
+select '-922337203685477580.9e1'::BIGINT;
+
+statement error
+select '-17014118346046923173168730371588410572.9e1'::HUGEINT;
+
+statement error
+select '25.6e1'::UTINYINT;
+
+statement error
+select '6553.6e1'::USMALLINT;
+
+statement error
+select '429496729.6e1'::UINTEGER;
+
+statement error
+select '1844674407370955161.6e1'::UBIGINT;
+
+statement error
+select '1e100000'::int;
+
+statement error
+select '1e-100000'::int;
+
+# TODO: unsupported feature
+# query I
+# select '0.00000000000000000000000000000009223372036854775807e50'::BIGINT;
+# ----
+# 9223372036854775807
+
+# TODO: unsupported feature
+# query I
+# select '-0.00000000000000000000000000000009223372036854775807e50'::BIGINT;
+# ----
+# -9223372036854775807
+
+# TODO: unsupported feature
+# query I
+# select '0.00000000000170141183460469231731687303715884105727e50'::HUGEINT;
+# ----
+# 170141183460469231731687303715884105727
+
+# TODO: unsupported feature
+# query I
+# select '-0.00000000000170141183460469231731687303715884105727e50'::HUGEINT;
+# ----
+# -170141183460469231731687303715884105727
+
+# TODO: unsupported feature
+# query I
+# select '15123456789e-32768'::int;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '0e32767'::int;
+# ----
+# 0

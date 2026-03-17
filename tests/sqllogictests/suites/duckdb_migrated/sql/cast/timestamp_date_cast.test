@@ -1,0 +1,72 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+create table test as
+select '2021-02-04 19:30:00'::timestamp t;
+
+# TODO: result differs
+# query I
+# select *
+# from test
+# where (t::date) = '2021-02-04'::date;
+# ----
+# 2021-02-04 19:30:00
+
+# TODO: result differs
+# query I
+# select *
+# from test
+# where (t::date) = '2021-02-04';
+# ----
+# 2021-02-04 19:30:00
+
+# Check that casts to DATE are not invertible
+
+# TODO: unsupported feature
+# query I
+# WITH t AS (
+#     SELECT
+#         '2020-09-13 00:30:00'::TIMESTAMP AS a,
+# )
+# SELECT
+#     a::DATE = '2020-09-13'::DATE,
+# FROM t;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# WITH t AS (
+#     SELECT
+#         '2020-09-13 00:30:00'::TIMESTAMP_S AS a,
+# )
+# SELECT
+#     a::DATE = '2020-09-13'::DATE,
+# FROM t;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# WITH t AS (
+#     SELECT
+#         '2020-09-13 00:30:00'::TIMESTAMP_MS AS a,
+# )
+# SELECT
+#     a::DATE = '2020-09-13'::DATE,
+# FROM t;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# WITH t AS (
+#     SELECT
+#         '2020-09-13 00:30:00'::TIMESTAMP_NS AS a,
+# )
+# SELECT
+#     a::DATE = '2020-09-13'::DATE,
+# FROM t;
+# ----
+# 1

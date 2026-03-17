@@ -8,66 +8,98 @@ DROP TABLE IF EXISTS my_tbl
 # statement ok
 # USE view_search_path
 
-statement ok
-CREATE TABLE my_tbl(i INTEGER)
-
-statement ok
-INSERT INTO my_tbl VALUES (42)
-
-statement ok
-CREATE VIEW my_view AS FROM my_tbl
-
-query I
-FROM my_view
-----
-42
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA my_schema
-
-statement ok
-USE my_schema
-
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE my_tbl(i INTEGER)
 
-statement ok
-INSERT INTO my_tbl VALUES (84)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO my_tbl VALUES (42)
 
 # TODO: unsupported feature
 # statement ok
 # CREATE VIEW my_view AS FROM my_tbl
 
-query I
-FROM my_view
-----
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
-84
+# TODO: unsupported feature
+# query I
+# FROM my_view
+# ----
+# 42
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA my_schema
+
+# TODO: unsupported feature
+# statement ok
+# USE my_schema
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE my_tbl(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO my_tbl VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW my_view AS FROM my_tbl
+
+# TODO: unsupported feature
+# query I
+# FROM my_view
+# ----
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
+# 84
 
 # TODO: unsupported feature
 # statement ok

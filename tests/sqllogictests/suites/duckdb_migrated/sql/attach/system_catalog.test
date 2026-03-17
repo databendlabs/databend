@@ -1,0 +1,29 @@
+statement ok
+DROP VIEW IF EXISTS system.main
+
+statement ok
+DROP TABLE IF EXISTS system.main
+
+statement error
+DETACH DATABASE system
+
+statement error
+DETACH DATABASE temp
+
+statement error
+CREATE SCHEMA system.eek
+
+statement error
+CREATE TABLE system.main.integers(i INTEGER)
+
+statement error
+CREATE VIEW system.main.integers AS SELECT 42
+
+statement error
+CREATE SEQUENCE system.main.seq
+
+statement error
+CREATE MACRO system.main.my_macro(a,b) AS a+b
+
+statement error
+CREATE TYPE system.main.rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');

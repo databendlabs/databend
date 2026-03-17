@@ -1,0 +1,47 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# prepared statements and dependencies
+# dependency on a bound table
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v AS SELECT * FROM integers
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers CASCADE
+
+# after the drop the prepared statement is invalidated
+
+statement error
+EXECUTE v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v AS SELECT nextval('seq')
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v
+
+# drop the sequence
+
+# TODO: unsupported feature
+# statement ok
+# DROP SEQUENCE seq CASCADE
+
+# after the drop the prepared statement is invalidated
+
+statement error
+EXECUTE v

@@ -1,0 +1,83 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+# con1 starts a transaction and modifies the second value
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE integers SET i=4 WHERE i=2
+
+# con2 can't update the second value
+
+statement error
+UPDATE integers SET i=4 WHERE i=2
+
+statement error
+UPDATE integers SET i=5 WHERE i=2
+
+statement error
+DELETE FROM integers WHERE i=2
+
+statement ok
+UPDATE integers SET i=5 WHERE i=3
+
+# rollback con1
+
+statement ok
+ROLLBACK
+
+# now we can perform the changes in con2
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE integers SET i=4 WHERE i=2
+
+statement ok
+UPDATE integers SET i=5 WHERE i=3
+
+# check the results, con1 still gets the old results
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+2
+3
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+4
+5
+
+# now commit
+
+statement ok
+COMMIT
+
+# check the results again, both get the same (new) results now
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+4
+5
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+4
+5

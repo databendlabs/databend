@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT t.k FROM integers AS 't'('k') ORDER BY ALL
+# ----
+# NULL
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT t.k FROM integers t('k') ORDER BY ALL
+# ----
+# NULL
+# 1
+# 2
+# 3

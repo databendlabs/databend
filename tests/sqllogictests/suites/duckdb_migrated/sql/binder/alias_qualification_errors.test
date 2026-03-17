@@ -1,0 +1,12 @@
+# forward reference should error
+statement error
+SELECT alias.x + 1 AS y, 1 AS x
+
+statement error
+SELECT alias.nope;
+
+statement error
+SELECT (SELECT 1) AS x, alias.x
+
+statement error
+SELECT 5 as x, alias.123;

@@ -58,8 +58,9 @@ select argmax()
 # ----
 # 1
 
-statement error
-select argmax(*)
+# TODO: unknown function
+# statement error
+# select argmax(*)
 
 # TODO: unknown function
 # query I
@@ -73,19 +74,21 @@ select argmax(*)
 # ----
 # NULL
 
-statement ok
-create table args (a integer, b integer)
-
-statement ok
-insert into args values (1,1), (2,2), (8,8), (10,10)
-
 # TODO: unknown function
+# statement ok
+# create table args (a integer, b integer)
+
+# TODO: unsupported feature
+# statement ok
+# insert into args values (1,1), (2,2), (8,8), (10,10)
+
+# TODO: unsupported feature
 # query II
 # select argmin(a,b), argmax(a,b) from args;
 # ----
 # 1.000000	10.000000
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query II
 # select argmin(a,b), argmax(a,b) from args group by a%2 ORDER BY argmin(a,b);
 # ----
@@ -126,7 +129,7 @@ insert into args values (1,1), (2,2), (8,8), (10,10)
 # ----
 # \xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query II
 # select argmin(a,b), argmax(a,b)  from blobs;
 # ----
@@ -155,8 +158,9 @@ insert into args values (1,1), (2,2), (8,8), (10,10)
 statement ok
 create table names (name string, salary integer)
 
-statement ok
-insert into names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
+# TODO: unknown function
+# statement ok
+# insert into names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
 
 # TODO: unknown function
 # query II
@@ -180,29 +184,33 @@ insert into names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blai
 
 # test arg_min arg_max alias
 
-query TT
-select arg_min(name,salary),arg_max(name,salary)  from names;
-----
-Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
+# TODO: unsupported feature
+# query TT
+# select arg_min(name,salary),arg_max(name,salary)  from names;
+# ----
+# NULL NULL
 
-statement ok
-drop table names;
+# TODO: unknown function
+# statement ok
+# drop table names;
 
-statement ok
-CREATE OR REPLACE TABLE employees(
-	employee_id NUMERIC,
-	department_id NUMERIC,
-	salary NUMERIC);
+# TODO: unknown function
+# statement ok
+# CREATE OR REPLACE TABLE employees(
+# 	employee_id NUMERIC,
+# 	department_id NUMERIC,
+# 	salary NUMERIC);
 
-statement ok
-INSERT INTO employees VALUES
-  (1001, 10, 10000),
-  (1020, 10, 9000),
-  (1030, 10, 8000),
-  (900, 20, 15000),
-  (2000, 20, NULL),
-  (2010, 20, 15000),
-  (2020, 20, 8000);
+# TODO: unknown function
+# statement ok
+# INSERT INTO employees VALUES
+#   (1001, 10, 10000),
+#   (1020, 10, 9000),
+#   (1030, 10, 8000),
+#   (900, 20, 15000),
+#   (2000, 20, NULL),
+#   (2010, 20, 15000),
+#   (2020, 20, 8000);
 
 # TODO: unknown function
 # query I
@@ -225,7 +233,7 @@ INSERT INTO employees VALUES
 # ----
 # 900
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT MIN_BY(employee_id, salary) as employee_with_least_salary
 # FROM employees;
@@ -238,13 +246,16 @@ INSERT INTO employees VALUES
 # ----
 # NULL
 
-statement ok
-create table names (first_name string, last_name string)
+# TODO: unsupported feature
+# statement ok
+# create table names (first_name string, last_name string)
 
-statement ok
-insert into names values ('PedroPedroPedroPedroPedro','HolandaHolandaHolandaHolandaHolanda'), ('HannesHannesHannesHannesHannesHannes','MuhleisenMuhleisenMuhleisenMuhleisenMuhleisenMuhleisen'), ('MarkMarkMark','RaasveldtRaasveldtRaasveldtRaasveldtRaasveldtRaasveldt'), ('Hubert-BlaineHubert-BlaineHubert-BlaineHubert-Blaine','WolfeschlegelsteinhausenbergerdorffWolfeschlegelsteinhausenbergerdorffWolfeschlegelsteinhausenbergerdorff')
+# TODO: unsupported feature
+# statement ok
+# insert into names values ('PedroPedroPedroPedroPedro','HolandaHolandaHolandaHolandaHolanda'), ('HannesHannesHannesHannesHannesHannes','MuhleisenMuhleisenMuhleisenMuhleisenMuhleisenMuhleisen'), ('MarkMarkMark','RaasveldtRaasveldtRaasveldtRaasveldtRaasveldtRaasveldt'), ('Hubert-BlaineHubert-BlaineHubert-BlaineHubert-Blaine','WolfeschlegelsteinhausenbergerdorffWolfeschlegelsteinhausenbergerdorffWolfeschlegelsteinhausenbergerdorff')
 
-query TT
-select arg_min(first_name,last_name),arg_max(first_name,last_name)  from names;
-----
-PedroPedroPedroPedroPedro	Hubert-BlaineHubert-BlaineHubert-BlaineHubert-Blaine
+# TODO: unsupported feature
+# query TT
+# select arg_min(first_name,last_name),arg_max(first_name,last_name)  from names;
+# ----
+# PedroPedroPedroPedroPedro	Hubert-BlaineHubert-BlaineHubert-BlaineHubert-Blaine

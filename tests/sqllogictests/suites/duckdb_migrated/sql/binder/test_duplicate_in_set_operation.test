@@ -1,0 +1,47 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# create table t1(col1 varchar collate nocase);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2(col1 varchar collate nocase);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 values ('a');
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values ('A');
+
+# TODO: unsupported feature
+# query I
+# select upper(col1)
+# from (
+# 	select *
+# 	from t1
+# 	union
+# 	select *
+# 	from t2
+# ) d;
+# ----
+# A
+
+# TODO: unsupported feature
+# query II
+# explain select upper(col1)
+# from (
+# 	select *
+# 	from t1
+# 	union
+# 	select *
+# 	from t2
+# ) d;
+# ----
+# TODO: special result marker

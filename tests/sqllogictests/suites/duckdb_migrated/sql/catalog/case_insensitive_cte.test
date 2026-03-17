@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# query I
+# with cte AS (SELECT 42 "A")
+# select a from cte
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# with "CTE" AS (SELECT 42)
+# select * from cte
+# ----
+# 42

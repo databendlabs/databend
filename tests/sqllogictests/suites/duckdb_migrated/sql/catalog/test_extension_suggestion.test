@@ -1,0 +1,2 @@
+statement error
+SELECT from_json('{DATA_DIR}/json/array_of_empty_arrays.json');

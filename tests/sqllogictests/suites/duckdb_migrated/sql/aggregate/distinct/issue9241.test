@@ -1,11 +1,14 @@
-statement ok
-DROP TABLE IF EXISTS foo
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS foo
 
-statement ok
-create table foo (a int, b int);
+# TODO: unsupported feature
+# statement ok
+# create table foo (a int, b int);
 
-statement ok
-insert into foo values (1, 1), (2, 1), (2, 2);
+# TODO: unsupported feature
+# statement ok
+# insert into foo values (1, 1), (2, 1), (2, 2);
 
 # TODO: unsupported feature
 # query II

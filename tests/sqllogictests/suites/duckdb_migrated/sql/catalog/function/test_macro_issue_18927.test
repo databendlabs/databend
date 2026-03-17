@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE MACRO my(s) AS s.lower().split('').aggregate('count');
+
+# TODO: unknown function
+# query I
+# SELECT my('AA');
+# ----
+# 2

@@ -1,0 +1,112 @@
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100::UTINYINT + 1) = 'UTINYINT';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100 + 1::UTINYINT) = 'UTINYINT';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100::USMALLINT + 1) = 'USMALLINT';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100 + 1::USMALLINT) = 'USMALLINT';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100::UINTEGER + 1) = 'UINTEGER';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100 + 1::UINTEGER) = 'UINTEGER';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100::UBIGINT + 1) = 'UBIGINT';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(100 + 1::UBIGINT) = 'UBIGINT';
+# ----
+# 1
+
+query B
+SELECT typeof(100::TINYINT + 1) = 'TINYINT';
+----
+0
+
+query B
+SELECT typeof(100 + 1::TINYINT) = 'TINYINT';
+----
+0
+
+query B
+SELECT typeof(100::SMALLINT + 1) = 'SMALLINT';
+----
+0
+
+query B
+SELECT typeof(100 + 1::SMALLINT) = 'SMALLINT';
+----
+0
+
+query B
+SELECT typeof(100::INTEGER + 1) = 'INTEGER';
+----
+0
+
+query B
+SELECT typeof(100 + 1::INTEGER) = 'INTEGER';
+----
+0
+
+query B
+SELECT typeof(100::BIGINT + 1) = 'BIGINT';
+----
+0
+
+query B
+SELECT typeof(100 + 1::BIGINT) = 'BIGINT';
+----
+0
+
+
+# integer literals out of range for type
+
+query T
+SELECT typeof(1::TINYINT + 100);
+----
+TINYINT UNSIGNED
+
+query T
+SELECT typeof(1::TINYINT + 10000);
+----
+SMALLINT UNSIGNED
+
+# integer literals with decimals
+
+query T
+SELECT typeof(1.05 + 1)
+----
+DECIMAL(3, 2)
+
+query T
+SELECT typeof(1 + 1);
+----
+TINYINT UNSIGNED

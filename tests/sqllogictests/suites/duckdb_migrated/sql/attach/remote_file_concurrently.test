@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH 'https://raw.githubusercontent.com/duckdb/duckdb/main/data/attach_test/attach.db' AS db;
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH 'https://raw.githubusercontent.com/duckdb/duckdb/main/data/attach_test/attach.db' AS db2;

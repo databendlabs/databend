@@ -1,0 +1,115 @@
+statement ok
+DROP VIEW IF EXISTS new_db.my_schema
+
+statement ok
+DROP TABLE IF EXISTS new_db.my_schema
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA new_db.my_schema;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE new_db.my_schema.my_table(col INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO new_db.my_schema.my_table VALUES (42);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW new_db.my_schema.my_view AS SELECT 84
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE new_db.my_schema.my_sequence;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO new_db.my_schema.one() AS (SELECT 1);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO new_db.my_schema.range(a) as TABLE SELECT * FROM range(a)
+
+# TODO: unsupported feature
+# query I
+# SELECT new_db.my_schema.one()
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_db.my_schema.range(0, 3)
+# ----
+# 0
+# 1
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# DETACH new_db
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_name.my_schema.my_table
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_name.my_schema.my_view
+# ----
+# 84
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('new_name.my_schema.my_sequence')
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT new_name.my_schema.one()
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_name.my_schema.range(0, 3)
+# ----
+# 0
+# 1
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# USE new_name.my_schema
+
+statement error
+USE new_name.my_schema.my_table
+
+query I
+SELECT * FROM my_table
+----
+42
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM my_view
+# ----
+# 84
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('my_sequence')
+# ----
+# 2
+
+# TODO: unknown function
+# query I
+# SELECT one()
+# ----
+# 1
+
+# FIXME - this leads to infinite recursion

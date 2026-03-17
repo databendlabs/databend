@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_first_macro() AS (84)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY MACRO my_second_macro() AS my_first_macro() + 42;
+
+# TODO: unknown function
+# query I
+# SELECT my_second_macro()
+# ----
+# 126

@@ -20,8 +20,9 @@ DROP TABLE IF EXISTS db2.person
 # ----
 # [sad, ok, happy]
 
-statement error
-SELECT enum_range(NULL::xx.db1.main.mood) AS my_enum_range;
+# TODO: unsupported feature
+# statement error
+# SELECT enum_range(NULL::xx.db1.main.mood) AS my_enum_range;
 
 # TODO: unsupported feature
 # statement ok

@@ -1,0 +1,45 @@
+statement ok
+DROP TABLE IF EXISTS db1.test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE db1.seq;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.test (a INTEGER DEFAULT nextval('seq'), b INTEGER, c INTEGER DEFAULT currval('seq'));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO db1.test (b) VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# alter table db1.test RENAME TO blubb;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO db1.blubb (b) VALUES (10);
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM db1.blubb
+# ----
+# 1	1	1
+# 2	10	2
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO db2.blubb (b) VALUES (100);
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM db2.blubb
+# ----
+# 1	1	1
+# 2	10	2
+# 3	100	3

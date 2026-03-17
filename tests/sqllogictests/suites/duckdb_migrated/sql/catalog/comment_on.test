@@ -1,0 +1,450 @@
+statement ok
+DROP VIEW IF EXISTS test_view
+
+statement ok
+DROP TABLE IF EXISTS test_table
+
+### Generic tests
+# String literal or NULL only
+statement error
+COMMENT ON TABLE test IS 1337
+
+statement error
+COMMENT ON TABLE hahahoehoe IS 'blablabloebloe'
+
+statement error
+COMMENT ON FUNCTION add IS 'foobar'
+
+statement ok
+CREATE TABLE test_table as SELECT 1 as test_table_column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='test_table';
+# ----
+# NULL
+
+statement ok
+COMMENT ON TABLE test_table IS 'very gezellige table'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='test_table';
+# ----
+# very gezellige table
+
+# Apply a set of alters to the table to ensure it is not corrupted
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table ADD COLUMN new_col INTEGER
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table ALTER new_col SET DATA TYPE TINYINT
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table ALTER new_col SET DATA TYPE TINYINT
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table ALTER COLUMN new_col SET DEFAULT 1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table ALTER COLUMN new_col DROP DEFAULT
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table ALTER new_col SET DATA TYPE TINYINT
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table RENAME COLUMN new_col TO new_col_2
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table DROP COLUMN new_col_2
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table RENAME TO test_table_2
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table_2 RENAME TO test_table
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='test_table';
+# ----
+# very gezellige table
+
+# Reverting to null goes like dis
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON TABLE test_table IS NULL
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_tables() where table_name='test_table';
+# ----
+# NULL
+
+# Check table is still functioning
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test_table
+# ----
+# 1
+
+### Comment on view
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test_view as SELECT 1 as test_view_column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_views() where view_name='test_view';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON VIEW test_view IS 'very gezellige view'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_views() where view_name='test_view';
+# ----
+# very gezellige view
+
+# TODO: unsupported feature
+# statement ok
+# ALTER VIEW test_view RENAME TO test_view_2
+
+# TODO: unsupported feature
+# statement ok
+# ALTER VIEW test_view_2 RENAME TO test_view
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_views() where view_name='test_view';
+# ----
+# very gezellige view
+
+# Check view is still functioning
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test_view
+# ----
+# 1
+
+### Comment on view column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_view_column';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN test_view.test_view_column IS 'very gezellige viewcolumn'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_view_column';
+# ----
+# very gezellige viewcolumn
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_view_column';
+# ----
+# very gezellige viewcolumn
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW test_view
+
+### Comment on indices
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX test_index ON test_table using art(test_table_column)
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_indexes() where index_name='test_index';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON INDEX test_index IS 'very gezellige index'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_indexes() where index_name='test_index';
+# ----
+# very gezellige index
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_indexes() where index_name='test_index';
+# ----
+# very gezellige index
+
+# Check index is still functioning
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test_table WHERE test_table_column=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX test_index;
+
+### Comment on sequences
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE test_sequence;
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_sequences() where sequence_name='test_sequence';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON SEQUENCE test_sequence IS 'very gezellige sequence'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_sequences() where sequence_name='test_sequence';
+# ----
+# very gezellige sequence
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_sequences() where sequence_name='test_sequence';
+# ----
+# very gezellige sequence
+
+# Check sequence is still functioning
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('test_sequence')
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP SEQUENCE test_sequence
+
+### Comment on types
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE test_type AS int32;
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_types() where type_name='test_type';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON TYPE test_type IS 'very gezellige type'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_types() where type_name='test_type';
+# ----
+# very gezellige type
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_types() where type_name='test_type';
+# ----
+# very gezellige type
+
+# Check type is still functioning
+
+# TODO: unsupported feature
+# query I
+# SELECT 1::test_type as val;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE test_type
+
+### Comment on table column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_table_column';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON COLUMN test_table.test_table_column IS 'very gezellige column'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_table_column';
+# ----
+# very gezellige column
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_columns() where column_name='test_table_column';
+# ----
+# very gezellige column
+
+# Comment persists rename
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test_table RENAME COLUMN test_table_column TO test_table_column_renamed
+
+# TODO: unknown function
+# query I
+# select comment from duckdb_columns() where column_name='test_table_column_renamed';
+# ----
+# very gezellige column
+
+### Comment on Macro
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO test_macro(a, b) AS a + b
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_macro';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON MACRO test_macro IS 'very gezellige macro'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_macro';
+# ----
+# very gezellige macro
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_macro';
+# ----
+# very gezellige macro
+
+# Check macro is still functioning
+
+# TODO: unsupported feature
+# query I
+# SELECT test_macro(1,2);
+# ----
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO test_macro
+
+### Comment on function (alias for scalar macro)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE FUNCTION test_function(a, b) AS a + b
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_function';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON FUNCTION test_function IS 'very gezellige function'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_function';
+# ----
+# very gezellige function
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_function';
+# ----
+# very gezellige function
+
+### Comment on TABLE MACRO
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO test_table_macro(a,b) as TABLE select a,b;
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_table_macro';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# COMMENT ON MACRO TABLE test_table_macro IS 'very gezellige table macro'
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_table_macro';
+# ----
+# very gezellige table macro
+
+# TODO: unsupported feature
+# query I
+# select comment from duckdb_functions() where function_name='test_table_macro';
+# ----
+# very gezellige table macro
+
+# Check table macro is still functioning
+
+# TODO: unsupported feature
+# query II
+# from test_table_macro(1,2);
+# ----
+# 1	2
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO TABLE test_table_macro
+
+### Comment on DATABASE
+
+statement error
+COMMENT ON DATABASE blabla IS 'bloebloe'
+
+# TODO: unsupported feature
+# statement error
+# COMMENT ON SCHEMA blabla IS 'bloebloe'
+
+statement ok
+DROP TABLE test_table

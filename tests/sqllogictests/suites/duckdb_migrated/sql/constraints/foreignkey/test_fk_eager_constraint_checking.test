@@ -1,0 +1,42 @@
+statement ok
+DROP TABLE IF EXISTS tbl_fk
+
+statement ok
+DROP TABLE IF EXISTS tbl_pk
+
+statement ok
+USE fk_db;
+
+# We need a PK table with a column not supporting in-place updates.
+
+statement ok
+CREATE TABLE tbl_pk (i INT PRIMARY KEY, payload STRUCT(v VARCHAR, i INTEGER[]));
+
+# Let's insert two rows.
+
+statement ok
+INSERT INTO tbl_pk VALUES (1, {'v': 'hello', 'i': [42]}), (2, {'v': 'world', 'i': [43]});
+
+# Now, we need a FK table.
+
+statement ok
+CREATE TABLE tbl_fk (i INT REFERENCES tbl_pk(i));
+
+# Let's insert rows so that has the FK table has a nested leaf with more than two row IDs.
+
+statement ok
+INSERT INTO tbl_fk VALUES (1), (1), (1);
+
+statement ok
+USE other_fk_db;
+
+# We also want the old LEAF representation serialized.
+
+statement ok
+CHECKPOINT fk_db;
+
+statement ok
+DETACH fk_db;
+
+statement error
+UPDATE fk_db.tbl_pk SET payload = {'v': 'new hello', 'i': [7]} WHERE i = 1;

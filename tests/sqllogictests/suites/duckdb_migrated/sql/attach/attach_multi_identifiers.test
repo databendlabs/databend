@@ -1,8 +1,9 @@
 statement ok
 DROP TABLE IF EXISTS db1.s1
 
-statement ok
-DROP TABLE IF EXISTS db2.s1
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db2.s1
 
 # TODO: unsupported feature
 # statement ok
@@ -114,8 +115,9 @@ SELECT c FROM db1.s1.t, db2.s1.t
 statement error
 SELECT t.c FROM db1.s1.t, db2.s1.t
 
-statement error
-SELECT s1.t.c FROM db1.s1.t, db2.s1.t
+# TODO: unsupported feature
+# statement error
+# SELECT s1.t.c FROM db1.s1.t, db2.s1.t
 
 # TODO: unsupported feature
 # query I

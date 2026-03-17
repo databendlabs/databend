@@ -1,0 +1,68 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)
+
+# insert two conflicting pairs at the same time
+
+statement error
+INSERT INTO integers VALUES (3, 4), (3, 5)
+
+statement ok
+INSERT INTO integers VALUES (3, 4), (2, 5)
+
+query II
+SELECT * FROM integers
+----
+3	4
+2	5
+
+# insert a duplicate value as part of a chain of values
+
+statement error
+INSERT INTO integers VALUES (6, 6), (3, 4);
+
+statement ok
+INSERT INTO integers VALUES (6, 6);
+
+query II
+SELECT * FROM integers
+----
+3	4
+2	5
+6	6
+
+# insert NULL value in PRIMARY KEY is not allowed
+
+statement error
+INSERT INTO integers VALUES (NULL, 4);
+
+statement error
+UPDATE integers SET i=NULL;
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+# insert from first connection succeeds
+
+statement ok
+INSERT INTO integers VALUES (7, 8);
+
+# insert from second connection also succeeds
+
+statement ok
+INSERT INTO integers VALUES (7, 33);
+
+# now committing the first transaction works
+
+statement ok
+COMMIT
+
+# but the second transaction results in a conflict
+
+statement error
+COMMIT

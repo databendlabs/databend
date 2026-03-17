@@ -1,0 +1,11 @@
+# Create a sequence object
+# TODO: unsupported feature
+# statement ok
+# create sequence seq;
+
+
+# We can now drop the sequence, all its dependents are gone
+
+# TODO: unsupported feature
+# statement ok
+# drop sequence seq;

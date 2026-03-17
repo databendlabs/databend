@@ -1,0 +1,65 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS new_database;
+
+# TODO: unsupported feature
+# query I
+# SHOW DATABASES
+# ----
+# "
+# a
+# a;a
+# b
+# db
+# db1
+# default
+# fts_main_documents
+# information_schema
+# macros
+# my_schema
+# out_of_path
+# prd
+# public
+# s1
+# s2
+# s3
+# schema1
+# system
+# tai
+# temp
+# test
+# test2
+# test3
+# test4
+# test5
+# test_schema
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM pragma_database_list ORDER BY name
+# ----
+# memory
+# new_database
+
+# check changing the default database
+
+# TODO: unsupported feature
+# statement ok
+# USE new_database
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT 42 i
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM new_database.tbl
+# ----
+# 42
+
+statement error
+USE blablabla

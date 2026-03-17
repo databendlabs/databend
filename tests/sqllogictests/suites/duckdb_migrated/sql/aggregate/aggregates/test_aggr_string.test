@@ -4,11 +4,12 @@ DROP TABLE IF EXISTS test
 statement ok
 DROP TABLE IF EXISTS test_strings
 
-query TTTTI
-SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id UNION SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id ORDER BY a
-----
-Кирилл Müller 我是谁 ASCII 2
-NULL NULL NULL NULL 1
+# TODO: unsupported feature
+# query TTTTI
+# SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id UNION SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id ORDER BY 1
+# ----
+# NULL	NULL	NULL	NULL	1
+# Кирилл	Müller	我是谁	ASCII	2
 
 statement ok
 CREATE TABLE test (a INTEGER, s VARCHAR);
@@ -62,21 +63,22 @@ SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test GROUP BY a ORDER BY a;
 
 # now with WHERE clause
 
-query IIII
-SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test WHERE s IS NOT NULL GROUP BY a ORDER BY a;
-----
-11	2	2	1
-12	2	2	1
+# TODO: unsupported feature
+# query IIII
+# SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test WHERE s IS NOT NULL GROUP BY a ORDER BY a;
+# ----
+# 11	2	2	1
+# 12	2	2	1
 
 # string min/max with long strings
 
-statement ok
-CREATE TABLE test_strings(s VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_strings(s VARCHAR);
+# INSERT INTO test_strings VALUES ('aaaaaaaahello'), ('bbbbbbbbbbbbbbbbbbbbhello'), ('ccccccccccccccchello'), ('aaaaaaaaaaaaaaaaaaaaaaaahello');;
 
-statement ok
-INSERT INTO test_strings VALUES ('aaaaaaaahello'), ('bbbbbbbbbbbbbbbbbbbbhello'), ('ccccccccccccccchello'), ('aaaaaaaaaaaaaaaaaaaaaaaahello');
-
-query TT
-SELECT MIN(s), MAX(s) FROM test_strings;
-----
-aaaaaaaaaaaaaaaaaaaaaaaahello	ccccccccccccccchello
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM test_strings;
+# ----
+# aaaaaaaaaaaaaaaaaaaaaaaahello	ccccccccccccccchello

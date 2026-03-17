@@ -1,0 +1,5 @@
+statement ok
+create schema """cursed_schema";
+
+statement ok
+drop schema """cursed_schema";

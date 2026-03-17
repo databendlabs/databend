@@ -1,0 +1,31 @@
+statement ok
+DROP VIEW IF EXISTS foo
+
+statement ok
+DROP VIEW IF EXISTS foo2
+
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE IF NOT EXISTS test (val INTEGER);
+
+statement ok
+INSERT INTO test(val) VALUES (1), (2), (3);
+
+# recursive view definition
+
+statement ok
+CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
+
+statement error
+CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
+
+statement ok
+CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
+
+statement ok
+CREATE OR REPLACE VIEW foo2 AS (SELECT * FROM foo);
+
+statement error
+CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));

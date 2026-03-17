@@ -1,0 +1,8 @@
+statement error
+select file.replace('a', 'b') from (values ('xxxx')) t("filename");
+
+statement error
+select filename.replacezxcv('a', 'b') from (values ('xxxx')) t("filename");
+
+statement error
+select replacezxcv('a', 'b') from (values ('xxxx')) t("filename");

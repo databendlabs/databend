@@ -1,0 +1,364 @@
+query I
+select '0.000005'::tinyint;
+----
+0
+
+query I
+select '1.100004'::tinyint;
+----
+1
+
+query I
+select '0.5'::tinyint;
+----
+1
+
+query I
+select '1.50004'::tinyint;
+----
+2
+
+query I
+select '0.000005'::smallint;
+----
+0
+
+query I
+select '1.100004'::smallint;
+----
+1
+
+query I
+select '0.5'::smallint;
+----
+1
+
+query I
+select '1.50004'::smallint;
+----
+2
+
+query I
+select '0.000005'::integer;
+----
+0
+
+query I
+select '1.100004'::integer;
+----
+1
+
+query I
+select '0.5'::integer;
+----
+1
+
+query I
+select '1.50004'::integer;
+----
+2
+
+query I
+select '0.000005'::bigint;
+----
+0
+
+query I
+select '1.100004'::bigint;
+----
+1
+
+query I
+select '0.5'::bigint;
+----
+1
+
+query I
+select '1.50004'::bigint;
+----
+2
+
+# TODO: unsupported feature
+# query I
+# select '0.000005'::utinyint;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '1.100004'::utinyint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '0.5'::utinyint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1.50004'::utinyint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# select '0.000005'::usmallint;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '1.100004'::usmallint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '0.5'::usmallint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1.50004'::usmallint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# select '0.000005'::uinteger;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '1.100004'::uinteger;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '0.5'::uinteger;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1.50004'::uinteger;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# select '0.000005'::ubigint;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '1.100004'::ubigint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '0.5'::ubigint;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '1.50004'::ubigint;
+# ----
+# 2
+
+
+
+# Negative numbers (excludes unsigned)
+
+query I
+select '-0.000005'::tinyint;
+----
+0
+
+query I
+select '-1.100004'::tinyint;
+----
+-1
+
+query I
+select '-0.5'::tinyint;
+----
+-1
+
+query I
+select '-1.50004'::tinyint;
+----
+-2
+
+query I
+select '-0.000005'::smallint;
+----
+0
+
+query I
+select '-1.100004'::smallint;
+----
+-1
+
+query I
+select '-0.5'::smallint;
+----
+-1
+
+query I
+select '-1.50004'::smallint;
+----
+-2
+
+query I
+select '-0.000005'::integer;
+----
+0
+
+query I
+select '-1.100004'::integer;
+----
+-1
+
+query I
+select '-0.5'::integer;
+----
+-1
+
+query I
+select '-1.50004'::integer;
+----
+-2
+
+query I
+select '-0.000005'::bigint;
+----
+0
+
+query I
+select '-1.100004'::bigint;
+----
+-1
+
+query I
+select '-0.5'::bigint;
+----
+-1
+
+query I
+select '-1.50004'::bigint;
+----
+-2
+
+
+# Check limits (signed)
+
+query II
+select '127.1'::TINYINT, '-128.1'::TINYINT;
+----
+127	-128
+
+query II
+select '32767.1'::SMALLINT, '-32768.1'::SMALLINT;
+----
+32767	-32768
+
+query II
+select '2147483647.1'::INTEGER, '-2147483648.1'::INTEGER;
+----
+2147483647	-2147483648
+
+query II
+select '9223372036854775807.1'::BIGINT, '-9223372036854775808.1'::BIGINT;
+----
+9223372036854775807	-9223372036854775808
+
+# TODO: unsupported feature
+# query II
+# select '170141183460469231731687303715884105727.1'::HUGEINT, '-170141183460469231731687303715884105728.1'::HUGEINT;
+# ----
+# 170141183460469231731687303715884105727	-170141183460469231731687303715884105728
+
+# Check limits (unsigned)
+
+# TODO: unsupported feature
+# query I
+# select '255.1'::UTINYINT;
+# ----
+# 255
+
+# TODO: unsupported feature
+# query I
+# select '65535.1'::USMALLINT;
+# ----
+# 65535
+
+# TODO: unsupported feature
+# query I
+# select '4294967295.1'::UINTEGER;
+# ----
+# 4294967295
+
+# TODO: unsupported feature
+# query I
+# select '18446744073709551615.1'::UBIGINT;
+# ----
+# 18446744073709551615
+
+# TODO: unsupported feature
+# query I
+# select '340282366920938463463374607431768211455.1'::UHUGEINT;
+# ----
+# 340282366920938463463374607431768211455
+
+# going above the limit should error (signed)
+
+statement error
+select '127.5'::TINYINT;
+
+statement error
+select '32767.5'::SMALLINT;
+
+statement error
+select '2147483647.5'::INTEGER;
+
+statement error
+select '9223372036854775807.5'::BIGINT;
+
+statement error
+select '170141183460469231731687303715884105727.5'::HUGEINT;
+
+statement error
+select '-128.5'::TINYINT;
+
+statement error
+select '-32768.5'::SMALLINT;
+
+statement error
+select '-2147483648.5'::INTEGER;
+
+statement error
+select '-9223372036854775808.5'::BIGINT;
+
+statement error
+select '-170141183460469231731687303715884105728.5'::HUGEINT;
+
+statement error
+select '255.5'::UTINYINT;
+
+statement error
+select '65535.5'::USMALLINT;
+
+statement error
+select '4294967295.5'::UINTEGER;
+
+statement error
+select '18446744073709551615.5'::UBIGINT;

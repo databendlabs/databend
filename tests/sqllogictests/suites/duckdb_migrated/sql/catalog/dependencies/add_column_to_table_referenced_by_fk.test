@@ -1,0 +1,40 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl2
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(a varchar primary key);
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl2(
+# 	a varchar,
+# 	foreign key (a) references tbl(a)
+# )
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values('abc');
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl2 values ('abc');
+
+# TODO: unsupported feature
+# statement ok
+# alter table tbl add column b integer default 5;
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# abc	5
+
+# TODO: unsupported feature
+# query I
+# select * from tbl2;
+# ----
+# abc

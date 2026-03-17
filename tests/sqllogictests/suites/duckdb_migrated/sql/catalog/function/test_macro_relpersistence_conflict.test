@@ -1,0 +1,75 @@
+# TODO: unknown function
+# statement ok
+# create macro test(a, b) as a + b
+
+# TODO: unsupported feature
+# query T
+# select test(4, 2)
+# ----
+# 6
+
+# TODO: unsupported feature
+# statement ok
+# create or replace macro test(a, b) as a + a
+
+# should be different now
+
+# TODO: unknown function
+# query T
+# select test(4, 2)
+# ----
+# 8
+
+# should be ignored
+
+# TODO: unsupported feature
+# statement ok
+# create macro if not exists test(a, b) as a + b
+
+# TODO: unknown function
+# query T
+# select test(4, 2)
+# ----
+# 8
+
+# TODO: unsupported feature
+# statement ok
+# drop macro test
+
+# now let's do the same stuff with a temporary macro
+
+# TODO: unknown function
+# statement ok
+# create temporary macro test(a, b) as a + b
+
+# TODO: unsupported feature
+# query T
+# select test(4, 2)
+# ----
+# 6
+
+# TODO: unknown function
+# statement ok
+# create or replace temporary macro test(a, b) as a + a
+
+# TODO: unsupported feature
+# query T
+# select test(4, 2)
+# ----
+# 8
+
+# TODO: unknown function
+# statement ok
+# create temporary macro if not exists test(a, b) as a + b
+
+# TODO: unknown function
+# query T
+# select test(4, 2)
+# ----
+# 8
+
+
+# macro should be gone
+
+statement error
+select test(4, 2)

@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS quantile
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS quantile
 
 # TODO: type_error
 # query II

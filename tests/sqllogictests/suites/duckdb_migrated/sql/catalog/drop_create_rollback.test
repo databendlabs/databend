@@ -1,0 +1,27 @@
+statement ok
+DROP TABLE IF EXISTS T1
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1 (c1 CHAR(5));
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE T1 (C2 CHAR(5));
+
+statement ok
+SELECT C2 FROM T1;
+
+statement ok
+ROLLBACK;
+
+# TODO: result differs
+# statement error
+# SELECT C2 FROM T1;

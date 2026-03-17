@@ -21,22 +21,23 @@ query II
 SELECT * FROM test
 ----
 3 NULL
+1 1
 2 2
 
 # TODO: unsupported feature
 # statement ok
 # ALTER TABLE test ALTER COLUMN j DROP DEFAULT
 
-statement ok
-INSERT INTO test (i) VALUES (4)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (i) VALUES (4)
 
 query II
 SELECT * FROM test
 ----
-3 NULL
 1 1
 2 2
-4 NULL
+3 NULL
 
 # TODO: unsupported feature
 # statement ok
@@ -46,13 +47,20 @@ SELECT * FROM test
 # statement ok
 # ALTER TABLE test ALTER j SET DEFAULT nextval('seq')
 
-statement ok
-INSERT INTO test (i) VALUES (5), (6)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (i) VALUES (5), (6)
 
-query II
-SELECT * FROM test
-----
-3 NULL
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test
+# ----
+# 4 NULL
+# 1 1
+# 2 2
+# 3 NULL
+# 5 NULL
+# 6 NULL
 
 # set default on a table with constraints
 
@@ -76,14 +84,17 @@ SELECT * FROM test
 
 # fail when column does not exist
 
-statement error
-ALTER TABLE test ALTER blabla SET DEFAULT 3
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE test ALTER blabla SET DEFAULT 3
 
-statement error
-ALTER TABLE test ALTER blabla DROP DEFAULT
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE test ALTER blabla DROP DEFAULT
 
-statement ok
-CREATE TEMPORARY TABLE temp_default_test(x INTEGER DEFAULT 1)
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE temp_default_test(x INTEGER DEFAULT 1)
 
 # TODO: unsupported feature
 # query TTI

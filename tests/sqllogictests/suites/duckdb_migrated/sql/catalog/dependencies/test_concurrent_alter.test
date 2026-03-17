@@ -1,0 +1,18 @@
+statement ok
+DROP TABLE IF EXISTS t2
+
+# Create the table
+statement ok
+CREATE TABLE t2 AS (SELECT 42);
+
+# Create a sequence
+
+# TODO: unsupported feature
+# statement ok
+# create sequence seq;
+
+# Let the table own the sequence
+
+# TODO: unsupported feature
+# statement ok
+# alter sequence seq owned by t2;

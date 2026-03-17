@@ -1,15 +1,13 @@
 statement ok
 DROP TABLE IF EXISTS s1.integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE s1.integers AS FROM range(0, 10) t(i);
+statement ok
+CREATE TABLE s1.integers AS FROM range(0, 10) t(i);
 
-# TODO: unsupported feature
-# query I
-# SELECT SUM(i) FROM s1.integers
-# ----
-# 45
+query I
+SELECT SUM(i) FROM s1.integers
+----
+45
 
 statement error
 ATTACH '~/home_dir.db' AS s2
@@ -22,11 +20,10 @@ ATTACH '~/home_dir.db' AS s2
 # statement ok
 # ATTACH '~/home_dir.db' AS s1
 
-# TODO: unsupported feature
-# query I
-# SELECT SUM(i) FROM s1.integers
-# ----
-# 45
+query I
+SELECT SUM(i) FROM s1.integers
+----
+45
 
 # TODO: unsupported feature
 # statement ok

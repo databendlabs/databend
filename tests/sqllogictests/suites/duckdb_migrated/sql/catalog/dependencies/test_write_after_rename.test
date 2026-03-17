@@ -1,0 +1,45 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+# Create 'tbl'
+statement ok
+create table tbl (i integer);
+
+statement ok
+insert into tbl VALUES (5);
+
+statement ok
+begin transaction;
+
+# Rename 'tbl' -> 'tbl2'
+
+# TODO: unsupported feature
+# statement ok
+# alter table tbl rename to tbl2;
+
+# Create a new table with the old name: 'tbl'
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (b varchar);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl VALUES ('test')
+
+statement ok
+commit;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+query I
+select * from tbl2;
+----
+5
+
+query I
+select * from tbl;
+----
+5

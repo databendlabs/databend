@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS varchar;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH varchar

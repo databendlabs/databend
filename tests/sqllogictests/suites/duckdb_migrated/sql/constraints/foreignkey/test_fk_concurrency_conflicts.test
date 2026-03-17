@@ -1,0 +1,47 @@
+statement ok
+DROP TABLE IF EXISTS fk_integers
+
+statement ok
+DROP TABLE IF EXISTS fk_integers_another
+
+statement ok
+DROP TABLE IF EXISTS pk_integers
+
+statement ok
+CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk_integers VALUES (1), (2), (3)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+statement ok
+INSERT INTO fk_integers VALUES (1)
+
+statement error
+DROP TABLE fk_integers
+
+statement ok
+DROP TABLE fk_integers
+
+statement error
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+statement ok
+ROLLBACK
+
+statement ok
+CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+
+statement ok
+INSERT INTO fk_integers VALUES (1), (2)
+
+statement error
+INSERT INTO fk_integers VALUES (4), (5)
+
+statement ok
+CREATE TABLE fk_integers_another(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))

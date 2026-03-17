@@ -4,8 +4,7 @@ DROP TABLE IF EXISTS test
 # TODO: unsupported feature
 # query I
 # WITH cte AS (
-# 	SELECT a::STRUCT(i INTEGER, j INTEGER)[] a FROM
-# 	VALUES ([ROW(1, 1)]), ([ROW(2, 2)]) t(a)
+# 	SELECT a::STRUCT(i INTEGER, j INTEGER)[] a FROM (VALUES ([ROW(1, 1)]), ([ROW(2, 2)])) t(a)
 # )
 # SELECT remap_struct(
 # 	a,

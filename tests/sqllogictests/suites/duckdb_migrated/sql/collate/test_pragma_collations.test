@@ -1,0 +1,16 @@
+# Check Norwegian collations are primary, not aliases
+query I
+from pragma_collations() 
+where collname like 'n%'
+order by all
+----
+nb
+nb_no
+ne
+nfc
+nl
+nn
+no
+noaccent
+nocase
+nso

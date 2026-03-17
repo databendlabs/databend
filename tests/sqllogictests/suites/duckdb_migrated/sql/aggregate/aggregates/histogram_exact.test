@@ -100,13 +100,13 @@ INSERT INTO obs VALUES (0), (5), (7), (12), (20), (23), (24), (25), (26), (28), 
 # ----
 # 0
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT is_histogram_other_bin([]::INT[][][])
 # ----
 # 1
 
-# TODO: unsupported feature
+# TODO: unknown function
 # query I
 # SELECT is_histogram_other_bin({'i': NULL::INT[][]})
 # ----

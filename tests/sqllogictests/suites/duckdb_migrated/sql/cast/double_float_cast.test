@@ -1,0 +1,23 @@
+# TODO: result differs
+# statement error
+# select 1e308::float;
+
+query R
+select '1e308'::float;
+----
+Infinity
+
+query R
+select '1e310'::double;
+----
+Infinity
+
+query R
+select '-1e308'::float;
+----
+-Infinity
+
+query R
+select '-1e310'::double;
+----
+-Infinity

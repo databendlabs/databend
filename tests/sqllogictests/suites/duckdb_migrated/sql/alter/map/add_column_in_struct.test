@@ -4,10 +4,9 @@ DROP TABLE IF EXISTS test
 # TODO: unsupported feature
 # query I
 # WITH cte as (
-# 	select a::MAP(STRUCT(n INTEGER, m INTEGER), STRUCT(i INTEGER, j INTEGER)) a from
-# 	VALUES
+# 	select a::MAP(STRUCT(n INTEGER, m INTEGER), STRUCT(i INTEGER, j INTEGER)) a FROM (VALUES
 # 		(MAP {ROW(3,3): ROW(1, 1)}),
-# 		(MAP {ROW(4,4): ROW(2, 2)})
+# 		(MAP {ROW(4,4): ROW(2, 2)}))
 # 	t(a)
 # )
 # SELECT remap_struct(

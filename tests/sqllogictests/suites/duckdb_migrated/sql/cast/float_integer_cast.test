@@ -1,0 +1,311 @@
+query I
+select cast(0.5::FLOAT as TINYINT) as x;
+----
+1
+
+query I
+select cast(0.55::FLOAT as TINYINT) as x;
+----
+1
+
+query I
+select cast(1.5::FLOAT as TINYINT) as x;
+----
+2
+
+query I
+select cast(-0.5::FLOAT as TINYINT) as x;
+----
+-1
+
+query I
+select cast(-0.55::FLOAT as TINYINT) as x;
+----
+-1
+
+query I
+select cast(-1.5::FLOAT as TINYINT) as x;
+----
+-2
+
+query I
+select cast(0.5::FLOAT as SMALLINT) as x;
+----
+1
+
+query I
+select cast(0.55::FLOAT as SMALLINT) as x;
+----
+1
+
+query I
+select cast(1.5::FLOAT as SMALLINT) as x;
+----
+2
+
+query I
+select cast(-0.5::FLOAT as SMALLINT) as x;
+----
+-1
+
+query I
+select cast(-0.55::FLOAT as SMALLINT) as x;
+----
+-1
+
+query I
+select cast(-1.5::FLOAT as SMALLINT) as x;
+----
+-2
+
+query I
+select cast(0.5::FLOAT as INTEGER) as x;
+----
+1
+
+query I
+select cast(0.55::FLOAT as INTEGER) as x;
+----
+1
+
+query I
+select cast(1.5::FLOAT as INTEGER) as x;
+----
+2
+
+query I
+select cast(-0.5::FLOAT as INTEGER) as x;
+----
+-1
+
+query I
+select cast(-0.55::FLOAT as INTEGER) as x;
+----
+-1
+
+query I
+select cast(-1.5::FLOAT as INTEGER) as x;
+----
+-2
+
+query I
+select cast(0.5::FLOAT as BIGINT) as x;
+----
+1
+
+query I
+select cast(0.55::FLOAT as BIGINT) as x;
+----
+1
+
+query I
+select cast(1.5::FLOAT as BIGINT) as x;
+----
+2
+
+query I
+select cast(-0.5::FLOAT as BIGINT) as x;
+----
+-1
+
+query I
+select cast(-0.55::FLOAT as BIGINT) as x;
+----
+-1
+
+query I
+select cast(-1.5::FLOAT as BIGINT) as x;
+----
+-2
+
+# TODO: unsupported feature
+# query I
+# select cast(0.5::FLOAT as HUGEINT) as x;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select cast(0.55::FLOAT as HUGEINT) as x;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select cast(1.5::FLOAT as HUGEINT) as x;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# select cast(-0.5::FLOAT as HUGEINT) as x;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select cast(-0.55::FLOAT as HUGEINT) as x;
+# ----
+# -1
+
+# TODO: unsupported feature
+# query I
+# select cast(-1.5::FLOAT as HUGEINT) as x;
+# ----
+# -2
+
+query I
+select cast(0.5::DOUBLE as TINYINT) as x;
+----
+1
+
+query I
+select cast(0.55::DOUBLE as TINYINT) as x;
+----
+1
+
+query I
+select cast(1.5::DOUBLE as TINYINT) as x;
+----
+2
+
+query I
+select cast(-0.5::DOUBLE as TINYINT) as x;
+----
+-1
+
+query I
+select cast(-0.55::DOUBLE as TINYINT) as x;
+----
+-1
+
+query I
+select cast(-1.5::DOUBLE as TINYINT) as x;
+----
+-2
+
+query I
+select cast(0.5::DOUBLE as SMALLINT) as x;
+----
+1
+
+query I
+select cast(0.55::DOUBLE as SMALLINT) as x;
+----
+1
+
+query I
+select cast(1.5::DOUBLE as SMALLINT) as x;
+----
+2
+
+query I
+select cast(-0.5::DOUBLE as SMALLINT) as x;
+----
+-1
+
+query I
+select cast(-0.55::DOUBLE as SMALLINT) as x;
+----
+-1
+
+query I
+select cast(-1.5::DOUBLE as SMALLINT) as x;
+----
+-2
+
+query I
+select cast(0.5::DOUBLE as INTEGER) as x;
+----
+1
+
+query I
+select cast(0.55::DOUBLE as INTEGER) as x;
+----
+1
+
+query I
+select cast(1.5::DOUBLE as INTEGER) as x;
+----
+2
+
+query I
+select cast(-0.5::DOUBLE as INTEGER) as x;
+----
+-1
+
+query I
+select cast(-0.55::DOUBLE as INTEGER) as x;
+----
+-1
+
+query I
+select cast(-1.5::DOUBLE as INTEGER) as x;
+----
+-2
+
+query I
+select cast(0.5::DOUBLE as BIGINT) as x;
+----
+1
+
+query I
+select cast(0.55::DOUBLE as BIGINT) as x;
+----
+1
+
+query I
+select cast(1.5::DOUBLE as BIGINT) as x;
+----
+2
+
+query I
+select cast(-0.5::DOUBLE as BIGINT) as x;
+----
+-1
+
+query I
+select cast(-0.55::DOUBLE as BIGINT) as x;
+----
+-1
+
+query I
+select cast(-1.5::DOUBLE as BIGINT) as x;
+----
+-2
+
+# TODO: unsupported feature
+# query I
+# select cast(0.5::DOUBLE as HUGEINT) as x;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select cast(0.55::DOUBLE as HUGEINT) as x;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select cast(1.5::DOUBLE as HUGEINT) as x;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# select cast(-0.5::DOUBLE as HUGEINT) as x;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select cast(-0.55::DOUBLE as HUGEINT) as x;
+# ----
+# -1
+
+# TODO: unsupported feature
+# query I
+# select cast(-1.5::DOUBLE as HUGEINT) as x;
+# ----
+# -2

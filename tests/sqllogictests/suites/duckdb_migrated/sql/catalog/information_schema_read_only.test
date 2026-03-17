@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS information_schema.tbl
+
+statement ok
+DROP TABLE IF EXISTS pg_catalog.tbl
+
+statement ok
+DROP TABLE IF EXISTS system.information_schema
+
+statement error
+CREATE TABLE system.information_schema.tbl(i INT)
+
+statement error
+CREATE TABLE information_schema.tbl(i INT)
+
+statement error
+CREATE TABLE pg_catalog.tbl(i INT)

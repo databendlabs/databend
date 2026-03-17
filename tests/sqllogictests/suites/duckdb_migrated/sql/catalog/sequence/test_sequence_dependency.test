@@ -1,0 +1,30 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# create sequence seq;
+
+# TODO: unsupported feature
+# statement ok
+# create table integers(i integer default nextval('seq'));
+
+# can't drop the sequence
+
+# TODO: result differs
+# statement error
+# drop sequence seq;
+
+statement ok
+begin transaction;
+
+# TODO: unsupported feature
+# statement ok
+# drop table integers;
+
+# TODO: unsupported feature
+# statement ok
+# drop sequence seq;
+
+statement ok
+commit

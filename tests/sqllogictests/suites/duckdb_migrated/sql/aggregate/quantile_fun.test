@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS quantiles
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS quantiles
 
 # scalar quantiles
 # TODO: unsupported feature
@@ -14,7 +15,7 @@ DROP TABLE IF EXISTS quantiles
 # statement ok
 # SELECT quantile_disc(0.1::decimal(4,1), [0.1, 0.5, 0.9]);
 
-# TODO: unsupported feature
+# TODO: unknown function
 # statement ok
 # SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "l_extendedprice") FROM lineitem;
 

@@ -1,0 +1,110 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+query B
+select '01'=1;
+----
+1
+
+query R
+SELECT cos('0')
+----
+1.0
+
+# date comparison
+
+query B
+select date '1992-01-01'>'1991-01-01';
+----
+1
+
+# Issue #9948 - this is a date comparison, and (2023-12-11 < 2023-12-11) = 0
+
+query B
+select date '2023-12-11' < '2023-12-11 15:54:45.119';
+----
+0
+
+# Issue #8529 - Inconsistent Date Partition Handling Between DuckDB and PostgreSQL
+
+statement ok
+CREATE TABLE test (
+    "date" DATE,
+    value VARCHAR
+);
+
+statement ok
+INSERT INTO test VALUES ('2023-08-01', 1), ('2023-08-02', 2), ('2023-08-03', 3), ('2023-08-04', 4), ('2023-08-05', 5), ('2023-08-06', 6), ('2023-08-07', 7);
+
+query ?T
+SELECT * FROM test WHERE date >= '2023-08-05 00:00:00' AND date < '2023-08-06 00:00:00';
+----
+2023-08-05	5
+
+# literals prefer to be strings
+
+# TODO: unsupported feature
+# query I
+# SELECT '[hello]'[1];
+# ----
+# [
+
+query I
+SELECT list('hello world')
+----
+["hello world"]
+
+# literals in IN clause work correctly
+
+query B
+select 1 IN ('1', '2');
+----
+1
+
+# as does COALESCE with string literals
+
+query R
+SELECT COALESCE(1, '1');
+----
+1.00000
+
+# we can do equality comparison with string columns
+
+query B
+select i=1 from (values ('01')) t(i);
+----
+1
+
+# or with an IN clause
+
+query B
+select i IN (1) from (values ('01')) t(i);
+----
+1
+
+# consistency between IN and equality
+
+query B
+WITH cte AS (SELECT '01' AS s)
+SELECT 1=s AS in_res FROM cte;
+----
+1
+
+query B
+WITH cte AS (SELECT '01' AS s)
+SELECT 1 IN (s) AS in_res FROM cte;
+----
+1
+
+# but not >
+
+# TODO: result differs
+# statement error
+# select i>1 from (values ('01')) t(i);
+
+# TODO: result differs
+# statement error
+# select date '1992-01-01'>i from (values ('1991-01-01')) t(i);
+
+statement error
+select d[1] from (values (date '1992-01-01')) t(d);

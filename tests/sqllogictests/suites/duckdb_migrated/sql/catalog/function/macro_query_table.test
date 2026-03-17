@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# create macro min_from_tbl(tbl, col) as (select min(col) from query_table(tbl::VARCHAR));
+
+statement ok
+create table integers as from range(0, 100) t(i)
+
+# TODO: unknown function
+# query I
+# SELECT min_from_tbl(integers, i)
+# ----
+# 0
+
+# column does not exist
+
+statement error
+SELECT min_from_tbl(integers, k)
+
+statement error
+SELECT min_from_tbl(integers2, i)
+
+statement error
+SELECT min_from_tbl(tbl_name, i) from (values ('integers')) t(tbl_name);

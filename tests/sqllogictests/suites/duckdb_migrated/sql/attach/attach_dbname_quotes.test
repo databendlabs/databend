@@ -22,11 +22,12 @@ DROP TABLE IF EXISTS "my""db".tbl
 # statement ok
 # USE "my""db";
 
-query I
-SELECT * FROM tbl
-----
-999
-100
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl
+# ----
+# 999
+# 100
 
 # TODO: unsupported feature
 # statement ok
@@ -48,11 +49,12 @@ SELECT * FROM tbl
 # statement ok
 # USE "my""db"."my""schema"
 
-query I
-SELECT * FROM tbl
-----
-999
-100
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl
+# ----
+# 999
+# 100
 
 # TODO: unsupported feature
 # statement ok

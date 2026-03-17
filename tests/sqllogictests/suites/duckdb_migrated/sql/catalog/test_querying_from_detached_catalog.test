@@ -1,0 +1,83 @@
+statement ok
+DROP TABLE IF EXISTS db2.tbl
+
+statement ok
+DROP TABLE IF EXISTS db2.tbl2
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db1;
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db2;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.tbl (i INTEGER, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO db2.tbl VALUES (1, 2), (3,4);
+
+statement ok
+USE db1;
+
+# TODO: unknown function
+# query I
+# SELECT CURRENT_SETTING('search_path');
+# ----
+# db1.main
+
+# TODO: unsupported feature
+# statement ok
+# USE db2;
+
+# drop catalog db1, which con1 is using
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db1;
+
+# querying to an attached catalog should work (with non-fully qualified name)
+
+# TODO: unsupported feature
+# query II
+# FROM db2.tbl;
+# ----
+# 1	2
+# 3	4
+
+# querying to an attached catalog should work (with fully qualified name)
+
+# TODO: unsupported feature
+# query II
+# FROM db2.main.tbl;
+# ----
+# 1	2
+# 3	4
+
+# creating a new table in db2 works
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.tbl2 AS SELECT 42;
+
+# error message should say that the table does not exist
+
+statement error
+FROM db2.non_existent_table;
+
+# TODO: result differs
+# statement error
+# SHOW TABLES;
+
+# TODO: unsupported feature
+# statement ok
+# USE db2;
+
+# TODO: unknown function
+# query I
+# SELECT CURRENT_SETTING('search_path');
+# ----
+# db2.main

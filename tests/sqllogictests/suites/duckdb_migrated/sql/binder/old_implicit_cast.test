@@ -1,0 +1,32 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers AS SELECT 42 AS i, '5' AS v;
+
+# TODO: result differs
+# statement error
+# SELECT i >= v FROM integers
+
+statement error
+SELECT i[1] FROM integers
+
+# TODO: result differs
+# statement error
+# SELECT [i, v] FROM integers
+
+# TODO: unsupported feature
+# query I
+# SELECT i[1] FROM integers
+# ----
+# 4
+
+query B
+SELECT i >= v FROM integers
+----
+1
+
+query I
+SELECT [i, v] FROM integers
+----
+[42.00000,5.00000]

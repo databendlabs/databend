@@ -1,0 +1,49 @@
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+BEGIN TRANSACTION;
+
+# create the same schema in both connections
+
+statement ok
+CREATE SCHEMA test;
+
+# this should cause a conflict
+
+statement error
+CREATE SCHEMA test;
+
+statement ok
+COMMIT
+
+statement ok
+ROLLBACK
+
+# now try the same with DROP SCHEMA
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP SCHEMA test;
+
+# this should cause a conflict
+
+statement error
+DROP SCHEMA test;
+
+statement ok
+ROLLBACK
+
+statement ok
+ROLLBACK
+
+# now the schema should still exist, so we can drop it again
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA test;

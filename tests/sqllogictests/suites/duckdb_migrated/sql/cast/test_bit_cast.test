@@ -1,0 +1,491 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bits
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bits (b bit);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bits VALUES('00001111');
+
+#                   cast to bool
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# statement error
+# SELECT bitstring('1', 9)::BOOL;
+
+# TODO: unsupported feature
+# query I
+# SELECT b::BOOLEAN FROM bits;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT '1'::BIT::BOOL;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT '0'::BIT::BOOL;
+# ----
+# 0
+
+#              casting to numerical types
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT b::TINYINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::SMALLINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::INTEGER FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::BIGINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::UTINYINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::USMALLINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::UINTEGER FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::UBIGINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::HUGEINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::UHUGEINT FROM bits;
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT b::FLOAT FROM bits;
+# ----
+# 2.1e-44
+
+# TODO: unsupported feature
+# query I
+# SELECT b::DOUBLE FROM bits;
+# ----
+# 7.4e-323
+
+# TODO: unsupported feature
+# query I
+# SELECT '100001111000011110000111100001111'::BIT::BIGINT;
+# ----
+# 4547612431
+
+#                numeric to bitstring
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT 15::BOOLEAN::BIT;
+# ----
+# 00000001
+
+# TODO: unsupported feature
+# query I
+# SELECT 15::TINYINT::BIT;
+# ----
+# 00001111
+
+# TODO: unsupported feature
+# query I
+# SELECT 15::SMALLINT::BIT;
+# ----
+# 0000000000001111
+
+# TODO: unsupported feature
+# query I
+# SELECT 15::BIT;
+# ----
+# 00000000000000000000000000001111
+
+# TODO: unsupported feature
+# query I
+# SELECT 15::BIGINT::BIT;
+# ----
+# 0000000000000000000000000000000000000000000000000000000000001111
+
+# TODO: unsupported feature
+# query I
+# SELECT 15::HUGEINT::BIT;
+# ----
+# 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001111
+
+# TODO: unsupported feature
+# query I
+# SELECT 15::UHUGEINT::BIT;
+# ----
+# 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001111
+
+# TODO: unsupported feature
+# query I
+# SELECT 2.1e-44::FLOAT::BIT;
+# ----
+# 00000000000000000000000000001111
+
+# TODO: unsupported feature
+# query I
+# SELECT 7.4e-323::BIT;
+# ----
+# 0000000000000000000000000000000000000000000000000000000000001111
+
+#  bitstrings that are too large for casted-to type
+# ---------------------------------------------------
+
+statement error
+SELECT bitstring('1', 9)::TINYINT;
+
+statement error
+SELECT bitstring('1', 17)::SMALLINT;
+
+statement error
+SELECT bitstring('1', 33)::INT;
+
+statement error
+SELECT bitstring('1', 65)::BIGINT;
+
+# TODO: unsupported feature
+# statement error
+# SELECT bitstring('1', 33)::FLOAT;
+
+# TODO: unsupported feature
+# statement error
+# SELECT bitstring('1', 65)::DOUBLE;
+
+# TODO: unsupported feature
+# query I
+# SELECT b::BLOB FROM bits;
+# ----
+# \x0F
+
+# TODO: unknown function
+# query I
+# SELECT bitstring('1111', 32)::BLOB;
+# ----
+# \x00\x00\x00\x0F
+
+# TODO: unsupported feature
+# query I
+# SELECT '1111'::BIT::BLOB;
+# ----
+# \x0F
+
+# TODO: unsupported feature
+# query I
+# select 'ab'::BLOB::BIT::BLOB;
+# ----
+# ab
+
+# TODO: unsupported feature
+# query I
+# select 'a'::BLOB::BIT::BLOB;
+# ----
+# a
+
+# TODO: unknown function
+# query I
+# SELECT bitstring('1111', 33)::BLOB;
+# ----
+# \x00\x00\x00\x00\x0F
+
+#             casting from BLOB type
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT 'AAAA'::BLOB::BIT;
+# ----
+# 01000001010000010100000101000001
+
+# TODO: unsupported feature
+# statement error
+# SELECT ''::BLOB::BIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT (-15)::TINYINT::BIT;
+# ----
+# 11110001
+
+# TODO: unsupported feature
+# query I
+# SELECT (-15)::HUGEINT::BIT;
+# ----
+# 11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111110001
+
+#            signed integer limits -> Bit
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT (127)::TINYINT::BIT;
+# ----
+# 01111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (-128)::TINYINT::BIT;
+# ----
+# 10000000
+
+# TODO: unsupported feature
+# query I
+# SELECT (32767)::SMALLINT::BIT;
+# ----
+# 0111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (-32768)::SMALLINT::BIT;
+# ----
+# 1000000000000000
+
+# TODO: unsupported feature
+# query I
+# SELECT (2147483647)::INT::BIT;
+# ----
+# 01111111111111111111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (-2147483648)::INT::BIT;
+# ----
+# 10000000000000000000000000000000
+
+# TODO: unsupported feature
+# query I
+# SELECT (9223372036854775807)::BIGINT::BIT;
+# ----
+# 0111111111111111111111111111111111111111111111111111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (-9223372036854775808)::BIGINT::BIT;
+# ----
+# 1000000000000000000000000000000000000000000000000000000000000000
+
+# TODO: unsupported feature
+# query I
+# SELECT (170141183460469231731687303715884105727)::HUGEINT::BIT;
+# ----
+# 01111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (-170141183460469231731687303715884105728)::HUGEINT::BIT;
+# ----
+# 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+#            Bit -> signed integer limits
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT '01111111'::BIT::TINYINT;
+# ----
+# 127
+
+# TODO: unsupported feature
+# query I
+# SELECT '10000000'::BIT::TINYINT;
+# ----
+# -128
+
+# TODO: unsupported feature
+# query I
+# SELECT '0111111111111111'::BIT::SMALLINT;
+# ----
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT '1000000000000000'::BIT::SMALLINT;
+# ----
+# -32768
+
+# TODO: unsupported feature
+# query I
+# SELECT '01111111111111111111111111111111'::BIT::INT;
+# ----
+# 2147483647
+
+# TODO: unsupported feature
+# query I
+# SELECT '10000000000000000000000000000000'::BIT::INT;
+# ----
+# -2147483648
+
+# TODO: unsupported feature
+# query I
+# SELECT '0111111111111111111111111111111111111111111111111111111111111111'::BIT::BIGINT;
+# ----
+# 9223372036854775807
+
+# TODO: unsupported feature
+# query I
+# SELECT '1000000000000000000000000000000000000000000000000000000000000000'::BIT::BIGINT;
+# ----
+# -9223372036854775808
+
+# TODO: unsupported feature
+# query I
+# SELECT '01111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111'::BIT::HUGEINT;
+# ----
+# 170141183460469231731687303715884105727
+
+# TODO: unsupported feature
+# query I
+# SELECT '10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'::BIT::HUGEINT;
+# ----
+# -170141183460469231731687303715884105728
+
+
+#            unsigned integer limits -> Bit
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT (255)::UTINYINT::BIT;
+# ----
+# 11111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (65535)::USMALLINT::BIT;
+# ----
+# 1111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (4294967295)::UINTEGER::BIT;
+# ----
+# 11111111111111111111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (18446744073709551615)::UBIGINT::BIT;
+# ----
+# 1111111111111111111111111111111111111111111111111111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT::BIT;
+# ----
+# 11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+
+#            Bit -> unsigned integer limits
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT '11111111'::BIT::UTINYINT;
+# ----
+# 255
+
+# TODO: unsupported feature
+# query I
+# SELECT '1111111111111111'::BIT::USMALLINT;
+# ----
+# 65535
+
+# TODO: unsupported feature
+# query I
+# SELECT '11111111111111111111111111111111'::BIT::UINTEGER;
+# ----
+# 4294967295
+
+# TODO: unsupported feature
+# query I
+# SELECT '1111111111111111111111111111111111111111111111111111111111111111'::BIT::UBIGINT;
+# ----
+# 18446744073709551615
+
+#                float limits -> Bit
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT (3.4028235e+38)::FLOAT::BIT;
+# ----
+# 01111111011111111111111111111111
+
+# TODO: unsupported feature
+# query I
+# SELECT (1.7976931348623157e+308)::DOUBLE::BIT;
+# ----
+# 0111111111101111111111111111111111111111111111111111111111111111
+
+
+#                Bit -> float limits
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT '01111111011111111111111111111111'::BIT::FLOAT;
+# ----
+# 3.4028235e+38
+
+# TODO: unsupported feature
+# query I
+# SELECT '0111111111101111111111111111111111111111111111111111111111111111'::BIT::DOUBLE;
+# ----
+# 1.7976931348623157e+308
+
+#                   NULL <-> Bit
+# ---------------------------------------------------
+
+# TODO: unsupported feature
+# query I
+# SELECT NULL::BIT;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT NULL::BIT::INT;
+# ----
+# NULL

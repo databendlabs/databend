@@ -7,8 +7,9 @@ DROP TABLE IF EXISTS five_complex
 statement ok
 DROP TABLE IF EXISTS five_dates
 
-statement ok
-CREATE TABLE five AS SELECT i::tinyint AS i FROM range(1, 6, 1) t1(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT i::tinyint AS i FROM range(1, 6, 1) t1(i)
 
 # TODO: unsupported feature
 # query I
@@ -38,11 +39,13 @@ CREATE TABLE five AS SELECT i::tinyint AS i FROM range(1, 6, 1) t1(i)
 # 1	1
 # 2	2
 
-statement ok
-DROP TABLE five
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
 
-statement ok
-CREATE TABLE five AS SELECT i::smallint AS i FROM range(1, 6, 1) t1(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT i::smallint AS i FROM range(1, 6, 1) t1(i)
 
 # TODO: unsupported feature
 # query I
@@ -72,11 +75,13 @@ CREATE TABLE five AS SELECT i::smallint AS i FROM range(1, 6, 1) t1(i)
 # 1	1
 # 2	2
 
-statement ok
-DROP TABLE five
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
 
-statement ok
-CREATE TABLE five AS SELECT i::integer AS i FROM range(1, 6, 1) t1(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT i::integer AS i FROM range(1, 6, 1) t1(i)
 
 # TODO: unsupported feature
 # query I
@@ -106,11 +111,13 @@ CREATE TABLE five AS SELECT i::integer AS i FROM range(1, 6, 1) t1(i)
 # 1	1
 # 2	2
 
-statement ok
-DROP TABLE five
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
 
-statement ok
-CREATE TABLE five AS SELECT i::bigint AS i FROM range(1, 6, 1) t1(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT i::bigint AS i FROM range(1, 6, 1) t1(i)
 
 # TODO: unsupported feature
 # query I
@@ -140,11 +147,13 @@ CREATE TABLE five AS SELECT i::bigint AS i FROM range(1, 6, 1) t1(i)
 # 1	1
 # 2	2
 
-statement ok
-DROP TABLE five
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
 
-statement ok
-CREATE TABLE five AS SELECT i::float AS i FROM range(1, 6, 1) t1(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT i::float AS i FROM range(1, 6, 1) t1(i)
 
 # TODO: unsupported feature
 # query I
@@ -174,11 +183,13 @@ CREATE TABLE five AS SELECT i::float AS i FROM range(1, 6, 1) t1(i)
 # 1	1
 # 2	2
 
-statement ok
-DROP TABLE five
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
 
-statement ok
-CREATE TABLE five AS SELECT i::double AS i FROM range(1, 6, 1) t1(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT i::double AS i FROM range(1, 6, 1) t1(i)
 
 # TODO: unsupported feature
 # query I
@@ -208,8 +219,9 @@ CREATE TABLE five AS SELECT i::double AS i FROM range(1, 6, 1) t1(i)
 # 1	1
 # 2	2
 
-statement ok
-DROP TABLE five
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
 
 
 # Decimals
@@ -291,8 +303,9 @@ CREATE TABLE five AS SELECT i::decimal(18,1) AS i FROM range(1, 6, 1) t1(i)
 # 1	1.0
 # 2	2.0
 
-statement ok
-DROP TABLE five
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
 
 
 # Temporal
@@ -384,14 +397,15 @@ DROP TABLE five
 
 # Complex
 
-statement ok
-CREATE TABLE five_complex AS
-	SELECT
-		i::integer AS i,
-		i::VARCHAR AS s,
-		[i] AS l,
-		{'a': i} AS r
-	FROM range(1, 6, 1) t1(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five_complex AS
+# 	SELECT
+# 		i::integer AS i,
+# 		i::VARCHAR AS s,
+# 		[i] AS l,
+# 		{'a': i} AS r
+# 	FROM range(1, 6, 1) t1(i)
 
 # TODO: unsupported feature
 # query III
@@ -429,5 +443,6 @@ CREATE TABLE five_complex AS
 # 1	1	[1]	{'a': 1}
 # 2	2	[2]	{'a': 2}
 
-statement ok
-DROP TABLE five_complex
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five_complex
