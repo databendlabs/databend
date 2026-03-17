@@ -411,10 +411,10 @@ output         : 5
 ast            : to_string(st_geographyfromewkt('POINT(-122.35 37.55)'))
 raw expr       : to_string(st_geographyfromewkt('POINT(-122.35 37.55)'))
 checked expr   : CAST<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)") AS String)
-optimized expr : "POINT(-122.35 37.55)"
+optimized expr : "SRID=4326;POINT(-122.35 37.55)"
 output type    : String
-output domain  : {"POINT(-122.35 37.55)"..="POINT(-122.35 37.55)"}
-output         : 'POINT(-122.35 37.55)'
+output domain  : {"SRID=4326;POINT(-122.35 37.55)"..="SRID=4326;POINT(-122.35 37.55)"}
+output         : 'SRID=4326;POINT(-122.35 37.55)'
 
 
 ast            : to_geography('POINT(-122.35 37.55)')

@@ -19,7 +19,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::BoundingRect;
 use geo::Geometry;
+use geo::LineString;
 use geo::Point;
+use geo::Polygon;
+use geo::Rect;
 use geohash::encode;
 use geozero::CoordDimensions;
 use geozero::GeomProcessor;
@@ -31,6 +34,7 @@ use geozero::ToWkt;
 use geozero::geo_types::GeoWriter;
 use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
+use hex::encode_upper;
 use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
@@ -193,21 +197,12 @@ impl<B: AsRef<[u8]>> GeometryFormatOutput for Ewkb<B> {
         match format_type {
             GeometryDataType::WKB => self
                 .to_wkb(CoordDimensions::xy())
-                .map(|bytes| {
-                    bytes
-                        .iter()
-                        .map(|b| format!("{:02X}", b))
-                        .collect::<Vec<_>>()
-                        .join("")
-                })
+                .map(encode_upper)
                 .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-            GeometryDataType::EWKB => Ok(self
-                .0
-                .as_ref()
-                .iter()
-                .map(|b| format!("{:02X}", b))
-                .collect::<Vec<_>>()
-                .join("")),
+            GeometryDataType::EWKB => self
+                .to_ewkb(CoordDimensions::xy(), self.srid())
+                .map(encode_upper)
+                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
             GeometryDataType::WKT => self
                 .to_wkt()
                 .map_err(|e| ErrorCode::GeometryError(e.to_string())),
@@ -256,6 +251,19 @@ pub fn geo_to_wkt(geo: Geometry) -> Result<String> {
 pub fn geo_to_ewkt(geo: Geometry, srid: Option<i32>) -> Result<String> {
     geo.to_ewkt(srid)
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+pub fn rect_to_polygon(rect: Rect<f64>) -> Polygon<f64> {
+    let min = rect.min();
+    let max = rect.max();
+    let exterior = LineString::from(vec![
+        (min.x, min.y),
+        (max.x, min.y),
+        (max.x, max.y),
+        (min.x, max.y),
+        (min.x, min.y),
+    ]);
+    Polygon::new(exterior, vec![])
 }
 
 /// Process EWKB input and return SRID.

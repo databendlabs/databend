@@ -36,6 +36,7 @@ use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
@@ -54,6 +55,7 @@ use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TextFileFormatParams;
+use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 use lexical_core::ToLexical;
@@ -403,20 +405,19 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = ewkb_to_geo(&mut Ewkb(v.0))
-            .and_then(
-                |(geo, srid)| match self.common_settings.settings.geometry_format {
-                    GeometryDataType::WKB => {
-                        geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes())
-                    }
-                    GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
-                    GeometryDataType::EWKB => {
-                        geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
-                    }
-                    GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
-                    GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
-                },
-            )
+        let s = Ewkb(v.0)
+            .to_geo()
+            .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+            .and_then(|geo| match self.common_settings.settings.geometry_format {
+                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::EWKB => geo_to_ewkb(geo, Some(GEOGRAPHY_SRID))
+                    .map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::EWKT => {
+                    geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)).map(|v| v.as_bytes().to_vec())
+                }
+                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+            })
             .unwrap_or_else(|_| v.0.to_vec());
 
         match self.common_settings.settings.geometry_format {
