@@ -816,7 +816,8 @@ mod tests {
     use databend_common_expression::types::ArgType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::UInt64Type;
-    use databend_common_functions::test_utils::parse_raw_expr;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use databend_common_sql_test_support::parse_raw_expr;
     use goldenfile::Mint;
 
     use super::*;
@@ -837,7 +838,7 @@ mod tests {
         writeln!(file, "expr          : {expr_text}")?;
 
         let in_stats = column_stats_to_string(&column_stats);
-        let raw_expr = parse_raw_expr(expr_text, columns);
+        let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
         let expr = raw_expr_to_scalar(&raw_expr, columns);
         let cardinality = 100.0;
         let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
