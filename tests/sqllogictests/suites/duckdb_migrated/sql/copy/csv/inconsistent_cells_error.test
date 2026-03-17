@@ -1,0 +1,6 @@
+# TODO: unsupported feature
+# query IIIII
+# select * from '{DATA_DIR}/csv/inconsistent_cells.csv'
+# ----
+# 1	2	3	4	5
+# 1	2	3	4	5

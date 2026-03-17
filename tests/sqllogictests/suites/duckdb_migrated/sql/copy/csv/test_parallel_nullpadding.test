@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# query I
+# select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0)
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding_2.csv', delim = ';', quote = '"', null_padding = True, header = 0)
+# ----
+# 3
+
+# If we force the buffer to break in the middle of the quotes, we can't read this.
+
+statement error
+select * from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 30)
+
+statement error
+select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 27)
+
+statement error
+select count(*) from read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 30)
+
+statement error
+select * from read_csv('{DATA_DIR}/csv/evil_nullpadding_2.csv', delim = ';', quote = '"', null_padding = True, header = 0, buffer_size = 26)

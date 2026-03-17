@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null/hive_partition_null_overwrite.csv'))
+# TO '{TEST_DIR}/repro_min'
+# (FORMAT csv, PARTITION_BY (symbol, year, month), OVERWRITE);

@@ -1,0 +1,11 @@
+# TODO: unknown function
+# query T
+# select * from parquet_scan('{DATA_DIR}/parquet-testing/timestamp.parquet') order by 1
+# ----
+# 2020-10-05 17:21:49.48844
+
+# TODO: unknown function
+# query T
+# select * from parquet_scan('{DATA_DIR}/parquet-testing/timestamp-ms.parquet') order by 1
+# ----
+# 2020-10-05 17:21:49

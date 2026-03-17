@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')
+
+# TODO: unsupported feature
+# query I
+# select * FROM read_csv('{DATA_DIR}/csv/enum_type.csv', types=[mood])
+# ----
+# sad
+# happy
+# angry

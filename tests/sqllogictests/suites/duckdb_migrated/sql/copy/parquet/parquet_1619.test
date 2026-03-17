@@ -1,0 +1,20 @@
+# TODO: unknown function
+# query I
+# select struct_extract("inner", 'f64_field') from parquet_scan('{DATA_DIR}/parquet-testing/struct.parquet');
+# ----
+# NULL
+# 1.23
+
+# TODO: unknown function
+# query I
+# select ("inner")."f64_field" from parquet_scan('{DATA_DIR}/parquet-testing/struct.parquet');
+# ----
+# NULL
+# 1.23
+
+# TODO: unknown function
+# query I
+# select "inner"['f64_field'] from parquet_scan('{DATA_DIR}/parquet-testing/struct.parquet');
+# ----
+# NULL
+# 1.23

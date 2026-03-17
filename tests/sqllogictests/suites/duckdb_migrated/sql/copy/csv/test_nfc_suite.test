@@ -1,0 +1,57 @@
+statement ok
+DROP TABLE IF EXISTS nfcstrings
+
+statement ok
+CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);
+
+# TODO: unsupported feature
+# query I
+# COPY nfcstrings FROM '{DATA_DIR}/csv/real/nfc_normalization.csv' (DELIMITER '|', HEADER 0);
+# ----
+# 18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings
+----
+0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM nfcstrings WHERE source COLLATE NFC=nfc
+# ----
+# 18819
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM nfcstrings WHERE nfc COLLATE NFC=nfd
+# ----
+# 18819
+
+statement ok
+DROP TABLE nfcstrings
+
+statement ok
+CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);
+
+# TODO: unsupported feature
+# query I
+# COPY nfcstrings FROM '{DATA_DIR}/csv/real/nfc_normalization_rn.csv' (DELIMITER '|', HEADER 0);
+# ----
+# 18819
+
+query I
+SELECT COUNT(*) FROM nfcstrings
+----
+0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM nfcstrings WHERE source COLLATE NFC=nfc
+# ----
+# 18819
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM nfcstrings WHERE nfc COLLATE NFC=nfd
+# ----
+# 18819

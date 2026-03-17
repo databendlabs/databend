@@ -1,0 +1,11 @@
+statement error
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r', strict_mode=false)
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n', strict_mode=false)
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false, strict_mode=false)
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r', strict_mode=false)

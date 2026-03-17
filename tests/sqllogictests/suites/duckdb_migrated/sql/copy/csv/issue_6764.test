@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv_auto('{DATA_DIR}/csv/issue6764.csv', all_varchar=true, skip=1, null_padding=True)
+# ----
+# 1	a	alice
+# 2	b	bob
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv_auto('{DATA_DIR}/csv/issue6764.csv', all_varchar=true, header=false, skip=1, null_padding=True)
+# ----
+# 1	a	alice
+# 2	b	bob
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv_auto('{DATA_DIR}/csv/issue6764.csv', null_padding=True)
+# ----
+# 1	a	alice	NULL
+# 2	b	bob	NULL
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv_auto('{DATA_DIR}/csv/issue6764.csv', all_varchar=true, null_padding=True)
+# ----
+# 1	a	alice	NULL
+# 2	b	bob	NULL
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv_auto('{DATA_DIR}/csv/issue6764.csv', header=false, null_padding=True)
+# ----
+# one	two	three	four
+# 1	a	alice	NULL
+# 2	b	bob	NULL
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv_auto('{DATA_DIR}/csv/issue6764.csv', all_varchar=true, header=false, skip=0, sep=',', null_padding=True)
+# ----
+# one	two	three	four
+# 1	a	alice	NULL
+# 2	b	bob	NULL

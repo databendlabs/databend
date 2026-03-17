@@ -1,0 +1,23 @@
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/missing_column.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/wrongtype.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/wrongtype.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/wrongtype.csv', sep=',', columns={'h1': int, 'h2': varchar}, header=True)
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/missing_column.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/wrongtype.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/wrongtype.csv', sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True, auto_detect = false)
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/wrongtype.csv', sep=',', columns={'h1': int, 'h2': varchar}, header=True)

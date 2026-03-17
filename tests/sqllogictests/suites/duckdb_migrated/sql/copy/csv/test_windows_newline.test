@@ -1,0 +1,44 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
+
+# TODO: unsupported feature
+# query I
+# COPY test FROM '{DATA_DIR}/csv/test/windows_newline.csv';
+# ----
+# 20000
+
+query IIIII
+SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;
+----
+NULL NULL NULL NULL NULL
+
+statement ok
+DELETE FROM test;
+
+# now do the same with a multi-byte quote that is not actually used
+
+statement error
+COPY test FROM '{DATA_DIR}/csv/test/windows_newline.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
+
+statement ok
+DROP TABLE test;
+
+# csv file with one value and many empty values with windows newline
+# load CSV file into a table
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# query I
+# COPY test FROM '{DATA_DIR}/csv/test/windows_newline_empty.csv' (HEADER 0);
+# ----
+# 20000
+
+query I
+SELECT SUM(a) FROM test;
+----
+NULL

@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# select * from '{DATA_DIR}/csv/csv_quoted_newline_odd.csv';

@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# the setting dictionary_compression_ratio_threshold is DEPRECATED, the tests are here to make sure it can be set without issue
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT 'thisisaverylongstringbutitrepeatsmanytimessoitshighlycompressible' || (range % 10) i FROM range(0, 100000)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test AS SELECT 'coolstring' || range i FROM range(0, 100000)
+
+# should still have compression, setting is deprecated

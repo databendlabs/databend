@@ -1,0 +1,78 @@
+# TODO: unsupported feature
+# query I
+# SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=False) limit 1
+# ----
+# BLOB
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=False)
+# ----
+# foo
+# bar
+# baz
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=True) limit 1
+# ----
+# VARCHAR
+
+# TODO: unknown function
+# query I
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet',binary_as_string=True)
+# ----
+# foo
+# bar
+# baz
+
+# TODO: unsupported feature
+# query I
+# SELECT converted_type FROM parquet_schema('{DATA_DIR}/parquet-testing/binary_string.parquet')
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet') limit 1
+# ----
+# VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet')
+# ----
+# foo
+# bar
+# baz
+
+# TODO: unknown function
+# query I
+# SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet') limit 1
+# ----
+# BLOB
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet')
+# ----
+# foo
+# bar
+# baz
+
+# Preference goes to variable set in scan
+
+# TODO: unknown function
+# query I
+# SELECT typeof(#1) FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet' ,binary_as_string=False) limit 1
+# ----
+# BLOB
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/binary_string.parquet')
+# ----
+# foo
+# bar
+# baz

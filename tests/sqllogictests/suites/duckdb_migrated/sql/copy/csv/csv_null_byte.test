@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# query III
+# select * from '{DATA_DIR}/csv/nullbyte.csv';
+# ----
+# val1	val\02	val3
+
+# TODO: unsupported feature
+# query III
+# select * from read_csv('{DATA_DIR}/csv/nullbyte.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR', 'col3': 'VARCHAR'}, delim='|');
+# ----
+# val1	val\02	val3
+
+# TODO: unsupported feature
+# query II
+# select * from '{DATA_DIR}/csv/nullbyte_header.csv';
+# ----
+# val1	val2
+
+# TODO: unsupported feature
+# query II
+# select * from read_csv('{DATA_DIR}/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=False);
+# ----
+# col1	col\02
+# val1	val2
+
+# TODO: unsupported feature
+# query II
+# select * from read_csv('{DATA_DIR}/csv/nullbyte_header.csv', columns={'col1': 'VARCHAR', 'col2': 'VARCHAR'}, delim='|', header=True);
+# ----
+# val1	val2

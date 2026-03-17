@@ -1,0 +1,309 @@
+statement ok
+DROP TABLE IF EXISTS ppl
+
+statement ok
+DROP TABLE IF EXISTS proj
+
+statement ok
+DROP TABLE IF EXISTS timestamps
+
+statement ok
+DROP TABLE IF EXISTS users
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS users_age
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE users (
+#         id INTEGER NOT NULL,  /*primary key*/
+#         name VARCHAR(10) NOT NULL,
+#         email VARCHAR
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO users
+# SELECT *
+# FROM read_csv('{DATA_DIR}/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+# TODO: unsupported feature
+# query III
+# select * from users order by all;
+# ----
+# 1	alice	alice@email.com
+# 1	alice	alice@email.com
+# 1	alice	alice@email.com
+# 2	eve	eve@email.com
+# 3	bob	bob@email.com
+# 3	bob	bob@email.com
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE users;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE users (
+#         id INTEGER NOT NULL,  /*primary key*/
+#         name VARCHAR(10) NOT NULL,
+#         email VARCHAR
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO users
+# SELECT *
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+# TODO: result differs
+# query III
+# select * from users;
+# ----
+# 1	alice	alice@email.com
+# 2	eve	NULL
+
+# Test Projection
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE proj (
+#         id INTEGER NOT NULL,  /*primary key*/
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO proj
+# SELECT id
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+# TODO: unsupported feature
+# query I
+# select * from proj;
+# ----
+# 1
+# 2
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO proj
+# SELECT id
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv');
+
+# TODO: unsupported feature
+# statement ok
+# DROP table proj;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE proj (
+#         name VARCHAR(10) NOT NULL,
+#         id INTEGER NOT NULL,  /*primary key*/
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO proj
+# SELECT name, id
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+# TODO: unsupported feature
+# query II
+# select * from proj;
+# ----
+# alice	1
+# eve	2
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO proj
+# SELECT name, id
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv');
+
+# TODO: unsupported feature
+# statement ok
+# DROP table proj;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE proj (
+#         email VARCHAR,
+#         id INTEGER NOT NULL,  /*primary key*/
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO proj
+# SELECT email, id
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv', ignore_errors=true, null_padding=true);
+
+# TODO: unsupported feature
+# query II
+# select * from proj;
+# ----
+# alice@email.com	1
+# NULL	2
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO proj
+# SELECT name, id
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv');
+
+# TODO: unsupported feature
+# statement ok
+# DROP table proj;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE proj (
+#         email VARCHAR,
+#         id VARCHAR NOT NULL,  /*primary key*/
+# );
+
+# A cast will not be pushed down
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO proj
+# SELECT name, id::INTEGER
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv');
+
+# TODO: unsupported feature
+# statement ok
+# DROP table proj;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE proj (
+#         email VARCHAR,
+#         id integer NOT NULL,  /*primary key*/
+# );
+
+# No pushdown if we have weird projections
+
+statement error
+INSERT INTO proj
+SELECT 'Pedro', id
+FROM read_csv('{DATA_DIR}/csv/file_error.csv');
+
+statement ok
+CREATE TABLE ppl (
+        name VARCHAR
+);
+
+statement ok
+insert into ppl values ('alice'), ('bob'), ('pedro')
+
+statement error
+INSERT INTO proj
+SELECT ppl.name,id
+FROM read_csv('{DATA_DIR}/csv/file_error.csv') T inner join ppl on (ppl.name = T.name);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO proj
+# SELECT T.name,id
+# FROM read_csv('{DATA_DIR}/csv/file_error.csv') T inner join ppl on (ppl.name = T.name);
+
+# TODO: unsupported feature
+# statement ok
+# DROP table users;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE users (
+#         id INTEGER NOT NULL,  /*primary key*/
+#         name VARCHAR(10) NOT NULL,
+#         email VARCHAR
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO users
+# SELECT *
+# FROM read_csv('{DATA_DIR}/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+# TODO: unsupported feature
+# query III
+# select * from users order by all;
+# ----
+# 1	alice	alice@email.com
+# 1	alice	alice@email.com
+# 1	alice	alice@email.com
+# 2	eve	eve@email.com
+# 3	bob	bob@email.com
+# 3	bob	bob@email.com
+
+# Test Glob + Projection
+
+# TODO: unsupported feature
+# statement ok
+# DROP table proj;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE proj (
+#         email VARCHAR,
+#         id integer NOT NULL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO proj
+# SELECT email, id
+# FROM read_csv('{DATA_DIR}/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
+
+# TODO: unsupported feature
+# query II
+# select * from proj order by all;
+# ----
+# alice@email.com	1
+# alice@email.com	1
+# alice@email.com	1
+# bob@email.com	3
+# bob@email.com	3
+# eve@email.com	2
+
+# Test union by name
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE users_age (
+#         id INTEGER NOT NULL,
+#         name VARCHAR(10) NOT NULL,
+#         email VARCHAR,
+#         age integer
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO users_age
+# SELECT *
+# FROM read_csv('{DATA_DIR}/csv/union-by-name/type_mismatch/f_*.csv', ignore_errors=true, null_padding=true, union_by_name=true);
+
+# TODO: unknown function
+# query IIII
+# select * from users_age;
+# ----
+# 1	alice	alice@email.com	NULL
+# 2	eve	eve@email.com	NULL
+# 1	alice	NULL	20
+# 3	bob	NULL	32
+
+# Only accept one reference per column
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamps(ts timestamp, dt date);
+
+# TODO: unsupported feature
+# statement ok
+# insert into timestamps select ts,ts from read_csv('{DATA_DIR}/csv/timestamp.csv');
+
+# TODO: unsupported feature
+# query II
+# select * from timestamps;
+# ----
+# 2020-01-01 01:02:03	2020-01-01

@@ -1,0 +1,184 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+# Error during sniffing
+statement error
+from read_csv_auto('{DATA_DIR}/csv/test/invalid_utf.csv')
+
+statement error
+from read_csv_auto('{DATA_DIR}/csv/test/invalid_utf.csv')
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+
+# TODO: unsupported feature
+# query III
+# select * from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true)
+# ----
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+
+# Test error in the second vector
+
+# TODO: unsupported feature
+# statement ok
+# create table t as from read_csv('{DATA_DIR}/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true)
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t
+# ----
+# 3030
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_big.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',')
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_quoted.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
+
+# TODO: unsupported feature
+# query III
+# select * from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
+# ----
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+
+# Test Invalid Header
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_header.csv', delim = ',', quote = '"')
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"')
+
+# TODO: unsupported feature
+# query III
+# select * from read_csv('{DATA_DIR}/csv/test/invalid_utf_header.csv', header=1,  delim = ',', quote = '"', ignore_errors = true)
+# ----
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+
+# Test invalid unicode in between a quoted newline
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"')
+
+# TODO: unsupported feature
+# query III
+# select * from read_csv('{DATA_DIR}/csv/test/invalid_utf_quoted_nl.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', ignore_errors=true)
+# ----
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+
+# Test error between buffers
+
+statement error
+from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', quote = '"', buffer_size = 198)
+
+# TODO: unsupported feature
+# query III
+# select * from read_csv('{DATA_DIR}/csv/test/invalid_utf_complex.csv',columns = {'col1': 'VARCHAR','col2': 'VARCHAR','col3': 'VARCHAR'}, auto_detect=false, header = 0, delim = ',', ignore_errors=true, buffer_size = 198)
+# ----
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+# valid	valid	valid
+
+
+# We get a casting error
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'INTEGER[]'} )
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/invalid_utf_list.csv', header=0, auto_detect=false, quote = '"',columns = {'col1': 'VARCHAR'} )

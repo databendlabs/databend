@@ -1,0 +1,359 @@
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = False, buffer_size = 10)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header = False, buffer_size = 10)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim_rn.csv', delim = 'aaaa', header = False, buffer_size = 10)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = False, buffer_size = 11)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header = False, buffer_size = 11)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim_rn.csv', delim = 'aaaa', header = False, buffer_size = 11)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = False, buffer_size = 12)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header = False, buffer_size = 12)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim_rn.csv', delim = 'aaaa', header = False, buffer_size = 12)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = False, buffer_size = 13)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header = False, buffer_size = 13)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim_rn.csv', delim = 'aaaa', header = False, buffer_size = 13)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = 'aaa', header = False, buffer_size = 14)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim.csv', delim = 'aaaa', header = False, buffer_size = 14)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaaa_delim_rn.csv', delim = 'aaaa', header = False, buffer_size = 14)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2

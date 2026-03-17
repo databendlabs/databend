@@ -1,0 +1,45 @@
+statement ok
+DROP TABLE IF EXISTS test2
+
+statement ok
+DROP TABLE IF EXISTS test3
+
+statement ok
+DROP TABLE IF EXISTS test4
+
+statement ok
+DROP TABLE IF EXISTS test5
+
+statement ok
+DROP TABLE IF EXISTS testpto
+
+statement ok
+CREATE TABLE test2 as SELECT i as a, (i*2) as b, power(i,2) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE test3 as SELECT i as a, (i*3) as b, power(i,3) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE test4 as SELECT i as a, (i*4) as b, power(i,4) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE test5 as SELECT i as a, (i*5) as b, power(i,5) as c from range(0,10) tbl(i);
+
+statement ok
+CREATE TABLE testpto as SELECT i as a, (i*10) as b, (i*100) as c from range(0,10000) tbl(i);
+
+query IIR
+SELECT * FROM test2;
+----
+0 0 0.0
+1 2 1.0
+2 4 4.0
+3 6 9.0
+4 8 16.0
+5 10 25.0
+6 12 36.0
+7 14 49.0
+8 16 64.0
+9 18 81.0
+
+# Test with the FILENAME_PATTERN option. "{uuid}" will be replaced with a unique string.

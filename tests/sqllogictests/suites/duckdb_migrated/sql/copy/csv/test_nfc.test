@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS nfcstrings
+
+statement ok
+CREATE TABLE nfcstrings (s STRING);
+
+# TODO: unsupported feature
+# query I
+# COPY nfcstrings FROM '{DATA_DIR}/csv/test/nfc.csv' (HEADER 0);
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM nfcstrings WHERE s COLLATE NFC = 'ü'
+# ----
+# 2

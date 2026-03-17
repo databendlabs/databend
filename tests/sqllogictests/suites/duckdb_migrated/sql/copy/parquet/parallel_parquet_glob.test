@@ -1,0 +1,41 @@
+# TODO: unknown function
+# query I
+# select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/t?.parquet')
+# ----
+# 2
+
+# TODO: unknown function
+# query I
+# select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*')
+# ----
+# 2
+
+# TODO: unknown function
+# query I
+# select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*.parquet')
+# ----
+# 2
+
+# TODO: unknown function
+# query I
+# select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/*.parquet')
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/t1.parquet')
+# ----
+# 2
+
+# TODO: unknown function
+# query I
+# select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/t1.parquet')
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/g*/t1.parquet')
+# ----
+# 2

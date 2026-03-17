@@ -1,0 +1,8 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+create table t (a integer, b double, c varchar)
+
+statement ok
+insert into t values (1,1.1,'bla');

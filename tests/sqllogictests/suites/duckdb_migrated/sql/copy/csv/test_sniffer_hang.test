@@ -1,0 +1,2 @@
+statement error
+FROM read_csv('{DATA_DIR}/csv/bad_csv_file_2047.csv', sample_size = -1)

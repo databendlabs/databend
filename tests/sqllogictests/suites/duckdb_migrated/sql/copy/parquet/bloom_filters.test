@@ -1,0 +1,6 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO assert_bloom_filter_hit(file, col, val) AS TABLE
+#     SELECT COUNT(*) > 0 AND COUNT(*) < MAX(row_group_id+1) FROM parquet_bloom_probe(file, col, val) WHERE NOT bloom_filter_excludes;
+
+# this in-domain should only be in a subset of row groups since its ordered

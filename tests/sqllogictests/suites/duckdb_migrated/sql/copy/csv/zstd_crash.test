@@ -1,0 +1,46 @@
+statement ok
+DROP TABLE IF EXISTS test_zst
+
+statement error
+CREATE TABLE test_zst AS SELECT * FROM read_csv('{DATA_DIR}/csv/broken/test.csv.zst', AUTO_DETECT=TRUE);
+
+statement ok
+CREATE TABLE test_zst(a INTEGER, b INTEGER, c INTEGER, d VARCHAR, e VARCHAR);
+
+# what if we try to load this with random other compressions
+
+statement error
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD);
+
+statement error
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION GZIP);
+
+statement error
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION NONE);
+
+statement error
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION INFER);
+
+statement error
+COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION UNKNOWN);
+
+# TODO: unsupported feature
+# statement ok
+# COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD, HEADER);
+
+# TODO: unsupported feature
+# statement ok
+# COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD, AUTO_DETECT 1);
+
+# what if we try to load a gzip file with zstd
+
+statement error
+COPY test_zst FROM '{DATA_DIR}/csv/lineitem1k.tbl.gz' (COMPRESSION ZSTD);
+
+# TODO: unsupported feature
+# statement ok
+# COPY test_zst TO '{TEMP_DIR}/noext.csv' (COMPRESSION ZSTD);
+
+# TODO: unsupported feature
+# statement ok
+# COPY test_zst FROM '{TEMP_DIR}/noext.csv' (COMPRESSION ZSTD);

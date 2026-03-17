@@ -1,0 +1,256 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/large_mixed_data.csv', SAMPLE_SIZE=-1);
+
+# TODO: unsupported feature
+# query ITR
+# SELECT linenr, mixed_string, mixed_double FROM test LIMIT 3;
+# ----
+# 1	1	1.000000
+# 2	2	2.000000
+# 3	3	3.000000
+
+# TODO: unsupported feature
+# query TTT
+# SELECT typeof(linenr), typeof(mixed_string), typeof(mixed_double) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	DOUBLE
+
+# TODO: unsupported feature
+# query ITR
+# SELECT linenr, mixed_string, mixed_double FROM test WHERE linenr > 27000 LIMIT 3;
+# ----
+# 27001	1	1.000000
+# 27002	2	2.000000
+# 27003	3	3.500000
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM test;
+# ----
+# 27003
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time, date and timestamp columns
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp.csv');
+
+# TODO: unsupported feature
+# query ITTTT
+# SELECT a, b, t, d, ts FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	2000-01-01	2000-01-01 12:12:00
+# 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+# 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time and date columns with leading/trailing chars
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_trailing.csv');
+
+# TODO: unsupported feature
+# query ITTTTT
+# SELECT a, b, t, tf, d, df FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	12:12:12	2000-01-01	2000-01-01
+# 345	TEST2	14:15:30	14:15:30	2002-02-02	2000-01-01 a
+# 346	TEST2	15:16:17	15:16:17 01	2004-12-13	2000-01-01
+
+# TODO: unknown function
+# query TTTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(tf), typeof(d), typeof(df) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	VARCHAR	DATE	VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time, date and timestamp columns in mm-dd-yyyy (12 hour)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_mm-dd-yyyy.csv');
+
+# TODO: unknown function
+# query ITTTT
+# SELECT a, b, t, d, ts FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	2000-01-01	2000-01-01 00:12:00
+# 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+# 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time, date and timestamp columns in mm-dd-yy format (12 hour)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_mm-dd-yy.csv');
+
+# TODO: unknown function
+# query ITTTT
+# SELECT a, b, t, d, ts FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	1990-01-01	1990-01-01 00:12:00
+# 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+# 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time, date and timestamp columns in dd-mm-yyyy format
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_dd-mm-yyyy.csv');
+
+# TODO: unsupported feature
+# query ITTTT
+# SELECT a, b, t, d, ts FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	2000-01-01	2000-01-01 12:12:00
+# 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+# 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time, date and timestamp columns in dd-mm-yy format
+
+# TODO: unknown function
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_dd-mm-yy.csv');
+
+# TODO: unsupported feature
+# query ITTTT
+# SELECT a, b, t, d, ts FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	2000-01-01	1990-01-01 12:12:00
+# 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+# 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time, date and timestamp columns in yyyy.mm.dd format
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_yyyy.mm.dd.csv');
+
+# TODO: unsupported feature
+# query ITTTT
+# SELECT a, b, t, d, ts FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	2000-01-01	2000-01-01 12:12:00
+# 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+# 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
+# TODO: unknown function
+# query TTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing time, date and timestamp columns in yy.mm.dd format
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_yy.mm.dd.csv');
+
+# TODO: unsupported feature
+# query ITTTT
+# SELECT a, b, t, d, ts FROM test ORDER BY a;
+# ----
+# 123	TEST2	12:12:12	1990-01-01	1990-01-01 00:12:00
+# 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
+# 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+# ----
+# BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# a CSV file containing integer bool value
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/int_bol.csv');
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM test ORDER BY i;
+# ----
+# 1
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query TT
+# SELECT typeof(i), typeof(b) FROM test LIMIT 1;
+# ----
+# BIGINT	BOOLEAN
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

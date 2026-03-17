@@ -1,0 +1,186 @@
+# TODO: unsupported feature
+# query II
+# select * from read_csv('{DATA_DIR}/csv/comments/14648.csv',
+#    header=false,
+#    sep=',',
+#    null_padding=true,
+#    comment='#',
+#    ignore_errors=true
+#    );
+# ----
+# a	b
+# a	NULL
+# x	y
+
+# TODO: unsupported feature
+# query II
+# select * from read_csv('{DATA_DIR}/csv/comments/14648.csv',
+#    header=false,
+#    sep=',',
+#    comment='#',
+#    ignore_errors=true
+#    );
+# ----
+# a	b
+# x	y
+
+# TODO: unsupported feature
+# statement error
+# from read_csv('{DATA_DIR}/csv/comments/14648.csv',
+#    header=false,
+#    sep=',',
+#    comment='#'
+#    );
+
+# TODO: unsupported feature
+# query III
+# select * FROM '{DATA_DIR}/csv/comments/14635.csv'
+# ----
+# a	#b	c
+
+# Ignore errors will have,
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/comments/14635.csv', ignore_errors = true, columns = {'header1': 'VARCHAR', 'header2': 'VARCHAR', 'header3': 'VARCHAR'}, quote = '', escape = '', delim =',');
+# ----
+# a	#b	c
+
+# If we only have midline comments, the comment must be explicitly given by the user
+
+# TODO: unsupported feature
+# query I
+# select * FROM '{DATA_DIR}/csv/comments/only_midline.csv';
+# ----
+# 6;7
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/comments/only_midline.csv', comment = '#');
+# ----
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/mid_line.csv';
+# ----
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/mid_line_header.csv';
+# ----
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/mid_line_quote.csv';
+# ----
+# 1	3
+# 6	7#test
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/mid_line_null.csv';
+# ----
+# 1	3
+# 6	NULL
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/simple_mid_line.csv';
+# ----
+# 1	3
+# 6	7
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/midline_empty_space.csv';
+# ----
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/comments/mid_line_invalid.csv', ignore_errors = true, delim = ';', comment = '#', auto_detect = false, columns= {'a':'integer', 'b':'integer'}, strict_mode=True);
+# ----
+# 1	3
+# 6	7
+# 8	9
+
+# Lets try over a vector size
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/midline_big.csv' limit 5;
+# ----
+# 1	3
+# 6	7
+# 1	3
+# 6	7
+# 1	3
+
+# Check commented data-points are not in the data
+
+# TODO: unsupported feature
+# query II
+# select * FROM '{DATA_DIR}/csv/comments/midline_big.csv' where  a = 20
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM '{DATA_DIR}/csv/comments/midline_big.csv'
+# ----
+# 1448
+
+# Lets try with a buffer limit
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/comments/simple_mid_line.csv', buffer_size = 30) limit 5;
+# ----
+# 1	3
+# 6	7
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/comments/simple_mid_line.csv', buffer_size = 31) limit 5;
+# ----
+# 1	3
+# 6	7
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/comments/simple_mid_line.csv', buffer_size = 32) limit 5;
+# ----
+# 1	3
+# 6	7
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/comments/simple_mid_line.csv', buffer_size = 33) limit 5;
+# ----
+# 1	3
+# 6	7
+# 1	3
+# 6	7
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/comments/simple_mid_line.csv', buffer_size = 34) limit 5;
+# ----
+# 1	3
+# 6	7
+# 1	3
+# 6	7

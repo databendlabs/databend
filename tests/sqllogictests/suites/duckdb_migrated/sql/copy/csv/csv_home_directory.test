@@ -1,0 +1,53 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+DROP TABLE IF EXISTS integers_load
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 10)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM '~/integers.csv'
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5
+# 6
+# 7
+# 8
+# 9
+
+statement ok
+CREATE TABLE integers_load(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# COPY integers_load FROM '~/integers.csv'
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers_load
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5
+# 6
+# 7
+# 8
+# 9
+
+# glob from home directory
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM '~/homedir_integers*.csv'
+# ----
+# 20

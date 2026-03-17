@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# query TT
+# SELECT concat('#', columns(*), '#') FROM read_csv('{DATA_DIR}/csv/unquoted_escape/identical.csv', quote = '"', escape = '"', sep = ',', strict_mode = false);
+# ----
+##	#a""b#
+#c""d#	##
+#ef,"gh"#	##
+##	#"ij",kl#
+#mn"#	#op""#

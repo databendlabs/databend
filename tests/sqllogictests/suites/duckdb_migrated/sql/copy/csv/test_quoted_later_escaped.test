@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS T
+
+statement ok
+DROP TABLE IF EXISTS T_2
+
+statement ok
+CREATE TABLE T as select '1, "Oogie Boogie"' from range(0, 100000)
+
+statement ok
+insert into T values ('2, """sir"" Oogie Boogie"')
+
+statement ok
+CREATE TABLE T_2 as select '1, "Oogie Boogie"' from range(0, 5000)
+
+statement ok
+insert into T_2 values ('2, "\"sir\" Oogie Boogie"')

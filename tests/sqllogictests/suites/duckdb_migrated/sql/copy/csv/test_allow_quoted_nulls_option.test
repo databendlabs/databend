@@ -1,0 +1,23 @@
+# TODO: unknown function
+# query II
+# SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null_comparison.csv');
+# ----
+# 42	NULL
+# NULL	NULL
+# 88	a
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null_comparison.csv', allow_quoted_nulls=False);
+# ----
+# 42	(empty)
+# NULL	NULL
+# 88	a
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM read_csv_auto('{DATA_DIR}/csv/null_comparison.csv', allow_quoted_nulls=True);
+# ----
+# 42	NULL
+# NULL	NULL
+# 88	a

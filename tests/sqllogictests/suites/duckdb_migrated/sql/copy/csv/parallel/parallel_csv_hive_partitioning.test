@@ -1,0 +1,20 @@
+# TODO: unsupported feature
+# query IIII
+# select id, value, filename.replace('\', '/').split('/')[-2], filename.replace('\', '/').split('/')[-3] from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', FILENAME=1) order by id
+# ----
+# 1	value1	date=2012-01-01	part=a
+# 2	value2	date=2013-01-01	part=b
+
+# TODO: unsupported feature
+# query IIII
+# select id, value, part, date from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1) order by id
+# ----
+# 1	value1	a	2012-01-01
+# 2	value2	b	2013-01-01
+
+# TODO: unsupported feature
+# query III
+# select part, value, date from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1) order by 1
+# ----
+# a	value1	2012-01-01
+# b	value2	2013-01-01

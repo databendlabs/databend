@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS T1
+
+statement ok
+CREATE TABLE T1 (name VARCHAR);
+
+statement error
+COPY T1(name) from '{DATA_DIR}/csv/line_too_long.csv.gz' (DELIMITER ',', HEADER true , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+
+statement error
+COPY T1(name) from '{DATA_DIR}/csv/line_too_long_with_newline.csv.gz' (DELIMITER ',', HEADER true , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+
+statement error
+COPY T1(name) from '{DATA_DIR}/csv/multiple_line_too_long.csv.gz' (DELIMITER ',', HEADER true , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+
+statement error
+COPY T1(name) from '{DATA_DIR}/csv/line_too_long.csv.gz' (DELIMITER ',', HEADER false , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+
+statement error
+COPY T1(name) from '{DATA_DIR}/csv/line_too_long_with_newline.csv.gz' (DELIMITER ',', HEADER false , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);
+
+statement error
+COPY T1(name) from '{DATA_DIR}/csv/multiple_line_too_long.csv.gz' (DELIMITER ',', HEADER false , COMPRESSION gzip, ALLOW_QUOTED_NULLS false);

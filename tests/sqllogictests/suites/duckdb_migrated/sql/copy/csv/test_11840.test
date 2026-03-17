@@ -1,0 +1,14 @@
+# TODO: unsupported feature
+# query I
+# select * FROM '{DATA_DIR}/csv/date_specificity.csv'
+# ----
+# 0.00
+# 12/17/2019
+
+# TODO: unsupported feature
+# query I
+# select d FROM '{DATA_DIR}/csv/special_date.csv'
+# ----
+# 2000-01-01
+# 2002-02-02
+# 2004-12-13

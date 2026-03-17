@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
+
+# TODO: unsupported feature
+# query I
+# COPY test FROM '{DATA_DIR}/csv/test/test.csv';
+# ----
+# 5000

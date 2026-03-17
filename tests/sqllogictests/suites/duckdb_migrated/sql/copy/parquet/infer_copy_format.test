@@ -1,0 +1,5 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 6) tbl(i);

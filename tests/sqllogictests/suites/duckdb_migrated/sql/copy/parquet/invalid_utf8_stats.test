@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# query III
+# select * FROM 'data/parquet-testing/invalid_utf8_stats.parquet'
+# ----
+# 😀 😁 😂 🤣 😍 😢	江苏省太仓市经济开发区	test-tenant-1
+# Great product! 👍	Chicago, Illinois	test-tenant-2
+# 😊 Excellent service! ⭐	北京市朝阳区	test-tenant-3

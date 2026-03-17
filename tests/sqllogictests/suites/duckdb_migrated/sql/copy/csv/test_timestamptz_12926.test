@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/timestamp_tz.csv', dtypes = [TIMESTAMPTZ]);
+
+# TODO: unsupported feature
+# query I
+# select * FROM read_csv('{DATA_DIR}/csv/timestamp_tz.csv', dtypes = [TIMESTAMPTZ], timestampformat = '%d/%m/%Y');
+# ----
+# 2020-01-01 00:00:00+00
+# 2020-01-01 00:00:00+00
+# 2020-01-01 00:00:00+00
+# 1995-07-05 00:00:00+00
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (column0 timestamptz);
+
+statement error
+INSERT INTO test SELECT * FROM '{DATA_DIR}/csv/timestamp_tz.csv';
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM  read_csv('{DATA_DIR}/csv/timestamp_tz.csv', dtypes = [TIMESTAMPTZ], timestampformat = '%d/%m/%Y');
+
+# TODO: unsupported feature
+# query I
+# select * FROM test
+# ----
+# 2020-01-01 00:00:00+00
+# 2020-01-01 00:00:00+00
+# 2020-01-01 00:00:00+00
+# 1995-07-05 00:00:00+00

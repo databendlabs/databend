@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query IIIIII nosort describeresult
+# DESCRIBE '{DATA_DIR}/parquet-testing/delta_byte_array.parquet'
+
+# TODO: unsupported feature
+# query IIIIII nosort describeresult
+# DESCRIBE "{DATA_DIR}/parquet-testing/delta_byte_array.parquet"
+
+# TODO: unsupported feature
+# query IIIIII nosort describeresult
+# DESCRIBE FROM read_parquet("{DATA_DIR}/parquet-testing/delta_byte_array.parquet")

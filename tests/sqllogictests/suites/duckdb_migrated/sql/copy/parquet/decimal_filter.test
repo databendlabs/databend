@@ -1,0 +1,54 @@
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet'
+# ----
+# 0.1	0.1	0.1	0.1
+# -0.1	-0.1	-0.1	-0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l1=0.1
+# ----
+# 0.1	0.1	0.1	0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l1=-0.1
+# ----
+# -0.1	-0.1	-0.1	-0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l2=0.1
+# ----
+# 0.1	0.1	0.1	0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l2=-0.1
+# ----
+# -0.1	-0.1	-0.1	-0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l3=0.1
+# ----
+# 0.1	0.1	0.1	0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l3=-0.1
+# ----
+# -0.1	-0.1	-0.1	-0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l4=0.1
+# ----
+# 0.1	0.1	0.1	0.1
+
+# TODO: unsupported feature
+# query IIII
+# select * from '{DATA_DIR}/parquet-testing/decimals.parquet' WHERE l4=-0.1
+# ----
+# -0.1	-0.1	-0.1	-0.1

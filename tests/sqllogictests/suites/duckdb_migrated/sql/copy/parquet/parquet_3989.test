@@ -1,0 +1,5 @@
+statement ok
+DROP TABLE IF EXISTS lists
+
+statement ok
+CREATE TABLE lists as SELECT i as id, [i] as list from range(0,10000) tbl(i);

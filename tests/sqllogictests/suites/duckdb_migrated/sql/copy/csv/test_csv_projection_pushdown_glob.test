@@ -1,0 +1,59 @@
+# TODO: unsupported feature
+# query I
+# SELECT i FROM glob_view ORDER BY i
+# ----
+# 42
+# 84
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT d FROM glob_view ORDER BY d
+# ----
+# 1992-01-01
+# 1993-01-01
+# 1994-01-01
+
+# TODO: unsupported feature
+# query I
+# SELECT s FROM glob_view ORDER BY s
+# ----
+# hello
+# this is a long string
+# world
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM glob_view
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM list_view ORDER BY i
+# ----
+# 42
+# 84
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT d FROM list_view ORDER BY d
+# ----
+# 1992-01-01
+# 1993-01-01
+# 1994-01-01
+
+# TODO: unsupported feature
+# query I
+# SELECT s FROM list_view ORDER BY s
+# ----
+# hello
+# this is a long string
+# world
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM list_view
+# ----
+# 3

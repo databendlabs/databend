@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS bigdata
+
+# different vector sizes result in different number of files
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
+
+statement ok
+INSERT INTO bigdata SELECT bigdata.* FROM bigdata, range(0, 9)
+
+# now we crank up the threads

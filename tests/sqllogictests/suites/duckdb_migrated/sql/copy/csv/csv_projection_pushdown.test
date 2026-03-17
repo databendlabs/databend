@@ -1,0 +1,44 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl(i INT, j VARCHAR, k DATE);
+
+statement ok
+INSERT INTO tbl VALUES (42, 'hello world', NULL),  (NULL, NULL, DATE '1992-01-01'), (100, 'thisisalongstring', DATE '2000-01-01');
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM v1
+# ----
+# 3
+
+# TODO: unsupported feature
+# query III
+# SELECT i, j, k FROM v1 ORDER BY i NULLS LAST
+# ----
+# 42	hello world	NULL
+# 100	thisisalongstring	2000-01-01
+# NULL	NULL	1992-01-01
+
+# TODO: unsupported feature
+# query I
+# SELECT j FROM v1 ORDER BY j NULLS LAST
+# ----
+# hello world
+# thisisalongstring
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT j FROM v1 ORDER BY j NULLS LAST
+# ----
+# hello world
+# thisisalongstring
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT filename.replace('\', '/').split('/')[-1] FROM v1 LIMIT 1
+# ----
+# projection_pushdown.csv

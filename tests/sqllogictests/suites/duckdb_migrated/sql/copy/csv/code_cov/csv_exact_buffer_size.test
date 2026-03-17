@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/auto/issue_1254_rn.csv', buffer_size=10)
+# ----
+# 1	2
+# 1	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/auto/issue_1254_rn.csv', buffer_size=8)
+# ----
+# 1	2
+# 1	2
+
+# TODO: unsupported feature
+# query I
+# select count(*) from read_csv_auto('{DATA_DIR}/csv/small_file.csv', buffer_size = 7)
+# ----
+# 2

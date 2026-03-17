@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS sales
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE sales (
+#     salesid INTEGER  NOT NULL PRIMARY KEY,
+#     listid INTEGER NOT NULL,
+#     sellerid INTEGER NOT NULL,
+#     buyerid  INTEGER NOT NULL,
+#     eventid INTEGER NOT NULL,
+#     dateid  SMALLINT  NOT NULL,
+#     qtysold   SMALLINT  NOT NULL,
+#     pricepaid DECIMAL (8,2),
+#     commission DECIMAL (8,2),
+#     saletime TIMESTAMP);
+
+# TODO: unsupported feature
+# statement ok
+# COPY sales FROM '{DATA_DIR}/csv/sales_snippet.csv' (TIMESTAMPFORMAT '%m/%d/%Y %I:%M:%S', IGNORE_ERRORS true);

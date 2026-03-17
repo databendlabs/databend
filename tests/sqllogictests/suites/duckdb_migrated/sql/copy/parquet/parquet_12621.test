@@ -1,0 +1,7 @@
+# TODO: unknown function
+# query I
+# select *
+# from read_parquet('{DATA_DIR}/parquet-testing/issue12621.parquet')
+# limit 1;
+# ----
+# 0.0000

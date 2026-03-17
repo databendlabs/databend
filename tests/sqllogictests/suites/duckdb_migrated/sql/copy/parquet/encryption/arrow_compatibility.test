@@ -1,0 +1,43 @@
+# parquet keys are not persisted across restarts
+# TODO: unsupported feature
+# query I
+# SELECT flba_field FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption.parquet', encryption_config={footer_key: 'arrow_key'}) LIMIT 1;
+# ----
+# \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
+
+# generated encrypted parquet file
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption_gist.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+# ----
+# 10	1
+# 20	0
+# 30	1
+
+# generated encrypted parquet files with arrow, 10 row groups
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM read_parquet('{DATA_DIR}/parquet-testing/encryption/arrow_uniform_encryption_ten_row_groups.parquet', encryption_config={footer_key: 'arrow_key_generated_files'});
+# ----
+# 1	1
+# 2	0
+# 3	1
+# 4	0
+# 5	1
+# 6	0
+# 7	1
+# 8	0
+# 9	1
+# 10	0
+# 11	1
+# 12	0
+# 13	1
+# 14	0
+# 15	1
+# 16	0
+# 17	1
+# 18	0
+# 19	1
+# 20	0

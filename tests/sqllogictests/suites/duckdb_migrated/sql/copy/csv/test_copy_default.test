@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR DEFAULT('hello'), c INTEGER DEFAULT(3+4));
+
+# TODO: unsupported feature
+# query I
+# COPY test (a) FROM '{DATA_DIR}/csv/test/test_default.csv';
+# ----
+# 5000
+
+# TODO: unsupported feature
+# query I
+# COPY test (c) FROM '{DATA_DIR}/csv/test/test_default.csv';
+# ----
+# 5000
+
+query IIIIIII
+SELECT COUNT(a), COUNT(b), COUNT(c), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(a), SUM(c) FROM test;
+----
+0 0 0 NULL NULL NULL NULL

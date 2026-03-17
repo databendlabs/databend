@@ -1,0 +1,22 @@
+statement error
+FROM read_csv('{DATA_DIR}/csv/15473.csv', delim = ',', columns = {'A' : 'VARCHAR','B' : 'VARCHAR','C' : 'VARCHAR','D' : 'VARCHAR'})
+
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT i::VARCHAR i FROM range(0, 103) tbl(i) UNION ALL SELECT 'hello') TO '{TEMP_DIR}/int_parse_error.csv' (HEADER, DELIMITER '|')
+
+statement error
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'})
+
+statement error
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'}, header=True, auto_detect=false)
+
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT i::VARCHAR i FROM range(0, 103) tbl(i) UNION ALL SELECT 'hello') TO '{TEMP_DIR}/int_parse_error.csv' (HEADER 0, DELIMITER '|')
+
+statement error
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)
+
+statement error
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)

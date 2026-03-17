@@ -1,0 +1,39 @@
+# We need httpfs to do encrypted writes
+# TODO: unsupported feature
+# statement ok
+# USE unencrypted;
+
+# TODO: unsupported feature
+# statement ok
+# CALL dbgen(sf=0.01);
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE unencrypted to encrypted;
+
+# TODO: unsupported feature
+# statement ok
+# USE other;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH unencrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted
+
+# TODO: unsupported feature
+# query I
+# SELECT l_suppkey FROM encrypted.lineitem limit 10;
+# ----
+# 93
+# 75
+# 38
+# 48
+# 23
+# 10
+# 33
+# 19
+# 70
+# 60

@@ -1,0 +1,38 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (foo INTEGER, bar VARCHAR(10), baz VARCHAR(10), bam VARCHAR(10));
+
+# TODO: unsupported feature
+# query I
+# COPY test FROM '{DATA_DIR}/csv/test/big_header.csv' (DELIMITER '	', HEADER false, SKIP 3);
+# ----
+# 3
+
+query I
+SELECT COUNT(bam) FROM test WHERE bam = '!';
+----
+0
+
+# TODO: unsupported feature
+# query I
+# INSERT INTO test SELECT * FROM read_csv('{DATA_DIR}/csv/test/big_header.csv', HEADER=FALSE, SKIP=3, DELIM='	', columns=STRUCT_PACK(foo := 'INTEGER', bar := 'VARCHAR', baz := 'VARCHAR', bam := 'VARCHAR'));
+# ----
+# 3
+
+query I
+SELECT COUNT(bam) FROM test WHERE bam = '!';
+----
+0
+
+# TODO: unsupported feature
+# query I
+# INSERT INTO test SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/big_header.csv', HEADER=FALSE, SKIP=3, DELIM='	');
+# ----
+# 3
+
+query I
+SELECT COUNT(bam) FROM test WHERE bam = '!';
+----
+0

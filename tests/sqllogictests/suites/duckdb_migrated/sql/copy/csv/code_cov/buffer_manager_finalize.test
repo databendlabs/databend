@@ -1,0 +1,21 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1 AS select i, (i+1) as j from range(0,3000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# COPY t1 TO '{TEMP_DIR}/t1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+# TODO: unsupported feature
+# query I
+# select count(*) from '{TEMP_DIR}/t1.csv'
+# ----
+# 3000
+
+# TODO: unsupported feature
+# query I
+# select count(*) from read_csv('{DATA_DIR}/csv/empty.csv', columns=STRUCT_PACK(d := 'BIGINT'), header=0, auto_detect = false)
+# ----
+# 0

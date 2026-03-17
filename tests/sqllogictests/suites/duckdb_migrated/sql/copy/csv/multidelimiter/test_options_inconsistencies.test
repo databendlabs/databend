@@ -1,0 +1,8 @@
+statement error
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '"\', quote ='"')
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '\\', escape ='\')
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/multidelimiter/aaa_delim.csv', delim = '|#', comment ='#', auto_detect = false, columns = {'a': 'varchar'})

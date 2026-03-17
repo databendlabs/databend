@@ -1,0 +1,86 @@
+# Test will fail on windows because byte_position is slightly different due to \r\n instead of \n
+# Test invalid arguments
+statement error
+SELECT * FROM read_csv(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=false,
+    store_rejects=true
+)
+
+statement error
+SELECT * FROM read_csv(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='')
+
+statement error
+SELECT * FROM read_csv(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    union_by_name=true)
+
+statement error
+SELECT * FROM read_csv(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_limit=10)
+
+statement error
+SELECT * FROM read_csv(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    rejects_limit=-1)
+
+statement error
+SELECT * FROM read_csv_auto(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    ignore_errors=false,
+    rejects_table='csv_rejects_table'
+)
+
+statement error
+SELECT * FROM read_csv_auto(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_table='')
+
+statement error
+SELECT * FROM read_csv_auto(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    union_by_name=true)
+
+statement error
+SELECT * FROM read_csv_auto(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_limit=10)
+
+statement error
+SELECT * FROM read_csv_auto(
+    '{DATA_DIR}/csv/error/mismatch/bad.csv',
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    rejects_limit=-1)
+
+# TODO: unsupported feature
+# query III
+# SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*) FROM read_csv_auto(
+#     '{DATA_DIR}/csv/error/mismatch/big_bad*.csv',
+#     sample_size=3000,
+#     rejects_table='csv_rejects_table',
+#     ignore_errors=true, header = 0);
+# ----
+# VARCHAR	VARCHAR	11048
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE csv_rejects_table;

@@ -1,0 +1,127 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+DROP TABLE IF EXISTS test_copy
+
+statement ok
+DROP TABLE IF EXISTS test_csv
+
+statement ok
+DROP TABLE IF EXISTS test_table_large
+
+# Simple glob with filenames
+# TODO: unsupported feature
+# query III
+# select i, j, parse_path(filename)[-2:] from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
+# ----
+# 1	a	[glob, t1.parquet]
+# 2	b	[glob, t2.parquet]
+# 3	c	[glob2, t1.parquet]
+
+# Filter on filename col
+
+# TODO: unsupported feature
+# query III
+# SELECT i, j, filename_tail3: array_to_string(parse_path(filename)[-3:], '/')
+# FROM parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1)
+# WHERE filename_tail3 = 'parquet-testing/glob2/t1.parquet'
+# ----
+# 3	c	parquet-testing/glob2/t1.parquet
+
+# filter on multiple vector sizes of rows
+
+# TODO: unsupported feature
+# query I
+# SELECT count(filename) FROM parquet_scan('{DATA_DIR}/parquet-testing/p2.parquet', FILENAME=1) where id < 1000;
+# ----
+# 479
+
+# filter pushdown on filename
+
+# TODO: unsupported feature
+# query I
+# SELECT count(id) FROM parquet_scan('{DATA_DIR}/parquet-testing/p2.parquet', FILENAME=1) where filename >= '{DATA_DIR}';
+# ----
+# 4979
+
+# Filter on non-filename col
+
+# TODO: unsupported feature
+# query I
+# select parse_path(filename)[-2:] from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet', FILENAME=1) where i=2;
+# ----
+# [glob, t2.parquet]
+
+statement ok
+CREATE TABLE test_csv AS SELECT 1 as id, 'test_csv_content' as filename;
+
+# TODO: unsupported feature
+# statement ok
+# COPY test_csv TO '{TEMP_DIR}/filename_as_column.csv' WITH HEADER;
+
+# This currently fails with a binder error
+
+statement error
+SELECT id, filename FROM read_csv_auto('{TEMP_DIR}/filename_as_column.csv',  FILENAME=1);
+
+statement ok
+CREATE TABLE test AS SELECT 1 as id, 'test' as filename;
+
+# TODO: unsupported feature
+# statement ok
+# COPY test TO '{TEMP_DIR}/filename_as_column.parquet';
+
+# we currently don't support filename as a column name when using the filename option
+
+statement error
+SELECT * FROM parquet_scan('{TEMP_DIR}/filename_as_column.parquet', FILENAME=1);
+
+statement ok
+CREATE TABLE test_copy (i INT, j VARCHAR, filename VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_copy FROM read_parquet('{DATA_DIR}/parquet-testing/glob/t1.parquet', filename=1, binary_as_string=1);
+
+# TODO: unsupported feature
+# query III
+# SELECT i, j, parse_path(filename)[-2:] FROM test_copy
+# ----
+# 1	a	[glob, t1.parquet]
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_copy FROM read_parquet('{DATA_DIR}/parquet-testing/glob/t1.parquet', filename=1);
+
+# TODO: unsupported feature
+# query III
+# SELECT i, j, parse_path(filename)[-2:] FROM test_copy
+# ----
+# 1	a	[glob, t1.parquet]
+# 1	a	[glob, t1.parquet]
+
+statement error
+COPY test_copy FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet';
+
+statement ok
+CREATE TABLE test_table_large AS SELECT * FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# COPY test_table_large TO '{TEMP_DIR}/test_table_large.parquet' (ROW_GROUP_SIZE 1000);
+
+# TODO: unsupported feature
+# query II
+# SELECT sum(i), max(parse_filename(filename)) FROM parquet_scan('{TEMP_DIR}/test_table_large.parquet', FILENAME=1) where i>5000;
+# ----
+# 37492500	test_table_large.parquet
+
+# Same file twice
+
+# TODO: unsupported feature
+# query III
+# SELECT i, j, parse_path(filename)[-2:] as file FROM parquet_scan(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet'], FILENAME=1) where filename like '%t1%'
+# ----
+# 1	a	[glob, t1.parquet]
+# 1	a	[glob, t1.parquet]

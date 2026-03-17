@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
+
+# TODO: unsupported feature
+# query I
+# COPY test FROM '{DATA_DIR}/csv/test/test_long_line.csv';
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT LENGTH(b) FROM test ORDER BY a;
+# ----
+# 10000
+# 20000
+
+query II
+SELECT SUM(a), SUM(c) FROM test;
+----
+NULL NULL

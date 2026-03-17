@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# SELECT quote FROM sniff_csv('{DATA_DIR}/csv/all_quotes.csv', ignore_errors = 1)
+# ----
+# "

@@ -1,0 +1,14 @@
+# TODO: unsupported feature
+# query I
+# SELECT * from read_csv_auto('{DATA_DIR}/csv/escape.csv', escape=']', header = 0)
+# ----
+# "bla"
+
+# TODO: unsupported feature
+# query I
+# SELECT * from read_csv_auto('{DATA_DIR}/csv/escape.csv', header = 0)
+# ----
+# "]"bla]""
+
+statement error
+SELECT * from read_csv_auto('{DATA_DIR}/csv/no_opt.csv', delim = ';')

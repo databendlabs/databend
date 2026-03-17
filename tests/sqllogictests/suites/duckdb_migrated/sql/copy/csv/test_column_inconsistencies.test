@@ -1,0 +1,102 @@
+# TODO: unknown function
+# query IIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_3.csv')
+# ----
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_3.csv', null_padding = true)
+# ----
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_3.csv', null_padding = true, ignore_errors = true)
+# ----
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+
+# TODO: unknown function
+# query I
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_6.csv')
+# ----
+# 1,2,3,4
+# 2,2,3,4,5
+# 3,2,3,4
+# 4,2,3,4
+# 5,2,3,4
+
+# TODO: unsupported feature
+# query IIIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_6.csv', null_padding = true)
+# ----
+# 1	2	3	4	NULL
+# 2	2	3	4	5
+# 3	2	3	4	NULL
+# 4	2	3	4	NULL
+# 5	2	3	4	NULL
+
+# TODO: unsupported feature
+# query IIIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_6.csv', null_padding = true, ignore_errors = true)
+# ----
+# 1	2	3	4	NULL
+# 2	2	3	4	5
+# 3	2	3	4	NULL
+# 4	2	3	4	NULL
+# 5	2	3	4	NULL
+
+# TODO: unsupported feature
+# query IIIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_6.csv', null_padding = true, ignore_errors = true, header = false)
+# ----
+# one	two	three	four	NULL
+# 1	2	3	4	NULL
+# 2	2	3	4	5
+# 3	2	3	4	NULL
+# 4	2	3	4	NULL
+# 5	2	3	4	NULL
+
+# TODO: unknown function
+# query IIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/line_with_spaces.csv')
+# ----
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+
+# Header gets nullpadded instead of thrown away
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/line_with_spaces.csv', null_padding = true, header = false)
+# ----
+# Line with spaces	NULL	NULL	NULL
+# a	b	c	d
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv('{DATA_DIR}/csv/inconsistencies/line_with_spaces.csv', null_padding = true, ignore_errors = true)
+# ----
+# a	b	c	d
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4
+# 1	2	3	4

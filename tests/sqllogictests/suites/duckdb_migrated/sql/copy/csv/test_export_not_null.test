@@ -1,0 +1,44 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl_2
+
+statement ok
+begin transaction;
+
+statement ok
+create table tbl(a VARCHAR NOT NULL)
+
+statement ok
+insert into tbl values ('');
+
+statement ok
+abort;
+
+statement ok
+begin transaction;
+
+# Very that the table can be imported
+
+statement ok
+abort;
+
+# Try Table with multiple null constraints
+
+statement ok
+begin transaction;
+
+statement ok
+create table tbl_2(a VARCHAR NOT NULL, b VARCHAR NOT NULL, c VARCHAR NOT NULL, d VARCHAR)
+
+statement ok
+insert into tbl_2 values ('','','','');
+
+statement ok
+abort;
+
+query TTTT
+select * from tbl_2
+----
+(empty) (empty) (empty) (empty)

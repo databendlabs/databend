@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+create table integers(i int);
+
+statement ok
+insert into integers values (42);
+
+statement ok
+drop table integers;
+
+# TODO: unsupported feature
+# query I
+# select * from integers;
+# ----
+# 42

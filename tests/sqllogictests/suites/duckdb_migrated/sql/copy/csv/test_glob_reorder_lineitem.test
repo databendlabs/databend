@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# call dbgen(sf=0.1);
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t;
+# ----
+# 20000
+
+# TODO: unsupported feature
+# statement ok
+# drop table t;
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t;
+# ----
+# 50000
+
+# TODO: unsupported feature
+# statement ok
+# drop table t;

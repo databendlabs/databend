@@ -1,0 +1,50 @@
+statement error
+FROM read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', buffer_size=20, quote = '"')
+
+# TODO: unsupported feature
+# statement ok
+# select * FROM read_csv('{DATA_DIR}/csv/evil_nullpadding.csv', buffer_size=20)
+
+# TODO: unsupported feature
+# query I
+# select * FROM read_csv('{DATA_DIR}/csv/validator/single_column.csv', header = 0)
+# ----
+# 123
+# 123
+# 123
+# one
+# 123
+# 123
+# 123
+# 123
+# 123
+# 123
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/validator/single_column.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false)
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/validator/single_column.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false, buffer_size = 11)
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/validator/single_column.csv', header = 0, columns = {'a': 'integer'}, auto_detect = false, buffer_size = 11, parallel = false)
+
+# TODO: unknown function
+# statement ok
+# select * FROM read_csv('{DATA_DIR}/csv/validator/quoted_new_value.csv')
+
+# TODO: unsupported feature
+# statement ok
+# select * FROM read_csv('{DATA_DIR}/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0)
+
+# TODO: unsupported feature
+# statement ok
+# select * FROM read_csv('{DATA_DIR}/csv/validator/quoted_new_value.csv', columns = {'band': 'varchar', 'album': 'varchar', 'release': 'varchar'}, quote = '''', delim = ';', header = 0, buffer_size = 48)
+
+# TODO: unsupported feature
+# statement ok
+# select * FROM read_csv('{DATA_DIR}/csv/validator/single_column_quoted_newline.csv', columns = {'Raffaella Carrà': 'varchar'}, quote = '"',  buffer_size = 24)
+
+# TODO: unsupported feature
+# statement ok
+# select * FROM read_csv('{DATA_DIR}/csv/validator/single_column_notquoted_newline.csv', columns = {'Raffaella Carrà': 'varchar'}, quote = '"',  buffer_size = 22)

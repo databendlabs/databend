@@ -1,0 +1,18 @@
+statement ok
+DROP TABLE IF EXISTS movie_info
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE movie_info (id integer NOT NULL PRIMARY KEY, movie_id integer NOT NULL, info_type_id integer NOT NULL, info text NOT NULL, note text);
+
+# TODO: unsupported feature
+# query I
+# COPY movie_info FROM '{DATA_DIR}/csv/real/imdb_movie_info_escaped.csv' DELIMITER ',' ESCAPE '\';
+# ----
+# 201
+
+# TODO: unsupported feature
+# query IIITT
+# SELECT * FROM movie_info;
+# ----
+# TODO: hash result

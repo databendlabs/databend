@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_csv('{DATA_DIR}/csv/test/struct_padding.csv', columns={'col': 'STRUCT(val VARCHAR)'}) ORDER BY 1;
+# ----
+# {'val': ''}
+# {'val': ''}
+# {'val': ''}
+# {'val': ''}
+# {'val': ''}
+# {'val': ''}
+# {'val': ''}
+# {'val': x}
+# {'val': x}
+# {'val': x}
+# {'val': x}
+# {'val': y}
+# {'val': y}
+# {'val': y}
+# {'val': y}

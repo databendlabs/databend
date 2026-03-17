@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# query II
+# SELECT * FROM '{DATA_DIR}/csv/issue2628_中文.csv'
+# ----
+# 1	1
+# 2	2
+# 3	3
+
+# unicode glob
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM '{DATA_DIR}/csv/*中文.csv'
+# ----
+# 1	1
+# 2	2
+# 3	3
+
+# unicode directory
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM '{DATA_DIR}/csv/中文/*.csv' ORDER BY 1
+# ----
+# 1	1
+# 2	2
+# 3	3
+# 4	4
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM '{DATA_DIR}/csv/中*/*.csv' ORDER BY 1
+# ----
+# 1	1
+# 2	2
+# 3	3
+# 4	4

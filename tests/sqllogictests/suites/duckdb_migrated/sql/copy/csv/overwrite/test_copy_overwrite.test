@@ -1,0 +1,41 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR(10));
+
+statement ok
+INSERT INTO test VALUES (1, 'hello'), (2, 'world '), (3, ' xx');
+
+query IT
+SELECT * FROM test ORDER BY 1;
+----
+1	hello
+2	world 
+3	 xx
+
+# copy to the CSV file
+
+statement ok
+DELETE FROM test;
+
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM test ORDER BY 1;
+# ----
+# 1	hello
+# 2	world 
+
+# test query returning error does not export to file
+
+statement ok
+DELETE FROM test;
+
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM test ORDER BY 1;
+# ----
+# 1	hello
+# 2	world 
+
+# Test USE_TMP_FILE flag

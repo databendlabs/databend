@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# select count(*) from '{DATA_DIR}/csv/soccer_kaggle.csv'
+# ----
+# 14

@@ -1,0 +1,8 @@
+statement ok
+DROP TABLE IF EXISTS people
+
+statement ok
+CREATE TABLE people(id INTEGER, name VARCHAR);
+
+statement ok
+INSERT INTO people VALUES (1, 'Mark'), (2, 'Hannes');

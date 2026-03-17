@@ -1,0 +1,53 @@
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM integer_file_first
+# WHERE i='042'
+# ----
+# f1	42
+# f2	42
+
+# casting to string - we only get '042' now
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM string_file_first
+# WHERE i='042'
+# ----
+# f2	042
+
+# greater than
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM integer_file_first
+# WHERE i>10
+# ORDER BY ALL
+# ----
+# f1	42
+# f2	42
+# f2	124
+
+# for strings, '8' is bigger than '10' (since '8' is bigger than '1')
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM string_file_first
+# WHERE i>'10'
+# ORDER BY ALL
+# ----
+# f1	42
+# f1	8
+# f2	124
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM integer_file_first
+# WHERE i IS NULL
+# ----
+# f1	NULL
+# f2	NULL

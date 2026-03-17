@@ -1,0 +1,51 @@
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM integer_file_first
+# WHERE i='042'
+# ----
+# f1	42
+# f2	42
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM bigint_file_first
+# WHERE i='042'
+# ORDER BY ALL
+# ----
+# f1	42
+# f2	42
+
+# greater than
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM integer_file_first
+# WHERE i>10
+# ORDER BY ALL
+# ----
+# f1	42
+# f2	42
+# f2	124
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM bigint_file_first
+# WHERE i>'10'
+# ORDER BY ALL
+# ----
+# f1	42
+# f2	42
+# f2	124
+
+# TODO: unsupported feature
+# query II
+# SELECT f, i
+# FROM integer_file_first
+# WHERE i IS NULL
+# ----
+# f1	NULL
+# f2	NULL

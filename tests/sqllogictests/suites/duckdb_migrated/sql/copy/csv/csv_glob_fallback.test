@@ -1,0 +1,10 @@
+# TODO: unsupported feature
+# query III
+# SELECT * FROM '{DATA_DIR}/csv/[avalon]_daily-avg.csv'
+# ----
+# 1	2	3
+# 3	4	5
+# 4	5	6
+
+statement error
+SELECT * FROM '{DATA_DIR}/csv/[avxalon]_daily-avg.csv'

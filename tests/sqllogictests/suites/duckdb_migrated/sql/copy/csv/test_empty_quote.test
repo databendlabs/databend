@@ -1,0 +1,31 @@
+statement ok
+DROP TABLE IF EXISTS no_quote
+
+statement ok
+CREATE TABLE no_quote(a VARCHAR, b VARCHAR);
+
+# empty quote
+
+# TODO: unsupported feature
+# query I
+# COPY no_quote FROM '{DATA_DIR}/csv/no_quote.csv' ( QUOTE '', ESCAPE '', DELIM '|');
+# ----
+# 3
+
+# TODO: unsupported feature
+# query TT
+# SELECT * FROM no_quote;
+# ----
+# "hello	world
+# h'ow do you	do"
+# 'I am'	"here"
+
+# empty quote in read_csv function
+
+# TODO: unsupported feature
+# query TT
+# SELECT * FROM read_csv('{DATA_DIR}/csv/no_quote.csv', auto_detect=1, quote='');
+# ----
+# "hello	world
+# h'ow do you	do"
+# 'I am'	"here"

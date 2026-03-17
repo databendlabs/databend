@@ -1,0 +1,11 @@
+# TODO: unknown function
+# query I
+# select columns FROM sniff_csv('{DATA_DIR}/csv/headers/escaped_quote.csv');
+# ----
+# [{'name': Name, 'type': VARCHAR}, {'name': 'Escaped\'\'Quote', 'type': BIGINT}]
+
+# TODO: unknown function
+# query I
+# select columns FROM sniff_csv('{DATA_DIR}/csv/headers/unescaped_quote.csv');
+# ----
+# [{'name': Name, 'type': VARCHAR}, {'name': 'Unescaped\'Quote', 'type': BIGINT}]

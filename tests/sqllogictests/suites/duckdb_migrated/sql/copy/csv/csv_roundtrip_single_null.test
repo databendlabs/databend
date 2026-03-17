@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# query I
+# select * FROM integers
+# ----
+# NULL

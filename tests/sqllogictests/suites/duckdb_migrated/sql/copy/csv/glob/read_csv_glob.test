@@ -1,0 +1,281 @@
+# TODO: unsupported feature
+# query IIIII
+# select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv('{DATA_DIR}/csv/per_thread/*.csv') limit 1
+# ----
+# VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
+
+# TODO: unsupported feature
+# query IIIII
+# select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['{DATA_DIR}/csv/per_thread/c1.csv', '{DATA_DIR}/csv/per_thread/c2.csv']) limit 1
+# ----
+# VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
+
+# TODO: unknown function
+# query IIIII
+# select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv(['{DATA_DIR}/csv/per_thread/c2.csv', '{DATA_DIR}/csv/per_thread/c1.csv', '{DATA_DIR}/csv/per_thread/c3.csv']) limit 1
+# ----
+# VARCHAR	BOOLEAN	DOUBLE	DOUBLE	VARCHAR
+
+# simple globbing
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_csv('{DATA_DIR}/csv/glob/a?/*.csv') ORDER BY 1
+# ----
+# 2019-06-05
+# 2019-06-15
+# 2019-06-25
+# 2019-07-05
+# 2019-07-15
+# 2019-07-25
+# 2019-08-05
+# 2019-08-15
+# 2019-08-25
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_csv('{DATA_DIR}/csv/glob/a?/a*.csv') ORDER BY 1
+# ----
+# 2019-06-05
+# 2019-06-15
+# 2019-06-25
+# 2019-07-05
+# 2019-07-15
+# 2019-07-25
+
+# list parameter
+
+# TODO: unknown function
+# query I
+# SELECT * FROM read_csv(['{DATA_DIR}/csv/glob/a1/a1.csv', '{DATA_DIR}/csv/glob/a2/a2.csv']) ORDER BY 1
+# ----
+# 2019-06-05
+# 2019-06-15
+# 2019-06-25
+# 2019-07-05
+# 2019-07-15
+# 2019-07-25
+
+# TODO: unknown function
+# query I
+# SELECT * FROM read_csv_auto(['{DATA_DIR}/csv/glob/a1/a1.csv', '{DATA_DIR}/csv/glob/a2/a2.csv']) ORDER BY 1
+# ----
+# 2019-06-05
+# 2019-06-15
+# 2019-06-25
+# 2019-07-05
+# 2019-07-15
+# 2019-07-25
+
+# multiple globs
+
+# TODO: unknown function
+# query I
+# SELECT * FROM read_csv(['{DATA_DIR}/csv/glob/a?/a*.csv', '{DATA_DIR}/csv/glob/a?/a*.csv']) ORDER BY 1
+# ----
+# 2019-06-05
+# 2019-06-05
+# 2019-06-15
+# 2019-06-15
+# 2019-06-25
+# 2019-06-25
+# 2019-07-05
+# 2019-07-05
+# 2019-07-15
+# 2019-07-15
+# 2019-07-25
+# 2019-07-25
+
+# more asterisks for directories
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_csv('{DATA_DIR}/csv/*/a?/a*.csv') ORDER BY 1
+# ----
+# 2019-06-05
+# 2019-06-15
+# 2019-06-25
+# 2019-07-05
+# 2019-07-15
+# 2019-07-25
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b LIKE '%a1.csv%' FROM read_csv('{DATA_DIR}/csv/*/a?/a*.csv', filename=1) t1(a,b) ORDER BY 1
+# ----
+# 2019-06-05	1
+# 2019-06-15	1
+# 2019-06-25	1
+# 2019-07-05	0
+# 2019-07-15	0
+# 2019-07-25	0
+
+# read-csv auto fails here because of a type mismatch: most files contain dates, but one file contains integers
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv') ORDER BY 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), header=1) ORDER BY 1
+# ----
+# 1
+# 2
+# 2019-06-05
+# 2019-06-15
+# 2019-06-25
+# 2019-07-05
+# 2019-07-15
+# 2019-07-25
+# 2019-08-05
+# 2019-08-15
+# 2019-08-25
+# 3
+
+# TODO: unknown function
+# query II
+# SELECT a, b LIKE '%a_.csv' FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv', columns=STRUCT_PACK(d := 'STRING'), filename=1, header=1) t(a,b) ORDER BY 1
+# ----
+# 1	0
+# 2	0
+# 2019-06-05	1
+# 2019-06-15	1
+# 2019-06-25	1
+# 2019-07-05	1
+# 2019-07-15	1
+# 2019-07-25	1
+# 2019-08-05	0
+# 2019-08-15	0
+# 2019-08-25	0
+# 3	0
+
+# test glob parsing
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('{DATA_DIR}/csv/glob/*/*.csv')
+# ----
+# 5
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob(['{DATA_DIR}/csv/glob/*/*.csv'])
+# ----
+# 5
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob(['{DATA_DIR}/csv/glob/*/*.csv', '{DATA_DIR}/csv/glob/*/*.csv'])
+# ----
+# 10
+
+# we can also use windows file slashes
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('{DATA_DIR}\csv\glob\*\*.csv')
+# ----
+# 5
+
+# consecutive slashes are ignored
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('{DATA_DIR}//csv///glob///*//////*.csv')
+# ----
+# 5
+
+# nothing matches the glob
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/glob/*/a*a.csv') ORDER BY 1
+
+statement error
+SELECT * FROM read_csv(['{DATA_DIR}/csv/glob/*/a*a.csv']) ORDER BY 1
+
+# TODO: unknown function
+# statement error
+# SELECT * FROM read_csv_auto(['{DATA_DIR}/csv/glob/*/a*a.csv']) ORDER BY 1
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('{DATA_DIR}/csv/glob/*/a*a.csv')
+# ----
+# 0
+
+# TODO: unknown function
+# query I
+# select count(*) from glob('/rewoiarwiouw3rajkawrasdf790273489*.csv') limit 10;
+# ----
+# 0
+
+# TODO: unknown function
+# query I
+# select count(*) from glob('~/rewoiarwiouw3rajkawrasdf790273489*.py') limit 10;
+# ----
+# 0
+
+
+# file_search_path with one path
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('*/*.csv');
+# ----
+# 5
+
+# file_search_path with multiple paths
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('*.csv');
+# ----
+# 2
+
+# file_search_path with a non-existent path
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('*/*.csv');
+# ----
+# 5
+
+# Only file_search_path is searched
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('csv/glob/*/*.csv');
+# ----
+# 0
+
+# file_search_path can be cleared
+
+# TODO: unknown function
+# query I
+# SELECT COUNT(*) FROM glob('{DATA_DIR}/csv/glob/*/*.csv');
+# ----
+# 5
+
+# empty list
+
+statement error
+SELECT * FROM read_csv_auto([]) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv_auto([]::VARCHAR[]) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv_auto(NULL) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv_auto([NULL]) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv_auto(NULL::VARCHAR) ORDER BY 1
+
+statement error
+SELECT * FROM read_csv_auto(NULL::VARCHAR[]) ORDER BY 1
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/glob/*/*.csv');

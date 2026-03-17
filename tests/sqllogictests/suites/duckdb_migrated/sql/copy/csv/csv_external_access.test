@@ -1,0 +1,24 @@
+statement ok
+DROP TABLE IF EXISTS date_test
+
+statement ok
+CREATE TABLE date_test(d date);
+
+# TODO: unsupported feature
+# statement ok
+# COPY date_test FROM '{DATA_DIR}/csv/test/date.csv';
+
+statement error
+SELECT * FROM read_csv('{DATA_DIR}/csv/test/date.csv', columns = {'d': 'DATE'});
+
+statement error
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/date.csv');
+
+statement error
+COPY date_test FROM '{DATA_DIR}/csv/test/date.csv';
+
+statement error
+COPY date_test TO '{TEMP_DIR}/date.csv'
+
+statement error
+FROM sniff_csv('{DATA_DIR}/csv/test/date.csv');

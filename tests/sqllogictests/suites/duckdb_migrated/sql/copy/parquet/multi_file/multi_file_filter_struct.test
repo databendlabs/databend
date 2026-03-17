@@ -1,0 +1,68 @@
+# statement ok
+# PRAGMA enable_verification
+# TODO: unsupported feature
+# query I
+# SELECT struct_val.i
+# FROM integer_file_first
+# ORDER BY ALL
+# ----
+# 8
+# 42
+# 42
+# 124
+# NULL
+# NULL
+
+# equality
+
+# TODO: unsupported feature
+# query II
+# SELECT struct_val.f, struct_val.i
+# FROM integer_file_first
+# WHERE struct_val.i='042'
+# ----
+# f1	42
+# NULL	42
+
+# TODO: unsupported feature
+# query I
+# SELECT struct_val.i
+# FROM bigint_file_first
+# WHERE struct_val.i='042'
+# ORDER BY ALL
+# ----
+# 42
+# 42
+
+# greater than
+
+# TODO: unsupported feature
+# query II
+# SELECT struct_val.f, struct_val.i
+# FROM integer_file_first
+# WHERE struct_val.i>10
+# ORDER BY ALL
+# ----
+# f1	42
+# NULL	42
+# NULL	124
+
+# TODO: unsupported feature
+# query I
+# SELECT struct_val.i
+# FROM bigint_file_first
+# WHERE struct_val.i>'10'
+# ORDER BY ALL
+# ----
+# 42
+# 42
+# 124
+
+# TODO: unsupported feature
+# query II
+# SELECT struct_val.f, struct_val.i
+# FROM integer_file_first
+# WHERE struct_val.i IS NULL
+# ----
+# f1	NULL
+# NULL	NULL

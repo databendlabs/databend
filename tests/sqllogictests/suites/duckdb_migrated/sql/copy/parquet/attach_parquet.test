@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# USE attached_parquet
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM file
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM attached_parquet
+# ----
+# 42

@@ -1,0 +1,91 @@
+# We need httpfs to do encrypted writes
+# TODO: unknown function
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_storage_version'
+# ----
+# v1.4.0+
+
+# TODO: unknown function
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_v0'
+# ----
+# v1.5.0+
+
+# TODO: unknown function
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_v1'
+# ----
+# v1.5.0+
+
+# TODO: unsupported feature
+# statement ok
+# USE unencrypted;
+
+# TODO: unsupported feature
+# statement ok
+# CALL dbgen(sf=0.01);
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE unencrypted to encrypted_storage_version;
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE unencrypted to encrypted_v0;
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE unencrypted to encrypted_v1;
+
+# TODO: unsupported feature
+# statement ok
+# USE other;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted_storage_version;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH unencrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted_v0
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted_v1
+
+# the setting of debug_encryption_version gets overridden
+# if the (de)serialized encryption version differs
+
+# TODO: unsupported feature
+# query I
+# SELECT l_suppkey FROM encrypted_v0.lineitem limit 10;
+# ----
+# 93
+# 75
+# 38
+# 48
+# 23
+# 10
+# 33
+# 19
+# 70
+# 60
+
+# TODO: unsupported feature
+# query I
+# SELECT l_suppkey FROM encrypted_v1.lineitem limit 10;
+# ----
+# 93
+# 75
+# 38
+# 48
+# 23
+# 10
+# 33
+# 19
+# 70
+# 60

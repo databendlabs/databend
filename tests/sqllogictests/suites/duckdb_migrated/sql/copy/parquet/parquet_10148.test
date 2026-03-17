@@ -1,0 +1,14 @@
+# TODO: unsupported feature
+# query I
+# SELECT CDCONO FROM '{DATA_DIR}/parquet-testing/bug10148-wide-decimal-stats.parquet'
+# ----
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0

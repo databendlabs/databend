@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM '{DATA_DIR}/csv/quoted_newline.csv'
+# ----
+# 1
+
+# TODO: unknown function
+# query I
+# SELECT quote FROM sniff_csv('{DATA_DIR}/csv/quoted_newline.csv')
+# ----
+# "

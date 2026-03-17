@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# statement ok
+# select * from '{DATA_DIR}/csv/test/dateformat.csv';
+
+# TODO: unsupported feature
+# statement ok
+# select * from '{DATA_DIR}/csv/test/dateformat.csv', '{DATA_DIR}/csv/test/dateformat_2.csv';
+
+# explicit alias
+
+# TODO: unsupported feature
+# statement ok
+# select mytbl.column0 from '{DATA_DIR}/csv/test/dateformat.csv'mytbl;
+
+# TODO: unsupported feature
+# statement ok
+# select mytbl.mycol from '{DATA_DIR}/csv/test/dateformat.csv' mytbl(mycol);
+
+# TODO: unsupported feature
+# statement ok
+# select blob.ids from '{DATA_DIR}/parquet-testing/blob.parquet'
+
+# TODO: unsupported feature
+# statement ok
+# select example_n.id from '{DATA_DIR}/json/example_n.ndjson'

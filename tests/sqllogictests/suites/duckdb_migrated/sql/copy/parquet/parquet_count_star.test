@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM '{DATA_DIR}/parquet-testing/out_of_range_stats.parquet'
+# ----
+# 1
+
+# TODO: unknown function
+# query I
+# select COUNT(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet')
+# ----
+# 3

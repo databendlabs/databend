@@ -1,0 +1,32 @@
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_bigint.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_date.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_int.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_smallint.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_timestamp.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_timestamp_ms.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_tinyint.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_ubigint.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_uinteger.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_usmallint.parquet';
+
+statement error
+SELECT * FROM '{DATA_DIR}/parquet-testing/broken/broken_utinyint.parquet';

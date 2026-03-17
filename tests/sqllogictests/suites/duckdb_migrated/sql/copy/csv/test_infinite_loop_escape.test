@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS trigger_loop
+
+statement ok
+CREATE TABLE trigger_loop (a VARCHAR);
+
+statement ok
+INSERT INTO trigger_loop VALUES ('"');
+
+# This command used to trigger an infinite loop because it found the quote
+# but added an empty escape character, finding the same quote again forever.

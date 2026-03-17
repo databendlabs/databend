@@ -1,0 +1,3 @@
+# file is corrupt
+statement error
+SELECT type_param_constraints FROM '{DATA_DIR}/parquet-testing/bug4903.parquet' limit 10

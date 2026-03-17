@@ -1,0 +1,404 @@
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_small.csv', delim = 'aa', header = False,  buffer_size = 8)
+# ----
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = 9)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = 9)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = 10)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = 10)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = 11)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = 11)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/ab_delim.csv', delim = 'ab', header = False, buffer_size = 12)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	b2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim.csv', delim = 'aa', header = False,  buffer_size = 12)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	ab2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1ab	2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = 13)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted_2.csv', delim = 'aa', header = False,  buffer_size = 13)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = 14)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted_2.csv', delim = 'aa', header = False,  buffer_size = 14)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = 15)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted_2.csv', delim = 'aa', header = False,  buffer_size = 15)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted.csv', delim = 'aa', header = False,  buffer_size = 16)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query II
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/aa_delim_quoted_2.csv', delim = 'aa', header = False,  buffer_size = 16)
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1	a2
+# 1	aa2
+# 1	2
+# 1	2
+# 1	2
+# 1	2
+# 1a	2
+# 1a	a2
+
+# TODO: unsupported feature
+# query IIII
+# select * FROM read_csv('{DATA_DIR}/csv/multidelimiter/many_bytes.csv', delim = '\|', header = False)
+# ----
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL
+# thisisaverysuberverylargestring	thisisaverysuberverylargestring	thisisaverysuberverylargestring	NULL

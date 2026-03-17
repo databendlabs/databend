@@ -1,0 +1,16 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# query I
+# COPY test FROM '{DATA_DIR}/csv/test/many_empty_lines.csv' (HEADER 0);
+# ----
+# 20000
+
+query I
+SELECT SUM(a) FROM test;
+----
+NULL

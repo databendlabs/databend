@@ -1,0 +1,36 @@
+# force parallelism of the queries
+# TODO: unknown function
+# query I
+# select * from read_csv_auto('{DATA_DIR}/csv/auto/test_single_column.csv')
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unknown function
+# query I
+# select * from read_csv_auto('{DATA_DIR}/csv/auto/test_single_column_rn.csv')
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unknown function
+# query II
+# select foo, count(1) cnt from read_csv_auto('{DATA_DIR}/csv/auto/test_multiple_columns.csv') group by foo order by cnt desc
+# ----
+# 1	102
+# 2	100
+# 3	98
+
+# TODO: unknown function
+# query II
+# select foo, count(1) cnt from read_csv_auto('{DATA_DIR}/csv/auto/test_multiple_columns_rn.csv') group by foo order by cnt desc
+# ----
+# 1	102
+# 2	100
+# 3	98

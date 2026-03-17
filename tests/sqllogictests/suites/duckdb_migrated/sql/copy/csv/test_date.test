@@ -1,0 +1,65 @@
+statement ok
+DROP TABLE IF EXISTS date_test
+
+statement ok
+CREATE TABLE date_test(d date);
+
+# TODO: unsupported feature
+# query I
+# COPY date_test FROM '{DATA_DIR}/csv/test/date.csv';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT cast(d as string) FROM date_test;
+# ----
+# 2019-06-05
+
+# TODO: unsupported feature
+# query TT
+# Select * from read_csv('{DATA_DIR}/csv/custom_date.csv', header=true, dateformat='%m/%d/%Y, %-I:%-M %p', types = ['BIGINT', 'DATE'] );
+# ----
+# 123	2023-01-02
+# 124	2023-12-02
+
+# TODO: unsupported feature
+# query TT
+# Select * from read_csv('{DATA_DIR}/csv/custom_date.csv', header=true, dateformat='%m/%d/%Y, %-I:%-M %p');
+# ----
+# 123	2023-01-02
+# 124	2023-12-02
+
+# TODO: unsupported feature
+# query TT
+# Select * from read_csv('{DATA_DIR}/csv/custom_date.csv', header=true, timestampformat='%m/%d/%Y, %-I:%-M %p', types = ['BIGINT', 'TIMESTAMP'] );
+# ----
+# 123	2023-01-02 12:33:00
+# 124	2023-12-02 11:57:00
+
+# TODO: unsupported feature
+# query TT
+# Select * from read_csv('{DATA_DIR}/csv/custom_date.csv', header=true, timestampformat='%m/%d/%Y, %-I:%-M %p');
+# ----
+# 123	2023-01-02 12:33:00
+# 124	2023-12-02 11:57:00
+
+# Check that less than two numbers and @ separator does not become a date
+
+# TODO: unsupported feature
+# query III
+# select typeof(#1),typeof(#2),typeof(#3) FROM '{DATA_DIR}/csv/versions.csv' limit 1
+# ----
+# VARCHAR	DATE	VARCHAR
+
+# TODO: unsupported feature
+# query I
+# select typeof(#1) FROM read_csv('{DATA_DIR}/csv/dates_special_format.csv', dateformat = '%b %-d, %Y', columns = {'Date': 'DATE'}) limit 1;
+# ----
+# DATE
+
+# TODO: unsupported feature
+# query I
+# select typeof(#1) FROM read_csv('{DATA_DIR}/csv/dates_special_format.csv', dateformat = '%b %-d, %Y') limit 1;
+# ----
+# DATE

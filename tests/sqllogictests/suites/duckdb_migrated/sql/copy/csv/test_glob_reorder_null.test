@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+DROP TABLE IF EXISTS t2
+
+statement ok
+create table t1 as select 1 as a,1 as b from range(0, 3);
+
+# Create t2 on a different order
+
+statement ok
+create table t2 (b integer, a integer);
+
+# Make t2 mostly null
+
+statement ok
+insert into t2 select NULL as b,NULL as a from range(0, 30000);
+
+statement ok
+insert into t2 values (3,4);
+
+# Create CSV files

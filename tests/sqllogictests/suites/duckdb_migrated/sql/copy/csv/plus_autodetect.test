@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS phone_numbers
+
+# TODO: unknown function
+# statement ok
+# CREATE TABLE phone_numbers AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/phonenumbers.csv')
+
+# TODO: unsupported feature
+# query I
+# SELECT phone FROM phone_numbers;
+# ----
+# +318855443322
+# +552244331122
+# +12233445567
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(phone) FROM phone_numbers LIMIT 1;
+# ----
+# VARCHAR

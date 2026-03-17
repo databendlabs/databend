@@ -1,0 +1,36 @@
+# original names
+# TODO: unknown function
+# query I
+# select name from parquet_schema( '{DATA_DIR}/parquet-testing/bug13053.parquet') offset 1;
+# ----
+# column
+# COLUMN
+# Column
+
+# renamed names
+
+# TODO: unsupported feature
+# query I
+# SELECT column_name FROM (DESCRIBE FROM '{DATA_DIR}/parquet-testing/bug13053.parquet')
+# ----
+# column
+# COLUMN_1
+# Column_2
+
+# case where _1 is already a column, maybe bit ugly but fine and consistent with CSV reader
+
+# TODO: unknown function
+# query I
+# select name from parquet_schema( '{DATA_DIR}/parquet-testing/bug13053-2.parquet') offset 1;
+# ----
+# column
+# column_1
+# column
+
+# TODO: unsupported feature
+# query I
+# SELECT column_name FROM (DESCRIBE FROM '{DATA_DIR}/parquet-testing/bug13053-2.parquet')
+# ----
+# column
+# column_1
+# column_1_1

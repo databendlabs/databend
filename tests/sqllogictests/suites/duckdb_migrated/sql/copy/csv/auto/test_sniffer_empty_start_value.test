@@ -1,0 +1,8 @@
+# TODO: unknown function
+# query III
+# select * from read_csv('{DATA_DIR}/csv/empty_space_start_value.csv')
+# ----
+# 1968	86	Greetings
+# 1970	17	Bloody Mama
+# 1970	73	Hi, Mom!
+# 1971	40	Born to Win

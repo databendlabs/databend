@@ -1,0 +1,121 @@
+statement ok
+DROP TABLE IF EXISTS unencrypted.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS v_0_10_2.tbl
+
+# We need httpfs to do encrypted writes
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(0, 10) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE v_0_10_2.tbl AS SELECT * FROM range(0, 10) t(i);
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM unencrypted.tbl
+# ----
+# 45
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM v_0_10_2.tbl
+# ----
+# 45
+
+# TODO: unsupported feature
+# statement ok
+# DETACH unencrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH v_0_10_2
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE unencrypted TO encrypted;
+
+# copy from version 0.10.2 to an encrypted db
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE v_0_10_2 TO encrypted_v2;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH unencrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH v_0_10_2
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted_v2
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM encrypted.tbl
+# ----
+# 45
+
+# check if we can read the encrypted data from the original v0.10.2 db
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM encrypted_v2.tbl
+# ----
+# 45
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE encrypted TO unencrypted_new;
+
+# copy encrypted db to unencrypted database with v1.2.0 storage version
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE encrypted_v2 TO unencrypted_v_1_2_0;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH unencrypted_new
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted
+
+# TODO: unsupported feature
+# statement ok
+# DETACH encrypted_v2
+
+# TODO: unknown function
+# statement ok
+# DETACH unencrypted_v_1_2_0
+
+# we should not be able to open an unencrypted db with an encryption key
+
+# TODO: unsupported feature
+# query I
+# SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='unencrypted_v_1_2_0'
+# ----
+# v1.2.0+
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM unencrypted_v_1_2_0.tbl;
+# ----
+# 45
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM unencrypted_new.tbl;
+# ----
+# 45

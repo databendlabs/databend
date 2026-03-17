@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# query IIIIII
+# describe from '{DATA_DIR}/csv/null_mismatch.csv'
+# ----
+# id	BIGINT	YES	NULL	NULL	NULL
+# name	VARCHAR	YES	NULL	NULL	NULL
+# url	VARCHAR	YES	NULL	NULL	NULL
+# type	VARCHAR	YES	NULL	NULL	NULL
+# PartOfPlaceId	BIGINT	YES	NULL	NULL	NULL

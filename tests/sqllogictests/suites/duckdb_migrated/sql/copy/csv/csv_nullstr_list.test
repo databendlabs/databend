@@ -1,0 +1,147 @@
+statement ok
+DROP TABLE IF EXISTS data
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null']);
+# ----
+# Pedro	31	1.73
+# Mark	NULL	NULL
+# Thijs	26	NULL
+
+# Test Quoted
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null']);
+# ----
+# Pedro	31	1.73
+# Mark	NULL	NULL
+# Thijs	26	NULL
+
+#allow_quoted_nulls = 0
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], allow_quoted_nulls = false);
+# ----
+# Pedro	31	1.73
+# Mark	null	(empty)
+# Thijs	26	none
+
+# Test nullstr = []
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = []);
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['a', NULL]);
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = NULL);
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = [42]);
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['',',','null'], allow_quoted_nulls = false);
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='\', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','"','null'], allow_quoted_nulls = false);
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='\',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','\','null'], allow_quoted_nulls = false);
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null','','none','null'], allow_quoted_nulls = false);
+# ----
+# Pedro	31	1.73
+# Mark	null	(empty)
+# Thijs	26	none
+
+# Test with force_not_null
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
+# ----
+# Pedro	31	1.73
+# Mark	NULL	(empty)
+# Thijs	26	(empty)
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['age','height']);
+# ----
+# Pedro	31	1.73
+# Mark	(empty)	(empty)
+# Thijs	26	(empty)
+
+# Test Quoted
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"', skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['height']);
+# ----
+# Pedro	31	1.73
+# Mark	NULL	(empty)
+# Thijs	26	(empty)
+
+# TODO: unsupported feature
+# query III
+# select * FROM read_csv('{DATA_DIR}/csv/null/multiple_quoted_nulls.csv', auto_detect=true, delim=',', quote='"', escape='"',  skip=0, header=true, nullstr = ['','none','null'], force_not_null = ['age','height'], ALL_VARCHAR = 1);
+# ----
+# Pedro	31	1.73
+# Mark	(empty)	(empty)
+# Thijs	26	(empty)
+
+# Test with projection push-down
+
+# TODO: unsupported feature
+# query I
+# select height FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', delim=',', quote='"', escape='"',  skip=0, header=true, nullstr = ['','none','null']);
+# ----
+# 1.73
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select age FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv',  delim=',', quote='"', escape='"',  skip=0, header=true,  nullstr = ['','none','null']);
+# ----
+# 31
+# NULL
+# 26
+
+# Test force_not_null fails for made-up column
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['','none','null'], force_not_null = ['dont_exist']);
+
+statement ok
+CREATE TABLE data (a VARCHAR, b VARCHAR, c VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# COPY data FROM '{DATA_DIR}/csv/null/multiple_nulls.csv' (nullstr  ['','none','null'], HEADER 1);
+
+statement error
+COPY data FROM '{DATA_DIR}/csv/null/multiple_nulls.csv' (nullstr NULL, HEADER 1);
+
+statement error
+COPY data FROM '{DATA_DIR}/csv/null/multiple_nulls.csv' (nullstr [NULL], HEADER 1);
+
+statement error
+COPY data FROM '{DATA_DIR}/csv/null/multiple_nulls.csv' (nullstr [42], HEADER 1);
+
+# TODO: unsupported feature
+# query III
+# select * FROM data
+# ----
+# Pedro	31	1.73
+# Mark	NULL	NULL
+# Thijs	26	NULL
+
+statement error
+COPY data TO '{TEMP_DIR}/multiple_nulls.csv' (nullstr ['a', 'b']);

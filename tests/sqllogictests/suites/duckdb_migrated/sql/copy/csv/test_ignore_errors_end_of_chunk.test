@@ -1,0 +1,51 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# Try without sniffing
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0, AUTO_DETECT 0)
+
+statement error
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0, AUTO_DETECT 0)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers limit 1
+# ----
+# 1	1
+
+query I
+select count(*) from integers;
+----
+0
+
+statement ok
+DROP TABLE integers;
+
+
+# Try with sniffing
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
+
+statement error
+COPY integers FROM '{DATA_DIR}/csv/test/error_too_little_end_of_filled_chunk.csv' (HEADER, NULL_PADDING 0)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers limit 1
+# ----
+# 1	1
+
+query I
+select count(*) from integers;
+----
+0
