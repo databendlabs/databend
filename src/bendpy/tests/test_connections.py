@@ -50,6 +50,13 @@ class MockSessionContext:
         sql = f"create view {name} as select * from '{file_path}' (file_format => 'csv'{pattern_clause}{conn_clause})"
         self.sql(sql)
 
+    def register_tsv(self, name, path, pattern=None, connection=None):
+        file_path = path if connection else (f"fs://{path}" if path.startswith("/") else path)
+        pattern_clause = f", pattern => '{pattern}'" if pattern else ""
+        conn_clause = f", connection => '{connection}'" if connection else ""
+        sql = f"create view {name} as select * from '{file_path}' (file_format => 'tsv'{pattern_clause}{conn_clause})"
+        self.sql(sql)
+
     def create_azblob_connection(self, name, endpoint_url, account_name, account_key):
         sql = f"CREATE OR REPLACE CONNECTION {name} STORAGE_TYPE = 'AZBLOB' endpoint_url = '{endpoint_url}' account_name = '{account_name}' account_key = '{account_key}'"
         self.sql(sql)
@@ -254,6 +261,15 @@ class TestRegisterWithConnection:
             expected_sql = "create view users as select * from 's3://bucket/users.csv' (file_format => 'csv', connection => 'my_s3')"
             mock_sql.assert_called_once_with(expected_sql)
 
+    def test_register_tsv_with_connection(self):
+        with unittest.mock.patch.object(self.ctx, "sql") as mock_sql:
+            mock_sql.return_value.collect.return_value = None
+
+            self.ctx.register_tsv("users", "s3://bucket/users.tsv", connection="my_s3")
+
+            expected_sql = "create view users as select * from 's3://bucket/users.tsv' (file_format => 'tsv', connection => 'my_s3')"
+            mock_sql.assert_called_once_with(expected_sql)
+
     def test_register_parquet_legacy_mode(self):
         with unittest.mock.patch.object(self.ctx, "sql") as mock_sql:
             mock_sql.return_value.collect.return_value = None
@@ -281,6 +297,17 @@ class TestRegisterWithConnection:
             )
 
             expected_sql = "create view logs as select * from 's3://bucket/logs/' (file_format => 'csv', pattern => '*.csv', connection => 'my_s3')"
+            mock_sql.assert_called_once_with(expected_sql)
+
+    def test_register_tsv_with_pattern_and_connection(self):
+        with unittest.mock.patch.object(self.ctx, "sql") as mock_sql:
+            mock_sql.return_value.collect.return_value = None
+
+            self.ctx.register_tsv(
+                "logs", "s3://bucket/logs/", pattern="*.tsv", connection="my_s3"
+            )
+
+            expected_sql = "create view logs as select * from 's3://bucket/logs/' (file_format => 'tsv', pattern => '*.tsv', connection => 'my_s3')"
             mock_sql.assert_called_once_with(expected_sql)
 
 
