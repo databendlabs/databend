@@ -1,0 +1,90 @@
+# This tests the vector cross product
+# TODO: unsupported feature
+# query I rowsort
+# SELECT array_cross_product(l, r) FROM (VALUES
+# 	([-1, -2, 3]::DOUBLE[3], [4, 0, -8]::DOUBLE[3]),
+# 	([1,2,3]::DOUBLE[3], [1,5,7]::DOUBLE[3]),
+# 	([1,2,3]::DOUBLE[3], NULL::DOUBLE[3]),
+# 	(NULL::DOUBLE[3], [1,5,7]::DOUBLE[3]),
+# 	(NULL::DOUBLE[3], NULL::DOUBLE[3])
+# ) as t(l,r);
+# ----
+# NULL
+# NULL
+# NULL
+# [-1.0, -4.0, 3.0]
+# [16.0, 4.0, 8.0]
+
+
+# Constant case
+
+# TODO: unknown function
+# query I
+# SELECT array_cross_product([1,2,3]::DOUBLE[3], [1,5,7]::DOUBLE[3]);
+# ----
+# [-1.0, -4.0, 3.0]
+
+# Constant Null case
+
+# TODO: unknown function
+# query I
+# SELECT array_cross_product([1,2,3]::DOUBLE[3], NULL::DOUBLE[3]);
+# ----
+# NULL
+
+statement error
+SELECT array_cross_product([1,NULL,3]::DOUBLE[3], [1,5,7]::DOUBLE[3]);
+
+statement error
+SELECT array_cross_product([1,5,7]::DOUBLE[3], [1,NULL,3]::DOUBLE[3]);
+
+# TODO: unknown function
+# query I
+# SELECT array_cross_product(array_value(1,2,3), array_value(1.0,5.0,7.0)::DOUBLE[3]);
+# ----
+# [-1.0, -4.0, 3.0]
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT array_cross_product(l, r) FROM (VALUES
+# 	([-1, -2, 3]::FLOAT[3], [4, 0, -8]::FLOAT[3]),
+# 	([1,2,3]::FLOAT[3], [1,5,7]::FLOAT[3]),
+# 	([1,2,3]::FLOAT[3], NULL::FLOAT[3]),
+# 	(NULL::FLOAT[3], [1,5,7]::FLOAT[3]),
+# 	(NULL::FLOAT[3], NULL::FLOAT[3])
+# ) as t(l,r);
+# ----
+# NULL
+# NULL
+# NULL
+# [-1.0, -4.0, 3.0]
+# [16.0, 4.0, 8.0]
+
+
+# Constant case
+
+# TODO: unknown function
+# query I
+# SELECT array_cross_product([1,2,3]::FLOAT[3], [1,5,7]::FLOAT[3]);
+# ----
+# [-1.0, -4.0, 3.0]
+
+# Constant Null case
+
+# TODO: unknown function
+# query I
+# SELECT array_cross_product([1,2,3]::FLOAT[3], NULL::FLOAT[3]);
+# ----
+# NULL
+
+statement error
+SELECT array_cross_product([1,NULL,3]::FLOAT[3], [1,5,7]::FLOAT[3]);
+
+statement error
+SELECT array_cross_product([1,5,7]::FLOAT[3], [1,NULL,3]::FLOAT[3]);
+
+# TODO: unknown function
+# query I
+# SELECT array_cross_product(array_value(1,2,3), array_value(1.0,5.0,7.0)::FLOAT[3]);
+# ----
+# [-1.0, -4.0, 3.0]

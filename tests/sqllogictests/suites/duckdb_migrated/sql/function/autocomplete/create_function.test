@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MA') LIMIT 1;
+# ----
+# MACRO 	7
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE F') LIMIT 1;
+# ----
+# FUNCTION 	7
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name(a) A') LIMIT 1;
+# ----
+# AS 	21
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name(a) AS a+1, (b) A') LIMIT 1;
+# ----
+# AS 	33
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name (a) AS TA') LIMIT 1;
+# ----
+# TABLE 	25
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MACRO name (a) AS TABLE SEL') LIMIT 1;
+# ----
+# SELECT 	31

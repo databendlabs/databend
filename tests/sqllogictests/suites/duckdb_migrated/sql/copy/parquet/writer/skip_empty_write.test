@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS empty_tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE empty_tbl(i INT, j VARCHAR);
+
+statement ok
+CREATE TABLE tbl AS FROM range(0, 10000) t(i) UNION ALL SELECT 100000
+
+# basic usage

@@ -1,0 +1,4 @@
+query II
+select * from '{DATA_DIR}/parquet-testing/timetz_4byte_stats.parquet' order by 1;
+----
+00:00:00+00	00:00:00+00

@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS integers2
+
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+DROP TABLE IF EXISTS integers2
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE OR REPLACE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE VIEW integers2 AS SELECT 42
+
+# TODO: result differs
+# statement error
+# CREATE OR REPLACE TABLE integers2(i INTEGER)
+
+statement ok
+CREATE TABLE IF NOT EXISTS integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 2);
+
+statement error
+CREATE OR REPLACE TABLE IF NOT EXISTS integers(i INTEGER)

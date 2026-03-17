@@ -1,0 +1,5 @@
+query I
+with cte as (select * from read_parquet('does/not/exist/file.parquet'))
+select 42
+----
+42

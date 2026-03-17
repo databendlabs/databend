@@ -1,0 +1,74 @@
+statement ok
+DROP TABLE IF EXISTS list_of_lists
+
+statement ok
+DROP TABLE IF EXISTS list_of_lists_of_lists_of_lists
+
+statement ok
+DROP TABLE IF EXISTS list_of_lists_simple
+
+statement ok
+DROP TABLE IF EXISTS list_of_struct_of_structs
+
+statement ok
+DROP TABLE IF EXISTS list_of_structs
+
+statement ok
+DROP TABLE IF EXISTS struct_of_lists
+
+# struct of lists
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE struct_of_lists AS SELECT * FROM (VALUES
+# 	({'a': [1, 2, 3], 'b': ['hello', 'world']}),
+# 	({'a': [4, NULL, 5], 'b': ['duckduck', 'goose']}),
+# 	({'a': NULL, 'b': ['longlonglonglonglonglong', NULL, NULL]}),
+# 	(NULL),
+#     ({'a': [], 'b': []}),
+#     ({'a': [1, 2, 3], 'b': NULL})
+# ) tbl(i);
+
+statement ok
+CREATE TABLE list_of_structs AS SELECT * FROM (VALUES
+	([{'a': 1, 'b': 100}, NULL, {'a': 2, 'b': 101}]),
+	(NULL),
+	([]),
+	([{'a': NULL, 'b': 102}, {'a': 3, 'b': NULL}, NULL])
+) tbl(i);
+
+statement ok
+CREATE TABLE list_of_struct_of_structs AS SELECT * FROM (VALUES
+	([{'a': {'x': 33}, 'b': {'y': 42, 'z': 99}}, NULL, {'a': {'x': NULL}, 'b': {'y': 43, 'z': 100}}]),
+	(NULL),
+	([]),
+	([{'a': NULL, 'b': {'y': NULL, 'z': 101}}, {'a': {'x': 34}, 'b': {'y': 43, 'z': NULL}}]),
+	([{'a': NULL, 'b': NULL}])
+) tbl(i);
+
+statement ok
+CREATE TABLE list_of_lists_simple AS SELECT * FROM (VALUES
+	([[1, 2, 3], [4, 5]]),
+	([[6, 7]]),
+	([[8, 9, 10], [11, 12]])
+) tbl(i);
+
+statement ok
+CREATE TABLE list_of_lists AS SELECT * FROM (VALUES
+	([[1, 2, 3], [4, 5], [], [6, 7]]),
+	([[8, NULL, 10], NULL, []]),
+	([]),
+	(NULL),
+	([[11, 12, 13, 14], [], NULL, [], [], [15], [NULL, NULL, NULL]])
+) tbl(i);
+
+statement ok
+CREATE TABLE list_of_lists_of_lists_of_lists AS
+   SELECT [LIST(i)] i FROM list_of_lists
+   UNION ALL
+   SELECT NULL
+   UNION ALL
+   SELECT [NULL]
+   UNION ALL
+   SELECT [[], NULL, [], []]
+   UNION ALL
+   SELECT [[[NULL, NULL, [NULL]], NULL, [[], [7, 8, 9], [NULL], NULL, []]], [], [NULL]]

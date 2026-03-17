@@ -1,0 +1,21 @@
+statement ok
+DROP TABLE IF EXISTS sensor_data
+
+statement ok
+CREATE TABLE sensor_data(ts TIMESTAMP, value INT);
+
+statement ok
+INSERT INTO sensor_data VALUES
+   (TIMESTAMP '2000-01-01 01:02:03', 42),
+   (TIMESTAMP '2000-02-01 01:02:03', 100),
+   (TIMESTAMP '2000-03-01 12:11:10', 1000)
+;
+
+statement ok
+DELETE FROM sensor_data;
+
+statement ok
+INSERT INTO sensor_data VALUES
+   (TIMESTAMP '2000-01-01 02:02:03', 62),
+   (TIMESTAMP '2000-03-01 13:11:10', 50)
+;

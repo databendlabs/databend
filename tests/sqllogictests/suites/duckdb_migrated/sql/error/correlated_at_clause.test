@@ -1,0 +1,10 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t (i VARCHAR)
+
+# See https://github.com/duckdb/duckdb/issues/16826
+
+statement error
+FROM t, t AT (VERSION => i)

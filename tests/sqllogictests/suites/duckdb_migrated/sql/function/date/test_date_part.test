@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# -- structural conversion skipped for test/sql/function/date/test_date_part.test: SKIP: foreach expansion exceeds 20 iterations

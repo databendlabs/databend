@@ -1,0 +1,150 @@
+# CREATE
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CR') LIMIT 1;
+# ----
+# CREATE 	0
+
+# match case
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('cr') LIMIT 1;
+# ----
+# create 	0
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TA') LIMIT 1;
+# ----
+# TABLE 	7
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE T') LIMIT 1;
+# ----
+# TABLE 	7
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE OR RE') LIMIT 1;
+# ----
+# REPLACE 	10
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create ta') LIMIT 1;
+# ----
+# table 	7
+
+# suggest a type
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTE') LIMIT 1;
+# ----
+# INTEGER	19
+
+# suggest a type in a list
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER, j INTE') LIMIT 1;
+# ----
+# INTEGER	30
+
+# suggest a constraint
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER PRI') LIMIT 1;
+# ----
+# PRIMARY 	27
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER PRIMARY KE') LIMIT 1;
+# ----
+# KEY 	35
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER UNIQ') LIMIT 1;
+# ----
+# UNIQUE 	27
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER UNIQUE NO') LIMIT 1;
+# ----
+# NOT 	34
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER UNIQUE NOT N') LIMIT 1;
+# ----
+# NULL 	38
+
+# top-level constraints
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('create table tbl(i INTEGER, PRI') LIMIT 1;
+# ----
+# PRIMARY 	28
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA abcdefgh;
+
+# suggest a schema name
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE abcd') LIMIT 1;
+# ----
+# abcdefgh.	13
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE abcdefgh.') LIMIT 1;
+# ----
+# .	21
+
+# we suggest the original schema
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE ABCD') LIMIT 1;
+# ----
+# abcdefgh.	13
+
+# what if the schema is a keyword?
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "SCHEMA";
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE SC') LIMIT 1;
+# ----
+# "SCHEMA".	13
+
+# suggest a catalog
+
+statement ok
+ATTACH ':memory:' AS attached_in_memory;
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE attac') LIMIT 1;
+----
+attached_in_memory.	13
+
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TABLE attached_in_memory.a') LIMIT 1;
+----
+abcdefgh.	32
+
+statement error
+FROM sql_auto_complete(NULL);

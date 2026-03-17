@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 100) tbl(i)
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM integers LIMIT 10
+----
+# TODO: special result marker
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM integers LIMIT 10 OFFSET 5
+----
+# TODO: special result marker
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM integers LIMIT 10%
+----
+# TODO: special result marker

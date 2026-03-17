@@ -1,0 +1,12 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl2
+
+# partitions
+statement ok
+CREATE TABLE tbl AS SELECT i//1000 AS partition, i FROM range(0, 10000) t(i)
+
+statement ok
+CREATE TABLE tbl2 AS SELECT (date '2000-01-01' + interval (i//2000) years)::DATE AS part1, i%2 AS part2, i FROM range(0, 10000) t(i)

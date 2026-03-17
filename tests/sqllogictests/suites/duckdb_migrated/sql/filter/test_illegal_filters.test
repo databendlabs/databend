@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (2, 12)
+
+# aggregates in WHERE are not allowed
+
+statement error
+SELECT * FROM integers WHERE SUM(a)>10

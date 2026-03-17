@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS copy_test
+
+statement ok
+CREATE TABLE copy_test(a INT, b INT);
+
+# if we copy from both files, we run into a schema mismatch in the files themselves (name differences)
+
+statement ok
+DROP TABLE copy_test
+
+# test type promotion
+
+statement ok
+CREATE TABLE copy_test(a INT, b INT);
+
+# if we copy from both files, we run into a schema mismatch in the files themselves (name differences)
+
+statement ok
+DROP TABLE copy_test
+
+# test type promotion

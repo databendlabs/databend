@@ -1,0 +1,129 @@
+# codec uncompressed
+statement ok
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/UNCOMPRESSED.parquet' (FORMAT 'parquet', CODEC 'UNCOMPRESSED');
+
+query II
+SELECT * FROM parquet_scan('{TEMP_DIR}/UNCOMPRESSED.parquet');
+----
+42	hello
+
+statement ok
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-UNCOMPRESSED.parquet' (FORMAT 'parquet', CODEC 'UNCOMPRESSED', ROW_GROUP_SIZE 10);
+
+statement ok
+FROM "{TEMP_DIR}/userdata-UNCOMPRESSED.parquet";
+
+
+# codec uncompressed
+
+statement ok
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/SNAPPY.parquet' (FORMAT 'parquet', CODEC 'SNAPPY');
+
+query II
+SELECT * FROM parquet_scan('{TEMP_DIR}/SNAPPY.parquet');
+----
+42	hello
+
+statement ok
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-SNAPPY.parquet' (FORMAT 'parquet', CODEC 'SNAPPY', ROW_GROUP_SIZE 10);
+
+statement ok
+FROM "{TEMP_DIR}/userdata-SNAPPY.parquet";
+
+
+# codec uncompressed
+
+statement ok
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/GZIP.parquet' (FORMAT 'parquet', CODEC 'GZIP');
+
+query II
+SELECT * FROM parquet_scan('{TEMP_DIR}/GZIP.parquet');
+----
+42	hello
+
+statement ok
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-GZIP.parquet' (FORMAT 'parquet', CODEC 'GZIP', ROW_GROUP_SIZE 10);
+
+statement ok
+FROM "{TEMP_DIR}/userdata-GZIP.parquet";
+
+
+# codec uncompressed
+
+statement ok
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/ZSTD.parquet' (FORMAT 'parquet', CODEC 'ZSTD');
+
+query II
+SELECT * FROM parquet_scan('{TEMP_DIR}/ZSTD.parquet');
+----
+42	hello
+
+statement ok
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-ZSTD.parquet' (FORMAT 'parquet', CODEC 'ZSTD', ROW_GROUP_SIZE 10);
+
+statement ok
+FROM "{TEMP_DIR}/userdata-ZSTD.parquet";
+
+
+# codec uncompressed
+
+statement ok
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/LZ4.parquet' (FORMAT 'parquet', CODEC 'LZ4');
+
+query II
+SELECT * FROM parquet_scan('{TEMP_DIR}/LZ4.parquet');
+----
+42	hello
+
+statement ok
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-LZ4.parquet' (FORMAT 'parquet', CODEC 'LZ4', ROW_GROUP_SIZE 10);
+
+statement ok
+FROM "{TEMP_DIR}/userdata-LZ4.parquet";
+
+
+# codec uncompressed
+
+statement ok
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/LZ4_RAW.parquet' (FORMAT 'parquet', CODEC 'LZ4_RAW');
+
+query II
+SELECT * FROM parquet_scan('{TEMP_DIR}/LZ4_RAW.parquet');
+----
+42	hello
+
+statement ok
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-LZ4_RAW.parquet' (FORMAT 'parquet', CODEC 'LZ4_RAW', ROW_GROUP_SIZE 10);
+
+statement ok
+FROM "{TEMP_DIR}/userdata-LZ4_RAW.parquet";
+
+
+# codec uncompressed
+
+statement ok
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/BROTLI.parquet' (FORMAT 'parquet', CODEC 'BROTLI');
+
+query II
+SELECT * FROM parquet_scan('{TEMP_DIR}/BROTLI.parquet');
+----
+42	hello
+
+statement ok
+COPY (FROM "{DATA_DIR}/parquet-testing/userdata1.parquet") TO '{TEMP_DIR}/userdata-BROTLI.parquet' (FORMAT 'parquet', CODEC 'BROTLI', ROW_GROUP_SIZE 10);
+
+statement ok
+FROM "{TEMP_DIR}/userdata-BROTLI.parquet";
+
+
+
+# unsupported codec
+
+statement error
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 'BLABLABLA');
+
+statement error
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC);
+
+statement error
+COPY (SELECT 42, 'hello') TO '{TEMP_DIR}/gzip.parquet' (FORMAT 'parquet', CODEC 3);

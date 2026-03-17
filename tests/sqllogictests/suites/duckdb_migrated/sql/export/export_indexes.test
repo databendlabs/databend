@@ -1,0 +1,42 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+BEGIN TRANSACTION
+
+# scalar macro
+
+statement ok
+CREATE MACRO elaborate_macro(x, y := 7) AS x + y;
+
+statement ok
+CREATE TABLE tbl (x integer, y varchar);
+
+# Index that depends on the 'elaborate_macro' macro function
+
+statement ok
+CREATE UNIQUE INDEX my_index on tbl (elaborate_macro(tbl.x));
+
+query I
+select index_name from duckdb_indexes();
+----
+my_index
+
+statement ok
+ROLLBACK
+
+query I
+select index_name from duckdb_indexes();
+----
+my_index
+
+query T
+SELECT elaborate_macro(28, y := 5)
+----
+33
+
+statement ok
+insert into tbl VALUES (10, 'hello');
+
+statement error
+insert into tbl VALUES (10, 'world');

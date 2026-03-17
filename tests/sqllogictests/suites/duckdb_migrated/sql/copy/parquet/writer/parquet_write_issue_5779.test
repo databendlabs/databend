@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS empty_list_nested
+
+statement ok
+DROP TABLE IF EXISTS empty_lists
+
+statement ok
+DROP TABLE IF EXISTS empty_lists_varchar
+
+statement ok
+CREATE TABLE empty_lists(i INTEGER[]);
+
+statement ok
+INSERT INTO empty_lists SELECT [] FROM range(0, 10) UNION ALL SELECT [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+statement ok
+CREATE TABLE empty_lists_varchar(i VARCHAR[]);
+
+statement ok
+INSERT INTO empty_lists_varchar SELECT [] FROM range(0, 10) UNION ALL SELECT ['hello', 'world', 'this', 'is', 'a', 'varchar', 'list']
+
+statement ok
+CREATE TABLE empty_list_nested(i INT[][]);
+
+statement ok
+INSERT INTO empty_list_nested SELECT [] FROM range(0, 10) UNION ALL SELECT [[1, 2, 3], [4, 5], [6, 7, 8]]

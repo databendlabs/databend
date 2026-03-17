@@ -1,0 +1,38 @@
+statement ok
+DROP TABLE IF EXISTS a
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+create table a (
+	u UNION(
+		"member name 1" VARCHAR,
+		"member name 2" BOOL
+	)
+);
+
+statement ok
+insert into a values (
+	union_value("member name 1" := 'hello')
+);
+
+query I
+select * from a
+----
+hello
+
+# now export the db
+
+statement ok
+ROLLBACK
+
+query I
+select * from a
+----
+hello
+
+query I
+select union_tag(COLUMNS(*)) from a;
+----
+member name 1

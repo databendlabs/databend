@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# -- structural conversion skipped for test/sql/copy/parquet/parquet_stats.test: SKIP: foreach expansion exceeds 20 iterations

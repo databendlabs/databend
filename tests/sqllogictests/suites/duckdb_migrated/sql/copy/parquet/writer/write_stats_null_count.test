@@ -1,0 +1,6 @@
+statement ok
+DROP TABLE IF EXISTS structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'a': NULL, 'b': 'hello'} i UNION ALL SELECT NULL UNION ALL SELECT {'a': 84, 'b': 'world'};

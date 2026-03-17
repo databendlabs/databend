@@ -1,0 +1,4 @@
+query I
+WITH my_list(value) AS MATERIALIZED (VALUES (1), (2), (3))
+    SELECT * FROM my_list LIMIT 0 OFFSET 1
+----

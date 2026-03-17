@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS a
+
+statement ok
+CREATE TABLE a AS SELECT * FROM range(0, 10000, 1) t1(i);
+
+query I
+SELECT COUNT(*) FROM a WHERE i >= 2000 AND i < 5000;
+----
+3000
+
+query I
+DELETE FROM a WHERE i >= 2000 AND i < 5000;
+----
+3000
+
+query I
+SELECT COUNT(*) FROM a;
+----
+7000

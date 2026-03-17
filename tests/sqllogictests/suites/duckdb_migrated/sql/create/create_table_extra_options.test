@@ -1,0 +1,149 @@
+statement ok
+DROP TABLE IF EXISTS iceberg_table
+
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement error
+CREATE TABLE integers(i INTEGER) PARTITIONED BY (i);
+
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (i);
+
+statement error
+CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+	'location' = 's3://amzn-s3-demo-bucket/iceberg-folder',
+	'table_type'='ICEBERG',
+    'format'='parquet'
+);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+	location = 's3://amzn-s3-demo-bucket/iceberg-folder',
+	table_type = 'ICEBERG',
+    format = 'parquet'
+);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+PARTITIONED BY (id)
+SORTED BY (date)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+SORTED BY (date)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+SORTED BY (date)
+PARTITIONED BY (id)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location='s3://amzn-s3-demo-bucket/iceberg-folder',
+  table_type='ICEBERG',
+  format='parquet'
+)
+SORTED BY (date)
+PARTITIONED BY (id);
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+Partitioned by (getvariable('location_var'));
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location=getvariable('location_var'),
+  table_type='ICEBERG',
+  format='parquet'
+)
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  'location'=getvariable('location_var'),
+  'table_type'='ICEBERG',
+  'format'='parquet'
+)
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  'location',
+  'table_type',
+  'format'
+)
+
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location,
+  table_type,
+  format
+)

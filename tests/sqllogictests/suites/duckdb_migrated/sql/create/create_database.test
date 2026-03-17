@@ -1,0 +1,10 @@
+# TODO: result differs
+# statement error
+# CREATE DATABASE mydb;
+
+statement error
+CREATE DATABASE mydb FROM './path';
+
+# TODO: result differs
+# statement error
+# DROP DATABASE mydb

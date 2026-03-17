@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+DROP TABLE IF EXISTS integers2
+
+statement ok
+CREATE TABLE integers AS SELECT range i FROM range(0, 200000);
+
+statement ok
+CREATE TABLE integers2 AS SELECT range i, range % 4 j FROM range(0, 200000);

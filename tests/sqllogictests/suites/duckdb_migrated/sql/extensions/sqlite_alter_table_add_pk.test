@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS sqlite_db.main
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE sqlite_db.main.tbl (i INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO sqlite_db.main.tbl VALUES (1);
+
+statement error
+ALTER TABLE sqlite_db.main.tbl ADD PRIMARY KEY (i);

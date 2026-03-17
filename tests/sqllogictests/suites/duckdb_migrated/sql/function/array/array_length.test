@@ -1,0 +1,57 @@
+statement ok
+DROP TABLE IF EXISTS arrays
+
+# Array length
+# TODO: unknown function
+# query I
+# SELECT length(array_value(1, 2, 3));
+# ----
+# 3
+
+# array length for NULL values
+
+statement ok
+create table arrays(a int[3]);
+
+statement ok
+insert into arrays values ([1, 2, 3]), ([4, 5, 6])
+
+query I
+select length(a) from arrays;
+----
+3
+3
+
+query I
+select length(NULL::int[3]) from arrays;
+----
+NULL
+NULL
+
+statement ok
+insert into arrays values (NULL);
+
+query I
+select length(a) from arrays;
+----
+3
+3
+NULL
+
+# Array length with dimension argument
+
+query I
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 1);
+----
+2
+
+query I
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 2);
+----
+3
+
+statement error
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 3);
+
+statement error
+SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 0);

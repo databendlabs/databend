@@ -1,0 +1,32 @@
+statement ok
+DROP TABLE IF EXISTS orders
+
+statement ok
+DROP TABLE IF EXISTS stg_orders
+
+statement ok
+create or replace table orders(ordered_at int);
+
+statement ok
+create or replace table stg_orders(ordered_at int);
+
+statement ok
+insert into orders values (1);
+
+statement ok
+insert into stg_orders values (1);
+
+# TODO: unsupported feature
+# query I
+# with
+# orders as (
+#     select * from main.stg_orders
+#     where ordered_at >= (select max(ordered_at) from main.orders)
+# ),
+# some_more_logic as (
+#     select *
+#     from orders
+# )
+# select * from some_more_logic;
+# ----
+# 1

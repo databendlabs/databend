@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TY') LIMIT 1;
+# ----
+# TYPE 	7
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TYPE my_type AS ENU') LIMIT 1;
+# ----
+# ENUM	23
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TYPE my_type AS TIME WITH TI') LIMIT 1;
+# ----
+# TIME 	33
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE TYPE my_type AS ROW(ts TIMESTAMP WITH TIME ZON') LIMIT 1;
+# ----
+# ZONE 	50

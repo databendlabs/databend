@@ -1,0 +1,6 @@
+# parquet registers options in overlapping slot(s)
+# TODO: unknown function
+# query I
+# SELECT current_setting('binary_as_string')::BOOLEAN;
+# ----
+# 0

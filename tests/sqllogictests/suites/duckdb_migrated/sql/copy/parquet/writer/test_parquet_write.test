@@ -1,0 +1,5 @@
+statement ok
+DROP TABLE IF EXISTS empty
+
+statement ok
+CREATE TABLE empty(i INTEGER)

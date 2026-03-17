@@ -1,0 +1,5 @@
+statement ok
+DROP TABLE IF EXISTS t0
+
+statement error
+CREATE TABLE t0 (i INT, CONSTRAINT any_constraint UNIQUE USING INDEX any_non_existed_index);

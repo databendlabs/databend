@@ -1,0 +1,24 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+begin transaction;
+
+# TODO: unknown function
+# statement ok
+# create table tbl as select val from ( select json_structure('{"a": 42}') val), range(0, 3);
+
+# TODO: unsupported feature
+# query I nosort result
+# select * from tbl;
+# ----
+
+# now export the db
+
+statement ok
+ROLLBACK
+
+# TODO: unsupported feature
+# query I nosort result
+# select * from tbl;
+# ----

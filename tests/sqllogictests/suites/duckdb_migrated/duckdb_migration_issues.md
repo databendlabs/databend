@@ -3213,3 +3213,59 @@
 | `vsize` | `unsupported feature` | 1 | sql/copy/csv/test_copy.test | `statement ok<br>CREATE TABLE vsize (a INTEGER, b INTEGER, c VARCHAR(10));` |  |
 | `web_page` | `unsupported feature` | 1 | sql/copy/csv/test_web_page.test | `statement ok<br>CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date date, wp_rec_end_date date, wp_creation_date_sk integer, wp_access_date_sk integer, wp_autogen_flag char(1), wp_customer_sk integer, wp_url varchar(100), wp_type char(50), wp_char_count integer, wp_link_count integer, wp_image_count integer, wp_max_ad_count integer, primary key (wp_web_page_sk));` |  |
 | `x27` | `unsupported feature` | 3 | sql/copy/csv/test_blob.test | `query T<br>SELECT b FROM blobs<br>----<br>\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0B\x0C\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F !\x22#$%&\x27()*+-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{	}~\x80\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8A\x8B\x8C\x8D\x8E\x8F\x90\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9A\x9B\x9C\x9D\x9E\x9F\xA0\xA1\xA2\xA3\xA4\xA5\xA6\xA7\xA8\xA9\xAA\xAB\xAC\xAD\xAE\xAF\xB0\xB1\xB2\xB3\xB4\xB5\xB6\xB7\xB8\xB9\xBA\xBB\xBC\xBD\xBE\xBF\xC0\xC1\xC2\xC3\xC4\xC5\xC6\xC7\xC8\xC9\xCA\xCB\xCC\xCD\xCE\xCF\xD0\xD1\xD2\xD3\xD4\xD5\xD6\xD7\xD8\xD9\xDA\xDB\xDC\xDD\xDE\xDF\xE0\xE1\xE2\xE3\xE4\xE5\xE6\xE7\xE8\xE9\xEA\xEB\xEC\xED\xEE\xEF\xF0\xF1\xF2\xF3\xF4\xF5\xF6\xF7\xF8\xF9\xFA\xFB\xFC\xFD\xFE` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T01:31:23.248923+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 300
+- Files with issues: 747
+- Unknown function TODOs: 685
+- Unsupported feature TODOs: 6038
+- Unknown function unique issues: 17
+- Unsupported feature unique issues: 16
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `array_cosine_distance` | 2 | sql/function/array/array_cosine_distance.test |  |
+| `array_cosine_similarity` | 1 | sql/function/array/array_cosine_similarity.test |  |
+| `array_cross_product` | 6 | sql/function/array/array_cross_product.test |  |
+| `array_distance` | 1 | sql/function/array/array_distance.test |  |
+| `array_inner_product` | 1 | sql/function/array/array_inner_product.test |  |
+| `base64` | 7 | sql/function/blob/base64.test |  |
+| `create_sort_key` | 8 | sql/function/blob/create_sort_key.test |  |
+| `encode` | 1 | sql/function/blob/encode.test |  |
+| `from_base64` | 6 | sql/function/blob/base64.test |  |
+| `json_structure` | 1 | sql/export/parquet/export_parquet_json.test |  |
+| `length` | 1 | sql/function/array/array_length.test |  |
+| `list_distinct` | 1 | sql/function/array/array_list_functions.test |  |
+| `list_slice` | 1 | sql/function/array/array_list_functions.test |  |
+| `map` | 3 | sql/function/array/array_and_map.test |  |
+| `time_bucket` | 37 | sql/function/date/test_time_bucket_date.test |  |
+| `to_base64` | 1 | sql/function/blob/base64.test |  |
+| `try` | 7 | sql/filter/test_try_filter_doesnt_mutate_columns.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `array_cross_product` | `unsupported feature` | 2 | sql/function/array/array_cross_product.test | `query I rowsort<br>SELECT array_cross_product(l, r) FROM (VALUES<br>	([-1, -2, 3]::FLOAT[3], [4, 0, -8]::FLOAT[3]),<br>	([1,2,3]::FLOAT[3], [1,5,7]::FLOAT[3]),<br>	([1,2,3]::FLOAT[3], NULL::FLOAT[3]),<br>	(NULL::FLOAT[3], [1,5,7]::FLOAT[3]),<br>	(NULL::FLOAT[3], NULL::FLOAT[3])<br>) as t(l,r);<br>----<br>NULL<br>NULL<br>NULL<br>[-1.0, -4.0, 3.0]<br>[16.0, 4.0, 8.0]` |  |
+| `array_slice` | `unsupported feature` | 2 | sql/function/blob/test_blob_array_slice.test | `query I<br>select array_slice(blob '\x00\x01\x02\x03\x04\x05', 0, 2)<br>----<br>\x00\x01` |  |
+| `collatz` | `unsupported feature` | 1 | sql/cte/materialized/test_nested_recursive_cte_materialized.test | `query III<br>WITH RECURSIVE collatz(x, t, steps) AS MATERIALIZED<br>(<br>  SELECT x, x, 0<br>  FROM   (WITH RECURSIVE n(t) AS (SELECT 1 UNION ALL SELECT t+1 FROM n WHERE t < 10) SELECT * FROM n) AS _(x)<br>    UNION ALL<br>  (SELECT x, CASE WHEN t%2 = 1 THEN t * 3 + p ELSE t / 2 END, steps + p<br>   FROM   collatz, (WITH RECURSIVE n(t) AS (SELECT 1 UNION ALL SELECT t+1 FROM n WHERE t < 1) SELECT * FROM n) AS _(p)<br>   WHERE  t <> 1)<br>)<br>SELECT * FROM collatz WHERE t = 1<br>ORDER BY x;<br>----<br>1	1	0<br>2	1	1<br>3	1	7<br>4	1	 2<br>5	1	 5<br>6	1	 8<br>7	1	16<br>8	1	 3<br>9	1	19<br>10	1	6` |  |
+| `cte` | `unsupported feature` | 2 | sql/cte/materialized/test_cte_materialized.test<br>sql/cte/test_cte.test | `query I<br>WITH RECURSIVE cte(d) AS (<br>		SELECT 1<br>	UNION ALL<br>		(WITH c(d) AS (SELECT * FROM cte)<br>			SELECT d + 1<br>			FROM c<br>			WHERE FALSE<br>		)<br>)<br>SELECT max(d) FROM cte;<br>----<br>1` |  |
+| `cte1` | `unsupported feature` | 1 | sql/cte/materialized/test_cte_in_cte_materialized.test | `query I<br>with cte1(xxx) as MATERIALIZED (with ncte(yyy) as MATERIALIZED (Select i as j from a) Select yyy from ncte) select xxx from cte1;<br>----<br>42` |  |
+| `decode` | `unsupported feature` | 4 | sql/function/blob/encode.test | `query I<br>SELECT decode(encode('ü'))<br>----<br>ü` |  |
+| `enable_logging` | `unsupported feature` | 1 | sql/cte/warn_deprecated_union_in_using_key.test | `statement ok<br>CALL enable_logging(level='error');` |  |
+| `flatten` | `unsupported feature` | 1 | sql/function/array/array_flatten.test | `query I<br>select flatten([['a'], ['b'], ['c']]::varchar[1][3]);<br>----<br>[a, b, c]` |  |
+| `materialized` | `unsupported feature` | 30 | sql/cte/materialized/recursive_cte_complex_pipelines.test<br>sql/cte/materialized/test_cte_in_cte_materialized.test<br>sql/cte/materialized/test_cte_materialized.test<br>sql/cte/materialized/test_cte_overflow_materialized.test<br>sql/cte/materialized/test_issue_10260.test<br>sql/cte/materialized/test_recursive_cte_union_all_materialized.test<br>sql/cte/materialized/test_recursive_cte_union_materialized.test | `query I<br>with a as MATERIALIZED (select * from va) select * from a<br>----<br>1729` |  |
+| `parents_tab` | `unsupported feature` | 2 | sql/cte/materialized/recursive_hang_2745_materialized.test<br>sql/cte/recursive_hang_2745.test | `statement ok<br>create view vparents as<br>with RECURSIVE parents_tab (id , value , parent )<br>as MATERIALIZED (values (1, 1, 2), (2, 2, 4), (3, 1, 4), (4, 2, -1), (5, 1, 2), (6, 2, 7), (7, 1, -1)<br>),<br>parents_tab2 (id , value , parent )<br>as MATERIALIZED (values (1, 1, 2), (2, 2, 4), (3, 1, 4), (4, 2, -1), (5, 1, 2), (6, 2, 7), (7, 1, -1)<br>)<br>select * from parents_tab<br>union all<br>select id, value+2, parent from parents_tab2;` |  |
+| `parquet_metadata` | `unsupported feature` | 3 | sql/copy/parquet/parquet_metadata.test<br>sql/copy/parquet/parquet_row_number.test | `statement ok<br>select * from parquet_metadata('{DATA_DIR}/parquet-testing/glob/*.parquet');` |  |
+| `sql_auto_complete` | `unsupported feature` | 160 | sql/function/autocomplete/alter_table.test<br>sql/function/autocomplete/copy.test<br>sql/function/autocomplete/create_function.test<br>sql/function/autocomplete/create_schema.test<br>sql/function/autocomplete/create_sequence.test<br>sql/function/autocomplete/create_table.test<br>sql/function/autocomplete/create_type.test<br>sql/function/autocomplete/drop.test<br>sql/function/autocomplete/expressions.test<br>sql/function/autocomplete/identical_schema_table.test<br>sql/function/autocomplete/insert_into.test<br>sql/function/autocomplete/pragma.test<br>sql/function/autocomplete/scalar_functions.test<br>sql/function/autocomplete/select.test<br>sql/function/autocomplete/setting.test<br>sql/function/autocomplete/show.test<br>sql/function/autocomplete/suggest_file.test<br>sql/function/autocomplete/table_functions.test<br>sql/function/autocomplete/window.test | `query II<br>SELECT suggestion, suggestion_start FROM sql_auto_complete('WI') LIMIT 1;<br>----<br>WITH 	0` |  |
+| `stats` | `unsupported feature` | 1 | sql/copy/parquet/parquet_row_number.test | `query IIII<br>select s.min, s.max, s.has_null, s.has_no_null from (select stats(seq) s from parquet_scan('{DATA_DIR}/parquet-testing/file_row_number.parquet') limit 1)<br>----<br>0	9999	0	1` |  |
+| `strftime` | `unsupported feature` | 2 | sql/function/date/test_strftime.test | `query I<br>SELECT strftime('%Y', DATE '1992-01-01');<br>----<br>1992` |  |
+| `struct_extract` | `unsupported feature` | 1 | sql/copy/parquet/test_parquet_nested.test | `query III<br>SELECT id, struct_extract(unnest(authors), 'name'), struct_extract(unnest(authors), 'id') FROM parquet_scan('{DATA_DIR}/parquet-testing/apkwan.parquet') limit 20<br>----<br>53e997b9b7602d9701f9f044	M. Stoll	56018d9645cedb3395e77641<br>53e997b9b7602d9701f9f044	H. Heiken	53f4d53adabfaef34ff814c8<br>53e997b9b7602d9701f9f044	G. M. N. Behrens	53f42afbdabfaec09f0ed4e0<br>53e997b9b7602d9701f9f044	R. E. Schmidt	56018d9645cedb3395e77644<br>53e997b2b7602d9701f8fea5	D. Barr	5440d4cfdabfae805a6fd46c<br>53e997aeb7602d9701f8856e	B Sharf	54059f34dabfae44f081a626<br>53e997aeb7602d9701f8856e	E Bental	5434518edabfaebba5856df4<br>53e997bab7602d9701fa1e34	R. A. Kyle	53f45704dabfaedd74e30781<br>53e997abb7602d9701f846c0	J. Mitchell	5405942bdabfae44f08177f9<br>53e9978db7602d9701f4d7e8	&NA;	NULL<br>53e9984bb7602d970207c61d	Olaf Th. Buck	53f4cef7dabfaeedd477c91f<br>53e9984bb7602d970207c61d	Volker Linnemann	544837ccdabfae87b7dea930<br>53e99796b7602d9701f5cd36	D. P. McKenzie	53f4384cdabfaeb22f48309c<br>53e99796b7602d9701f5cd36	J. G. Gluyas	53f42c87dabfaec09f108097<br>53e99796b7602d9701f5cd36	G. Eglinton	56017dd445cedb3395e642dd<br>53e99796b7602d9701f5cd36	M. L. Coleman	53f44fc6dabfaedd74e13c0e<br>53e99809b7602d970201f551	A Moncrieff	53f42dcfdabfaee43ebca730<br>53e99809b7602d970201f551	L E Whitby	53f4508fdabfaeb22f4e9af6<br>53e997a6b7602d9701f7ffb0	R R Walters	53f43b0edabfaee0d9b91d40<br>53e99813b7602d970202f0a1	Sean Milmo	53f45f64dabfaee4dc832b5f` |  |
+| `weird_tbl` | `unsupported feature` | 2 | sql/copy/partitioned/hive_partition_escape.test | `statement ok<br>CREATE TABLE weird_tbl(id INT DEFAULT nextval('seq'), key VARCHAR)` |  |

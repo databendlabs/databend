@@ -1,0 +1,14 @@
+statement ok
+DROP TABLE IF EXISTS table1
+
+statement ok
+DROP TABLE IF EXISTS table2
+
+statement ok
+CREATE TABLE table1 (id INTEGER, a INTEGER);
+
+statement ok
+CREATE TABLE table2 (table1_id INTEGER);
+
+statement error
+INSERT INTO table2 WITH cte AS (INSERT INTO table1 SELECT 1, 2 RETURNING id) SELECT id FROM cte;

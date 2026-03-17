@@ -1,0 +1,19 @@
+statement ok
+DROP TABLE IF EXISTS s1.tbl
+
+# TODO: unsupported feature
+# statement ok
+# create schema s1;
+
+statement ok
+create table s1.tbl(a varchar);
+
+statement ok
+insert into s1.tbl values ('hello');
+
+# TODO: unsupported feature
+# query II
+# with tbl as (select 'world' b)
+# select * from s1.tbl, tbl;
+# ----
+# hello	world

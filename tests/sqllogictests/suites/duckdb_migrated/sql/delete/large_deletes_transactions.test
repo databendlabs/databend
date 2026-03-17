@@ -1,0 +1,36 @@
+statement ok
+DROP TABLE IF EXISTS a
+
+statement ok
+CREATE TABLE a AS SELECT * FROM range(0, 1000000) t1(i);
+
+statement ok
+BEGIN TRANSACTION
+
+query I
+SELECT COUNT(*) FROM a
+----
+1000000
+
+query I
+DELETE FROM a WHERE i%2=0
+----
+500000
+
+query I
+SELECT COUNT(*) FROM a
+----
+500000
+
+query I
+SELECT COUNT(*) FROM a
+----
+500000
+
+statement ok
+COMMIT
+
+query I
+SELECT COUNT(*) FROM a
+----
+500000

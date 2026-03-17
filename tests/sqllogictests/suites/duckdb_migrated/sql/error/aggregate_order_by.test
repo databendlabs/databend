@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS lists_tbl
+
+statement ok
+CREATE TABLE lists_tbl AS SELECT i%20 as groups, i AS l FROM range(0, 1000) tmp(i);
+
+statement error
+SELECT COUNT(DISTINCT l) FROM lists_tbl group by groups order by l limit 10;
+
+statement error
+SELECT DISTINCT ON(l) COUNT(DISTINCT l) FROM lists_tbl group by groups;

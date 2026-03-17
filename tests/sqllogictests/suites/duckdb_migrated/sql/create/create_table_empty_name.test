@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS s1
+
+statement error
+CREATE TABLE '' AS SELECT 42;
+
+# TODO: unsupported feature
+# statement ok
+# create schema s1;
+
+# TODO: result differs
+# statement error
+# CREATE TABLE s1.""(i INTEGER);

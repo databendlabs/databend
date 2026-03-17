@@ -1,0 +1,24 @@
+# this function is in the dbgen extension
+statement error
+SELECT dbgen();
+
+statement error
+SELECT DBGEN();
+
+statement error
+SELECT * FROM dbgen();
+
+statement error
+CALL dbgen(sf=0.1);
+
+statement error
+SELECT * FROM dbgen
+
+statement error
+SELECT * FROM TimeZone
+
+statement error
+SELECT dbgen()
+
+statement error
+CALL dbge()

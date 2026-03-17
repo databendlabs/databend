@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS intervals
+
+statement ok
+CREATE TABLE IF NOT EXISTS intervals (i interval);
+
+statement ok
+INSERT INTO intervals VALUES
+       (interval '1' day),
+       (interval '00:00:01'),
+       (NULL),
+       (interval '0' month),
+       (interval '1' month)

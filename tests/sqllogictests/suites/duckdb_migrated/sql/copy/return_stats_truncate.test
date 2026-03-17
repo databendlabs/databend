@@ -1,0 +1,1 @@
+# we cannot truncate blobs that are all 0xFF - so stats are omitted

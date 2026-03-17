@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
+
+query T
+EXPLAIN SELECT * FROM integers
+----
+TableScan
+├── table: default.default.integers
+├── scan id: 0
+├── output columns: [i (#0), j (#1)]
+├── read rows: 4
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 4.00

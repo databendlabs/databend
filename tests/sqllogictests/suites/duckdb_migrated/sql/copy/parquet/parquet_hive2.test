@@ -1,0 +1,9 @@
+statement ok
+DROP TABLE IF EXISTS orders
+
+# See https://github.com/duckdb/duckdb/pull/9473#issuecomment-1786231577
+statement ok
+create or replace table orders(m int,v int,j int);
+
+statement ok
+insert into orders select i%12+1,i,j from range(0, 360)t(i),range(0, 1000)s(j);

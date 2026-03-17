@@ -1,0 +1,5 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement error
+CREATE TABLE tbl AS EXECUTE tbl;

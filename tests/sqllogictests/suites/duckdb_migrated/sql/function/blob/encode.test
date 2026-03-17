@@ -1,0 +1,37 @@
+# TODO: unknown function
+# query I
+# SELECT encode('ü')
+# ----
+# \xC3\xBC
+
+# TODO: unsupported feature
+# query I
+# SELECT decode(encode('ü'))
+# ----
+# ü
+
+# TODO: unsupported feature
+# query I
+# SELECT decode('\xF0\x9F\xA6\x86'::BLOB)
+# ----
+# 🦆
+
+# null byte
+
+# TODO: unsupported feature
+# query I
+# SELECT decode('\x00'::BLOB)
+# ----
+# \0
+
+# test invalid decodes
+
+statement error
+SELECT decode('\xFF'::BLOB)
+
+# TODO: unsupported feature
+# query I
+# SELECT decode(encode(a)) || a from (values ('hello'), ('world')) tbl(a);
+# ----
+# hellohello
+# worldworld

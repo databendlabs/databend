@@ -1,0 +1,38 @@
+statement ok
+DROP TABLE IF EXISTS decimals
+
+statement ok
+CREATE TABLE decimals(
+	dec4 DECIMAL(4,1),
+	dec9 DECIMAL(9,2),
+	dec18 DECIMAL(18,3),
+	dec38 DECIMAL(38,4)
+);
+
+statement ok
+INSERT INTO decimals VALUES (
+	-999.9,
+	-9999999.99,
+	-999999999999999.999,
+	-999999999999999999999999999999999.9999
+), (
+	NULL, NULL, NULL, NULL
+), (
+ 	42, 42, 42, 42
+), (
+ 	-42, -42, -42, -42
+), (
+  	0, 0, 0, 0
+ ), (
+  	999.9,
+  	9999999.99,
+  	999999999999999.999,
+  	999999999999999999999999999999999.9999
+);
+
+# TODO: result differs
+# query IIII nosort decimal_scan
+# SELECT * FROM decimals;
+
+statement ok
+DELETE FROM decimals WHERE dec4<-42 OR dec4>42

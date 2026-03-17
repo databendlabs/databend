@@ -1,0 +1,17 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+DROP TABLE IF EXISTS test2
+
+statement ok
+DROP TABLE IF EXISTS test_null_write
+
+statement ok
+create table test as select i%5 as a, i%2 as b from range(0,10) tbl(i);
+
+statement ok
+create table test2 as select i%5 as a, i%2 as b, i as c from range(0,10) tbl(i);
+
+statement ok
+create table test_null_write as select 1 as c, NULL::INT as a, NULL::INT as b;

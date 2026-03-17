@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query III
+# SELECT my_map['A'], * FROM parquet_scan('{DATA_DIR}/parquet-testing/struct_skip_test.parquet') where filter = '0'
+# ----
+# NULL	{A=NULL}	0

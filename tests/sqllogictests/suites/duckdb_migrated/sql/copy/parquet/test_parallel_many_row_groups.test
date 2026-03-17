@@ -1,0 +1,24 @@
+# these files are small (1000 entries), but they are intentionally written such that every row has its own row group
+# TODO: unsupported feature
+# query IIII
+# SELECT COUNT(*), MIN(i), MAX(i), SUM(i) FROM parquet_scan('{DATA_DIR}/parquet-testing/manyrowgroups.parquet') t(i)
+# ----
+# 1001	42	1041	541542
+
+# TODO: unsupported feature
+# query IIII
+# SELECT COUNT(*), MIN(i), MAX(i), SUM(i) FROM parquet_scan('{DATA_DIR}/parquet-testing/manyrowgroups*') t(i)
+# ----
+# 2002	42	1041	1083084
+
+# TODO: unsupported feature
+# query IIII
+# SELECT COUNT(*), MIN(i), MAX(i), SUM(i) FROM parquet_scan('{DATA_DIR}/parquet-testing/manyrowgroups.parquet') t(i)
+# ----
+# 1001	42	1041	541542
+
+# TODO: unsupported feature
+# query IIII
+# SELECT COUNT(*), MIN(i), MAX(i), SUM(i) FROM parquet_scan('{DATA_DIR}/parquet-testing/manyrowgroups*') t(i)
+# ----
+# 2002	42	1041	1083084

@@ -1,0 +1,74 @@
+statement ok
+DROP TABLE IF EXISTS nested_single_struct
+
+statement ok
+DROP TABLE IF EXISTS single_struct
+
+statement ok
+DROP TABLE IF EXISTS single_struct_null
+
+statement ok
+DROP TABLE IF EXISTS struct
+
+statement ok
+DROP TABLE IF EXISTS struct_nested
+
+statement ok
+DROP TABLE IF EXISTS struct_nested_null
+
+statement ok
+DROP TABLE IF EXISTS struct_nulls
+
+# standard struct
+statement ok
+CREATE TABLE struct AS SELECT * FROM (VALUES
+	({'a': 42, 'b': 84}),
+	({'a': 33, 'b': 32}),
+	({'a': 42, 'b': 27})
+) tbl(i);
+
+statement ok
+CREATE TABLE struct_nulls AS SELECT * FROM (VALUES
+	({'a': 42, 'b': 84}),
+	({'a': NULL, 'b': 32}),
+	(NULL),
+	({'a': 42, 'b': NULL})
+) tbl(i);
+
+statement ok
+CREATE TABLE struct_nested AS SELECT * FROM (VALUES
+	({'a': {'x': 3, 'x1': 22}, 'b': {'y': 27, 'y1': 44}}),
+	({'a': {'x': 9, 'x1': 26}, 'b': {'y': 1, 'y1': 999}}),
+	({'a': {'x': 17, 'x1': 23}, 'b': {'y': 3, 'y1': 9999}})
+) tbl(i);
+
+statement ok
+CREATE TABLE struct_nested_null AS SELECT * FROM (VALUES
+	({'a': {'x': 3, 'x1': 22}, 'b': {'y': NULL, 'y1': 44}}),
+	({'a': {'x': NULL, 'x1': 26}, 'b': {'y': 1, 'y1': NULL}}),
+	({'a': {'x': 17, 'x1': NULL}, 'b': {'y': 3, 'y1': 9999}}),
+	(NULL),
+	({'a': NULL, 'b': NULL})
+) tbl(i);
+
+statement ok
+CREATE TABLE single_struct AS SELECT * FROM (VALUES
+	({'a': 42}),
+	({'a': 33}),
+	({'a': 42})
+) tbl(i);
+
+statement ok
+CREATE TABLE single_struct_null AS SELECT * FROM (VALUES
+	({'a': 42}),
+	({'a': NULL}),
+	(NULL)
+) tbl(i);
+
+statement ok
+CREATE TABLE nested_single_struct AS SELECT * FROM (VALUES
+	({'a': {'b': 42}}),
+	({'a': {'b': NULL}}),
+	({'a': NULL}),
+	(NULL)
+) tbl(i);

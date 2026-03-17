@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# query TTT
+# select * from parquet_scan('{DATA_DIR}/parquet-testing/zstd.parquet') order by 1
+# ----
+# NULL	bar	0
+# -1	foo	1
+# 2.5	baz	1

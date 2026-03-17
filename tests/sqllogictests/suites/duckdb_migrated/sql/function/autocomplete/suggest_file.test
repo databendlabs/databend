@@ -1,0 +1,12 @@
+# test file auto complete
+# TODO: unsupported feature
+# query I
+# SELECT suggestion FROM sql_auto_complete('COPY tbl FROM ''{DATA_DIR}/parq') LIMIT 1;
+# ----
+# parquet-testing/
+
+# TODO: unsupported feature
+# query I
+# SELECT suggestion FROM sql_auto_complete('COPY tbl FROM ''{DATA_DIR}/csv/all_quote') LIMIT 1;
+# ----
+# all_quotes.csv'

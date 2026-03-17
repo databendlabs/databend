@@ -1,0 +1,62 @@
+# literal
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANG') LIMIT 1;
+# ----
+# RANGE 	26
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWE') LIMIT 1;
+# ----
+# BETWEEN 	32
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN UNBOU') LIMIT 1;
+# ----
+# UNBOUNDED 	40
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN UNBOUNDED PREC') LIMIT 1;
+# ----
+# PRECEDING 	50
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (RANGE BETWEEN CURRENT ROW AND 5 PREC') LIMIT 1;
+# ----
+# PRECEDING 	58
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT row_number() OVER (PART') LIMIT 1;
+# ----
+# PARTITION 	26
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT lag(col1) OVER (PARTITION BY col1, col2 ORD') LIMIT 1;
+# ----
+# ORDER 	47
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT sum(42) OVER (PARTITION BY col1, col2 ORDER BY col3 ROW') LIMIT 1;
+# ----
+# ROWS 	59
+
+# window clause
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT lead(l_orderkey) OVER win FR') LIMIT 1;
+# ----
+# FROM 	33
+
+# TODO: unsupported feature
+# query II
+# SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT lead(l_orderkey) OVER (win) FROM tbl WINDOW win AS (PART') LIMIT 1;
+# ----
+# PARTITION 	59

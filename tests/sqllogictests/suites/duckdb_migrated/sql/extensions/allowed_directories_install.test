@@ -1,0 +1,5 @@
+statement error
+INSTALL bogus FROM 'http://not.existent';
+
+statement error
+INSTALL bogus FROM 'http://not.existent';

@@ -1,0 +1,8 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(part_key INT, val INT);
+
+statement ok
+INSERT INTO t1 SELECT i%2, i FROM range(0, 10) t(i);

@@ -1,0 +1,9 @@
+statement ok
+DROP VIEW IF EXISTS list_int
+
+statement ok
+CREATE VIEW list_int AS
+SELECT case when i%2 <> 0 then [1] else NULL end FROM range(0, 10000) tbl(i);
+
+statement error
+select count(*) from list_int where l is distinct from NULL;

@@ -1,0 +1,174 @@
+statement ok
+DROP TABLE IF EXISTS dates
+
+query T
+SELECT strftime(DATE '1992-01-01', '%Y');
+----
+1992
+
+# flip the order
+
+# TODO: unsupported feature
+# query I
+# SELECT strftime('%Y', DATE '1992-01-01');
+# ----
+# 1992
+
+# TODO: unsupported feature
+# query I
+# SELECT strftime('%Y', TIMESTAMP '1992-01-01');
+# ----
+# 1992
+
+# some literals
+
+query T
+SELECT strftime(DATE '1992-01-01', '(%Y)');
+----
+(1992)
+
+# escapes
+
+query T
+SELECT strftime(DATE '1992-01-01', '%% %Y %%');
+----
+% 1992 %
+
+# many consecutive escapes
+
+query T
+SELECT strftime(DATE '1992-01-01', '%%%%%% %Y %%%%%%');
+----
+%%% 1992 %%%
+
+# multiple specifiers
+
+query T
+SELECT strftime(DATE '1992-02-01', '%d/%m/%Y');
+----
+01/02/1992
+
+# we can repeat the same specifier many times
+
+query T
+SELECT strftime(DATE '1992-02-01', '%Y %Y %Y %Y');
+----
+1992 1992 1992 1992
+
+# test on a table
+
+statement ok
+CREATE TABLE dates(d DATE);
+INSERT INTO dates VALUES ('1992-01-01'), ('1993-03-20'), (NULL);
+
+query I
+SELECT strftime(d, '%d/%m/%Y') FROM dates ORDER BY d;
+----
+NULL
+01/01/1992
+20/03/1993
+
+# null date
+
+query I
+SELECT strftime(NULL::DATE, '%d/%m/%Y') FROM dates ORDER BY d;
+----
+NULL
+NULL
+NULL
+
+# null format
+
+query I
+SELECT strftime(d, NULL) FROM dates ORDER BY d;
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT strftime(NULL::TIMESTAMP, NULL) FROM range(0, 3);
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT strftime(NULL::TIMESTAMP, '%%%%%% %Y %%%%%%') FROM range(0, 3);
+----
+NULL
+NULL
+NULL
+
+# no specifiers, only constant
+
+query I
+SELECT strftime(DATE '1992-01-01', 'hello world');
+----
+hello world
+
+query I
+SELECT strftime('2019-01-23'::DATE, '42');
+----
+42
+
+#
+# Infinities
+#
+
+
+# PG to_char returns NULL here
+# but we can do better.
+
+query I
+SELECT strftime('infinity'::DATE, '%Y-%m-%d');
+----
+infinity
+
+query I
+SELECT strftime('-infinity'::DATE, '%Y-%m-%d');
+----
+-infinity
+
+
+# PG to_char returns NULL here
+# but we can do better.
+
+query I
+SELECT strftime('infinity'::TIMESTAMP, '%Y-%m-%d');
+----
+infinity
+
+query I
+SELECT strftime('-infinity'::TIMESTAMP, '%Y-%m-%d');
+----
+-infinity
+
+
+# non-constant format not supported
+
+statement error
+SELECT strftime(d, d::VARCHAR) FROM dates ORDER BY d;
+
+statement error
+SELECT strftime(DATE '1992-01-01', '%');
+
+statement error
+SELECT strftime(DATE '1992-01-01', '%R');
+
+query IIII
+select strftime(strptime('023', '%g'), '%g'), strftime(strptime('0', '%g'), '%g'), strftime(strptime('000', '%g'), '%g'), strftime(strptime('999', '%g'), '%g');
+----
+023
+000
+000
+999
+
+statement error
+SELECT strptime('-1', '%g');
+
+statement error
+SELECT strptime('1000', '%g');
+
+statement error
+SELECT strftime('%Y', '1992-01-01');

@@ -1,0 +1,57 @@
+statement ok
+DROP TABLE IF EXISTS int_maps
+
+statement ok
+DROP TABLE IF EXISTS list_map
+
+statement ok
+DROP TABLE IF EXISTS string_map
+
+# int -> int map
+statement ok
+CREATE TABLE int_maps(m MAP(INTEGER,INTEGER));
+
+statement ok
+INSERT INTO int_maps VALUES 
+	(MAP([42, 84], [1, 2])), 
+	(MAP([101, 201, 301], [3, NULL, 5])),
+	(MAP([55, 66, 77], [6, 7, NULL]))
+;
+
+statement error
+INSERT INTO int_maps VALUES
+	(MAP([NULL], [NULL]))
+;
+
+statement ok
+CREATE TABLE string_map(m MAP(VARCHAR,VARCHAR));
+
+statement ok
+INSERT INTO string_map VALUES 
+	(MAP(['key1', 'key2'], ['value1', 'value2'])), 
+	(MAP(['best band', 'best boyband', 'richest person'], ['Tenacious D', 'Backstreet Boys', 'Jon Lajoie'])),
+	(MAP([], [])),
+	(NULL),
+	(MAP(['option'], [NULL]))
+;
+
+statement error
+INSERT INTO string_map VALUES
+	(MAP([NULL], [NULL]))
+;
+
+statement ok
+CREATE TABLE list_map(m MAP(INT[],INT[]));
+
+statement ok
+INSERT INTO list_map VALUES 
+	(MAP([[1, 2, 3], [], [4, 5]], [[6, 7, 8], NULL, [NULL]])),
+	(MAP([], [])),
+	(MAP([[1]], [NULL])),
+	(MAP([[10, 12, 14, 16, 18, 20], []], [[1], [2]]))
+;
+
+statement error
+INSERT INTO list_map VALUES
+	(MAP([NULL], [NULL]))
+;

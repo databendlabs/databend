@@ -1,0 +1,14 @@
+statement ok
+CREATE RECURSIVE VIEW nums (n) AS
+    VALUES (1)
+UNION ALL
+    SELECT n+1 FROM nums WHERE n < 5;
+
+query I
+FROM nums
+----
+1
+2
+3
+4
+5

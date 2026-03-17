@@ -1,0 +1,2 @@
+statement error
+SELECT read_csv('test.csv')

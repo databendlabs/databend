@@ -1,0 +1,5 @@
+statement error
+SELECT 1, 2 FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM no_such_tbl'));
+
+statement error
+SELECT 1, 2 FROM json_execute_serialized_sql(json_serialize_sql('SELECT 1,2,3,4,5,6,7,8,* FROM no_such_tbl'));

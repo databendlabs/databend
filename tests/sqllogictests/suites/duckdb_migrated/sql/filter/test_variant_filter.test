@@ -1,0 +1,75 @@
+# TODO: result differs
+# statement error
+# WITH cte as (
+# 	select '12'::VARIANT a
+# )
+# select IF(a = 12, 1, 0) from cte
+
+statement error
+WITH cte as (
+	select '12'::VARIANT a
+)
+select IF(a = [1,2,3], 1, 0) from cte
+
+statement error
+WITH cte as (
+	select '[1,2,3]'::VARIANT a
+)
+select IF(a = [1,2,3], 1, 0) from cte
+
+# TODO: unsupported feature
+# query I
+# WITH cte as (
+# 	select [1,2,3]::VARIANT a
+# )
+# select IF(a = [3, 2, 1], 1, 0) from cte
+# ----
+# 0
+
+# Exact equality of list
+
+# TODO: unsupported feature
+# query I
+# WITH cte as (
+# 	select [1,2,3]::VARIANT a
+# )
+# select IF(a = [1,2,3], 1, 0) from cte
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# WITH cte as (
+# 	select [1::VARIANT,'2',3]::VARIANT a
+# )
+# select IF(a = [1,2,3], 1, 0) from cte
+# ----
+# 1
+
+statement error
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a = [1,2,3], 1, 0) from cte
+
+query I
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a = {b: [1,2,3], a: 21}, 1, 0) from cte
+----
+1
+
+# GreaterThan / LessThan
+
+statement error
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a < [1,2,3], 1, 0) from cte
+
+statement error
+WITH cte as (
+	select {a: 21, b: [1,2,3]}::VARIANT a
+)
+select IF(a > [1,2,3], 1, 0) from cte

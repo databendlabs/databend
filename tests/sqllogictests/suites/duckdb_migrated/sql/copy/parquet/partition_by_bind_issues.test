@@ -1,0 +1,9 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test AS SELECT
+	'test' AS user,
+	'2025' AS year
+
+# 'user' is also the name of a SQLValueFunction, this used to bind incorrectly (#20324)

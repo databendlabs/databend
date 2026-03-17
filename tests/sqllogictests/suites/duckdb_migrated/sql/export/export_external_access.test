@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, CHECK(i+j<10))
+
+statement ok
+ROLLBACK

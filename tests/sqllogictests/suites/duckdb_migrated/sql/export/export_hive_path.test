@@ -1,0 +1,19 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+BEGIN
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (42);
+
+statement ok
+ROLLBACK
+
+query I
+FROM integers
+----
+42

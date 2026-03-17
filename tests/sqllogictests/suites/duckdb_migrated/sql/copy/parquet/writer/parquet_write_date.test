@@ -1,0 +1,16 @@
+statement ok
+DROP TABLE IF EXISTS dates
+
+statement ok
+CREATE TABLE dates(d DATE)
+
+statement ok
+INSERT INTO dates VALUES (DATE '1992-01-01'), (DATE '1900-01-01'), (NULL), (DATE '2020-09-27')
+
+query I nosort date_scan
+SELECT * FROM dates
+----
+1992-01-01
+1900-01-01
+NULL
+2020-09-27

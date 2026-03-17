@@ -1,0 +1,36 @@
+# The database is written with a vector size of 2048.
+# TODO: unsupported feature
+# query I
+# FROM cte_v1.v1
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# FROM cte_v1.v2
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# FROM cte_v1.v3
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# FROM cte_v1_4.v1
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# FROM cte_v1_4.v2
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# FROM cte_v1_4.v3
+# ----
+# 42

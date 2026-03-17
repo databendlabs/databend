@@ -1,0 +1,28 @@
+statement ok
+DROP TABLE IF EXISTS weird_tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE weird_tbl(id INT DEFAULT nextval('seq'), key VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO weird_tbl (key) VALUES
+# 	('/'),
+# 	('\/\/'),
+# 	('==='),
+# 	('value with strings'),
+# 	('?:&'),
+# 	('🦆'),
+# 	('==='),
+# 	('===');
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE weird_tbl RENAME COLUMN key TO "=/ \\/"
+
+# this column name won't work with automatic HIVE partition due to the equal character

@@ -1,0 +1,89 @@
+statement ok
+DROP VIEW IF EXISTS v1
+
+statement ok
+DROP TABLE IF EXISTS enums
+
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE test(a INTEGER, b INTEGER, c VARCHAR(10));
+
+statement ok
+INSERT INTO test VALUES (42, 88, 'hello');
+
+# FIXME - (unique) indexes aren't copied currently
+
+statement ok
+CREATE VIEW v1 AS FROM test;
+
+statement ok
+CREATE TYPE mood AS ENUM('ok', 'sad', 'happy');
+
+statement ok
+CREATE TABLE enums(i mood)
+
+statement ok
+INSERT INTO enums VALUES ('ok'), ('sad'), (NULL)
+
+statement ok
+select * from db1.enums
+
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT nextval('seq')
+----
+1
+
+statement ok
+CREATE FUNCTION my_add(a, b) AS a + b
+
+statement ok
+COPY FROM DATABASE db1 TO db2
+
+statement ok
+USE db2
+
+query III
+SELECT * FROM test;
+----
+42	88	hello
+
+query I
+SELECT * FROM enums;
+----
+ok
+sad
+NULL
+
+query III
+SELECT * FROM v1;
+----
+42	88	hello
+
+# FIXME - unique indexes aren't copied currently
+
+statement ok
+INSERT INTO test VALUES (43, 88, 'hello');
+
+query III
+SELECT * FROM v1;
+----
+42	88	hello
+43	88	hello
+
+query I
+SELECT nextval('seq')
+----
+2
+
+query I
+SELECT my_add(1, 2)
+----
+3

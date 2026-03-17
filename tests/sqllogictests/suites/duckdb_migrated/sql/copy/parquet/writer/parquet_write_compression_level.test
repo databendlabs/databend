@@ -1,0 +1,7 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# NOTE: since updating ZSTD, compression levels between -131072 and 22 are now supported
+# We now also support this, and this test has been updated accordingly
+statement ok
+CREATE TABLE integers AS FROM range(0, 100) t(i)
