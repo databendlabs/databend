@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::base::ProgressValues;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
@@ -64,5 +65,27 @@ pub struct OneBlockJoinStream(pub Option<DataBlock>);
 impl JoinStream for OneBlockJoinStream {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         Ok(self.0.take())
+    }
+}
+
+pub struct FinishedJoin;
+
+impl FinishedJoin {
+    pub fn create() -> Box<dyn Join> {
+        Box::new(FinishedJoin)
+    }
+}
+
+impl Join for FinishedJoin {
+    fn add_block(&mut self, _: Option<DataBlock>) -> Result<()> {
+        Err(ErrorCode::Internal("Join is finished"))
+    }
+
+    fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+        Err(ErrorCode::Internal("Join is finished"))
+    }
+
+    fn probe_block(&mut self, _: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
+        Err(ErrorCode::Internal("Join is finished"))
     }
 }
