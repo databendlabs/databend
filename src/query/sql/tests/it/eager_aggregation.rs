@@ -37,7 +37,7 @@ use goldenfile::Mint;
 
 use crate::planner::LiteTableContext;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_eager_aggregation_with_lite_table_context() -> Result<()> {
     let mut mint = Mint::new("tests/it");
     let mut file = mint.new_goldenfile("eager_aggregation.txt")?;

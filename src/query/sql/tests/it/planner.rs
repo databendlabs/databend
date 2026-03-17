@@ -123,7 +123,7 @@ impl TestCaseRunner for LiteRunner {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
     let suite = TestSuite::new(
         TestSuite::optimizer_data_dir(),

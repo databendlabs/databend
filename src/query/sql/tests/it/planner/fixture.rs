@@ -16,8 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::Once;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -127,16 +125,36 @@ static TEST_BUILD_INFO: BuildInfo = BuildInfo {
     embedded_license: String::new(),
 };
 
-static INIT_GLOBALS: Once = Once::new();
-static GLOBAL_CATALOG_MANAGER: OnceLock<Arc<CatalogManager>> = OnceLock::new();
-static INIT_GLOBAL_CATALOG_MANAGER: Once = Once::new();
+thread_local! {
+    static INIT_TESTING_GLOBALS: std::sync::Once = const { std::sync::Once::new() };
+    static THREAD_CATALOG_MANAGER: std::cell::OnceCell<Arc<CatalogManager>> =
+        const { std::cell::OnceCell::new() };
+}
 
-fn init_globals() {
-    INIT_GLOBALS.call_once(|| {
-        GlobalInstance::init_production();
-        GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO).expect("init global config");
-        OssLicenseManager::init("default".to_string()).expect("init oss license manager");
-    });
+fn init_testing_globals() {
+    #[cfg(debug_assertions)]
+    {
+        INIT_TESTING_GLOBALS.with(|init| {
+            init.call_once(|| {
+                let thread_name = std::thread::current().name().unwrap().to_string();
+                GlobalInstance::init_testing(&thread_name);
+                GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
+                    .expect("init global config");
+                OssLicenseManager::init("default".to_string()).expect("init oss license manager");
+            });
+        });
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        static INIT_GLOBALS: std::sync::Once = std::sync::Once::new();
+        INIT_GLOBALS.call_once(|| {
+            GlobalInstance::init_production();
+            GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
+                .expect("init global config");
+            OssLicenseManager::init("default".to_string()).expect("init oss license manager");
+        });
+    }
 }
 
 fn unsupported<T>(name: &str) -> Result<T> {
@@ -682,16 +700,18 @@ impl LiteTableContext {
     }
 
     pub async fn create() -> Result<Arc<Self>> {
-        init_globals();
+        init_testing_globals();
 
         let tenant = Tenant::new_literal("default");
         let settings = Settings::create(tenant.clone());
         let shared_settings = Settings::create(tenant.clone());
-        let catalog_manager = if let Some(catalog_manager) = GLOBAL_CATALOG_MANAGER.get() {
-            catalog_manager.clone()
+        let catalog_manager = if let Some(catalog_manager) =
+            THREAD_CATALOG_MANAGER.with(|cell| cell.get().cloned())
+        {
+            catalog_manager
         } else {
             let default_catalog = Arc::new(DummyCatalog::default());
-            let default_catalog_dyn: Arc<dyn Catalog> = default_catalog;
+            let default_catalog_dyn: Arc<dyn Catalog> = default_catalog.clone();
             let mut rpc_conf = RpcClientConf::empty();
             rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
             rpc_conf.timeout = Some(Duration::from_millis(1));
@@ -705,12 +725,13 @@ impl LiteTableContext {
                 catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
                 catalog_caches: Default::default(),
             });
-            let catalog_manager = GLOBAL_CATALOG_MANAGER
-                .get_or_init(|| catalog_manager.clone())
-                .clone();
-            INIT_GLOBAL_CATALOG_MANAGER.call_once(|| {
-                GlobalInstance::set(catalog_manager.clone());
+            THREAD_CATALOG_MANAGER.with(|cell| {
+                assert!(
+                    cell.set(catalog_manager.clone()).is_ok(),
+                    "catalog manager should be initialized once per thread"
+                );
             });
+            GlobalInstance::set(catalog_manager.clone());
             catalog_manager
         };
         let default_catalog: Arc<DummyCatalog> = catalog_manager
@@ -1396,16 +1417,20 @@ impl TableContext for LiteTableContext {
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
         Ok(())
     }
+
     fn add_recursive_cte_temp_table(
         &self,
         _catalog_name: &str,
         _database_name: &str,
         _table_name: &str,
     ) {
+        unimplemented!()
     }
+
     async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
-        Ok(())
+        unsupported("table_ctx::drop_recursive_cte_temp_table")
     }
+
     fn get_next_broadcast_id(&self) -> u32 {
         0
     }
@@ -1444,7 +1469,7 @@ mod tests {
         )]
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_fake_tables_have_unique_ids() -> Result<()> {
         let ctx = LiteTableContext::create().await?;
         ctx.register_table_with_stats("default", "t1", test_fields(), None, HashMap::new())?;
@@ -1466,7 +1491,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_create_clears_catalog_tables() -> Result<()> {
         let ctx1 = LiteTableContext::create().await?;
         ctx1.register_table_with_stats("default", "t1", test_fields(), None, HashMap::new())?;
