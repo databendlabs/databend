@@ -113,6 +113,9 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
                 rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
                 probe_targets_str,
             );
+            if rf.is_spatial {
+                s += "spatial,";
+            }
             if rf.enable_bloom_runtime_filter {
                 s += "bloom,";
             }

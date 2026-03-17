@@ -5976,6 +5976,7 @@ dependencies = [
  "futures",
  "futures-util",
  "geo",
+ "geo-index",
  "geozero",
  "goldenfile",
  "headers",
@@ -6036,6 +6037,7 @@ dependencies = [
  "tonic 0.13.1",
  "tower 0.5.2",
  "typetag",
+ "unicase",
  "url",
  "uuid",
  "walkdir",
@@ -6196,6 +6198,7 @@ dependencies = [
  "tantivy-common",
  "tantivy-fst",
  "thiserror 1.0.69",
+ "unicase",
  "xorfilter-rs",
  "zerocopy",
 ]

@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
-use databend_common_io::ewkb_to_geo;
+use databend_common_expression::types::geometry::extract_geo_and_srid;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
 use geo::BoundingRect;
-use geozero::ToGeo;
-use geozero::wkb::Ewkb;
 use log::debug;
 
 #[derive(Clone)]
@@ -31,6 +28,7 @@ pub struct SpatialStatsBuilder {
     srid: Option<i32>,
     has_null: bool,
     has_value: bool,
+    has_empty_rect: bool,
     srid_mixed: bool,
 }
 
@@ -50,36 +48,19 @@ impl SpatialStatsBuilder {
             srid: None,
             has_null: false,
             has_value: false,
+            has_empty_rect: false,
             srid_mixed: false,
         }
     }
 
     pub fn update_value(&mut self, value: ScalarRef) -> Result<()> {
-        match value {
-            ScalarRef::Geometry(buf) => {
-                let (geo, srid) = ewkb_to_geo(&mut Ewkb(buf))?;
-                if !self.update_srid(srid.unwrap_or(0)) {
-                    return Ok(());
-                }
-                if let Some(rect) = geo.bounding_rect() {
-                    self.update_rect(rect);
-                }
-            }
-            ScalarRef::Geography(buf) => {
-                let geo = Ewkb(buf.0)
-                    .to_geo()
-                    .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-                if !self.update_srid(4326) {
-                    return Ok(());
-                }
-                if let Some(rect) = geo.bounding_rect() {
-                    self.update_rect(rect);
-                }
-            }
-            _ => {
-                self.has_null = true;
-            }
-        }
+        let Some((geo, srid)) = extract_geo_and_srid(value)? else {
+            self.has_null = true;
+            return Ok(());
+        };
+
+        let rect = geo.bounding_rect();
+        self.update_rect_with_srid(rect, srid);
         Ok(())
     }
 
@@ -89,11 +70,9 @@ impl SpatialStatsBuilder {
         }
         if let Some(rect) = rect {
             self.update_rect(rect);
+        } else {
+            self.has_empty_rect = true;
         }
-    }
-
-    pub fn mark_null(&mut self) {
-        self.has_null = true;
     }
 
     pub fn srid(&self) -> Option<i32> {
@@ -104,19 +83,27 @@ impl SpatialStatsBuilder {
         self.srid_mixed
     }
 
-    pub fn finalize(self) -> Option<SpatialStatistics> {
-        if self.srid_mixed || !self.has_value {
-            return None;
+    pub fn is_valid(&self) -> bool {
+        !self.srid_mixed && self.has_value
+    }
+
+    pub fn finalize(self) -> SpatialStatistics {
+        let is_valid = self.is_valid();
+        let srid = self.srid.unwrap_or(0);
+        if is_valid {
+            SpatialStatistics {
+                min_x: self.min_x.into(),
+                min_y: self.min_y.into(),
+                max_x: self.max_x.into(),
+                max_y: self.max_y.into(),
+                srid,
+                has_null: self.has_null,
+                has_empty_rect: self.has_empty_rect,
+                is_valid,
+            }
+        } else {
+            SpatialStatistics::default()
         }
-        let srid = self.srid?;
-        Some(SpatialStatistics {
-            min_x: self.min_x.into(),
-            min_y: self.min_y.into(),
-            max_x: self.max_x.into(),
-            max_y: self.max_y.into(),
-            srid,
-            has_null: self.has_null,
-        })
     }
 
     fn update_srid(&mut self, srid: i32) -> bool {
@@ -165,10 +152,15 @@ mod tests {
 
         builder.update_value(ScalarRef::Geometry(ewkb_4326.as_slice()))?;
         assert!(!builder.is_srid_mixed());
+        let stat = builder.clone().finalize();
+        assert!(stat.is_valid);
+        assert_eq!(stat.srid, 4326);
 
         builder.update_value(ScalarRef::Geometry(ewkb_3857.as_slice()))?;
         assert!(builder.is_srid_mixed());
-        assert!(builder.finalize().is_none());
+        let stat = builder.finalize();
+        assert!(!stat.is_valid);
+        assert_eq!(stat.srid, 0);
         Ok(())
     }
 
@@ -178,7 +170,9 @@ mod tests {
         let ewkb_empty = geometry_from_str("POINT EMPTY", None)?;
         builder.update_value(ScalarRef::Geometry(ewkb_empty.as_slice()))?;
         assert!(!builder.is_srid_mixed());
-        assert!(builder.finalize().is_none());
+        let stat = builder.finalize();
+        assert!(!stat.is_valid);
+        assert_eq!(stat.srid, 0);
         Ok(())
     }
 }

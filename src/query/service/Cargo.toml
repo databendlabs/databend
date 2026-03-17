@@ -121,6 +121,8 @@ fastrace = { workspace = true }
 flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
+geo = { workspace = true }
+geo-index = { workspace = true }
 geozero = { workspace = true }
 headers = { workspace = true }
 hex = { workspace = true }
@@ -170,6 +172,7 @@ tokio-util = { workspace = true }
 toml = { workspace = true }
 tonic = { workspace = true }
 typetag = { workspace = true }
+unicase = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }

@@ -137,6 +137,7 @@ impl TransformHashJoinBuild {
                 settings.get_inlist_runtime_filter_threshold()? as usize,
                 settings.get_bloom_runtime_filter_threshold()? as usize,
                 settings.get_min_max_runtime_filter_threshold()? as usize,
+                settings.get_spatial_runtime_filter_threshold()? as usize,
             )?
         };
 
@@ -333,6 +334,7 @@ impl Processor for TransformHashJoinBuild {
                         settings.get_inlist_runtime_filter_threshold()? as usize,
                         settings.get_bloom_runtime_filter_threshold()? as usize,
                         settings.get_min_max_runtime_filter_threshold()? as usize,
+                        settings.get_spatial_runtime_filter_threshold()? as usize,
                     )?;
                     build_and_push_down_runtime_filter(packet, &self.build_state).await?;
                 }
