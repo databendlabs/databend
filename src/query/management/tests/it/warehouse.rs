@@ -25,13 +25,13 @@ use databend_common_management::*;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_meta_store::MetaStore;
 use databend_common_version::BUILD_INFO;
-use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MatchSeqExt;
+use databend_meta_client::types::NodeInfo;
+use databend_meta_client::types::NodeType;
+use databend_meta_client::types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::MatchSeqExt;
-use databend_meta_types::NodeInfo;
-use databend_meta_types::NodeType;
-use databend_meta_types::SeqV;
 use tokio::sync::Barrier;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

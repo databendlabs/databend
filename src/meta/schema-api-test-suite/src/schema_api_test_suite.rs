@@ -155,12 +155,12 @@ use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::Key;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::MetaError;
-use databend_meta_types::UpsertKV;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::UpsertKV;
 use fastrace::func_name;
 use log::debug;
 use log::info;
@@ -5409,7 +5409,6 @@ impl SchemaApiTestSuite {
                 prev_table_id: None,
                 new_table: true,
                 orphan_table_name: None,
-                spec_vec: None,
             };
             let cur_db = util.get_database().await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);

@@ -78,17 +78,14 @@ async fn location_snapshot(
         if let Some(snapshot_id) = snapshot_id {
             // prepare the stream of snapshot
             let snapshot_version = tbl.snapshot_format_version(None)?;
-            let snapshot_location = tbl.meta_location_generator.gen_snapshot_location(
-                tbl.get_branch_id(),
-                &snapshot.snapshot_id,
-                snapshot_version,
-            )?;
+            let snapshot_location = tbl
+                .meta_location_generator
+                .gen_snapshot_location(&snapshot.snapshot_id, snapshot_version)?;
             let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
             let mut snapshot_stream = reader.snapshot_history(
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
-                tbl.get_branch_id(),
             );
 
             // find the element by snapshot_id in stream

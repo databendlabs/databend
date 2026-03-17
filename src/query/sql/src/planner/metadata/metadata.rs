@@ -45,7 +45,6 @@ pub type IndexType = usize;
 
 /// Use IndexType::MAX to represent dummy table.
 pub const DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
-pub const DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
 
 /// ColumnSet represents a set of columns identified by `Symbol`.
 pub type ColumnSet = BTreeSet<Symbol>;
@@ -87,6 +86,10 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    fn next_column_index(&self) -> Symbol {
+        Symbol::new(self.columns.len())
+    }
+
     pub fn table(&self, index: IndexType) -> &TableEntry {
         self.tables.get(index).expect("metadata must contain table")
     }
@@ -254,13 +257,13 @@ impl Metadata {
         column_id: ColumnId,
         column_position: Option<usize>,
         virtual_expr: Option<String>,
-    ) -> IndexType {
-        let column_index = self.columns.len();
+    ) -> Symbol {
+        let column_index = self.next_column_index();
         let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
             column_name: name,
             column_position,
             data_type,
-            column_index: Symbol::new(column_index),
+            column_index,
             table_index,
             path_indices,
             column_id,
@@ -271,14 +274,14 @@ impl Metadata {
     }
 
     pub fn add_derived_column(&mut self, alias: String, data_type: DataType) -> Symbol {
-        let column_index = self.columns.len();
+        let column_index = self.next_column_index();
         let column_entry = ColumnEntry::DerivedColumn(DerivedColumn {
-            column_index: Symbol::new(column_index),
+            column_index,
             alias,
             data_type,
         });
         self.columns.push(column_entry);
-        Symbol::new(column_index)
+        column_index
     }
 
     pub fn add_internal_column(
@@ -286,7 +289,7 @@ impl Metadata {
         table_index: IndexType,
         internal_column: InternalColumn,
     ) -> Symbol {
-        let column_index = Symbol::new(self.columns.len());
+        let column_index = self.next_column_index();
         self.columns
             .push(ColumnEntry::InternalColumn(TableInternalColumn {
                 table_index,
@@ -307,7 +310,7 @@ impl Metadata {
         data_type: TableDataType,
         is_try: bool,
     ) -> Symbol {
-        let column_index = Symbol::new(self.columns.len());
+        let column_index = self.next_column_index();
         let column = ColumnEntry::VirtualColumn(VirtualColumn {
             table_index,
             source_column_name,

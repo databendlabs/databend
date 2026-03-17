@@ -43,7 +43,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 
 use crate::sessions::QueryContext;
 use crate::table_functions::TableFunction;

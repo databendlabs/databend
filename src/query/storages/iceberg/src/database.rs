@@ -42,7 +42,7 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_cache::LoadParams;
 use educe::Educe;
 use iceberg::TableCreation;
@@ -210,7 +210,6 @@ impl Database for IcebergDatabase {
                             table_id_seq: None,
                             db_id: 0,
                             new_table: true,
-                            spec_vec: None,
                             prev_table_id: None,
                             orphan_table_name: None,
                         });
@@ -263,7 +262,6 @@ impl Database for IcebergDatabase {
             table_id_seq: None,
             db_id: 0,
             new_table: true,
-            spec_vec: None,
             prev_table_id: None,
             orphan_table_name: None,
         })

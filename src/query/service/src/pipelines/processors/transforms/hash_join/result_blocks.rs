@@ -53,13 +53,15 @@ impl HashJoinProbeState {
             self.hash_join_state.hash_join_desc.join_type,
             JoinType::InnerAny | JoinType::RightAny
         ) {
-            let build_num_rows = unsafe {
+            let block_num = unsafe {
                 (*self.hash_join_state.build_state.get())
                     .generation_state
-                    .build_num_rows
+                    .chunks
+                    .len()
             };
-
-            probe_state.used_once = Some(MutableBitmap::from_len_zeroed(build_num_rows))
+            probe_state.used_once = Some(MutableBitmap::from_len_zeroed(
+                block_num * probe_state.max_block_size,
+            ));
         }
         let no_other_predicate = self
             .hash_join_state

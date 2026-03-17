@@ -22,13 +22,13 @@ use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::ListOptions;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::MetaError;
-use databend_meta_types::SeqV;
-use databend_meta_types::With;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::With;
 use futures::TryStreamExt;
 
 use crate::errors::meta_service_error;
@@ -175,7 +175,7 @@ impl UdfMgr {
     }
 
     fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {
-        if is_builtin_function(name) {
+        if is_builtin_function(&name.to_lowercase()) {
             return Err(UdfError::Exists {
                 tenant: self.tenant.tenant_name().to_string(),
                 name: name.to_string(),

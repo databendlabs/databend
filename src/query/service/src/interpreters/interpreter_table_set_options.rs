@@ -34,7 +34,7 @@ use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::segment_format_from_location;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -279,11 +279,9 @@ async fn set_segment_format(
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;
-    let location = fuse_table.meta_location_generator().gen_snapshot_location(
-        None,
-        &new_snapshot.snapshot_id,
-        TableSnapshot::VERSION,
-    )?;
+    let location = fuse_table
+        .meta_location_generator()
+        .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
 
     fuse_table
         .get_operator()

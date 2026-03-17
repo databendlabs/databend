@@ -17,8 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchema;
-use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKey;
@@ -62,8 +61,7 @@ impl SnapshotGenerator for MutationGenerator {
 
     fn do_generate_new_snapshot(
         &self,
-        table_ident: &TableIdent,
-        table_schema: &TableSchema,
+        table_info: &TableInfo,
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
@@ -102,9 +100,9 @@ impl SnapshotGenerator for MutationGenerator {
                     }
                     new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
                     let new_snapshot = TableSnapshot::try_new(
-                        Some(table_ident.seq),
+                        Some(table_info.ident.seq),
                         previous.clone(),
-                        table_schema.clone(),
+                        table_info.schema().as_ref().clone(),
                         new_summary,
                         new_segments,
                         cluster_key_meta,

@@ -221,11 +221,8 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
         None,
         TestFixture::default_table_meta_timestamps(),
     )?;
-    let snapshot_loc_1 = location_gen.gen_snapshot_location(
-        None,
-        &snapshot_1.snapshot_id,
-        TableSnapshot::VERSION,
-    )?;
+    let snapshot_loc_1 =
+        location_gen.gen_snapshot_location(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_1.write_meta(&operator, &snapshot_loc_1).await?;
 
     // generate table statistics.

@@ -107,9 +107,10 @@ use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_meta_client::RpcClientConf;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::NodeInfo;
+use databend_meta_client::types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
@@ -763,8 +764,6 @@ impl LiteTableContext {
     }
 
     pub fn set_cluster_node_num(&self, nodes: u64) {
-        use databend_meta_types::NodeInfo;
-
         let local_id = if nodes == 0 {
             "local".to_string()
         } else {
@@ -1223,15 +1222,25 @@ impl TableContext for LiteTableContext {
     fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
         Ok(())
     }
-    async fn get_table_with_batch(
+    async fn get_table_with_branch(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
         _branch: Option<&str>,
-        _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         self.get_table(catalog, database, table).await
+    }
+    async fn resolve_data_source(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table_with_branch(catalog, database, table, branch)
+            .await
     }
     async fn filter_out_copied_files(
         &self,

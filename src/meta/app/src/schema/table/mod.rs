@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -27,14 +26,13 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_ast::ast::SnapshotRefType as AstSnapshotRefType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaId;
 use maplit::hashmap;
 
 use super::CatalogInfo;
@@ -170,15 +168,10 @@ pub struct TableMeta {
     /// Deprecated, will be removed later.
     /// Original cluster key as a string. Use `cluster_key_v2` instead.
     pub cluster_key: Option<String>,
-    /// Cluster key for the main branch, including an id.
-    /// The `u32` is the cluster key id of the main branch, uniquely identifying each version.
+    /// Cluster key for the table, including an id.
     pub cluster_key_v2: Option<(u32, String)>,
     /// Global monotonically increasing sequence for cluster key changes, to
     /// ensuring a unique identifier for each version of cluster key.
-    ///
-    /// This sequence is shared across the main branch and all branches, and is
-    /// incremented whenever a cluster key is created or altered on any branch.
-    /// It remains unchanged when the cluster key is dropped.
     pub cluster_key_seq: u32,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
@@ -189,8 +182,6 @@ pub struct TableMeta {
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub statistics: TableStatistics,
-    // shared by share_id
-    pub shared_by: BTreeSet<u64>,
     // should be discard
     pub column_mask_policy: Option<BTreeMap<String, String>>,
     // ColumnId always equals the first value in SecurityPolicyColumnMap::columns_ids
@@ -204,80 +195,6 @@ pub struct TableMeta {
     pub row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
     pub indexes: BTreeMap<String, TableIndex>,
     pub constraints: BTreeMap<String, Constraint>,
-
-    pub refs: BTreeMap<String, SnapshotRef>,
-}
-
-// Inspired by iceberg(https://github.com/apache/iceberg-rust/blob/main/crates/iceberg/src/spec/snapshot.rs#L443-L449)
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct SnapshotRef {
-    /// The unique id of the reference.
-    /// It is allocated from a global sequence and is unique cluster-wide.
-    pub id: u64,
-    /// After this timestamp, the reference becomes inactive.
-    pub expire_at: Option<DateTime<Utc>>,
-    /// The type of the reference.
-    pub typ: SnapshotRefType,
-    /// The location of the snapshot that this reference points to.
-    pub loc: String,
-}
-
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    num_derive::FromPrimitive,
-    Hash,
-)]
-pub enum SnapshotRefType {
-    Branch = 0,
-    Tag = 1,
-}
-
-impl From<&AstSnapshotRefType> for SnapshotRefType {
-    fn from(v: &AstSnapshotRefType) -> Self {
-        match v {
-            AstSnapshotRefType::Branch => SnapshotRefType::Branch,
-            AstSnapshotRefType::Tag => SnapshotRefType::Tag,
-        }
-    }
-}
-
-impl Display for SnapshotRefType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SnapshotRefType::Branch => write!(f, "BRANCH"),
-            SnapshotRefType::Tag => write!(f, "TAG"),
-        }
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct BranchInfo {
-    pub name: String,
-    pub info: SnapshotRef,
-    // Branch schema is derived from its snapshot
-    // and should not be persisted in table meta.
-    pub schema: Arc<TableSchema>,
-    pub cluster_key_meta: Option<(u32, String)>,
-}
-
-impl BranchInfo {
-    pub fn branch_name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn branch_id(&self) -> u64 {
-        self.info.id
-    }
-
-    pub fn branch_type(&self) -> SnapshotRefType {
-        self.info.typ
-    }
 }
 
 impl TableMeta {
@@ -447,22 +364,6 @@ impl TableInfo {
             .and_then(|s| s.parse::<T>().ok())
             .unwrap_or(default)
     }
-
-    pub fn get_table_ref(&self, name: &str) -> Result<&SnapshotRef> {
-        let Some(table_ref) = self.meta.refs.get(name) else {
-            return Err(ErrorCode::UnknownReference(format!(
-                "Unknown reference '{}' in table {}",
-                name, self.desc
-            )));
-        };
-        if table_ref.expire_at.is_some_and(|v| v < Utc::now()) {
-            return Err(ErrorCode::ReferenceExpired(format!(
-                "{} '{}' in table {} is expired",
-                table_ref.typ, name, self.desc,
-            )));
-        }
-        Ok(table_ref)
-    }
 }
 
 impl Default for TablePartition {
@@ -500,14 +401,12 @@ impl Default for TableMeta {
             virtual_schema: Default::default(),
             drop_on: None,
             statistics: Default::default(),
-            shared_by: BTreeSet::new(),
             column_mask_policy: None,
             column_mask_policy_columns_ids: BTreeMap::new(),
             row_access_policy: None,
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
             constraints: BTreeMap::new(),
-            refs: BTreeMap::new(),
         }
     }
 }
@@ -676,8 +575,6 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    // (db id, removed table id)
-    pub spec_vec: Option<(u64, u64)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }
@@ -1287,11 +1184,11 @@ pub struct TruncateTableReply {}
 pub struct EmptyProto {}
 
 mod kvapi_key_impl {
-    use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::Key;
-    use databend_meta_kvapi::kvapi::KeyBuilder;
-    use databend_meta_kvapi::kvapi::KeyError;
-    use databend_meta_kvapi::kvapi::KeyParser;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::KeyBuilder;
+    use databend_meta_client::kvapi::KeyError;
+    use databend_meta_client::kvapi::KeyParser;
 
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
@@ -1462,8 +1359,8 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::Key;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::Key;
 
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableMeta;

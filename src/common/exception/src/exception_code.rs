@@ -219,7 +219,7 @@ build_exceptions! {
     JiffError(2513),
 }
 
-// Cluster and Resource Management Errors [1035, 1045, 1082, 1101, 2401-2410, 4013]
+// Cluster and Resource Management Errors [1035, 1045, 1082, 1101, 2401-2410]
 build_exceptions! {
     /// Cluster node not found
     NotFoundClusterNode(1035),
@@ -249,8 +249,6 @@ build_exceptions! {
     WarehouseClusterAlreadyExists(2409),
     /// Warehouse cluster not exists
     WarehouseClusterNotExists(2410),
-    /// Unsupported cluster type
-    UnsupportedClusterType(4013),
 }
 
 // Table Structure and Operation Errors [1102-1103, 1106-1111, 1113-1118, 1121-1122, 1130-1133]
@@ -333,7 +331,7 @@ build_exceptions! {
     UnsupportedEngineParams(2703),
 }
 
-// Table reference Errors [2745-2749]
+// Table reference Errors [2745-2748]
 build_exceptions! {
     /// Unknown reference
     UnknownReference(2745),
@@ -341,10 +339,8 @@ build_exceptions! {
     ReferenceAlreadyExists(2746),
     /// Illegal reference
     IllegalReference(2747),
-    /// Mismatched reference type
-    MismatchedReferenceType(2748),
     /// Reference expired
-    ReferenceExpired(2749),
+    ReferenceExpired(2748),
 }
 
 // License Errors [1401-1404]
@@ -609,44 +605,6 @@ build_exceptions! {
     IllegalDynamicTable(2740),
 }
 
-// Sharing and Collaboration Errors [2705-2719, 3111-3112]
-build_exceptions! {
-    /// Share already exists
-    ShareAlreadyExists(2705),
-    /// Unknown share
-    UnknownShare(2706),
-    /// Unknown share ID
-    UnknownShareId(2707),
-    /// Share accounts already exists
-    ShareAccountsAlreadyExists(2708),
-    /// Unknown share accounts
-    UnknownShareAccounts(2709),
-    /// Wrong share object
-    WrongShareObject(2710),
-    /// Wrong share
-    WrongShare(2711),
-    /// Share has no granted database
-    ShareHasNoGrantedDatabase(2712),
-    /// Share has no granted privilege
-    ShareHasNoGrantedPrivilege(2713),
-    /// Share endpoint already exists
-    ShareEndpointAlreadyExists(2714),
-    /// Unknown share endpoint
-    UnknownShareEndpoint(2715),
-    /// Unknown share endpoint ID
-    UnknownShareEndpointId(2716),
-    /// Cannot access share table
-    CannotAccessShareTable(2717),
-    /// Cannot share database created from share
-    CannotShareDatabaseCreatedFromShare(2718),
-    /// Share storage error
-    ShareStorageError(2719),
-    /// Error share endpoint credential
-    ErrorShareEndpointCredential(3111),
-    /// Wrong share privileges
-    WrongSharePrivileges(3112),
-}
-
 // Variable and Configuration Errors [2801-2803]
 build_exceptions! {
     /// Unknown variable
@@ -681,8 +639,10 @@ build_exceptions! {
     IllegalProcedureFormat(3132),
 }
 
-// Storage and I/O Errors [3001-3002, 3901-3905, 4000]
+// Storage and I/O Errors [2719, 3001-3002, 3901-3905, 4000]
 build_exceptions! {
+    /// Share storage error
+    ShareStorageError(2719),
     /// Storage not found
     StorageNotFound(3001),
     /// Storage permission denied

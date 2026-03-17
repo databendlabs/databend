@@ -64,7 +64,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
@@ -82,6 +82,7 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::binder::split_conjunctions;
+use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::TypeChecker;
 use crate::planner::semantic::normalize_identifier;
@@ -607,7 +608,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table_with_batch(
+                .resolve_data_source(
                     catalog_name,
                     database_name,
                     table_name,
@@ -737,13 +738,10 @@ impl Binder {
                 database,
                 name,
             } => self.resolve_stream_data_travel_point(catalog, database, name),
-            TimeTravelPoint::TableRef { typ, name } => {
-                let name = self.normalize_identifier(name).name;
-                Ok(NavigationPoint::TableRef {
-                    typ: typ.into(),
-                    name,
-                })
-            }
+            TimeTravelPoint::TableTag(name) => Err(legacy_table_ref_removed_error(format!(
+                "table tag navigation `AT (TAG => {})`",
+                self.normalize_identifier(name).name
+            ))),
         }
     }
 

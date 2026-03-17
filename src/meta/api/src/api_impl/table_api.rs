@@ -91,23 +91,23 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::Key;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_kvapi::kvapi::ListOptions;
-use databend_meta_types::ConditionResult::Eq;
-use databend_meta_types::MatchSeqExt;
-use databend_meta_types::MetaError;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
-use databend_meta_types::TxnGetRequest;
-use databend_meta_types::TxnGetResponse;
-use databend_meta_types::TxnOp;
-use databend_meta_types::TxnRequest;
-use databend_meta_types::protobuf as pb;
-use databend_meta_types::txn_op::Request;
-use databend_meta_types::txn_op_response::Response;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::types::ConditionResult::Eq;
+use databend_meta_client::types::MatchSeqExt;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::TxnGetRequest;
+use databend_meta_client::types::TxnGetResponse;
+use databend_meta_client::types::TxnOp;
+use databend_meta_client::types::TxnRequest;
+use databend_meta_client::types::protobuf as pb;
+use databend_meta_client::types::txn_op::Request;
+use databend_meta_client::types::txn_op_response::Response;
 use fastrace::func_name;
 use log::debug;
 use log::error;
@@ -354,7 +354,6 @@ where
                                 table_id_seq: None,
                                 db_id: *seq_db_id.data,
                                 new_table: false,
-                                spec_vec: None,
                                 prev_table_id: None,
                                 orphan_table_name: None,
                             });
@@ -514,7 +513,6 @@ where
                         table_id_seq,
                         db_id: *seq_db_id.data,
                         new_table: dbid_tbname_seq == 0,
-                        spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
                     });
@@ -1211,17 +1209,12 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for ((req, _), (tb_meta_seq, table_meta)) in
-            update_table_metas.iter_mut().zip(tb_meta_vec.iter())
-        {
+        for ((req, _), (tb_meta_seq, _)) in update_table_metas.iter_mut().zip(tb_meta_vec.iter()) {
             let tbid = TableId {
                 table_id: req.table_id,
             };
-            // `update_table_meta` MUST NOT modify `shared_by` field
-            let table_meta = table_meta.as_ref().unwrap();
 
-            let mut new_table_meta = req.new_table_meta.clone();
-            new_table_meta.shared_by = table_meta.shared_by.clone();
+            let new_table_meta = req.new_table_meta.clone();
 
             tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));

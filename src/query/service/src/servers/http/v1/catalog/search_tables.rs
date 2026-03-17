@@ -58,10 +58,12 @@ async fn handle(ctx: &HttpQueryContext, keyword: String) -> Result<SearchTablesR
         .get_visibility_checker(false, Object::All)
         .await?;
 
-    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
+    let catalog = CatalogManager::instance()
+        .get_default_catalog(Default::default())?
+        .disable_table_info_refresh()?;
 
     let mut tables = vec![];
-    let warnings = vec![];
+    let mut warnings = vec![];
 
     for db in catalog.list_databases(&tenant).await? {
         if !visibility_checker.check_database_visibility(
@@ -71,7 +73,21 @@ async fn handle(ctx: &HttpQueryContext, keyword: String) -> Result<SearchTablesR
         ) {
             continue;
         }
-        for tbl in db.list_tables().await? {
+        let db_tables = match db.list_tables().await {
+            Ok(tables) => tables,
+            Err(err) => {
+                let msg = format!(
+                    "Failed to list tables in database {}.{}: {}",
+                    catalog.name(),
+                    db.name(),
+                    err
+                );
+                log::warn!("{}", msg);
+                warnings.push(msg);
+                continue;
+            }
+        };
+        for tbl in db_tables {
             if !tbl.name().contains(&keyword) {
                 continue;
             }

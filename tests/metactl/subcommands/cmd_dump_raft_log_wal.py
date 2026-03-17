@@ -96,12 +96,12 @@ ChunkId(00_000_000_000_000_000_000)
   R-00010: [000_000_643, 000_000_689) Size(46): Commit(T1-N1.3)
   R-00011: [000_000_689, 000_000_884) Size(195): Append(log_id: T1-N1.4, payload: normal:time: <TIME> cmd: add_node(override):1=id=1 raft=localhost:28103 grpc=127.0.0.1:9191)
   R-00012: [000_000_884, 000_000_930) Size(46): Commit(T1-N1.4)
-  R-00013: [000_000_930, 000_001_192) Size(262): Append(log_id: T1-N1.5, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/host >= seq(0)] then:[Put(Put key=app/db/host)] else:[Get(Get key=app/db/host)]})
-  R-00014: [000_001_192, 000_001_238) Size(46): Commit(T1-N1.5)
-  R-00015: [000_001_238, 000_001_495) Size(257): Append(log_id: T1-N1.6, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/port >= seq(0)] then:[Put(Put key=app/db/port)] else:[Get(Get key=app/db/port)]})
-  R-00016: [000_001_495, 000_001_541) Size(46): Commit(T1-N1.6)
-  R-00017: [000_001_541, 000_001_817) Size(276): Append(log_id: T1-N1.7, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/config/timeout >= seq(0)] then:[Put(Put key=app/config/timeout)] else:[Get(Get key=app/config/timeout)]})
-  R-00018: [000_001_817, 000_001_863) Size(46): Commit(T1-N1.7)"""
+  R-00013: [000_000_930, 000_001_203) Size(273): Append(log_id: T1-N1.5, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/host >= seq(0)] then:[Put(Put key=app/db/host)] else:[Get(Get key=app/db/host)]})
+  R-00014: [000_001_203, 000_001_249) Size(46): Commit(T1-N1.5)
+  R-00015: [000_001_249, 000_001_517) Size(268): Append(log_id: T1-N1.6, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/port >= seq(0)] then:[Put(Put key=app/db/port)] else:[Get(Get key=app/db/port)]})
+  R-00016: [000_001_517, 000_001_563) Size(46): Commit(T1-N1.6)
+  R-00017: [000_001_563, 000_001_850) Size(287): Append(log_id: T1-N1.7, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/config/timeout >= seq(0)] then:[Put(Put key=app/config/timeout)] else:[Get(Get key=app/config/timeout)]})
+  R-00018: [000_001_850, 000_001_896) Size(46): Commit(T1-N1.7)"""
 
     expected2 = """RaftLog:
 ChunkId(00_000_000_000_000_000_000)
@@ -118,12 +118,12 @@ ChunkId(00_000_000_000_000_000_000)
   R-00010: [000_000_643, 000_000_689) Size(46): Commit(T1-N1.3)
   R-00011: [000_000_689, 000_000_884) Size(195): Append(log_id: T1-N1.4, payload: normal:time: <TIME> cmd: add_node(override):1=id=1 raft=localhost:28103 grpc=127.0.0.1:9191)
   R-00012: [000_000_884, 000_000_930) Size(46): Commit(T1-N1.4)
-  R-00013: [000_000_930, 000_001_192) Size(262): Append(log_id: T1-N1.5, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/host >= seq(0)] then:[Put(Put key=app/db/host)] else:[Get(Get key=app/db/host)]})
-  R-00014: [000_001_192, 000_001_238) Size(46): Commit(T1-N1.5)
-  R-00015: [000_001_238, 000_001_495) Size(257): Append(log_id: T1-N1.6, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/port >= seq(0)] then:[Put(Put key=app/db/port)] else:[Get(Get key=app/db/port)]})
-  R-00016: [000_001_495, 000_001_541) Size(46): Commit(T1-N1.6)
-  R-00017: [000_001_541, 000_001_817) Size(276): Append(log_id: T1-N1.7, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/config/timeout >= seq(0)] then:[Put(Put key=app/config/timeout)] else:[Get(Get key=app/config/timeout)]})
-  R-00018: [000_001_817, 000_001_863) Size(46): Commit(T1-N1.7)"""
+  R-00013: [000_000_930, 000_001_203) Size(273): Append(log_id: T1-N1.5, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/host >= seq(0)] then:[Put(Put key=app/db/host)] else:[Get(Get key=app/db/host)]})
+  R-00014: [000_001_203, 000_001_249) Size(46): Commit(T1-N1.5)
+  R-00015: [000_001_249, 000_001_517) Size(268): Append(log_id: T1-N1.6, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/port >= seq(0)] then:[Put(Put key=app/db/port)] else:[Get(Get key=app/db/port)]})
+  R-00016: [000_001_517, 000_001_563) Size(46): Commit(T1-N1.6)
+  R-00017: [000_001_563, 000_001_850) Size(287): Append(log_id: T1-N1.7, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/config/timeout >= seq(0)] then:[Put(Put key=app/config/timeout)] else:[Get(Get key=app/config/timeout)]})
+  R-00018: [000_001_850, 000_001_896) Size(46): Commit(T1-N1.7)"""
 
     expected3 = """RaftLog:
 ChunkId(00_000_000_000_000_000_000)
@@ -139,12 +139,12 @@ ChunkId(00_000_000_000_000_000_000)
   R-00009: [000_000_597, 000_000_643) Size(46): Commit(T1-N1.3)
   R-00010: [000_000_643, 000_000_838) Size(195): Append(log_id: T1-N1.4, payload: normal:time: <TIME> cmd: add_node(override):1=id=1 raft=localhost:28103 grpc=127.0.0.1:9191)
   R-00011: [000_000_838, 000_000_884) Size(46): Commit(T1-N1.4)
-  R-00012: [000_000_884, 000_001_146) Size(262): Append(log_id: T1-N1.5, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/host >= seq(0)] then:[Put(Put key=app/db/host)] else:[Get(Get key=app/db/host)]})
-  R-00013: [000_001_146, 000_001_192) Size(46): Commit(T1-N1.5)
-  R-00014: [000_001_192, 000_001_449) Size(257): Append(log_id: T1-N1.6, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/port >= seq(0)] then:[Put(Put key=app/db/port)] else:[Get(Get key=app/db/port)]})
-  R-00015: [000_001_449, 000_001_495) Size(46): Commit(T1-N1.6)
-  R-00016: [000_001_495, 000_001_771) Size(276): Append(log_id: T1-N1.7, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/config/timeout >= seq(0)] then:[Put(Put key=app/config/timeout)] else:[Get(Get key=app/config/timeout)]})
-  R-00017: [000_001_771, 000_001_817) Size(46): Commit(T1-N1.7)"""
+  R-00012: [000_000_884, 000_001_157) Size(273): Append(log_id: T1-N1.5, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/host >= seq(0)] then:[Put(Put key=app/db/host)] else:[Get(Get key=app/db/host)]})
+  R-00013: [000_001_157, 000_001_203) Size(46): Commit(T1-N1.5)
+  R-00014: [000_001_203, 000_001_471) Size(268): Append(log_id: T1-N1.6, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/db/port >= seq(0)] then:[Put(Put key=app/db/port)] else:[Get(Get key=app/db/port)]})
+  R-00015: [000_001_471, 000_001_517) Size(46): Commit(T1-N1.6)
+  R-00016: [000_001_517, 000_001_804) Size(287): Append(log_id: T1-N1.7, payload: normal:time: <TIME> cmd: txn:TxnRequest{if:[app/config/timeout >= seq(0)] then:[Put(Put key=app/config/timeout)] else:[Get(Get key=app/config/timeout)]})
+  R-00017: [000_001_804, 000_001_850) Size(46): Commit(T1-N1.7)"""
 
     assert_match_any(result, [expected, expected2, expected3])
 

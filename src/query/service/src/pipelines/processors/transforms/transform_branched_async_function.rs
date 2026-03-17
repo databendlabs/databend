@@ -98,16 +98,11 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                 }
                 AsyncFunctionArgument::DictGetFunction(_) => unreachable!(),
                 AsyncFunctionArgument::ReadFile(read_file_arg) => {
-                    let arg_indices = async_func_desc
-                        .arg_indices
-                        .iter()
-                        .map(|idx| idx.as_usize())
-                        .collect::<Vec<_>>();
                     self.read_file_ctx
                         .transform_read_file(
                             self.ctx.clone(),
                             &mut block,
-                            &arg_indices,
+                            &async_func_desc.arg_indices,
                             &async_func_desc.data_type,
                             read_file_arg,
                         )

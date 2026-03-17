@@ -83,6 +83,7 @@ impl ExchangeInjector for DefaultExchangeInjector {
     ) -> Result<Arc<Box<dyn FlightScatter>>> {
         Ok(Arc::new(match exchange {
             DataExchange::Merge(_) => unreachable!(),
+            DataExchange::GlobalShuffleExchange(_) => unreachable!(),
             DataExchange::Broadcast(exchange) => Box::new(BroadcastFlightScatter::try_create(
                 exchange.destination_ids.len(),
             )?),

@@ -36,7 +36,7 @@ impl TenantUserIdent {
 
 mod kvapi_impl {
     use databend_common_exception::ErrorCode;
-    use databend_meta_kvapi::kvapi;
+    use databend_meta_client::kvapi;
 
     use crate::principal::TenantUserIdent;
     use crate::principal::UserIdentity;
@@ -75,7 +75,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_kvapi::kvapi::Key;
+    use databend_meta_client::kvapi::Key;
 
     use crate::principal::TenantUserIdent;
     use crate::principal::UserIdentity;

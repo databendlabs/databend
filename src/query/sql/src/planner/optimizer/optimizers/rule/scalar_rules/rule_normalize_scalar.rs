@@ -323,7 +323,7 @@ mod tests {
                 let (name, data_type) = &columns[index];
                 let column = ColumnBindingBuilder::new(
                     name.to_string(),
-                    Symbol::new(index),
+                    Symbol::from_field_index(index),
                     Box::new(data_type.clone()),
                     Visibility::Visible,
                 )

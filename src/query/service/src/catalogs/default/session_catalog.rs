@@ -113,8 +113,8 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
@@ -366,9 +366,10 @@ impl Catalog for SessionCatalog {
         let (table_in_txn, is_active) = {
             let guard = self.txn_mgr.lock();
             if guard.is_active() {
+                let desc = format!("'{}'.'{}'", db_name, table_name);
                 (
                     guard
-                        .get_table_from_buffer(tenant, db_name, table_name)
+                        .get_table_from_buffer(&desc)
                         .map(|table_info| self.get_table_by_info(&table_info)),
                     true,
                 )
@@ -389,6 +390,37 @@ impl Catalog for SessionCatalog {
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
         Ok(table)
+    }
+
+    async fn get_table_branch_with_expire_ctl(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+        include_expired: bool,
+    ) -> Result<Arc<dyn Table>> {
+        {
+            let guard = self.txn_mgr.lock();
+            if guard.is_active() {
+                let branch_desc = format!("'{}'.'{}'/'{}'", db_name, table_name, branch_name);
+                if let Some(table) = guard
+                    .get_table_from_buffer(&branch_desc)
+                    .map(|table_info| self.get_table_by_info(&table_info))
+                {
+                    return table;
+                }
+            }
+        }
+        self.inner
+            .get_table_branch_with_expire_ctl(
+                tenant,
+                db_name,
+                table_name,
+                branch_name,
+                include_expired,
+            )
+            .await
     }
 
     async fn mget_tables(

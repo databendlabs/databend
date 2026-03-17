@@ -35,7 +35,7 @@ use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
 
-pub struct BroadcastRecvTransform {
+pub struct ExchangeRecvTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -45,7 +45,7 @@ pub struct BroadcastRecvTransform {
     handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
 }
 
-impl BroadcastRecvTransform {
+impl ExchangeRecvTransform {
     pub fn create_item(
         worker_id: usize,
         receiver: Arc<dyn InboundChannel>,
@@ -67,9 +67,9 @@ impl BroadcastRecvTransform {
     }
 }
 
-impl Processor for BroadcastRecvTransform {
+impl Processor for ExchangeRecvTransform {
     fn name(&self) -> String {
-        String::from("BroadcastRecvTransform")
+        String::from("ExchangeRecvTransform")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

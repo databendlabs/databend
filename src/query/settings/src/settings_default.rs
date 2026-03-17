@@ -562,7 +562,7 @@ impl DefaultSettings {
                 }),
                 ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
-                    desc: "Selectivity threshold (percentage) for join runtime filters. Filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
+                    desc: "Selectivity threshold (percentage) for bloom join runtime filters. Bloom filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
@@ -1126,6 +1126,20 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["None".into(), "LZ4".into(), "ZSTD".into()])),
+                }),
+                ("hash_shuffle_rows_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8192),
+                    desc: "Sets the max rows threshold for hash shuffle block partition stream.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("hash_shuffle_bytes_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(4 * 1024 * 1024),
+                    desc: "Sets the max bytes threshold for hash shuffle block partition stream.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

@@ -114,8 +114,8 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
@@ -303,11 +303,38 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
         branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
-        let table = self.get_table(tenant, db_name, table_name).await?;
         match branch {
-            Some(v) => table.with_branch(v),
-            None => Ok(table),
+            Some(branch_name) => {
+                self.get_table_branch(tenant, db_name, table_name, branch_name)
+                    .await
+            }
+            None => self.get_table(tenant, db_name, table_name).await,
         }
+    }
+
+    async fn get_table_branch(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table_branch_with_expire_ctl(tenant, db_name, table_name, branch_name, false)
+            .await
+    }
+
+    async fn get_table_branch_with_expire_ctl(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+        _branch_name: &str,
+        _include_expired: bool,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_table_branch_no_expire' not implemented for catalog {}",
+            self.name()
+        )))
     }
 
     /// Get multiple tables by db and table names.

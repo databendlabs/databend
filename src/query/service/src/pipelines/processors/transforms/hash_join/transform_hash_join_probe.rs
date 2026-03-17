@@ -180,7 +180,7 @@ impl TransformHashJoinProbe {
     }
 
     fn next_step(&mut self, step: Step) -> Result<Event> {
-        let event = match step {
+        let event = match &step {
             Step::Sync(_) => Event::Sync,
             Step::Async(_) => Event::Async,
             Step::Finish => {

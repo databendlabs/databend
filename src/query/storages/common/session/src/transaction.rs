@@ -29,8 +29,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_meta_app::tenant::Tenant;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -251,14 +250,8 @@ impl TxnManager {
             .cloned()
     }
 
-    pub fn get_table_from_buffer(
-        &self,
-        _tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-    ) -> Option<TableInfo> {
-        let desc = format!("'{}'.'{}'", db_name, table_name);
-        let temp_table_id = self.txn_buffer.temp_table_desc_to_id.get(&desc);
+    pub fn get_table_from_buffer(&self, desc: &str) -> Option<TableInfo> {
+        let temp_table_id = self.txn_buffer.temp_table_desc_to_id.get(desc);
         if let Some(id) = temp_table_id {
             let table = self.txn_buffer.mutated_temp_tables.get(id).unwrap();
             return Some(TableInfo::new(
@@ -272,7 +265,7 @@ impl TxnManager {
             ));
         }
 
-        self.txn_buffer.table_desc_to_id.get(&desc).and_then(|id| {
+        self.txn_buffer.table_desc_to_id.get(desc).and_then(|id| {
             self.txn_buffer.mutated_tables.get(id).cloned().or_else(|| {
                 self.txn_buffer
                     .stream_tables
@@ -406,21 +399,17 @@ impl TxnManager {
             .collect()
     }
 
-    pub fn get_table_txn_begin_timestamp(&self, table_unique_id: u64) -> Option<DateTime<Utc>> {
+    pub fn get_table_txn_begin_timestamp(&self, table_id: u64) -> Option<DateTime<Utc>> {
         self.txn_buffer
             .table_tnx_begin_timestamps
-            .get(&table_unique_id)
+            .get(&table_id)
             .cloned()
     }
 
-    pub fn set_table_txn_begin_timestamp(
-        &mut self,
-        table_unique_id: u64,
-        timestamps: DateTime<Utc>,
-    ) {
+    pub fn set_table_txn_begin_timestamp(&mut self, table_id: u64, timestamps: DateTime<Utc>) {
         self.txn_buffer
             .table_tnx_begin_timestamps
-            .insert(table_unique_id, timestamps);
+            .insert(table_id, timestamps);
     }
 
     pub fn get_base_snapshot_location(&self, table_id: u64) -> Option<String> {

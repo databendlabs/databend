@@ -26,7 +26,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::parse_computed_expr;
+use databend_common_sql::parse_computed_field_index_expr;
 
 use crate::Transform;
 use crate::blocks::CompoundBlockOperator;
@@ -51,8 +51,11 @@ where Self: Transform
         for f in output_schema.fields().iter() {
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
-                    let expr = parse_computed_expr(ctx.clone(), input_schema.clone(), stored_expr)?
-                        .project_column_ref(|i| Ok(i.as_usize()))?;
+                    let expr = parse_computed_field_index_expr(
+                        ctx.clone(),
+                        input_schema.clone(),
+                        stored_expr,
+                    )?;
                     check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?
                 } else {
                     return Err(ErrorCode::Internal(

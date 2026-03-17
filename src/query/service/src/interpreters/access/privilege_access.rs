@@ -55,7 +55,7 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::history_tables::session::get_history_log_user;
@@ -1652,10 +1652,16 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropTableClusterKey(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
-            Plan::CreateTableRef(plan) => {
+            Plan::CreateTableBranch(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
-            Plan::DropTableRef(plan) => {
+            Plan::CreateTableTag(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::DropTableBranch(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::DropTableTag(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::RefreshTableCache(_) | Plan::RefreshDatabaseCache(_) => {

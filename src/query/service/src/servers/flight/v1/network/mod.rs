@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod flagged_waker;
 pub mod inbound_channel;
 pub mod inbound_quota;
 pub mod local_channel;
 pub mod outbound_buffer;
 pub mod outbound_channel;
 pub mod outbound_transport;
+pub mod sync_task;
 
-pub use flagged_waker::FlaggedWaker;
-pub use flagged_waker::SyncTaskHandle;
-pub use flagged_waker::SyncTaskSet;
 pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;
@@ -39,3 +36,5 @@ pub use outbound_transport::PingPongCallback;
 pub use outbound_transport::PingPongExchange;
 pub use outbound_transport::PingPongExchangeInner;
 pub use outbound_transport::PingPongResponse;
+pub use sync_task::SyncTaskHandle;
+pub use sync_task::SyncTaskSet;

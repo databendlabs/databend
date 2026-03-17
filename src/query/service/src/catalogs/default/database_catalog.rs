@@ -117,8 +117,8 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_storages_common_session::SessionState;
 use log::info;
 
@@ -404,6 +404,26 @@ impl Catalog for DatabaseCatalog {
         }
         self.mutable_catalog
             .get_table(tenant, db_name, table_name)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_branch_with_expire_ctl(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+        branch_name: &str,
+        include_expired: bool,
+    ) -> Result<Arc<dyn Table>> {
+        self.mutable_catalog
+            .get_table_branch_with_expire_ctl(
+                tenant,
+                db_name,
+                table_name,
+                branch_name,
+                include_expired,
+            )
             .await
     }
 

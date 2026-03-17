@@ -17,7 +17,7 @@ use std::fmt::Display;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::ProcedureIdentity;
@@ -610,6 +610,48 @@ impl UnknownTableId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("ReferenceAlreadyExists: {reference}")]
+pub struct ReferenceAlreadyExists {
+    reference: String,
+}
+
+impl ReferenceAlreadyExists {
+    pub fn new(reference: impl Into<String>) -> Self {
+        Self {
+            reference: reference.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownReference: `{reference}`")]
+pub struct UnknownReference {
+    reference: String,
+}
+
+impl UnknownReference {
+    pub fn new(reference: impl Into<String>) -> Self {
+        Self {
+            reference: reference.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("ReferenceExpired: {reference}")]
+pub struct ReferenceExpired {
+    reference: String,
+}
+
+impl ReferenceExpired {
+    pub fn new(reference: impl Into<String>) -> Self {
+        Self {
+            reference: reference.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableSnapshotExpired: {table_id} while {context}")]
 pub struct TableSnapshotExpired {
     table_id: u64,
@@ -659,240 +701,6 @@ impl VirtualColumnTooMany {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("ShareAlreadyExists: {share_name} while {context}")]
-pub struct ShareAlreadyExists {
-    share_name: String,
-    context: String,
-}
-
-impl ShareAlreadyExists {
-    pub fn new(share_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            share_name: share_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("ShareEndpointAlreadyExists: {endpoint} while {context}")]
-pub struct ShareEndpointAlreadyExists {
-    endpoint: String,
-    context: String,
-}
-
-impl ShareEndpointAlreadyExists {
-    pub fn new(endpoint: impl ToString, context: impl ToString) -> Self {
-        Self {
-            endpoint: endpoint.to_string(),
-            context: context.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("ShareAccountsAlreadyExists: {share_name} while {context}")]
-pub struct ShareAccountsAlreadyExists {
-    share_name: String,
-    accounts: Vec<String>,
-    context: String,
-}
-
-impl ShareAccountsAlreadyExists {
-    pub fn new(
-        share_name: impl Into<String>,
-        accounts: &[String],
-        context: impl Into<String>,
-    ) -> Self {
-        Self {
-            share_name: share_name.into(),
-            accounts: accounts.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareAccounts: {share_id} while {context}")]
-pub struct UnknownShareAccounts {
-    accounts: Vec<String>,
-    share_id: u64,
-    context: String,
-}
-
-impl UnknownShareAccounts {
-    pub fn new(accounts: &[String], share_id: u64, context: impl Into<String>) -> Self {
-        Self {
-            accounts: accounts.into(),
-            share_id,
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("WrongShareObject: {obj_name} does not belong to the database that is being shared")]
-pub struct WrongShareObject {
-    obj_name: String,
-}
-
-impl WrongShareObject {
-    pub fn new(obj_name: impl ToString) -> Self {
-        Self {
-            obj_name: obj_name.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("WrongSharePrivileges: wrong share privileges of {obj_name}")]
-pub struct WrongSharePrivileges {
-    obj_name: String,
-}
-
-impl WrongSharePrivileges {
-    pub fn new(obj_name: impl ToString) -> Self {
-        Self {
-            obj_name: obj_name.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("ShareHasNoGrantedDatabase: {tenant}.{share_name} has no granted database")]
-pub struct ShareHasNoGrantedDatabase {
-    pub tenant: String,
-    pub share_name: String,
-}
-
-impl ShareHasNoGrantedDatabase {
-    pub fn new(tenant: impl Into<String>, share_name: impl Into<String>) -> Self {
-        Self {
-            tenant: tenant.into(),
-            share_name: share_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("ShareHasNoGrantedPrivilege: {tenant}.{share_name} has no proper granted privilege")]
-pub struct ShareHasNoGrantedPrivilege {
-    pub tenant: String,
-    pub share_name: String,
-}
-
-impl ShareHasNoGrantedPrivilege {
-    pub fn new(tenant: impl Into<String>, share_name: impl Into<String>) -> Self {
-        Self {
-            tenant: tenant.into(),
-            share_name: share_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error(
-    "CannotAccessShareTable: cannot access share table {table_name} from {tenant}.{share_name}"
-)]
-pub struct CannotAccessShareTable {
-    pub tenant: String,
-    pub share_name: String,
-    pub table_name: String,
-}
-
-impl CannotAccessShareTable {
-    pub fn new(
-        tenant: impl Into<String>,
-        share_name: impl Into<String>,
-        table_name: impl Into<String>,
-    ) -> Self {
-        Self {
-            tenant: tenant.into(),
-            share_name: share_name.into(),
-            table_name: table_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("WrongShare: {share_name} has the wrong format")]
-pub struct WrongShare {
-    share_name: String,
-}
-
-impl WrongShare {
-    pub fn new(share_name: impl Into<String>) -> Self {
-        Self {
-            share_name: share_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShare: {share_name} while {context}")]
-pub struct UnknownShare {
-    share_name: String,
-    context: String,
-}
-
-impl UnknownShare {
-    pub fn new(share_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            share_name: share_name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareID: {share_id} while {context}")]
-pub struct UnknownShareId {
-    share_id: u64,
-    context: String,
-}
-
-impl UnknownShareId {
-    pub fn new(share_id: u64, context: impl Into<String>) -> Self {
-        Self {
-            share_id,
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareEndpoint: {endpoint} while {context}")]
-pub struct UnknownShareEndpoint {
-    endpoint: String,
-    context: String,
-}
-
-impl UnknownShareEndpoint {
-    pub fn new(endpoint: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            endpoint: endpoint.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareEndpointId: {share_endpoint_id} while {context}")]
-pub struct UnknownShareEndpointId {
-    share_endpoint_id: u64,
-    context: String,
-}
-
-impl UnknownShareEndpointId {
-    pub fn new(share_endpoint_id: u64, context: impl Into<String>) -> Self {
-        Self {
-            share_endpoint_id,
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("TableLockExpired: `{table_id}` while `{context}`")]
 pub struct TableLockExpired {
     table_id: u64,
@@ -903,24 +711,6 @@ impl TableLockExpired {
     pub fn new(table_id: u64, context: impl Into<String>) -> Self {
         Self {
             table_id,
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error(
-    "CannotShareDatabaseCreatedFromShare: cannot share database {database_name} which created from share while {context}"
-)]
-pub struct CannotShareDatabaseCreatedFromShare {
-    database_name: String,
-    context: String,
-}
-
-impl CannotShareDatabaseCreatedFromShare {
-    pub fn new(database_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            database_name: database_name.into(),
             context: context.into(),
         }
     }
@@ -1128,56 +918,19 @@ pub enum AppError {
     TableSnapshotExpired(#[from] TableSnapshotExpired),
 
     #[error(transparent)]
+    ReferenceAlreadyExists(#[from] ReferenceAlreadyExists),
+
+    #[error(transparent)]
+    UnknownReference(#[from] UnknownReference),
+
+    #[error(transparent)]
+    ReferenceExpired(#[from] ReferenceExpired),
+
+    #[error(transparent)]
     TxnRetryMaxTimes(#[from] TxnRetryMaxTimes),
-
-    // share api errors
-    #[error(transparent)]
-    ShareAlreadyExists(#[from] ShareAlreadyExists),
-
-    #[error(transparent)]
-    UnknownShare(#[from] UnknownShare),
-
-    #[error(transparent)]
-    UnknownShareId(#[from] UnknownShareId),
-
-    #[error(transparent)]
-    ShareAccountsAlreadyExists(#[from] ShareAccountsAlreadyExists),
-
-    #[error(transparent)]
-    UnknownShareAccounts(#[from] UnknownShareAccounts),
-
-    #[error(transparent)]
-    WrongShareObject(#[from] WrongShareObject),
-
-    #[error(transparent)]
-    WrongSharePrivileges(#[from] WrongSharePrivileges),
-
-    #[error(transparent)]
-    ShareHasNoGrantedDatabase(#[from] ShareHasNoGrantedDatabase),
-
-    #[error(transparent)]
-    ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
-
-    #[error(transparent)]
-    CannotAccessShareTable(#[from] CannotAccessShareTable),
-
-    #[error(transparent)]
-    WrongShare(#[from] WrongShare),
-
-    #[error(transparent)]
-    ShareEndpointAlreadyExists(#[from] ShareEndpointAlreadyExists),
-
-    #[error(transparent)]
-    UnknownShareEndpoint(#[from] UnknownShareEndpoint),
-
-    #[error(transparent)]
-    UnknownShareEndpointId(#[from] UnknownShareEndpointId),
 
     #[error(transparent)]
     TableLockExpired(#[from] TableLockExpired),
-
-    #[error(transparent)]
-    CannotShareDatabaseCreatedFromShare(#[from] CannotShareDatabaseCreatedFromShare),
 
     #[error(transparent)]
     CreateIndexWithDropTime(#[from] CreateIndexWithDropTime),
@@ -1340,6 +1093,12 @@ impl AppErrorMessage for UnknownTable {
 
 impl AppErrorMessage for UnknownTableId {}
 
+impl AppErrorMessage for UnknownReference {}
+
+impl AppErrorMessage for ReferenceExpired {}
+
+impl AppErrorMessage for ReferenceAlreadyExists {}
+
 impl AppErrorMessage for TableSnapshotExpired {}
 
 impl AppErrorMessage for UnknownDatabaseId {}
@@ -1416,122 +1175,11 @@ impl AppErrorMessage for UndropTableHasNoHistory {
     }
 }
 
-impl AppErrorMessage for ShareAlreadyExists {
-    fn message(&self) -> String {
-        format!("Share '{}' already exists", self.share_name)
-    }
-}
-
-impl AppErrorMessage for UnknownShare {
-    fn message(&self) -> String {
-        format!("Unknown share '{}'", self.share_name)
-    }
-}
-
-impl AppErrorMessage for UnknownShareId {
-    fn message(&self) -> String {
-        format!("Unknown share id '{}'", self.share_id)
-    }
-}
-
-impl AppErrorMessage for ShareAccountsAlreadyExists {
-    fn message(&self) -> String {
-        format!(
-            "Share accounts for ({},{:?}) already exists",
-            self.share_name, self.accounts
-        )
-    }
-}
-
-impl AppErrorMessage for UnknownShareAccounts {
-    fn message(&self) -> String {
-        format!(
-            "Unknown share account for ({:?},{})",
-            self.accounts, self.share_id
-        )
-    }
-}
-
-impl AppErrorMessage for WrongShareObject {
-    fn message(&self) -> String {
-        format!(
-            " {} does not belong to the database that is being shared",
-            self.obj_name
-        )
-    }
-}
-
-impl AppErrorMessage for WrongSharePrivileges {
-    fn message(&self) -> String {
-        format!("wrong share privileges of {}", self.obj_name)
-    }
-}
-
-impl AppErrorMessage for ShareHasNoGrantedDatabase {
-    fn message(&self) -> String {
-        format!(
-            "share {}.{} has no granted database",
-            self.tenant, self.share_name
-        )
-    }
-}
-
-impl AppErrorMessage for ShareHasNoGrantedPrivilege {
-    fn message(&self) -> String {
-        format!(
-            "share {}.{} has no proper granted privilege",
-            self.tenant, self.share_name
-        )
-    }
-}
-
-impl AppErrorMessage for CannotAccessShareTable {
-    fn message(&self) -> String {
-        format!(
-            "cannot access to share table {} from share {}.{}",
-            self.table_name, self.tenant, self.share_name
-        )
-    }
-}
-
-impl AppErrorMessage for WrongShare {
-    fn message(&self) -> String {
-        format!("share {} has the wrong format", self.share_name)
-    }
-}
-
-impl AppErrorMessage for ShareEndpointAlreadyExists {
-    fn message(&self) -> String {
-        format!("Share endpoint '{}' already exists", self.endpoint)
-    }
-}
-
-impl AppErrorMessage for UnknownShareEndpoint {
-    fn message(&self) -> String {
-        format!("Unknown share endpoint '{}'", self.endpoint)
-    }
-}
-
-impl AppErrorMessage for UnknownShareEndpointId {
-    fn message(&self) -> String {
-        format!("Unknown share endpoint id '{}'", self.share_endpoint_id)
-    }
-}
-
 impl AppErrorMessage for TableLockExpired {
     fn message(&self) -> String {
         format!(
             "the acquired table lock in '{}' has been expired",
             self.table_id
-        )
-    }
-}
-
-impl AppErrorMessage for CannotShareDatabaseCreatedFromShare {
-    fn message(&self) -> String {
-        format!(
-            "Cannot share database '{}' which created from share",
-            self.database_name
         )
     }
 }
@@ -1674,6 +1322,11 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownDatabase(err) => ErrorCode::UnknownDatabase(err.message()),
             AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.message()),
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
+            AppError::UnknownReference(err) => ErrorCode::UnknownReference(err.message()),
+            AppError::ReferenceExpired(err) => ErrorCode::ReferenceExpired(err.message()),
+            AppError::ReferenceAlreadyExists(err) => {
+                ErrorCode::ReferenceAlreadyExists(err.message())
+            }
             AppError::TableSnapshotExpired(err) => ErrorCode::TableSnapshotExpired(err.message()),
             AppError::UnknownTable(err) => ErrorCode::UnknownTable(err.message()),
             AppError::UnknownCatalog(err) => ErrorCode::UnknownCatalog(err.message()),
@@ -1720,36 +1373,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::StreamVersionMismatched(err.message())
             }
             AppError::UnknownStreamId(err) => ErrorCode::UnknownStreamId(err.message()),
-            AppError::ShareAlreadyExists(err) => ErrorCode::ShareAlreadyExists(err.message()),
-            AppError::UnknownShare(err) => ErrorCode::UnknownShare(err.message()),
-            AppError::UnknownShareId(err) => ErrorCode::UnknownShareId(err.message()),
-            AppError::ShareAccountsAlreadyExists(err) => {
-                ErrorCode::ShareAccountsAlreadyExists(err.message())
-            }
-            AppError::UnknownShareAccounts(err) => ErrorCode::UnknownShareAccounts(err.message()),
-            AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
-            AppError::WrongSharePrivileges(err) => ErrorCode::WrongSharePrivileges(err.message()),
-            AppError::ShareHasNoGrantedDatabase(err) => {
-                ErrorCode::ShareHasNoGrantedDatabase(err.message())
-            }
-            AppError::ShareHasNoGrantedPrivilege(err) => {
-                ErrorCode::ShareHasNoGrantedPrivilege(err.message())
-            }
-            AppError::CannotAccessShareTable(err) => {
-                ErrorCode::CannotAccessShareTable(err.message())
-            }
-            AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
-            AppError::ShareEndpointAlreadyExists(err) => {
-                ErrorCode::ShareEndpointAlreadyExists(err.message())
-            }
-            AppError::UnknownShareEndpoint(err) => ErrorCode::UnknownShareEndpoint(err.message()),
-            AppError::UnknownShareEndpointId(err) => {
-                ErrorCode::UnknownShareEndpointId(err.message())
-            }
             AppError::TableLockExpired(err) => ErrorCode::TableLockExpired(err.message()),
-            AppError::CannotShareDatabaseCreatedFromShare(err) => {
-                ErrorCode::CannotShareDatabaseCreatedFromShare(err.message())
-            }
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
             AppError::CreateIndexWithDropTime(err) => {

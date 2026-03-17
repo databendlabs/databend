@@ -47,8 +47,6 @@ use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::DUMMY_COLUMN_INDEX;
-use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
@@ -60,7 +58,7 @@ use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::parse_computed_expr;
+use databend_common_sql::parse_computed_field_index_expr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
@@ -90,8 +88,8 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 
-// The predicate_column_index should not be conflict with update expr's column_binding's index.
-pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
+// The predicate column symbol should not conflict with update expr column bindings.
+pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mutation {
@@ -162,7 +160,7 @@ impl IPhysicalPlan for Mutation {
 
         let tbl = builder
             .ctx
-            .build_table_by_table_info(&self.table_info, &None, None)?;
+            .build_table_by_table_info(&self.table_info, None)?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
@@ -437,7 +435,7 @@ impl PhysicalPlanBuilder {
         let row_id_offset = if !is_not_matched_only {
             mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
-            DUMMY_COLUMN_INDEX
+            Symbol::DUMMY_COLUMN.as_usize()
         };
 
         // For distributed merge, we shuffle data blocks by block_id (derived from row_id) to avoid
@@ -539,7 +537,7 @@ impl PhysicalPlanBuilder {
             let update_list = if let Some(update_list) = &item.update {
                 // we don't need real col_indices here, just give a
                 // dummy index, that's ok.
-                let col_indices = vec![DUMMY_COLUMN_INDEX];
+                let col_indices = vec![Symbol::DUMMY_COLUMN.as_usize()];
                 let (database, table_name) = match table_name_alias {
                     None => (Some(database_name.as_str()), table_name.clone()),
                     Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
@@ -550,7 +548,7 @@ impl PhysicalPlanBuilder {
                     update_list,
                     table.schema_with_stream().into(),
                     col_indices,
-                    Some(PREDICATE_COLUMN_INDEX),
+                    PREDICATE_COLUMN_INDEX,
                     database,
                     &table_name,
                 )?;
@@ -823,13 +821,13 @@ pub fn generate_update_list(
     update_list: &HashMap<FieldIndex, ScalarExpr>,
     schema: DataSchema,
     col_indices: Vec<usize>,
-    use_column_name_index: Option<usize>,
+    use_column_name_index: Symbol,
     database: Option<&str>,
     table: &str,
 ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
     let column = ColumnBindingBuilder::new(
         PREDICATE_COLUMN_NAME.to_string(),
-        Symbol::new(use_column_name_index.unwrap_or_else(|| schema.num_fields())),
+        use_column_name_index,
         Box::new(DataType::Boolean),
         Visibility::Visible,
     )
@@ -901,13 +899,9 @@ pub fn generate_update_list(
                     arguments: vec![predicate.clone(), left, right],
                 })
             };
-            let expr = scalar.as_expr()?.project_column_ref(|col| {
-                if use_column_name_index.is_none() {
-                    Ok(col.column_name.clone())
-                } else {
-                    Ok(col.index.to_string())
-                }
-            })?;
+            let expr = scalar
+                .as_expr()?
+                .project_column_ref(|col| Ok(col.index.to_string()))?;
             let (expr, _) =
                 ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));
@@ -923,14 +917,14 @@ pub fn mutation_update_expr(
     update_list: &HashMap<FieldIndex, ScalarExpr>,
     schema: DataSchema,
     input_schema: Arc<DataSchema>,
-    predicate_column_index: Option<usize>,
+    predicate_column_index: Option<Symbol>,
     database: Option<&str>,
     table: &str,
 ) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
     let predicate = if let Some(predicate_column_index) = predicate_column_index {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
-            Symbol::new(predicate_column_index),
+            predicate_column_index,
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
@@ -1014,29 +1008,29 @@ pub fn generate_stored_computed_list(
     let mut remote_exprs = Vec::new();
     for (i, f) in schema.fields().iter().enumerate() {
         if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
-            let expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?;
+            let expr = parse_computed_field_index_expr(ctx.clone(), schema.clone(), stored_expr)?;
             let expr = check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?;
 
             // If related column has updated, the stored computed column need to regenerate.
             let mut need_update = false;
             let field_indices = expr.column_refs();
             for (field_index, _) in field_indices.iter() {
-                if update_list.contains_key(&field_index.as_usize()) {
+                if update_list.contains_key(field_index) {
                     need_update = true;
                     break;
                 }
             }
             if need_update {
-                let expr = expr.project_column_ref(|id| {
-                    let mut column_index: Option<usize> = None;
+                let expr = expr.project_column_ref(|field| {
+                    let mut column_index = None;
                     for column_binding in bind_context.columns.iter() {
                         if BindContext::match_column_binding(
                             database,
                             Some(table),
-                            schema.field(id.as_usize()).name(),
+                            schema.field(*field).name(),
                             column_binding,
                         ) {
-                            column_index = Some(column_binding.index.as_usize());
+                            column_index = Some(column_binding.index);
                             break;
                         }
                     }

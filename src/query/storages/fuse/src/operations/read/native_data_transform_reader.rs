@@ -27,6 +27,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_sql::IndexType;
+use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::native_data_source::NativeDataSource;
@@ -99,6 +100,7 @@ impl AsyncTransform for ReadNativeDataTransform {
                         self.func_ctx.clone(),
                         self.table_schema.clone(),
                         self.block_reader.operator(),
+                        ReadSettings::from_ctx(&self.context)?,
                         inlist_bloom_prune_threshold,
                         runtime_filters
                             .into_iter()

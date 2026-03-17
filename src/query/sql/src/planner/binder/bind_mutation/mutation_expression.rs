@@ -32,7 +32,6 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
-use crate::DUMMY_COLUMN_INDEX;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -287,7 +286,7 @@ impl MutationExpression {
                         bind_context,
                         all_source_columns: None,
                         target_table_index,
-                        target_table_row_id_index: Symbol::new(DUMMY_COLUMN_INDEX),
+                        target_table_row_id_index: Symbol::DUMMY_COLUMN,
                     })
                 } else {
                     let is_lazy_table = {

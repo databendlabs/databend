@@ -88,6 +88,7 @@ impl HashJoinProbeState {
                 if match_count == 0 {
                     continue;
                 }
+
                 if ProbeState::check_used(
                     &mut probe_state.used_once,
                     max_block_size,
@@ -135,6 +136,7 @@ impl HashJoinProbeState {
                 if match_count == 0 {
                     continue;
                 }
+
                 if ProbeState::check_used(
                     &mut probe_state.used_once,
                     max_block_size,

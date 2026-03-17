@@ -25,12 +25,12 @@ use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_types::ConditionResult::Eq;
-use databend_meta_types::MetaError;
-use databend_meta_types::SeqV;
-use databend_meta_types::TxnRequest;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::types::ConditionResult::Eq;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 

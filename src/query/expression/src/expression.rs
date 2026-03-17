@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Write;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -54,7 +55,7 @@ impl ColumnIndex for String {
 
 impl ColumnIndex for Symbol {
     fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result {
-        write!(f, "{}", self.as_usize())
+        write!(f, "{self}")
     }
 }
 

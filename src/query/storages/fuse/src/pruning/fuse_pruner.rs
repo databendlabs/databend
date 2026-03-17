@@ -166,6 +166,7 @@ impl PruningContext {
             func_ctx.clone(),
             &table_schema,
             dal.clone(),
+            ReadSettings::from_ctx(ctx)?,
             filter_expr.as_ref(),
             bloom_index_cols,
             ngram_args,
