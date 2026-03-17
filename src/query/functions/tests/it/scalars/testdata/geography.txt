@@ -210,6 +210,420 @@ output domain  : {2..=2}
 output         : 2
 
 
+ast            : st_centroid(st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+raw expr       : st_centroid(st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+checked expr   : st_centroid<Geography>(st_geographyfromwkt<String>("POINT(-0.1278 51.5074)"))
+optimized expr : "POINT(-0.1278 51.5074)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(-0.1278 51.5074)'
+
+
+ast            : st_centroid(st_geographyfromewkt('LINESTRING(-74.0060 40.7128, -73.9851 40.7580)'))
+raw expr       : st_centroid(st_geographyfromewkt('LINESTRING(-74.0060 40.7128, -73.9851 40.7580)'))
+checked expr   : st_centroid<Geography>(st_geographyfromwkt<String>("LINESTRING(-74.0060 40.7128, -73.9851 40.7580)"))
+optimized expr : "POINT(-73.995553605 40.735400558)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(-73.995553605 40.735400558)'
+
+
+ast            : st_centroid(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+raw expr       : st_centroid(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+checked expr   : st_centroid<Geography>(st_geographyfromwkt<String>("POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))"))
+optimized expr : "POINT(2.344999994 48.86000032)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(2.344999994 48.86000032)'
+
+
+ast            : st_centroid(st_geographyfromewkt('MULTIPOINT((-74.0060 40.7128), (-73.9851 40.7580), (-73.9680 40.7851))'))
+raw expr       : st_centroid(st_geographyfromewkt('MULTIPOINT((-74.0060 40.7128), (-73.9851 40.7580), (-73.9680 40.7851))'))
+checked expr   : st_centroid<Geography>(st_geographyfromwkt<String>("MULTIPOINT((-74.0060 40.7128), (-73.9851 40.7580), (-73.9680 40.7851))"))
+optimized expr : "POINT(-73.9863737 40.751967871)"
+output type    : Geography NULL
+output domain  : Undefined
+output         : 'POINT(-73.9863737 40.751967871)'
+
+
+ast            : st_union(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+raw expr       : st_union(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+checked expr   : st_union<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))"))
+optimized expr : "POLYGON((-74.000000061 40.740001733,-74.02 40.74,-74.02 40.7,-73.98 40.7,-73.980000062 40.720001733,-73.96 40.72,-73.96 40.76,-74 40.76,-74.000000061 40.740001733))"
+output type    : Geography
+output domain  : Undefined
+output         : 'POLYGON((-74.000000061 40.740001733,-74.02 40.74,-74.02 40.7,-73.98 40.7,-73.980000062 40.720001733,-73.96 40.72,-73.96 40.76,-74 40.76,-74.000000061 40.740001733))'
+
+
+ast            : st_union(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+raw expr       : st_union(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+checked expr   : st_union<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"), st_geographyfromwkt<String>("POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))"))
+optimized expr : "MULTIPOLYGON(((-0.15 51.5,-0.15 51.52,-0.1 51.52,-0.1 51.5,-0.15 51.5)),((2.33 48.85,2.33 48.87,2.36 48.87,2.36 48.85,2.33 48.85)))"
+output type    : Geography
+output domain  : Undefined
+output         : 'MULTIPOLYGON(((-0.15 51.5,-0.15 51.52,-0.1 51.52,-0.1 51.5,-0.15 51.5)),((2.33 48.85,2.33 48.87,2.36 48.87,2.36 48.85,2.33 48.85)))'
+
+
+ast            : st_union(st_geographyfromewkt('POINT(-0.1278 51.5074)'), st_geographyfromewkt('POINT(2.3522 48.8566)'))
+raw expr       : st_union(st_geographyfromewkt('POINT(-0.1278 51.5074)'), st_geographyfromewkt('POINT(2.3522 48.8566)'))
+checked expr   : st_union<Geography, Geography>(st_geographyfromwkt<String>("POINT(-0.1278 51.5074)"), st_geographyfromwkt<String>("POINT(2.3522 48.8566)"))
+optimized expr : "MULTIPOINT(-0.1278 51.5074,2.3522 48.8566)"
+output type    : Geography
+output domain  : Undefined
+output         : 'MULTIPOINT(-0.1278 51.5074,2.3522 48.8566)'
+
+
+ast            : st_intersection(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+raw expr       : st_intersection(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+checked expr   : st_intersection<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))"))
+optimized expr : "POLYGON((-73.98 40.74,-74.000000061 40.740001733,-74 40.72,-73.980000062 40.720001733,-73.98 40.74))"
+output type    : Geography
+output domain  : Undefined
+output         : 'POLYGON((-73.98 40.74,-74.000000061 40.740001733,-74 40.72,-73.980000062 40.720001733,-73.98 40.74))'
+
+
+ast            : st_intersection(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+raw expr       : st_intersection(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+checked expr   : st_intersection<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"), st_geographyfromwkt<String>("POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))"))
+optimized expr : "GEOMETRYCOLLECTION EMPTY"
+output type    : Geography
+output domain  : Undefined
+output         : 'GEOMETRYCOLLECTION EMPTY'
+
+
+ast            : st_intersection(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+raw expr       : st_intersection(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+checked expr   : st_intersection<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"), st_geographyfromwkt<String>("POINT(-0.1278 51.5074)"))
+optimized expr : "POINT(-0.1278 51.5074)"
+output type    : Geography
+output domain  : Undefined
+output         : 'POINT(-0.1278 51.5074)'
+
+
+ast            : st_difference(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+raw expr       : st_difference(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+checked expr   : st_difference<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))"))
+optimized expr : "POLYGON((-74.000000061 40.740001733,-74.02 40.74,-74.02 40.7,-73.98 40.7,-73.980000062 40.720001733,-74 40.72,-74.000000061 40.740001733))"
+output type    : Geography
+output domain  : Undefined
+output         : 'POLYGON((-74.000000061 40.740001733,-74.02 40.74,-74.02 40.7,-73.98 40.7,-73.980000062 40.720001733,-74 40.72,-74.000000061 40.740001733))'
+
+
+ast            : st_difference(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+raw expr       : st_difference(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+checked expr   : st_difference<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"), st_geographyfromwkt<String>("POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))"))
+optimized expr : "POLYGON((-0.100000028 51.520000029,-0.14999995 51.519999997,-0.150000041 51.499999979,-0.100000008 51.499999999,-0.100000028 51.520000029))"
+output type    : Geography
+output domain  : Undefined
+output         : 'POLYGON((-0.100000028 51.520000029,-0.14999995 51.519999997,-0.150000041 51.499999979,-0.100000008 51.499999999,-0.100000028 51.520000029))'
+
+
+ast            : st_difference(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+raw expr       : st_difference(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+checked expr   : st_difference<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"), st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"))
+optimized expr : "GEOMETRYCOLLECTION EMPTY"
+output type    : Geography
+output domain  : Undefined
+output         : 'GEOMETRYCOLLECTION EMPTY'
+
+
+ast            : st_symdifference(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+raw expr       : st_symdifference(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+checked expr   : st_symdifference<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))"))
+optimized expr : "MULTIPOLYGON(((-74.000000061 40.740001733,-74.02 40.74,-74.02 40.7,-73.98 40.7,-73.980000062 40.720001733,-74 40.72,-74.000000061 40.740001733)),((-73.96 40.76,-74 40.76,-74.000000061 40.740001733,-73.98 40.74,-73.980000062 40.720001733,-73.96 40.72,-73.96 40.76)))"
+output type    : Geography
+output domain  : Undefined
+output         : 'MULTIPOLYGON(((-74.000000061 40.740001733,-74.02 40.74,-74.02 40.7,-73.98 40.7,-73.980000062 40.720001733,-74 40.72,-74.000000061 40.740001733)),((-73.96 40.76,-74 40.76,-74.000000061 40.740001733,-73.98 40.74,-73.980000062 40.720001733,-73.96 40.72,-73.96 40.76)))'
+
+
+ast            : st_symdifference(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+raw expr       : st_symdifference(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+checked expr   : st_symdifference<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))"), st_geographyfromwkt<String>("POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))"))
+optimized expr : "GEOMETRYCOLLECTION EMPTY"
+output type    : Geography
+output domain  : Undefined
+output         : 'GEOMETRYCOLLECTION EMPTY'
+
+
+ast            : st_symdifference(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+raw expr       : st_symdifference(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+checked expr   : st_symdifference<Geography, Geography>(st_geographyfromwkt<String>("POINT(139.6917 35.6895)"), st_geographyfromwkt<String>("POINT(-0.1278 51.5074)"))
+optimized expr : "MULTIPOINT(139.6917 35.689499991,-0.1278 51.507399997)"
+output type    : Geography
+output domain  : Undefined
+output         : 'MULTIPOINT(139.6917 35.689499991,-0.1278 51.507399997)'
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0060 40.7128)'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0060 40.7128)'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POINT(-74.0060 40.7128)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(139.6917 35.6895)'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(139.6917 35.6895)'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POINT(139.6917 35.6895)"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"), st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"), st_geographyfromwkt<String>("POINT(-0.1278 51.5074)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0199 40.7001)'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0199 40.7001)'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POINT(-74.0199 40.7001)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0201 40.6999)'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0201 40.6999)'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POINT(-74.0201 40.6999)"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POINT(2.345 48.860)'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POINT(2.345 48.860)'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))"), st_geographyfromwkt<String>("POINT(2.345 48.860)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_contains(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POINT(2.3299 48.8499)'))
+raw expr       : st_contains(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POINT(2.3299 48.8499)'))
+checked expr   : st_contains<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))"), st_geographyfromwkt<String>("POINT(2.3299 48.8499)"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_disjoint(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+raw expr       : st_disjoint(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+checked expr   : st_disjoint<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"), st_geographyfromwkt<String>("POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_disjoint(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+raw expr       : st_disjoint(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+checked expr   : st_disjoint<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_disjoint(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+raw expr       : st_disjoint(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+checked expr   : st_disjoint<Geography, Geography>(st_geographyfromwkt<String>("POINT(139.6917 35.6895)"), st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_disjoint(st_geographyfromewkt('POINT(-74.0201 40.6999)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_disjoint(st_geographyfromewkt('POINT(-74.0201 40.6999)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_disjoint<Geography, Geography>(st_geographyfromwkt<String>("POINT(-74.0201 40.6999)"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_disjoint(st_geographyfromewkt('POINT(-0.2002 51.4798)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+raw expr       : st_disjoint(st_geographyfromewkt('POINT(-0.2002 51.4798)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+checked expr   : st_disjoint<Geography, Geography>(st_geographyfromwkt<String>("POINT(-0.2002 51.4798)"), st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_disjoint(st_geographyfromewkt('POLYGON((-74.0206 40.7396, -74.0206 40.7398, -74.0204 40.7398, -74.0204 40.7396, -74.0206 40.7396))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_disjoint(st_geographyfromewkt('POLYGON((-74.0206 40.7396, -74.0206 40.7398, -74.0204 40.7398, -74.0204 40.7396, -74.0206 40.7396))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_disjoint<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.0206 40.7396, -74.0206 40.7398, -74.0204 40.7398, -74.0204 40.7396, -74.0206 40.7396))"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+raw expr       : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_intersects(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+raw expr       : st_intersects(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"), st_geographyfromwkt<String>("POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_intersects(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+raw expr       : st_intersects(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"), st_geographyfromwkt<String>("POINT(-0.1278 51.5074)"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_intersects(st_geographyfromewkt('POINT(-74.0060 40.7128)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_intersects(st_geographyfromewkt('POINT(-74.0060 40.7128)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POINT(-74.0060 40.7128)"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0205 40.6995, -74.0205 40.7005, -74.0195 40.7005, -74.0195 40.6995, -74.0205 40.6995))'))
+raw expr       : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0205 40.6995, -74.0205 40.7005, -74.0195 40.7005, -74.0195 40.6995, -74.0205 40.6995))'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.0205 40.6995, -74.0205 40.7005, -74.0195 40.7005, -74.0195 40.6995, -74.0205 40.6995))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0206 40.6994, -74.0206 40.6996, -74.0204 40.6996, -74.0204 40.6994, -74.0206 40.6994))'))
+raw expr       : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0206 40.6994, -74.0206 40.6996, -74.0204 40.6996, -74.0204 40.6994, -74.0206 40.6994))'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.0206 40.6994, -74.0206 40.6996, -74.0204 40.6996, -74.0204 40.6994, -74.0206 40.6994))"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0201 40.7399, -74.0201 40.7402, -74.0198 40.7402, -74.0198 40.7399, -74.0201 40.7399))'))
+raw expr       : st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0201 40.7399, -74.0201 40.7402, -74.0198 40.7402, -74.0198 40.7399, -74.0201 40.7399))'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"), st_geographyfromwkt<String>("POLYGON((-74.0201 40.7399, -74.0201 40.7402, -74.0198 40.7402, -74.0198 40.7399, -74.0201 40.7399))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_intersects(st_geographyfromewkt('POINT(2.3301 48.8501)'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+raw expr       : st_intersects(st_geographyfromewkt('POINT(2.3301 48.8501)'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))
+checked expr   : st_intersects<Geography, Geography>(st_geographyfromwkt<String>("POINT(2.3301 48.8501)"), st_geographyfromwkt<String>("POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_within(st_geographyfromewkt('POINT(-74.0060 40.7128)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_within(st_geographyfromewkt('POINT(-74.0060 40.7128)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POINT(-74.0060 40.7128)"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_within(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+raw expr       : st_within(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))"), st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_within(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_within(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POINT(139.6917 35.6895)"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_within(st_geographyfromewkt('POINT(-0.1278 51.5074)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+raw expr       : st_within(st_geographyfromewkt('POINT(-0.1278 51.5074)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POINT(-0.1278 51.5074)"), st_geographyfromwkt<String>("POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_within(st_geographyfromewkt('POINT(-74.0199 40.7001)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_within(st_geographyfromewkt('POINT(-74.0199 40.7001)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POINT(-74.0199 40.7001)"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_within(st_geographyfromewkt('POLYGON((-74.0198 40.7002, -74.0198 40.7008, -74.0192 40.7008, -74.0192 40.7002, -74.0198 40.7002))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_within(st_geographyfromewkt('POLYGON((-74.0198 40.7002, -74.0198 40.7008, -74.0192 40.7008, -74.0192 40.7002, -74.0198 40.7002))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.0198 40.7002, -74.0198 40.7008, -74.0192 40.7008, -74.0192 40.7002, -74.0198 40.7002))"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_within(st_geographyfromewkt('POINT(-74.0201 40.6999)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_within(st_geographyfromewkt('POINT(-74.0201 40.6999)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POINT(-74.0201 40.6999)"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_within(st_geographyfromewkt('POLYGON((-74.0198 40.7398, -74.0198 40.7406, -74.0192 40.7406, -74.0192 40.7398, -74.0198 40.7398))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+raw expr       : st_within(st_geographyfromewkt('POLYGON((-74.0198 40.7398, -74.0198 40.7406, -74.0192 40.7406, -74.0192 40.7398, -74.0198 40.7398))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))
+checked expr   : st_within<Geography, Geography>(st_geographyfromwkt<String>("POLYGON((-74.0198 40.7398, -74.0198 40.7406, -74.0192 40.7406, -74.0192 40.7398, -74.0198 40.7398))"), st_geographyfromwkt<String>("POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))"))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
 ast            : st_geogfromgeohash(st_geohash(st_makepoint(-122.3061, 37.554162)))
 raw expr       : st_geogfromgeohash(st_geohash(st_makepoint(-122.3061, 37.554162)))
 checked expr   : st_geogfromgeohash<String>(st_geohash<Geography>(st_makepoint<Float64, Float64>(CAST<Decimal(7, 4)>(-122.3061_d64(7,4) AS Float64), CAST<Decimal(8, 6)>(37.554162_d64(8,6) AS Float64))))
@@ -411,10 +825,10 @@ output         : 5
 ast            : to_string(st_geographyfromewkt('POINT(-122.35 37.55)'))
 raw expr       : to_string(st_geographyfromewkt('POINT(-122.35 37.55)'))
 checked expr   : CAST<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)") AS String)
-optimized expr : "POINT(-122.35 37.55)"
+optimized expr : "SRID=4326;POINT(-122.35 37.55)"
 output type    : String
-output domain  : {"POINT(-122.35 37.55)"..="POINT(-122.35 37.55)"}
-output         : 'POINT(-122.35 37.55)'
+output domain  : {"SRID=4326;POINT(-122.35 37.55)"..="SRID=4326;POINT(-122.35 37.55)"}
+output         : 'SRID=4326;POINT(-122.35 37.55)'
 
 
 ast            : to_geography('POINT(-122.35 37.55)')

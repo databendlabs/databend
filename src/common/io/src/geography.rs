@@ -27,7 +27,13 @@ use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
 
 use crate::ewkb_to_geo;
+use crate::geometry::GeometryDataType;
 use crate::geometry::ewkt_str_to_geo;
+use crate::geometry::geo_to_ewkb;
+use crate::geometry::geo_to_ewkt;
+use crate::geometry::geo_to_json;
+use crate::geometry::geo_to_wkb;
+use crate::geometry::geo_to_wkt;
 
 pub const LONGITUDE_MIN: f64 = -180.0;
 pub const LONGITUDE_MAX: f64 = 180.0;
@@ -67,6 +73,34 @@ pub fn geography_from_geojson(json_str: &str) -> Result<Vec<u8>> {
     geo.coords_iter().try_for_each(|c| check_point(c.x, c.y))?;
     geo.to_ewkb(geozero::CoordDimensions::xy(), None)
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+pub fn geography_format(ewkb: &[u8], format_type: GeometryDataType) -> Result<String> {
+    let geo = Ewkb(ewkb)
+        .to_geo()
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+
+    match format_type {
+        GeometryDataType::WKB => {
+            let bytes = geo_to_wkb(geo)?;
+            Ok(bytes
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(""))
+        }
+        GeometryDataType::EWKB => {
+            let bytes = geo_to_ewkb(geo, Some(GEOGRAPHY_SRID))?;
+            Ok(bytes
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(""))
+        }
+        GeometryDataType::WKT => geo_to_wkt(geo),
+        GeometryDataType::EWKT => geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)),
+        GeometryDataType::GEOJSON => geo_to_json(geo),
+    }
 }
 
 pub fn check_srid(srid: Option<i32>) -> Result<()> {

@@ -19,7 +19,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::BoundingRect;
 use geo::Geometry;
+use geo::LineString;
 use geo::Point;
+use geo::Polygon;
+use geo::Rect;
 use geohash::encode;
 use geozero::CoordDimensions;
 use geozero::GeomProcessor;
@@ -256,6 +259,19 @@ pub fn geo_to_wkt(geo: Geometry) -> Result<String> {
 pub fn geo_to_ewkt(geo: Geometry, srid: Option<i32>) -> Result<String> {
     geo.to_ewkt(srid)
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+pub fn rect_to_polygon(rect: Rect<f64>) -> Polygon<f64> {
+    let min = rect.min();
+    let max = rect.max();
+    let exterior = LineString::from(vec![
+        (min.x, min.y),
+        (max.x, min.y),
+        (max.x, max.y),
+        (min.x, max.y),
+        (min.x, min.y),
+    ]);
+    Polygon::new(exterior, vec![])
 }
 
 /// Process EWKB input and return SRID.

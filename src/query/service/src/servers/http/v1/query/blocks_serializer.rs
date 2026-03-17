@@ -30,6 +30,7 @@ use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
@@ -38,6 +39,7 @@ use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::OutputFormatSettings;
+use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 use log::info;
@@ -229,20 +231,18 @@ impl RowSerializer<'_> {
             Column::Geography(c) => {
                 let v = unsafe { c.index_unchecked(self.row_index) };
 
-                Ok(
-                    match (&self.format.geometry_format, ewkb_to_geo(&mut Ewkb(v.0))) {
-                        (GeometryDataType::WKB, Ok((geo, _))) => {
-                            geo_to_wkb(geo).map(hex::encode_upper).ok()
-                        }
-                        (GeometryDataType::WKT, Ok((geo, _))) => geo_to_wkt(geo).ok(),
-                        (GeometryDataType::EWKB, Ok((geo, srid))) => {
-                            geo_to_ewkb(geo, srid).map(hex::encode_upper).ok()
-                        }
-                        (GeometryDataType::EWKT, Ok((geo, srid))) => geo_to_ewkt(geo, srid).ok(),
-                        (GeometryDataType::GEOJSON, Ok((geo, _))) => geo_to_json(geo).ok(),
-                        (_, Err(_)) => None,
-                    },
-                )
+                Ok(match (&self.format.geometry_format, Ewkb(v.0).to_geo()) {
+                    (GeometryDataType::WKB, Ok(geo)) => geo_to_wkb(geo).map(hex::encode_upper).ok(),
+                    (GeometryDataType::WKT, Ok(geo)) => geo_to_wkt(geo).ok(),
+                    (GeometryDataType::EWKB, Ok(geo)) => geo_to_ewkb(geo, Some(GEOGRAPHY_SRID))
+                        .map(hex::encode_upper)
+                        .ok(),
+                    (GeometryDataType::EWKT, Ok(geo)) => {
+                        geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)).ok()
+                    }
+                    (GeometryDataType::GEOJSON, Ok(geo)) => geo_to_json(geo).ok(),
+                    (_, Err(_)) => None,
+                })
             }
             Column::Nullable(c) => {
                 if !c.validity.get_bit(self.row_index) {

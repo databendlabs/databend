@@ -38,6 +38,15 @@ fn test_geography() {
     test_st_startpoint(file);
     test_st_pointn(file);
     test_st_dimension(file);
+    test_st_centroid(file);
+    test_st_union(file);
+    test_st_intersection(file);
+    test_st_difference(file);
+    test_st_symdifference(file);
+    test_st_contains(file);
+    test_st_disjoint(file);
+    test_st_intersects(file);
+    test_st_within(file);
     test_st_geogfromgeohash(file);
     test_st_geogpointfromgeohash(file);
     test_st_makepolygon(file);
@@ -196,6 +205,263 @@ fn test_st_dimension(file: &mut impl Write) {
     run_ast(
         file,
         "st_dimension(st_geographyfromewkt('POLYGON((0 0,0 1,1 1,1 0,0 0))'))",
+        &[],
+    );
+}
+
+fn test_st_centroid(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_centroid(st_geographyfromewkt('POINT(-0.1278 51.5074)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_centroid(st_geographyfromewkt('LINESTRING(-74.0060 40.7128, -73.9851 40.7580)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_centroid(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_centroid(st_geographyfromewkt('MULTIPOINT((-74.0060 40.7128), (-73.9851 40.7580), (-73.9680 40.7851))'))",
+        &[],
+    );
+}
+
+fn test_st_union(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_union(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_union(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_union(st_geographyfromewkt('POINT(-0.1278 51.5074)'), st_geographyfromewkt('POINT(2.3522 48.8566)'))",
+        &[],
+    );
+}
+
+fn test_st_intersection(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_intersection(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersection(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersection(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))",
+        &[],
+    );
+}
+
+fn test_st_difference(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_difference(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_difference(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_difference(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))",
+        &[],
+    );
+}
+
+fn test_st_symdifference(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_symdifference(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_symdifference(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_symdifference(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))",
+        &[],
+    );
+}
+
+fn test_st_contains(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0060 40.7128)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(139.6917 35.6895)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0199 40.7001)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POINT(-74.0201 40.6999)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POINT(2.345 48.860)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_contains(st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'), st_geographyfromewkt('POINT(2.3299 48.8499)'))",
+        &[],
+    );
+}
+
+fn test_st_disjoint(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_disjoint(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_disjoint(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_disjoint(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_disjoint(st_geographyfromewkt('POINT(-74.0201 40.6999)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_disjoint(st_geographyfromewkt('POINT(-0.2002 51.4798)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_disjoint(st_geographyfromewkt('POLYGON((-74.0206 40.7396, -74.0206 40.7398, -74.0204 40.7398, -74.0204 40.7396, -74.0206 40.7396))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+}
+
+fn test_st_intersects(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.00 40.72, -74.00 40.76, -73.96 40.76, -73.96 40.72, -74.00 40.72))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((139.68 35.68, 139.68 35.70, 139.70 35.70, 139.70 35.68, 139.68 35.68))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POINT(-0.1278 51.5074)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POINT(-74.0060 40.7128)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0205 40.6995, -74.0205 40.7005, -74.0195 40.7005, -74.0195 40.6995, -74.0205 40.6995))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0206 40.6994, -74.0206 40.6996, -74.0204 40.6996, -74.0204 40.6994, -74.0206 40.6994))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'), st_geographyfromewkt('POLYGON((-74.0201 40.7399, -74.0201 40.7402, -74.0198 40.7402, -74.0198 40.7399, -74.0201 40.7399))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_intersects(st_geographyfromewkt('POINT(2.3301 48.8501)'), st_geographyfromewkt('POLYGON((2.33 48.85, 2.33 48.87, 2.36 48.87, 2.36 48.85, 2.33 48.85))'))",
+        &[],
+    );
+}
+
+fn test_st_within(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POINT(-74.0060 40.7128)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POLYGON((-0.15 51.50, -0.15 51.52, -0.10 51.52, -0.10 51.50, -0.15 51.50))'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POINT(139.6917 35.6895)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POINT(-0.1278 51.5074)'), st_geographyfromewkt('POLYGON((-0.20 51.48, -0.20 51.54, -0.05 51.54, -0.05 51.48, -0.20 51.48))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POINT(-74.0199 40.7001)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POLYGON((-74.0198 40.7002, -74.0198 40.7008, -74.0192 40.7008, -74.0192 40.7002, -74.0198 40.7002))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POINT(-74.0201 40.6999)'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_within(st_geographyfromewkt('POLYGON((-74.0198 40.7398, -74.0198 40.7406, -74.0192 40.7406, -74.0192 40.7398, -74.0198 40.7398))'), st_geographyfromewkt('POLYGON((-74.02 40.70, -74.02 40.74, -73.98 40.74, -73.98 40.70, -74.02 40.70))'))",
         &[],
     );
 }

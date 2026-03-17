@@ -39,6 +39,7 @@ ethnum = { workspace = true }
 futures = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
+proj4rs = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
 itertools = { workspace = true }

@@ -12,22 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::arc_with_non_send_sync)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::ptr_arg)]
-#![allow(clippy::type_complexity)]
-#![allow(clippy::redundant_iter_cloned)]
-#![allow(internal_features)]
-#![feature(core_intrinsics)]
-#![feature(box_patterns)]
-#![feature(type_ascription)]
-#![feature(try_blocks)]
-#![feature(downcast_unchecked)]
-#![feature(str_internals)]
+mod aggregate;
+mod gbox;
+mod heuristic_overlay;
+mod srid;
 
-pub mod geo;
-pub mod geo_h3;
-pub mod geography;
-pub mod geometry;
-mod register;
+pub use aggregate::*;
+pub use gbox::*;
+pub use heuristic_overlay::*;
+pub use srid::*;
