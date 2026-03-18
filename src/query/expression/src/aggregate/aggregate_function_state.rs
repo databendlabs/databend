@@ -198,7 +198,7 @@ impl StateSerdeType {
 pub struct StatesLayout {
     pub layout: Layout,
     pub states_loc: Vec<Box<[AggrStateLoc]>>,
-    pub(super) serialize_type: Vec<StateSerdeType>,
+    pub serialize_type: Vec<StateSerdeType>,
 }
 
 impl StatesLayout {
