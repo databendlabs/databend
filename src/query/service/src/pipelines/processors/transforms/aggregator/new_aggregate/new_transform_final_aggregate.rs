@@ -105,6 +105,7 @@ impl NewTransformFinalAggregate {
         let spiller = NewAggregateSpiller::try_create(
             ctx.clone(),
             SPILL_BUCKET_NUM,
+            params.spill_schema(),
             LocalPartitionStream::new(
                 params.max_block_rows,
                 params.max_block_bytes,
