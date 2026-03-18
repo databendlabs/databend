@@ -17,6 +17,7 @@ crate-type = ["cdylib"]
 [dependencies]
 arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
+csv = "1"
 ctor = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
@@ -32,6 +33,7 @@ databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
 ] }
+glob = "0.3"
 pyo3 = { version = "0.25", features = ["generate-import-lib", "abi3-py312"] }
 serde_json = { workspace = true }
 sysinfo = { workspace = true }

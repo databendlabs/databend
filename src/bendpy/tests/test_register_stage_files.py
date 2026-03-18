@@ -41,9 +41,9 @@ class TestRegisterDelimitedFiles:
         self.ctx.register_csv("csv_header_view", str(CSV_HEADER_PATH))
 
         df = self.ctx.sql(
-            "select id, value from csv_header_view order by id limit 3"
+            "select count(), min(to_int64(id)), max(to_int64(id)) from csv_header_view"
         ).to_pandas()
-        assert df.values.tolist() == [[0, 1], [1, 2], [2, 3]]
+        assert df.values.tolist() == [[18, 0, 17]]
 
     def test_register_csv_select_star_with_pattern(self):
         self.ctx.register_csv("csv_stage_pattern_view", str(CSV_DIR), pattern="select.csv")
@@ -60,9 +60,9 @@ class TestRegisterDelimitedFiles:
         self.ctx.register_tsv("tsv_header_view", str(header_tsv))
 
         df = self.ctx.sql(
-            "select id, name from tsv_header_view order by id"
+            "select count(), min(to_int64(id)), max(to_int64(id)) from tsv_header_view"
         ).to_pandas()
-        assert df.values.tolist() == [[1, "alice"], [2, "bob"]]
+        assert df.values.tolist() == [[2, 1, 2]]
 
     def test_register_tsv_select_star_with_pattern(self):
         self.ctx.register_tsv("tsv_stage_pattern_view", str(TSV_DIR), pattern="select.tsv")

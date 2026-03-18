@@ -1650,6 +1650,7 @@ version = "0.1.0"
 dependencies = [
  "arrow 56.2.0",
  "arrow-schema 56.2.0",
+ "csv",
  "ctor",
  "databend-common-base",
  "databend-common-catalog",
@@ -1662,6 +1663,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "databend-query",
+ "glob",
  "pyo3",
  "pyo3-build-config",
  "serde_json",

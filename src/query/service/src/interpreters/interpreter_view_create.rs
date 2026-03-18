@@ -66,10 +66,12 @@ impl Interpreter for CreateViewInterpreter {
                 for table in metadata.tables() {
                     let database_name = table.database();
                     let table_name = table.name();
+                    let is_stage_placeholder = database_name == "system" && table_name == "stage";
                     if !catalog
                         .exists_table(&tenant, database_name, table_name)
                         .await?
                         && !table_function.contains(&table_name.to_string())
+                        && !is_stage_placeholder
                         && !table.table().is_stage_table()
                     {
                         return Err(databend_common_exception::ErrorCode::UnknownTable(format!(

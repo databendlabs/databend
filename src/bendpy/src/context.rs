@@ -59,44 +59,101 @@ fn is_identifier_like(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-fn read_delimited_header_names(path: &str, delimiter: char) -> PyResult<Vec<String>> {
-    use std::io::BufRead;
-
+fn read_delimited_records(path: &std::path::Path, delimiter: char) -> PyResult<Vec<Vec<String>>> {
     let file = std::fs::File::open(path).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-            "Failed to read local file header from {}: {}",
-            path, e
+            "Failed to read local file {}: {}",
+            path.display(),
+            e
         ))
     })?;
-    let mut reader = std::io::BufReader::new(file);
-    let mut header = String::new();
-    reader.read_line(&mut header).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-            "Failed to read local file header from {}: {}",
-            path, e
-        ))
-    })?;
-
-    Ok(header
-        .trim_end_matches(['\r', '\n'])
-        .split(delimiter)
-        .map(|s| s.trim().trim_matches('"').to_string())
-        .collect())
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .delimiter(delimiter as u8)
+        .from_reader(file);
+    reader
+        .records()
+        .map(|record| {
+            record
+                .map(|r| r.iter().map(|s| s.trim().to_string()).collect::<Vec<_>>())
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Failed to parse local file {}: {}",
+                        path.display(),
+                        e
+                    ))
+                })
+        })
+        .collect()
 }
 
-fn try_build_local_header_select(file_path: &str, file_format: &str) -> PyResult<Option<String>> {
-    let Some(path) = fs_path_from_uri(file_path) else {
+fn collect_local_paths(
+    path: &str,
+    pattern: Option<&str>,
+) -> PyResult<Option<Vec<std::path::PathBuf>>> {
+    let Some(path) = fs_path_from_uri(path) else {
         return Ok(None);
     };
 
+    let path = std::path::Path::new(path);
     let metadata = std::fs::metadata(path).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
             "Failed to access local file {}: {}",
-            path, e
+            path.display(),
+            e
         ))
     })?;
-    if !metadata.is_file() {
+    if metadata.is_file() {
+        return Ok(Some(vec![path.to_path_buf()]));
+    }
+    if !metadata.is_dir() {
         return Ok(None);
+    }
+
+    let Some(pattern) = pattern else {
+        return Ok(None);
+    };
+    let matcher = glob::Pattern::new(pattern).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Invalid local file pattern {}: {}",
+            pattern, e
+        ))
+    })?;
+
+    let mut matched = std::fs::read_dir(path)
+        .map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to list local directory {}: {}",
+                path.display(),
+                e
+            ))
+        })?
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|entry| entry.is_file())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| matcher.matches(name))
+        })
+        .collect::<Vec<_>>();
+    matched.sort();
+    Ok(Some(matched))
+}
+
+fn try_build_local_file_select(
+    file_path: &str,
+    file_format: &str,
+    pattern: Option<&str>,
+) -> PyResult<Option<ColumnSelect>> {
+    let Some(paths) = collect_local_paths(file_path, pattern)? else {
+        return Ok(None);
+    };
+    if paths.is_empty() {
+        return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            "Could not infer schema: no columns found",
+        ));
     }
 
     let delimiter = match file_format {
@@ -104,12 +161,44 @@ fn try_build_local_header_select(file_path: &str, file_format: &str) -> PyResult
         "tsv" => '\t',
         _ => unreachable!(),
     };
-    let header_names = read_delimited_header_names(path, delimiter)?;
-    if header_names.is_empty() || !header_names.iter().all(|name| is_identifier_like(name)) {
-        return Ok(None);
+
+    let mut first_record = None;
+    let mut max_fields = 0;
+    for path in &paths {
+        let records = read_delimited_records(path, delimiter)?;
+        if first_record.is_none() {
+            first_record = records.first().cloned();
+        }
+        for record in records {
+            max_fields = max_fields.max(record.len());
+        }
     }
 
-    build_position_select(&header_names).map(Some)
+    if max_fields == 0 {
+        return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            "Could not infer schema: no columns found",
+        ));
+    }
+
+    if paths.len() == 1
+        && let Some(header_names) = first_record
+        && !header_names.is_empty()
+        && header_names.len() == max_fields
+        && header_names.iter().all(|name| is_identifier_like(name))
+    {
+        return Ok(Some(ColumnSelect {
+            select_clause: build_position_select(&header_names)?,
+            query_suffix: " OFFSET 1".to_string(),
+        }));
+    }
+
+    let column_names = (0..max_fields)
+        .map(|i| format!("column_{}", i + 1))
+        .collect::<Vec<_>>();
+    Ok(Some(ColumnSelect {
+        select_clause: build_position_select(&column_names)?,
+        query_suffix: String::new(),
+    }))
 }
 
 fn extract_string_column(
@@ -160,6 +249,11 @@ fn build_position_select(col_names: &[String]) -> PyResult<String> {
         .map(|(i, name)| format!("${} AS `{}`", i + 1, name))
         .collect::<Vec<_>>()
         .join(", "))
+}
+
+struct ColumnSelect {
+    select_clause: String,
+    query_suffix: String,
 }
 
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
@@ -316,48 +410,28 @@ impl PySessionContext {
             .map(|p| format!(", pattern => '{}'", p))
             .unwrap_or_default();
 
-        let select_clause = match file_format {
+        let column_select = match file_format {
             "csv" | "tsv" => {
                 self.build_column_select(&file_path, file_format, pattern, connection, py)?
             }
-            _ => "*".to_string(),
+            _ => ColumnSelect {
+                select_clause: "*".to_string(),
+                query_suffix: String::new(),
+            },
         };
 
         let sql = format!(
-            "create view {} as select {} from '{}' (file_format => '{}'{}{})",
-            name, select_clause, file_path, file_format, pattern_clause, connection_clause
+            "create view {} as select {} from '{}' (file_format => '{}'{}{}){}",
+            name,
+            column_select.select_clause,
+            file_path,
+            file_format,
+            pattern_clause,
+            connection_clause,
+            column_select.query_suffix
         );
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
-    }
-
-    fn build_column_select(
-        &mut self,
-        file_path: &str,
-        file_format: &str,
-        pattern: Option<&str>,
-        connection: Option<&str>,
-        py: Python,
-    ) -> PyResult<String> {
-        if connection.is_none()
-            && pattern.is_none()
-            && let Some(select) = try_build_local_header_select(file_path, file_format)?
-        {
-            return Ok(select);
-        }
-
-        let sql = build_infer_schema_sql(file_path, file_format, pattern, connection);
-        let blocks = self.sql(&sql, py)?.collect(py)?;
-
-        let col_names = blocks
-            .blocks
-            .iter()
-            .filter(|b| b.num_rows() > 0)
-            .filter_map(|b| extract_string_column(b.get_by_offset(0)))
-            .flat_map(|col| col.iter().map(|s| s.to_string()))
-            .collect::<Vec<_>>();
-
-        build_position_select(&col_names)
     }
 
     #[pyo3(signature = (name, access_key_id, secret_access_key, endpoint_url = None, region = None))]
@@ -503,6 +577,40 @@ impl PySessionContext {
     }
 }
 
+impl PySessionContext {
+    fn build_column_select(
+        &mut self,
+        file_path: &str,
+        file_format: &str,
+        pattern: Option<&str>,
+        connection: Option<&str>,
+        py: Python,
+    ) -> PyResult<ColumnSelect> {
+        if connection.is_none()
+            && let Some(local_select) =
+                try_build_local_file_select(file_path, file_format, pattern)?
+        {
+            return Ok(local_select);
+        }
+
+        let sql = build_infer_schema_sql(file_path, file_format, pattern, connection);
+        let blocks = self.sql(&sql, py)?.collect(py)?;
+
+        let col_names = blocks
+            .blocks
+            .iter()
+            .filter(|b| b.num_rows() > 0)
+            .filter_map(|b| extract_string_column(b.get_by_offset(0)))
+            .flat_map(|col| col.iter().map(|s| s.to_string()))
+            .collect::<Vec<_>>();
+
+        Ok(ColumnSelect {
+            select_clause: build_position_select(&col_names)?,
+            query_suffix: String::new(),
+        })
+    }
+}
+
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
@@ -521,7 +629,7 @@ mod tests {
     }
 
     #[test]
-    fn test_try_build_local_header_select() {
+    fn test_try_build_local_file_select_with_header() {
         use std::io::Write;
 
         let path = std::env::temp_dir().join(format!(
@@ -536,10 +644,33 @@ mod tests {
         file.write_all(b"id,name\n1,alice\n").unwrap();
 
         let select =
-            try_build_local_header_select(&format!("fs://{}", path.display()), "csv").unwrap();
+            try_build_local_file_select(&format!("fs://{}", path.display()), "csv", None).unwrap();
         std::fs::remove_file(path).unwrap();
 
-        assert_eq!(select, Some("$1 AS `id`, $2 AS `name`".to_string()));
+        let select = select.unwrap();
+        assert_eq!(select.select_clause, "$1 AS `id`, $2 AS `name`");
+        assert_eq!(select.query_suffix, " OFFSET 1");
+    }
+
+    #[test]
+    fn test_read_delimited_records_with_quoted_delimiter() {
+        use std::io::Write;
+
+        let path = std::env::temp_dir().join(format!(
+            "bendpy_context_quoted_header_{}_{}.csv",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(b"\"last,name\",age\nsmith,10\n").unwrap();
+
+        let records = read_delimited_records(&path, ',').unwrap();
+        std::fs::remove_file(path).unwrap();
+
+        assert_eq!(records[0], vec!["last,name".to_string(), "age".to_string()]);
     }
 
     #[test]
