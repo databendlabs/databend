@@ -36,6 +36,7 @@ use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
+use crate::plans::Join;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -51,10 +52,16 @@ impl RuleShrinkType {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::ShrinkGroupByType,
-            matchers: vec![Matcher::MatchOp {
-                op_type: RelOp::Aggregate,
-                children: vec![Matcher::Leaf],
-            }],
+            matchers: vec![
+                Matcher::MatchOp {
+                    op_type: RelOp::Aggregate,
+                    children: vec![Matcher::Leaf],
+                },
+                Matcher::MatchOp {
+                    op_type: RelOp::Join,
+                    children: vec![Matcher::Leaf, Matcher::Leaf],
+                },
+            ],
             metadata,
         }
     }
@@ -179,6 +186,167 @@ impl RuleShrinkType {
         state.add_result(new_expr);
         Ok(())
     }
+
+    fn apply_join(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        let join: Join = s_expr.plan().clone().try_into()?;
+        if join.equi_conditions.is_empty() {
+            return Ok(());
+        }
+
+        let rel_expr = RelExpr::with_s_expr(s_expr);
+        let left_stat = rel_expr.derive_cardinality_child(0)?;
+        let right_stat = rel_expr.derive_cardinality_child(1)?;
+        let left_column_stats = &left_stat.statistics.column_stats;
+        let right_column_stats = &right_stat.statistics.column_stats;
+
+        let mut rewrites = Vec::new();
+        for (idx, condition) in join.equi_conditions.iter().enumerate() {
+            let ScalarExpr::BoundColumnRef(left) = &condition.left else {
+                continue;
+            };
+
+            let ScalarExpr::BoundColumnRef(right) = &condition.right else {
+                continue;
+            };
+
+            let Some(left_stat) = left_column_stats.get(&left.column.index) else {
+                continue;
+            };
+
+            let Some(right_stat) = right_column_stats.get(&right.column.index) else {
+                continue;
+            };
+
+            let Some(target_type) = shrink_join_target_type(
+                left.column.data_type.as_ref(),
+                left_stat,
+                right.column.data_type.as_ref(),
+                right_stat,
+            ) else {
+                continue;
+            };
+
+            if target_type == *left.column.data_type && target_type == *right.column.data_type {
+                continue;
+            }
+
+            let left_rewrite = self.create_join_column_rewrite(
+                &left.column,
+                &target_type,
+                format!("{}_join_shrink_l_{}", left.column.column_name, idx),
+            );
+            let right_rewrite = self.create_join_column_rewrite(
+                &right.column,
+                &target_type,
+                format!("{}_join_shrink_r_{}", right.column.column_name, idx),
+            );
+
+            rewrites.push(JoinRewrite {
+                condition_index: idx,
+                left: left_rewrite,
+                right: right_rewrite,
+            });
+        }
+
+        if rewrites.is_empty() {
+            return Ok(());
+        }
+
+        let mut new_left_child = s_expr.child(0)?.clone();
+        let mut new_right_child = s_expr.child(1)?.clone();
+        let mut left_items = Vec::new();
+        let mut right_items = Vec::new();
+        let mut new_join = join;
+
+        for rewrite in rewrites.iter() {
+            new_join.equi_conditions[rewrite.condition_index].left =
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: rewrite.left.shrink_binding.clone(),
+                });
+            new_join.equi_conditions[rewrite.condition_index].right =
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: rewrite.right.shrink_binding.clone(),
+                });
+
+            left_items.push(ScalarItem {
+                index: rewrite.left.shrink_index,
+                scalar: ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: false,
+                    argument: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: rewrite.left.original_binding.clone(),
+                    })),
+                    target_type: Box::new(rewrite.left.shrink_type.clone()),
+                }),
+            });
+
+            right_items.push(ScalarItem {
+                index: rewrite.right.shrink_index,
+                scalar: ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: false,
+                    argument: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: rewrite.right.original_binding.clone(),
+                    })),
+                    target_type: Box::new(rewrite.right.shrink_type.clone()),
+                }),
+            });
+        }
+
+        if !left_items.is_empty() {
+            new_left_child = SExpr::create_unary(
+                Arc::new(EvalScalar { items: left_items }.into()),
+                Arc::new(new_left_child),
+            );
+        }
+
+        if !right_items.is_empty() {
+            new_right_child = SExpr::create_unary(
+                Arc::new(EvalScalar { items: right_items }.into()),
+                Arc::new(new_right_child),
+            );
+        }
+
+        let new_expr = SExpr::create_binary(
+            Arc::new(new_join.into()),
+            Arc::new(new_left_child),
+            Arc::new(new_right_child),
+        );
+
+        state.add_result(new_expr);
+        Ok(())
+    }
+
+    fn create_join_column_rewrite(
+        &self,
+        column: &ColumnBinding,
+        target_type: &DataType,
+        alias: String,
+    ) -> JoinColumnRewrite {
+        let shrink_index = {
+            let mut metadata = self.metadata.write();
+            metadata.add_derived_column(alias.clone(), target_type.clone())
+        };
+
+        let shrink_binding = ColumnBindingBuilder::new(
+            alias,
+            shrink_index,
+            Box::new(target_type.clone()),
+            Visibility::InVisible,
+        )
+        .build();
+
+        JoinColumnRewrite {
+            original_binding: column.clone(),
+            shrink_binding,
+            shrink_type: target_type.clone(),
+            shrink_index,
+        }
+    }
 }
 
 impl Rule for RuleShrinkType {
@@ -189,6 +357,7 @@ impl Rule for RuleShrinkType {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         match s_expr.plan().rel_op() {
             RelOp::Aggregate => self.apply_aggregate(s_expr, state),
+            RelOp::Join => self.apply_join(s_expr, state),
             _ => Ok(()),
         }
     }
@@ -206,6 +375,20 @@ struct GroupByRewrite {
     shrink_type: DataType,
     shrink_index: IndexType,
 }
+
+struct JoinRewrite {
+    condition_index: usize,
+    left: JoinColumnRewrite,
+    right: JoinColumnRewrite,
+}
+
+struct JoinColumnRewrite {
+    original_binding: ColumnBinding,
+    shrink_binding: ColumnBinding,
+    shrink_type: DataType,
+    shrink_index: IndexType,
+}
+
 fn shrink_group_by_data_type(data_type: &DataType, stat: &ColumnStat) -> Option<DataType> {
     minimal_data_type(data_type, stat).and_then(|minimal| {
         if minimal.eq(data_type) {
@@ -340,6 +523,70 @@ fn datum_to_i128(value: &Datum) -> Option<i128> {
         _ => None,
     }
 }
+
+fn shrink_join_target_type(
+    left_type: &DataType,
+    left_stat: &ColumnStat,
+    right_type: &DataType,
+    right_stat: &ColumnStat,
+) -> Option<DataType> {
+    let left_min = minimal_data_type(left_type, left_stat)?;
+    let right_min = minimal_data_type(right_type, right_stat)?;
+    combine_join_types(&left_min, &right_min)
+}
+
+fn combine_join_types(left: &DataType, right: &DataType) -> Option<DataType> {
+    match (left, right) {
+        (DataType::Number(left_number), DataType::Number(right_number)) => {
+            max_number_type(*left_number, *right_number).map(DataType::Number)
+        }
+        (DataType::Nullable(left_inner), DataType::Nullable(right_inner)) => {
+            match (left_inner.as_ref(), right_inner.as_ref()) {
+                (DataType::Number(left_number), DataType::Number(right_number)) => {
+                    max_number_type(*left_number, *right_number)
+                        .map(|ty| DataType::Nullable(Box::new(DataType::Number(ty))))
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn max_number_type(left: NumberDataType, right: NumberDataType) -> Option<NumberDataType> {
+    fn is_signed(ty: NumberDataType) -> Option<bool> {
+        match ty {
+            NumberDataType::UInt8
+            | NumberDataType::UInt16
+            | NumberDataType::UInt32
+            | NumberDataType::UInt64 => Some(false),
+            NumberDataType::Int8
+            | NumberDataType::Int16
+            | NumberDataType::Int32
+            | NumberDataType::Int64 => Some(true),
+            _ => None,
+        }
+    }
+
+    fn rank(ty: NumberDataType) -> Option<u8> {
+        match ty {
+            NumberDataType::UInt8 | NumberDataType::Int8 => Some(0),
+            NumberDataType::UInt16 | NumberDataType::Int16 => Some(1),
+            NumberDataType::UInt32 | NumberDataType::Int32 => Some(2),
+            NumberDataType::UInt64 | NumberDataType::Int64 => Some(3),
+            _ => None,
+        }
+    }
+
+    if is_signed(left)? != is_signed(right)? {
+        return None;
+    }
+
+    match rank(left)? >= rank(right)? {
+        true => Some(left),
+        false => Some(right),
+    }
+}
 #[cfg(test)]
 mod tests {
     use databend_common_statistics::Datum;
@@ -414,6 +661,103 @@ mod tests {
         };
         assert!(
             shrink_group_by_data_type(&DataType::Number(NumberDataType::UInt64), &stat).is_none()
+        );
+    }
+
+    #[test]
+    fn test_shrink_join_target_unsigned() {
+        let left_stat = ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(120),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::UInt(0),
+            origin_max: Datum::UInt(120),
+            histogram: None,
+        };
+        let right_stat = ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(200),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::UInt(0),
+            origin_max: Datum::UInt(200),
+            histogram: None,
+        };
+
+        let target = shrink_join_target_type(
+            &DataType::Number(NumberDataType::UInt64),
+            &left_stat,
+            &DataType::Number(NumberDataType::UInt64),
+            &right_stat,
+        );
+        assert_eq!(target, Some(DataType::Number(NumberDataType::UInt8)));
+    }
+
+    #[test]
+    fn test_shrink_join_target_nullable() {
+        let left_stat = ColumnStat {
+            min: Datum::Int(-100),
+            max: Datum::Int(100),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::Int(-100),
+            origin_max: Datum::Int(100),
+            histogram: None,
+        };
+        let right_stat = ColumnStat {
+            min: Datum::Int(-200),
+            max: Datum::Int(200),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::Int(-200),
+            origin_max: Datum::Int(200),
+            histogram: None,
+        };
+
+        let target = shrink_join_target_type(
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &left_stat,
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            &right_stat,
+        );
+        assert_eq!(
+            target,
+            Some(DataType::Nullable(Box::new(DataType::Number(
+                NumberDataType::Int16
+            ))))
+        );
+    }
+
+    #[test]
+    fn test_shrink_join_target_incompatible() {
+        let left_stat = ColumnStat {
+            min: Datum::Int(0),
+            max: Datum::Int(10),
+            ndv: Ndv::Stat(5.0),
+            null_count: 0,
+            origin_min: Datum::Int(0),
+            origin_max: Datum::Int(10),
+            histogram: None,
+        };
+        let right_stat = ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(10),
+            ndv: Ndv::Stat(5.0),
+            null_count: 0,
+            origin_min: Datum::UInt(0),
+            origin_max: Datum::UInt(10),
+            histogram: None,
+        };
+
+        assert!(
+            shrink_join_target_type(
+                &DataType::Number(NumberDataType::Int64),
+                &left_stat,
+                &DataType::Number(NumberDataType::UInt64),
+                &right_stat,
+            )
+            .is_none()
         );
     }
 }
