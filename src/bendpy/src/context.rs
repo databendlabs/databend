@@ -44,6 +44,74 @@ fn resolve_file_path(path: &str) -> String {
     )
 }
 
+fn fs_path_from_uri(uri: &str) -> Option<&str> {
+    uri.strip_prefix("fs://")
+}
+
+fn is_identifier_like(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn read_delimited_header_names(path: &str, delimiter: char) -> PyResult<Vec<String>> {
+    use std::io::BufRead;
+
+    let file = std::fs::File::open(path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Failed to read local file header from {}: {}",
+            path, e
+        ))
+    })?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut header = String::new();
+    reader.read_line(&mut header).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Failed to read local file header from {}: {}",
+            path, e
+        ))
+    })?;
+
+    Ok(header
+        .trim_end_matches(['\r', '\n'])
+        .split(delimiter)
+        .map(|s| s.trim().trim_matches('"').to_string())
+        .collect())
+}
+
+fn try_build_local_header_select(file_path: &str, file_format: &str) -> PyResult<Option<String>> {
+    let Some(path) = fs_path_from_uri(file_path) else {
+        return Ok(None);
+    };
+
+    let metadata = std::fs::metadata(path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Failed to access local file {}: {}",
+            path, e
+        ))
+    })?;
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+
+    let delimiter = match file_format {
+        "csv" => ',',
+        "tsv" => '\t',
+        _ => unreachable!(),
+    };
+    let header_names = read_delimited_header_names(path, delimiter)?;
+    if header_names.is_empty() || !header_names.iter().all(|name| is_identifier_like(name)) {
+        return Ok(None);
+    }
+
+    build_position_select(&header_names).map(Some)
+}
+
 fn extract_string_column(
     entry: &BlockEntry,
 ) -> Option<&databend_common_expression::types::StringColumn> {
@@ -271,6 +339,13 @@ impl PySessionContext {
         connection: Option<&str>,
         py: Python,
     ) -> PyResult<String> {
+        if connection.is_none()
+            && pattern.is_none()
+            && let Some(select) = try_build_local_header_select(file_path, file_format)?
+        {
+            return Ok(select);
+        }
+
         let sql = build_infer_schema_sql(file_path, file_format, pattern, connection);
         let blocks = self.sql(&sql, py)?.collect(py)?;
 
@@ -443,6 +518,28 @@ mod tests {
         let col_names = vec!["id".to_string(), "name".to_string()];
         let select = build_position_select(&col_names).unwrap();
         assert_eq!(select, "$1 AS `id`, $2 AS `name`");
+    }
+
+    #[test]
+    fn test_try_build_local_header_select() {
+        use std::io::Write;
+
+        let path = std::env::temp_dir().join(format!(
+            "bendpy_context_header_{}_{}.csv",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(b"id,name\n1,alice\n").unwrap();
+
+        let select =
+            try_build_local_header_select(&format!("fs://{}", path.display()), "csv").unwrap();
+        std::fs::remove_file(path).unwrap();
+
+        assert_eq!(select, Some("$1 AS `id`, $2 AS `name`".to_string()));
     }
 
     #[test]

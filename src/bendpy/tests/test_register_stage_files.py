@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 CSV_DIR = ROOT / "tests" / "data" / "csv"
 TSV_DIR = ROOT / "tests" / "data" / "tsv"
 CSV_PATH = ROOT / "tests" / "data" / "csv" / "select.csv"
+CSV_HEADER_PATH = ROOT / "tests" / "data" / "csv" / "numbers_with_headers.csv"
 TSV_PATH = ROOT / "tests" / "data" / "tsv" / "select.tsv"
 
 
@@ -36,6 +37,14 @@ class TestRegisterDelimitedFiles:
         self.ctx.register_csv("csv_stage_view", str(CSV_PATH))
         self.assert_view_rows("csv_stage_view")
 
+    def test_register_csv_preserves_local_header_names(self):
+        self.ctx.register_csv("csv_header_view", str(CSV_HEADER_PATH))
+
+        df = self.ctx.sql(
+            "select id, value from csv_header_view order by id limit 3"
+        ).to_pandas()
+        assert df.values.tolist() == [[0, 1], [1, 2], [2, 3]]
+
     def test_register_csv_select_star_with_pattern(self):
         self.ctx.register_csv("csv_stage_pattern_view", str(CSV_DIR), pattern="select.csv")
         self.assert_view_rows("csv_stage_pattern_view")
@@ -43,6 +52,17 @@ class TestRegisterDelimitedFiles:
     def test_register_tsv_select_star(self):
         self.ctx.register_tsv("tsv_stage_view", str(TSV_PATH))
         self.assert_view_rows("tsv_stage_view")
+
+    def test_register_tsv_preserves_local_header_names(self, tmp_path):
+        header_tsv = tmp_path / "header.tsv"
+        header_tsv.write_text("id\tname\n1\talice\n2\tbob\n", encoding="utf-8")
+
+        self.ctx.register_tsv("tsv_header_view", str(header_tsv))
+
+        df = self.ctx.sql(
+            "select id, name from tsv_header_view order by id"
+        ).to_pandas()
+        assert df.values.tolist() == [[1, "alice"], [2, "bob"]]
 
     def test_register_tsv_select_star_with_pattern(self):
         self.ctx.register_tsv("tsv_stage_pattern_view", str(TSV_DIR), pattern="select.tsv")

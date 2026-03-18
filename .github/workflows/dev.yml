@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
-      bendpy_changed: ${{ steps.bendpy.outputs.any_changed }}
+      bendpy_test_needed: ${{ steps.bendpy.outputs.any_changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +42,14 @@ jobs:
         with:
           files: |
             src/bendpy/**
+            src/common/**
+            src/query/**
+            Cargo.toml
+            Cargo.lock
+            rust-toolchain.toml
+            .github/actions/build_bindings_python/**
+            .github/workflows/bindings.python.yml
+            .github/workflows/dev.yml
       - name: Output Source File Changes
         run: |
           if [[ "${{ steps.src.outputs.any_changed }}" == "true" ]]; then
@@ -66,7 +74,7 @@ jobs:
 
   test_bendpy:
     needs: changes
-    if: needs.changes.outputs.bendpy_changed == 'true'
+    if: needs.changes.outputs.bendpy_test_needed == 'true'
     runs-on:
       - self-hosted
       - ARM64
@@ -94,16 +102,21 @@ jobs:
         uses: actions/github-script@v7
         env:
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
+          BENDPY_TEST_NEEDED: ${{ needs.changes.outputs.bendpy_test_needed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
-            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_RESULT != 'failure') {
+            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_TEST_NEEDED == 'false') {
               core.info('No source file changes detected, skipping');
               return;
             }
-            if (process.env.BENDPY_RESULT == 'failure') {
-              core.setFailed('Bendpy tests failed, not ready to merge');
+            if (process.env.BENDPY_TEST_NEEDED == 'true' && process.env.BENDPY_RESULT != 'success') {
+              core.setFailed('Bendpy tests failed or were skipped when required, not ready to merge');
+              return;
+            }
+            if (process.env.SRC_CHANGED == 'false') {
+              core.info('Required Bendpy checks succeeded, ready to merge');
               return;
             }
             if (process.env.LINUX_BUILD_RESULT == 'success') {
