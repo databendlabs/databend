@@ -1,0 +1,127 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1, 'first payload');
+
+# Keep one connection open to ensure we still have the old value in the ART.
+
+# TODO: unsupported feature
+# statement ok old
+# BEGIN;
+
+# TODO: unsupported feature
+# statement ok old
+# INSERT INTO tbl VALUES (5, 'old payload');
+
+# con1 open.
+
+statement ok
+BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE tbl SET id = 3 WHERE id = 1;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1, 'new payload');
+
+# Ensure that we can still see the old value.
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl WHERE id = 1;
+# ----
+# 1	first payload	0
+
+# Locally update the payload.
+
+statement ok
+BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE tbl SET payload = 'second payload' WHERE id = 1;
+
+# Transaction-local state.
+
+# TODO: unsupported feature
+# query II
+# SELECT id, payload FROM tbl WHERE id = 1;
+# ----
+# 1	second payload
+
+# Transaction-local state.
+
+# TODO: unsupported feature
+# query II
+# SELECT id, payload FROM tbl WHERE id = 3;
+# ----
+# 3	first payload
+
+# TODO: unsupported feature
+# query II
+# SELECT id, payload FROM tbl WHERE id = 1;
+# ----
+# 1	new payload
+
+statement ok
+COMMIT;
+
+# We only see the local changes.
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl WHERE id = 1;
+# ----
+# 1	second payload	0
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl WHERE id = 3;
+# ----
+
+# This runs into a write-write conflict on commit and rolls back.
+
+statement ok
+COMMIT;
+
+# The result are the committed changes of con1.
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl WHERE id = 3;
+# ----
+# 3	first payload	1
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl WHERE id = 1;
+# ----
+# 1	new payload	2
+
+# Ensure that the old transaction can still see the old storage.
+
+# TODO: unsupported feature
+# query III old
+# SELECT id, payload, rowid FROM tbl WHERE id = 1;
+# ----
+# 1	first payload	0
+
+# TODO: unsupported feature
+# statement ok old
+# COMMIT;
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl ORDER BY ALL;
+# ----
+# 1	new payload	2
+# 3	first payload	1
+# 5	old payload	3

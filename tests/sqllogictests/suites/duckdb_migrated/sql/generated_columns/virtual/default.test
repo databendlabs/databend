@@ -1,0 +1,48 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS unit
+
+statement ok
+DROP TABLE IF EXISTS unit2
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+INSERT INTO unit VALUES (4,5)
+
+# (ALTER) Generated columns can not be created with a DEFAULT constraint
+
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+statement error
+SELECT total_profit FROM unit;
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE unit2 (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL DEFAULT 1
+# );
+
+statement error
+select * from unit2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	g1 AS (x),
+# 	g2 AS (x),
+# 	x INTEGER DEFAULT (5),
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (DEFAULT);

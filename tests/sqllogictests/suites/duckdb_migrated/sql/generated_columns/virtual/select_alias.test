@@ -1,0 +1,261 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price * amount_sold),
+# 	order_id BIGINT,
+# 	y as (order_id + total_profit - amount_sold)
+# );
+
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl tbl(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl tbl;
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl tbl(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl tbl(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl t2(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl t2;
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl t2(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl t2(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl y(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl y;
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl y(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl y(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl order_id(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl order_id;
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl order_id(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl order_id(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl total_profit(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl total_profit;
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl total_profit(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl total_profit(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl amount_sold(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl amount_sold;
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl amount_sold(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl amount_sold(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl price(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl price;
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl price(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl price(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias
+
+# Alias all columns
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl "a.b.c"(y, order_id, total_profit, amount_sold, price);
+# ----
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl "a.b.c";
+# ----
+
+# Alias as completely different things
+
+# TODO: unsupported feature
+# query IIIII nosort scrambled
+# select * from tbl "a.b.c"(a, b, c, d, e);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select a, b from tbl "a.b.c"(e, c, b, d, a);
+# ----
+
+# TODO: unsupported feature
+# query II nosort swapped
+# select y, amount_sold from tbl;
+# ----
+
+#table_alias

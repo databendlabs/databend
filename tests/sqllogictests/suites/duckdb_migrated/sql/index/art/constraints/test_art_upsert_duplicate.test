@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS hero
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE hero (
+#         name VARCHAR NOT NULL,
+#         secret_name VARCHAR NOT NULL,
+#         age INTEGER,
+#         PRIMARY KEY (name));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX ix_hero_age ON hero (age);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO hero (name, secret_name, age)
+# VALUES
+# 	('Captain North America', 'Esteban Rogelios', 93),
+# 	('Rusty-Man', 'Tommy Sharp', 48),
+# 	('Tarantula', 'Natalia Roman-on', 32),
+# 	('Spider-Boy', 'Pedro Parqueador', 17),
+# 	('Captain North America', 'Esteban Rogelios', 93)
+# ON CONFLICT (name) DO UPDATE
+# 	age = EXCLUDED.age;

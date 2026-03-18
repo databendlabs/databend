@@ -1,0 +1,100 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS unit
+
+statement error
+CREATE TEMP TABLE t0(c0 AS (1));
+
+statement error
+CREATE TABLE unit (
+	price INTEGER,
+	total_profit BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL,
+);
+
+statement error
+CREATE TABLE unit (
+	total_profit BOOLEAN GENERATED ALWAYS AS(price * 2) VIRTUAL,
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+#     total_profit BOOLEAN GENERATED ALWAYS AS(word) VIRTUAL,
+#     word VARCHAR,
+#     price INTEGER,
+#     amount_sold INTEGER,
+# );
+
+# word doesn't contain any data yet
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM tbl
+
+# Cant convert 'string' to boolean
+
+statement error
+INSERT INTO tbl VALUES ('string', 5, 12);
+
+statement error
+CREATE TABLE unit (
+    total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL,
+    word VARCHAR,
+    price INTEGER,
+    amount_sold INTEGER,
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_macro() AS (
+#     (select 42)
+# );
+
+# Expression contains a subquery - through a macro
+
+statement error
+CREATE TABLE unit (
+    total_profit INTEGER GENERATED ALWAYS AS(my_macro()) VIRTUAL,
+    word VARCHAR,
+    price INTEGER,
+    amount_sold INTEGER,
+);
+
+statement error
+CREATE TABLE unit (
+    total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
+    total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
+    price INTEGER,
+    amount_sold INTEGER,
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit (
+#     total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
+#     price INTEGER,
+#     amount_sold INTEGER,
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,4)
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM unit;
+# ----
+# 20	5	4
+
+# Delete the generated column
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE unit DROP COLUMN total_profit;
+
+# We can now no longer select it
+
+statement error
+SELECT total_profit FROM unit;

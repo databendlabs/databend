@@ -1,0 +1,74 @@
+statement ok
+DROP TABLE IF EXISTS tbl1
+
+statement ok
+CREATE TABLE tbl1 (i INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 SELECT range FROM range(0, 50000);
+
+statement ok
+DELETE FROM tbl1 WHERE i > 4;
+
+
+# Parallel index construction.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx ON tbl1(i);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(i) FROM tbl1 WHERE i = 1;
+# ----
+# 8

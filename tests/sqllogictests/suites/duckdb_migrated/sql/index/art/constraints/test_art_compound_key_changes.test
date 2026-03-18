@@ -1,0 +1,150 @@
+statement ok
+DROP TABLE IF EXISTS tbl_comp
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl_comp (
+# 	a INT,
+# 	b VARCHAR UNIQUE,
+# 	gen AS (2 * a),
+# 	c INT,
+# 	d VARCHAR,
+# 	PRIMARY KEY (c, b));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX unique_idx ON tbl_comp((d || 'hello'), (a + 42));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX normal_idx ON tbl_comp(d, a, c);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX lookup_idx ON tbl_comp(c);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_comp VALUES (1, 'hello', 1, 'hello');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_comp VALUES (2, 'hello', 1, 'world')
+# ON CONFLICT (c, b) DO UPDATE SET a = excluded.a, d = excluded.d;
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+# ----
+# 2	hello	4	1	world
+
+# Trigger unique_idx.
+
+statement error
+INSERT INTO tbl_comp VALUES (2, 'hola', 5, 'world');
+
+statement error
+INSERT INTO tbl_comp VALUES (3, 'hoi', 1, 'wereld');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_comp VALUES (3, 'hoi', 2, 'wereld');
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp ORDER BY ALL;
+# ----
+# 2	hello	4	1	world
+# 3	hoi	6	2	wereld
+
+# Trigger the primary key.
+
+statement error
+INSERT INTO tbl_comp VALUES (42, 'hoi', 2, 'welt');
+
+# TODO: unsupported feature
+# statement ok old
+# BEGIN;
+
+# TODO: unsupported feature
+# statement ok old
+# INSERT INTO tbl_comp VALUES (42, 'hoii', 22, 'welt');
+
+# con1 open.
+
+statement ok
+BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_comp;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_comp VALUES (200, 'hello', 1, 'world'), (300, 'hoi', 2, 'wereld');
+
+# Ensure that we can still see the old value.
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 2;
+# ----
+# 3	hoi	6	2	wereld
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+# ----
+# 2	hello	4	1	world
+
+# Now commit the changes.
+
+statement ok
+COMMIT;
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp ORDER BY ALL;
+# ----
+# 200	hello	400	1	world
+# 300	hoi	600	2	wereld
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 2;
+# ----
+# 300	hoi	600	2	wereld
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+# ----
+# 200	hello	400	1	world
+
+# Ensure that the old transaction can still see the old storage.
+
+# TODO: unsupported feature
+# query IIIII old
+# SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 2;
+# ----
+# 3	hoi	6	2	wereld
+
+# TODO: unsupported feature
+# query IIIII old
+# SELECT a, b, gen, c, d FROM tbl_comp WHERE c = 1;
+# ----
+# 2	hello	4	1	world
+
+# TODO: unsupported feature
+# statement ok old
+# COMMIT;
+
+# Final results.
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT a, b, gen, c, d FROM tbl_comp ORDER BY ALL;
+# ----
+# 42	hoii	84	22	welt
+# 200	hello	400	1	world
+# 300	hoi	600	2	wereld

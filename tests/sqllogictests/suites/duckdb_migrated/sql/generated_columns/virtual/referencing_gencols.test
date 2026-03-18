@@ -1,0 +1,108 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl2
+
+statement ok
+DROP TABLE IF EXISTS tbl3
+
+statement ok
+DROP TABLE IF EXISTS tbl4
+
+statement ok
+DROP TABLE IF EXISTS unit
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price * amount_sold),
+# 	profit_total AS (total_profit * 5)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,4)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (4,5);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unit;
+# ----
+# 5	4	20	100
+# 4	5	20	100
+
+# ON CREATE
+
+#Circular dependency
+
+statement error
+CREATE TABLE tbl2 (
+	circular INTEGER AS (dependency),
+	dependency INTEGER AS (circular)
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl2 (
+# 	price INTEGER,
+# 	circular AS (dependency * price),
+# 	dependency AS (price),
+# );
+
+#Same, but with a provided type
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl3 (
+# 	dependency INTEGER AS (price),
+# 	price INTEGER,
+# 	circular AS (dependency),
+# );
+
+#Example with 'correct' order
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	price INTEGER,
+# 	dependency INTEGER AS (price),
+# 	circular AS (dependency * price),
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl4 (
+# 	price INTEGER,
+# 	dependency AS (price),
+# 	depth1 AS (dependency),
+# 	depth2 AS (price * dependency),
+# 	depth3 AS (depth1 * depth2 * dependency),
+# 	depth4 aS ((dependency * depth3) + depth1),
+# 	depth5 AS (depth4 - (depth3 + depth2) + (dependency * depth1))
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl4 VALUES (5);
+
+# TODO: unsupported feature
+# query IIIIIII
+# SELECT * FROM tbl4;
+# ----
+# 5	5	5	25	625	3130	2505
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5);
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl;
+# ----
+# 5	5	25

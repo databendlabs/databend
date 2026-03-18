@@ -1,0 +1,76 @@
+statement ok
+DROP TABLE IF EXISTS tbl_list
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl_list (id INT PRIMARY KEY, payload VARCHAR[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_list VALUES (1, ['first payload']);
+
+# Keep one connection open to ensure we still have the old value in the ART.
+
+# TODO: unsupported feature
+# statement ok old
+# BEGIN;
+
+# TODO: unsupported feature
+# statement ok old
+# INSERT INTO tbl_list VALUES (5, ['old payload']);
+
+# con1 open.
+
+statement ok
+BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT OR REPLACE INTO tbl_list VALUES (1, ['con1 payload']);
+
+# Ensure that we can still see the old value.
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl_list WHERE id = 1;
+# ----
+# 1	[first payload]	0
+
+# Try to upsert again.
+
+statement ok
+BEGIN;
+
+statement error
+INSERT OR REPLACE INTO tbl_list VALUES (1, ['second payload']);
+
+statement ok
+ROLLBACK;
+
+statement ok
+COMMIT;
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl_list WHERE id = 1;
+# ----
+# 1	[con1 payload]	1
+
+# Ensure that the old transaction can still see the old storage.
+
+# TODO: unsupported feature
+# query III old
+# SELECT id, payload, rowid FROM tbl_list WHERE id = 1;
+# ----
+# 1	[first payload]	0
+
+# TODO: unsupported feature
+# statement ok old
+# COMMIT;
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl_list ORDER BY ALL;
+# ----
+# 1	[con1 payload]	1
+# 5	[old payload]	2

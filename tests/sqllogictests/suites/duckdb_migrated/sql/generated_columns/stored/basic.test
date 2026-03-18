@@ -1,0 +1,8 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement error
+CREATE TABLE tbl (
+	price INTEGER,
+	gcol AS (price) STORED,
+);

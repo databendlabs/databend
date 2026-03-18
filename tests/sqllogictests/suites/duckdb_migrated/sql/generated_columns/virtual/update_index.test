@@ -1,0 +1,25 @@
+statement ok
+DROP TABLE IF EXISTS tbl_comp
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl_comp (
+# 	a INT,
+# 	gen AS (2 * a),
+# 	b INT,
+# 	c VARCHAR,
+# 	PRIMARY KEY(c));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_comp VALUES (1, 1, 'hello');
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE tbl_comp SET c='world'
+
+# TODO: unsupported feature
+# query IIII
+# FROM tbl_comp
+# ----
+# 1	2	1	world

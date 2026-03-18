@@ -1,0 +1,122 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i integer);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i);
+
+
+# Node7 Leaf Insertion and Deletion Coverage.
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+statement ok
+INSERT INTO integers VALUES (2);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers where rowid = 1;
+
+query I
+SELECT COUNT(*) FROM integers;
+----
+7
+
+# Node15 Leaf Insertion and Deletion Coverage.
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers where rowid = 2
+
+query I
+SELECT COUNT(*) FROM integers
+----
+14
+
+# Node256 Leaf Insertion and Deletion Coverage.
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+statement ok
+INSERT INTO integers VALUES (2)
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers where rowid = 3
+
+query I
+SELECT COUNT(*) FROM integers
+----
+24
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index
+
+statement ok
+DROP TABLE integers

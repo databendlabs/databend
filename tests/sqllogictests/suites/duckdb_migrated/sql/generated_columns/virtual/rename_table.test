@@ -1,0 +1,24 @@
+statement ok
+DROP TABLE IF EXISTS unit
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price * amount_sold)	
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,4)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE unit RENAME TO not_unit;
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM not_unit;
+# ----
+# 5	4	20

@@ -1,0 +1,84 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i integer)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i)
+
+# insert elements
+
+statement ok
+INSERT INTO integers VALUES (0 + 1);
+
+statement ok
+INSERT INTO integers VALUES (1 + 1);
+
+statement ok
+INSERT INTO integers VALUES (2 + 1);
+
+statement ok
+INSERT INTO integers VALUES (3 + 1);
+
+
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 0 + 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1 + 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2 + 1
+----
+1
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 3 + 1
+----
+1
+
+
+# verify sums
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+3
+
+query I
+SELECT sum(i) FROM integers WHERE i > 1
+----
+9
+
+# now delete all elements
+
+statement ok
+DELETE FROM integers WHERE i = 0 + 1
+
+statement ok
+DELETE FROM integers WHERE i = 1 + 1
+
+statement ok
+DELETE FROM integers WHERE i = 2 + 1
+
+statement ok
+DELETE FROM integers WHERE i = 3 + 1
+
+statement ok
+DELETE FROM integers WHERE i = 0
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index
+
+statement ok
+DROP TABLE integers

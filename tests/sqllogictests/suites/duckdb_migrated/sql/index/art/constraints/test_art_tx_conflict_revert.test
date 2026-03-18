@@ -1,0 +1,169 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS tbl2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(i INT PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl FROM range(100_000);
+
+statement ok
+CREATE TABLE tbl2(i INT);
+
+statement ok
+INSERT INTO tbl2 VALUES (42);
+
+onlyif mode=with_open_transaction
+
+# TODO: unsupported feature
+# statement ok read_con
+# BEGIN
+
+statement ok
+BEGIN
+
+statement ok
+BEGIN
+
+# con2 deletes rows 0M...1M
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl;
+
+# and inserts into tbl2
+
+statement ok
+DELETE FROM tbl2
+
+# con1 now alters tbl2
+
+statement ok
+ALTER TABLE tbl2 ADD COLUMN j INTEGER
+
+statement ok
+COMMIT
+
+# TODO: unsupported feature
+# statement error
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# FROM tbl WHERE i=50_000
+# ----
+# 50000
+
+# TODO: unsupported feature
+# query I read_con
+# FROM tbl WHERE i=50_000
+# ----
+# 50000
+
+onlyif mode=with_open_transaction
+
+# TODO: unsupported feature
+# statement ok read_con
+# COMMIT
+
+query I
+FROM tbl WHERE i=50_000
+----
+50000
+
+statement error
+INSERT INTO tbl VALUES (50_000)
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl
+
+statement ok
+DROP TABLE tbl2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(i INT PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl FROM range(100_000);
+
+statement ok
+CREATE TABLE tbl2(i INT);
+
+statement ok
+INSERT INTO tbl2 VALUES (42);
+
+onlyif mode=with_open_transaction
+
+# TODO: unsupported feature
+# statement ok read_con
+# BEGIN
+
+statement ok
+BEGIN
+
+statement ok
+BEGIN
+
+# con2 deletes rows 0M...1M
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl;
+
+# and inserts into tbl2
+
+statement ok
+DELETE FROM tbl2
+
+# con1 now alters tbl2
+
+statement ok
+ALTER TABLE tbl2 ADD COLUMN j INTEGER
+
+statement ok
+COMMIT
+
+# TODO: unsupported feature
+# statement error
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# FROM tbl WHERE i=50_000
+# ----
+# 50000
+
+# TODO: unsupported feature
+# query I read_con
+# FROM tbl WHERE i=50_000
+# ----
+# 50000
+
+onlyif mode=with_open_transaction
+
+# TODO: unsupported feature
+# statement ok read_con
+# COMMIT
+
+query I
+FROM tbl WHERE i=50_000
+----
+50000
+
+statement error
+INSERT INTO tbl VALUES (50_000)
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl
+
+statement ok
+DROP TABLE tbl2

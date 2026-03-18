@@ -1,0 +1,71 @@
+statement ok
+DROP TABLE IF EXISTS unit
+
+statement ok
+DROP TABLE IF EXISTS unit2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price * amount_sold)
+# );
+
+# Not allowed to have qualified (tbl.name) column references
+
+statement error
+CREATE TABLE unit2 (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price / amount_sold),
+	profit_total AS (unit2.price * unit2.amount_sold)
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit2 (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price / amount_sold),
+# 	profit_total AS (price * amount_sold)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,4)
+
+# Ambiguous, both have 'total_profit'
+
+statement error
+SELECT total_profit FROM unit, unit2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit2 VALUES (100, 4)
+
+# When using the table name, we avoid ambiguity
+
+# TODO: unsupported feature
+# statement ok
+# SELECT unit.total_profit FROM unit, unit2
+
+# When using aliases for tables, this should still work
+
+# TODO: unsupported feature
+# query I
+# SELECT unit.total_profit FROM unit AS unit2, unit2 AS unit
+# ----
+# 25
+
+# No ambiguity here
+
+# TODO: unsupported feature
+# statement ok
+# SELECT profit_total FROM unit2
+
+# Aliasing the table name shouldn't break the generated expression
+
+# TODO: unsupported feature
+# statement ok
+# SELECT profit_total FROM unit2 as unit

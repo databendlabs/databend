@@ -1,0 +1,36 @@
+statement ok
+DROP TABLE IF EXISTS key_value_pairs
+
+statement ok
+DROP TABLE IF EXISTS keys_to_lookup
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE key_value_pairs (key VARCHAR PRIMARY KEY, value VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO key_value_pairs
+# 	SELECT concat('key_', i::VARCHAR), concat('value_', i::VARCHAR)
+# 	FROM range(0, 10000) t(i)
+# 	WHERE random() < 0.5
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE keys_to_lookup (key VARCHAR PRIMARY KEY)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO keys_to_lookup
+# 	SELECT concat('key_', i::VARCHAR)
+# 	FROM range(0, 100) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT COUNT(*) FROM
+# (
+# 	SELECT key, value
+# 	FROM
+# 		keys_to_lookup
+# 		JOIN key_value_pairs USING(key)
+# )

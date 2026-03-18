@@ -1,0 +1,33 @@
+statement ok
+DROP TABLE IF EXISTS tbl_list
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl_list (id INT PRIMARY KEY, payload VARCHAR[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_list SELECT range, [range || ' payload'] FROM range(0, 5);
+
+# TODO: unsupported feature
+# query II
+# UPDATE tbl_list SET id = id + 5 RETURNING id, payload;
+# ----
+# 5	[0 payload]
+# 6	[1 payload]
+# 7	[2 payload]
+# 8	[3 payload]
+# 9	[4 payload]
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_list SELECT range + 10, [(range + 10) || ' payload'] FROM range(0, 3000);
+
+# For each incoming chunk, we add the row IDs to the delete index.
+# For standard_vector_size = 2048, we delete the first chunk, and then try to insert the incremented values.
+# This is expected to throw a constraint violation.
+# The value going into the next chunk is not yet in the delete index, as the chunk that would add that value hasn't been processed, yet.
+# This scenario is a known limitation (also in postgres).
+
+statement error
+UPDATE tbl_list SET id = id + 1 RETURNING id, payload;

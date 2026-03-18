@@ -1,0 +1,35 @@
+statement ok
+DROP TABLE IF EXISTS unit
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price * amount_sold)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,4)
+
+# TODO: unsupported feature
+# query I
+# SELECT total_profit FROM unit
+# ----
+# 20
+
+# Dependency of 'total_price' - the change is prohibited
+
+statement error
+ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT total_profit FROM unit;
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM unit
+# ----
+# 5	4	20

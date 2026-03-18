@@ -1,0 +1,73 @@
+statement ok
+DROP TABLE IF EXISTS unit
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit as (price * amount_sold),
+# 	profit_total AS (total_profit),
+# 	dependent AS (profit_total),
+# 	also_dependent AS (profit_total * dependent),
+# 	dont_delete_me AS (amount_sold),
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,4)
+
+# TODO: unsupported feature
+# query IIIIIII
+# SELECT * FROM unit;
+# ----
+# 5	4	20	20	20	400	4
+
+# Is a dependency of 1 or more columns - CASCADE required
+
+statement error
+ALTER TABLE unit DROP COLUMN price;
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE unit DROP COLUMN price CASCADE;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM unit;
+# ----
+# 4	4
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM unit;
+# ----
+# 4	4
+# 5	5
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE unit DROP COLUMN dont_delete_me;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM unit;
+# ----
+# 4
+# 5
+
+# Cant delete last column
+
+statement error
+ALTER TABLE unit DROP COLUMN amount_sold CASCADE;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM unit;
+# ----
+# 4
+# 5

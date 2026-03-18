@@ -1,0 +1,32 @@
+statement ok
+DROP TABLE IF EXISTS tbl_rollback
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl_rollback (id INT PRIMARY KEY, payload VARCHAR[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_rollback VALUES (1, ['first payload']);
+
+statement ok
+BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE tbl_rollback SET payload = ['con1 payload'] WHERE id = 1;
+
+statement error
+INSERT INTO tbl_rollback VALUES (1, ['con1 payload']);
+
+statement error
+SELECT 42;
+
+statement ok
+ROLLBACK;
+
+# TODO: unsupported feature
+# query III
+# SELECT id, payload, rowid FROM tbl_rollback ORDER BY ALL;
+# ----
+# 1	[first payload]	0

@@ -1,0 +1,45 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers using art(i)
+
+statement ok
+INSERT INTO integers VALUES (1)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE integers SET i=10 WHERE i=1
+
+# con sees the new state
+
+query I
+SELECT * FROM integers WHERE i < 5
+----
+
+query I
+SELECT * FROM integers WHERE i > 0
+----
+10
+
+# con2 sees the old state
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE i < 5
+# ----
+# 1
+
+query I
+SELECT * FROM integers WHERE i > 0
+----
+10
+
+statement ok
+ROLLBACK

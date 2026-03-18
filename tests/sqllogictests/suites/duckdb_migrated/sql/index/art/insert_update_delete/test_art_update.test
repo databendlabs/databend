@@ -1,0 +1,28 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers using art(j)
+
+statement ok
+INSERT INTO integers VALUES (1, 2), (2, 2)
+
+statement ok
+UPDATE integers SET j=10 WHERE i=1
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE integers SET j=10 WHERE rowid=0
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE rowid=1
+
+query II
+SELECT * FROM integers WHERE j>5
+----
+1	10

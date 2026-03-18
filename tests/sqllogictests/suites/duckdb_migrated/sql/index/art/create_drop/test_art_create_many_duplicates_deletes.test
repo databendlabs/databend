@@ -1,0 +1,63 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i integer)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT * FROM repeat(1, 1500) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT * FROM repeat(2, 1500) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT * FROM repeat(3, 1500) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT * FROM repeat(4, 1500) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT * FROM repeat(5, 1500) t1(i)
+
+statement ok
+COMMIT
+
+statement ok
+DELETE FROM integers WHERE i = 5
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i)
+
+query I
+SELECT count(i) FROM integers WHERE i > 1 AND i < 3
+----
+0
+
+query I
+SELECT count(i) FROM integers WHERE i >= 1 AND i < 3
+----
+0
+
+query I
+SELECT count(i) FROM integers WHERE i > 1
+----
+0
+
+query I
+SELECT count(i) FROM integers WHERE i < 4
+----
+0
+
+query I
+SELECT count(i) FROM integers WHERE i < 5
+----
+0

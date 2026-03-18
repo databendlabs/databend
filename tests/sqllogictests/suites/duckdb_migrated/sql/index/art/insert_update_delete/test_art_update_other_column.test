@@ -1,0 +1,134 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers using art(j)
+
+statement ok
+INSERT INTO integers VALUES (10, 1, 'hello'), (11, 2, 'world')
+
+# condition on "j"
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+10	1	hello
+
+# now update the column
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE integers SET i=100, k='update' WHERE j=1
+
+# con sees the old state, con2 sees the new state
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+100 1 update
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+100	1	update
+
+# after a commit, both see the new state
+
+statement ok
+COMMIT
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+100	1	update
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+100	1	update
+
+# now do the same but with two outstanding updates
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE integers SET i=20, k='t1' WHERE j=1
+
+statement ok
+UPDATE integers SET i=21, k='t2' WHERE j=2
+
+# con1 sees the updated state for the first tuple, but the old state for the new tuple
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+20	1	t1
+
+query IIT
+SELECT * FROM integers WHERE j=2
+----
+21 2 t2
+
+query IIT
+SELECT * FROM integers ORDER BY j
+----
+20 1 t1
+21 2 t2
+
+# con2 sees the updated state for the second tuple, but the old state for the new tuple
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+20 1 t1
+
+query IIT
+SELECT * FROM integers WHERE j=2
+----
+21	2	t2
+
+query IIT
+SELECT * FROM integers ORDER BY j
+----
+20 1 t1
+21 2 t2
+
+# after commit, both see the updated state
+
+statement ok
+COMMIT
+
+statement ok
+COMMIT
+
+query IIT
+SELECT * FROM integers WHERE j=1
+----
+20	1	t1
+
+query IIT
+SELECT * FROM integers WHERE j=2
+----
+21	2	t2
+
+query IIT
+SELECT * FROM integers ORDER BY j
+----
+20	1	t1
+21	2	t2
+
+query IIT
+SELECT * FROM integers ORDER BY j
+----
+20	1	t1
+21	2	t2

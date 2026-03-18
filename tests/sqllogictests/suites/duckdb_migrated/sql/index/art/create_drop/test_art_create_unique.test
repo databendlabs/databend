@@ -1,0 +1,41 @@
+statement ok
+DROP TABLE IF EXISTS merge_violation
+
+statement ok
+DROP TABLE IF EXISTS t0
+
+statement ok
+CREATE TABLE t0(c0 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX i0 ON t0(c0);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO t0(c0) VALUES (1);
+
+query I
+SELECT * FROM t0 WHERE t0.c0 = 1;
+----
+1
+
+statement ok
+CREATE TABLE merge_violation (id INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_violation SELECT range FROM range(0, 2048);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_violation SELECT range + 10000 FROM range(0, 2048);
+
+statement ok
+INSERT INTO merge_violation VALUES (2047);
+
+statement error
+CREATE UNIQUE INDEX idx ON merge_violation(id);

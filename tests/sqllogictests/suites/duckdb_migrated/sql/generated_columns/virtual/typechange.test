@@ -1,0 +1,48 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS unit
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unit (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price * amount_sold)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,4)
+
+# TODO: unsupported feature
+# query I
+# SELECT total_profit FROM unit;
+# ----
+# 20
+
+# Typechange is not supported yet
+
+statement error
+ALTER TABLE unit ALTER COLUMN total_profit TYPE BOOLEAN;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unit VALUES (5,0);
+
+#query I
+#SELECT total_profit FROM unit
+#----
+#True
+#False
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	price INTEGER,
+# 	total_profit DATE AS (price * 5),
+# );
+
+statement error
+INSERT INTO tbl VALUES (5);

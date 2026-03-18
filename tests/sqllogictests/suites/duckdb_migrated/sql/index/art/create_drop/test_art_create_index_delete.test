@@ -1,0 +1,51 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 10)
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM integers WHERE i=2 OR i=7
+
+query I
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE i=2;
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i)
+
+query I
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+query I
+SELECT * FROM integers WHERE i=2;
+----
+
+# connection 1 still sees the old state
+
+query I
+SELECT * FROM integers WHERE i=1;
+----
+1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE i=2;
+# ----
+# 2

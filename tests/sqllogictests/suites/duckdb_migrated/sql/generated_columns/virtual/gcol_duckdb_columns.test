@@ -1,0 +1,16 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+# Create a table containing a generated column
+# TODO: unsupported feature
+# statement ok
+# create table t (i int, j int as (1));
+
+# duckdb_columns should return the stringified generated column expression as 'column_default'
+
+# TODO: unsupported feature
+# query I
+# select column_default from duckdb_columns;
+# ----
+# NULL
+# CAST(1 AS INTEGER)

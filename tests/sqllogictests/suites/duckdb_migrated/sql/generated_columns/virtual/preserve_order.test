@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (
+#     foo INTEGER,
+#     bar INTEGER GENERATED ALWAYS AS (foo+1) VIRTUAL,
+#     foobar INTEGER
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (foo, foobar) VALUES (1, 10);
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test;
+# ----
+# 1	2	10

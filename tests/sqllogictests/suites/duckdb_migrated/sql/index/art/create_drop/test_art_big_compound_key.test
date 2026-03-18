@@ -1,0 +1,14 @@
+statement ok
+DROP TABLE IF EXISTS v0
+
+statement ok
+CREATE TABLE v0 (v2 VARCHAR, v1 INT);
+
+statement ok
+INSERT INTO v0 (v2 ,v1 ) VALUES ('358677 4 2 1', 7), ('a%', 1);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX v3 ON v0
+# 	(v1, v1, v1, v1, v1, v2, v1, v2, v1, v2, v2, v1, v2, v2,
+# 	v2, v2, v2, v2, v1, v1, v2, v2, v1, v1, v2, v1);

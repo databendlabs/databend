@@ -1,0 +1,83 @@
+statement ok
+DROP TABLE IF EXISTS a
+
+statement ok
+DROP TABLE IF EXISTS b
+
+statement ok
+DROP TABLE IF EXISTS tbl1
+
+statement ok
+DROP TABLE IF EXISTS tbl2
+
+statement ok
+DROP TABLE IF EXISTS tbl3
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl1 (
+# 	a INTEGER UNIQUE,
+# );
+
+#Generated column references a foreign key directly
+
+statement error
+CREATE TABLE tbl2 (
+	a INTEGER,
+	b AS (a) REFERENCES tbl1(a),
+);
+
+statement error
+CREATE TABLE tbl2 (
+	a INTEGER,
+	b AS (a),
+	FOREIGN KEY (b) REFERENCES tbl1 (a)
+);
+
+statement error
+CREATE TABLE tbl2 (
+	price INTEGER,
+	also_price AS (price) UNIQUE
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl2 (
+# 	price INTEGER,
+# 	also_price AS (price)
+# );
+
+#Can not reference a generated column as foreign key
+
+statement error
+CREATE TABLE tbl3 (
+	a INTEGER,
+	FOREIGN KEY (a) REFERENCES tbl2 (also_price)
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a (
+# 	a_gen1 AS (a_reg),
+# 	a_gen2 AS (a_reg),
+# 	a_reg INTEGER,
+# 	PRIMARY KEY (a_reg)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b (
+# 	gen1 AS (price),
+# 	gen2 AS (price),
+# 	price INTEGER,
+# 	FOREIGN KEY (price) REFERENCES a (a_reg)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (5);
+
+# Violates primary key constraint
+
+statement error
+INSERT INTO a VALUES (5);

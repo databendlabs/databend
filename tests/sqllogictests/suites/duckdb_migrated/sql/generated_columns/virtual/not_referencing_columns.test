@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement error
+CREATE TABLE tbl (
+	price INTEGER,
+	amount_sold INTEGER,
+	gcol AS (list(5,4,3))
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	price INTEGER,
+# 	gcol AS (map())
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5);
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl;
+# ----
+# 5	{}

@@ -34849,13 +34849,2399 @@
         ]
       },
       "gate": "partial"
+    },
+    "test/sql/generated_columns/stored/basic.test": {
+      "source_sha": "92eb495e052fc8cc5cf1ee065c6325acbe354ab5",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/stored/basic.test",
+      "status": "pass",
+      "commented_out": 0,
+      "total_records": 2,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "gate": "pass"
+    },
+    "test/sql/generated_columns/virtual/alter_table.test": {
+      "source_sha": "cc1eaf9469880cf5e27cb891c13f7f59488e3e81",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/alter_table.test",
+      "status": "pass",
+      "commented_out": 0,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "gate": "pass"
+    },
+    "test/sql/generated_columns/virtual/ambiguity.test": {
+      "source_sha": "09d281bb941ada64730370e9ab8d0fe5f7416127",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/ambiguity.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/cascading_delete.test": {
+      "source_sha": "befd5ff1444299eaf4b4361feb87e00d8c5dbe88",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/cascading_delete.test",
+      "status": "partial",
+      "commented_out": 10,
+      "total_records": 13,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/casting.test": {
+      "source_sha": "437d03c0520cf695f67833dabceb24607f8e1011",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/casting.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 8,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/check.test": {
+      "source_sha": "aa4b5b1a623516d01b471d3389b6df720b8375e4",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/check.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 9,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/circular_dependency_stresstest.test": {
+      "source_sha": "b4ae581eae5302a52042d1a9ad8fe81109d705e4",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/circular_dependency_stresstest.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/collate.test": {
+      "source_sha": "5839ecefc74a7c8f702e91e6f83655639aea24c0",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/collate.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 6,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/create_table.test": {
+      "source_sha": "8cf3484ba28e0460a087f7aa50a3108e24f7d736",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/create_table.test",
+      "status": "partial",
+      "commented_out": 7,
+      "total_records": 17,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/default.test": {
+      "source_sha": "6ef1e5edcc8555dcad3ececd5797859b7ce031f6",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/default.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/drop.test": {
+      "source_sha": "3fec06940a3a2b497e73ae97769612035e9e4ef8",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/drop.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/drop_dependency.test": {
+      "source_sha": "41addbf209f1f4be73ed18cd4f629373216bf277",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/drop_dependency.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 8,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/foreign_key.test": {
+      "source_sha": "45b978e0f40683b8d091381856b26cd38919477d",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/foreign_key.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 15,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/foreign_key_extensive.test": {
+      "source_sha": "be1ce67f3332400c7d4ec2dca5a2064de26c0921",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/foreign_key_extensive.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 15,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/from_generated_column.test": {
+      "source_sha": "612f1c67c3fe7036b8168f8deb9602be64a73e09",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/from_generated_column.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 11,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/gcol_duckdb_columns.test": {
+      "source_sha": "d8f049a60b6e78ac4b2f632ac2748cc47c605528",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/gcol_duckdb_columns.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 3,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/implicit_type.test": {
+      "source_sha": "68be4bbd31b7f41c93a18d60aad188e13885c201",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/implicit_type.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 10,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/insert.test": {
+      "source_sha": "b5873dfa69cd1b56854b675205303464f51d0a6a",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/insert.test",
+      "status": "partial",
+      "commented_out": 11,
+      "total_records": 18,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 11
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/not_referencing_columns.test": {
+      "source_sha": "ebf5405bc4b516a99eb2559890d027d595975be8",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/not_referencing_columns.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/null.test": {
+      "source_sha": "08f76446c1c9c8be709e784b8a9dda421709ecd5",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/null.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 6,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/partition.test": {
+      "source_sha": "7ac7d54088d6857ec45a3ebda9cb89e7103ccfa1",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/partition.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 7,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/preserve_order.test": {
+      "source_sha": "ebf5774c4c2fb6958ad160fc8bbb26a823853fb0",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/preserve_order.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 4,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/primary_key.test": {
+      "source_sha": "af6a7ff36c42c6be7ea468e7ea43c16d61c34c86",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/primary_key.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 7,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/rename.test": {
+      "source_sha": "9963bf91c6515a1ce03223ca672502100a7dd9fe",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/rename.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 6,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/group_by.test": {
+      "source_sha": "7deb580e32b3d4451ee2632bbf1423a7f99e8147",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/group_by.test",
+      "status": "partial",
+      "commented_out": 18,
+      "total_records": 20,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 18
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/referencing_gencols.test": {
+      "source_sha": "091e16e0c8707aefcd1cd60552b12eff4b03bd2c",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/referencing_gencols.test",
+      "status": "partial",
+      "commented_out": 12,
+      "total_records": 18,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 12
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/rename_dependency.test": {
+      "source_sha": "560fa701d2f1de280119c15598b765493093bb39",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/rename_dependency.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 7,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/rename_table.test": {
+      "source_sha": "500fd7812622b76ec5174183066f42d225ef2504",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/rename_table.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/row_group_fetch.test": {
+      "source_sha": "79a1db9eaf264cde7a95ff5dc439a35d9c4298d0",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/row_group_fetch.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/rowid.test": {
+      "source_sha": "cfc28f14276dfe34d7a3eb9a6487b58038d83a4e",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/rowid.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 11,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/select.test": {
+      "source_sha": "54e34dde04fa447d17185d5c1577cbe95233f5d6",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/select.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 10,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/select_alias.test": {
+      "source_sha": "af1a92d89859fe27bd7ccb5cc7c0acafc9238ab4",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/select_alias.test",
+      "status": "partial",
+      "commented_out": 41,
+      "total_records": 42,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 41
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/type_resolution_bug.test": {
+      "source_sha": "f70f07116639a82d2a4fecba2fec17c5063d5bcb",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/type_resolution_bug.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 4,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/typechange.test": {
+      "source_sha": "fca25dd9853bb77a3dea2e2de7fb5d7397795338",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/typechange.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 10,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "fail"
+    },
+    "test/sql/generated_columns/virtual/typechange_dependency.test": {
+      "source_sha": "63af3ac2701c908f0b65ea4e8f61539ad3b119ad",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/typechange_dependency.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 7,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/unique.test": {
+      "source_sha": "a1042ebf479eeb574918ab64e32573967cff318b",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/unique.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 7,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/update.test": {
+      "source_sha": "b2e7d9f046b58c30f67be3051913b9f7edacdb9a",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/update.test",
+      "status": "partial",
+      "commented_out": 10,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
+    },
+    "test/sql/generated_columns/virtual/update_index.test": {
+      "source_sha": "d7b7d3deb17164c5df8244b45559eb8193623cb9",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/generated_columns/virtual/update_index.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_compound_key_changes.test": {
+      "source_sha": "69a6577fecb24483f4032f98affce772f9a1ef94",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_compound_key_changes.test",
+      "status": "partial",
+      "commented_out": 22,
+      "total_records": 28,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 22
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_eager_batch_insert.test": {
+      "source_sha": "3dc83837e471cd600b53f6d1956c5feecd09295c",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_eager_batch_insert.test",
+      "status": "partial",
+      "commented_out": 10,
+      "total_records": 14,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_eager_constraint_checking.test": {
+      "source_sha": "81c0406e1b0013ac59d7ce3ba664bed57124846a",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_eager_constraint_checking.test",
+      "status": "partial",
+      "commented_out": 57,
+      "total_records": 76,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 57
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_eager_with_wal.test": {
+      "source_sha": "97e5485c77aab1f99b1fd88e708e5c853fff507b",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_eager_with_wal.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 8,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_large_abort.test": {
+      "source_sha": "199b2ee94348ec45eafff49c79d0d2cd4e20a3b0",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_large_abort.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 15,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_simple_update.test": {
+      "source_sha": "81dd09d1ecec2d62b553eb6243a7fedd30a87be9",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_simple_update.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 9,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_conflict_revert.test": {
+      "source_sha": "70d7fb42a1f036774e34bf3a60cf397473ccfcd2",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_conflict_revert.test",
+      "status": "partial",
+      "commented_out": 18,
+      "total_records": 40,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 18
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_delete_with_global_nested.test": {
+      "source_sha": "1a02113459c0b1d6cef650df5884843cbf48b32e",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_delete_with_global_nested.test",
+      "status": "partial",
+      "commented_out": 11,
+      "total_records": 16,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 11
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_deletes_list.test": {
+      "source_sha": "30538518761c34d4bf70f4369c8fd58be893b615",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_deletes_list.test",
+      "status": "partial",
+      "commented_out": 11,
+      "total_records": 17,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 11
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_deletes_rollback.test": {
+      "source_sha": "366bdff86114e845892a742bdfd6eff045d9f570",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_deletes_rollback.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 10,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_deletes_varchar.test": {
+      "source_sha": "9740ae28b9bc3abe3e7be7e11826386e1946122c",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_deletes_varchar.test",
+      "status": "partial",
+      "commented_out": 11,
+      "total_records": 17,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 11
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_over_eager.test": {
+      "source_sha": "25f26809ea0022cbb181df8738d1f7ef1b7b08bc",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_over_eager.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 11,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_returning.test": {
+      "source_sha": "c7d9d267fc5dc722cd23112acafb11c82237db3c",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_returning.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 6,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_same_row_id.test": {
+      "source_sha": "74c15d5ebf3359e687b34b2b8a52d857d9b49fc8",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_same_row_id.test",
+      "status": "pass",
+      "commented_out": 0,
+      "total_records": 0,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "gate": "pass"
+    },
+    "test/sql/index/art/constraints/test_art_tx_update_with_global_nested.test": {
+      "source_sha": "21ed3f6cd21050deca3773d61558dcc3c55cefba",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_update_with_global_nested.test",
+      "status": "partial",
+      "commented_out": 9,
+      "total_records": 14,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 9
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_updates_list.test": {
+      "source_sha": "22f223db1466b39c508dd9aa192ae8646a821751",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_updates_list.test",
+      "status": "partial",
+      "commented_out": 16,
+      "total_records": 22,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 16
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_updates_pk_col.test": {
+      "source_sha": "8b70845bf5ced531a560de73472662655a103c8e",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_updates_pk_col.test",
+      "status": "partial",
+      "commented_out": 18,
+      "total_records": 23,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 18
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_updates_rollback.test": {
+      "source_sha": "3efc04ce7007eb8dbf4b0a23eb819b1762b38fc9",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_updates_rollback.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 9,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_upsert_with_global_nested.test": {
+      "source_sha": "c18e40845d65d556f1253540bc7813eb9068d4e3",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_upsert_with_global_nested.test",
+      "status": "partial",
+      "commented_out": 7,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_upserts_list.test": {
+      "source_sha": "874971fef60906e66b69d0f11ed73b20f16a783e",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_upserts_list.test",
+      "status": "partial",
+      "commented_out": 10,
+      "total_records": 16,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_upserts_local.test": {
+      "source_sha": "1fe7acd2a213a165387a0d98ea61db3985adfb97",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_upserts_local.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 13,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_tx_upserts_rollback.test": {
+      "source_sha": "b4c14a94e3819208d133bd2023f5eed41706f563",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_tx_upserts_rollback.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 10,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_upsert_duplicate.test": {
+      "source_sha": "9cd7161ec307500074930b0fa206d2bac0ce9e35",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_upsert_duplicate.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 4,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/constraints/test_art_upsert_other_index.test": {
+      "source_sha": "2280f674f7afbd1e06bb521288ebd1e0a219640d",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/constraints/test_art_upsert_other_index.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 9,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_big_compound_key.test": {
+      "source_sha": "5567f5101bec0dec336afb7470b6f85dcfd72b5e",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_big_compound_key.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 4,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_create_index_delete.test": {
+      "source_sha": "ff6bcb3fda7c07c328c8ed4d984adeb39132052d",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_create_index_delete.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_create_index_duplicate_deletes.test": {
+      "source_sha": "72594dbd72d86e9b5979461a9ced4bba63655abd",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_create_index_duplicate_deletes.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 8,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_create_many_duplicates.test": {
+      "source_sha": "4e7000ff816e65d121588d4c2770326c680bb1ca",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_create_many_duplicates.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 16,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_create_many_duplicates_deletes.test": {
+      "source_sha": "dae4618117d2c488d8f6f4409747b7e136f80141",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_create_many_duplicates_deletes.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 16,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_create_unique.test": {
+      "source_sha": "91b405072def5b2a7173988fd488681e72717368",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_create_unique.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_drop_index.test": {
+      "source_sha": "9f1e92612fe87f4dcb14b90e810c355caa24b105",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_drop_index.test",
+      "status": "partial",
+      "commented_out": 4,
+      "total_records": 21,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 4
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_invalid_create_index.test": {
+      "source_sha": "d3c8663fe7adde3690766287fb7b3f9e16d8fa0b",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_invalid_create_index.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_many_versions.test": {
+      "source_sha": "60c36663361cd66e902c29852a32ddcfe429ad74",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_many_versions.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 18,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_single_value.test": {
+      "source_sha": "eafda922effc1983facb1ca56d6bf90f11b4565f",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_single_value.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 14,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/insert_update_delete/test_art_sel_vector.test": {
+      "source_sha": "6948b75d2c8f125d24ed54d3a19e59a437e6b69a",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/insert_update_delete/test_art_sel_vector.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 20,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/insert_update_delete/test_art_simple_update.test": {
+      "source_sha": "a7b7db05373bc87099071911ab52bdc90dcc7b42",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/insert_update_delete/test_art_simple_update.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 11,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/insert_update_delete/test_art_update.test": {
+      "source_sha": "4b1c52c36389f7fa7654df55270948b13383e28a",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/insert_update_delete/test_art_update.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 8,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/insert_update_delete/test_art_update_other_column.test": {
+      "source_sha": "15ed2cd0185b4496f56c79c5adb1414d8043b508",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/insert_update_delete/test_art_update_other_column.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 28,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/insert_update_delete/test_art_update_same_value.test": {
+      "source_sha": "a41721c93ec7d9b7b1bf960ac6f111a1471422ef",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/insert_update_delete/test_art_update_same_value.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 51,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst.test": {
+      "source_sha": "9bbddf533321c54e35f449565cd16c1614eabe05",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 6,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst_and_replay.test": {
+      "source_sha": "21a7cba64cc722e99f5e8518c8531ef076cb4ab9",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst_and_replay.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 6,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_fuzzer.test": {
+      "source_sha": "ad5c727aa252db07c567f3522d294d3f9b970de7",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_fuzzer.test",
+      "status": "partial",
+      "commented_out": 7,
+      "total_records": 28,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 7
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_fuzzer_persisted.test": {
+      "source_sha": "1ec3380c0e080b86926a4699b1a143e123b732e9",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_fuzzer_persisted.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_internal_issue_4742.test": {
+      "source_sha": "9d39325ec047a5384e7864c0e4d8369e08149214",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_internal_issue_4742.test",
+      "status": "partial",
+      "commented_out": 10,
+      "total_records": 11,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 10,
+        "other": 2
+      },
+      "gate": "fail"
+    },
+    "test/sql/index/art/issues/test_art_issue_4976.test": {
+      "source_sha": "55859353f22b117a6fb5fdfd282a560f66a1446f",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_issue_4976.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_issue_6603.test": {
+      "source_sha": "3cab372b5f315f9f8d3167b788ae3fabad6d1643",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_issue_6603.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_issue_6799.test": {
+      "source_sha": "7e32b33d50ca91804a2039a9da9d7b76814127e2",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_issue_6799.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 7,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_issue_7530.test": {
+      "source_sha": "9d6ce0d7235258f98f6dcbd473cd35692fc3ea3d",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_issue_7530.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_view_col_binding.test": {
+      "source_sha": "5b4946ed758b31f8805b348d75455376daaae2a5",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_view_col_binding.test",
+      "status": "partial",
+      "commented_out": 6,
+      "total_records": 12,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 6
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/multi_column/test_art_multi_column.test": {
+      "source_sha": "c0a1b6357cfa8e4ff9099719ceac7a4490e20c40",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/multi_column/test_art_multi_column.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 11,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/multi_column/test_art_multi_predicate.test": {
+      "source_sha": "5f35437d4ff8bc48cc796c6310648cb87a3a8a76",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/multi_column/test_art_multi_predicate.test",
+      "status": "partial",
+      "commented_out": 1,
+      "total_records": 5,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 1
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/nodes/test_art_nested_leaf_coverage.test": {
+      "source_sha": "b5473657852ecf9be58fe3fd3e29fba68d0b7ce5",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_nested_leaf_coverage.test",
+      "status": "partial",
+      "commented_out": 5,
+      "total_records": 35,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 5
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/nodes/test_art_node_16.test": {
+      "source_sha": "e83b53c546ed4149509eb7baf13b77b3cc49c523",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_node_16.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 26,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/nodes/test_art_node_256.test": {
+      "source_sha": "5ab4049c84d566bfba60b9fb0aaa27994fdb7dc5",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_node_256.test",
+      "status": "partial",
+      "commented_out": 0,
+      "total_records": 0,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "gate": "partial"
+    },
+    "test/sql/index/art/nodes/test_art_node_4.test": {
+      "source_sha": "787fe3a26f841df2118017c18f5ed6d1844a4332",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_node_4.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 20,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/nodes/test_art_node_48.test": {
+      "source_sha": "3b3c4818a7d269585ab41f0e31a5d880ba9eb7af",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_node_48.test",
+      "status": "abort",
+      "commented_out": 2,
+      "total_records": 102,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "gate": "abort"
+    },
+    "test/sql/index/art/nodes/test_art_prefixes_restart.test": {
+      "source_sha": "b0457e0cffb143e5f38da393ddd40cde3935a5d3",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_prefixes_restart.test",
+      "status": "partial",
+      "commented_out": 2,
+      "total_records": 15,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 2
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/scan/test_art_adaptive_scan.test": {
+      "source_sha": "db32d6656b707554c9418f1eb0a16f1a728c436c",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/scan/test_art_adaptive_scan.test",
+      "status": "partial",
+      "commented_out": 3,
+      "total_records": 6,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 3
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/create_drop/test_art_create_if_exists.test": {
+      "source_sha": "01595a888dec623ec9cfca84652be32518840995",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/create_drop/test_art_create_if_exists.test",
+      "status": "partial",
+      "commented_out": 8,
+      "total_records": 15,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 8
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/issues/test_art_issue_7349.test": {
+      "source_sha": "84d9215d3f3aee54723faef575639b54add3b4ba",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/issues/test_art_issue_7349.test",
+      "status": "partial",
+      "commented_out": 12,
+      "total_records": 23,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 12
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/nodes/test_art_leaf_coverage.test": {
+      "source_sha": "4fa8f183c09cf357f3d36295483d859e421ccf66",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_leaf_coverage.test",
+      "status": "partial",
+      "commented_out": 28,
+      "total_records": 37,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 28
+      },
+      "gate": "partial"
+    },
+    "test/sql/index/art/nodes/test_art_sparse_merge.test": {
+      "source_sha": "0958ba1d230e5fe5442252ff5042892e4631ab13",
+      "target_path": "tests/sqllogictests/suites/duckdb_migrated/sql/index/art/nodes/test_art_sparse_merge.test",
+      "status": "partial",
+      "commented_out": 10,
+      "total_records": 20,
+      "last_synced": "2026-03-18",
+      "todo_whitelist": [
+        "hugeint",
+        "lambda",
+        "printf not supported",
+        "format not supported",
+        "type difference",
+        "result differs",
+        "wrong_result",
+        "type_error",
+        "unknown function",
+        "unsupported feature"
+      ],
+      "todo_breakdown": {
+        "unsupported_feature": 10
+      },
+      "gate": "partial"
     }
   },
   "checkpoints": {
     "backfill": {
       "target_commit": "cefac92a5d3a7bbbe27bee97df68080323be8f1b",
-      "last_list_at": "2026-03-17T11:21:07.188381+00:00",
-      "batch_max_files": 300,
+      "last_list_at": "2026-03-18T09:12:17.533167+00:00",
+      "batch_max_files": 100,
       "skip_status": [
         "partial",
         "pass"
@@ -34865,20 +37251,10 @@
         "fail"
       ],
       "total_files_in_commit": 3256,
-      "eligible_total": 2077,
-      "skipped_files": 1052,
-      "retry_total": 127,
+      "eligible_total": 1777,
+      "skipped_files": 1365,
+      "retry_total": 114,
       "retry_paths": [
-        {
-          "path": "test/sql/alter/add_col/test_add_col_default_seq.test",
-          "status": "fail",
-          "sha": "9e103af969bf3d6f80bcda01755e44952b64a70e"
-        },
-        {
-          "path": "test/sql/alter/add_pk/test_add_same_pk_simultaneously.test",
-          "status": "fail",
-          "sha": "ccabfd97db32deeaa339a36c2c5631f3528bee81"
-        },
         {
           "path": "test/sql/catalog/view/recursive_view.test",
           "status": "abort",
@@ -34888,11 +37264,6 @@
           "path": "test/sql/catalog/view/recursive_view_with_dependencies.test",
           "status": "abort",
           "sha": "4b403f205044534491082a20362792e7d417e1ce"
-        },
-        {
-          "path": "test/sql/catalog/view/test_loosely_qualified_view_sql.test",
-          "status": "fail",
-          "sha": "09b5d6eafcac3f8b0ba57b9275b05578ef7ecb1c"
         },
         {
           "path": "test/sql/catalog/view/test_stacked_view.test",
@@ -35330,51 +37701,6 @@
           "sha": "60f014bfad63de289eb34fa816ae3c6e22fb8852"
         },
         {
-          "path": "test/sql/copy/csv/afl/fuzz_20250211_crash.test",
-          "status": "fail",
-          "sha": "74a3ec81b111c4fb4722165a2945c42985b0bfe9"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/fuzz_20250226.test",
-          "status": "fail",
-          "sha": "8acaf796dc817c491aca0941ac422b9d2bbdde8d"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/test_afl_skip.test",
-          "status": "fail",
-          "sha": "06a2d1db5e2446264797736be2be8b29a43b8d13"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/test_fuzz_3977.test",
-          "status": "fail",
-          "sha": "e7a913db910007124337ff00bb46e0407e03b0aa"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/test_fuzz_4086.test",
-          "status": "fail",
-          "sha": "9e3aa6415689b982be5c56140eeeb697df83e3a4"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/test_fuzz_4172.test",
-          "status": "fail",
-          "sha": "3c7ddb003e13b0c8e75f170b4dca53c8e73c4987"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/test_fuzz_4496.test",
-          "status": "fail",
-          "sha": "7df6d31930068818a4c35964b6f7bd4623949595"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/test_fuzz_4793.test",
-          "status": "fail",
-          "sha": "d0bcff286d92e28443abbafa6a9fc8157a139317"
-        },
-        {
-          "path": "test/sql/copy/csv/afl/test_fuzz_5194.test",
-          "status": "fail",
-          "sha": "252f59bfb1ee51b847db018900df03a3b907fc11"
-        },
-        {
           "path": "test/sql/copy/csv/auto/test_14177.test",
           "status": "abort",
           "sha": "5fb908796a9ee48427966fb8d6c0636934ea3d12"
@@ -35498,314 +37824,109 @@
           "path": "test/sql/copy/csv/auto/test_sniffer_blob.test",
           "status": "abort",
           "sha": "f5f3dde42a99cdbe61efdad363ed54ce77f68221"
-        },
-        {
-          "path": "test/sql/copy/csv/test_afl.test",
-          "status": "fail",
-          "sha": "d6d3fb98affcdd4c43017f855a82ca710752423c"
         }
       ],
       "next_batch_paths": [
-        "test/sql/function/enum/test_enum_first.test",
-        "test/sql/function/enum/test_enum_last.test",
-        "test/sql/function/enum/test_enum_range.test",
-        "test/sql/function/generic/can_cast_implicitly.test",
-        "test/sql/function/generic/case_condition.test",
-        "test/sql/function/generic/case_short_circuit.test",
-        "test/sql/function/generic/case_varchar.test",
-        "test/sql/function/generic/cast_to_type.test",
-        "test/sql/function/generic/constant_or_null.test",
-        "test/sql/function/generic/error.test",
-        "test/sql/function/generic/hash_func.test",
-        "test/sql/function/generic/least_greatest_enum.test",
-        "test/sql/function/generic/least_greatest_types.test",
-        "test/sql/function/generic/replace_type.test",
-        "test/sql/function/generic/table_func_varargs.test",
-        "test/sql/function/generic/test_approx_database_count.test",
-        "test/sql/function/generic/test_between.test",
-        "test/sql/function/generic/test_between_sideeffects.test",
-        "test/sql/function/generic/test_boolean_test.test",
-        "test/sql/function/generic/test_connection_count.test",
-        "test/sql/function/generic/test_if.test",
-        "test/sql/function/generic/test_if_null.test",
-        "test/sql/function/generic/test_in.test",
-        "test/sql/function/generic/test_least_greatest.test",
-        "test/sql/function/generic/test_null_if.test",
-        "test/sql/function/generic/test_set.test",
-        "test/sql/function/generic/test_sleep.test",
-        "test/sql/function/generic/test_stats.test",
-        "test/sql/function/generic/test_table_param.test",
-        "test/sql/function/index/index_key.test",
-        "test/sql/function/interval/test_date_part.test",
-        "test/sql/function/interval/test_extract.test",
-        "test/sql/function/interval/test_interval_muldiv.test",
-        "test/sql/function/interval/test_interval_trunc.test",
-        "test/sql/function/list/aggregates/any_value.test",
-        "test/sql/function/list/aggregates/approx_count_distinct.test",
-        "test/sql/function/list/aggregates/avg.test",
-        "test/sql/function/list/aggregates/bigints_sum_avg.test",
-        "test/sql/function/list/aggregates/bit_and.test",
-        "test/sql/function/list/aggregates/bit_or.test",
-        "test/sql/function/list/aggregates/bit_xor.test",
-        "test/sql/function/list/aggregates/bool_and_or.test",
-        "test/sql/function/list/aggregates/count.test",
-        "test/sql/function/list/aggregates/entropy.test",
-        "test/sql/function/list/aggregates/first.test",
-        "test/sql/function/list/aggregates/histogram.test",
-        "test/sql/function/list/aggregates/histogram_decimal.test",
-        "test/sql/function/list/aggregates/hugeint.test",
-        "test/sql/function/list/aggregates/incorrect.test",
-        "test/sql/function/list/aggregates/kurtosis.test",
-        "test/sql/function/list/aggregates/last.test",
-        "test/sql/function/list/aggregates/mad.test",
-        "test/sql/function/list/aggregates/max.test",
-        "test/sql/function/list/aggregates/median.test",
-        "test/sql/function/list/aggregates/min.test",
-        "test/sql/function/list/aggregates/minmax_nested.test",
-        "test/sql/function/list/aggregates/mode.test",
-        "test/sql/function/list/aggregates/nested.test",
-        "test/sql/function/list/aggregates/null_or_empty.test",
-        "test/sql/function/list/aggregates/product.test",
-        "test/sql/function/list/aggregates/sem.test",
-        "test/sql/function/list/aggregates/skewness.test",
-        "test/sql/function/list/aggregates/string_agg.test",
-        "test/sql/function/list/aggregates/sum.test",
-        "test/sql/function/list/aggregates/sum_bool.test",
-        "test/sql/function/list/aggregates/sum_no_overflow.test",
-        "test/sql/function/list/aggregates/uhugeint.test",
-        "test/sql/function/list/aggregates/var_stddev.test",
-        "test/sql/function/list/array_length.test",
-        "test/sql/function/list/array_to_string.test",
-        "test/sql/function/list/array_to_string_comma_default.test",
-        "test/sql/function/list/flatten.test",
-        "test/sql/function/list/generate_series.test",
-        "test/sql/function/list/generate_series_timestamp.test",
-        "test/sql/function/list/generate_subscripts.test",
-        "test/sql/function/list/icu_generate_series_timestamptz.test",
-        "test/sql/function/list/lambda_constant_null.test",
-        "test/sql/function/list/lambdas/arrow/expression_iterator_cases_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/filter_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/lambda_scope_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/lambdas_and_group_by_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/list_comprehension_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/reduce_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/reduce_initial_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/rhs_parameters_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/storage_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/table_functions_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/test_deprecated_lambda.test",
-        "test/sql/function/list/lambdas/arrow/test_lambda_arrow_storage_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/transform_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/transform_with_index_deprecated.test",
-        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
-        "test/sql/function/list/lambdas/expression_iterator_cases.test",
-        "test/sql/function/list/lambdas/filter.test",
-        "test/sql/function/list/lambdas/incorrect.test",
-        "test/sql/function/list/lambdas/lambda_scope.test",
-        "test/sql/function/list/lambdas/lambdas_and_functions.test",
-        "test/sql/function/list/lambdas/lambdas_and_group_by.test",
-        "test/sql/function/list/lambdas/lambdas_and_macros.test",
-        "test/sql/function/list/lambdas/list_comprehension.test",
-        "test/sql/function/list/lambdas/reduce.test",
-        "test/sql/function/list/lambdas/reduce_initial.test",
-        "test/sql/function/list/lambdas/rhs_parameters.test",
-        "test/sql/function/list/lambdas/storage.test",
-        "test/sql/function/list/lambdas/table_functions.test",
-        "test/sql/function/list/lambdas/test_lambda_storage.test",
-        "test/sql/function/list/lambdas/transform.test",
-        "test/sql/function/list/lambdas/transform_with_index.test",
-        "test/sql/function/list/lambdas/vector_types.test",
-        "test/sql/function/list/list_concat.test",
-        "test/sql/function/list/list_contains.test",
-        "test/sql/function/list/list_cosine_similarity.test",
-        "test/sql/function/list/list_distance.test",
-        "test/sql/function/list/list_distinct.test",
-        "test/sql/function/list/list_has_any_and_has_all.test",
-        "test/sql/function/list/list_inner_product.test",
-        "test/sql/function/list/list_intersect.test",
-        "test/sql/function/list/list_position.test",
-        "test/sql/function/list/list_position_nan.test",
-        "test/sql/function/list/list_resize.test",
-        "test/sql/function/list/list_resize_error.test",
-        "test/sql/function/list/list_reverse.test",
-        "test/sql/function/list/list_sort_having.test",
-        "test/sql/function/list/list_sort_vector_types.test",
-        "test/sql/function/list/list_unique.test",
-        "test/sql/function/list/list_value_arrays.test",
-        "test/sql/function/list/list_value_nested_lists.test",
-        "test/sql/function/list/list_value_structs.test",
-        "test/sql/function/list/list_where.test",
-        "test/sql/function/list/list_zip.test",
-        "test/sql/function/list/repeat_list.test",
-        "test/sql/function/list/test_lambda_with_struct_aliases.test",
-        "test/sql/function/nested/array_extract_unnamed_struct.test",
-        "test/sql/function/nested/test_issue_5437.test",
-        "test/sql/function/nested/test_struct_insert.test",
-        "test/sql/function/nested/test_struct_update.test",
-        "test/sql/function/numeric/abs.test",
-        "test/sql/function/numeric/decimal_mod.test",
-        "test/sql/function/numeric/set_seed_for_sample.test",
-        "test/sql/function/numeric/test_arithmetic_aliases.test",
-        "test/sql/function/numeric/test_bit_count.test",
-        "test/sql/function/numeric/test_even.test",
-        "test/sql/function/numeric/test_factorial.test",
-        "test/sql/function/numeric/test_fdiv_fmod.test",
-        "test/sql/function/numeric/test_floor_ceil.test",
-        "test/sql/function/numeric/test_gamma.test",
-        "test/sql/function/numeric/test_gcd_lcm.test",
-        "test/sql/function/numeric/test_geomean.test",
-        "test/sql/function/numeric/test_invalid_math.test",
-        "test/sql/function/numeric/test_is_nan.test",
-        "test/sql/function/numeric/test_mod.test",
-        "test/sql/function/numeric/test_nextafter.test",
-        "test/sql/function/numeric/test_pg_math.test",
-        "test/sql/function/numeric/test_pow.test",
-        "test/sql/function/numeric/test_random.test",
-        "test/sql/function/numeric/test_round.test",
-        "test/sql/function/numeric/test_round_even.test",
-        "test/sql/function/numeric/test_round_integers.test",
-        "test/sql/function/numeric/test_sign_bit.test",
-        "test/sql/function/numeric/test_trigo.test",
-        "test/sql/function/numeric/test_trunc.test",
-        "test/sql/function/numeric/test_trunc_precision.test",
-        "test/sql/function/numeric/test_type_resolution.test",
-        "test/sql/function/numeric/test_unary.test",
-        "test/sql/function/operator/test_arithmetic.test",
-        "test/sql/function/operator/test_arithmetic_sqllogic.test",
-        "test/sql/function/operator/test_bitwise_ops.test",
-        "test/sql/function/operator/test_bitwise_ops_types.test",
-        "test/sql/function/operator/test_comparison.test",
-        "test/sql/function/operator/test_conjunction.test",
-        "test/sql/function/operator/test_date_arithmetic.test",
-        "test/sql/function/operator/test_division_overflow.test",
-        "test/sql/function/operator/test_in_empty_table.test",
-        "test/sql/function/string/format_bytes.test",
-        "test/sql/function/string/hex.test",
-        "test/sql/function/string/like_unicode.test",
-        "test/sql/function/string/md5.test",
-        "test/sql/function/string/null_byte.test",
-        "test/sql/function/string/parse_formatted_bytes.test",
-        "test/sql/function/string/parse_path.test",
-        "test/sql/function/string/parse_path_windows.test",
-        "test/sql/function/string/regex_capture.test",
-        "test/sql/function/string/regex_escape.test",
-        "test/sql/function/string/regex_extract.test",
-        "test/sql/function/string/regex_extract_all.test",
-        "test/sql/function/string/regex_extract_all_struct.test",
-        "test/sql/function/string/regex_filter_pushdown.test",
-        "test/sql/function/string/regex_replace.test",
-        "test/sql/function/string/regex_search.test",
-        "test/sql/function/string/regexp_split_to_table.test",
-        "test/sql/function/string/regexp_unicode_literal.test",
-        "test/sql/function/string/sha1.test",
-        "test/sql/function/string/sha256.test",
-        "test/sql/function/string/strip_accents.test",
-        "test/sql/function/string/test_array_extract.test",
-        "test/sql/function/string/test_ascii.test",
-        "test/sql/function/string/test_bar.test",
-        "test/sql/function/string/test_bit_length.test",
-        "test/sql/function/string/test_caseconvert.test",
-        "test/sql/function/string/test_complex_unicode.test",
-        "test/sql/function/string/test_concat.test",
-        "test/sql/function/string/test_concat_binding.test",
-        "test/sql/function/string/test_concat_function.test",
-        "test/sql/function/string/test_concat_ws.test",
-        "test/sql/function/string/test_contains.test",
-        "test/sql/function/string/test_contains_utf8.test",
-        "test/sql/function/string/test_damerau_levenshtein.test",
-        "test/sql/function/string/test_format.test",
-        "test/sql/function/string/test_format_extensions.test",
-        "test/sql/function/string/test_glob.test",
-        "test/sql/function/string/test_ilike.test",
-        "test/sql/function/string/test_ilike_escape.test",
-        "test/sql/function/string/test_instr.test",
-        "test/sql/function/string/test_instr_utf8.test",
-        "test/sql/function/string/test_issue_1812.test",
-        "test/sql/function/string/test_jaccard.test",
-        "test/sql/function/string/test_jaro_winkler.test",
-        "test/sql/function/string/test_left.test",
-        "test/sql/function/string/test_length.test",
-        "test/sql/function/string/test_levenshtein.test",
-        "test/sql/function/string/test_like.test",
-        "test/sql/function/string/test_like_escape.test",
-        "test/sql/function/string/test_mismatches.test",
-        "test/sql/function/string/test_pad.test",
-        "test/sql/function/string/test_prefix.test",
-        "test/sql/function/string/test_printf.test",
-        "test/sql/function/string/test_repeat.test",
-        "test/sql/function/string/test_replace.test",
-        "test/sql/function/string/test_reverse.test",
-        "test/sql/function/string/test_right.test",
-        "test/sql/function/string/test_similar_to.test",
-        "test/sql/function/string/test_split_part.test",
-        "test/sql/function/string/test_starts_with_function.test",
-        "test/sql/function/string/test_starts_with_function_utf8.test",
-        "test/sql/function/string/test_starts_with_operator.test",
-        "test/sql/function/string/test_starts_with_operator_utf8.test",
-        "test/sql/function/string/test_string_array_slice.test",
-        "test/sql/function/string/test_string_slice.test",
-        "test/sql/function/string/test_string_split.test",
-        "test/sql/function/string/test_subscript.test",
-        "test/sql/function/string/test_substring.test",
-        "test/sql/function/string/test_substring_utf8.test",
-        "test/sql/function/string/test_suffix.test",
-        "test/sql/function/string/test_to_base.test",
-        "test/sql/function/string/test_translate.test",
-        "test/sql/function/string/test_trim.test",
-        "test/sql/function/string/test_unicode.test",
-        "test/sql/function/string/test_url_encode.test",
-        "test/sql/function/time/epoch.test",
-        "test/sql/function/time/test_date_part.test",
-        "test/sql/function/time/test_extract.test",
-        "test/sql/function/time/test_extract_stats.test",
-        "test/sql/function/timestamp/age.test",
-        "test/sql/function/timestamp/current_time.test",
-        "test/sql/function/timestamp/current_timestamp.test",
-        "test/sql/function/timestamp/epoch.test",
-        "test/sql/function/timestamp/make_date.test",
-        "test/sql/function/timestamp/test_date_diff_epoch.test",
-        "test/sql/function/timestamp/test_date_part.test",
-        "test/sql/function/timestamp/test_extract.test",
-        "test/sql/function/timestamp/test_extract_ms.test",
-        "test/sql/function/timestamp/test_icu_age.test",
-        "test/sql/function/timestamp/test_icu_dateadd.test",
-        "test/sql/function/timestamp/test_icu_datediff.test",
-        "test/sql/function/timestamp/test_icu_datepart.test",
-        "test/sql/function/timestamp/test_icu_datesub.test",
-        "test/sql/function/timestamp/test_icu_datetrunc.test",
-        "test/sql/function/timestamp/test_icu_makedate.test",
-        "test/sql/function/timestamp/test_icu_strftime.test",
-        "test/sql/function/timestamp/test_icu_strptime.test",
-        "test/sql/function/timestamp/test_icu_time_bucket_timestamptz.test",
-        "test/sql/function/timestamp/test_last_modified.test",
-        "test/sql/function/timestamp/test_now.test",
-        "test/sql/function/timestamp/test_now_prepared.test",
-        "test/sql/function/timestamp/test_strftime_timestamp.test",
-        "test/sql/function/timestamp/test_strftime_timestamp_ns.test",
-        "test/sql/function/timestamp/test_strptime.test",
-        "test/sql/function/timestamp/test_time_bucket_timestamp.test",
-        "test/sql/function/timestamp/test_try_strptime.test",
-        "test/sql/function/timetz/test_date_part.test",
-        "test/sql/function/timetz/test_extract.test",
-        "test/sql/function/timetz/test_icu_cast.test",
-        "test/sql/function/timetz/timetz_group_by.test",
-        "test/sql/function/tokenize/simple_tokenize.test",
-        "test/sql/function/uuid/test_uuid.test",
-        "test/sql/function/uuid/test_uuid_function.test",
-        "test/sql/function/variant/variant_extract.test",
-        "test/sql/function/variant/variant_extract_try_cast.test",
-        "test/sql/function/variant/variant_shredded_extract_nested.test",
-        "test/sql/function/variant/variant_typeof.test",
-        "test/sql/copy/parquet/writer/test_parquet_write_complex.test",
-        "test/sql/copy/partitioned/hive_partition_case_insensitive_column.test",
-        "test/sql/copy/partitioned/hive_partition_join_pushdown.test",
-        "test/sql/copy/partitioned/partitioned_group_by.test",
-        "test/sql/copy/return_files.test",
-        "test/sql/copy/return_stats.test",
-        "test/sql/function/array/array_length.test",
-        "test/sql/function/array/array_list_functions.test"
+        "test/sql/generated_columns/stored/basic.test",
+        "test/sql/generated_columns/virtual/alter_table.test",
+        "test/sql/generated_columns/virtual/ambiguity.test",
+        "test/sql/generated_columns/virtual/cascading_delete.test",
+        "test/sql/generated_columns/virtual/casting.test",
+        "test/sql/generated_columns/virtual/check.test",
+        "test/sql/generated_columns/virtual/circular_dependency_stresstest.test",
+        "test/sql/generated_columns/virtual/collate.test",
+        "test/sql/generated_columns/virtual/create_table.test",
+        "test/sql/generated_columns/virtual/default.test",
+        "test/sql/generated_columns/virtual/drop.test",
+        "test/sql/generated_columns/virtual/drop_dependency.test",
+        "test/sql/generated_columns/virtual/foreign_key.test",
+        "test/sql/generated_columns/virtual/foreign_key_extensive.test",
+        "test/sql/generated_columns/virtual/from_generated_column.test",
+        "test/sql/generated_columns/virtual/gcol_duckdb_columns.test",
+        "test/sql/generated_columns/virtual/group_by.test",
+        "test/sql/generated_columns/virtual/implicit_type.test",
+        "test/sql/generated_columns/virtual/insert.test",
+        "test/sql/generated_columns/virtual/not_referencing_columns.test",
+        "test/sql/generated_columns/virtual/null.test",
+        "test/sql/generated_columns/virtual/partition.test",
+        "test/sql/generated_columns/virtual/preserve_order.test",
+        "test/sql/generated_columns/virtual/primary_key.test",
+        "test/sql/generated_columns/virtual/referencing_gencols.test",
+        "test/sql/generated_columns/virtual/rename.test",
+        "test/sql/generated_columns/virtual/rename_dependency.test",
+        "test/sql/generated_columns/virtual/rename_table.test",
+        "test/sql/generated_columns/virtual/row_group_fetch.test",
+        "test/sql/generated_columns/virtual/rowid.test",
+        "test/sql/generated_columns/virtual/select.test",
+        "test/sql/generated_columns/virtual/select_alias.test",
+        "test/sql/generated_columns/virtual/type_resolution_bug.test",
+        "test/sql/generated_columns/virtual/typechange.test",
+        "test/sql/generated_columns/virtual/typechange_dependency.test",
+        "test/sql/generated_columns/virtual/unique.test",
+        "test/sql/generated_columns/virtual/update.test",
+        "test/sql/generated_columns/virtual/update_index.test",
+        "test/sql/index/art/constraints/test_art_compound_key_changes.test",
+        "test/sql/index/art/constraints/test_art_eager_batch_insert.test",
+        "test/sql/index/art/constraints/test_art_eager_constraint_checking.test",
+        "test/sql/index/art/constraints/test_art_eager_with_wal.test",
+        "test/sql/index/art/constraints/test_art_large_abort.test",
+        "test/sql/index/art/constraints/test_art_simple_update.test",
+        "test/sql/index/art/constraints/test_art_tx_conflict_revert.test",
+        "test/sql/index/art/constraints/test_art_tx_delete_with_global_nested.test",
+        "test/sql/index/art/constraints/test_art_tx_deletes_list.test",
+        "test/sql/index/art/constraints/test_art_tx_deletes_rollback.test",
+        "test/sql/index/art/constraints/test_art_tx_deletes_varchar.test",
+        "test/sql/index/art/constraints/test_art_tx_over_eager.test",
+        "test/sql/index/art/constraints/test_art_tx_returning.test",
+        "test/sql/index/art/constraints/test_art_tx_same_row_id.test",
+        "test/sql/index/art/constraints/test_art_tx_update_with_global_nested.test",
+        "test/sql/index/art/constraints/test_art_tx_updates_list.test",
+        "test/sql/index/art/constraints/test_art_tx_updates_pk_col.test",
+        "test/sql/index/art/constraints/test_art_tx_updates_rollback.test",
+        "test/sql/index/art/constraints/test_art_tx_upsert_with_global_nested.test",
+        "test/sql/index/art/constraints/test_art_tx_upserts_list.test",
+        "test/sql/index/art/constraints/test_art_tx_upserts_local.test",
+        "test/sql/index/art/constraints/test_art_tx_upserts_rollback.test",
+        "test/sql/index/art/constraints/test_art_upsert_duplicate.test",
+        "test/sql/index/art/constraints/test_art_upsert_other_index.test",
+        "test/sql/index/art/create_drop/test_art_big_compound_key.test",
+        "test/sql/index/art/create_drop/test_art_create_if_exists.test",
+        "test/sql/index/art/create_drop/test_art_create_index_delete.test",
+        "test/sql/index/art/create_drop/test_art_create_index_duplicate_deletes.test",
+        "test/sql/index/art/create_drop/test_art_create_many_duplicates.test",
+        "test/sql/index/art/create_drop/test_art_create_many_duplicates_deletes.test",
+        "test/sql/index/art/create_drop/test_art_create_unique.test",
+        "test/sql/index/art/create_drop/test_art_drop_index.test",
+        "test/sql/index/art/create_drop/test_art_invalid_create_index.test",
+        "test/sql/index/art/create_drop/test_art_many_versions.test",
+        "test/sql/index/art/create_drop/test_art_single_value.test",
+        "test/sql/index/art/insert_update_delete/test_art_sel_vector.test",
+        "test/sql/index/art/insert_update_delete/test_art_simple_update.test",
+        "test/sql/index/art/insert_update_delete/test_art_update.test",
+        "test/sql/index/art/insert_update_delete/test_art_update_other_column.test",
+        "test/sql/index/art/insert_update_delete/test_art_update_same_value.test",
+        "test/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst.test",
+        "test/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst_and_replay.test",
+        "test/sql/index/art/issues/test_art_fuzzer.test",
+        "test/sql/index/art/issues/test_art_fuzzer_persisted.test",
+        "test/sql/index/art/issues/test_art_internal_issue_4742.test",
+        "test/sql/index/art/issues/test_art_issue_4976.test",
+        "test/sql/index/art/issues/test_art_issue_6603.test",
+        "test/sql/index/art/issues/test_art_issue_6799.test",
+        "test/sql/index/art/issues/test_art_issue_7349.test",
+        "test/sql/index/art/issues/test_art_issue_7530.test",
+        "test/sql/index/art/issues/test_art_view_col_binding.test",
+        "test/sql/index/art/multi_column/test_art_multi_column.test",
+        "test/sql/index/art/multi_column/test_art_multi_predicate.test",
+        "test/sql/index/art/nodes/test_art_leaf_coverage.test",
+        "test/sql/index/art/nodes/test_art_nested_leaf_coverage.test",
+        "test/sql/index/art/nodes/test_art_node_16.test",
+        "test/sql/index/art/nodes/test_art_node_256.test",
+        "test/sql/index/art/nodes/test_art_node_4.test",
+        "test/sql/index/art/nodes/test_art_node_48.test",
+        "test/sql/index/art/nodes/test_art_prefixes_restart.test",
+        "test/sql/index/art/nodes/test_art_sparse_merge.test",
+        "test/sql/index/art/scan/test_art_adaptive_scan.test"
       ],
       "has_more": true,
       "remaining_counted": true,

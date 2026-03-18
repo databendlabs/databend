@@ -1,0 +1,35 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+DROP TABLE IF EXISTS unit
+
+statement error
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold AS (price) PRIMARY KEY,
+);
+
+statement error
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold AS (price),
+	PRIMARY KEY (amount_sold),
+);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	gen1 AS (price),
+# 	gen2 AS (price),
+# 	price INTEGER PRIMARY KEY
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5);
+
+# Violates primary key constraint
+
+statement error
+INSERT INTO tbl VALUES (5);
