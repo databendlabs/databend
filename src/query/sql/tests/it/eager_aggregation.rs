@@ -47,7 +47,7 @@ async fn test_eager_aggregation_with_lite_table_context() -> Result<()> {
         ctx.register_table_sql(sql).await?;
     }
 
-    for (idx, sql) in [Q0, Q1, Q2, Q3, Q4, Q5].iter().copied().enumerate() {
+    for (idx, sql) in [Q0, Q1, Q2, Q3, Q4, Q5, Q6].iter().copied().enumerate() {
         run_eager_aggregation_query(&mut file, &ctx, idx, sql).await?;
     }
 
@@ -179,6 +179,11 @@ WHERE o_orderkey = l_orderkey
 GROUP BY o_orderkey";
 
 const Q5: &str = "SELECT o_orderkey, sum(l_extendedprice) + 1
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q6: &str = "SELECT o_orderkey, count(*) + 1
 FROM lineitem, orders
 WHERE o_orderkey = l_orderkey
 GROUP BY o_orderkey";

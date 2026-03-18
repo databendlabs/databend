@@ -1101,25 +1101,21 @@ impl EagerAnalysis {
         aggr_function.index = new_index;
 
         let mut success = false;
+        let count_output = was_count.then(|| Self::rewritten_count_output(new_index));
 
         for scalar_item in eval_scalar_items {
-            let hit_old_index = scalar_item.scalar.used_columns().contains(&old_index);
-            if let ScalarExpr::BoundColumnRef(column) = &mut scalar_item.scalar {
-                if column.column.index != old_index {
-                    continue;
-                }
-                let column_binding = &mut column.column;
-                column_binding.index = new_index;
+            if !scalar_item.scalar.used_columns().contains(&old_index) {
+                continue;
+            }
 
-                if was_count {
-                    column_binding.data_type = Box::new(UInt64Type::data_type().wrap_nullable());
-                    scalar_item.scalar = wrap_cast(&scalar_item.scalar, &UInt64Type::data_type());
-                }
-                success = true;
+            if let Some(count_output) = &count_output {
+                scalar_item
+                    .scalar
+                    .replace_column_with_scalar(old_index, count_output)?;
             } else {
                 scalar_item.scalar.replace_column(old_index, new_index)?;
-                success |= hit_old_index;
             }
+            success = true;
         }
         Ok(AggregateOutputRewrite {
             binding: EagerOutputRewrite {
@@ -1151,6 +1147,22 @@ impl EagerAnalysis {
         } else {
             agg.args[0] = agg_func;
         }
+    }
+
+    fn rewritten_count_output(new_index: Symbol) -> ScalarExpr {
+        wrap_cast(
+            &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    "_eager_final_count".to_string(),
+                    new_index,
+                    Box::new(UInt64Type::data_type().wrap_nullable()),
+                    Visibility::Visible,
+                )
+                .build(),
+            }),
+            &UInt64Type::data_type(),
+        )
     }
 
     fn create_eager_count_multiply_scalar_item(
