@@ -301,6 +301,7 @@ impl PhysicalPlanBuilder {
         let required_udf_ids: BTreeSet<_> = maybe_udfs.intersection(&udf_ids).collect();
         let udf_col_num = required_udf_ids.len();
         required.extend(required_udf_ids);
+        required.extend(mutation.execution_required_columns());
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
         if *no_effect {

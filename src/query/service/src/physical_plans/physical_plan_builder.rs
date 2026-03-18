@@ -348,6 +348,10 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
+            RelOperator::Mutation(mutation) => {
+                let req = &mut child_required[0];
+                req.extend(mutation.execution_required_columns());
+            }
 
             RelOperator::Scan(_)
             | RelOperator::DummyTableScan(_)
@@ -359,7 +363,6 @@ impl PhysicalPlanBuilder {
             | RelOperator::MaterializedCTERef(_)
             | RelOperator::Sequence(_)
             | RelOperator::MaterializedCTE(_)
-            | RelOperator::Mutation(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::Limit(_)
             | RelOperator::Exchange(_) => {}

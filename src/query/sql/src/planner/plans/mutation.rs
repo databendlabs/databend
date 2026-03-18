@@ -169,6 +169,60 @@ impl Mutation {
     pub fn schema(&self) -> DataSchemaRef {
         self.mutation_table_schema().unwrap()
     }
+
+    pub fn execution_required_columns(&self) -> ColumnSet {
+        let mut required = ColumnSet::new();
+
+        for evaluator in &self.matched_evaluators {
+            if let Some(condition) = &evaluator.condition {
+                required.extend(condition.used_columns());
+            }
+
+            if let Some(update) = &evaluator.update {
+                for expr in update.values() {
+                    required.extend(expr.used_columns());
+                }
+            }
+        }
+
+        for evaluator in &self.unmatched_evaluators {
+            if let Some(condition) = &evaluator.condition {
+                required.extend(condition.used_columns());
+            }
+
+            for value in &evaluator.values {
+                required.extend(value.used_columns());
+            }
+        }
+
+        for filter in &self.direct_filter {
+            required.extend(filter.used_columns());
+        }
+
+        // `_row_id` is only required when the mutation needs to locate existing target rows.
+        // This is true for `MatchedOnly` and `MixedMatched` strategies.
+        // `NotMatchedOnly` MERGE inserts source rows from an ANTI join and must not require
+        // target-side `_row_id`. `Direct` mutations use `DUMMY_COLUMN_INDEX` as the row id
+        // placeholder, so propagating it as a real required column would be incorrect.
+        if matches!(
+            self.strategy,
+            MutationStrategy::MatchedOnly | MutationStrategy::MixedMatched
+        ) {
+            required.insert(self.row_id_index);
+        }
+
+        if let Some(predicate_column_index) = self.predicate_column_index {
+            required.insert(predicate_column_index);
+        }
+
+        for column in self.field_index_map.values() {
+            if let Ok(index) = column.parse::<usize>() {
+                required.insert(index);
+            }
+        }
+
+        required
+    }
 }
 
 impl Eq for Mutation {}
