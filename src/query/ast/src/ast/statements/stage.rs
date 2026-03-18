@@ -147,6 +147,7 @@ pub enum SelectStageOption {
     Pattern(LiteralStringOrVariable),
     FileFormat(String),
     Connection(BTreeMap<String, String>),
+    // accept for compat, but ignore it
     CaseSensitive(bool),
 }
 
@@ -159,7 +160,7 @@ impl SelectStageOptions {
                 SelectStageOption::Pattern(v) => options.pattern = Some(v),
                 SelectStageOption::FileFormat(v) => options.file_format = Some(v),
                 SelectStageOption::Connection(v) => options.connection = v,
-                SelectStageOption::CaseSensitive(v) => options.case_sensitive = Some(v),
+                SelectStageOption::CaseSensitive(_) => {}
             }
         }
         options
@@ -172,7 +173,6 @@ pub struct SelectStageOptions {
     pub pattern: Option<LiteralStringOrVariable>,
     pub file_format: Option<String>,
     pub connection: BTreeMap<String, String>,
-    pub case_sensitive: Option<bool>,
 }
 
 impl SelectStageOptions {
@@ -181,7 +181,6 @@ impl SelectStageOptions {
             && self.pattern.is_none()
             && self.file_format.is_none()
             && self.connection.is_empty()
-            && self.case_sensitive.is_none()
     }
 }
 
@@ -216,10 +215,6 @@ impl Display for SelectStageOptions {
 
         if let Some(pattern) = self.pattern.as_ref() {
             write!(f, " PATTERN => {},", pattern)?;
-        }
-
-        if let Some(case_sensitive) = self.case_sensitive {
-            write!(f, " CASE_SENSITIVE => {},", case_sensitive)?;
         }
 
         if !self.connection.is_empty() {

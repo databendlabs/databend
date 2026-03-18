@@ -272,15 +272,18 @@ impl Binder {
                     column: ColumnRef {
                         database: None,
                         table: None,
-                        column: AstColumnID::Name(Identifier::from_name_with_quoted(
-                            None,
-                            if case_sensitive {
-                                dest_field.name().to_string()
-                            } else {
-                                dest_field.name().to_lowercase().to_string()
-                            },
-                            Some('"'),
-                        )),
+                        column: AstColumnID::Name(if case_sensitive {
+                            Identifier::from_name_with_quoted(
+                                None,
+                                dest_field.name().to_string(),
+                                Some('"'),
+                            )
+                        } else {
+                            Identifier::from_name(
+                                None,
+                                dest_field.name().to_lowercase().to_string(),
+                            )
+                        }),
                     },
                 };
                 // cast types to variant, tuple will be rewrite as `json_object_keep_null`
@@ -485,11 +488,6 @@ impl Binder {
         if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
-        let case_sensitive = plan
-            .stage_table_info
-            .copy_into_table_options
-            .column_match_mode
-            == Some(ColumnMatchMode::CaseSensitive);
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -500,7 +498,6 @@ impl Binder {
                 plan.stage_table_info.files_info.clone(),
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
-                case_sensitive,
                 Some(
                     plan.stage_table_info
                         .copy_into_table_options

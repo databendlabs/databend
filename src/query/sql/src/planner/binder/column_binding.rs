@@ -32,6 +32,8 @@ pub struct ColumnBinding {
     pub table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
+
+    pub column_name_lower: Option<String>,
     /// Column index of ColumnBinding
     pub index: Symbol,
 
@@ -63,6 +65,7 @@ impl ColumnBinding {
             visibility: Visibility::Visible,
             virtual_expr: None,
             is_srf: false,
+            column_name_lower: None,
         }
     }
 
@@ -97,6 +100,7 @@ pub struct ColumnBindingBuilder {
 
     pub virtual_expr: Option<String>,
     pub is_srf: bool,
+    pub case_sensitive: bool,
 }
 
 impl ColumnBindingBuilder {
@@ -117,11 +121,17 @@ impl ColumnBindingBuilder {
             visibility,
             virtual_expr: None,
             is_srf: false,
+            case_sensitive: true,
         }
     }
 
     pub fn database_name(mut self, name: Option<String>) -> ColumnBindingBuilder {
         self.database_name = name;
+        self
+    }
+
+    pub fn case_sensitive(mut self, case_sensitive: bool) -> ColumnBindingBuilder {
+        self.case_sensitive = case_sensitive;
         self
     }
 
@@ -151,6 +161,11 @@ impl ColumnBindingBuilder {
     }
 
     pub fn build(self) -> ColumnBinding {
+        let column_name_lower = if self.case_sensitive {
+            None
+        } else {
+            Some(self.column_name.to_lowercase())
+        };
         ColumnBinding {
             database_name: self.database_name,
             table_name: self.table_name,
@@ -162,6 +177,7 @@ impl ColumnBindingBuilder {
             visibility: self.visibility,
             virtual_expr: self.virtual_expr,
             is_srf: self.is_srf,
+            column_name_lower,
         }
     }
 }
