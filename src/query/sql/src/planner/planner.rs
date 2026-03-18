@@ -301,8 +301,8 @@ impl Planner {
                 RuleID::MergeFilter,
             ]);
             for indices in &mut agg_indices.values_mut() {
-                for (_, _, s_expr) in indices {
-                    *s_expr = optimizer.optimize_sync(s_expr)?;
+                for index in indices {
+                    index.s_expr = optimizer.optimize_sync(&index.s_expr)?;
                 }
             }
             metadata.write().replace_agg_indices(agg_indices);

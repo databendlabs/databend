@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -27,10 +26,9 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use itertools::Itertools;
 use log::info;
 
-use crate::ColumnBinding;
+use crate::AggIndexPlan;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -40,8 +38,8 @@ use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
-use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
+use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
@@ -53,20 +51,23 @@ pub fn try_rewrite(
     table_name: &str,
     base_columns: &[ColumnEntry],
     s_expr: &SExpr,
-    index_plans: &[(u64, String, SExpr)],
+    index_plans: &[AggIndexPlan],
 ) -> Result<Option<SExpr>> {
     if index_plans.is_empty() {
         return Ok(None);
     }
 
     let query_info = QueryInfo::new(table_index, table_name, base_columns, s_expr)?;
-    let agg_index_rewriter = AggIndexRewriter::new(query_info);
+    let agg_index_rewriter = AggIndexRewriter { query_info };
 
-    for (index_id, sql, view_s_expr) in index_plans.iter() {
-        let view_info = ViewInfo::new(table_index, table_name, base_columns, view_s_expr)?;
-        if let Some(result) =
-            agg_index_rewriter.try_rewrite_index(s_expr, *index_id, sql, &view_info)?
-        {
+    for index_plan in index_plans {
+        let view_info = ViewInfo::new(table_index, table_name, base_columns, &index_plan.s_expr)?;
+        if let Some(result) = agg_index_rewriter.try_rewrite_index(
+            s_expr,
+            index_plan.index_id,
+            &index_plan.sql,
+            &view_info,
+        )? {
             return Ok(Some(result));
         }
     }
@@ -81,8 +82,66 @@ struct QueryInfo {
     sort_items: Option<Vec<SortItem>>,
     aggregate: Option<Aggregate>,
     column_map: HashMap<Symbol, ScalarExpr>,
-    column_display_map: HashMap<String, Symbol>,
+    column_exprs: Vec<ColumnExprEntry>,
     output_cols: Vec<ScalarItem>,
+}
+
+struct ColumnExprEntry {
+    expr: ScalarExpr,
+    index: Symbol,
+    source: ColumnExprSource,
+}
+
+struct ColumnExprSourceEntry {
+    index: Symbol,
+    source: ColumnExprSource,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ColumnExprSource {
+    order: usize,
+}
+
+impl ColumnExprSource {
+    fn new(order: usize) -> Self {
+        Self { order }
+    }
+
+    fn prefer_over(self, other: Self, index: Symbol, other_index: Symbol) -> bool {
+        match self.order.cmp(&other.order) {
+            Ordering::Less => false,
+            Ordering::Greater => true,
+            Ordering::Equal => index < other_index,
+        }
+    }
+}
+
+struct IndexOutputColumn {
+    expr: ScalarExpr,
+    index_scalar: ScalarExpr,
+    is_agg: bool,
+}
+
+struct EqualityPredicate {
+    left: ScalarExpr,
+    right: ScalarExpr,
+}
+
+struct RangePredicate {
+    op: ComparisonOp,
+    column: ScalarExpr,
+    value: ConstantExpr,
+}
+
+struct RangeClassEntry {
+    column: ScalarExpr,
+    values: RangeValues,
+}
+
+struct CompensatingRange {
+    column: ScalarExpr,
+    lower_bound: BoundValue,
+    upper_bound: BoundValue,
 }
 
 impl QueryInfo {
@@ -92,145 +151,190 @@ impl QueryInfo {
         base_columns: &[ColumnEntry],
         s_expr: &SExpr,
     ) -> Result<QueryInfo> {
-        if let RelOperator::EvalScalar(eval) = s_expr.plan() {
-            let selection = eval;
+        let RelOperator::EvalScalar(selection) = s_expr.plan() else {
+            return Err(ErrorCode::Internal("Unsupported plan"));
+        };
 
-            let mut predicates: std::option::Option<&[ScalarExpr]> = None;
-            let mut sort_items = None;
-            let mut aggregate = None;
-            let mut column_map = HashMap::new();
+        let mut predicates: Option<&[ScalarExpr]> = None;
+        let mut sort_items = None;
+        let mut aggregate = None;
+        let mut column_map = HashMap::new();
+        let mut column_expr_sources = Vec::new();
+        let mut next_source_order = 0usize;
 
-            for item in &eval.items {
-                column_map.insert(item.index, item.scalar.clone());
-            }
+        let mut record_column_source = |index: Symbol, scalar: ScalarExpr| {
+            column_map.insert(index, scalar);
+            column_expr_sources.push(ColumnExprSourceEntry {
+                index,
+                source: ColumnExprSource::new(next_source_order),
+            });
+            next_source_order += 1;
+        };
 
-            // collect query info from the plan
-            let mut s_expr = s_expr.child(0)?;
-            loop {
-                match s_expr.plan() {
-                    RelOperator::EvalScalar(eval) => {
-                        for item in &eval.items {
-                            column_map.insert(item.index, item.scalar.clone());
-                        }
-                    }
-                    RelOperator::Aggregate(agg) => {
-                        if agg.grouping_sets.is_some() {
-                            return Err(ErrorCode::Internal("Grouping sets is not supported"));
-                        }
+        for item in &selection.items {
+            record_column_source(item.index, item.scalar.clone());
+        }
 
-                        aggregate = Some(agg.clone());
-                        for item in &agg.aggregate_functions {
-                            column_map.insert(item.index, item.scalar.clone());
-                        }
-                        for item in &agg.group_items {
-                            column_map.insert(item.index, item.scalar.clone());
-                        }
-                        let child = s_expr.child(0)?;
-                        if let RelOperator::EvalScalar(eval) = child.plan() {
-                            for item in &eval.items {
-                                column_map.insert(item.index, item.scalar.clone());
-                            }
-                            s_expr = child.child(0)?;
-                            continue;
-                        }
-                    }
-                    RelOperator::Sort(sort) => {
-                        sort_items = Some(sort.items.clone());
-                    }
-                    RelOperator::Filter(filter) => {
-                        predicates = Some(filter.predicates.as_ref());
-                    }
-                    RelOperator::Scan(scan) => {
-                        if let Some(prewhere) = &scan.prewhere {
-                            debug_assert!(predicates.is_none());
-                            predicates = Some(prewhere.predicates.as_ref());
-                        }
-                        // Finish the recursion.
-                        break;
-                    }
-                    _ => {
-                        return Err(ErrorCode::Internal("Unsupported plan"));
+        // collect query info from the plan
+        let mut s_expr = s_expr.unary_child();
+        loop {
+            match s_expr.plan() {
+                RelOperator::EvalScalar(eval) => {
+                    for item in &eval.items {
+                        record_column_source(item.index, item.scalar.clone());
                     }
                 }
-                s_expr = s_expr.child(0)?;
-            }
+                RelOperator::Aggregate(agg) => {
+                    if agg.grouping_sets.is_some() {
+                        return Err(ErrorCode::Internal("Grouping sets is not supported"));
+                    }
 
-            for base_column in base_columns {
-                let column_binding = ColumnBindingBuilder::new(
-                    base_column.name(),
-                    base_column.index(),
-                    Box::new(base_column.data_type()),
-                    Visibility::Visible,
-                )
-                .table_name(Some(table_name.to_string()))
-                .table_index(Some(table_index))
-                .build();
-
-                let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: column_binding,
-                });
-                column_map.insert(base_column.index(), column);
-            }
-
-            let mut column_display_map = HashMap::new();
-            for (index, scalar) in column_map.iter() {
-                let display_name = format_scalar(scalar, &column_map);
-                if let Some(old_index) = column_display_map.get(&display_name) {
-                    // use index from low level plan first.
-                    if old_index < index {
+                    aggregate = Some(agg.clone());
+                    for item in &agg.aggregate_functions {
+                        record_column_source(item.index, item.scalar.clone());
+                    }
+                    for item in &agg.group_items {
+                        record_column_source(item.index, item.scalar.clone());
+                    }
+                    let child = s_expr.unary_child();
+                    if let RelOperator::EvalScalar(eval) = child.plan() {
+                        for item in &eval.items {
+                            record_column_source(item.index, item.scalar.clone());
+                        }
+                        s_expr = child.unary_child();
                         continue;
                     }
                 }
-                column_display_map.insert(display_name, *index);
-            }
-
-            let mut preds_splitter = PredicatesSplitter::new();
-            let mut equi_classes = EquivalenceClasses::new();
-            let mut range_classes = RangeClasses::new();
-            let mut residual_classes = ResidualClasses::new();
-
-            // split predicates as equal predicate, range predicate, and residual predicate.
-            if let Some(predicates) = predicates {
-                for pred in predicates {
-                    preds_splitter.split(pred, &column_map);
+                RelOperator::Sort(sort) => {
+                    sort_items = Some(sort.items.clone());
                 }
-
-                for equi_pred in &preds_splitter.equi_columns_preds {
-                    equi_classes.add_equivalence_class(&equi_pred.0, &equi_pred.1);
+                RelOperator::Filter(filter) => {
+                    predicates = Some(filter.predicates.as_ref());
                 }
-                for range_pred in &preds_splitter.range_preds {
-                    range_classes.add_range_class(&range_pred.0, &range_pred.1, &range_pred.2);
+                RelOperator::Scan(scan) => {
+                    if let Some(prewhere) = &scan.prewhere {
+                        debug_assert!(predicates.is_none());
+                        predicates = Some(prewhere.predicates.as_ref());
+                    }
+                    // Finish the recursion.
+                    break;
                 }
-                for residual_pred in &preds_splitter.residual_preds {
-                    let display_name = format_scalar(residual_pred, &column_map);
-                    residual_classes.add_residual_pred(display_name, residual_pred);
+                _ => {
+                    return Err(ErrorCode::Internal("Unsupported plan"));
                 }
             }
+            s_expr = s_expr.unary_child();
+        }
 
-            let mut output_cols = Vec::with_capacity(selection.items.len());
-            for item in &selection.items {
+        for base_column in base_columns {
+            let column_binding = ColumnBindingBuilder::new(
+                base_column.name(),
+                base_column.index(),
+                Box::new(base_column.data_type()),
+                Visibility::Visible,
+            )
+            .table_name(Some(table_name.to_string()))
+            .table_index(Some(table_index))
+            .build();
+
+            let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: column_binding,
+            });
+            record_column_source(base_column.index(), column);
+        }
+
+        let mut column_exprs = Vec::new();
+        let column_matcher = ScalarExprMatcher::same(&column_map);
+        for (scalar, source) in column_expr_sources
+            .iter()
+            .filter_map(|source| column_map.get(&source.index).map(|scalar| (scalar, source)))
+        {
+            register_column_expr(
+                &mut column_exprs,
+                scalar.clone(),
+                source.index,
+                source.source,
+                &column_matcher,
+            );
+        }
+
+        let mut equi_classes = EquivalenceClasses::default();
+        let mut range_classes = RangeClasses::default();
+        let mut residual_classes = ResidualClasses::default();
+
+        // split predicates as equal predicate, range predicate, and residual predicate.
+        if let Some(predicates) = predicates {
+            let mut preds_splitter = PredicatesSplitter::default();
+            for pred in predicates {
+                preds_splitter.split(pred, &column_map);
+            }
+
+            for equi_pred in &preds_splitter.equi_columns_preds {
+                equi_classes.add_equivalence_class(
+                    &equi_pred.left,
+                    &equi_pred.right,
+                    &column_matcher,
+                );
+            }
+            for range_pred in &preds_splitter.range_preds {
+                range_classes.add_range_class(
+                    range_pred.op,
+                    &range_pred.column,
+                    &range_pred.value,
+                    &column_matcher,
+                );
+            }
+            for residual_pred in &preds_splitter.residual_preds {
+                residual_classes.add_residual_pred(residual_pred.clone(), &column_matcher);
+            }
+        }
+
+        let output_cols = selection
+            .items
+            .iter()
+            .map(|item| {
                 let actual_scalar = actual_column_ref(&item.scalar, &column_map);
-                let actual_item = ScalarItem {
+                ScalarItem {
                     index: item.index,
                     scalar: actual_scalar.clone(),
-                };
-                output_cols.push(actual_item);
-            }
-
-            Ok(Self {
-                equi_classes,
-                range_classes,
-                residual_classes,
-                aggregate,
-                sort_items,
-                column_map,
-                column_display_map,
-                output_cols,
+                }
             })
-        } else {
-            Err(ErrorCode::Internal("Unsupported plan"))
+            .collect();
+
+        Ok(Self {
+            equi_classes,
+            range_classes,
+            residual_classes,
+            aggregate,
+            sort_items,
+            column_map,
+            column_exprs,
+            output_cols,
+        })
+    }
+
+    fn rewrite_output_args(
+        &self,
+        args: &[ScalarExpr],
+        index_output_cols: &[IndexOutputColumn],
+        index_column_map: &HashMap<Symbol, ScalarExpr>,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> Result<Option<Vec<ScalarExpr>>> {
+        let mut rewritten = Vec::with_capacity(args.len());
+        for arg in args {
+            let Some(new_arg) = self.check_output_cols(
+                arg,
+                index_output_cols,
+                index_column_map,
+                new_selection_set,
+            )?
+            else {
+                return Ok(None);
+            };
+            rewritten.push(new_arg);
         }
+        Ok(Some(rewritten))
     }
 
     // check whether the scalar can be computed from index output columns.
@@ -238,34 +342,38 @@ impl QueryInfo {
     fn check_output_cols(
         &self,
         scalar: &ScalarExpr,
-        index_output_cols: &HashMap<String, (ScalarExpr, bool)>,
+        index_output_cols: &[IndexOutputColumn],
+        index_column_map: &HashMap<Symbol, ScalarExpr>,
         new_selection_set: &mut HashSet<ScalarItem>,
     ) -> Result<Option<ScalarExpr>> {
-        let display_name = format_scalar(scalar, &self.column_map);
+        let output_matcher = ScalarExprMatcher::new(index_column_map, &self.column_map);
+        let query_matcher = ScalarExprMatcher::same(&self.column_map);
 
-        if let Some((new_scalar, is_agg)) = index_output_cols.get(&display_name) {
-            if let Some(index) = self.column_display_map.get(&display_name) {
+        if let Some((new_scalar, is_agg)) =
+            output_matcher.find_index_output_col(index_output_cols, scalar)
+        {
+            if let Some(index) = query_matcher.find_column_index(&self.column_exprs, scalar) {
                 let new_item = ScalarItem {
-                    index: *index,
+                    index,
                     scalar: new_scalar.clone(),
                 };
                 new_selection_set.insert(new_item);
             }
             // agg function can't used
-            if *is_agg {
-                return Ok(None);
+            return if is_agg {
+                Ok(None)
             } else {
-                return Ok(Some(new_scalar.clone()));
-            }
+                Ok(Some(new_scalar.clone()))
+            };
         }
 
         let new_scalar = match scalar {
             ScalarExpr::BoundColumnRef(_) => {
-                let actual_column = actual_column_ref(scalar, &self.column_map);
-                if !matches!(actual_column, ScalarExpr::BoundColumnRef(_)) {
+                if let Some(actual_column) = query_matcher.resolve_right(scalar) {
                     return self.check_output_cols(
                         actual_column,
                         index_output_cols,
+                        index_column_map,
                         new_selection_set,
                     );
                 }
@@ -273,28 +381,26 @@ impl QueryInfo {
             }
             ScalarExpr::ConstantExpr(_) => scalar.clone(),
             ScalarExpr::FunctionCall(func) => {
-                let mut valid = true;
-                let mut new_args = Vec::with_capacity(func.arguments.len());
-                for arg in &func.arguments {
-                    if let Some(new_arg) =
-                        self.check_output_cols(arg, index_output_cols, new_selection_set)?
-                    {
-                        new_args.push(new_arg);
-                    } else {
-                        valid = false;
-                    }
-                }
-                if !valid {
+                let Some(new_args) = self.rewrite_output_args(
+                    &func.arguments,
+                    index_output_cols,
+                    index_column_map,
+                    new_selection_set,
+                )?
+                else {
                     return Ok(None);
-                }
+                };
                 let mut new_func = func.clone();
                 new_func.arguments = new_args;
                 ScalarExpr::FunctionCall(new_func)
             }
             ScalarExpr::CastExpr(cast) => {
-                if let Some(new_arg) =
-                    self.check_output_cols(&cast.argument, index_output_cols, new_selection_set)?
-                {
+                if let Some(new_arg) = self.check_output_cols(
+                    &cast.argument,
+                    index_output_cols,
+                    index_column_map,
+                    new_selection_set,
+                )? {
                     let mut new_cast = cast.clone();
                     new_cast.argument = Box::new(new_arg);
                     ScalarExpr::CastExpr(new_cast)
@@ -305,31 +411,36 @@ impl QueryInfo {
             ScalarExpr::AggregateFunction(func) => {
                 // agg function can't push down
                 for expr in func.exprs() {
-                    self.check_output_cols(expr, index_output_cols, new_selection_set)?;
+                    self.check_output_cols(
+                        expr,
+                        index_output_cols,
+                        index_column_map,
+                        new_selection_set,
+                    )?;
                 }
                 return Ok(None);
             }
             ScalarExpr::UDAFCall(udaf) => {
                 for arg in &udaf.arguments {
-                    self.check_output_cols(arg, index_output_cols, new_selection_set)?;
+                    self.check_output_cols(
+                        arg,
+                        index_output_cols,
+                        index_column_map,
+                        new_selection_set,
+                    )?;
                 }
                 return Ok(None);
             }
             ScalarExpr::UDFCall(udf) => {
-                let mut valid = true;
-                let mut new_args = Vec::with_capacity(udf.arguments.len());
-                for arg in &udf.arguments {
-                    if let Some(new_arg) =
-                        self.check_output_cols(arg, index_output_cols, new_selection_set)?
-                    {
-                        new_args.push(new_arg);
-                    } else {
-                        valid = false;
-                    }
-                }
-                if !valid {
+                let Some(new_args) = self.rewrite_output_args(
+                    &udf.arguments,
+                    index_output_cols,
+                    index_column_map,
+                    new_selection_set,
+                )?
+                else {
                     return Ok(None);
-                }
+                };
                 let mut new_udf = udf.clone();
                 new_udf.arguments = new_args;
                 ScalarExpr::UDFCall(new_udf)
@@ -337,9 +448,9 @@ impl QueryInfo {
             _ => unreachable!(), // Window function and subquery will not appear in index.
         };
 
-        if let Some(index) = self.column_display_map.get(&display_name) {
+        if let Some(index) = query_matcher.find_column_index(&self.column_exprs, scalar) {
             let new_item = ScalarItem {
-                index: *index,
+                index,
                 scalar: new_scalar.clone(),
             };
             new_selection_set.insert(new_item);
@@ -354,7 +465,7 @@ impl QueryInfo {
 struct ViewInfo {
     query_info: QueryInfo,
     index_fields: Vec<TableField>,
-    index_output_cols: HashMap<String, (ScalarExpr, bool)>,
+    index_output_cols: Vec<IndexOutputColumn>,
 }
 
 impl ViewInfo {
@@ -369,11 +480,9 @@ impl ViewInfo {
         // collect the output columns of aggregating index,
         // query can use those columns to compute expressions.
         let mut index_fields = Vec::with_capacity(query_info.output_cols.len());
-        let mut index_output_cols = HashMap::with_capacity(query_info.output_cols.len());
+        let mut index_output_cols = Vec::with_capacity(query_info.output_cols.len());
         let factory = AggregateFunctionFactory::instance();
         for (index, item) in query_info.output_cols.iter().enumerate() {
-            let display_name = format_scalar(&item.scalar, &query_info.column_map);
-
             let aggr_scalar_item = query_info.aggregate.as_ref().and_then(|aggregate| {
                 aggregate
                     .aggregate_functions
@@ -410,7 +519,11 @@ impl ViewInfo {
             index_fields.push(index_field);
 
             let index_scalar = to_index_scalar(index, &data_type);
-            index_output_cols.insert(display_name, (index_scalar, is_agg));
+            index_output_cols.push(IndexOutputColumn {
+                expr: item.scalar.clone(),
+                index_scalar,
+                is_agg,
+            });
         }
 
         Ok(Self {
@@ -421,127 +534,107 @@ impl ViewInfo {
     }
 }
 
+#[derive(Default)]
 struct PredicatesSplitter {
-    equi_columns_preds: Vec<(BoundColumnRef, BoundColumnRef)>,
-    range_preds: Vec<(String, BoundColumnRef, ConstantExpr)>,
+    equi_columns_preds: Vec<EqualityPredicate>,
+    range_preds: Vec<RangePredicate>,
     residual_preds: Vec<ScalarExpr>,
 }
 
 impl PredicatesSplitter {
-    fn new() -> Self {
-        Self {
-            equi_columns_preds: vec![],
-            range_preds: vec![],
-            residual_preds: vec![],
-        }
-    }
-
     fn split(&mut self, pred: &ScalarExpr, column_map: &HashMap<Symbol, ScalarExpr>) {
-        if let ScalarExpr::FunctionCall(func) = pred {
-            match func.func_name.as_str() {
-                "and" | "and_filters" => {
-                    for arg in &func.arguments {
-                        self.split(arg, column_map);
-                    }
-                }
-                "eq" if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
-                    && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
-                {
-                    let arg0 = actual_column_ref(&func.arguments[0], column_map);
-                    let arg1 = actual_column_ref(&func.arguments[1], column_map);
+        let ScalarExpr::FunctionCall(func) = pred else {
+            self.residual_preds.push(pred.clone());
+            return;
+        };
 
-                    let col0 = BoundColumnRef::try_from(arg0.clone()).unwrap();
-                    let col1 = BoundColumnRef::try_from(arg1.clone()).unwrap();
-                    self.equi_columns_preds.push((col0, col1));
-                }
-                "eq" | "lt" | "lte" | "gt" | "gte"
-                    if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
-                        && matches!(func.arguments[1], ScalarExpr::ConstantExpr(_)) =>
-                {
-                    let func_name = func.func_name.clone();
-                    let arg0 = actual_column_ref(&func.arguments[0], column_map);
-                    let col = BoundColumnRef::try_from(arg0.clone()).unwrap();
-                    let val = ConstantExpr::try_from(func.arguments[1].clone()).unwrap();
-                    self.range_preds.push((func_name, col, val));
-                }
-                "eq" | "lt" | "lte" | "gt" | "gte"
-                    if matches!(func.arguments[0], ScalarExpr::ConstantExpr(_))
-                        && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
-                {
-                    let func_name = reverse_op(func.func_name.as_str());
-
-                    let val = ConstantExpr::try_from(func.arguments[0].clone()).unwrap();
-                    let arg1 = actual_column_ref(&func.arguments[1], column_map);
-                    let col = BoundColumnRef::try_from(arg1.clone()).unwrap();
-                    self.range_preds.push((func_name, col, val));
-                }
-                _ => {
-                    self.residual_preds.push(pred.clone());
+        match func.func_name.as_str() {
+            "and" | "and_filters" => {
+                for arg in &func.arguments {
+                    self.split(arg, column_map);
                 }
             }
-        } else {
-            self.residual_preds.push(pred.clone());
+            "eq" if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
+                && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
+            {
+                let arg0 = actual_column_ref(&func.arguments[0], column_map);
+                let arg1 = actual_column_ref(&func.arguments[1], column_map);
+                self.equi_columns_preds.push(EqualityPredicate {
+                    left: arg0.clone(),
+                    right: arg1.clone(),
+                });
+            }
+            "eq" | "lt" | "lte" | "gt" | "gte"
+                if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
+                    && matches!(func.arguments[1], ScalarExpr::ConstantExpr(_)) =>
+            {
+                let op = ComparisonOp::try_from_func_name(func.func_name.as_str()).unwrap();
+                let column = actual_column_ref(&func.arguments[0], column_map).clone();
+                let value = ConstantExpr::try_from(func.arguments[1].clone()).unwrap();
+                self.range_preds.push(RangePredicate { op, column, value });
+            }
+            "eq" | "lt" | "lte" | "gt" | "gte"
+                if matches!(func.arguments[0], ScalarExpr::ConstantExpr(_))
+                    && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
+            {
+                let op = ComparisonOp::try_from_func_name(func.func_name.as_str())
+                    .unwrap()
+                    .reverse();
+                let value = ConstantExpr::try_from(func.arguments[0].clone()).unwrap();
+                let column = actual_column_ref(&func.arguments[1], column_map).clone();
+                self.range_preds.push(RangePredicate { op, column, value });
+            }
+            _ => {
+                self.residual_preds.push(pred.clone());
+            }
         }
     }
 }
 
+#[derive(Default)]
 struct EquivalenceClasses {
-    column_to_equivalence_class: HashMap<String, HashSet<String>>,
+    classes: Vec<Vec<ScalarExpr>>,
 }
 
 impl EquivalenceClasses {
-    fn new() -> Self {
-        Self {
-            column_to_equivalence_class: HashMap::new(),
-        }
-    }
-
-    fn add_equivalence_class(&mut self, col1: &BoundColumnRef, col2: &BoundColumnRef) {
-        let mut equivalence_columns = HashSet::new();
-
-        let col1_name = format_col(&col1.column);
-        let col2_name = format_col(&col2.column);
-
-        equivalence_columns.insert(col1_name.clone());
-        equivalence_columns.insert(col2_name.clone());
-
-        if let Some(c1) = self.column_to_equivalence_class.get(&col1_name) {
-            for c in c1 {
-                equivalence_columns.insert(c.clone());
-            }
-        }
-        if let Some(c2) = self.column_to_equivalence_class.get(&col2_name) {
-            for c in c2 {
-                equivalence_columns.insert(c.clone());
-            }
-        }
-
-        for column in &equivalence_columns {
-            if let Some(orig_columns) = self.column_to_equivalence_class.get_mut(column) {
-                for equi_column in &equivalence_columns {
-                    if equi_column == column {
-                        continue;
-                    }
-                    orig_columns.insert(equi_column.clone());
+    fn add_equivalence_class(
+        &mut self,
+        col1: &ScalarExpr,
+        col2: &ScalarExpr,
+        matcher: &ScalarExprMatcher<'_, '_>,
+    ) {
+        let mut merged = vec![col1.clone(), col2.clone()];
+        let mut idx = 0;
+        while idx < self.classes.len() {
+            if matcher.list_contains(&self.classes[idx], col1)
+                || matcher.list_contains(&self.classes[idx], col2)
+            {
+                let class = self.classes.remove(idx);
+                for scalar in class {
+                    matcher.push_unique_scalar(&mut merged, scalar);
                 }
             } else {
-                let mut equi_cols = equivalence_columns.clone();
-                equi_cols.remove(column);
-                self.column_to_equivalence_class
-                    .insert(column.clone(), equi_cols);
+                idx += 1;
             }
         }
+        self.classes.push(merged);
     }
 
     // Equijoin subsumption test.
-    fn check(&self, view_equi_classes: &EquivalenceClasses) -> bool {
-        for (col, view_equi_cols) in view_equi_classes.column_to_equivalence_class.iter() {
-            if let Some(query_equi_cols) = self.column_to_equivalence_class.get(col) {
-                // checking whether every non-trivial view equivalence class
-                // is a subset of some query equivalence class
-                if view_equi_cols.is_subset(query_equi_cols) {
-                    continue;
-                }
+    fn check(
+        &self,
+        view_equi_classes: &EquivalenceClasses,
+        query_column_map: &HashMap<Symbol, ScalarExpr>,
+        view_column_map: &HashMap<Symbol, ScalarExpr>,
+    ) -> bool {
+        let matcher = ScalarExprMatcher::new(query_column_map, view_column_map);
+        for view_class in &view_equi_classes.classes {
+            if self.classes.iter().any(|query_class| {
+                view_class
+                    .iter()
+                    .all(|view_scalar| matcher.list_contains(query_class, view_scalar))
+            }) {
+                continue;
             }
             return false;
         }
@@ -619,6 +712,20 @@ impl Ord for BoundValue {
 impl PartialEq for BoundValue {
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
+impl BoundValue {
+    fn comparison_bound(
+        &self,
+        closed_name: &'static str,
+        open_name: &'static str,
+    ) -> Option<(Scalar, &'static str)> {
+        match self {
+            BoundValue::Closed(val) => Some((val.clone(), closed_name)),
+            BoundValue::Open(val) => Some((val.clone(), open_name)),
+            BoundValue::NegativeInfinite | BoundValue::PositiveInfinite => None,
+        }
     }
 }
 
@@ -705,50 +812,56 @@ impl RangeValues {
     }
 }
 
+#[derive(Default)]
 struct RangeClasses {
-    column_to_range_class: BTreeMap<String, RangeValues>,
+    column_to_range_class: Vec<RangeClassEntry>,
 }
 
 impl RangeClasses {
-    fn new() -> Self {
-        Self {
-            column_to_range_class: BTreeMap::new(),
-        }
-    }
-
-    fn add_range_class(&mut self, func_name: &str, col: &BoundColumnRef, val: &ConstantExpr) {
-        let col_name = format_col(&col.column);
-
-        let (lower_bound, upper_bound) = match func_name {
-            "eq" => (
+    fn add_range_class(
+        &mut self,
+        op: ComparisonOp,
+        col: &ScalarExpr,
+        val: &ConstantExpr,
+        matcher: &ScalarExprMatcher<'_, '_>,
+    ) {
+        let (lower_bound, upper_bound) = match op {
+            ComparisonOp::Equal => (
                 BoundValue::Closed(val.value.clone()),
                 BoundValue::Closed(val.value.clone()),
             ),
-            "lt" => (
+            ComparisonOp::LT => (
                 BoundValue::NegativeInfinite,
                 BoundValue::Open(val.value.clone()),
             ),
-            "lte" => (
+            ComparisonOp::LTE => (
                 BoundValue::NegativeInfinite,
                 BoundValue::Closed(val.value.clone()),
             ),
-            "gt" => (
+            ComparisonOp::GT => (
                 BoundValue::Open(val.value.clone()),
                 BoundValue::PositiveInfinite,
             ),
-            "gte" => (
+            ComparisonOp::GTE => (
                 BoundValue::Closed(val.value.clone()),
                 BoundValue::PositiveInfinite,
             ),
             _ => unreachable!(),
         };
-        if !self.column_to_range_class.contains_key(&col_name) {
-            self.column_to_range_class
-                .insert(col_name.clone(), RangeValues::new());
+        if let Some(range_entry) = self
+            .column_to_range_class
+            .iter_mut()
+            .find(|entry| matcher.expr_equal(&entry.column, col))
+        {
+            range_entry.values.insert(lower_bound, upper_bound);
+            return;
         }
-        if let Some(range_values) = self.column_to_range_class.get_mut(&col_name) {
-            range_values.insert(lower_bound, upper_bound);
-        }
+        let mut range_values = RangeValues::new();
+        range_values.insert(lower_bound, upper_bound);
+        self.column_to_range_class.push(RangeClassEntry {
+            column: col.clone(),
+            values: range_values,
+        });
     }
 
     // Range subsumption test.
@@ -756,7 +869,9 @@ impl RangeClasses {
     fn check(
         &self,
         view_range_classes: &RangeClasses,
-    ) -> (bool, Option<BTreeMap<String, (BoundValue, BoundValue)>>) {
+        query_column_map: &HashMap<Symbol, ScalarExpr>,
+        view_column_map: &HashMap<Symbol, ScalarExpr>,
+    ) -> (bool, Option<Vec<CompensatingRange>>) {
         // if the range predicate in aggregating index and the query have three cases.
         // 1. the range of aggregating index and query are same, don't need extra filter ranges.
         // 2. the range of aggregating index filter less values than the query,
@@ -766,21 +881,35 @@ impl RangeClasses {
         // 3. the range of aggregating index filter more values than the query,
         //    this aggregating index don't match the query.
         //    for example: aggregating index: a > 10 and query: a > 5
-        let mut extra_ranges = BTreeMap::new();
-        for (col, query_range_values) in self.column_to_range_class.iter() {
-            if !view_range_classes.column_to_range_class.contains_key(col) {
-                if let Some((query_lower_bound, query_upper_bound)) = &query_range_values.bounds {
-                    extra_ranges.insert(
-                        col.clone(),
-                        (query_lower_bound.clone(), query_upper_bound.clone()),
-                    );
+        let mut extra_ranges = Vec::new();
+        let matcher = ScalarExprMatcher::new(query_column_map, view_column_map);
+        let reverse_matcher = ScalarExprMatcher::new(view_column_map, query_column_map);
+        for range_entry in self.column_to_range_class.iter() {
+            if !view_range_classes
+                .column_to_range_class
+                .iter()
+                .any(|entry| reverse_matcher.expr_equal(&entry.column, &range_entry.column))
+            {
+                if let Some((query_lower_bound, query_upper_bound)) = &range_entry.values.bounds {
+                    extra_ranges.push(CompensatingRange {
+                        column: range_entry.column.clone(),
+                        lower_bound: query_lower_bound.clone(),
+                        upper_bound: query_upper_bound.clone(),
+                    });
                 }
             }
         }
 
-        for (col, view_range_values) in view_range_classes.column_to_range_class.iter() {
-            if let Some(query_range_values) = self.column_to_range_class.get(col) {
-                match (&query_range_values.bounds, &view_range_values.bounds) {
+        for view_range_entry in view_range_classes.column_to_range_class.iter() {
+            if let Some(query_range_entry) = self
+                .column_to_range_class
+                .iter()
+                .find(|entry| matcher.expr_equal(&entry.column, &view_range_entry.column))
+            {
+                match (
+                    &query_range_entry.values.bounds,
+                    &view_range_entry.values.bounds,
+                ) {
                     (
                         Some((query_lower_bound, query_upper_bound)),
                         Some((view_lower_bound, view_upper_bound)),
@@ -793,22 +922,25 @@ impl RangeClasses {
                                 continue;
                             }
                             (Ordering::Equal, Ordering::Greater) => {
-                                extra_ranges.insert(
-                                    col.clone(),
-                                    (BoundValue::NegativeInfinite, query_upper_bound.clone()),
-                                );
+                                extra_ranges.push(CompensatingRange {
+                                    column: view_range_entry.column.clone(),
+                                    lower_bound: BoundValue::NegativeInfinite,
+                                    upper_bound: query_upper_bound.clone(),
+                                });
                             }
                             (Ordering::Less, Ordering::Equal) => {
-                                extra_ranges.insert(
-                                    col.clone(),
-                                    (query_lower_bound.clone(), BoundValue::PositiveInfinite),
-                                );
+                                extra_ranges.push(CompensatingRange {
+                                    column: view_range_entry.column.clone(),
+                                    lower_bound: query_lower_bound.clone(),
+                                    upper_bound: BoundValue::PositiveInfinite,
+                                });
                             }
                             (Ordering::Less, Ordering::Greater) => {
-                                extra_ranges.insert(
-                                    col.clone(),
-                                    (query_lower_bound.clone(), query_upper_bound.clone()),
-                                );
+                                extra_ranges.push(CompensatingRange {
+                                    column: view_range_entry.column.clone(),
+                                    lower_bound: query_lower_bound.clone(),
+                                    upper_bound: query_upper_bound.clone(),
+                                });
                             }
                             (_, _) => {
                                 return (false, None);
@@ -816,10 +948,11 @@ impl RangeClasses {
                         }
                     }
                     (Some((query_lower_bound, query_upper_bound)), None) => {
-                        extra_ranges.insert(
-                            col.clone(),
-                            (query_lower_bound.clone(), query_upper_bound.clone()),
-                        );
+                        extra_ranges.push(CompensatingRange {
+                            column: view_range_entry.column.clone(),
+                            lower_bound: query_lower_bound.clone(),
+                            upper_bound: query_upper_bound.clone(),
+                        });
                     }
                     (_, _) => {
                         return (false, None);
@@ -837,35 +970,37 @@ impl RangeClasses {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct ResidualClasses {
-    residual_preds: BTreeMap<String, ScalarExpr>,
+    residual_preds: Vec<ScalarExpr>,
 }
 
 impl ResidualClasses {
-    fn new() -> Self {
-        Self {
-            residual_preds: BTreeMap::new(),
+    fn add_residual_pred(&mut self, pred: ScalarExpr, matcher: &ScalarExprMatcher<'_, '_>) {
+        if !matcher.list_contains(&self.residual_preds, &pred) {
+            self.residual_preds.push(pred);
         }
     }
 
-    fn add_residual_pred(&mut self, pred_display: String, pred: &ScalarExpr) {
-        self.residual_preds.insert(pred_display, pred.clone());
-    }
-
     // Residual subsumption test.
-    fn check(&self, view_residual_classes: &ResidualClasses) -> (bool, Option<Vec<ScalarExpr>>) {
+    fn check(
+        &self,
+        view_residual_classes: &ResidualClasses,
+        query_column_map: &HashMap<Symbol, ScalarExpr>,
+        view_column_map: &HashMap<Symbol, ScalarExpr>,
+    ) -> (bool, Option<Vec<ScalarExpr>>) {
+        let matcher = ScalarExprMatcher::new(query_column_map, view_column_map);
+        let reverse_matcher = ScalarExprMatcher::new(view_column_map, query_column_map);
         let mut extra_residual_preds = Vec::new();
-        for (view_residual_key, _) in view_residual_classes.residual_preds.iter() {
-            if !self.residual_preds.contains_key(view_residual_key) {
+        for view_residual_pred in &view_residual_classes.residual_preds {
+            if !matcher.list_contains(&self.residual_preds, view_residual_pred) {
                 return (false, None);
             }
         }
         // TODO: continue split residual predicates and check
-        for (query_residual_key, query_residual_pred) in self.residual_preds.iter() {
-            if !view_residual_classes
-                .residual_preds
-                .contains_key(query_residual_key)
+        for query_residual_pred in &self.residual_preds {
+            if !reverse_matcher
+                .list_contains(&view_residual_classes.residual_preds, query_residual_pred)
             {
                 extra_residual_preds.push(query_residual_pred.clone());
             }
@@ -885,10 +1020,6 @@ struct AggIndexRewriter {
 }
 
 impl AggIndexRewriter {
-    fn new(query_info: QueryInfo) -> Self {
-        Self { query_info }
-    }
-
     fn try_rewrite_index(
         &self,
         s_expr: &SExpr,
@@ -940,6 +1071,150 @@ impl AggIndexRewriter {
         Ok(Some(result))
     }
 
+    fn add_compensating_range_predicates(
+        &self,
+        view_info: &ViewInfo,
+        extra_ranges: &[CompensatingRange],
+        new_predicates: &mut Vec<ScalarExpr>,
+    ) -> bool {
+        let index_output_matcher = ScalarExprMatcher::new(
+            &view_info.query_info.column_map,
+            &self.query_info.column_map,
+        );
+
+        for extra_range in extra_ranges {
+            let Some((new_scalar, _)) = index_output_matcher
+                .find_index_output_col(&view_info.index_output_cols, &extra_range.column)
+            else {
+                return false;
+            };
+
+            let lower = extra_range.lower_bound.comparison_bound("gte", "gt");
+            let upper = extra_range.upper_bound.comparison_bound("lte", "lt");
+
+            if let (Some((lower_val, "gte")), Some((upper_val, "lte"))) = (&lower, &upper) {
+                if lower_val == upper_val {
+                    new_predicates.push(comparison_predicate(
+                        "eq",
+                        new_scalar.clone(),
+                        lower_val.clone(),
+                    ));
+                    continue;
+                }
+            }
+
+            push_optional_comparison_predicate(new_predicates, &new_scalar, lower);
+            push_optional_comparison_predicate(new_predicates, &new_scalar, upper);
+        }
+
+        true
+    }
+
+    fn check_output_scalars<'a>(
+        &self,
+        scalars: impl IntoIterator<Item = &'a ScalarExpr>,
+        view_info: &ViewInfo,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
+        for scalar in scalars {
+            if self
+                .query_info
+                .check_output_cols(
+                    scalar,
+                    &view_info.index_output_cols,
+                    &view_info.query_info.column_map,
+                    new_selection_set,
+                )
+                .is_err()
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn add_missing_residual_predicates(
+        &self,
+        view_info: &ViewInfo,
+        extra_residual_preds: &[ScalarExpr],
+        new_predicates: &mut Vec<ScalarExpr>,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
+        for extra_residual_pred in extra_residual_preds {
+            match self.query_info.check_output_cols(
+                extra_residual_pred,
+                &view_info.index_output_cols,
+                &view_info.query_info.column_map,
+                new_selection_set,
+            ) {
+                Ok(Some(new_residual_pred)) => new_predicates.push(new_residual_pred),
+                Ok(None) => {}
+                Err(_) => return false,
+            }
+        }
+
+        true
+    }
+
+    fn query_group_items(&self) -> &[ScalarItem] {
+        self.query_info
+            .aggregate
+            .as_ref()
+            .map(|agg| agg.group_items.as_slice())
+            .unwrap_or_default()
+    }
+
+    fn view_group_items<'a>(&self, view_info: &'a ViewInfo) -> &'a [ScalarItem] {
+        view_info
+            .query_info
+            .aggregate
+            .as_ref()
+            .map(|agg| agg.group_items.as_slice())
+            .unwrap_or_default()
+    }
+
+    fn group_items_match(&self, view_info: &ViewInfo) -> bool {
+        let query_group_items = self.query_group_items();
+        let view_group_items = self.view_group_items(view_info);
+        if query_group_items.len() != view_group_items.len() {
+            return false;
+        }
+
+        let query_group_matcher = ScalarExprMatcher::same(&self.query_info.column_map);
+        let mut query_group_names = Vec::with_capacity(query_group_items.len());
+        for item in query_group_items {
+            query_group_matcher.push_unique_scalar(&mut query_group_names, item.scalar.clone());
+        }
+
+        let view_group_matcher = ScalarExprMatcher::same(&view_info.query_info.column_map);
+        let mut view_group_names = Vec::with_capacity(view_group_items.len());
+        for item in view_group_items {
+            view_group_matcher.push_unique_scalar(&mut view_group_names, item.scalar.clone());
+        }
+
+        let group_matcher = ScalarExprMatcher::new(
+            &view_info.query_info.column_map,
+            &self.query_info.column_map,
+        );
+        query_group_names.into_iter().all(|query_group_name| {
+            group_matcher.list_contains(&view_group_names, &query_group_name)
+        })
+    }
+
+    fn check_group_items_output_cols(
+        &self,
+        group_items: &[ScalarItem],
+        view_info: &ViewInfo,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
+        self.check_output_scalars(
+            group_items.iter().map(|item| &item.scalar),
+            view_info,
+            new_selection_set,
+        )
+    }
+
     fn check_predicates(
         &self,
         view_info: &ViewInfo,
@@ -956,25 +1231,27 @@ impl AggIndexRewriter {
         // 5. Check that every conjunct in the residual predicate of the
         //    view matches a conjunct in the residual predicate of the query.
         //    If not, reject the view.
-        if !self
-            .query_info
-            .equi_classes
-            .check(&view_info.query_info.equi_classes)
-        {
+        if !self.query_info.equi_classes.check(
+            &view_info.query_info.equi_classes,
+            &self.query_info.column_map,
+            &view_info.query_info.column_map,
+        ) {
             return false;
         }
-        let (range_res, extra_ranges) = self
-            .query_info
-            .range_classes
-            .check(&view_info.query_info.range_classes);
+        let (range_res, extra_ranges) = self.query_info.range_classes.check(
+            &view_info.query_info.range_classes,
+            &self.query_info.column_map,
+            &view_info.query_info.column_map,
+        );
         if !range_res {
             return false;
         }
 
-        let (residual_res, extra_residual_preds) = self
-            .query_info
-            .residual_classes
-            .check(&view_info.query_info.residual_classes);
+        let (residual_res, extra_residual_preds) = self.query_info.residual_classes.check(
+            &view_info.query_info.residual_classes,
+            &self.query_info.column_map,
+            &view_info.query_info.column_map,
+        );
         if !residual_res {
             return false;
         }
@@ -990,90 +1267,21 @@ impl AggIndexRewriter {
         // 3. Find the residual predicates of the query that are missing in the view.
         //    Try to map every column reference to an output column (using the query equivalence classes).
         //    If this is not possible, reject the view.
-
-        if let Some(extra_ranges) = extra_ranges {
-            for (col, (lower_bound, upper_bound)) in extra_ranges.iter() {
-                // materialized view output must contains the column
-                if let Some((new_scalar, _)) = view_info.index_output_cols.get(col) {
-                    let lower = match lower_bound {
-                        BoundValue::Closed(val) => Some((val.clone(), "gte")),
-                        BoundValue::Open(val) => Some((val.clone(), "gt")),
-                        BoundValue::NegativeInfinite => None,
-                        _ => unreachable!(),
-                    };
-                    let upper = match upper_bound {
-                        BoundValue::Closed(val) => Some((val.clone(), "lte")),
-                        BoundValue::Open(val) => Some((val.clone(), "lt")),
-                        BoundValue::PositiveInfinite => None,
-                        _ => unreachable!(),
-                    };
-
-                    if let (Some((lower_val, "gte")), Some((upper_val, "lte"))) = (&lower, &upper) {
-                        // if lower and upper value equal, convert to equal function
-                        if lower_val.eq(upper_val) {
-                            let lower_val_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                                span: None,
-                                value: lower_val.clone(),
-                            });
-                            let pred = ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: "eq".to_string(),
-                                params: vec![],
-                                arguments: vec![new_scalar.clone(), lower_val_scalar],
-                            });
-                            new_predicates.push(pred);
-                            continue;
-                        }
-                    }
-
-                    if let Some((lower_val, func_name)) = lower {
-                        let lower_val_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                            span: None,
-                            value: lower_val,
-                        });
-                        let pred = ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: func_name.to_string(),
-                            params: vec![],
-                            arguments: vec![new_scalar.clone(), lower_val_scalar],
-                        });
-                        new_predicates.push(pred);
-                    }
-                    if let Some((upper_val, func_name)) = upper {
-                        let upper_val_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                            span: None,
-                            value: upper_val,
-                        });
-                        let pred = ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: func_name.to_string(),
-                            params: vec![],
-                            arguments: vec![new_scalar.clone(), upper_val_scalar],
-                        });
-                        new_predicates.push(pred);
-                    }
-                } else {
-                    return false;
-                }
-            }
+        if let Some(extra_ranges) = extra_ranges
+            && !self.add_compensating_range_predicates(view_info, &extra_ranges, new_predicates)
+        {
+            return false;
         }
 
-        if let Some(extra_residual_preds) = extra_residual_preds {
-            for extra_residual_pred in extra_residual_preds {
-                match self.query_info.check_output_cols(
-                    &extra_residual_pred,
-                    &view_info.index_output_cols,
-                    new_selection_set,
-                ) {
-                    Ok(Some(new_residual_pred)) => {
-                        new_predicates.push(new_residual_pred);
-                    }
-                    Ok(None) => {}
-                    Err(_) => {
-                        return false;
-                    }
-                }
-            }
+        if let Some(extra_residual_preds) = extra_residual_preds
+            && !self.add_missing_residual_predicates(
+                view_info,
+                &extra_residual_preds,
+                new_predicates,
+                new_selection_set,
+            )
+        {
+            return false;
         }
 
         true
@@ -1087,20 +1295,11 @@ impl AggIndexRewriter {
         // 3.1.4 Can output expressions be computed?
         // Checking whether all output expressions of the query can be computed from the view
         // is similar to checking whether the additional predicates can be computed correctly.
-        for output_item in self.query_info.output_cols.iter() {
-            if self
-                .query_info
-                .check_output_cols(
-                    &output_item.scalar,
-                    &view_info.index_output_cols,
-                    new_selection_set,
-                )
-                .is_err()
-            {
-                return false;
-            }
-        }
-        true
+        self.check_output_scalars(
+            self.query_info.output_cols.iter().map(|item| &item.scalar),
+            view_info,
+            new_selection_set,
+        )
     }
 
     fn check_aggregation(
@@ -1117,74 +1316,33 @@ impl AggIndexRewriter {
         // 4. All columns required to perform further grouping (if necessary) are available in the view output.
         // 5. All columns required to compute output expressions are available in the view output.
 
-        let query_group_items = self
-            .query_info
-            .aggregate
-            .clone()
-            .map(|agg| agg.group_items)
-            .unwrap_or_default();
-
-        let view_group_items = view_info
-            .query_info
-            .aggregate
-            .clone()
-            .clone()
-            .map(|agg| agg.group_items)
-            .unwrap_or_default();
+        let query_group_items = self.query_group_items();
+        let view_group_items = self.view_group_items(view_info);
 
         match (query_group_items.is_empty(), view_group_items.is_empty()) {
             // both query and view have group, check for same group items.
             (false, false) => {
                 // TODO: query can support continue group
-                if query_group_items.len() != view_group_items.len() {
+                if !self.group_items_match(view_info) {
                     return false;
                 }
-                let mut query_group_names = HashSet::with_capacity(query_group_items.len());
-                for item in &query_group_items {
-                    let query_group_name = format_scalar(&item.scalar, &self.query_info.column_map);
-                    query_group_names.insert(query_group_name);
-                }
-                let mut view_group_names = HashSet::with_capacity(view_group_items.len());
-                for item in &view_group_items {
-                    let view_group_name =
-                        format_scalar(&item.scalar, &view_info.query_info.column_map);
-                    view_group_names.insert(view_group_name);
-                }
-                for query_group_name in query_group_names {
-                    if !view_group_names.contains(&query_group_name) {
-                        return false;
-                    }
-                }
-
-                for item in query_group_items {
-                    if self
-                        .query_info
-                        .check_output_cols(
-                            &item.scalar,
-                            &view_info.index_output_cols,
-                            new_selection_set,
-                        )
-                        .is_err()
-                    {
-                        return false;
-                    }
+                if !self.check_group_items_output_cols(
+                    query_group_items,
+                    view_info,
+                    new_selection_set,
+                ) {
+                    return false;
                 }
             }
             // query have group, but view don't have group,
             // check group items in output rows.
             (false, true) => {
-                for item in query_group_items {
-                    if self
-                        .query_info
-                        .check_output_cols(
-                            &item.scalar,
-                            &view_info.index_output_cols,
-                            new_selection_set,
-                        )
-                        .is_err()
-                    {
-                        return false;
-                    }
+                if !self.check_group_items_output_cols(
+                    query_group_items,
+                    view_info,
+                    new_selection_set,
+                ) {
+                    return false;
                 }
             }
             // both query and view don't have group, don't need check.
@@ -1203,19 +1361,17 @@ impl AggIndexRewriter {
         view_info: &ViewInfo,
         new_selection_set: &mut HashSet<ScalarItem>,
     ) -> bool {
-        if let Some(sort_items) = &self.query_info.sort_items {
-            for item in sort_items {
-                if let Some(scalar) = self.query_info.column_map.get(&item.index) {
-                    if self
-                        .query_info
-                        .check_output_cols(scalar, &view_info.index_output_cols, new_selection_set)
-                        .is_err()
-                    {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
+        let Some(sort_items) = &self.query_info.sort_items else {
+            return true;
+        };
+
+        for item in sort_items {
+            let Some(scalar) = self.query_info.column_map.get(&item.index) else {
+                return false;
+            };
+
+            if !self.check_output_scalars([scalar], view_info, new_selection_set) {
+                return false;
             }
         }
 
@@ -1237,28 +1393,6 @@ fn to_index_scalar(index: FieldIndex, data_type: &DataType) -> ScalarExpr {
     ScalarExpr::BoundColumnRef(col)
 }
 
-#[inline(always)]
-fn format_col(column: &ColumnBinding) -> String {
-    match &column.table_name {
-        Some(table_name) => {
-            format!("{}.{}", table_name, column.column_name)
-        }
-        None => column.column_name.clone(),
-    }
-}
-
-#[inline(always)]
-fn reverse_op(op: &str) -> String {
-    match op {
-        "gt" => "lt".to_string(),
-        "gte" => "lte".to_string(),
-        "lt" => "gt".to_string(),
-        "lte" => "gte".to_string(),
-        "eq" => "eq".to_string(),
-        _ => unreachable!(),
-    }
-}
-
 // replace derived column with actual ScalarExpr.
 fn actual_column_ref<'a>(
     col: &'a ScalarExpr,
@@ -1272,104 +1406,207 @@ fn actual_column_ref<'a>(
     col
 }
 
-fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<Symbol, ScalarExpr>) -> String {
-    match scalar {
-        ScalarExpr::BoundColumnRef(_) => match actual_column_ref(scalar, column_map) {
-            ScalarExpr::BoundColumnRef(col) => format_col(&col.column),
-            s => format_scalar(s, column_map),
-        },
-        ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
-        ScalarExpr::FunctionCall(func) => format!(
-            "{}({})",
-            &func.func_name,
-            func.arguments
-                .iter()
-                .map(|arg| { format_scalar(arg, column_map) })
-                .collect::<Vec<String>>()
-                .join(", ")
-        ),
-        ScalarExpr::CastExpr(cast) => {
-            let func_name = if cast.is_try { "try_cast" } else { "cast" };
-            format!(
-                "{}({} as {})",
-                func_name,
-                format_scalar(&cast.argument, column_map),
-                cast.target_type
-            )
+fn register_column_expr(
+    column_exprs: &mut Vec<ColumnExprEntry>,
+    expr: ScalarExpr,
+    index: Symbol,
+    source: ColumnExprSource,
+    matcher: &ScalarExprMatcher<'_, '_>,
+) {
+    if let Some(existing_entry) = column_exprs
+        .iter_mut()
+        .find(|entry| matcher.expr_equal(&entry.expr, &expr))
+    {
+        if source.prefer_over(existing_entry.source, index, existing_entry.index) {
+            existing_entry.index = index;
+            existing_entry.source = source;
         }
-        ScalarExpr::AggregateFunction(agg) => {
-            let params = agg
-                .params
-                .iter()
-                .map(|i| i.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let args = agg
-                .args
-                .iter()
-                .map(|arg| format_scalar(arg, column_map))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let mut scalar = if !params.is_empty() {
-                format!("{}<{}>({})", &agg.func_name, params, args)
-            } else {
-                format!("{}({})", &agg.func_name, args)
-            };
-            if !agg.sort_descs.is_empty() {
-                let sort_descs = agg
-                    .sort_descs
-                    .iter()
-                    .map(|desc| format_sort_desc(desc, column_map))
-                    .join(", ");
-                scalar = format!("{} within group (order by {})", scalar, sort_descs);
-            }
-            scalar
-        }
-        ScalarExpr::UDAFCall(udaf) => {
-            let args = udaf
-                .arguments
-                .iter()
-                .map(|arg| format_scalar(arg, column_map))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{}({})", &udaf.name, args)
-        }
-        ScalarExpr::UDFCall(udf) => format!(
-            "{}({})",
-            &udf.handler,
-            udf.arguments
-                .iter()
-                .map(|arg| { format_scalar(arg, column_map) })
-                .collect::<Vec<String>>()
-                .join(", ")
-        ),
-
-        _ => unreachable!(), // Window function and subquery will not appear in index.
+        return;
     }
+
+    column_exprs.push(ColumnExprEntry {
+        expr,
+        index,
+        source,
+    });
 }
 
-fn format_sort_desc(
-    AggregateFunctionScalarSortDesc {
-        expr,
-        nulls_first,
-        asc,
-        ..
-    }: &AggregateFunctionScalarSortDesc,
-    column_map: &HashMap<Symbol, ScalarExpr>,
-) -> String {
-    let mut expr = format_scalar(expr, column_map);
+fn comparison_predicate(func_name: &str, column: ScalarExpr, value: Scalar) -> ScalarExpr {
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: func_name.to_string(),
+        params: vec![],
+        arguments: vec![
+            column,
+            ScalarExpr::ConstantExpr(ConstantExpr { span: None, value }),
+        ],
+    })
+}
 
-    if *asc {
-        expr.push_str(" asc");
-    } else {
-        expr.push_str(" desc");
+fn push_optional_comparison_predicate(
+    predicates: &mut Vec<ScalarExpr>,
+    column: &ScalarExpr,
+    bound: Option<(Scalar, &'static str)>,
+) {
+    let Some((value, func_name)) = bound else {
+        return;
+    };
+    predicates.push(comparison_predicate(func_name, column.clone(), value));
+}
+
+struct ScalarExprMatcher<'a, 'b> {
+    left_column_map: &'a HashMap<Symbol, ScalarExpr>,
+    right_column_map: &'b HashMap<Symbol, ScalarExpr>,
+}
+
+impl<'a, 'b> ScalarExprMatcher<'a, 'b> {
+    fn new(
+        left_column_map: &'a HashMap<Symbol, ScalarExpr>,
+        right_column_map: &'b HashMap<Symbol, ScalarExpr>,
+    ) -> Self {
+        Self {
+            left_column_map,
+            right_column_map,
+        }
     }
-    if *nulls_first {
-        expr.push_str(" nulls first");
-    } else {
-        expr.push_str(" nulls last");
+
+    fn same(column_map: &'a HashMap<Symbol, ScalarExpr>) -> ScalarExprMatcher<'a, 'a> {
+        ScalarExprMatcher::new(column_map, column_map)
     }
-    expr
+
+    fn resolve_left(&self, scalar: &ScalarExpr) -> Option<&'a ScalarExpr> {
+        Self::resolve_scalar(scalar, self.left_column_map)
+    }
+
+    fn resolve_right(&self, scalar: &ScalarExpr) -> Option<&'b ScalarExpr> {
+        Self::resolve_scalar(scalar, self.right_column_map)
+    }
+
+    fn resolve_scalar<'map>(
+        scalar: &ScalarExpr,
+        column_map: &'map HashMap<Symbol, ScalarExpr>,
+    ) -> Option<&'map ScalarExpr> {
+        let ScalarExpr::BoundColumnRef(col) = scalar else {
+            return None;
+        };
+
+        let mapped = column_map.get(&col.column.index)?;
+        match mapped {
+            ScalarExpr::BoundColumnRef(mapped_col)
+                if mapped_col.column.index == col.column.index
+                    && mapped_col.column.table_index == col.column.table_index =>
+            {
+                None
+            }
+            _ => Some(mapped),
+        }
+    }
+
+    fn expr_equal(&self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        if let Some(mapped_left) = self.resolve_left(left) {
+            return self.expr_equal(mapped_left, right);
+        }
+        if let Some(mapped_right) = self.resolve_right(right) {
+            return self.expr_equal(left, mapped_right);
+        }
+
+        match (left, right) {
+            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => {
+                l.column.index == r.column.index && l.column.table_index == r.column.table_index
+            }
+            (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r))
+            | (ScalarExpr::ConstantExpr(l), ScalarExpr::TypedConstantExpr(r, _))
+            | (ScalarExpr::TypedConstantExpr(l, _), ScalarExpr::ConstantExpr(r))
+            | (ScalarExpr::TypedConstantExpr(l, _), ScalarExpr::TypedConstantExpr(r, _)) => {
+                l.value == r.value
+            }
+            (ScalarExpr::FunctionCall(l), ScalarExpr::FunctionCall(r)) => {
+                l.func_name == r.func_name
+                    && l.params == r.params
+                    && l.arguments.len() == r.arguments.len()
+                    && l.arguments
+                        .iter()
+                        .zip(r.arguments.iter())
+                        .all(|(l, r)| self.expr_equal(l, r))
+            }
+            (ScalarExpr::CastExpr(l), ScalarExpr::CastExpr(r)) => {
+                l.is_try == r.is_try
+                    && l.target_type == r.target_type
+                    && self.expr_equal(&l.argument, &r.argument)
+            }
+            (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => {
+                l.func_name == r.func_name
+                    && l.distinct == r.distinct
+                    && l.params == r.params
+                    && l.args.len() == r.args.len()
+                    && l.sort_descs.len() == r.sort_descs.len()
+                    && l.args
+                        .iter()
+                        .zip(r.args.iter())
+                        .all(|(l, r)| self.expr_equal(l, r))
+                    && l.sort_descs.iter().zip(r.sort_descs.iter()).all(|(l, r)| {
+                        l.nulls_first == r.nulls_first
+                            && l.asc == r.asc
+                            && self.expr_equal(&l.expr, &r.expr)
+                    })
+            }
+            (ScalarExpr::UDAFCall(l), ScalarExpr::UDAFCall(r)) => {
+                l.name == r.name
+                    && l.arguments.len() == r.arguments.len()
+                    && l.arguments
+                        .iter()
+                        .zip(r.arguments.iter())
+                        .all(|(l, r)| self.expr_equal(l, r))
+            }
+            (ScalarExpr::UDFCall(l), ScalarExpr::UDFCall(r)) => {
+                l.handler == r.handler
+                    && l.arguments.len() == r.arguments.len()
+                    && l.arguments
+                        .iter()
+                        .zip(r.arguments.iter())
+                        .all(|(l, r)| self.expr_equal(l, r))
+            }
+            _ => false,
+        }
+    }
+
+    fn list_contains(&self, list: &[ScalarExpr], target: &ScalarExpr) -> bool {
+        list.iter().any(|expr| self.expr_equal(expr, target))
+    }
+
+    fn push_unique_scalar(&self, list: &mut Vec<ScalarExpr>, scalar: ScalarExpr) {
+        if !self.list_contains(list, &scalar) {
+            list.push(scalar);
+        }
+    }
+
+    fn find_column_index(
+        &self,
+        column_exprs: &[ColumnExprEntry],
+        target: &ScalarExpr,
+    ) -> Option<Symbol> {
+        column_exprs.iter().find_map(|entry| {
+            if self.expr_equal(&entry.expr, target) {
+                Some(entry.index)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn find_index_output_col(
+        &self,
+        index_output_cols: &[IndexOutputColumn],
+        target: &ScalarExpr,
+    ) -> Option<(ScalarExpr, bool)> {
+        index_output_cols.iter().find_map(|entry| {
+            if self.expr_equal(&entry.expr, target) {
+                Some((entry.index_scalar.clone(), entry.is_agg))
+            } else {
+                None
+            }
+        })
+    }
 }
 
 fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr> {
