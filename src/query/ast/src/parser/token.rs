@@ -14,6 +14,7 @@
 
 use logos::Lexer;
 use logos::Logos;
+use memchr::memchr;
 use memchr::memchr_iter;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -22,6 +23,24 @@ pub use self::TokenKind::*;
 use crate::ParseError;
 use crate::Range;
 use crate::Result;
+
+/// The kind of unclosed construct detected at EOF.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnclosedKind {
+    SingleQuote,
+    DoubleQuote,
+    Backtick,
+    DollarQuote,
+    BlockComment,
+}
+
+/// Extra state carried through the `logos` lexer to track unclosed constructs.
+#[derive(Debug, Clone, Default)]
+pub struct TokenExtras {
+    /// If the tokenizer hit EOF inside an unclosed string/comment,
+    /// this records the kind and the byte offset where it started.
+    pub unclosed: Option<(UnclosedKind, usize)>,
+}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
@@ -61,10 +80,19 @@ impl<'a> Tokenizer<'a> {
     pub fn new(source: &'a str) -> Self {
         Tokenizer {
             source,
-            lexer: TokenKind::lexer(source),
+            lexer: TokenKind::lexer_with_extras(source, TokenExtras::default()),
             eoi: false,
             prev_token: None,
         }
+    }
+
+    /// Returns the unclosed construct detected at EOF, if any.
+    ///
+    /// Call this after the iterator is exhausted (or after an `Err`).
+    /// Returns `Some((kind, byte_offset))` where `byte_offset` is the
+    /// start of the unclosed string literal, backtick, or block comment.
+    pub fn unclosed(&self) -> Option<(UnclosedKind, usize)> {
+        self.lexer.extras.unclosed
     }
 
     pub fn contains_token(query: &str, target_kind: TokenKind) -> bool {
@@ -186,11 +214,89 @@ fn lex_comment_block(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
         }
     }
 
+    lex.extras.unclosed = Some((UnclosedKind::BlockComment, lex.span().start));
+    logos::FilterResult::Error
+}
+
+fn lex_single_quoted(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    let start = lex.span().start;
+    let bytes = lex.remainder().as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => {
+                // Doubled quote '' is an escape, not a close.
+                if bytes.get(i + 1) == Some(&b'\'') {
+                    i += 2;
+                } else {
+                    lex.bump(i + 1);
+                    return logos::FilterResult::Emit(());
+                }
+            }
+            b'\\' => i += 2,
+            _ => i += 1,
+        }
+    }
+    lex.extras.unclosed = Some((UnclosedKind::SingleQuote, start));
+    logos::FilterResult::Error
+}
+
+fn lex_double_quoted(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    let start = lex.span().start;
+    let bytes = lex.remainder().as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                if bytes.get(i + 1) == Some(&b'"') {
+                    i += 2;
+                } else {
+                    lex.bump(i + 1);
+                    return logos::FilterResult::Emit(());
+                }
+            }
+            b'\\' => i += 2,
+            _ => i += 1,
+        }
+    }
+    lex.extras.unclosed = Some((UnclosedKind::DoubleQuote, start));
+    logos::FilterResult::Error
+}
+
+fn lex_backtick(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    let start = lex.span().start;
+    let bytes = lex.remainder().as_bytes();
+    // Backtick has no escape sequences — just find the closing `.
+    match memchr(b'`', bytes) {
+        Some(idx) => {
+            lex.bump(idx + 1);
+            logos::FilterResult::Emit(())
+        }
+        None => {
+            lex.extras.unclosed = Some((UnclosedKind::Backtick, start));
+            logos::FilterResult::Error
+        }
+    }
+}
+
+fn lex_dollar_quoted(lex: &mut Lexer<TokenKind>) -> logos::FilterResult<()> {
+    let start = lex.span().start;
+    let bytes = lex.remainder().as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' && bytes.get(i + 1) == Some(&b'$') {
+            lex.bump(i + 2);
+            return logos::FilterResult::Emit(());
+        }
+        i += 1;
+    }
+    lex.extras.unclosed = Some((UnclosedKind::DollarQuote, start));
     logos::FilterResult::Error
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Logos, EnumIter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[logos(extras = TokenExtras)]
 pub enum TokenKind {
     #[error]
     Error,
@@ -216,12 +322,12 @@ pub enum TokenKind {
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
 
-    #[regex(r#"`[^`]*`"#)]
-    #[regex(r#""([^"\\]|\\.|"")*""#)]
-    #[regex(r#"'([^'\\]|\\.|'')*'"#)]
+    #[token("`", lex_backtick)]
+    #[token("\"", lex_double_quoted)]
+    #[token("'", lex_single_quoted)]
     LiteralString,
 
-    #[regex(r#"\$\$([^\$]|(\$[^\$]))*\$\$"#)]
+    #[token("$$", lex_dollar_quoted)]
     LiteralCodeString,
 
     #[regex(r#"@([^\s,`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]

@@ -131,3 +131,96 @@ mod comment_heavy {
         divan::black_box(stmt);
     }
 }
+
+#[divan::bench_group(max_time = 0.5)]
+mod string_heavy {
+    use std::sync::OnceLock;
+
+    use databend_common_ast::parser::tokenize_sql;
+
+    fn single_quoted_sql() -> &'static str {
+        static CASE: OnceLock<String> = OnceLock::new();
+        CASE.get_or_init(|| {
+            let mut sql = String::from("SELECT ");
+            for i in 0..200 {
+                if i > 0 {
+                    sql.push_str(", ");
+                }
+                sql.push_str(&format!("'value_{i}'"));
+            }
+            sql
+        })
+        .as_str()
+    }
+
+    fn double_quoted_sql() -> &'static str {
+        static CASE: OnceLock<String> = OnceLock::new();
+        CASE.get_or_init(|| {
+            let mut sql = String::from("SELECT ");
+            for i in 0..200 {
+                if i > 0 {
+                    sql.push_str(", ");
+                }
+                sql.push_str(&format!("\"col_{i}\""));
+            }
+            sql.push_str(" FROM t");
+            sql
+        })
+        .as_str()
+    }
+
+    fn backtick_sql() -> &'static str {
+        static CASE: OnceLock<String> = OnceLock::new();
+        CASE.get_or_init(|| {
+            let mut sql = String::from("SELECT ");
+            for i in 0..200 {
+                if i > 0 {
+                    sql.push_str(", ");
+                }
+                sql.push_str(&format!("`col_{i}`"));
+            }
+            sql.push_str(" FROM t");
+            sql
+        })
+        .as_str()
+    }
+
+    fn escaped_single_quoted_sql() -> &'static str {
+        static CASE: OnceLock<String> = OnceLock::new();
+        CASE.get_or_init(|| {
+            let mut sql = String::from("SELECT ");
+            for i in 0..200 {
+                if i > 0 {
+                    sql.push_str(", ");
+                }
+                sql.push_str(&format!("'it''s value_{i} with \\' escape'"));
+            }
+            sql
+        })
+        .as_str()
+    }
+
+    #[divan::bench]
+    fn tokenize_single_quoted() {
+        let tokens = tokenize_sql(single_quoted_sql()).unwrap();
+        divan::black_box(tokens.len());
+    }
+
+    #[divan::bench]
+    fn tokenize_double_quoted() {
+        let tokens = tokenize_sql(double_quoted_sql()).unwrap();
+        divan::black_box(tokens.len());
+    }
+
+    #[divan::bench]
+    fn tokenize_backtick() {
+        let tokens = tokenize_sql(backtick_sql()).unwrap();
+        divan::black_box(tokens.len());
+    }
+
+    #[divan::bench]
+    fn tokenize_escaped_single_quoted() {
+        let tokens = tokenize_sql(escaped_single_quoted_sql()).unwrap();
+        divan::black_box(tokens.len());
+    }
+}
