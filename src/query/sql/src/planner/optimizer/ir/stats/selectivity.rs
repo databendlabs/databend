@@ -248,10 +248,12 @@ impl SelectivityVisitor<'_> {
                 }
             };
             ColumnStat {
-                min: min.to_datum()?,
-                max: max.to_datum()?,
+                min: min.clone().to_datum()?,
+                max: max.clone().to_datum()?,
                 ndv: stat.ndv,
                 null_count: stat.null_count,
+                origin_min: min.to_datum()?,
+                origin_max: max.to_datum()?,
                 histogram: stat.histogram.cloned(),
             }
         })
@@ -934,6 +936,8 @@ mod tests {
                 max: Datum::UInt(20),
                 ndv: Ndv::Stat(10.0),
                 null_count: 0,
+                origin_min: Datum::UInt(10),
+                origin_max: Datum::UInt(20),
                 histogram: None,
             }),
             (Symbol::new(1), ColumnStat {
@@ -941,6 +945,8 @@ mod tests {
                 max: Datum::UInt(20),
                 ndv: Ndv::Stat(10.0),
                 null_count: 10,
+                origin_min: Datum::UInt(10),
+                origin_max: Datum::UInt(20),
                 histogram: None,
             }),
         ]);
@@ -988,6 +994,8 @@ mod tests {
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
                 null_count: 0,
+                origin_min: Datum::UInt(0),
+                origin_max: Datum::UInt(9),
                 histogram: None,
             }),
             (Symbol::new(1), ColumnStat {
@@ -995,6 +1003,8 @@ mod tests {
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
                 null_count: 10,
+                origin_min: Datum::UInt(0),
+                origin_max: Datum::UInt(9),
                 histogram: None,
             }),
         ]);
@@ -1035,6 +1045,8 @@ mod tests {
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
                 null_count: 0,
+                origin_min: Datum::UInt(0),
+                origin_max: Datum::UInt(9),
                 histogram: None,
             }),
             (Symbol::new(1), ColumnStat {
@@ -1042,6 +1054,8 @@ mod tests {
                 max: Datum::UInt(9),
                 ndv: Ndv::Stat(10.0),
                 null_count: 10,
+                origin_min: Datum::UInt(0),
+                origin_max: Datum::UInt(9),
                 histogram: None,
             }),
         ]);
@@ -1059,6 +1073,8 @@ mod tests {
             max: Datum::Bytes("zz".as_bytes().to_vec()),
             ndv: Ndv::Stat(52.0),
             null_count: 0,
+            origin_min: Datum::Bytes("aa".as_bytes().to_vec()),
+            origin_max: Datum::Bytes("zz".as_bytes().to_vec()),
             histogram: None,
         })]);
         run_test(file, "s like 'ab%'", columns, column_stats.clone())?;

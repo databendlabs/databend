@@ -260,6 +260,7 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
+            RuleID::ShrinkGroupByType,
             RuleID::SplitAggregate,
         ]))
         // Apply DPhyp algorithm for cost-based join reordering
@@ -318,6 +319,7 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         ))
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
+            RuleID::ShrinkGroupByType,
             RuleID::SplitAggregate,
         ]))
         // Cost based optimization

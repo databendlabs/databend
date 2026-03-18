@@ -40,6 +40,9 @@ pub struct ColumnStat {
     /// Count of null values
     pub null_count: u64,
 
+    pub origin_min: Datum,
+    pub origin_max: Datum,
+
     /// Histogram of column
     pub histogram: Option<Histogram>,
 }
@@ -63,9 +66,11 @@ impl ColumnStat {
     pub fn from_const(datum: Datum) -> Self {
         Self {
             min: datum.clone(),
-            max: datum,
+            max: datum.clone(),
             ndv: Ndv::Stat(1.0),
             null_count: 0,
+            origin_min: datum.clone(),
+            origin_max: datum,
             histogram: None,
         }
     }

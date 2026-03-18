@@ -130,6 +130,7 @@ pub enum RuleID {
     HierarchicalGroupingSetsToUnion,
     SplitAggregate,
     FoldCountAggregate,
+    ShrinkGroupByType,
     PushDownPrewhere,
     TryApplyAggIndex,
     EliminateSelfJoin,
@@ -181,6 +182,7 @@ impl Display for RuleID {
             RuleID::HierarchicalGroupingSetsToUnion => write!(f, "HierarchicalGroupingSetsToUnion"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
+            RuleID::ShrinkGroupByType => write!(f, "ShrinkGroupByType"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
             RuleID::EliminateSelfJoin => write!(f, "EliminateSelfJoin"),
 
