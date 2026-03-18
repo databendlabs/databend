@@ -38,7 +38,12 @@ pub fn merge_join_runtime_filter_packets(
 
     // If any packet is incomplete (disable_all_due_to_spill), the merged result is also incomplete
     if packets.iter().any(|packet| packet.disable_all_due_to_spill) {
-        return Ok(JoinRuntimeFilterPacket::disable_all(total_build_rows));
+        let result = JoinRuntimeFilterPacket::disable_all(total_build_rows);
+        log::info!(
+            "RUNTIME-FILTER: merge_join_runtime_filter_packets output: build_rows={}, disable_all_due_to_spill=true",
+            total_build_rows
+        );
+        return Ok(result);
     }
 
     let should_merge_inlist = total_build_rows < inlist_threshold;
