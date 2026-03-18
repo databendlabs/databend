@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_version::BUILD_INFO;
 use databend_query::sessions::BuildInfoRef;
@@ -42,32 +44,39 @@ fn resolve_file_path(path: &str) -> String {
     )
 }
 
-/// Extract the real filesystem path from a `fs://` URI.
-fn fs_path_from_uri(uri: &str) -> Option<&str> {
-    uri.strip_prefix("fs://")
+fn extract_string_column(
+    entry: &BlockEntry,
+) -> Option<&databend_common_expression::types::StringColumn> {
+    match entry {
+        BlockEntry::Column(Column::String(col)) => Some(col),
+        BlockEntry::Column(Column::Nullable(n)) => match &n.column {
+            Column::String(col) => Some(col),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
-/// Read the header line of a CSV file and return column names.
-fn read_csv_column_names(path: &str) -> std::io::Result<Vec<String>> {
-    read_delimited_column_names(path, ',')
-}
+fn build_infer_schema_sql(
+    file_path: &str,
+    file_format: &str,
+    pattern: Option<&str>,
+    connection: Option<&str>,
+) -> String {
+    let connection_clause = connection
+        .map(|c| format!(", connection_name => '{}'", c))
+        .unwrap_or_default();
+    let pattern_clause = pattern
+        .map(|p| format!(", pattern => '{}'", p))
+        .unwrap_or_default();
 
-/// Read the header line of a TSV file and return column names.
-fn read_tsv_column_names(path: &str) -> std::io::Result<Vec<String>> {
-    read_delimited_column_names(path, '\t')
-}
-
-fn read_delimited_column_names(path: &str, delimiter: char) -> std::io::Result<Vec<String>> {
-    use std::io::BufRead;
-    let file = std::fs::File::open(path)?;
-    let mut reader = std::io::BufReader::new(file);
-    let mut header = String::new();
-    reader.read_line(&mut header)?;
-    Ok(header
-        .trim()
-        .split(delimiter)
-        .map(|s| s.trim().trim_matches('"').to_string())
-        .collect())
+    format!(
+        "SELECT column_name FROM infer_schema(location => '{}', file_format => '{}'{}{})",
+        file_path,
+        file_format.to_uppercase(),
+        pattern_clause,
+        connection_clause
+    )
 }
 
 fn build_position_select(col_names: &[String]) -> PyResult<String> {
@@ -240,7 +249,9 @@ impl PySessionContext {
             .unwrap_or_default();
 
         let select_clause = match file_format {
-            "csv" | "tsv" => self.build_column_select(&file_path, file_format)?,
+            "csv" | "tsv" => {
+                self.build_column_select(&file_path, file_format, pattern, connection, py)?
+            }
             _ => "*".to_string(),
         };
 
@@ -252,27 +263,25 @@ impl PySessionContext {
         Ok(())
     }
 
-    /// Read CSV/TSV header from local file and build `$1 AS col1, $2 AS col2, ...`.
-    fn build_column_select(&self, file_path: &str, file_format: &str) -> PyResult<String> {
-        let fs_path = fs_path_from_uri(file_path).ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "{} column inference only supports local files (fs://), got: {}",
-                file_format.to_ascii_uppercase(),
-                file_path,
-            ))
-        })?;
-        let col_names = match file_format {
-            "csv" => read_csv_column_names(fs_path),
-            "tsv" => read_tsv_column_names(fs_path),
-            _ => unreachable!(),
-        }
-        .map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to read {} header: {}",
-                file_format.to_ascii_uppercase(),
-                e
-            ))
-        })?;
+    fn build_column_select(
+        &mut self,
+        file_path: &str,
+        file_format: &str,
+        pattern: Option<&str>,
+        connection: Option<&str>,
+        py: Python,
+    ) -> PyResult<String> {
+        let sql = build_infer_schema_sql(file_path, file_format, pattern, connection);
+        let blocks = self.sql(&sql, py)?.collect(py)?;
+
+        let col_names = blocks
+            .blocks
+            .iter()
+            .filter(|b| b.num_rows() > 0)
+            .filter_map(|b| extract_string_column(b.get_by_offset(0)))
+            .flat_map(|col| col.iter().map(|s| s.to_string()))
+            .collect::<Vec<_>>();
+
         build_position_select(&col_names)
     }
 
@@ -427,42 +436,22 @@ async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use super::*;
 
-    fn write_temp_file(ext: &str, content: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "bendpy_context_{}_{}.{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos(),
-            ext
-        ));
-        let mut file = std::fs::File::create(&path).unwrap();
-        file.write_all(content.as_bytes()).unwrap();
-        path
-    }
-
     #[test]
-    fn test_build_position_select_from_csv_header() {
-        let path = write_temp_file("csv", "id,name\n1,alice\n");
-        let col_names = read_csv_column_names(path.to_str().unwrap()).unwrap();
-        std::fs::remove_file(path).unwrap();
-
+    fn test_build_position_select() {
+        let col_names = vec!["id".to_string(), "name".to_string()];
         let select = build_position_select(&col_names).unwrap();
         assert_eq!(select, "$1 AS `id`, $2 AS `name`");
     }
 
     #[test]
-    fn test_build_position_select_from_tsv_header() {
-        let path = write_temp_file("tsv", "id\tname\n1\talice\n");
-        let col_names = read_tsv_column_names(path.to_str().unwrap()).unwrap();
-        std::fs::remove_file(path).unwrap();
+    fn test_build_infer_schema_sql_with_pattern_and_connection() {
+        let sql = build_infer_schema_sql("s3://bucket/logs/", "csv", Some("*.csv"), Some("my_s3"));
 
-        let select = build_position_select(&col_names).unwrap();
-        assert_eq!(select, "$1 AS `id`, $2 AS `name`");
+        assert_eq!(
+            sql,
+            "SELECT column_name FROM infer_schema(location => 's3://bucket/logs/', file_format => 'CSV', pattern => '*.csv', connection_name => 'my_s3')"
+        );
     }
 }
