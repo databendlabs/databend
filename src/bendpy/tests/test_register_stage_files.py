@@ -21,7 +21,6 @@ ROOT = Path(__file__).resolve().parents[3]
 CSV_DIR = ROOT / "tests" / "data" / "csv"
 TSV_DIR = ROOT / "tests" / "data" / "tsv"
 CSV_PATH = ROOT / "tests" / "data" / "csv" / "select.csv"
-CSV_HEADER_PATH = ROOT / "tests" / "data" / "csv" / "numbers_with_headers.csv"
 TSV_PATH = ROOT / "tests" / "data" / "tsv" / "select.tsv"
 
 
@@ -37,13 +36,16 @@ class TestRegisterDelimitedFiles:
         self.ctx.register_csv("csv_stage_view", str(CSV_PATH))
         self.assert_view_rows("csv_stage_view")
 
-    def test_register_csv_preserves_local_header_names(self):
-        self.ctx.register_csv("csv_header_view", str(CSV_HEADER_PATH))
+    def test_register_csv_keeps_header_row_as_data(self, tmp_path):
+        header_csv = tmp_path / "header.csv"
+        header_csv.write_text("id,name\n1,alice\n2,bob\n", encoding="utf-8")
+
+        self.ctx.register_csv("csv_header_view", str(header_csv))
 
         df = self.ctx.sql(
-            "select count(), min(to_int64(id)), max(to_int64(id)) from csv_header_view"
+            "select column_1, column_2 from csv_header_view order by column_1"
         ).to_pandas()
-        assert df.values.tolist() == [[18, 0, 17]]
+        assert df.values.tolist() == [["1", "alice"], ["2", "bob"], ["id", "name"]]
 
     def test_register_csv_select_star_with_pattern(self):
         self.ctx.register_csv("csv_stage_pattern_view", str(CSV_DIR), pattern="select.csv")
@@ -53,16 +55,16 @@ class TestRegisterDelimitedFiles:
         self.ctx.register_tsv("tsv_stage_view", str(TSV_PATH))
         self.assert_view_rows("tsv_stage_view")
 
-    def test_register_tsv_preserves_local_header_names(self, tmp_path):
+    def test_register_tsv_keeps_header_row_as_data(self, tmp_path):
         header_tsv = tmp_path / "header.tsv"
         header_tsv.write_text("id\tname\n1\talice\n2\tbob\n", encoding="utf-8")
 
         self.ctx.register_tsv("tsv_header_view", str(header_tsv))
 
         df = self.ctx.sql(
-            "select count(), min(to_int64(id)), max(to_int64(id)) from tsv_header_view"
+            "select column_1, column_2 from tsv_header_view order by column_1"
         ).to_pandas()
-        assert df.values.tolist() == [[2, 1, 2]]
+        assert df.values.tolist() == [["1", "alice"], ["2", "bob"], ["id", "name"]]
 
     def test_register_tsv_select_star_with_pattern(self):
         self.ctx.register_tsv("tsv_stage_pattern_view", str(TSV_DIR), pattern="select.tsv")

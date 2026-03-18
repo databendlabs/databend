@@ -48,18 +48,11 @@ fn fs_path_from_uri(uri: &str) -> Option<&str> {
     uri.strip_prefix("fs://")
 }
 
-fn is_identifier_like(name: &str) -> bool {
-    let mut chars = name.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !(first.is_ascii_alphabetic() || first == '_') {
-        return false;
-    }
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+struct LocalFileShape {
+    max_fields: usize,
 }
 
-fn read_delimited_records(path: &std::path::Path, delimiter: char) -> PyResult<Vec<Vec<String>>> {
+fn inspect_delimited_file(path: &std::path::Path, delimiter: char) -> PyResult<LocalFileShape> {
     let file = std::fs::File::open(path).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
             "Failed to read local file {}: {}",
@@ -72,20 +65,20 @@ fn read_delimited_records(path: &std::path::Path, delimiter: char) -> PyResult<V
         .flexible(true)
         .delimiter(delimiter as u8)
         .from_reader(file);
-    reader
-        .records()
-        .map(|record| {
-            record
-                .map(|r| r.iter().map(|s| s.trim().to_string()).collect::<Vec<_>>())
-                .map_err(|e| {
-                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                        "Failed to parse local file {}: {}",
-                        path.display(),
-                        e
-                    ))
-                })
-        })
-        .collect()
+
+    let mut max_fields = 0;
+    for record in reader.records() {
+        let record = record.map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to parse local file {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
+        max_fields = max_fields.max(record.len());
+    }
+
+    Ok(LocalFileShape { max_fields })
 }
 
 fn collect_local_paths(
@@ -162,34 +155,16 @@ fn try_build_local_file_select(
         _ => unreachable!(),
     };
 
-    let mut first_record = None;
     let mut max_fields = 0;
     for path in &paths {
-        let records = read_delimited_records(path, delimiter)?;
-        if first_record.is_none() {
-            first_record = records.first().cloned();
-        }
-        for record in records {
-            max_fields = max_fields.max(record.len());
-        }
+        let shape = inspect_delimited_file(path, delimiter)?;
+        max_fields = max_fields.max(shape.max_fields);
     }
 
     if max_fields == 0 {
         return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
             "Could not infer schema: no columns found",
         ));
-    }
-
-    if paths.len() == 1
-        && let Some(header_names) = first_record
-        && !header_names.is_empty()
-        && header_names.len() == max_fields
-        && header_names.iter().all(|name| is_identifier_like(name))
-    {
-        return Ok(Some(ColumnSelect {
-            select_clause: build_position_select(&header_names)?,
-            query_suffix: " OFFSET 1".to_string(),
-        }));
     }
 
     let column_names = (0..max_fields)
@@ -629,7 +604,7 @@ mod tests {
     }
 
     #[test]
-    fn test_try_build_local_file_select_with_header() {
+    fn test_try_build_local_file_select_uses_positional_names() {
         use std::io::Write;
 
         let path = std::env::temp_dir().join(format!(
@@ -648,12 +623,12 @@ mod tests {
         std::fs::remove_file(path).unwrap();
 
         let select = select.unwrap();
-        assert_eq!(select.select_clause, "$1 AS `id`, $2 AS `name`");
-        assert_eq!(select.query_suffix, " OFFSET 1");
+        assert_eq!(select.select_clause, "$1 AS `column_1`, $2 AS `column_2`");
+        assert_eq!(select.query_suffix, "");
     }
 
     #[test]
-    fn test_read_delimited_records_with_quoted_delimiter() {
+    fn test_inspect_delimited_file_with_quoted_delimiter() {
         use std::io::Write;
 
         let path = std::env::temp_dir().join(format!(
@@ -667,10 +642,10 @@ mod tests {
         let mut file = std::fs::File::create(&path).unwrap();
         file.write_all(b"\"last,name\",age\nsmith,10\n").unwrap();
 
-        let records = read_delimited_records(&path, ',').unwrap();
+        let shape = inspect_delimited_file(&path, ',').unwrap();
         std::fs::remove_file(path).unwrap();
 
-        assert_eq!(records[0], vec!["last,name".to_string(), "age".to_string()]);
+        assert_eq!(shape.max_fields, 2);
     }
 
     #[test]
