@@ -42,49 +42,6 @@ fn resolve_file_path(path: &str) -> String {
     )
 }
 
-/// Extract the real filesystem path from a `fs://` URI.
-fn fs_path_from_uri(uri: &str) -> Option<&str> {
-    uri.strip_prefix("fs://")
-}
-
-/// Read the header line of a CSV file and return column names.
-fn read_csv_column_names(path: &str) -> std::io::Result<Vec<String>> {
-    read_delimited_column_names(path, ',')
-}
-
-/// Read the header line of a TSV file and return column names.
-fn read_tsv_column_names(path: &str) -> std::io::Result<Vec<String>> {
-    read_delimited_column_names(path, '\t')
-}
-
-fn read_delimited_column_names(path: &str, delimiter: char) -> std::io::Result<Vec<String>> {
-    use std::io::BufRead;
-    let file = std::fs::File::open(path)?;
-    let mut reader = std::io::BufReader::new(file);
-    let mut header = String::new();
-    reader.read_line(&mut header)?;
-    Ok(header
-        .trim()
-        .split(delimiter)
-        .map(|s| s.trim().trim_matches('"').to_string())
-        .collect())
-}
-
-fn build_position_select(col_names: &[String]) -> PyResult<String> {
-    if col_names.is_empty() {
-        return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            "Could not infer schema: no columns found",
-        ));
-    }
-
-    Ok(col_names
-        .iter()
-        .enumerate()
-        .map(|(i, name)| format!("${} AS `{}`", i + 1, name))
-        .collect::<Vec<_>>()
-        .join(", "))
-}
-
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
@@ -239,41 +196,12 @@ impl PySessionContext {
             .map(|p| format!(", pattern => '{}'", p))
             .unwrap_or_default();
 
-        let select_clause = match file_format {
-            "csv" | "tsv" => self.build_column_select(&file_path, file_format)?,
-            _ => "*".to_string(),
-        };
-
         let sql = format!(
-            "create view {} as select {} from '{}' (file_format => '{}'{}{})",
-            name, select_clause, file_path, file_format, pattern_clause, connection_clause
+            "create view {} as select * from '{}' (file_format => '{}'{}{})",
+            name, file_path, file_format, pattern_clause, connection_clause
         );
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
-    }
-
-    /// Read CSV/TSV header from local file and build `$1 AS col1, $2 AS col2, ...`.
-    fn build_column_select(&self, file_path: &str, file_format: &str) -> PyResult<String> {
-        let fs_path = fs_path_from_uri(file_path).ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "{} column inference only supports local files (fs://), got: {}",
-                file_format.to_ascii_uppercase(),
-                file_path,
-            ))
-        })?;
-        let col_names = match file_format {
-            "csv" => read_csv_column_names(fs_path),
-            "tsv" => read_tsv_column_names(fs_path),
-            _ => unreachable!(),
-        }
-        .map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to read {} header: {}",
-                file_format.to_ascii_uppercase(),
-                e
-            ))
-        })?;
-        build_position_select(&col_names)
     }
 
     #[pyo3(signature = (name, access_key_id, secret_access_key, endpoint_url = None, region = None))]
@@ -423,46 +351,4 @@ async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
     Ok(PyDataFrame::new(ctx.clone(), plan, default_box_size()))
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::Write;
-
-    use super::*;
-
-    fn write_temp_file(ext: &str, content: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "bendpy_context_{}_{}.{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos(),
-            ext
-        ));
-        let mut file = std::fs::File::create(&path).unwrap();
-        file.write_all(content.as_bytes()).unwrap();
-        path
-    }
-
-    #[test]
-    fn test_build_position_select_from_csv_header() {
-        let path = write_temp_file("csv", "id,name\n1,alice\n");
-        let col_names = read_csv_column_names(path.to_str().unwrap()).unwrap();
-        std::fs::remove_file(path).unwrap();
-
-        let select = build_position_select(&col_names).unwrap();
-        assert_eq!(select, "$1 AS `id`, $2 AS `name`");
-    }
-
-    #[test]
-    fn test_build_position_select_from_tsv_header() {
-        let path = write_temp_file("tsv", "id\tname\n1\talice\n");
-        let col_names = read_tsv_column_names(path.to_str().unwrap()).unwrap();
-        std::fs::remove_file(path).unwrap();
-
-        let select = build_position_select(&col_names).unwrap();
-        assert_eq!(select, "$1 AS `id`, $2 AS `name`");
-    }
 }

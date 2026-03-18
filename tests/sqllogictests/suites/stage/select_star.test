@@ -22,8 +22,11 @@ select $1 from @unload (file_format => 'csv')
 1
 2
 
-query error 1065.*Query from CSV file lacks column positions\. Specify as \$1, \$2, etc\.
-select * from @unload (file_format => 'csv')
+query I
+select * from @unload (file_format => 'csv') order by 1
+----
+1
+2
 
 query error 1065.*select \* from file only support Parquet format
 select *, $1 from @unload (file_format => 'csv')

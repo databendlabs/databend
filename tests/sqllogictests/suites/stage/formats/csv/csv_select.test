@@ -12,8 +12,12 @@ select a.$1 from @data/csv (files=>('select.csv'), file_format=>'csv') a order b
 2
 3
 
-query error 1065.*Query from CSV file lacks column positions\. Specify as \$1, \$2, etc\.
-select * from @data/csv (files=>('select.csv'), file_format=>'csv')
+query ITT
+select * from @data/csv (files=>('select.csv'), file_format=>'csv') order by 1
+----
+1 NULL NULL
+2 b B
+3 c NULL
 
 query error 1065.*select \* from file only support Parquet format
 select *, $1 from @data/csv (files=>('select.csv'), file_format=>'csv')

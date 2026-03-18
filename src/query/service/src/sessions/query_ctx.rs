@@ -44,6 +44,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
@@ -75,6 +76,8 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -171,10 +174,76 @@ use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::spillers;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
+use crate::table_functions::infer_schema::separator::InferSchemaSeparator;
 
 const MYSQL_VERSION: &str = "8.0.90";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
+
+async fn infer_csv_tsv_stage_schema(
+    stage_info: &StageInfo,
+    files_info: &StageFilesInfo,
+    files_to_copy: Option<&Vec<StageFileInfo>>,
+) -> Result<Arc<TableSchema>> {
+    if let FileFormatParams::Tsv(fmt) = &stage_info.file_format_params
+        && fmt.field_delimiter.is_empty()
+    {
+        return Ok(Arc::new(TableSchema::new(vec![TableField::new(
+            "column_1",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        )])));
+    }
+
+    let operator = init_stage_operator(stage_info)?;
+    let file_info = match files_to_copy {
+        Some(files) => files
+            .iter()
+            .find(|file| file.size > 0)
+            .cloned()
+            .or_else(|| files.first().cloned()),
+        None => {
+            let listed_files = files_info.list(&operator, 1, Some(100)).await?;
+            listed_files
+                .iter()
+                .find(|file| file.size > 0)
+                .cloned()
+                .or_else(|| listed_files.first().cloned())
+        }
+    }
+    .ok_or_else(|| ErrorCode::BadArguments("No files found to infer CSV/TSV schema"))?;
+
+    let mut content = operator.read(&file_info.path).await?.to_vec();
+    if let Some(algo) = CompressAlgorithm::from_path(&file_info.path) {
+        content = match algo {
+            CompressAlgorithm::Zip => DecompressDecoder::decompress_all_zip(
+                &content,
+                &file_info.path,
+                GLOBAL_MEM_STAT.get_limit() as usize,
+            )?,
+            _ => {
+                let mut decoder = DecompressDecoder::new(algo);
+                decoder.decompress_all(&content)?
+            }
+        };
+    }
+
+    let arrow_schema = match InferSchemaSeparator::infer_arrow_schema_from_bytes(
+        &stage_info.file_format_params,
+        &content,
+        true,
+        None,
+    ) {
+        Ok(schema) => schema,
+        Err(Some(err)) => return Err(ErrorCode::BadBytes(err.to_string())),
+        Err(None) => {
+            return Err(ErrorCode::BadArguments(
+                "Failed to infer CSV/TSV schema from empty input",
+            ));
+        }
+    };
+
+    Ok(Arc::new(TableSchema::try_from(&arrow_schema)?))
+}
 
 pub struct QueryContext {
     version: String,
@@ -2225,16 +2294,23 @@ impl TableContext for QueryContext {
             }
             FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
                 if max_column_position == 0 {
-                    let file_type = match stage_info.file_format_params {
-                        FileFormatParams::Csv(..) => "CSV",
-                        FileFormatParams::Tsv(..) => "TSV",
-                        _ => unreachable!(), // This branch should never be reached
+                    let schema = infer_csv_tsv_stage_schema(
+                        &stage_info,
+                        &files_info,
+                        files_to_copy.as_ref(),
+                    )
+                    .await?;
+                    let info = StageTableInfo {
+                        schema,
+                        stage_info,
+                        files_info,
+                        files_to_copy,
+                        is_select: true,
+                        stage_root,
+                        copy_into_table_options: copy_options.clone(),
+                        ..Default::default()
                     };
-
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
-                        file_type
-                    )));
+                    return StageTable::try_create(info);
                 }
                 if let FileFormatParams::Tsv(fmt) = &stage_info.file_format_params {
                     if fmt.field_delimiter.is_empty() && max_column_position > 1 {

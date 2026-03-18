@@ -16,7 +16,7 @@ mod async_crash_me;
 mod cloud;
 mod copy_history;
 mod fuse_vacuum2;
-mod infer_schema;
+pub(crate) mod infer_schema;
 mod inspect_parquet;
 mod list_stage;
 mod numbers;

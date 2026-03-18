@@ -118,6 +118,58 @@ pub struct InferSchemaSeparator {
 }
 
 impl InferSchemaSeparator {
+    pub(crate) fn infer_arrow_schema_from_bytes(
+        file_format_params: &FileFormatParams,
+        file_bytes: &[u8],
+        is_eof: bool,
+        max_records: Option<usize>,
+    ) -> std::result::Result<Schema, Option<ArrowError>> {
+        match file_format_params {
+            FileFormatParams::Csv(params) => {
+                let escape = if params.escape.is_empty() {
+                    None
+                } else {
+                    Some(params.escape.as_bytes()[0])
+                };
+
+                let mut format = Format::default()
+                    .with_delimiter(params.field_delimiter.as_bytes()[0])
+                    .with_quote(params.quote.as_bytes()[0])
+                    .with_header(params.headers != 0);
+                if let Some(escape) = escape {
+                    format = format.with_escape(escape);
+                }
+                format
+                    .infer_schema(Cursor::new(file_bytes), max_records)
+                    .map(|(schema, _)| schema)
+                    .map_err(Some)
+            }
+            FileFormatParams::Tsv(params) => {
+                Self::infer_tsv_schema(file_bytes, params, is_eof, max_records)
+            }
+            FileFormatParams::NdJson(_) => {
+                let mut records = ValueIter::new(Cursor::new(file_bytes), max_records);
+                let fn_ndjson = |max_records| -> std::result::Result<Schema, Option<ArrowError>> {
+                    if let Some(max_record) = max_records {
+                        let mut tmp: Vec<std::result::Result<_, ArrowError>> =
+                            Vec::with_capacity(max_record);
+
+                        for result in records {
+                            tmp.push(Ok(result.map_err(|_| None)?));
+                        }
+                        infer_json_schema_from_iterator(tmp.into_iter()).map_err(Some)
+                    } else {
+                        infer_json_schema_from_iterator(&mut records).map_err(Some)
+                    }
+                };
+                fn_ndjson(max_records)
+            }
+            _ => Err(Some(ArrowError::SchemaError(
+                "infer schema only supports CSV, TSV and NDJSON".to_string(),
+            ))),
+        }
+    }
+
     pub fn create(
         file_format_params: FileFormatParams,
         max_records: Option<usize>,
@@ -260,52 +312,12 @@ impl AccumulatingTransform for InferSchemaSeparator {
             return Ok(vec![DataBlock::empty()]);
         }
         let file_bytes = bytes.as_slice();
-        let result = match &self.file_format_params {
-            FileFormatParams::Csv(params) => {
-                let escape = if params.escape.is_empty() {
-                    None
-                } else {
-                    Some(params.escape.as_bytes()[0])
-                };
-
-                let mut format = Format::default()
-                    .with_delimiter(params.field_delimiter.as_bytes()[0])
-                    .with_quote(params.quote.as_bytes()[0])
-                    .with_header(params.headers != 0);
-                if let Some(escape) = escape {
-                    format = format.with_escape(escape);
-                }
-                format
-                    .infer_schema(Cursor::new(file_bytes), self.max_records)
-                    .map(|(schema, _)| schema)
-                    .map_err(Some)
-            }
-            FileFormatParams::Tsv(params) => {
-                Self::infer_tsv_schema(file_bytes, params, batch.is_eof, self.max_records)
-            }
-            FileFormatParams::NdJson(_) => {
-                let mut records = ValueIter::new(Cursor::new(file_bytes), self.max_records);
-                let fn_ndjson = |max_records| -> std::result::Result<Schema, Option<ArrowError>> {
-                    if let Some(max_record) = max_records {
-                        let mut tmp: Vec<std::result::Result<_, ArrowError>> =
-                            Vec::with_capacity(max_record);
-
-                        for result in records {
-                            tmp.push(Ok(result.map_err(|_| None)?));
-                        }
-                        infer_json_schema_from_iterator(tmp.into_iter()).map_err(Some)
-                    } else {
-                        infer_json_schema_from_iterator(&mut records).map_err(Some)
-                    }
-                };
-                fn_ndjson(self.max_records)
-            }
-            _ => {
-                return Err(ErrorCode::BadArguments(
-                    "InferSchemaSeparator is currently limited to format CSV, TSV and NDJSON",
-                ));
-            }
-        };
+        let result = Self::infer_arrow_schema_from_bytes(
+            &self.file_format_params,
+            file_bytes,
+            batch.is_eof,
+            self.max_records,
+        );
         let arrow_schema = match result {
             Ok(schema) => schema,
             Err(None) => return Ok(vec![DataBlock::empty()]),
@@ -383,6 +395,8 @@ fn human_readable_size(bytes: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_meta_app::principal::CsvFileFormatParams;
+    use databend_common_meta_app::principal::FileFormatParams;
     use databend_common_meta_app::principal::TsvFileFormatParams;
 
     use super::*;
@@ -401,6 +415,23 @@ mod tests {
     }
 
     #[test]
+    fn test_infer_csv_schema_from_bytes() {
+        let schema = InferSchemaSeparator::infer_arrow_schema_from_bytes(
+            &FileFormatParams::Csv(CsvFileFormatParams::default()),
+            b"1,hello\n2,world\n",
+            true,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(schema.fields().len(), 2);
+        assert_eq!(schema.field(0).name(), "column_1");
+        assert_eq!(schema.field(0).data_type(), &DataType::Int64);
+        assert_eq!(schema.field(1).name(), "column_2");
+        assert_eq!(schema.field(1).data_type(), &DataType::Utf8);
+    }
+
+    #[test]
     fn test_infer_tsv_schema_with_escaped_delimiters() {
         let params = TsvFileFormatParams::default();
         let schema =
@@ -408,6 +439,23 @@ mod tests {
                 .unwrap();
 
         assert_eq!(schema.fields().len(), 2);
+    }
+
+    #[test]
+    fn test_infer_tsv_schema_from_bytes() {
+        let schema = InferSchemaSeparator::infer_arrow_schema_from_bytes(
+            &FileFormatParams::Tsv(TsvFileFormatParams::default()),
+            b"1\thello\n2\tworld\n",
+            true,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(schema.fields().len(), 2);
+        assert_eq!(schema.field(0).name(), "column_1");
+        assert_eq!(schema.field(0).data_type(), &DataType::Int64);
+        assert_eq!(schema.field(1).name(), "column_2");
+        assert_eq!(schema.field(1).data_type(), &DataType::Utf8);
     }
 
     #[test]
