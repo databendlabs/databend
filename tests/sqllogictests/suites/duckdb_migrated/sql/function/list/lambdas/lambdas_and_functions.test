@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE function demo(n, z) AS TABLE (
+#   SELECT list_transform(range(0, n), lambda x: z) AS row
+# );
+
+# TODO: unsupported feature
+# query I
+# FROM demo(3, 0);
+# ----
+# [0, 0, 0]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE function demo(n, z) AS TABLE (
+#   SELECT list_transform(range(0, n), lambda x: 0 + z) AS row
+# );
+
+# TODO: unsupported feature
+# query I
+# FROM demo(3, 0);
+# ----
+# [0, 0, 0]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE function demo(n, z) AS TABLE (
+#   SELECT list_transform(range(0, n), lambda x: (z -> 'a')) AS row
+# );
+
+# TODO: unsupported feature
+# query I
+# FROM demo(3, {'a': 2});
+# ----
+# [2, 2, 2]

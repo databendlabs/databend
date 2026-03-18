@@ -1,0 +1,129 @@
+query T
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)', 1);
+----
+["1","2","14"]
+
+query T
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 2)
+----
+["a","b","m"]
+
+query T
+SELECT REGEXP_EXTRACT_ALL('test', '.')
+----
+["t","e","s","t"]
+
+query T
+SELECT regexp_extract_all('1a 2b 14m', '\\d+');
+----
+["1","2","14"]
+
+query T
+SELECT regexp_extract_all('1a 2b 14m', '\\d+', 0);
+----
+["1","2","14"]
+
+query T
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)?', 1);
+----
+["1","","2","","14",""]
+
+query T
+SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', 1);
+----
+["1","2","14"]
+
+query T
+SELECT regexp_extract_all('AbCdE', '(?-i)([[:lower:]]+)C([[:lower:]]+)', 1);
+----
+["b"]
+
+query T
+SELECT regexp_extract_all('AbCdEfCg', '(?-i)([[:lower:]]+)C([[:lower:]]+)', 1);
+----
+["b","f"]
+
+query T
+SELECT regexp_extract_all('abc=111, def=222, ghi=333', '("[^"]+"|\\w+)=("[^"]+"|\\w+)', 1);
+----
+["abc","def","ghi"]
+
+query T
+select regexp_extract_all('', NULL)
+----
+NULL
+
+query T
+select regexp_extract_all(NULL, '')
+----
+NULL
+
+query T
+select regexp_extract_all('', '')
+----
+[""]
+
+query T
+select regexp_extract_all('', 'abc')
+----
+[]
+
+query T
+select regexp_extract_all('abc', '.')
+----
+["a","b","c"]
+
+query T
+select regexp_extract_all('aaa', '^a')
+----
+["a"]
+
+query T
+select regexp_extract_all('abc', 'abc')
+----
+["abc"]
+
+query T
+select regexp_extract_all('abcdef', 'a.c.*f')
+----
+["abcdef"]
+
+query T
+select regexp_extract_all('abcdef', 'ac.*e.')
+----
+[]
+
+query T
+select regexp_extract_all('abcdef', 'bcde')
+----
+["bcde"]
+
+query T
+select regexp_extract_all('aabca', 'a*')
+----
+["aa","","a"]
+
+query T
+select regexp_extract_all('aaba', 'a?')
+----
+["a","a","a"]
+
+query T
+select regexp_extract_all('baac', 'a*')
+----
+["","aa",""]
+
+query T
+select regexp_extract_all('щцф', '.')
+----
+["щ","ц","ф"]
+
+query T
+select regexp_extract_all('щцф', '.{3}')
+----
+["щцф"]
+
+query T
+select regexp_extract_all('щцф', '.{6}')
+----
+[]

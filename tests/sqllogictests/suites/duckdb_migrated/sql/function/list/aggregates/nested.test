@@ -1,0 +1,59 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# TODO: unknown function
+# query I
+# SELECT list_min(list_concat([1, 2], [-1]))
+# ----
+# -1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_min(list_aggr([1, 2], 'list'))
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists (l1 INTEGER[], l2 INTEGER[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists VALUES ([1, 2, 3], [4]), ([NULL, 1, -4, NULL], [NULL]), (NULL, NULL), ([NULL], [-4]), ([], [])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(list_concat(l1, l2)) FROM lists
+# ----
+# 4
+# NULL
+# NULL
+# -4
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_concat(list(list_last(l1)), list(list_first(l2))) FROM lists
+# ----
+# [3, NULL, NULL, NULL, NULL, 4, NULL, NULL, -4, NULL]
+
+# aliases
+
+# TODO: unsupported feature
+# query I
+# SELECT array_aggregate([1, 2], 'min')
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT array_aggr([1, 2], 'min')
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_aggregate([1, 2], 'min')
+# ----
+# 1

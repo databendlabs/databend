@@ -1,0 +1,135 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS quantile
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS range
+
+# types
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::integer) AS r FROM range(0, 10000) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 4999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE quantile
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::float) AS r FROM range(0, 10000) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 4999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE quantile
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::double) AS r FROM range(0, 10000) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 4999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE quantile
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::smallint) AS r FROM range(0, 10000) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 4999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE quantile
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::bigint) AS r FROM range(0, 10000) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 4999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE quantile
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::hugeint) AS r FROM range(0, 10000) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 4999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE quantile
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::decimal(10,2)) AS r FROM range(0, 10000) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 4999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE quantile
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE quantile AS SELECT LIST(r::tinyint) AS r FROM range(0, 100) t1(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(r) FROM quantile
+# ----
+# 49.500000
+
+# scalar quantiles
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE range AS SELECT LIST(1) AS i FROM range(0, 2000) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO range VALUES (NULL), ([]), ([NULL]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_median(i) FROM range
+# ----
+# 1
+# NULL
+# NULL
+# NULL

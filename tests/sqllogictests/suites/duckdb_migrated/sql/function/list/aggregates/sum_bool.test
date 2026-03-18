@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT CASE WHEN i%3=0 THEN NULL ELSE i END i FROM range(0, 10000) t(i);
+
+# TODO: type_error
+# query III
+# SELECT SUM(i > 500), SUM(i=1), SUM(i IS NULL) FROM integers
+# ----
+# 6332	1	3334
+
+# TODO: unsupported feature
+# query III
+# SELECT COUNTIF(i > 500), COUNT_IF(i=1), COUNTIF(i IS NULL) FROM integers
+# ----
+# 6332	1	3334

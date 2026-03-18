@@ -1,0 +1,434 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bool_table
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS def
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nulls
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS string_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unknown function
+# query I
+# SELECT list_resize([1, 2, 4], 2);
+# ----
+# [1, 2]
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(a int[], b int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([5,4,3], 3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([1,2,3], 5);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values (NULL, 8);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([10,11,12], 2);
+
+# TODO: unsupported feature
+# query I
+# select list_resize(a, b) from tbl;
+# ----
+# [5, 4, 3]
+# [1, 2, 3, NULL, NULL]
+# NULL
+# [10, 11]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([], 2);
+# ----
+# [NULL, NULL]
+
+# Strings
+
+# TODO: unsupported feature
+# statement ok
+# create table string_tbl(a string[], b int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into string_tbl values (['abc', 'def'], 3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into string_tbl values (['d', 'ef', 'ghij'], 8);
+
+# TODO: unsupported feature
+# statement ok
+# insert into string_tbl values (['lmnopqrs'], 5);
+
+# TODO: unsupported feature
+# statement ok
+# insert into string_tbl values (['here is a little story about a duck,', 'whose name is harold.', 'He is a cool duck who lives in a cool world'], 5);
+
+# TODO: unsupported feature
+# query I
+# select list_resize(a, b) from string_tbl;
+# ----
+# [abc, def, NULL]
+# [d, ef, ghij, NULL, NULL, NULL, NULL, NULL]
+# [lmnopqrs, NULL, NULL, NULL, NULL]
+# ['here is a little story about a duck,', whose name is harold., He is a cool duck who lives in a cool world, NULL, NULL]
+
+# Null Check
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize(NULL, 1, 1);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize(NULL, 2, NULL);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize(NULL, NULL, NULL);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_resize([1,2,3], NULL);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nulls(l INT[], b INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nulls VALUES ([1, 2, 3], 2), (NULL, 6), ([], 4), ([NULL, NULL, 5, 6, NULL], 6);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize(l, b) FROM nulls;
+# ----
+# [1, 2]
+# NULL
+# [NULL, NULL, NULL, NULL]
+# [NULL, NULL, 5, 6, NULL, NULL]
+
+# TODO: unsupported feature
+# query I
+# select * from (SELECT list_resize(NULL, 1, 1))
+# ----
+# NULL
+
+# Nested Lists
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]], 3)
+# ----
+# [[1], [1, 2], NULL]
+
+# TODO: unsupported feature
+# statement ok
+# create table list_tbl(a int[][], b int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_tbl values ([[1, 2, 3], [4, 5, 6]], 3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_tbl values ([[7, 8, 9], [10, NULL, 6], [9, 8, 7]], 5);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_tbl values ([[1, 2, 3], NULL, [4, 5, 6]], 2);
+
+# TODO: unsupported feature
+# query I
+# select list_resize(a, b) from list_tbl;
+# ----
+# [[1, 2, 3], [4, 5, 6], NULL]
+# [[7, 8, 9], [10, NULL, 6], [9, 8, 7], NULL, NULL]
+# [[1, 2, 3], NULL]
+
+# Structs
+
+# TODO: unsupported feature
+# query I
+# select list_resize([{'i': 1,'j': 2}, NULL, {'i': 3, 'j': 4}], 2);
+# ----
+# [{'i': 1, 'j': 2}, NULL]
+
+# TODO: unsupported feature
+# query I
+# select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 4);
+# ----
+# [{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, NULL]
+
+# Nested Lists of Structs and Structs of Lists in Structs and Lists of Structs in Lists
+
+# TODO: unsupported feature
+# query I
+# select list_resize([{'i': 1,'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}], 4);
+# ----
+# [{'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL]
+
+# TODO: unsupported feature
+# query I
+# select list_resize([{'i': 1,'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}], 4);
+# ----
+# [{'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL]
+
+# TODO: unsupported feature
+# query I
+# select list_resize([[[1, 2, 3], [4, 5, 6]], [[ 7, 8, 9 ]], [[10, 11, 12], [13, 14, 15]]], 2);
+# ----
+# [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9]]]
+
+# TODO: unsupported feature
+# query I
+# select list_resize([[[1, 2, 3], [4, 5, 6]], [[ 7, 8, 9 ], NULL], NULL, [NULL], [[10, 11, 12], [13, 14, 15]]], 8);
+# ----
+# [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], NULL], NULL, [NULL], [[10, 11, 12], [13, 14, 15]], NULL, NULL, NULL]
+
+# Nested Function
+
+# TODO: unsupported feature
+# query I
+# select list_resize([1, 2, 3], len(list_resize([1, 2, 3], 2)));
+# ----
+# [1, 2]
+
+# TODO: unsupported feature
+# query I
+# select list_resize(list_filter([1, 2, 3, 4, 5, 6], lambda x: x > 1), 4);
+# ----
+# [2, 3, 4, 5]
+
+# Default Values
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([1, 2], 3, 4)
+# ----
+# [1, 2, 4]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE def(tbl INT[], b INT, d INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO def VALUES ([1, 2, 3], 5, 4), ([4, 5, 6], 6, NULL), ([7, 8, NULL], 3, 10);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize(tbl, b, d) FROM def;
+# ----
+# [1, 2, 3, 4, 4]
+# [4, 5, 6, NULL, NULL, NULL]
+# [7, 8, NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([1, 2], 3, NULL);
+# ----
+# [1, 2, NULL]
+
+# Struct Default Values
+
+# TODO: unsupported feature
+# query I
+# select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 4, {'i': 5, 'j': [10, 10]});
+# ----
+# [{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, {'i': 5, 'j': [10, 10]}]
+
+# TODO: unsupported feature
+# query I
+# select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 6, NULL);
+# ----
+# [{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, NULL, NULL, NULL]
+
+# Lists that exceed standard vector size (2048)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_resize(range(0, 10000), 4000);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_resize([1, 2, 3], 4000);
+
+# Vector_types
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bool_table(a bool[], b int);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bool_table VALUES ([true, false, true], 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bool_table VALUES ([false, true, false], 2);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bool_table VALUES ([true, true, NULL], 3);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize(a, b) FROM bool_table;
+# ----
+# [1]
+# [0, 1]
+# [1, 1, NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([true], 2);
+# ----
+# [1, NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([false], 2);
+# ----
+# [0, NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([NULL], 2);
+# ----
+# [NULL, NULL]
+
+# Prepared Statements
+
+# TODO: unsupported feature
+# statement ok
+# prepare q1 as select list_resize(?, ?);
+
+# TODO: unsupported feature
+# statement ok
+# prepare q2 as select array_resize(?, ?);
+
+# TODO: unsupported feature
+# query I
+# execute q1([1, 2, 3], 4);
+# ----
+# [1, 2, 3, NULL]
+
+# TODO: unsupported feature
+# query I
+# execute q1([1, 2, 3], 2);
+# ----
+# [1, 2]
+
+# TODO: unsupported feature
+# query I
+# execute q1([1, 2, 3], 0);
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# execute q1([1, 2, 3], NULL);
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# execute q1([1, 2, 3], 1.4);
+# ----
+# [1]
+
+# TODO: unsupported feature
+# statement ok
+# execute q1([2], 2::TINYINT);
+
+# TODO: unsupported feature
+# statement error
+# execute q1([1, 2, 3], -1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT LIST_RESIZE([1, 2, 3], 9999999999999999999);
+
+# TODO: unsupported feature
+# statement error
+# SELECT LIST_RESIZE([1, 2, 3], 4000999999999999999)
+
+# TODO: unsupported feature
+# query I
+# execute q2([1, 2, 3], 4);
+# ----
+# [1, 2, 3, NULL]
+
+# TODO: unsupported feature
+# query I
+# execute q2([1, 2, 3], 2);
+# ----
+# [1, 2]
+
+# TODO: unsupported feature
+# query I
+# execute q2([1, 2, 3], 0);
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# execute q2([1, 2, 3], NULL);
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# execute q2([1, 2, 3], 1.4);
+# ----
+# [1]
+
+# TODO: unsupported feature
+# statement ok
+# execute q2([2], 2::TINYINT);
+
+# TODO: unsupported feature
+# statement error
+# execute q2([1, 2, 3], -1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT LIST_RESIZE([1, 2, 3], 9999999999999999999);
+
+# TODO: unsupported feature
+# statement error
+# SELECT LIST_RESIZE([1, 2, 3], 4000999999999999999)
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize([1, 2, 3]::BIGINT[], 5, 42);
+# ----
+# [1, 2, 3, 42, 42]

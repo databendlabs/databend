@@ -1,0 +1,41 @@
+# TODO: unsupported feature
+# statement error
+# SELECT (ROW(42, 84))['element']
+
+# TODO: unsupported feature
+# query I
+# SELECT (ROW(42, 84))[1]
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT (ROW(42, 84))[2]
+# ----
+# 84
+
+# TODO: unsupported feature
+# query II
+# SELECT UNNEST(ROW(42, 84))
+# ----
+# 42	84
+
+# TODO: unsupported feature
+# statement error
+# SELECT (ROW(42, 84))[0]
+
+# TODO: unsupported feature
+# statement error
+# SELECT (ROW(42, 84))[9999]
+
+# TODO: unsupported feature
+# statement error
+# SELECT (ROW(42, 84))[-1]
+
+# TODO: unsupported feature
+# statement error
+# SELECT (ROW(42, 84))[9223372036854775807]
+
+# TODO: unsupported feature
+# statement error
+# SELECT (ROW(42, 84))[(-9223372036854775808)::BIGINT]

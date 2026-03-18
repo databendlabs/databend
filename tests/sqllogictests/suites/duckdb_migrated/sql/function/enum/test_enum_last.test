@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE rainbow AS ENUM ('red', 'orange', 'yellow', 'green', 'blue', 'purple');
+
+# TODO: unsupported feature
+# query I
+# SELECT enum_last(null::rainbow)
+# ----
+# purple
+
+# TODO: unsupported feature
+# statement error
+# SELECT enum_last('bla')

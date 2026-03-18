@@ -1,0 +1,387 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_data
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_of_list
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_of_strings
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unknown function
+# query I
+# select list_has_any([1,2,3], [2,3,4]);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select list_has_all([1,2,3], [2,3,4]);
+# ----
+# 0
+
+# Test NULLs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE list_data(l1 int[], l2 int[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES (NULL, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES (NULL, [1,2,3]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES ([1,2,3], NULL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES ([1,2,3], [2,3,NULL]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES ([1,2,NULL], [2,3,NULL]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES ([1,2,NULL], [NULL,3,4]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES ([1,2,3], [1,2,3]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_data VALUES ([1,2,3], [1,2,NULL]);
+
+# TODO: unsupported feature
+# query I
+# select list_has_any(l1, l2) from list_data;
+# ----
+# NULL
+# NULL
+# NULL
+# 1
+# 1
+# 0
+# 1
+# 1
+
+# TODO: unsupported feature
+# query I
+# select list_has_all(l1, l2) from list_data;
+# ----
+# NULL
+# NULL
+# NULL
+# 1
+# 0
+# 0
+# 1
+# 1
+
+# Test Lists in Lists
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE list_data;
+
+# TODO: unsupported feature
+# statement ok
+# create table list_of_list(l1 int[][], l2 int[][]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_list values (NULL, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[2, 3, 4], NULL, [1, 2, 3]]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[8, 8, 8], NULL, [8, 8, 8]]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_list values ([[1 , 2, 3], NULL, [8, 8, 8]], [[8, 8, 8], NULL, [1, 2, 3]]);
+
+# TODO: unsupported feature
+# query I
+# select list_has_any(l1, l2) from list_of_list;
+# ----
+# NULL
+# 1
+# 0
+# 1
+
+# TODO: unsupported feature
+# query I
+# select list_has_all(l1, l2) from list_of_list;
+# ----
+# NULL
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# drop table list_of_list;
+
+# test string lists
+
+# TODO: unsupported feature
+# statement ok
+# create table list_of_strings(l1 string[], l2 string[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_strings values (NULL, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_strings values ([NULL, 'a', 'b', 'c'], [NULL, 'b', 'c', 'd']);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_strings values (['a', 'b', 'c'], ['a', 'b', 'c']);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'here is a very long long string that is def more than 12 bytes', 'c', 'd']);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long string that is def more than 12 bytes', 'here is a very long string that is def more than 12 bytes', 'c', 'd']);
+
+# TODO: unsupported feature
+# statement ok
+# insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'and a shorty']);
+
+# TODO: unsupported feature
+# query I
+# select list_has_any(l1, l2) from list_of_strings;
+# ----
+# NULL
+# 1
+# 1
+# 1
+# 0
+# 1
+
+# TODO: unsupported feature
+# query I
+# select list_has_all(l1, l2) from list_of_strings;
+# ----
+# NULL
+# 0
+# 1
+# 0
+# 0
+# 1
+
+# test error cases
+
+# TODO: unsupported feature
+# statement error
+# select list_has_any(l1) from list_of_strings;
+
+# TODO: unsupported feature
+# statement error
+# select list_has_any(l1, l2, l1) from list_of_strings;
+
+# TODO: unsupported feature
+# statement error
+# select list_has_all(l1) from list_of_strings;
+
+# TODO: unsupported feature
+# statement error
+# select list_has_all(l1, l2, l1) from list_of_strings;
+
+# TODO: unsupported feature
+# statement error
+# select list_has_all([1, 2], 1);
+
+# TODO: unsupported feature
+# statement error
+# select list_has_any([[1,2], [2,4]], ['abc', 'def']);
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(l1 int[], l2 int[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([1,2,3], [2,3,4]);
+
+# TODO: unsupported feature
+# query I
+# select list_has_all(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# drop table tbl;
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(l1 int[], l2 int[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([1,2,3], [2,3,4]);
+
+# TODO: unsupported feature
+# query I
+# select list_has_any(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# drop table tbl;
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(l1 int[], l2 int[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([1,2,3], [2,3,4]);
+
+# TODO: unsupported feature
+# query I
+# select array_has_all(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# drop table tbl;
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(l1 int[], l2 int[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([1,2,3], [2,3,4]);
+
+# TODO: unsupported feature
+# query I
+# select array_has_any(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# drop table tbl;
+
+
+# Test Lists of Different Lengths
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(l1 int[], l2 int[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([1,2,3,4,5,6], [2,3,4]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ([1,2,3], [1,2,3,4,7,8,9]);
+
+# TODO: unsupported feature
+# query I
+# select list_has_any(l1, l2) from tbl;
+# ----
+# 1
+# 1
+
+# TODO: unsupported feature
+# query I
+# select list_has_all(l1, l2) from tbl;
+# ----
+# 1
+# 0
+
+# TODO: unsupported feature
+# query I
+# select list_has_all(l2, l1) from tbl;
+# ----
+# 0
+# 1
+
+# Operators
+
+# TODO: unsupported feature
+# query I
+# select l1 && l2 from tbl;
+# ----
+# 1
+# 1
+
+# TODO: unsupported feature
+# statement error
+# select 'hello' && l1 from tbl;
+
+# TODO: unsupported feature
+# query I
+# select NULL && [NULL];
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select l1 && NULL from tbl;
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select l1 @> l2 from tbl;
+# ----
+# 1
+# 0
+
+# TODO: unsupported feature
+# query I
+# select l1 <@ l2 from tbl;
+# ----
+# 0
+# 1
+
+# TODO: unsupported feature
+# statement error
+# select 'hello' @> l1 from tbl;
+
+# TODO: unsupported feature
+# statement error
+# select 'hello' <@ l1 from tbl;
+
+# TODO: unsupported feature
+# query I
+# select l1 @> NULL from tbl;
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select l1 <@ NULL from tbl;
+# ----
+# NULL
+# NULL

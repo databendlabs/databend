@@ -1,0 +1,490 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bools
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS enums
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS selections
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers (i int[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES  ([1,2,3]), ([4,5,6])
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE selections (j boolean[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO selections VALUES  ([true, false, true]), ([false, true, false])
+
+# normal test cases
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([0, 1, 2], [true, false, false])
+# ----
+# [0]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(i, [true, false, true]) FROM integers
+# ----
+# [1, 3]
+# [4, 6]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(i, j) FROM integers, selections order by all
+# ----
+# [1, 3]
+# [2]
+# [4, 6]
+# [5]
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_where([1,2,3], [True, NULL, FALSE]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1,2,3], [True, True, False, False]);
+# ----
+# [1, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1,2,3], [True, False]);
+# ----
+# [1]
+
+# very large lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(0, 10000) GROUP BY range % 4;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bools AS SELECT range % 4 a, list((range % 2):: bool) s FROM range(0, 10000) GROUP BY range % 4;
+
+# TODO: unsupported feature
+# statement ok
+# select g, list_where(l, s) l from lists, bools
+
+# test all types
+
+# BOOLEAN
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([true, false, NULL, true, true, NULL], [true, false, true, true, true, true])
+# ----
+# [1, NULL, 1, 1, NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::BOOLEAN], [true])
+# ----
+# [NULL]
+
+# VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['aa', 'a', 'cd', NULL, '42'], [true, true, false, false, false])
+# ----
+# [aa, a]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::VARCHAR], [true])
+# ----
+# [NULL]
+
+# INTEGER types
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::tinyint, NULL, 2::tinyint], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::tinyint], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::smallint, NULL, 2::smallint], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::smallint], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::integer, NULL, 2::integer], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::integer], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::bigint, NULL, 2::bigint], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::bigint], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::hugeint, NULL, 2::hugeint], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::hugeint], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::utinyint, NULL, 2::utinyint], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::utinyint], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::usmallint, NULL, 2::usmallint], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::usmallint], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::uinteger, NULL, 2::uinteger], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::uinteger], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1::ubigint, NULL, 2::ubigint], [true, true, true])
+# ----
+# [1, NULL, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::ubigint], [true])
+# ----
+# [NULL]
+
+
+# FLOAT, DOUBLE and DECIMAL types
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_where([1::float], [true])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::float], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_where([1::double], [true])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::double], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_where([1::decimal(4,1)], [true])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::decimal(4,1)], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_where([1::decimal(9,4)], [true])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::decimal(9,4)], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_where([1::decimal(18,6)], [true])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::decimal(18,6)], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_where([1::decimal(38,10)], [true])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::decimal(38,10)], [true])
+# ----
+# [NULL]
+
+
+# TEMPORAL types
+
+# date
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['2021-08-20'::DATE], [true])
+# ----
+# [2021-08-20]
+
+# time
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['14:59:37'::TIME], [true])
+# ----
+# ['14:59:37']
+
+# timestamp
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['2021-08-20'::TIMESTAMP], [true])
+# ----
+# ['2021-08-20 00:00:00']
+
+# timestamp s
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['2021-08-20'::TIMESTAMP_S], [true])
+# ----
+# ['2021-08-20 00:00:00']
+
+# timestamp ms
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['2021-08-20 00:00:00.123'::TIMESTAMP_MS], [true])
+# ----
+# ['2021-08-20 00:00:00.123']
+
+# timestamp ns
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS], [true])
+# ----
+# ['2021-08-20 00:00:00.123456']
+
+# time with time zone
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['14:59:37'::TIMETZ], [true])
+# ----
+# ['14:59:37+00']
+
+# timestamp with time zone
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['2021-08-20'::TIMESTAMPTZ], [true])
+# ----
+# ['2021-08-20 00:00:00+00']
+
+# interval
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([INTERVAL 1 YEAR], [true])
+# ----
+# [1 year]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::date], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::time], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::timestamp], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::timestamp_s], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::timestamp_ms], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::timestamp_ns], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::timetz], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::timestamptz], [true])
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::interval], [true])
+# ----
+# [NULL]
+
+
+# BLOB
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(['{a: 1}'::BLOB, '{a: 3}'::BLOB], [true, false])
+# ----
+# ['{a: 1}']
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([NULL::BLOB], [true])
+# ----
+# [NULL]
+
+# ENUMS
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE enums (e mood[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO enums VALUES (['happy', 'sad'])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where(e, [false, true]) FROM enums
+# ----
+# [sad]
+
+# NESTED types
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]], [true, false, false, true, true, false])
+# ----
+# [[1], [NULL], []]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([{'a': 1}, {'a': 5}, {'a': 3}], [true, true, true])
+# ----
+# [{'a': 1}, {'a': 5}, {'a': 3}]
+
+# Also make sure it works when casting ARRAY to list
+
+# TODO: unsupported feature
+# query I
+# SELECT list_where([1,2,3]::INT[3], [true, false, true]::BOOLEAN[3]);
+# ----
+# [1, 3]
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_WHERE(ARRAY_VALUE('1', NULL), [TRUE, TRUE, TRUE]);
+# ----
+# [1, NULL, NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_WHERE(ARRAY_VALUE('1', NULL), [TRUE, TRUE, FALSE]);
+# ----
+# [1, NULL]

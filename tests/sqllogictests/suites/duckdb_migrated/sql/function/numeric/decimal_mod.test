@@ -1,0 +1,39 @@
+query RR
+SELECT 10 % 2.4, -10 % 2.4
+----
+0.40000000000000036 -0.40000000000000036
+
+query RR
+SELECT 10.0 % 2.4, -10.0 % 2.4
+----
+0.40000000000000036 -0.40000000000000036
+
+# large decimals
+
+query R
+SELECT 12345678901111111 % 2.0;
+----
+0.0
+
+query I
+select 12345678901234567890 % 123;
+----
+78
+
+# if the required width exceeds the maximum decimal width we fallback to double
+
+query R
+SELECT 10000000000000000000000000000000000001::DECIMAL(38,0) % 0.00000000000000000000000000000000004
+----
+3.8355203599945277e-35
+
+query TT
+SELECT typeof(10.0 % 2.0), typeof(10.0 % 2.0 % 2.0 % 2.0)
+----
+DOUBLE DOUBLE
+
+# TODO: unsupported feature
+# query I
+# SELECT 10.0 % 0.0
+# ----
+# NULL

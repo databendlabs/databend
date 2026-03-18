@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# SELECT approx_count >= 3 FROM duckdb_approx_database_count();
+# ----
+# True

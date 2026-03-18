@@ -1,3 +1,27 @@
-# TODO: unsupported feature
-# statement ok
-# attach ':memory:' as db1;
+statement ok
+DROP VIEW IF EXISTS db1.v1
+
+statement ok
+DROP TABLE IF EXISTS db1.t1
+
+statement ok
+CREATE DATABASE IF NOT EXISTS db1
+
+statement ok
+CREATE TABLE db1.t1(i INT)
+
+statement ok
+INSERT INTO db1.t1 VALUES (42)
+
+statement ok
+CREATE VIEW db1.v1 AS SELECT * FROM db1.t1
+
+query I
+SELECT * FROM db1.v1
+----
+42
+
+query TT
+SHOW CREATE TABLE db1.v1
+----
+v1	CREATE VIEW `db1`.`v1` AS SELECT * FROM db1.t1

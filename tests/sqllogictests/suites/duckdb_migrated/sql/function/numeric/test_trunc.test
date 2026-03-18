@@ -1,0 +1,305 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS truncme
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE truncme(a DOUBLE, b INTEGER, c UINTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO truncme VALUES (42.123456, 3, 19), (-3.141592, -7, 5);
+
+# Non-intergral should truncate 
+
+# TODO: unsupported feature
+# query R
+# select trunc(42.12345::DOUBLE)
+# ----
+# 42.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(-42.12345::DOUBLE)
+# ----
+# -42.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(127::DOUBLE)
+# ----
+# 127.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(-127::DOUBLE)
+# ----
+# -127.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(0::DOUBLE)
+# ----
+# 0.000000
+
+# TODO: unsupported feature
+# query I
+# select trunc(a::DOUBLE) from truncme
+# ----
+# 42.000000
+# -3.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(42.12345::FLOAT)
+# ----
+# 42.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(-42.12345::FLOAT)
+# ----
+# -42.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(127::FLOAT)
+# ----
+# 127.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(-127::FLOAT)
+# ----
+# -127.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(0::FLOAT)
+# ----
+# 0.000000
+
+# TODO: unsupported feature
+# query I
+# select trunc(a::FLOAT) from truncme
+# ----
+# 42.000000
+# -3.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(42.12345::DECIMAL(10,6))
+# ----
+# 42.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(-42.12345::DECIMAL(10,6))
+# ----
+# -42.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(127::DECIMAL(10,6))
+# ----
+# 127.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(-127::DECIMAL(10,6))
+# ----
+# -127.000000
+
+# TODO: unsupported feature
+# query R
+# select trunc(0::DECIMAL(10,6))
+# ----
+# 0.000000
+
+# TODO: unsupported feature
+# query I
+# select trunc(a::DECIMAL(10,6)) from truncme
+# ----
+# 42.000000
+# -3.000000
+
+
+# Signed integers should be a NOP
+
+# TODO: unsupported feature
+# query R
+# select trunc(54::TINYINT)
+# ----
+# 54
+
+# TODO: unsupported feature
+# query R
+# select trunc(-27::TINYINT)
+# ----
+# -27
+
+# TODO: unsupported feature
+# query I
+# select trunc(b::TINYINT) from truncme
+# ----
+# 3
+# -7
+
+# TODO: unsupported feature
+# query R
+# select trunc(54::SMALLINT)
+# ----
+# 54
+
+# TODO: unsupported feature
+# query R
+# select trunc(-27::SMALLINT)
+# ----
+# -27
+
+# TODO: unsupported feature
+# query I
+# select trunc(b::SMALLINT) from truncme
+# ----
+# 3
+# -7
+
+# TODO: unsupported feature
+# query R
+# select trunc(54::INTEGER)
+# ----
+# 54
+
+# TODO: unsupported feature
+# query R
+# select trunc(-27::INTEGER)
+# ----
+# -27
+
+# TODO: unsupported feature
+# query I
+# select trunc(b::INTEGER) from truncme
+# ----
+# 3
+# -7
+
+# TODO: unsupported feature
+# query R
+# select trunc(54::BIGINT)
+# ----
+# 54
+
+# TODO: unsupported feature
+# query R
+# select trunc(-27::BIGINT)
+# ----
+# -27
+
+# TODO: unsupported feature
+# query I
+# select trunc(b::BIGINT) from truncme
+# ----
+# 3
+# -7
+
+# TODO: unsupported feature
+# query R
+# select trunc(54::HUGEINT)
+# ----
+# 54
+
+# TODO: unsupported feature
+# query R
+# select trunc(-27::HUGEINT)
+# ----
+# -27
+
+# TODO: unsupported feature
+# query I
+# select trunc(b::HUGEINT) from truncme
+# ----
+# 3
+# -7
+
+
+# Unsigned integers should be a NOP
+
+# TODO: unsupported feature
+# query R
+# select trunc(15::UTINYINT)
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# select trunc(c::UTINYINT) from truncme
+# ----
+# 19
+# 5
+
+# TODO: unsupported feature
+# query R
+# select trunc(15::USMALLINT)
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# select trunc(c::USMALLINT) from truncme
+# ----
+# 19
+# 5
+
+# TODO: unsupported feature
+# query R
+# select trunc(15::UINTEGER)
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# select trunc(c::UINTEGER) from truncme
+# ----
+# 19
+# 5
+
+# TODO: unsupported feature
+# query R
+# select trunc(15::UBIGINT)
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# select trunc(c::UBIGINT) from truncme
+# ----
+# 19
+# 5
+
+# TODO: unsupported feature
+# query R
+# select trunc(15::UHUGEINT)
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# select trunc(c::UHUGEINT) from truncme
+# ----
+# 19
+# 5
+
+
+# Test specials
+
+# TODO: unsupported feature
+# query III
+# select trunc('NAN'::DOUBLE), trunc('infinity'::DOUBLE), trunc('-infinity'::DOUBLE);
+# ----
+# NAN	infinity	-infinity
+
+# TODO: unsupported feature
+# query III
+# select trunc('NAN'::FLOAT), trunc('infinity'::FLOAT), trunc('-infinity'::FLOAT);
+# ----
+# NAN	infinity	-infinity

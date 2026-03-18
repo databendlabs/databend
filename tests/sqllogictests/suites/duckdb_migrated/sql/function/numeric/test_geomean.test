@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS numbers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE numbers(x DOUBLE)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO numbers VALUES (NULL), (1), (2)
+
+# TODO: unknown function
+# query I
+# SELECT geomean(x) FROM numbers
+# ----
+# 1.414213562373095
+
+# TODO: unsupported feature
+# query I
+# SELECT geomean(x::integer) FROM numbers
+# ----
+# 1.414213562373095
+
+# TODO: unsupported feature
+# query I
+# SELECT geomean(i) FROM generate_series(1000, 2000) tbl(i);
+# ----
+# 1471.459313166229

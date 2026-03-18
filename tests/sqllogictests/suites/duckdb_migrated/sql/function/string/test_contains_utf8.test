@@ -1,0 +1,87 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(id INT, s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES (1, 'átomo')
+
+statement ok
+INSERT INTO strings VALUES (2, 'olá mundo')
+
+statement ok
+INSERT INTO strings VALUES (3, '你好世界')
+
+statement ok
+INSERT INTO strings VALUES (4, 'two ñ three ₡ four 🦆 end')
+
+# Test one matching UTF8 letter
+
+query I
+SELECT CAST(POSITION('á' IN s) > 0 AS INT) FROM strings ORDER BY id
+----
+1
+1
+0
+0
+
+# Test a sentence with an UTF-8
+
+query I
+SELECT CAST(POSITION('olá mundo' IN s) > 0 AS INT) FROM strings ORDER BY id
+----
+0
+1
+0
+0
+
+# Test an entire UTF-8 word
+
+query I
+SELECT CAST(POSITION('你好世界' IN s) > 0 AS INT) FROM strings ORDER BY id
+----
+0
+0
+1
+0
+
+# Test a substring of the haystack from the beginning
+
+query I
+SELECT CAST(POSITION('two ñ thr' IN s) > 0 AS INT) FROM strings ORDER BY id
+----
+0
+0
+0
+1
+
+# Test a single UTF8 substring of the haystack in the middle
+
+query I
+SELECT CAST(POSITION('ñ' IN s) > 0 AS INT) FROM strings ORDER BY id
+----
+0
+0
+0
+1
+
+# Test a multiple UTF8 substring of the haystack in the middle
+
+query I
+SELECT CAST(POSITION('₡ four 🦆 e' IN s) > 0 AS INT) FROM strings ORDER BY id
+----
+0
+0
+0
+1
+
+# Test a substring of the haystack from the middle to the end
+
+query I
+SELECT CAST(POSITION('🦆 end' IN s) > 0 AS INT) FROM strings ORDER BY id
+----
+0
+0
+0
+1

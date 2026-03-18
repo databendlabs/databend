@@ -1,0 +1,82 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+query B
+select lower('a%c') like lower('a$%C') escape '$';
+----
+1
+
+query B
+select lower('A%C') like lower('a$%c') escape '$';
+----
+1
+
+query B
+select lower('a%c') like lower('a$%C') escape '/';
+----
+0
+
+query B
+select lower('a_c') like lower('a$_C') escape '$';
+----
+1
+
+query B
+select lower('a%c') like lower('a$_c') escape '$';
+----
+0
+
+# nulls as parameter
+
+query T
+select lower(NULL) like lower('a$%C') escape '/';
+----
+NULL
+
+query T
+select lower('a%c') like lower(NULL) escape '$';
+----
+NULL
+
+query B
+select CAST(NULL AS BOOLEAN);
+----
+NULL
+
+# non-scalar ilike
+
+statement ok
+CREATE TABLE tbl(str VARCHAR, pat VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES ('a%c', 'a$%C');
+
+query B
+SELECT lower(str) LIKE lower(pat) ESCAPE '$' FROM tbl
+----
+1
+
+query B
+SELECT lower(str) NOT LIKE lower(pat) ESCAPE '$' FROM tbl
+----
+0
+
+query B
+SELECT lower('A_C') LIKE lower('a$_c') ESCAPE '$'
+----
+1
+
+query T
+SELECT lower(NULL) LIKE lower(pat) ESCAPE '$' FROM tbl
+----
+NULL
+
+query T
+SELECT lower(str) LIKE lower(NULL) ESCAPE '$' FROM tbl
+----
+NULL
+
+query B
+SELECT CAST(NULL AS BOOLEAN) FROM tbl
+----
+NULL

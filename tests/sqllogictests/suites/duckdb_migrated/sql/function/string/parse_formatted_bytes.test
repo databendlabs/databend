@@ -1,0 +1,94 @@
+# Databend rewrite: parse formatted sizes with regexp_extract + CASE.
+
+query T
+WITH src(idx, value) AS (
+    SELECT 1, '0 B'
+    UNION ALL SELECT 2, '1 byte'
+    UNION ALL SELECT 3, '2 bytes'
+    UNION ALL SELECT 4, '1 KB'
+    UNION ALL SELECT 5, '1.5 KB'
+    UNION ALL SELECT 6, '2 MB'
+    UNION ALL SELECT 7, '1 GiB'
+    UNION ALL SELECT 8, '1.5 KiB'
+    UNION ALL SELECT 9, '  2  mib  '
+    UNION ALL SELECT 10, '1e3 B'
+    UNION ALL SELECT 11, NULL
+)
+SELECT concat(CASE
+    WHEN value IS NULL THEN NULL
+    ELSE CAST(
+        try_cast(regexp_extract(value, '^[[:space:]]*([0-9]+(?:[.][0-9]+)?(?:[eE][+-]?[0-9]+)?)', 1) AS DOUBLE)
+        * CASE upper(regexp_extract(value, '([A-Za-z]+)[[:space:]]*$', 1))
+            WHEN 'B' THEN 1
+            WHEN 'BYTE' THEN 1
+            WHEN 'BYTES' THEN 1
+            WHEN 'KB' THEN 1000
+            WHEN 'MB' THEN 1000 * 1000
+            WHEN 'GB' THEN 1000 * 1000 * 1000
+            WHEN 'TB' THEN 1000 * 1000 * 1000 * 1000
+            WHEN 'KIB' THEN 1024
+            WHEN 'MIB' THEN 1024 * 1024
+            WHEN 'GIB' THEN 1024 * 1024 * 1024
+            WHEN 'TIB' THEN 1024 * 1024 * 1024 * 1024
+            ELSE NULL
+        END
+        AS BIGINT
+    )
+END, '')
+FROM src
+ORDER BY idx
+----
+0
+1
+2
+1000
+1500
+2000000
+1073741824
+1536
+2097152
+1000
+NULL
+
+statement error
+SELECT CAST(CAST(regexp_extract('abc', '^[[:space:]]*([0-9]+(?:[.][0-9]+)?(?:[eE][+-]?[0-9]+)?)', 1) AS DOUBLE) AS BIGINT)
+
+statement error
+SELECT CAST(
+    CAST(regexp_extract('10000000000 TiB', '^[[:space:]]*([0-9]+(?:[.][0-9]+)?(?:[eE][+-]?[0-9]+)?)', 1) AS DOUBLE)
+    * (1024 * 1024 * 1024 * 1024)
+    AS BIGINT
+)
+
+query T
+WITH src(idx, value) AS (
+    SELECT 1, 'abc'
+    UNION ALL SELECT 2, '-5 MB'
+    UNION ALL SELECT 3, '1 Ki'
+    UNION ALL SELECT 4, '5'
+)
+SELECT concat(CAST(
+    try_cast(regexp_extract(value, '^[[:space:]]*([0-9]+(?:[.][0-9]+)?(?:[eE][+-]?[0-9]+)?)', 1) AS DOUBLE)
+    * CASE upper(regexp_extract(value, '([A-Za-z]+)[[:space:]]*$', 1))
+        WHEN 'B' THEN 1
+        WHEN 'BYTE' THEN 1
+        WHEN 'BYTES' THEN 1
+        WHEN 'KB' THEN 1000
+        WHEN 'MB' THEN 1000 * 1000
+        WHEN 'GB' THEN 1000 * 1000 * 1000
+        WHEN 'TB' THEN 1000 * 1000 * 1000 * 1000
+        WHEN 'KIB' THEN 1024
+        WHEN 'MIB' THEN 1024 * 1024
+        WHEN 'GIB' THEN 1024 * 1024 * 1024
+        WHEN 'TIB' THEN 1024 * 1024 * 1024 * 1024
+        ELSE NULL
+    END
+    AS BIGINT
+), '')
+FROM src
+ORDER BY idx
+----
+NULL
+NULL
+NULL
+NULL

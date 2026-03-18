@@ -1,0 +1,24 @@
+# list position with NaN
+# TODO: unknown function
+# query I
+# SELECT list_position(['NaN'::DOUBLE], 'NaN'::DOUBLE)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_position([NULL, 0, 'NaN'::DOUBLE], 'NaN'::DOUBLE)
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT list_contains([NULL, 0, 'NaN'::DOUBLE], 'NaN'::DOUBLE)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_position([[[NULL, 42]]], [[NULL, 42]])
+# ----
+# 1

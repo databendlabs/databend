@@ -1,0 +1,5 @@
+statement error
+SELECT sum_no_overflow(42)
+
+statement error
+SELECT sum_no_overflow(42.5)

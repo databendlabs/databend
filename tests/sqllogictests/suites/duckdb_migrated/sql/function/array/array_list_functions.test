@@ -8,7 +8,7 @@
 
 # Sort example:
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_sort(array_value(3,2,1)) = list_sort([3,2,1]);
 # ----
@@ -16,7 +16,7 @@
 
 # Slice example:
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_slice(array_value(1,2,3,4,5), 1, 3) = list_slice([1,2,3,4,5], 1, 3);
 # ----
@@ -24,7 +24,7 @@
 
 # Transform example
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_transform(array_value(3,2,1), lambda x: x + 1) = list_transform([3,2,1], lambda x: x + 1);
 # ----
@@ -32,7 +32,7 @@
 
 # Filter example
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_filter(array_value(3,2,1), lambda x: x > 1) = list_filter([3,2,1], lambda x: x > 1);
 # ----
@@ -40,67 +40,67 @@
 
 # Concat example(s)
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_concat(array_value(1,2,3), array_value(4,5,6));
 # ----
 # [1, 2, 3, 4, 5, 6]
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query II
 # SELECT list_concat(array_value(1,2,3), NULL), list_concat(NULL, array_value(4,5,6));
 # ----
 # [1, 2, 3]	[4, 5, 6]
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_resize(array_value(1,2), 3);
 # ----
 # [1, 2, NULL]
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_resize(array_value(1,2), 1);
 # ----
 # [1]
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_resize(array_value(1,2), 0);
 # ----
 # []
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_position(array_value(1,2,3), 2);
 # ----
 # 2
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_position(array_value(1,2,3), 4);
 # ----
 # NULL
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_contains(array_value(1,2,3), 2);
 # ----
 # 1
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_contains(array_value(1,2,3), 4);
 # ----
 # 0
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_extract(array_value(4,5,6), 2);
 # ----
 # 5
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT list_extract(array_value(4,5,6), 4);
 # ----

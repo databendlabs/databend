@@ -1,0 +1,119 @@
+statement ok
+DROP TABLE IF EXISTS fib
+
+query TT
+SELECT bin(10), upper(to_hex(10))
+----
+1010	A
+
+query TT
+SELECT lpad(bin(10), 8, '0'), upper(lpad(to_hex(10), 2, '0'))
+----
+00001010	0A
+
+query TTT
+SELECT bin(1), bin(10), bin(42)
+----
+1	1010	101010
+
+query TTT
+SELECT upper(to_hex(1)), upper(to_hex(10)), upper(to_hex(42))
+----
+1	A	2A
+
+statement ok
+CREATE TABLE fib AS SELECT * FROM (VALUES
+    (0),
+    (1),
+    (1),
+    (2),
+    (3),
+    (5),
+    (8),
+    (13),
+    (21),
+    (34),
+    (55),
+    (89),
+    (144),
+    (233),
+    (377),
+    (610),
+    (987),
+    (1597),
+    (2584),
+    (4181),
+    (6765),
+    (10946),
+    (17711),
+    (28657),
+    (46368)
+)
+
+query T
+SELECT bin(col0) FROM fib ORDER BY col0
+----
+0
+1
+1
+10
+11
+101
+1000
+1101
+10101
+100010
+110111
+1011001
+10010000
+11101001
+101111001
+1001100010
+1111011011
+11000111101
+101000011000
+1000001010101
+1101001101101
+10101011000010
+100010100101111
+110111111110001
+1011010100100000
+
+query T
+SELECT upper(to_hex(col0)) FROM fib ORDER BY col0
+----
+0
+1
+1
+2
+3
+5
+8
+D
+15
+22
+37
+59
+90
+E9
+179
+262
+3DB
+63D
+A18
+1055
+1A6D
+2AC2
+452F
+6FF1
+B520
+
+query T
+SELECT bin('10')
+----
+1010
+
+query T
+SELECT upper(to_hex(CAST('10' AS INT)))
+----
+A

@@ -1,0 +1,77 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT range i FROM range(0, 3);
+
+# TODO: unsupported feature
+# statement error
+# CREATE MACRO my_macro(i) AS (SELECT i IN (SELECT i FROM test));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO list_contains_macro(x, y) AS (list_contains(x, y))
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], lambda x: list_contains_macro(x, 3))
+# ----
+# [[1, 2, 3]]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO macro_with_lambda(list, num) AS (list_transform(list, lambda x: x + num))
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([[1, 2], NULL, [3], [4, NULL]], lambda f: list_count(macro_with_lambda(f, 2)) > 1)
+# ----
+# [[1, 2]]
+
+# Test a case where the operator mismatch is only detected when using the macro.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, lambda a: x + y + z))
+
+# TODO: unsupported feature
+# statement error
+# SELECT some_macro([1, 2], 3, 4);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO reduce_macro(list, num) AS (list_reduce(list, lambda x, y: x + y + num))
+
+# TODO: unsupported feature
+# query I
+# SELECT reduce_macro([1, 2, 3, 4], 5);
+# ----
+# 25
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO other_reduce_macro(list, num, bla) AS (SELECT list_reduce(list, lambda x, y: list + x + y + num + bla))
+
+# TODO: unsupported feature
+# statement error
+# SELECT other_reduce_macro([1, 2, 3, 4], 5, 6);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO scoping_macro(x, y, z) AS (SELECT list_transform(x, lambda x: x + y + z));
+
+# TODO: unsupported feature
+# query I
+# SELECT scoping_macro([11, 22], 3, 4);
+# ----
+# [18, 29]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE MACRO foo(bar) AS (SELECT apply([bar], lambda x: 0));
+
+# TODO: unsupported feature
+# statement ok
+# SELECT foo(v) FROM (SELECT 0 AS v);

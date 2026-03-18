@@ -1,0 +1,87 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distance([1, 2, 3]::FLOAT[], [1, 2, 3]::FLOAT[]);
+# ----
+# 0.0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE lists (l FLOAT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distance(l, [1, 2, 3]) FROM lists;
+# ----
+# 0.0
+# 1.0
+# 10.392304
+# 7.483315
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distance([1, NULL, 3]::FLOAT[], [1, 2, 3]::FLOAT[]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distance([1, 2, 3]::FLOAT[], [1, NULL, 3]::FLOAT[]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distance([1, 2, 3]::FLOAT[], [1, 2, 3, 4]::FLOAT[]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distance([], []);
+# ----
+# 0.0
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distance([1, 2, 3]::DOUBLE[], [1, 2, 3]::DOUBLE[]);
+# ----
+# 0.0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE lists (l DOUBLE[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distance(l, [1, 2, 3]) FROM lists;
+# ----
+# 0.0
+# 1.0
+# 10.392304
+# 7.483315
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distance([1, NULL, 3]::DOUBLE[], [1, 2, 3]::DOUBLE[]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distance([1, 2, 3]::DOUBLE[], [1, NULL, 3]::DOUBLE[]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distance([1, 2, 3]::DOUBLE[], [1, 2, 3, 4]::DOUBLE[]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distance([], []);
+# ----
+# 0.0

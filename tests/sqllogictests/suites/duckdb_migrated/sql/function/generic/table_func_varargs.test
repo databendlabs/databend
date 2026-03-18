@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# query III
+# SELECT * FROM repeat_row(1, 2, 'foo', num_rows=3)
+# ----
+# 1	2	foo
+# 1	2	foo
+# 1	2	foo

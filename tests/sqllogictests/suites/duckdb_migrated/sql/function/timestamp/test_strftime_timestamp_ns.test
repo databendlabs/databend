@@ -1,0 +1,34 @@
+query T
+SELECT strftime(TIMESTAMP '1992-01-01 01:20:30', '%a')
+----
+Wed
+
+query T
+SELECT strftime(TIMESTAMP '2020-08-10 10:10:10.123456', '%A')
+----
+Monday
+
+query T
+SELECT strftime(TIMESTAMP '2020-08-10 10:10:10.123456', '%Y')
+----
+2020
+
+query T
+SELECT strftime(TIMESTAMP '2020-08-10 10:10:10.123456', '%H:%M:%S')
+----
+10:10:10
+
+query T
+SELECT strftime(TIMESTAMP '2020-08-10 10:10:10.123456', '%f')
+----
+123456
+
+query T
+SELECT strftime(TIMESTAMP '2020-08-10 10:10:10.123456', '%Y-%m-%d %H:%M:%S')
+----
+2020-08-10 10:10:10
+
+query T
+SELECT strftime(NULL::TIMESTAMP, '%a')
+----
+NULL

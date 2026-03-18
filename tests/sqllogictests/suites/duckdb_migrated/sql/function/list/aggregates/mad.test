@@ -1,0 +1,361 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS const
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS date
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS hour
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS numerics
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS second
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tinys
+
+# scalar value
+# TODO: unknown function
+# query I
+# SELECT list_mad([1])
+# ----
+# 0
+
+# constant list_mad is zero
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE const AS SELECT LIST(1) AS i FROM range(0, 2000) t1(i)
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(i) FROM const
+# ----
+# 0
+
+# small numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table tinys as select list(r::tinyint) as r from range(0, 100) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM tinys
+# ----
+# 25
+
+# TODO: unsupported feature
+# statement ok
+# drop table tinys;
+
+# TODO: unsupported feature
+# statement ok
+# create table tinys as select list(r::decimal(4,1)) as r from range(0, 100) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM tinys
+# ----
+# 25
+
+# TODO: unsupported feature
+# statement ok
+# drop table tinys;
+
+
+# large numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::smallint) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::integer) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::bigint) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::hugeint) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::float) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::double) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::decimal(8,1)) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::decimal(12,1)) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::decimal(18,1)) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+# TODO: unsupported feature
+# statement ok
+# create table numerics as select list(r::decimal(24,1)) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM numerics
+# ----
+# 2500
+
+# TODO: unsupported feature
+# statement ok
+# drop table numerics
+
+
+# temporal types
+
+# TODO: unsupported feature
+# statement ok
+# create table date as select list(('2018-01-01'::DATE + INTERVAL (r) DAY)::DATE) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM date
+# ----
+# 2500 days
+
+# TODO: unsupported feature
+# statement ok
+# create table hour as select list('2018-01-01'::TIMESTAMP + INTERVAL (r) HOUR) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM hour
+# ----
+# 104 days 04:00:00
+
+# TODO: unsupported feature
+# statement ok
+# create table second as select list('00:00:00'::TIME + INTERVAL (r) SECOND) as r from range(0, 10000) tbl(r);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_mad(r) FROM second
+# ----
+# 00:41:40
+
+# TODO: unsupported feature
+# query I
+# select list_mad(x) from (values (['294247-01-10'::date, '290309-12-22 (BC)'::date])) tbl(x);
+# ----
+# 106751991 days
+
+# TODO: unsupported feature
+# query I
+# select list_mad(x) from (values	(['294247-01-10 04:00:54.775806'::timestamp,
+# 	'290309-12-22 (BC) 00:00:00'::timestamp])) tbl(x);
+# ----
+# 106751991 days 02:00:27.387903
+
+# TODO: unsupported feature
+# query I
+# select list_mad(x) from (values (['23:59:59.999999'::time, '00:00:00'::time])) tbl(x);
+# ----
+# 12:00:00
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::date])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::date])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::time])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::time])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::timestamp])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::timestamp])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::timestamp_s])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::timestamp_s])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::timestamp_ms])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::timestamp_ms])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::timestamp_ns])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::timestamp_ns])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::timetz])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::timetz])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad(['2021-08-20'::timestamptz])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_mad([NULL::timestamptz])
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_mad([INTERVAL 1 YEAR])
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_mad([NULL::INTERVAL])
+
+# TODO: unsupported feature
+# query I
+# select list_mad(x) from (values (['127'::DECIMAL(3,0), '-128'::DECIMAL(3,0)])) tbl(x);
+# ----
+# 127
+
+# TODO: unsupported feature
+# query I
+# select list_mad(x) from (values (['32767'::DECIMAL(5,0), '-32768'::DECIMAL(5,0)])) tbl(x);
+# ----
+# 32767
+
+# TODO: unsupported feature
+# query I
+# select list_mad(x) from (values (['2147483647'::DECIMAL(10,0), '-2147483648'::DECIMAL(10,0)])) tbl(x);
+# ----
+# 2147483647
+
+# TODO: unsupported feature
+# statement ok
+# select list_mad(x) from (values ([-1e308, 1e308])) tbl(x);

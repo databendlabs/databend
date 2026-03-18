@@ -1,0 +1,68 @@
+# Databend rewrite: Windows-style path normalization with chr(92).
+
+query T
+SELECT array_to_string(split(
+    regexp_replace(replace(concat('path', chr(92), 'to', chr(92), 'file.csv/file2.csv'), chr(92), '/'), '/+', '/'),
+    '/'
+), '|')
+----
+path|to|file.csv|file2.csv
+
+query T
+SELECT array_to_string(split(
+    regexp_replace(replace(concat('home', chr(92), 'user', chr(92), 'documents', chr(92), 'file.csv', chr(92), 'file2.csv'), chr(92), '/'), '/+', '/'),
+    '/'
+), '|')
+----
+home|user|documents|file.csv|file2.csv
+
+query T
+SELECT array_to_string(split('file.csv', '/'), '|')
+----
+file.csv
+
+query T
+SELECT array_to_string(array_concat(
+    ['/'],
+    split(
+        trim_leading(replace(concat(chr(92), 'path', chr(92), 'to', chr(92), 'file.csv'), chr(92), '/'), '/'),
+        '/'
+    )
+), '|')
+----
+/|path|to|file.csv
+
+query T
+SELECT regexp_extract(
+    regexp_replace(replace(concat('path', chr(92), 'to', chr(92), 'file.csv/file2.csv'), chr(92), '/'), '/+', '/'),
+    '^(.*)/[^/]*$',
+    1
+)
+----
+path/to/file.csv
+
+query T
+SELECT regexp_extract(
+    regexp_replace(replace(concat('path', chr(92), 'to', chr(92), 'file.csv/file2.csv'), chr(92), '/'), '/+', '/'),
+    '([^/]*)$',
+    1
+)
+----
+file2.csv
+
+query T
+SELECT regexp_extract(
+    regexp_replace(replace(concat('path', chr(92), 'to', chr(92), 'file.csv/file2.csv'), chr(92), '/'), '/+', '/'),
+    '^/?([^/]+)',
+    1
+)
+----
+path
+
+query T
+SELECT regexp_extract(NULL, '([^/]*)$', 1)
+----
+NULL
+
+statement error
+SELECT split()

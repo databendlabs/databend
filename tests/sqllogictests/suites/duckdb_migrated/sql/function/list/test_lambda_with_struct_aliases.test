@@ -1,0 +1,65 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS addresses
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# query I
+# SELECT COALESCE(*COLUMNS(lambda c: {'title': c}.title IN ('a', 'c')))
+# FROM (SELECT NULL, 2, 3) t(a, b, c);
+# ----
+# 3
+
+# Test HavingBinder::BindColumnRef.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE addresses (i INT, b INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO addresses VALUES (1, 10), (2, 20), (1, 52), (3, 7);
+
+# TODO: unsupported feature
+# query II
+# SELECT i, sum(b) FROM addresses
+# GROUP BY i
+# HAVING sum(b) >= list_sum(list_transform([20], lambda x: {'title': x}.title + 30))
+# ----
+# 1	62
+
+# Test ExpressionBinder::QualifyColumnName.
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform([10], lambda x: sum(1) + {'title': x}.title)
+# ----
+# [11]
+
+# Test AlterBinder::BindColumnReference.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (NULL), ([]), (['asdf']), (['qwer', 'CXZASDF']);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test
+# ALTER COLUMN a TYPE STRUCT(title VARCHAR)[]
+# USING (list_transform(a, lambda x: {'title': x}));
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM test ORDER BY ALL;
+# ----
+# []
+# [{'title': asdf}]
+# [{'title': qwer}, {'title': CXZASDF}]
+# NULL

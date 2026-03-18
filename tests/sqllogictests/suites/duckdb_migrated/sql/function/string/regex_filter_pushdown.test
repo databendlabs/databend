@@ -1,0 +1,29 @@
+statement ok
+DROP TABLE IF EXISTS regex
+
+statement ok
+CREATE TABLE regex(s STRING)
+
+statement ok
+INSERT INTO regex VALUES ('asdf'), ('xxxx'), ('aaaa')
+
+query T
+SELECT s FROM regex WHERE regexp_like(s, 'as(c|d|e)f')
+----
+asdf
+
+query T
+SELECT s FROM regex WHERE NOT regexp_like(s, 'as(c|d|e)f')
+----
+xxxx
+aaaa
+
+query T
+SELECT s FROM regex WHERE regexp_like(s, 'as(c|d|e)f') AND s = 'asdf'
+----
+asdf
+
+query T
+SELECT s FROM regex WHERE regexp_like(s, 'as(c|d|e)f') AND regexp_like(s, 'as[a-z]f')
+----
+asdf

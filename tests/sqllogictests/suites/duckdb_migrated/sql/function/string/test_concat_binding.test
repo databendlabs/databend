@@ -1,0 +1,50 @@
+query T
+SELECT concat('hello')
+----
+hello
+
+query T
+SELECT concat('hello', ' ', 'world')
+----
+hello world
+
+query T
+SELECT concat('hi', NULL)
+----
+NULL
+
+query T
+SELECT concat(NULL, 'hi')
+----
+NULL
+
+query T
+SELECT array_concat([1], [2])
+----
+[1,2]
+
+query T
+SELECT array_concat([1], [NULL])
+----
+[1,NULL]
+
+query T
+SELECT array_concat(array_concat([1], [2]), [3])
+----
+[1,2,3]
+
+query T
+SELECT array_concat([1], NULL)
+----
+NULL
+
+statement error
+SELECT concat([1], 'hello')
+
+query T
+SELECT array_concat([1, 2], ['3', '4'])
+----
+[1.00000,2.00000,3.00000,4.00000]
+
+statement error
+SELECT array_concat([1, 2], 4)

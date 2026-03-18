@@ -1,0 +1,85 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER)
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1), ('world', 2), ('b', 1), (NULL, 2)
+
+query TT
+SELECT substring('🦆ab', 1, 1), substring('abc', 2, 1)
+----
+🦆	b
+
+query T
+SELECT substring(s, 2, 1) FROM strings
+----
+e
+o
+(empty)
+NULL
+
+query T
+SELECT substring(s, 3, 1) FROM strings
+----
+l
+r
+(empty)
+NULL
+
+query T
+SELECT substring(s, off, 1) FROM strings
+----
+h
+o
+b
+NULL
+
+query T
+SELECT substring('hello', off, 1) FROM strings
+----
+h
+e
+h
+e
+
+query T
+SELECT substring(NULL, off, 1) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring('hello', NULL, 1) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring(s, greatest(char_length(s), 1), 1) FROM strings
+----
+o
+d
+b
+NULL
+
+query T
+SELECT substring(s, 6, 1) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+query T
+SELECT substring(s, 2147483646, 1) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL

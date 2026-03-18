@@ -1,0 +1,366 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dummy_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS incorrect_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS l_filter_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lambda_check
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS map_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested_list
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS unit2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE incorrect_test (i INTEGER);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform();
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(1, 2, 3);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(NULL, NULL);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(NULL, x);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1, 2], (SELECT 1) -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(NULL, i) FROM incorrect_test;
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(NULL, x -> y);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1], NULL);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([[1]], x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(1, 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(1, x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter();
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter(1, 2, 3);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter(NULL, NULL);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter(NULL, x);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([1, 2], (SELECT 1) -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter(NULL, i) FROM incorrect_test;
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter(NULL, x -> y);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([1]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([1], NULL);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([[1]], x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter(1, 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter(1, x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce();
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(1, 2, 3);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(NULL, NULL);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(NULL, x);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1, 2], (SELECT 1) -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(NULL, i) FROM incorrect_test;
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(NULL, x -> y);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1], NULL);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([[1]], x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(1, 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(1, x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1], x -> x, 3);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([True], x -> x, x -> x);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([1], x -> x, 3);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([True], x -> x, x -> x);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1], x -> x, 3);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([True], x -> x, x -> x);
+
+# TODO: unsupported feature
+# statement error
+# SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
+
+# TODO: unsupported feature
+# statement error
+# select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_apply(i, a.x -> x + 1) FROM (VALUES (list_value(1, 2, 3))) tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE l_filter_test (l integer[]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1, 2], (x, y, z) -> x + y + z);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z);
+
+# TODO: unsupported feature
+# statement error
+# SELECT cos(x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT cos([1], x -> x + 1);
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE lambda_check (i BIGINT[],
+#     CHECK (list_filter(i, x -> x % 2 = 0) = []));
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE lambda_check (i BIGINT[],
+#     CHECK (list_transform(i, x -> x % 2) = []));
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE lambda_check (i BIGINT[],
+#     CHECK ([x + 1 FOR x IN i IF x > 0] = []));
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE lambda_check (
+# 	i BIGINT[],
+# 	j BIGINT[],
+# 	CHECK ((list_apply(i, x -> list_count(list_filter(j, y -> y%2=0)) + x)) = []));
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE unit2(
+# 	price INTEGER[],
+# 	total_price INTEGER GENERATED ALWAYS AS (list_transform(price, x -> x + 1)) VIRTUAL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT {'a': 10} AS s;
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(UNNEST(s), x -> UNNEST(x)) FROM tbl;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested_list(i INT[][], other INT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested_list VALUES ([[1, 2]], [3, 4]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(i, x -> UNNEST(x)) FROM nested_list;
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(i, x -> UNNEST(other)) FROM nested_list;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE map_tbl(m MAP(INTEGER, INTEGER));
+
+# TODO: unsupported feature
+# statement error
+# SELECT [UNNEST([x.key FOR y IN range(x.value)]) FOR x IN map_entries(m)] FROM map_tbl;
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform(map_entries(m), x -> UNNEST(range(x.value))) FROM map_tbl;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE dummy_tbl (y INT);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1], lambda x: lambda y: x + y) FROM dummy_tbl;
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1], lambda x: 1 : hello) FROM dummy_tbl;
+
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE function transpose(lst) AS (
+# 	SELECT list_transform(range(1, 1 + length(lst[1])),
+# 		j -> list_transform(range(1, length(lst) + 1),
+# 			lambda i: lst[i][j]
+# 		)
+# 	)
+# );
+
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE FUNCTION transpose(lst) AS (
+# 	SELECT list_transform(range(1, 1 + length(lst[1])),
+# 		j -> list_transform(range(1, length(lst) + 1),
+# 			i -> lst[i][j]
+# 		)
+# 	)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE FUNCTION transpose(lst) AS (
+# 	SELECT list_transform(range(1, 1 + length(lst[1])),
+# 		j -> list_transform(range(1, length(lst) + 1),
+# 			i -> lst[i][j]
+# 		)
+# 	)
+# );

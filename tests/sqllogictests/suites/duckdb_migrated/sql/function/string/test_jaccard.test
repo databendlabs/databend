@@ -1,0 +1,147 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+# Databend rewrite: exact Jaccard similarity over distinct character sets.
+
+query T
+SELECT concat(round(
+    array_length(array_intersection(array_distinct(regexp_extract_all('hello', '.')), array_distinct(regexp_extract_all('hello', '.'))))
+    / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all('hello', '.')), array_distinct(regexp_extract_all('hello', '.'))))),
+    3
+), '')
+----
+1
+
+query T
+SELECT concat(CASE
+    WHEN 'hello' IS NULL OR NULL IS NULL THEN NULL
+    ELSE round(
+        array_length(array_intersection(array_distinct(regexp_extract_all('hello', '.')), array_distinct(regexp_extract_all(NULL, '.'))))
+        / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all('hello', '.')), array_distinct(regexp_extract_all(NULL, '.'))))),
+        3
+    )
+END, '')
+----
+NULL
+
+query T
+SELECT concat(CASE
+    WHEN NULL IS NULL OR 'hello' IS NULL THEN NULL
+    ELSE round(
+        array_length(array_intersection(array_distinct(regexp_extract_all(NULL, '.')), array_distinct(regexp_extract_all('hello', '.'))))
+        / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all(NULL, '.')), array_distinct(regexp_extract_all('hello', '.'))))),
+        3
+    )
+END, '')
+----
+NULL
+
+query T
+SELECT concat(CASE
+    WHEN NULL IS NULL OR NULL IS NULL THEN NULL
+    ELSE 0
+END, '')
+----
+NULL
+
+query T
+SELECT concat(round(
+    array_length(array_intersection(array_distinct(regexp_extract_all('ab', '.')), array_distinct(regexp_extract_all('aabb', '.'))))
+    / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all('ab', '.')), array_distinct(regexp_extract_all('aabb', '.'))))),
+    3
+), '')
+----
+1
+
+query T
+SELECT concat(round(
+    array_length(array_intersection(array_distinct(regexp_extract_all('ab', '.')), array_distinct(regexp_extract_all('cd', '.'))))
+    / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all('ab', '.')), array_distinct(regexp_extract_all('cd', '.'))))),
+    3
+), '')
+----
+0
+
+query T
+SELECT concat(round(
+    array_length(array_intersection(array_distinct(regexp_extract_all('ab', '.')), array_distinct(regexp_extract_all('aabbcc', '.'))))
+    / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all('ab', '.')), array_distinct(regexp_extract_all('aabbcc', '.'))))),
+    3
+), '')
+----
+0.667
+
+query T
+SELECT concat(round(
+    array_length(array_intersection(array_distinct(regexp_extract_all('aabbccddeeff', '.')), array_distinct(regexp_extract_all('ab', '.'))))
+    / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all('aabbccddeeff', '.')), array_distinct(regexp_extract_all('ab', '.'))))),
+    3
+), '')
+----
+0.333
+
+statement error
+SELECT CASE
+    WHEN char_length('hello') = 0 OR char_length('') = 0 THEN CAST('x' AS DOUBLE)
+    ELSE 0
+END
+
+statement error
+SELECT CASE
+    WHEN char_length('') = 0 OR char_length('hello') = 0 THEN CAST('x' AS DOUBLE)
+    ELSE 0
+END
+
+statement ok
+CREATE TABLE strings(s VARCHAR, t VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello', 'hallo'), ('aloha', 'fello'), ('fellow', 'ducks'), (NULL, NULL)
+
+query T
+SELECT concat(CASE
+    WHEN s IS NULL OR t IS NULL THEN NULL
+    ELSE round(
+        array_length(array_intersection(array_distinct(regexp_extract_all(s, '.')), array_distinct(regexp_extract_all(t, '.'))))
+        / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all(s, '.')), array_distinct(regexp_extract_all(t, '.'))))),
+        1
+    )
+END, '')
+FROM strings
+----
+0.6
+0.3
+0
+NULL
+
+query T
+SELECT concat(CASE
+    WHEN s IS NULL THEN NULL
+    ELSE round(
+        array_length(array_intersection(array_distinct(regexp_extract_all(s, '.')), array_distinct(regexp_extract_all('hallo', '.'))))
+        / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all(s, '.')), array_distinct(regexp_extract_all('hallo', '.'))))),
+        1
+    )
+END, '')
+FROM strings
+----
+0.6
+1
+0.3
+NULL
+
+query T
+SELECT concat(CASE
+    WHEN t IS NULL THEN NULL
+    ELSE round(
+        array_length(array_intersection(array_distinct(regexp_extract_all('hallo', '.')), array_distinct(regexp_extract_all(t, '.'))))
+        / array_length(array_distinct(array_concat(array_distinct(regexp_extract_all('hallo', '.')), array_distinct(regexp_extract_all(t, '.'))))),
+        1
+    )
+END, '')
+FROM strings
+----
+1
+0.3
+0
+NULL

@@ -1,0 +1,207 @@
+statement ok
+DROP TABLE IF EXISTS regex
+
+statement ok
+DROP TABLE IF EXISTS t0
+
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE t0 AS FROM (VALUES('asdf')) t(c0)
+
+# null
+
+query I
+SELECT CAST(regexp_like(c0, NULL) AS INT) FROM t0
+----
+NULL
+
+# constant strings
+
+query I
+SELECT CAST(regexp_like(c0, '.*sd.*') AS INT) FROM t0
+----
+1
+
+query I
+SELECT CAST(regexp_like(c0, '.*yu.*') AS INT) FROM t0
+----
+0
+
+# partial matches okay
+
+query I
+SELECT CAST(regexp_like(c0, 'sd') AS INT) FROM t0
+----
+1
+
+query I
+SELECT CAST(regexp_like(c0, '^(?:sd)$') AS INT) FROM t0
+----
+0
+
+query I
+SELECT CAST(regexp_like(c0, '^(?:.sd.)$') AS INT) FROM t0
+----
+1
+
+query I
+SELECT CAST(regexp_like(c0, '^sdf$') AS INT) FROM t0
+----
+0
+
+# empty strings
+
+query I
+SELECT CAST(regexp_like('', '.*yu.*') AS INT)
+----
+0
+
+query I
+SELECT CAST(regexp_like('', '.*') AS INT)
+----
+1
+
+query I
+SELECT CAST(regexp_like('', '^$') AS INT)
+----
+1
+
+query I
+SELECT CAST(regexp_like(c0, '^$') AS INT) FROM t0
+----
+0
+
+# NULLs
+
+query I
+SELECT CAST(regexp_like(c0, CAST(NULL AS STRING)) AS INT) FROM t0
+----
+NULL
+
+query I
+SELECT CAST(regexp_like(CAST(NULL AS STRING), '.*sd.*') AS INT)
+----
+NULL
+
+query I
+SELECT CAST(regexp_like(CAST(NULL AS STRING), CAST(NULL AS STRING)) AS INT)
+----
+NULL
+
+query I
+SELECT CAST(regexp_like('foobarbequebaz', '(bar)(beque)') AS INT)
+----
+1
+
+# postgres says throw error on invalid regex
+
+statement error
+SELECT regexp_like('', '\X')
+
+statement ok
+CREATE TABLE regex(s STRING, p STRING)
+
+statement ok
+INSERT INTO regex VALUES ('asdf', 'sd'), ('asdf', '^sd'), (NULL, '^sd'), ('asdf', NULL)
+
+query I
+SELECT CAST(regexp_like(s, '.*') AS INT) FROM regex
+----
+1
+1
+NULL
+1
+
+query I
+SELECT CAST(regexp_like(s, p) AS INT) FROM regex
+----
+1
+0
+NULL
+NULL
+
+# test regex_matches with options
+# case sensitivity
+
+query I
+SELECT CAST(regexp_like(c0, '.*SD.*', 'i') AS INT) FROM t0
+----
+1
+
+query I
+SELECT CAST(regexp_like(c0, '.*SD.*', 'c') AS INT) FROM t0
+----
+0
+
+# literal match
+
+query I
+SELECT CAST(regexp_like('as^/$df', '\\^/\\$') AS INT)
+----
+1
+
+query I
+SELECT CAST(regexp_like('as^/$df', '^/$') AS INT)
+----
+0
+
+# dot matches newline
+
+query I
+SELECT CAST(regexp_like('hello
+world', '(?s).*') AS INT)
+----
+1
+
+query I
+SELECT CAST(regexp_like('hello
+world', '^(?:.*)$') AS INT)
+----
+0
+
+# whitespace is ignored
+
+query I
+SELECT CAST(regexp_like(c0, '.*SD.*', 'i') AS INT) FROM t0
+----
+1
+
+query I
+SELECT CAST(regexp_like('a$c', 'a\\$c') AS INT)
+----
+1
+
+statement ok
+CREATE TABLE test(v VARCHAR)
+
+statement ok
+INSERT INTO test VALUES ('hello'), ('HELLO')
+
+query I
+SELECT CAST(regexp_like(v, 'h.*', 'i') AS INT) FROM test ORDER BY v
+----
+1
+1
+
+query I
+SELECT CAST(regexp_like(v, 'h.*', 'c') AS INT) FROM test ORDER BY v
+----
+0
+1
+
+statement error
+SELECT regexp_like(v, 'h.*', v) FROM test ORDER BY v
+
+statement error
+SELECT regexp_like(c0, '.*SD.*', 'q') FROM t0
+
+statement error
+SELECT regexp_like(c0, '.*SD.*', 'g') FROM t0
+
+statement ok
+INSERT INTO regex VALUES ('asdf', '(')
+
+statement error
+SELECT CAST(regexp_like(s, p) AS INT) FROM regex

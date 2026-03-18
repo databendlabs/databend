@@ -1,0 +1,552 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS df
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS right_only
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t_struct
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS where_clause
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> x + y, 100);
+# ----
+# 106
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> x * y, -1);
+# ----
+# -6
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([100, 10, 1], (x, y, i) -> x - y - i, 1000);
+# ----
+# 883
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> y - x, -1);
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> x - y, 10);
+# ----
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y, i) -> x + y + i, -1);
+# ----
+# 11
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> x + y, NULL);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([NULL], (x, y, i) -> x + y + i, 100);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(NULL, (x, y, i) -> x + y + i, 100);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(['Once', 'upon', 'a', 'time'], (x, y) -> x || ' ' || y, '-->');
+# ----
+# --> Once upon a time
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([], (x, y) -> x + y, 100);
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(['a', 'b', 'c'], (x, y) -> x || y, NULL);
+# ----
+# NULL
+
+#errors on simple reduce with initial value
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1, 2, 3], (x, y) -> (x * y), 'i dare you to cast me');
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1, 2], (x) -> x, 100);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1, 2], NULL, 100);
+
+# TODO: unsupported feature
+# statement error
+# SELECt list_reduce([1, 2], (len('abc') AS x, y) - > x + y, 100)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE table t1(l int[], initial int);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ([1, 2, 3], 100);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ([666], 1000);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ([1, 2, 3], NULL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (NULL, 2);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ([44, 55], 3);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ([-1, NULL, -2], 4);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(l, (x, y) -> x + y, initial) FROM t1;
+# ----
+# 106
+# 1666
+# NULL
+# NULL
+# 102
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(l, (x, y, i) -> x + y + i, initial) FROM t1;
+# ----
+# 112
+# 1667
+# NULL
+# NULL
+# 105
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ([], 100);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(l, (x, y) -> x + y) FROM t1;
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(l, (x, y) -> x + y, initial) FROM t1;
+# ----
+# 106
+# 1666
+# NULL
+# NULL
+# 102
+# NULL
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t1;
+
+# reduce on a table with a list of strings
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 (l varchar[], initial varchar);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (['a', 'b'], '1:'), (NULL, '2:'), (['e', 'f'], '3:');
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(l, (x, y) -> x || ' ' || y, initial) FROM t1;
+# ----
+# 1: a b
+# NULL
+# 3: e f
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 values (['h', NULL], '4:'), (['i', 'j'], '5:');
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(l, (x, y) -> x || ' ' || y, initial) FROM t1;
+# ----
+# 1: a b
+# NULL
+# 3: e f
+# NULL
+# 5: i j
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 values (['x', 'y'], NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(l, (x, y) -> x || ' ' || y, initial) FROM t1;
+# ----
+# 1: a b
+# NULL
+# 3: e f
+# NULL
+# 5: i j
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ([], '7:');
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(l, (x, y) -> x || ' ' || y) FROM t1;
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(l, (x, y) -> x || ' ' || y, initial) FROM t1;
+# ----
+# 1: a b
+# NULL
+# 3: e f
+# NULL
+# 5: i j
+# NULL
+# 7:
+
+# reduce on a string only using the RHS
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE right_only (v varchar[], i int);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO right_only VALUES (['blue', 'babbling', 'brook'], 1), (['dogs', 'doing', 'dishes'], 2), (['she', 'sells', 'seashells'], 3);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(v, (x, y) -> y[i]) FROM right_only;
+# ----
+# b
+# i
+# a
+
+# nested functions with ints
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([4, 5, 6], (a, b) -> x + y + a + b, 100), 1000);
+# ----
+# 28549
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([], (a, b) -> x + y + a + b), 1000);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> x + y + a + b + x_i + a_i, 100), 1000);
+# ----
+# 28681
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([], (a, b, a_i) -> x + y + a + b + x_i + a_i), 1000);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([[10, 20], [30, 40], [50, 60]], (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (n, o) -> n + o)), [100, 200]);
+# ----
+# [510]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([[1,2,3], [4,5,6], [7,8,9]], (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (n, o) -> n + o)), [100]);
+# ----
+# [145]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([[10, 20], [30, 40], NULL, [NULL, 60], NULL], (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (n, o) -> n + o)), [100]);
+# ----
+# [NULL]
+
+# nested functions with strings
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(['a', 'b'], (x, y) -> list_reduce(['1', '2'], (a, b) -> x || y || a || b, 'B'), 'A');
+# ----
+# AaAaB12bAaAaB12bB12
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([['a', 'b'], ['c', 'd'], ['e', 'f']], (x, y) -> list_pack(list_reduce(x, (a, b) -> a || b) || list_reduce(y, (c, d) -> c || d)), ['->']);
+# ----
+# [->abcdef]
+
+# nested functions in a table with ints
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested (n integer[], l integer[], initial integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested VALUES ([1, 2, 3], [4, 5, 6], 100), (NULL, NULL, 100), (NULL, [110, 111, 112], 44), ([77, 88, 99], [55, 66, NULL], 1);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> x + y + a + b), initial) FROM nested;
+# ----
+# 927
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(n, (x, y, x_i) -> list_reduce(l, (a, b, a_i) -> x + y + a + b + x_i + a_i), initial) FROM nested;
+# ----
+# 984
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(n, (x, y, x_i) -> list_reduce(l, (a, b, a_i) -> x + y + x_i < a + b + a_i), initial) FROM nested;
+# ----
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested VALUES ([4, 5, 6], [], -1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> x + y + a + b), initial) FROM nested;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE nested;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested (n integer[][], initial integer[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested VALUES ([[10, 20], [30, 40], [50, 60]], [100]), ([[1,2,3], [4,5,6], [7,8,9]], [1000]), (NULL, [-1]), ([[NULL, 60], [70, NULL], [NULL, NULL]], [NULL]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (j, k) -> j + k)), initial) from nested;
+# ----
+# [310]
+# [1045]
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested VALUES ([[4, 5, 6], []], [9]);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> l + m) + list_reduce(y, (j, k) -> j + k)), initial) from nested;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE nested;
+
+# nested functions in a table with strings
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested (n varchar[], l varchar[], initialN varchar, initialL varchar);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested VALUES (['a', 'b'], ['1', '2'], 'A', 'B'), (NULL, NULL, 'C', 'D'), (NULL, ['110', '111', '112'], 'X', 'Y'), (['77', '88', '99'], ['55', '66', NULL], 'E', 'F');
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> x || y || a || b, initialL), initialN) FROM nested;
+# ----
+# AaAaB12bAaAaB12bB12
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE nested;
+
+# three level nested functions with ints
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([4, 5, 6], (a, b) -> list_reduce([7, 8, 9], (c, d) -> x + y + a + b + c + d, 1000), 100), 10);
+# ----
+# 25917331
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> list_reduce([7, 8, 9], (c, d, c_i) -> x + y + a + b + c + d + x_i + a_i + c_i, 1000), 100), 10);
+# ----
+# 26185861
+
+# three level nested in a table with ints
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested (n integer[], l integer[], m integer[], initial integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested VALUES ([1, 2, 3], [4, 5, 6], [7, 8, 9], 100), (NULL, NULL, NULL, NULL), (NULL, [110, 111, 112], [113, 114, 115], NULL), ([77, 88, 99], [55, 66, NULL], [44, 33, 22], 1);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(n, (x, y) -> list_reduce(l, (a, b) -> list_reduce(m, (c, d) -> x + y + a + b + c + d, initial), initial), initial) FROM nested;
+# ----
+# 12992341
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE nested;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested (n integer[][][], initial integer[][]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested VALUES ([[[10, 20], [100, 200]], [[30, 40], [300, 400]], [[50, 60], [500, 600]]], [[1]]), ([[[1,2,3], [4,5,6], [7,8,9]]], [[2]]), (NULL, [[3]]), ([[[NULL, 60], [70, NULL], [NULL, NULL]]], [[4]]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(n, (x, y) -> list_pack(list_reduce(x, (l, m) -> list_pack(list_reduce(l, (a, b) -> a + b) + list_reduce(m, (c, d) -> c + d))) + list_reduce(y, (e, f) -> list_pack(list_reduce(e, (a, b) -> a + b) + list_reduce(f, (c, d) -> c + d))))) from nested;
+# ----
+# [[330, 770, 1210]]
+# [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+# NULL
+# [[NULL, 60], [70, NULL], [NULL, NULL]]
+
+# tests on structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t_struct (s STRUCT(v VARCHAR, i INTEGER)[], initial STRUCT(v VARCHAR, i INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t_struct VALUES ([row('a', 1), row('b', 2)], row('->', 1)), ([row('c', 3), row('d', 4)], row('-->', 2)), ([row('e', 5), row('f', 6)], row('--->', 3)), ([row('g', 7), row('h', 8)], row('---->', 4)), ([row('i', 9), row('j', 10)], row('----->', 5));
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(s, (a, b) -> row(a.v || b.v, a.i + b.i), initial) FROM t_struct;
+# ----
+# {'v': ->ab, 'i': 4}
+# {'v': -->cd, 'i': 9}
+# {'v': --->ef, 'i': 14}
+# {'v': ---->gh, 'i': 19}
+# {'v': ----->ij, 'i': 24}
+
+# issue #11142
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE df(s STRUCT(a INT, b INT)[], initial STRUCT(a INT, b INT));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO df VALUES ([row(0, 0), row(0, 1), row(0, 2)], row(-2, -3));
+
+# TODO: unsupported feature
+# query I
+# SELECT 
+# list_reduce(
+#     s, (curr, next) -> struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b), initial
+# )
+# FROM df
+# ----
+# {'a': 3, 'b': 2}
+
+# TODO: unsupported feature
+# query I
+# SELECT 
+# list_reduce(
+#     [struct_pack(a:=0, b:=0), struct_pack(a:=0, b:=1), struct_pack(a:=0, b:=2)],
+#     (curr, next) -> struct_pack(a:=curr.a + (next.b - curr.b), b:=next.b),
+#     struct_pack(a:=-2, b:=-3)
+# )
+# ----
+# {'a': 3, 'b': 2}
+
+# list_reduce in where clause
+
+# TODO: unsupported feature
+# statement ok
+# CREATE table where_clause (a int[], initial integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO where_clause VALUES ([10, 2, 1], 10), ([1, 2, 3], 20), ([15, 4, 3], 30), ([3, 4, 5], 40), ([11, 2, 3, 4, 5], 50), ([5, 4, 3, 2, 1], 60), ([100, 2, 3, 4, 5, 6, 7, 8, 9, 10], 70);
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM where_clause WHERE list_reduce(a, (x, y) -> x - y, initial) > 0;
+# ----
+# [1, 2, 3]
+# [15, 4, 3]
+# [3, 4, 5]
+# [11, 2, 3, 4, 5]
+# [5, 4, 3, 2, 1]

@@ -1,0 +1,111 @@
+statement ok
+DROP TABLE IF EXISTS regex_replace_regex
+
+statement ok
+DROP TABLE IF EXISTS regex_replace_test
+
+query T
+SELECT regexp_replace('foobarbaz', 'b..', 'X')
+----
+fooXX
+
+# global replace
+
+query T
+SELECT regexp_replace('ana ana', 'ana', 'banana')
+----
+banana banana
+
+query T
+SELECT regexp_replace('ANA ana', '(?i)ana', 'banana')
+----
+banana banana
+
+# case sensitivity
+
+query T
+SELECT regexp_replace('ana', '(?-i)ana', 'banana')
+----
+banana
+
+query T
+SELECT regexp_replace('ANA', '(?i)ana', 'banana')
+----
+banana
+
+# literal match
+
+query T
+SELECT regexp_replace('as^/$df', '\\^/\\$', '')
+----
+asdf
+
+query T
+SELECT regexp_replace('as^/$df', '^/$', '')
+----
+as^/$df
+
+# dot matches newline
+
+query T
+SELECT regexp_replace('hello
+world', '(?s).*', 'x')
+----
+x
+
+# the result here is a single row with a newline ('x\nx')
+# this is a bit complicated to check in sqllogictest, so we use a JOIN with a count
+# to verify the correct result
+
+query I
+SELECT COUNT(*) FROM (SELECT 'x
+x') t1(a) JOIN (SELECT regexp_replace('hello
+world', '.*', 'x')) t2(a) USING (a)
+----
+1
+
+# this also works with tables
+
+statement ok
+CREATE TABLE regex_replace_test(v VARCHAR)
+
+statement ok
+INSERT INTO regex_replace_test VALUES ('hello'), ('HELLO')
+
+query T
+SELECT regexp_replace(v, '(?i)h.*', 'world') FROM regex_replace_test ORDER BY v
+----
+world
+world
+
+query T
+SELECT regexp_replace(v, '(?-i)h.*', 'world') FROM regex_replace_test ORDER BY v
+----
+HELLO
+world
+
+# we cannot use non-constant options (currently)
+
+statement error
+SELECT regexp_replace(v, 'h.*', 'world', v) FROM regex_replace_test ORDER BY v
+
+statement error
+SELECT regexp_replace('asdf', '.*SD.*', 'a', 'q')
+
+statement error
+SELECT regexp_like('abc', '*')
+
+statement error
+SELECT regexp_replace('abc', '*', 'X')
+
+statement ok
+CREATE TABLE regex_replace_regex (s STRING, r STRING)
+
+statement ok
+INSERT INTO regex_replace_regex VALUES ('abc', '*')
+
+statement error
+SELECT regexp_like(s, r) FROM regex_replace_regex
+
+statement error
+SELECT regexp_replace(s, r, 'X') FROM regex_replace_regex

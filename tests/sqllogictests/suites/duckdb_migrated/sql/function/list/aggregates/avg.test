@@ -1,0 +1,109 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bigints
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS doubles
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS vals
+
+# list_avg on a sequence
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg([nextval('seq')]);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg([nextval('seq')]);
+# ----
+# 2
+
+# multiple list entries
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES ([1, 2, 3]), ([6, 3, 2, 5]), ([]), ([NULL]), (NULL), ([1, NULL, 2, 3]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg(i) FROM integers;
+# ----
+# 2
+# 4
+# NULL
+# NULL
+# NULL
+# 2
+
+# incorrect use
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_avg()
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE vals(i INTEGER[], j HUGEINT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES ([NULL, NULL], [NULL, NULL, NULL])
+
+# TODO: unsupported feature
+# query II
+# SELECT list_avg(i), list_avg(j) FROM vals;
+# ----
+# NULL	NULL
+
+# test list_avg on integers with no exact float64 representation
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bigints(n HUGEINT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigints (n) VALUES (['9007199254740992'::HUGEINT, 1::HUGEINT, 0::HUGEINT]);
+
+# this would give the wrong result with 'double' precision
+
+# TODO: unsupported feature
+# query R
+# SELECT list_avg(n)::DOUBLE - '3002399751580331'::DOUBLE FROM bigints;
+# ----
+# 0
+
+# test list_avg in which the intermediate sums are not exact (favg)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE doubles(n DOUBLE[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO doubles (n) VALUES (['9007199254740992'::DOUBLE, 1::DOUBLE, 1::DOUBLE, 0::DOUBLE]);
+
+# this would give the wrong result with a simple sum-and-divide
+
+# TODO: unsupported feature
+# query R
+# SELECT list_aggr(n, 'favg') - '2251799813685248.5'::DOUBLE FROM doubles;
+# ----
+# 0

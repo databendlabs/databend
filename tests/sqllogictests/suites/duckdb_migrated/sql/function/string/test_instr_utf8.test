@@ -1,0 +1,66 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query IIII
+SELECT
+    instr('átomo', 'á'),
+    instr('olá mundo', 'á'),
+    instr('你好世界', 'á'),
+    instr('two ñ three ₡ four 🦆 end', 'á')
+----
+1	3	0	0
+
+query II
+SELECT position('好世' IN '你好世界'), locate('好世', '你好世界')
+----
+2	2
+
+query III
+SELECT
+    instr('olá mundo', 'olá mundo'),
+    instr('你好世界', '你好世界'),
+    instr('two ñ three ₡ four 🦆 end', 'two ñ thr')
+----
+1	1	1
+
+query III
+SELECT
+    instr('two ñ three ₡ four 🦆 end', 'ñ'),
+    instr('two ñ three ₡ four 🦆 end', '₡ four 🦆 e'),
+    instr('two ñ three ₡ four 🦆 end', '🦆 end')
+----
+5	13	20
+
+statement ok
+CREATE TABLE strings(id INT, s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES
+    (1, 'átomo'),
+    (2, 'olá mundo'),
+    (3, '你好世界'),
+    (4, 'two ñ three ₡ four 🦆 end')
+
+query I
+SELECT instr(s, 'á') FROM strings ORDER BY id
+----
+1
+3
+0
+0
+
+query I
+SELECT instr(s, '你好') FROM strings ORDER BY id
+----
+0
+0
+1
+0
+
+query I
+SELECT position('🦆 end' IN s) FROM strings ORDER BY id
+----
+0
+0
+0
+20

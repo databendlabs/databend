@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE t AS ENUM ('z','y','x');
+
+# TODO: unsupported feature
+# query II
+# SELECT greatest('x'::t, 'z'::t), 'x'::t > 'z'::t;
+# ----
+# x	1

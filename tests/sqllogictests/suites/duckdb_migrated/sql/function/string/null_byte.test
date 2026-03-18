@@ -1,0 +1,39 @@
+query T
+SELECT hex(chr(0))
+----
+00
+
+query I
+SELECT ascii(chr(0))
+----
+0
+
+query T
+SELECT hex(concat('goo', chr(0), 'se'))
+----
+676f6f007365
+
+query I
+SELECT instr(concat('goo', chr(0), 'se'), chr(0))
+----
+4
+
+query I
+SELECT char_length(concat('goo', chr(0), 'se'))
+----
+6
+
+query I
+SELECT octet_length(concat('goo', chr(0), 'se'))
+----
+6
+
+query T
+SELECT hex(substr(concat('goo', chr(0), 'se'), 4))
+----
+007365
+
+query T
+SELECT quote(concat('goo', chr(0), 'se'))
+----
+goo\0se

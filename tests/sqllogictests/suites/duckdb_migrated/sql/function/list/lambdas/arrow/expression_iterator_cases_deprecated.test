@@ -1,0 +1,160 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS my_window
+
+# these tests check the different cases of the expression iterator
+# TODO: unknown function
+# query I
+# SELECT list_transform([10], x -> sum(1) + x)
+# ----
+# [11]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([10], x -> sum(1) > 0)
+# ----
+# [10]
+
+# BOUND_BETWEEN
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
+# ----
+# [NULL, 0, 1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
+# ----
+# [2021-09-20]
+
+# BOUND_CASE
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform(['hello', 'duck', 'sunshine'], str -> CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END)
+# ----
+# [e, other, e]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter(['hello', 'duck', 'sunshine'], str -> (CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END) LIKE 'e')
+# ----
+# [hello, sunshine]
+
+# BOUND_CAST
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform([2.0::DOUBLE], x -> x::INTEGER)
+# ----
+# [2]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([2], x -> x::DOUBLE = 2)
+# ----
+# [2]
+
+# BOUND_COMPARISON
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform([2.4, NULL, -4.7], x -> x != 10.4)
+# ----
+# [1, NULL, 1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([2.4, NULL, -4.7], x -> x != -4.7)
+# ----
+# [2.4]
+
+# BOUND_CONJUNCTION
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform([True, False, NULL], x -> x AND true)
+# ----
+# [1, 0, NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([True, False, NULL], x -> x AND true)
+# ----
+# [1]
+
+# BOUND_FUNCTION
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], x -> century(x))
+# ----
+# [20, 3, 17]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], x -> century(x) > 16)
+# ----
+# ['1992-03-22 00:00:00', '1700-03-22 00:00:00']
+
+# BOUND_OPERATOR
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform([2], x -> x + x)
+# ----
+# [4]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter([2], x -> x + x = 4)
+# ----
+# [2]
+
+# BOUND_SUBQUERY
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([2], x -> (SELECT 1 - x) * x)
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([2], x -> (SELECT 1 - x) * x > 2)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_transform([1], x -> x = UNNEST([1]));
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_filter([1], x -> x = UNNEST([1]));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE my_window (l integer[], g integer, o integer)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO my_window VALUES ([1], 1, 1), ([1, NULL, 2], 1, 2), ([], 2, 3), (NULL, NULL, NULL), ([1, 2], 2, 4)
+
+# TODO: unsupported feature
+# query I
+# SELECT list(list_transform(l, e -> e + 1)) OVER (PARTITION BY g ORDER BY o) 
+# FROM my_window
+# ORDER BY ALL
+# ----
+# [[]]
+# [[], [2, 3]]
+# [[2]]
+# [[2], [2, NULL, 3]]
+# [NULL]

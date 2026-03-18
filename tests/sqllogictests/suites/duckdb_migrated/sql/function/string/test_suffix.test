@@ -1,0 +1,231 @@
+query I
+SELECT CAST(RIGHT('abcd', CHAR_LENGTH('d')) = 'd' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcd', CHAR_LENGTH('cd')) = 'cd' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcd', CHAR_LENGTH('bcd')) = 'bcd' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcd', CHAR_LENGTH('abcd')) = 'abcd' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcd', CHAR_LENGTH('X')) = 'X' AS INT)
+----
+0
+
+# Medium string (8bytes)
+
+query I
+SELECT CAST(RIGHT('abcdefgh', CHAR_LENGTH('h')) = 'h' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefgh', CHAR_LENGTH('gh')) = 'gh' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefgh', CHAR_LENGTH('fgh')) = 'fgh' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefgh', CHAR_LENGTH('efgh')) = 'efgh' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefgh', CHAR_LENGTH('defgh')) = 'defgh' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefgh', CHAR_LENGTH('X')) = 'X' AS INT)
+----
+0
+
+query I
+SELECT CAST(RIGHT('abcdefgh', CHAR_LENGTH('abcdefgh')) = 'abcdefgh' AS INT)
+----
+1
+
+# Long string (> 15bytes)
+
+query I
+SELECT CAST(RIGHT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('z')) = 'z' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('yz')) = 'yz' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('xyz')) = 'xyz' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('wxyz')) = 'wxyz' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('vwxyz')) = 'vwxyz' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('X')) = 'X' AS INT)
+----
+0
+
+query I
+SELECT CAST(RIGHT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('defghijklmnopqrstuvwxyz')) = 'defghijklmnopqrstuvwxyz' AS INT)
+----
+1
+
+# Empty string and suffix
+
+query I
+SELECT CAST(RIGHT('', CHAR_LENGTH('aaa')) = 'aaa' AS INT)
+----
+0
+
+query I
+SELECT CAST(RIGHT('aaa', CHAR_LENGTH('')) = '' AS INT)
+----
+1
+
+# NULL string and suffix
+
+query I
+SELECT CAST(RIGHT(NULL, CHAR_LENGTH('aaa')) = 'aaa' AS INT)
+----
+NULL
+
+query I
+SELECT CAST(RIGHT('aaa', CHAR_LENGTH(NULL)) = NULL AS INT)
+----
+NULL
+
+query I
+SELECT CAST(RIGHT(NULL, CHAR_LENGTH(NULL)) = NULL AS INT)
+----
+NULL
+
+# Suffix test with UTF8
+# inverse "átomo" (atom)
+
+query I
+SELECT CAST(RIGHT('omotá', CHAR_LENGTH('á')) = 'á' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('omotá', CHAR_LENGTH('á')) = 'á' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('omotá', CHAR_LENGTH('a')) = 'a' AS INT)
+----
+0
+
+# inverse "olá mundo" (hello world)
+
+query I
+SELECT CAST(RIGHT('mundo olá', CHAR_LENGTH('olá')) = 'olá' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('mundo olá', CHAR_LENGTH('olá')) = 'olá' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('mundo olá', CHAR_LENGTH('mundo olá')) = 'mundo olá' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('mundo olá', CHAR_LENGTH('ola')) = 'ola' AS INT)
+----
+0
+
+# eftñ
+
+query I
+SELECT CAST(RIGHT('eftñ', CHAR_LENGTH('ñ')) = 'ñ' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('ñeft', CHAR_LENGTH('ñeft')) = 'ñeft' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('ñeft', CHAR_LENGTH('neft')) = 'neft' AS INT)
+----
+0
+
+# two ñ three ₡ four 🦆 end
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('🦆 end')) = '🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('🦆 end')) = '🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('three ₡ four 🦆 end')) = 'three ₡ four 🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('three ₡ four 🦆 end')) = 'three ₡ four 🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three ₡ four 🦆 end')) = 'two ñ three ₡ four 🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three ₡ four 🦆 end')) = 'two ñ three ₡ four 🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three ₡ four 🦆 end')) = 'two ñ three ₡ four 🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two n three ₡ four 🦆 end')) = 'two n three ₡ four 🦆 end' AS INT)
+----
+0
+
+query I
+SELECT CAST(RIGHT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('XXXtwo ñ three ₡ four 🦆 end')) = 'XXXtwo ñ three ₡ four 🦆 end' AS INT)
+----
+0

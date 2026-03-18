@@ -1,0 +1,99 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query TTTTT
+SELECT LEFT('abcd', 0), LEFT('abc', 1), LEFT('abc', 2), LEFT('abc', 3), LEFT('abc', 4)
+----
+(empty)	a	ab	abc	abc
+
+query TTTTT
+SELECT LEFT('🦆ab', 0), LEFT('🦆ab', 1), LEFT('🦆ab', 2), LEFT('🦆ab', 3), LEFT('🦆ab', 4)
+----
+(empty)	🦆	🦆a	🦆ab	🦆ab
+
+query TTTTT
+SELECT
+    LEFT('abcd', 0),
+    LEFT('abc', GREATEST(CHAR_LENGTH('abc') - 1, 0)),
+    LEFT('abc', GREATEST(CHAR_LENGTH('abc') - 2, 0)),
+    LEFT('abc', GREATEST(CHAR_LENGTH('abc') - 3, 0)),
+    LEFT('abc', GREATEST(CHAR_LENGTH('abc') - 4, 0))
+----
+(empty)	ab	a	(empty)	(empty)
+
+query TTTTT
+SELECT
+    LEFT('🦆ab', 0),
+    LEFT('🦆ab', GREATEST(CHAR_LENGTH('🦆ab') - 1, 0)),
+    LEFT('🦆ab', GREATEST(CHAR_LENGTH('🦆ab') - 2, 0)),
+    LEFT('🦆ab', GREATEST(CHAR_LENGTH('🦆ab') - 3, 0)),
+    LEFT('🦆ab', GREATEST(CHAR_LENGTH('🦆ab') - 4, 0))
+----
+(empty)	🦆a	🦆	(empty)	(empty)
+
+query TT
+SELECT LEFT('abcdef', 99), LEFT('🦆ab', 99)
+----
+abcdef	🦆ab
+
+query TTT
+SELECT LEFT(NULL, 0), LEFT('abc', NULL), LEFT(NULL, NULL)
+----
+NULL	NULL	NULL
+
+query TTT
+SELECT LEFT(NULL, 0), LEFT('🦆ab', NULL), LEFT(NULL, NULL)
+----
+NULL	NULL	NULL
+
+statement ok
+CREATE TABLE strings(a STRING, b BIGINT)
+
+statement ok
+INSERT INTO strings VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4), ('🦆ab', 2)
+
+query T
+SELECT LEFT(a, b) FROM strings
+----
+(empty)
+a
+ab
+abc
+abc
+🦆a
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(a STRING, b BIGINT)
+
+statement ok
+INSERT INTO strings VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4), ('🦆ab', -1), ('🦆ab', -2)
+
+query T
+SELECT CASE WHEN b >= 0 THEN LEFT(a, b) ELSE LEFT(a, GREATEST(CHAR_LENGTH(a) + b, 0)) END FROM strings
+----
+(empty)
+ab
+a
+(empty)
+(empty)
+🦆a
+🦆
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(a STRING, b BIGINT)
+
+statement ok
+INSERT INTO strings VALUES (NULL, 0), ('abc', NULL), (NULL, NULL)
+
+query T
+SELECT LEFT(a, b) FROM strings
+----
+NULL
+NULL
+NULL

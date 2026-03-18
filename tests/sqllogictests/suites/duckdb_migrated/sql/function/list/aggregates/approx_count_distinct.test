@@ -1,0 +1,141 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dates
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_ints
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_ints_2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS names
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamp
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE list_ints (l INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_ints SELECT LIST(i) FROM range(0, 100) tbl(i);
+
+# TODO: unsupported feature
+# query II
+# select list_approx_count_distinct([10]), list_approx_count_distinct(['hello']) from list_ints;
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# query II
+# select list_approx_count_distinct(l), list_approx_count_distinct(['hello']) from list_ints;
+# ----
+# 102	1
+
+# TODO: unsupported feature
+# query I
+# select list_approx_count_distinct([]) from list_ints;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_ints VALUES ([]), (NULL), ([NULL]);
+
+# TODO: unsupported feature
+# query I
+# select list_approx_count_distinct(l) from list_ints;
+# ----
+# 102
+# 0
+# NULL
+# 0
+
+# dates
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS dates (t date[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO dates VALUES (['2008-01-01', NULL, '2007-01-01', '2008-02-01', '2008-01-02', '2008-01-01', '2008-01-01', '2008-01-01'])
+
+# TODO: unsupported feature
+# query II
+# SELECT list_count(t), list_approx_count_distinct(t) from dates
+# ----
+# 7	4
+
+# timestamps
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS timestamp (t TIMESTAMP[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES (['2008-01-01 00:00:01', NULL, '2007-01-01 00:00:01', '2008-02-01 00:00:01', '2008-01-02 00:00:01', '2008-01-01 10:00:00', '2008-01-01 00:10:00', '2008-01-01 00:00:10'])
+
+# TODO: unsupported feature
+# query II
+# SELECT list_count(t), list_approx_count_distinct(t) from timestamp
+# ----
+# 7	7
+
+# strings
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS names (t string[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO names VALUES (['Pedro', NULL, 'Pedro', 'Pedro', 'Mark', 'Mark', 'Mark', 'Hannes-Muehleisen', 'Hannes-Muehleisen'])
+
+# TODO: unsupported feature
+# query II
+# SELECT list_count(t), list_approx_count_distinct(t) from names
+# ----
+# 8	3
+
+# test approximate count on different (long) lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE list_ints_2 (a INTEGER[], b INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_ints_2 SELECT LIST(a), LIST(mod(a, 10)) FROM range(0, 2000) tbl(a);
+
+# TODO: unsupported feature
+# query III
+# SELECT list_count(a), list_approx_count_distinct(a), list_approx_count_distinct(b) from list_ints_2
+# ----
+# 2000	2034	10
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM list_ints_2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_ints_2 SELECT LIST(a), NULL FROM range(0, 2000) tbl(a, b) WHERE a % 2 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_ints_2 SELECT LIST(a), NULL FROM range(0, 2000) tbl(a, b) WHERE a % 2 = 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT list_approx_count_distinct(a) from list_ints_2;
+# ----
+# 1033
+# 975

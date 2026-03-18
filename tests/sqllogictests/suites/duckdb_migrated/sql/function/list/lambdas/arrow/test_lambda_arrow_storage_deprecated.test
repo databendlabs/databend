@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE FUNCTION deprecated_syntax.transpose(lst) AS (
+# 	SELECT list_transform(range(1, 1 + length(lst[1])),
+# 		j -> list_transform(range(1, length(lst) + 1),
+# 			i -> lst[i][j]
+# 		)
+# 	)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# DETACH deprecated_syntax;

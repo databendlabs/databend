@@ -1,0 +1,132 @@
+# Databend rewrite: printf-like formatting expressed with concat/lpad/to_hex/bin.
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+query T
+SELECT 'hello'
+----
+hello
+
+query T
+SELECT CAST(NULL AS VARCHAR)
+----
+NULL
+
+query T
+SELECT concat('hello', ': ', 'world')
+----
+hello: world
+
+query T
+SELECT concat(CAST(NULL AS VARCHAR), ': ', 'world')
+----
+NULL
+
+query T
+SELECT concat(33, '')
+----
+33
+
+query T
+SELECT lpad('33', 4, '0')
+----
+0033
+
+query T
+SELECT concat('time ', lpad('12', 2, '0'), ':', lpad('3', 2, '0'), ':', lpad('16', 2, '0'), ' AM')
+----
+time 12:03:16 AM
+
+query T
+SELECT concat(cast(18446744073709551615 AS DECIMAL(38, 0)))
+----
+18446744073709551615
+
+query T
+SELECT upper(to_hex(255))
+----
+FF
+
+query T
+SELECT bin(100)
+----
+1100100
+
+query T
+SELECT chr(65)
+----
+A
+
+query T
+SELECT lpad('10', 5, ' ')
+----
+   10
+
+query T
+SELECT concat(round(10.0, 2), ' ', round(0.5, 4))
+----
+10.0 0.5
+
+statement ok
+CREATE TABLE strings(idx INTEGER, fmt STRING, pint INTEGER, pstring STRING)
+
+statement ok
+INSERT INTO strings VALUES (1, '%d: %s', 10, 'hello')
+
+statement ok
+INSERT INTO strings VALUES (2, 'blabla %d blabla %s', 20, 'blabla')
+
+statement ok
+INSERT INTO strings VALUES (3, NULL, 30, 'abcde')
+
+query T
+SELECT CASE idx
+    WHEN 1 THEN concat(pint, ': ', pstring)
+    WHEN 2 THEN concat('blabla ', pint, ' blabla ', pstring)
+    ELSE NULL
+END
+FROM strings
+ORDER BY idx
+----
+10: hello
+blabla 20 blabla blabla
+NULL
+
+query T
+SELECT CASE WHEN fmt IS NULL THEN NULL ELSE concat(10, ': ', pstring) END
+FROM strings
+ORDER BY idx
+----
+10: hello
+10: blabla
+NULL
+
+query T
+SELECT concat(pstring, ': ', pstring)
+FROM strings
+ORDER BY idx
+----
+hello: hello
+blabla: blabla
+abcde: abcde
+
+query T
+SELECT concat(pstring, ': ', pstring)
+FROM strings
+WHERE idx <> 2
+ORDER BY idx
+----
+hello: hello
+abcde: abcde
+
+query T
+SELECT concat(100::tinyint, ' ', 1000::smallint, ' ', 1000::int, ' ', 1000::bigint)
+----
+100 1000 1000 1000
+
+statement error
+SELECT concat()
+
+statement error
+SELECT lpad('33')

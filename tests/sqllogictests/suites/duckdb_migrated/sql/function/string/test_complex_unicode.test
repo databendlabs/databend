@@ -1,0 +1,39 @@
+query III
+SELECT char_length('S̈a'), length('S̈a'), octet_length('S̈a')
+----
+3	3	4
+
+query III
+SELECT char_length('🤦🏼‍♂️'), length('🤦🏼‍♂️'), octet_length('🤦🏼‍♂️')
+----
+5	5	17
+
+query III
+SELECT char_length('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'), length('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️'), octet_length('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')
+----
+19	19	55
+
+query T
+SELECT reverse('MotörHead')
+----
+daeHrötoM
+
+query T
+SELECT substring('S̈a', 1, 1)
+----
+S
+
+query T
+SELECT substring('S̈a', 2, 1)
+----
+̈
+
+query T
+SELECT substring('🤦🏼‍♂️🤦🏼‍♂️🤦🏼‍♂️', 1, 5)
+----
+🤦🏼‍♂️
+
+query T
+SELECT substring('test: 🤦🏼‍♂️hello🤦🏼‍♂️ world', 7, 15)
+----
+🤦🏼‍♂️hello🤦🏼‍♂️

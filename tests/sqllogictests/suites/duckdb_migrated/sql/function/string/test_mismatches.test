@@ -1,0 +1,172 @@
+# Databend rewrite: fixed-width mismatch counts with substring comparisons.
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+query T
+SELECT concat(CASE
+    WHEN 'hallo' IS NULL OR 'hallo' IS NULL THEN NULL
+    WHEN char_length('hallo') <> char_length('hallo') OR char_length('hallo') = 0 THEN CAST('x' AS INT)
+    ELSE
+        (CASE WHEN substring('hallo', 1, 1) = substring('hallo', 1, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hallo', 2, 1) = substring('hallo', 2, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hallo', 3, 1) = substring('hallo', 3, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hallo', 4, 1) = substring('hallo', 4, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hallo', 5, 1) = substring('hallo', 5, 1) THEN 0 ELSE 1 END)
+END, '')
+----
+0
+
+query T
+SELECT concat(CASE
+    WHEN 'hello' IS NULL OR 'hallo' IS NULL THEN NULL
+    WHEN char_length('hello') <> char_length('hallo') OR char_length('hello') = 0 THEN CAST('x' AS INT)
+    ELSE
+        (CASE WHEN substring('hello', 1, 1) = substring('hallo', 1, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hello', 2, 1) = substring('hallo', 2, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hello', 3, 1) = substring('hallo', 3, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hello', 4, 1) = substring('hallo', 4, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('hello', 5, 1) = substring('hallo', 5, 1) THEN 0 ELSE 1 END)
+END, '')
+----
+1
+
+query T
+SELECT concat(CASE
+    WHEN 'aloha' IS NULL OR 'hallo' IS NULL THEN NULL
+    WHEN char_length('aloha') <> char_length('hallo') OR char_length('aloha') = 0 THEN CAST('x' AS INT)
+    ELSE
+        (CASE WHEN substring('aloha', 1, 1) = substring('hallo', 1, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('aloha', 2, 1) = substring('hallo', 2, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('aloha', 3, 1) = substring('hallo', 3, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('aloha', 4, 1) = substring('hallo', 4, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring('aloha', 5, 1) = substring('hallo', 5, 1) THEN 0 ELSE 1 END)
+END, '')
+----
+5
+
+query T
+SELECT CASE WHEN NULL IS NULL OR 'hallo' IS NULL THEN NULL ELSE 0 END
+----
+NULL
+
+query T
+SELECT CASE WHEN 'hello' IS NULL OR NULL IS NULL THEN NULL ELSE 0 END
+----
+NULL
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('world'), (NULL)
+
+query T
+SELECT concat(CASE
+    WHEN s IS NULL OR 'hallo' IS NULL THEN NULL
+    WHEN char_length(s) <> char_length('hallo') OR char_length(s) = 0 THEN CAST('x' AS INT)
+    ELSE
+        (CASE WHEN substring(s, 1, 1) = substring('hallo', 1, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 2, 1) = substring('hallo', 2, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 3, 1) = substring('hallo', 3, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 4, 1) = substring('hallo', 4, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 5, 1) = substring('hallo', 5, 1) THEN 0 ELSE 1 END)
+END, '')
+FROM strings
+ORDER BY s
+----
+5
+0
+1
+4
+NULL
+
+query T
+SELECT CASE
+    WHEN NULL IS NULL OR s IS NULL THEN NULL
+    ELSE 0
+END
+FROM strings
+ORDER BY s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement error
+SELECT CASE
+    WHEN char_length('') = 0 THEN CAST('x' AS INT)
+    ELSE 0
+END
+
+statement error
+SELECT CASE
+    WHEN char_length('hoi') <> char_length('hallo') THEN CAST('x' AS INT)
+    ELSE 0
+END
+
+statement ok
+DROP TABLE strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('halo'), (NULL)
+
+statement error
+SELECT CASE
+    WHEN s IS NULL OR 'hallo' IS NULL THEN NULL
+    WHEN char_length(s) <> char_length('hallo') OR char_length(s) = 0 THEN CAST('x' AS INT)
+    ELSE
+        (CASE WHEN substring(s, 1, 1) = substring('hallo', 1, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 2, 1) = substring('hallo', 2, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 3, 1) = substring('hallo', 3, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 4, 1) = substring('hallo', 4, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 5, 1) = substring('hallo', 5, 1) THEN 0 ELSE 1 END)
+END
+FROM strings
+WHERE s = 'halo'
+
+statement ok
+DROP TABLE IF EXISTS string_pairs
+
+statement ok
+CREATE TABLE string_pairs(s VARCHAR, t VARCHAR)
+
+statement ok
+INSERT INTO string_pairs VALUES ('hello', 'world'), ('hallo', 'ola'), ('hello', ''), (NULL, NULL), ('', ''), ('bora', 'bora')
+
+query T
+SELECT concat(CASE
+    WHEN s IS NULL OR t IS NULL THEN NULL
+    WHEN char_length(s) <> char_length(t) OR char_length(s) = 0 THEN CAST('x' AS INT)
+    ELSE
+        (CASE WHEN substring(s, 1, 1) = substring(t, 1, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 2, 1) = substring(t, 2, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 3, 1) = substring(t, 3, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 4, 1) = substring(t, 4, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 5, 1) = substring(t, 5, 1) THEN 0 ELSE 1 END)
+END, '')
+FROM string_pairs
+WHERE char_length(s) = char_length(t) AND char_length(s) > 0
+ORDER BY s, t
+----
+0
+4
+
+statement error
+SELECT CASE
+    WHEN s IS NULL OR t IS NULL THEN NULL
+    WHEN char_length(s) <> char_length(t) OR char_length(s) = 0 THEN CAST('x' AS INT)
+    ELSE
+        (CASE WHEN substring(s, 1, 1) = substring(t, 1, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 2, 1) = substring(t, 2, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 3, 1) = substring(t, 3, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 4, 1) = substring(t, 4, 1) THEN 0 ELSE 1 END) +
+        (CASE WHEN substring(s, 5, 1) = substring(t, 5, 1) THEN 0 ELSE 1 END)
+END
+FROM string_pairs
+WHERE s = 'hallo'

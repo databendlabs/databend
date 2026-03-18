@@ -1,0 +1,40 @@
+query T
+SELECT regexp_extract_all('2023-04-15 2024-05-20', '(\\d{4})-(\\d{2})-(\\d{2})', 0)
+----
+["2023-04-15","2024-05-20"]
+
+query T
+SELECT regexp_extract_all('John 30, Jane 25', '(\\w+) (\\d+)', 1)
+----
+["John","Jane"]
+
+query T
+SELECT regexp_extract_all('A1 B2 C3', '([A-Z])(\\d)', 2)
+----
+["1","2","3"]
+
+query T
+SELECT regexp_extract_all('no numbers here', '(\\d+)', 0)
+----
+[]
+
+query T
+SELECT regexp_extract_all('', '(\\d+)', 0)
+----
+[]
+
+query T
+SELECT regexp_extract_all('Order-123-456 Order-789-012', 'Order-(\\d+)-(\\d+)', 2)
+----
+["456","012"]
+
+query T
+SELECT regexp_extract_all('img.jpg readme', '(\\w+)(?:\\.(\\w+))?', 2)
+----
+["jpg",""]
+
+statement error
+SELECT regexp_extract_all('A1 B2 C3', '([A-Z])(\\d)', 3)
+
+statement error
+SELECT regexp_extract_all('A1 B2 C3', '([A-Z])(\\d)', 10)

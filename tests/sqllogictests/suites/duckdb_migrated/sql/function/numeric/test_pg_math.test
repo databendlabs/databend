@@ -1,0 +1,188 @@
+# see https://www.postgresql.org/docs/10/functions-math.html
+# TODO: unsupported feature
+# query R
+# select abs(-17.4)
+# ----
+# 17.4
+
+# TODO: unsupported feature
+# query R
+# select cbrt(27.0)
+# ----
+# 3.0
+
+# TODO: unsupported feature
+# query I
+# select ceil(-42.8)
+# ----
+# -42
+
+# TODO: unsupported feature
+# query I
+# select ceiling(-95.3)
+# ----
+# -95
+
+# TODO: unsupported feature
+# query R
+# select exp(1.0)
+# ----
+# 2.718281828459045
+
+# TODO: unsupported feature
+# query I
+# select floor(-42.8)
+# ----
+# -43
+
+# TODO: unsupported feature
+# query R
+# select ln(2.0)
+# ----
+# 0.6931471805599453
+
+# TODO: unsupported feature
+# query R
+# select log(100.0)
+# ----
+# 4.605170185988092
+
+# TODO: unsupported feature
+# query R
+# select log10(100.0)
+# ----
+# 2.0
+
+# TODO: unsupported feature
+# query R
+# select log2(4.0)
+# ----
+# 2.0
+
+# TODO: unsupported feature
+# query R
+# select pi()
+# ----
+# 3.141592653589793
+
+# TODO: unsupported feature
+# query R
+# select sqrt(2.0)
+# ----
+# 1.4142135623730951
+
+# TODO: unsupported feature
+# query R
+# select radians(45.0)
+# ----
+# 0.7853981633974483
+
+# TODO: unsupported feature
+# query R
+# select degrees(0.5)
+# ----
+# 28.64788975654116
+
+# TODO: unsupported feature
+# query I
+# select sign(4.1)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select sign(-4.1)
+# ----
+# -1
+
+# TODO: unsupported feature
+# query I
+# select sign(0)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select sign(3)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query R
+# select log(2, 64)
+# ----
+# 6.0
+
+# TODO: result differs
+# statement error
+# select log(0, 64)
+
+# TODO: unsupported feature
+# statement error
+# select log(2, 0)
+
+# TODO: unsupported feature
+# statement error
+# select log(-1, 64)
+
+# TODO: unsupported feature
+# statement error
+# select log(2, -1)
+
+# TODO: unsupported feature
+# statement error
+# select log(1, 64)
+
+# TODO: unsupported feature
+# query I
+# select log(2, 1)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select log(0.5, 64)
+# ----
+# -6
+
+# TODO: unsupported feature
+# query I
+# select log(0.5, 64)
+# ----
+# -6
+
+# TODO: unsupported feature
+# query I
+# select log('Inf'::DOUBLE, 64)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select log(64, 'Inf'::DOUBLE)
+# ----
+# Inf
+
+# TODO: unsupported feature
+# query I
+# select log(64, 'NaN'::DOUBLE)
+# ----
+# NaN
+
+# TODO: unsupported feature
+# query I
+# select log('NaN'::DOUBLE, 64)
+# ----
+# NaN
+
+# TODO: unsupported feature
+# statement error
+# select log('-Inf'::DOUBLE, 64)
+
+# TODO: unsupported feature
+# statement error
+# select log(64, '-Inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select log(2, -1)

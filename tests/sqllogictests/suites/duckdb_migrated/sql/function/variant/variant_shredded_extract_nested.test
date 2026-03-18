@@ -1,0 +1,85 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_variant
+
+# TODO: unsupported feature
+# statement ok
+# create table list_variant as select
+# 	{
+# 		'id': l_orderkey,
+# 		'my_list': [
+# 			l_orderkey,
+# 			l_orderkey + 1,
+# 			l_orderkey + 2
+# 		],
+# 		'my_struct': {
+# 			'a': l_orderkey,
+# 			'b': l_orderkey + 30
+# 		}
+# 	}::variant as list_variant
+# from
+# 	range(0, 5) t(l_orderkey)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# Extract of a LIST without a CAST
+
+# TODO: unsupported feature
+# query I
+# select
+# 	list_variant.my_list
+# from
+# 	list_variant
+# limit
+# 	1;
+# ----
+# [0, 1, 2]
+
+# Extract of a LIST with a CAST
+
+# TODO: unsupported feature
+# query I
+# select
+# 	list_variant.my_list::BIGINT[]
+# from
+# 	list_variant
+# limit
+# 	1;
+# ----
+# [0, 1, 2]
+
+# Extract of a STRUCT without a CAST
+
+# TODO: unsupported feature
+# query I
+# select
+# 	list_variant.my_struct
+# from
+# 	list_variant
+# limit 1;
+# ----
+# {'a': 0, 'b': 30}
+
+# Extract of a STRUCT with a CAST
+
+# TODO: unsupported feature
+# query I
+# select
+# 	list_variant.my_struct::STRUCT(b BIGINT, a BIGINT)
+# from
+# 	list_variant
+# limit 1;
+# ----
+# {'b': 30, 'a': 0}
+
+# TODO: unsupported feature
+# query I
+# select
+# 	(list_variant.my_struct::STRUCT(b VARCHAR, a VARCHAR)).b[1]
+# from
+# 	list_variant
+# limit 1;
+# ----
+# 3

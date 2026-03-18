@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE t1(t TIMESTAMP)
+
+statement ok
+INSERT INTO t1 VALUES (NOW());
+
+statement ok
+INSERT INTO t1 SELECT NOW();
+
+query I
+SELECT COUNT(DISTINCT t) FROM t1
+----
+2
+
+statement ok
+ROLLBACK

@@ -1,0 +1,125 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, len INTEGER)
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)
+
+query TT
+SELECT substring('🦆ab', 1, 0), substring('abc', 1, 0)
+----
+(empty)	(empty)
+
+query T
+SELECT substring(s FROM 1 FOR 2) FROM strings
+----
+he
+wo
+b
+NULL
+
+query T
+SELECT substring(s FROM 2 FOR 2) FROM strings
+----
+el
+or
+(empty)
+NULL
+
+query T
+SELECT substring(s FROM off FOR len) FROM strings
+----
+he
+orl
+b
+NULL
+
+query T
+SELECT substring(s FROM off FOR 2) FROM strings
+----
+he
+or
+b
+NULL
+
+query T
+SELECT substring(s FROM 1 FOR len) FROM strings
+----
+he
+wor
+b
+NULL
+
+query T
+SELECT substring('hello' FROM off FOR len) FROM strings
+----
+he
+ell
+h
+el
+
+query T
+SELECT substring(NULL FROM off FOR len) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring('hello' FROM NULL FOR len) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring('hello' FROM off FOR NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT substring(s, greatest(char_length(s) - 1, 1), 2) FROM strings
+----
+lo
+ld
+b
+NULL
+
+query T
+SELECT substring(s, 2, 0) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+query T
+SELECT substring(s, 2) FROM strings
+----
+ello
+orld
+(empty)
+NULL
+
+query T
+SELECT substring(substring(s, 2), 2) FROM strings
+----
+llo
+rld
+(empty)
+NULL
+
+query T
+SELECT substring(s, 2147483647, 2147483647) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL

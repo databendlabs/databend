@@ -1,0 +1,98 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+# scalar like with escape
+query B
+SELECT '%++' LIKE '*%++' ESCAPE '*';
+----
+1
+
+# Not Like
+
+query B
+SELECT '%++' NOT LIKE '*%++' ESCAPE '*';
+----
+0
+
+query B
+SELECT 'a_b' LIKE 'a*_b' ESCAPE '*';
+----
+1
+
+query B
+SELECT 'a_b' NOT LIKE 'a*%b' ESCAPE '*';
+----
+1
+
+query B
+SELECT '%' LIKE '*%' ESCAPE '*';
+----
+1
+
+query B
+SELECT '_ ' LIKE '*_ ' ESCAPE '*';
+----
+1
+
+query B
+SELECT ' a ' LIKE '*_ ' ESCAPE '*';
+----
+0
+
+query B
+SELECT '%_' LIKE '%_';
+----
+1
+
+query B
+SELECT '*%' NOT LIKE '*%' ESCAPE '*';
+----
+1
+
+query B
+SELECT 'a%b' LIKE 'a*%b' ESCAPE '*';
+----
+1
+
+statement ok
+CREATE TABLE strings(s STRING, pat STRING);
+
+statement ok
+INSERT INTO strings VALUES ('abab', 'ab%'), ('aaa', 'a*_a'), ('aaa', '*%b'), ('bbb', 'a%');
+
+query T
+SELECT s FROM strings;
+----
+abab
+aaa
+aaa
+bbb
+
+query T
+SELECT pat FROM strings;
+----
+ab%
+a*_a
+*%b
+a%
+
+query T
+SELECT s FROM strings WHERE pat LIKE 'a*%' ESCAPE '*';
+----
+bbb
+
+query T
+SELECT s FROM strings WHERE 'aba' LIKE pat ESCAPE '*';
+----
+abab
+bbb
+
+query T
+SELECT s FROM strings WHERE s LIKE pat ESCAPE '*';
+----
+abab
+
+query B
+select CAST(NULL AS BOOLEAN);
+----
+NULL

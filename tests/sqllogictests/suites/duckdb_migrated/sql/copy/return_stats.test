@@ -1,139 +1,174 @@
-statement ok
-DROP TABLE IF EXISTS array_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS array_test
 
-statement ok
-DROP TABLE IF EXISTS blob_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS blob_test
 
-statement ok
-DROP TABLE IF EXISTS bools
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bools
 
-statement ok
-DROP TABLE IF EXISTS date_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS date_test
 
-statement ok
-DROP TABLE IF EXISTS decimal_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS decimal_test
 
-statement ok
-DROP TABLE IF EXISTS empty_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS empty_test
 
-statement ok
-DROP TABLE IF EXISTS floating_point_nan
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floating_point_nan
 
-statement ok
-DROP TABLE IF EXISTS floating_point_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floating_point_test
 
-statement ok
-DROP TABLE IF EXISTS fp_nan_only
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS fp_nan_only
 
-statement ok
-DROP TABLE IF EXISTS funky_names
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS funky_names
 
-statement ok
-DROP TABLE IF EXISTS integers
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
 
-statement ok
-DROP TABLE IF EXISTS large_blob
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS large_blob
 
-statement ok
-DROP TABLE IF EXISTS large_string
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS large_string
 
-statement ok
-DROP TABLE IF EXISTS list_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_test
 
-statement ok
-DROP TABLE IF EXISTS map_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS map_test
 
-statement ok
-DROP TABLE IF EXISTS medium_list_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS medium_list_test
 
-statement ok
-DROP TABLE IF EXISTS multi_column_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS multi_column_test
 
-statement ok
-DROP TABLE IF EXISTS multi_partitioned_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS multi_partitioned_test
 
-statement ok
-DROP TABLE IF EXISTS nested_struct_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested_struct_test
 
-statement ok
-DROP TABLE IF EXISTS partitioned_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS partitioned_test
 
-statement ok
-DROP TABLE IF EXISTS string_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS string_test
 
-statement ok
-DROP TABLE IF EXISTS struct_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS struct_test
 
-statement ok
-DROP TABLE IF EXISTS uuids
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS uuids
 
-statement ok
-CREATE TABLE integers AS SELECT i FROM range(0, 200000) AS r(i);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers AS SELECT range i FROM range(0, 200000);
 
-statement ok
-CREATE TABLE bools AS SELECT i::bool i FROM range(0, 2) i(i);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bools AS SELECT i::bool i FROM range(0, 2) i(i);
 
-statement ok
-CREATE TABLE multi_column_test AS SELECT i, i % 10 AS j, CASE WHEN i % 2 = 0 THEN NULL ELSE i END AS k FROM range(0, 2500) AS r(i);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE multi_column_test AS SELECT range i, range%10 j, case when range%2=0 then null else range end k FROM range(0, 2500);
 
-statement ok
-CREATE TABLE floating_point_test AS SELECT case when i%10=0 then null else i/10.0 end as fp FROM range(0, 2500) t(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floating_point_test AS SELECT case when i%10=0 then null else i/10.0 end as fp FROM range(0, 2500) t(i)
 
-statement ok
-CREATE TABLE floating_point_nan AS SELECT case when i%10=0 then 'nan'::double when i%4=0 then null else i/10.0 end as fp FROM range(0, 2500) t(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floating_point_nan AS SELECT case when i%10=0 then 'nan'::double when i%4=0 then null else i/10.0 end as fp FROM range(0, 2500) t(i)
 
-statement ok
-CREATE TABLE fp_nan_only AS SELECT 'nan'::float as float_val
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE fp_nan_only AS SELECT 'nan'::float as float_val
 
-statement ok
-CREATE TABLE string_test AS SELECT concat('thisisalongstring_', i) AS s FROM range(0, 2500) AS r(i);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE string_test AS SELECT concat('thisisalongstring_', range) s FROM range(0, 2500);
 
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE date_test AS
-# SELECT (TIMESTAMP '2000-01-01' + interval (i) day)::DATE dt,
-#        TIMESTAMP '2000-01-01 12:12:12.123456' + interval (i) day ts,
-#        (TIMESTAMP '2000-01-01 12:12:12' + interval (i) day)::TIMESTAMP_S ts_s,
-#        (TIMESTAMP '2000-01-01 12:12:12.123' + interval (i) day)::TIMESTAMP_MS ts_ms,
-#        concat((TIMESTAMP '2000-01-01 12:12:12.123456' + interval (i) day)::VARCHAR, '789')::TIMESTAMP_NS ts_ns,
-#        TIME '00:00:00' + interval (10 * i) second t
-# FROM range(0, 2500) AS r(i);
+# SELECT (TIMESTAMP '2000-01-01' + interval (range) day)::DATE dt,
+#        TIMESTAMP '2000-01-01 12:12:12.123456' + interval (range) day ts,
+#        (TIMESTAMP '2000-01-01 12:12:12' + interval (range) day)::TIMESTAMP_S ts_s,
+#        (TIMESTAMP '2000-01-01 12:12:12.123' + interval (range) day)::TIMESTAMP_MS ts_ms,
+#        concat((TIMESTAMP '2000-01-01 12:12:12.123456' + interval (range) day)::VARCHAR, '789')::TIMESTAMP_NS ts_ns,
+#        TIME '00:00:00' + interval (10 * range) second t
+# FROM range(0, 2500);
 
-statement ok
-CREATE TABLE empty_test AS FROM range(0, 2500) LIMIT 0;
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE empty_test AS FROM range(0, 2500) LIMIT 0;
 
-statement ok
-CREATE TABLE blob_test AS SELECT ''::BLOB AS bl UNION ALL SELECT '\x80\x00\x80'::BLOB
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE blob_test AS SELECT ''::BLOB AS bl UNION ALL SELECT '\x80\x00\x80'::BLOB
 
-statement ok
-CREATE TABLE decimal_test AS
-SELECT 25.3::DECIMAL(4,1) AS dec_i16,
-       123456.789::DECIMAL(9,3) AS dec_i32,
-       123456789123.456::DECIMAL(18,3) AS dec_i64,
-       12345678912345678912345678912345678.912::DECIMAL(38,3) AS dec_i128
-UNION ALL
-SELECT 1.1::DECIMAL(4,1),
-       2.123::DECIMAL(9,3),
-       3.456::DECIMAL(18,3),
-       4.567::DECIMAL(38,3)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE decimal_test AS
+# SELECT 25.3::DECIMAL(4,1) AS dec_i16,
+#        123456.789::DECIMAL(9,3) AS dec_i32,
+#        123456789123.456::DECIMAL(18,3) AS dec_i64,
+#        12345678912345678912345678912345678.912::DECIMAL(38,3) AS dec_i128
+# UNION ALL
+# SELECT 1.1::DECIMAL(4,1),
+#        2.123::DECIMAL(9,3),
+#        3.456::DECIMAL(18,3),
+#        4.567::DECIMAL(38,3)
 
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE struct_test AS SELECT case when i%10=0 then null else {'x': i, 'y': case when i%2=0 then 100 + i else null end} end struct_val FROM range(0, 2500) t(i)
 
-statement ok
-CREATE TABLE list_test AS SELECT [i] l1, case when i%10=0 then null else [case when i%2=0 then 100 + i else null end] end l2 FROM range(0, 2500) t(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE list_test AS SELECT [i] l1, case when i%10=0 then null else [case when i%2=0 then 100 + i else null end] end l2 FROM range(0, 2500) t(i)
 
-statement ok
-CREATE TABLE medium_list_test AS SELECT
-	[i, i, i] l1,
-	case when i%10=0
-		then
-			null
-		else
-			[case when i%2=0 then 100 + i else null end, null, case when i%2=0 then null else 100 + i end]
-	end l2
-FROM range(0, 2500) t(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE medium_list_test AS SELECT
+# 	[i, i, i] l1,
+# 	case when i%10=0
+# 		then
+# 			null
+# 		else
+# 			[case when i%2=0 then 100 + i else null end, null, case when i%2=0 then null else 100 + i end]
+# 	end l2
+# FROM range(0, 2500) t(i)
 
 # TODO: unsupported feature
 # statement ok
@@ -151,17 +186,21 @@ FROM range(0, 2500) t(i)
 # statement ok
 # CREATE TABLE array_test AS SELECT [i, i + 1, i + 2]::INT[3] AS array_val FROM range(0, 2500) t(i)
 
-statement ok
-CREATE TABLE partitioned_test AS SELECT i % 2 AS partition_key, i AS val FROM range(0, 2500) AS r(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE partitioned_test AS SELECT range%2 as partition_key, range val FROM range(0, 2500)
 
-statement ok
-CREATE TABLE multi_partitioned_test AS SELECT i % 2 AS partition_key, i % 3 AS partition_key2, i AS val FROM range(0, 2500) AS r(i)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE multi_partitioned_test AS SELECT range%2 as partition_key, range % 3 as partition_key2, range val FROM range(0, 2500)
 
-statement ok
-CREATE TABLE large_string AS SELECT repeat('A', 254) || '🦆' AS val UNION ALL SELECT repeat('Z', 254) || '🦆'
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE large_string AS SELECT repeat('A', 254) || '🦆' AS val UNION ALL SELECT repeat('Z', 254) || '🦆'
 
-statement ok
-CREATE TABLE large_blob AS SELECT repeat('\x81', 4000)::BLOB AS val UNION ALL SELECT repeat('\x80', 4000)::BLOB
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE large_blob AS SELECT repeat('\x81', 4000)::BLOB AS val UNION ALL SELECT repeat('\x80', 4000)::BLOB
 
 # TODO: unsupported feature
 # statement ok

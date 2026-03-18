@@ -1,0 +1,77 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(id INT, s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES (1, 'átomo')
+
+statement ok
+INSERT INTO strings VALUES (2, 'olá mundo')
+
+statement ok
+INSERT INTO strings VALUES (3, '你好世界')
+
+statement ok
+INSERT INTO strings VALUES (4, 'two ñ three ₡ four 🦆 end')
+
+# Test one matching UTF8 letter
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('á')) = 'á' AS INT) FROM strings ORDER BY id
+----
+1
+0
+0
+0
+
+# Test a sentence with an UTF-8
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('olá mundo')) = 'olá mundo' AS INT) FROM strings ORDER BY id
+----
+0
+1
+0
+0
+
+# Test an entire UTF-8 word
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('你好世界')) = '你好世界' AS INT) FROM strings ORDER BY id
+----
+0
+0
+1
+0
+
+# Test a substring of the haystack from the beginning
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('two ñ thr')) = 'two ñ thr' AS INT) FROM strings ORDER BY id
+----
+0
+0
+0
+1
+
+# Test a single UTF8 substring of the haystack in the middle
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('ñ')) = 'ñ' AS INT) FROM strings ORDER BY id
+----
+0
+0
+0
+0
+
+# Test a multiple UTF8 substring of the haystack in the middle
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('₡ four 🦆 e')) = '₡ four 🦆 e' AS INT) FROM strings ORDER BY id
+----
+0
+0
+0
+0

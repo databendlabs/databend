@@ -1,0 +1,84 @@
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%Y-%m-%d %H:%M:%S.%f')
+----
+2022-04-07 18:12:15.123456
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%d/%m/%Y')
+----
+07/04/2022
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '(%Y)')
+----
+(2022)
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%% %Y %%')
+----
+% 2022 %
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%a')
+----
+Thu
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%A')
+----
+Thursday
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%j')
+----
+097
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%H:%M:%S')
+----
+18:12:15
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%Y %Y %Y')
+----
+2022 2022 2022
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%m')
+----
+04
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%M')
+----
+12
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%S')
+----
+15
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%f')
+----
+123456
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%V')
+----
+14
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%G')
+----
+2022
+
+query T
+SELECT strftime(TIMESTAMP '2022-04-07 18:12:15.123456', '%u')
+----
+4
+
+query T
+SELECT strftime(NULL::TIMESTAMP, '%Y')
+----
+NULL

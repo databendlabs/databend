@@ -1,0 +1,204 @@
+statement ok
+DROP TABLE IF EXISTS a
+
+# create table
+statement ok
+CREATE TABLE a (i integer, j integer);
+
+statement ok
+INSERT INTO a VALUES (3, 4), (4, 5), (5, 6);
+
+query II
+SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
+----
+5	6
+
+query T
+explain SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5);
+----
+TableScan
+├── table: default.default.a
+├── scan id: 0
+├── output columns: [i (#0), j (#1)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+├── push downs: [filters: [a.i (#0) > 3 and (a.j (#1) < 5 or a.j (#1) > 5)], limit: NONE]
+└── estimated rows: 1.67
+
+# test boolean logic in conjunctions
+
+query B
+SELECT true AND true
+----
+1
+
+query B
+SELECT true AND false
+----
+0
+
+query B
+SELECT false AND true
+----
+0
+
+query B
+SELECT false AND false
+----
+0
+
+query B
+SELECT false AND NULL
+----
+0
+
+query B
+SELECT NULL AND false
+----
+0
+
+query T
+SELECT NULL AND true
+----
+NULL
+
+query T
+SELECT true AND NULL
+----
+NULL
+
+query B
+SELECT true OR true
+----
+1
+
+query B
+SELECT true OR NULL
+----
+1
+
+query B
+SELECT NULL OR true
+----
+1
+
+query T
+SELECT false OR NULL
+----
+NULL
+
+query T
+SELECT NULL OR false
+----
+NULL
+
+query B
+SELECT true OR false
+----
+1
+
+query B
+SELECT false OR true
+----
+1
+
+query B
+SELECT false OR false
+----
+0
+
+# test single constant in conjunctions
+
+query B
+SELECT true AND i>3 FROM a ORDER BY i
+----
+0
+1
+1
+
+query B
+SELECT i>3 AND true FROM a ORDER BY i
+----
+0
+1
+1
+
+query B
+SELECT 2>3 AND i>3 FROM a ORDER BY i
+----
+0
+0
+0
+
+query B
+SELECT false AND i>3 FROM a ORDER BY i
+----
+0
+0
+0
+
+query B
+SELECT i>3 AND false FROM a ORDER BY i
+----
+0
+0
+0
+
+query B
+SELECT false OR i>3 FROM a ORDER BY i
+----
+0
+1
+1
+
+query B
+SELECT i>3 OR false FROM a ORDER BY i
+----
+0
+1
+1
+
+query B
+SELECT true OR i>3 FROM a ORDER BY i
+----
+1
+1
+1
+
+query B
+SELECT i>3 OR true FROM a ORDER BY i
+----
+1
+1
+1
+
+query B
+SELECT NULL OR i>3 FROM a ORDER BY i
+----
+NULL
+1
+1
+
+query B
+SELECT i>3 OR NULL FROM a ORDER BY i
+----
+NULL
+1
+1
+
+query B
+SELECT NULL AND i>3 FROM a ORDER BY i
+----
+0
+NULL
+NULL
+
+query B
+SELECT i>3 AND NULL FROM a ORDER BY i
+----
+0
+NULL
+NULL

@@ -1,0 +1,44 @@
+# TODO: unsupported feature
+# query I
+# SELECT [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
+# ----
+# [-2147483648, 2147483647]
+# []
+# []
+# [-2147483648, 2147483647]
+# [-2147483648, 2147483647]
+# [-2147483648, 2147483647]
+# []
+# []
+# [3, 5]
+# []
+# [7]
+
+# TODO: unsupported feature
+# query I
+# SELECT [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
+# ----
+# []
+# []
+# [NULL]
+# []
+# []
+# []
+# []
+# [NULL]
+# []
+# []
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(c, lambda x, y: x + y) FROM test_vector_types(NULL::INT[]) t(c) WHERE len(c) > 0;
+# ----
+# -1
+# NULL
+# -1
+# -1
+# -1
+# NULL
+# 8
+# 7

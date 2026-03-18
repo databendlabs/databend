@@ -1,0 +1,248 @@
+statement ok
+DROP TABLE IF EXISTS t0
+
+query I
+SELECT CAST(LEFT('abcd', CHAR_LENGTH('a')) = 'a' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcd', CHAR_LENGTH('ab')) = 'ab' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcd', CHAR_LENGTH('abc')) = 'abc' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcd', CHAR_LENGTH('abcd')) = 'abcd' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcd', CHAR_LENGTH('b')) = 'b' AS INT)
+----
+0
+
+# "Inlined string"
+
+query I
+SELECT CAST(LEFT('abcdefgh', CHAR_LENGTH('a')) = 'a' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefgh', CHAR_LENGTH('ab')) = 'ab' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefgh', CHAR_LENGTH('abc')) = 'abc' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefgh', CHAR_LENGTH('abcd')) = 'abcd' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefgh', CHAR_LENGTH('abcde')) = 'abcde' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefgh', CHAR_LENGTH('b')) = 'b' AS INT)
+----
+0
+
+# Longer (non-inlined) strings
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('a')) = 'a' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('ab')) = 'ab' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('abc')) = 'abc' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('abcd')) = 'abcd' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('abcde')) = 'abcde' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('b')) = 'b' AS INT)
+----
+0
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('abcdefghijklmnopqrstuvwx')) = 'abcdefghijklmnopqrstuvwx' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('abcdefghijklmnopqrstuvwxyz', CHAR_LENGTH('abcfefghijklmnopqrstuvwx')) = 'abcfefghijklmnopqrstuvwx' AS INT)
+----
+0
+
+# "Empty string and prefix"
+
+query I
+SELECT CAST(LEFT('', CHAR_LENGTH('aaa')) = 'aaa' AS INT)
+----
+0
+
+query I
+SELECT CAST(LEFT('aaa', CHAR_LENGTH('')) = '' AS INT)
+----
+1
+
+# "Issue #572 alloc exception on empty table"
+
+statement ok
+CREATE TABLE t0(c0 VARCHAR)
+
+query T
+SELECT * FROM t0 WHERE LEFT(t0.c0, CHAR_LENGTH('')) = ''
+----
+
+# "Prefix test with UTF8"
+
+query I
+SELECT CAST(LEFT('átomo', CHAR_LENGTH('á')) = 'á' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('átomo', CHAR_LENGTH('á')) = 'á' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('átomo', CHAR_LENGTH('a')) = 'a' AS INT)
+----
+0
+
+query I
+SELECT CAST(LEFT('olá mundo', CHAR_LENGTH('olá')) = 'olá' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('olá mundo', CHAR_LENGTH('olá')) = 'olá' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('olá mundo', CHAR_LENGTH('ola')) = 'ola' AS INT)
+----
+0
+
+query I
+SELECT CAST(LEFT('ñeft', CHAR_LENGTH('ñ')) = 'ñ' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('ñeft', CHAR_LENGTH('ñ')) = 'ñ' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('ñeft', CHAR_LENGTH('ñeft')) = 'ñeft' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('ñeft', CHAR_LENGTH('neft')) = 'neft' AS INT)
+----
+0
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ')) = 'two ñ' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ')) = 'two ñ' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two n')) = 'two n' AS INT)
+----
+0
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three')) = 'two ñ three' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three ₡')) = 'two ñ three ₡' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three ₡ four 🦆')) = 'two ñ three ₡ four 🦆' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three ₡ four 🦆 end')) = 'two ñ three ₡ four 🦆 end' AS INT)
+----
+1
+
+query I
+SELECT CAST(LEFT('two ñ three ₡ four 🦆 end', CHAR_LENGTH('two ñ three ₡ four 🦆 end')) = 'two ñ three ₡ four 🦆 end' AS INT)
+----
+1
+
+# test empty prefix removal
+
+statement ok
+INSERT INTO t0 VALUES ('a'), ('b'), ('d')
+
+query I
+SELECT COUNT(*) FROM t0 WHERE LEFT(t0.c0, CHAR_LENGTH('')) = '';
+----
+3
+
+query TI
+SELECT c0, CAST(LEFT(t0.c0, CHAR_LENGTH('')) = '' AS INT) FROM t0 WHERE c0 <> 'b' ORDER BY t0.c0;
+----
+a	1
+d	1
+
+
+# now with a NULL value
+
+statement ok
+INSERT INTO t0 VALUES (NULL)
+
+query I
+SELECT COUNT(*) FROM t0 WHERE LEFT(t0.c0, CHAR_LENGTH('')) = '';
+----
+3
+
+query TI
+SELECT c0, CAST(LEFT(t0.c0, CHAR_LENGTH('')) = '' AS INT) FROM t0 WHERE c0 IS NULL OR c0 <> 'b' ORDER BY c0 IS NOT NULL, t0.c0;
+----
+NULL	NULL
+a	1
+d	1

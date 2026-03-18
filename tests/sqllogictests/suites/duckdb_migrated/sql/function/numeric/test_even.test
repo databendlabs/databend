@@ -1,0 +1,71 @@
+# TODO: unknown function
+# query II
+# select i, even(i + 0.4) from generate_series(-4,4) tbl(i);
+# ----
+# -4	-4
+# -3	-4
+# -2	-2
+# -1	-2
+# 0	2
+# 1	2
+# 2	4
+# 3	4
+# 4	6
+
+# TODO: unsupported feature
+# query II
+# select i, even(i + 0.9) from generate_series(-4,4) tbl(i);
+# ----
+# -4	-4
+# -3	-4
+# -2	-2
+# -1	-2
+# 0	2
+# 1	2
+# 2	4
+# 3	4
+# 4	6
+
+# decimals
+
+# TODO: unsupported feature
+# query II
+# SELECT even(19.4), even(-19.4)
+# ----
+# 20	-20
+
+# TODO: unsupported feature
+# query II
+# SELECT even(8.9), even(-8.9)
+# ----
+# 10	-10
+
+# doubles
+
+# TODO: unsupported feature
+# query II
+# SELECT even(45::DOUBLE), even(-35::DOUBLE)
+# ----
+# 46	-36
+
+# TODO: unsupported feature
+# query I
+# SELECT even(NULL)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT even('abcd')
+
+# TODO: unsupported feature
+# query I
+# SELECT even(1.7976931348623155e+308)
+# ----
+# 1.7976931348623155e+308
+
+# TODO: unsupported feature
+# query I
+# SELECT even(-1.7976931348623155e+308)
+# ----
+# -1.7976931348623155e+308

@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bits
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bits(t tinyint, s smallint, i integer, b bigint, h hugeint)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bits VALUES (NULL, NULL, NULL, NULL, NULL), (31, 1023, 11834119, 50827156903621017, 3141592653589793238462643383279528841), (-59, -517, -575693, -9876543210, -148873535527910577765226390751398592512)
+
+# TODO: unsupported feature
+# query IIIII
+# select bit_count(t), bit_count(s), bit_count(i), bit_count(b), bit_count(h) from bits
+# ----
+# NULL	NULL	NULL	NULL	NULL
+# 5	10	11	27	67
+# 4	14	24	49	2

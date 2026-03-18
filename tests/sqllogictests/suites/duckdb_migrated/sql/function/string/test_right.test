@@ -1,0 +1,99 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query TTTTT
+SELECT RIGHT('abcd', 0), RIGHT('abc', 1), RIGHT('abc', 2), RIGHT('abc', 3), RIGHT('abc', 4)
+----
+(empty)	c	bc	abc	abc
+
+query TTTTT
+SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', 1), RIGHT('🦆ab', 2), RIGHT('🦆ab', 3), RIGHT('🦆ab', 4)
+----
+(empty)	b	ab	🦆ab	🦆ab
+
+query TTTTT
+SELECT
+    RIGHT('abcd', 0),
+    SUBSTRING('abc' FROM 2),
+    SUBSTRING('abc' FROM 3),
+    SUBSTRING('abc' FROM 4),
+    SUBSTRING('abc' FROM 5)
+----
+(empty)	bc	c	(empty)	(empty)
+
+query TTTTT
+SELECT
+    RIGHT('🦆ab', 0),
+    SUBSTRING('🦆ab' FROM 2),
+    SUBSTRING('🦆ab' FROM 3),
+    SUBSTRING('🦆ab' FROM 4),
+    SUBSTRING('🦆ab' FROM 5)
+----
+(empty)	ab	b	(empty)	(empty)
+
+query TT
+SELECT RIGHT('abcdef', 99), RIGHT('🦆ab', 99)
+----
+abcdef	🦆ab
+
+query TTT
+SELECT RIGHT(NULL, 0), RIGHT('abc', NULL), RIGHT(NULL, NULL)
+----
+NULL	NULL	NULL
+
+query TTT
+SELECT RIGHT(NULL, 0), RIGHT('🦆ab', NULL), RIGHT(NULL, NULL)
+----
+NULL	NULL	NULL
+
+statement ok
+CREATE TABLE strings(a STRING, b BIGINT)
+
+statement ok
+INSERT INTO strings VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4), ('🦆ab', 2)
+
+query T
+SELECT RIGHT(a, b) FROM strings
+----
+(empty)
+c
+bc
+abc
+abc
+ab
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(a STRING, b BIGINT)
+
+statement ok
+INSERT INTO strings VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4), ('🦆ab', -1), ('🦆ab', -2)
+
+query T
+SELECT CASE WHEN b >= 0 THEN RIGHT(a, b) ELSE SUBSTRING(a FROM -b + 1) END FROM strings
+----
+(empty)
+bc
+c
+(empty)
+(empty)
+ab
+b
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(a STRING, b BIGINT)
+
+statement ok
+INSERT INTO strings VALUES (NULL, 0), ('abc', NULL), (NULL, NULL)
+
+query T
+SELECT RIGHT(a, b) FROM strings
+----
+NULL
+NULL
+NULL

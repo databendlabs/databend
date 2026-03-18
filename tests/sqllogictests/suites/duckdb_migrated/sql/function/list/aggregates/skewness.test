@@ -1,0 +1,81 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS aggr
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS aggr2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS skew
+
+# incorrect usage
+# TODO: unsupported feature
+# statement error
+# select list_skewness()
+
+# TODO: unknown function
+# query I
+# select list_skewness([1])
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE skew AS SELECT LIST(10) AS i FROM range(0, 5) t1(i)
+
+# constant value
+
+# TODO: unsupported feature
+# query I
+# select list_skewness (i) from skew
+# ----
+# NAN
+
+# TODO: unsupported feature
+# query I
+# select list_skewness ([1,2])
+# ----
+# NULL
+
+# out of range
+
+# TODO: unsupported feature
+# statement error
+# select list_skewness([-2e307, 0, 2e307])
+
+# TODO: unsupported feature
+# statement ok
+# create table aggr(k int[], v decimal(10,2)[], v2 decimal(10, 2)[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into aggr values ([1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+# 	[10, 10, 10, 10, 20, 20, 25, 30, 30, 30, 30],
+# 	[NULL, 11, 15, 18, 22, 25, NULL, 35, 40, 50, 51]),
+# 	([], NULL, [NULL]);
+
+# TODO: unsupported feature
+# query III
+# select list_skewness(k), list_skewness(v), list_skewness(v2) from aggr
+# ----
+# -3.316625	-0.163444	0.365401
+# NULL	NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# create table aggr2(v2 decimal(10, 2)[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into aggr2 values ([NULL, 11, 15, 18]), ([22, 25]), ([NULL]), ([35, 40, 50, 51]);
+
+# TODO: unsupported feature
+# query I
+# select list_skewness(v2) from aggr2
+# ----
+# -0.423273
+# NULL
+# NULL
+# -0.330141

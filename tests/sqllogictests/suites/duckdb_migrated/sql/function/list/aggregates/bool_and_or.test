@@ -1,0 +1,56 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bools
+
+# incorrect usage
+# TODO: unsupported feature
+# statement error
+# select list_bool_or()
+
+# TODO: unsupported feature
+# statement error
+# select list_bool_and()
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bools (l BOOLEAN[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bools SELECT LIST(True) FROM range(0, 100) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bools SELECT LIST(False) FROM range(0, 100) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bools VALUES ([True, False]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bools VALUES ([]), ([NULL]), (NULL), ([NULL, True, False, NULL]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_bool_or(l) FROM bools;
+# ----
+# 1
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_bool_and(l) FROM bools;
+# ----
+# 1
+# 0
+# 0
+# NULL
+# NULL
+# NULL
+# 0

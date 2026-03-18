@@ -1,0 +1,42 @@
+# TODO: unsupported feature
+# query I
+# SELECT array_to_string([1,2,3], '')
+# ----
+# 123
+
+# TODO: unsupported feature
+# query I
+# SELECT array_to_string([1,2,3], '-')
+# ----
+# 1-2-3
+
+# TODO: unsupported feature
+# query I
+# SELECT array_to_string(NULL, '-')
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT array_to_string([1, 2, 3], NULL)
+# ----
+# 1,2,3
+
+# TODO: unsupported feature
+# query I
+# SELECT array_to_string([], '-')
+# ----
+# (empty)
+
+# TODO: unsupported feature
+# query I
+# SELECT array_to_string([i, i + 1], '-') FROM range(0, 6) t(i) WHERE i<=2 OR i>4
+# ----
+# 0-1
+# 1-2
+# 2-3
+# 5-6
+
+# TODO: unsupported feature
+# statement error
+# SELECT array_to_string([1, 2, 3], k) FROM repeat(',', 5) t(k)

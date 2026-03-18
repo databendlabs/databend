@@ -1,0 +1,47 @@
+# Databend rewrite: format byte sizes with CASE and concat.
+
+query T
+WITH src(idx, v) AS (
+    SELECT 1, -1
+    UNION ALL SELECT 2, 0
+    UNION ALL SELECT 3, 1
+    UNION ALL SELECT 4, 1023
+    UNION ALL SELECT 5, 1024
+    UNION ALL SELECT 6, 1048576
+    UNION ALL SELECT 7, NULL
+)
+SELECT CASE
+    WHEN v IS NULL THEN NULL
+    WHEN abs(v) = 1 THEN concat(v, ' byte')
+    WHEN abs(v) < 1024 THEN concat(v, ' bytes')
+    WHEN abs(v) < 1024 * 1024 THEN concat(round(v / 1024.0, 1), ' KiB')
+    ELSE concat(round(v / (1024.0 * 1024.0), 1), ' MiB')
+END
+FROM src
+ORDER BY idx
+----
+-1 byte
+0 bytes
+1 byte
+1023 bytes
+1.0 KiB
+1.0 MiB
+NULL
+
+query T
+WITH src(idx, v) AS (
+    SELECT 1, 500
+    UNION ALL SELECT 2, 500000
+    UNION ALL SELECT 3, 500000000
+)
+SELECT CASE
+    WHEN v < 1000 THEN concat(v, ' bytes')
+    WHEN v < 1000 * 1000 THEN concat(round(v / 1000.0, 1), ' kB')
+    ELSE concat(round(v / (1000.0 * 1000.0), 1), ' MB')
+END
+FROM src
+ORDER BY idx
+----
+500 bytes
+500.0 kB
+500.0 MB

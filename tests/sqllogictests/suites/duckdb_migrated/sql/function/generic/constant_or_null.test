@@ -1,0 +1,30 @@
+query II
+SELECT CASE WHEN NULL IS NULL THEN NULL ELSE 1 END, CASE WHEN 10 IS NULL THEN NULL ELSE 1 END
+----
+NULL	1
+
+query I
+SELECT CASE WHEN (case when i%2=0 then null else i end) IS NULL THEN NULL ELSE 1 END from range(0, 5) tbl(i)
+----
+NULL
+1
+NULL
+1
+NULL
+
+query I
+SELECT CASE WHEN (case when i%2=0 then null else i end) IS NULL OR (case when i%2=1 then null else i end) IS NULL THEN NULL ELSE 1 END from range(0, 5) tbl(i)
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+# TODO: unknown function
+# statement error
+# SELECT constant_or_null(1);
+
+# TODO: unknown function
+# statement error
+# SELECT constant_or_null();

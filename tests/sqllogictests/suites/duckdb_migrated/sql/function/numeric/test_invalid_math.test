@@ -1,0 +1,52 @@
+# cannot take log of negative number or zero
+# TODO: result differs
+# statement error
+# SELECT log(0);
+
+# TODO: unsupported feature
+# statement error
+# SELECT log(-1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT ln(0);
+
+# TODO: unsupported feature
+# statement error
+# SELECT ln(-1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT log10(0);
+
+# TODO: unsupported feature
+# statement error
+# SELECT log10(-1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT sqrt(-1);
+
+# TODO: unsupported feature
+# query I
+# SELECT SQRT(0)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query RRR
+# SELECT POW(1e300,100), POW(-1e300,100), POW(-1.0, 0.5)
+# ----
+# inf	inf	nan
+
+# TODO: unsupported feature
+# query RR
+# SELECT EXP(1e300), EXP(1e100)
+# ----
+# inf	inf
+
+# TODO: unsupported feature
+# query R
+# SELECT DEGREES(1e308)
+# ----
+# inf

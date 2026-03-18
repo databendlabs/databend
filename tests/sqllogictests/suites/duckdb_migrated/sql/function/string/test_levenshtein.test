@@ -1,0 +1,116 @@
+# Databend rewrite: edit-similarity coverage with jaro_winkler.
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+query T
+SELECT concat(round(jaro_winkler('hallo', 'hallo'), 2), '')
+----
+1
+
+query T
+SELECT concat(round(jaro_winkler('hallo', 'hello'), 2), '')
+----
+0.88
+
+query T
+SELECT concat(round(jaro_winkler('lawn', 'flaw'), 2), '')
+----
+0.83
+
+query T
+SELECT concat(round(jaro_winkler('kitten', 'sitting'), 2), '')
+----
+0.75
+
+query T
+SELECT concat(round(jaro_winkler('hallo', 'hoi'), 2), '')
+----
+0.56
+
+query T
+SELECT jaro_winkler(NULL, 'hi')
+----
+NULL
+
+query T
+SELECT jaro_winkler('hi', NULL)
+----
+NULL
+
+query T
+SELECT jaro_winkler(NULL, NULL)
+----
+NULL
+
+query T
+SELECT concat(jaro_winkler('', 'hi'), '')
+----
+0
+
+query T
+SELECT concat(jaro_winkler('hi', ''), '')
+----
+0
+
+query T
+SELECT concat(jaro_winkler('', ''), '')
+----
+1
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('hallo'), ('aloha'), ('fello'), ('fellow'), ('ducks')
+
+query T
+SELECT concat(round(jaro_winkler(s, 'hallo'), 2), '')
+FROM strings
+ORDER BY s
+----
+0.6
+0
+0.73
+0.7
+1
+0.88
+
+query T
+SELECT concat(round(jaro_winkler('hallo', s), 2), '')
+FROM strings
+ORDER BY s
+----
+0.6
+0
+0.73
+0.7
+1
+0.88
+
+query T
+SELECT jaro_winkler(NULL, s)
+FROM strings
+ORDER BY s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT concat(jaro_winkler('', s), '')
+FROM strings
+ORDER BY s
+----
+0
+0
+0
+0
+0
+0
+
+statement error
+SELECT jaro_winkler('one')

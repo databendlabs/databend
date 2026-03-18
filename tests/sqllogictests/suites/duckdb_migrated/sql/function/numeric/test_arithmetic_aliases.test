@@ -1,0 +1,40 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(a integer)
+
+statement ok
+insert into test values (1), (2), (3), (NULL)
+
+query I
+select add(a,a) from test
+----
+2
+4
+6
+NULL
+
+query I
+select subtract(a,a) from test
+----
+0
+0
+0
+NULL
+
+query I
+select multiply(a,a) from test
+----
+1
+4
+9
+NULL
+
+query R
+select divide(a,a) from test
+----
+1.0
+1.0
+1.0
+NULL

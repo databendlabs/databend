@@ -1,0 +1,39 @@
+# TODO: result differs
+# statement error
+# SELECT (-128)::TINYINT // (-1)::TINYINT
+
+# TODO: unsupported feature
+# query I
+# SELECT (-127)::TINYINT // (-1)::TINYINT
+# ----
+# 127
+
+# TODO: unsupported feature
+# statement error
+# SELECT (-32768)::SMALLINT // (-1)::SMALLINT
+
+# TODO: unsupported feature
+# query I
+# SELECT (-32767)::SMALLINT // (-1)::SMALLINT
+# ----
+# 32767
+
+# TODO: unsupported feature
+# statement error
+# SELECT (-2147483648)::INTEGER // (-1)::INTEGER
+
+# TODO: unsupported feature
+# query I
+# SELECT (-2147483647)::INTEGER // (-1)::INTEGER
+# ----
+# 2147483647
+
+# TODO: unsupported feature
+# statement error
+# SELECT (-9223372036854775808)::BIGINT // (-1)::BIGINT
+
+# TODO: unsupported feature
+# query I
+# SELECT (-9223372036854775807)::BIGINT // (-1)::BIGINT
+# ----
+# 9223372036854775807

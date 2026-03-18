@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# query I rowsort sortintarray
+# SELECT list_sort(l) FROM test_vector_types(NULL::INT[], all_flat=true) tbl(l)
+# ----
+
+# TODO: unsupported feature
+# query I rowsort sortnestedintarray
+# SELECT list_sort(l) FROM test_vector_types(NULL::INT[][], all_flat=true) tbl(l)
+# ----
+
+# TODO: unsupported feature
+# query I rowsort sortvarchararray
+# SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[], all_flat=true) tbl(l)
+# ----
+
+# TODO: unsupported feature
+# query I rowsort sortnestedvarchararray
+# SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[][], all_flat=true) tbl(l)
+# ----
+
+# TODO: unsupported feature
+# query I rowsort sortintarray
+# SELECT list_sort(l) FROM test_vector_types(NULL::INT[], all_flat=false) tbl(l)
+# ----
+
+# TODO: unsupported feature
+# query I rowsort sortnestedintarray
+# SELECT list_sort(l) FROM test_vector_types(NULL::INT[][], all_flat=false) tbl(l)
+# ----
+
+# TODO: unsupported feature
+# query I rowsort sortvarchararray
+# SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[], all_flat=false) tbl(l)
+# ----
+
+# TODO: unsupported feature
+# query I rowsort sortnestedvarchararray
+# SELECT list_sort(l) FROM test_vector_types(NULL::VARCHAR[][], all_flat=false) tbl(l)
+# ----

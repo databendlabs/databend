@@ -1,0 +1,109 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+query T
+SELECT regexp_extract('foobarbaz', 'b..')
+----
+bar
+
+query T
+SELECT regexp_extract('foobarbaz', '(?-i)B..')
+----
+(empty)
+
+# pass in regex options
+
+query T
+SELECT regexp_extract('foobarbaz', '(?i)B..', 0)
+----
+bar
+
+query T
+SELECT regexp_extract('foobarbaz', 'b..', 1)
+----
+(empty)
+
+query T
+SELECT regexp_extract('foobarbaz', '(b..)(b..)')
+----
+barbaz
+
+query T
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', 1)
+----
+bar
+
+query T
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', 2)
+----
+baz
+
+statement error
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', -1)
+
+statement error
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', 42)
+
+statement ok
+CREATE TABLE test (s VARCHAR, p VARCHAR, i INT)
+
+statement ok
+INSERT INTO test VALUES
+    ('foobarbaz', 'b..', 0),
+    ('foobarbaz', 'b..', 1),
+    ('foobarbaz', '(b..)(b..)', 0),
+    ('foobarbaz', '(b..)(b..)', 1),
+    ('foobarbaz', '(b..)(b..)', 2)
+
+query T
+SELECT regexp_extract(s, p, 0) FROM test
+----
+bar
+bar
+barbaz
+barbaz
+barbaz
+
+query T
+SELECT regexp_extract(s, p, 1) FROM test WHERE p = '(b..)(b..)' ORDER BY i
+----
+bar
+bar
+bar
+
+query T
+SELECT regexp_extract(s, p, 2) FROM test WHERE p = '(b..)(b..)' ORDER BY i
+----
+baz
+baz
+baz
+
+query T
+SELECT regexp_extract(s, 'b..', 0) FROM test
+----
+bar
+bar
+bar
+bar
+bar
+
+statement error
+SELECT regexp_extract(s, '(b..)(b..)', i) FROM test
+
+query T
+SELECT regexp_extract('foobarbaz', NULL, 0)
+----
+NULL
+
+query T
+SELECT regexp_extract('foobarbaz', 'b..', NULL)
+----
+NULL
+
+query T
+SELECT regexp_extract(NULL, 'b..')
+----
+NULL
+
+statement error
+SELECT regexp_extract('foobarbaz', 'b..', '1')

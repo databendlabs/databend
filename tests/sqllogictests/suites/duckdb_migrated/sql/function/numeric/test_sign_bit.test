@@ -1,0 +1,69 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floats
+
+# TODO: unknown function
+# query III
+# SELECT signbit(3::FLOAT), signbit(-3::FLOAT), signbit(NULL::FLOAT)
+# ----
+# 0	1	NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f FLOAT)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES (3), (1.0::float), (-0.0::float), ('inf'), ('-inf'), (NULL)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT f, signbit(f), isinf(f), isfinite(f) FROM floats ORDER BY f
+# ----
+# NULL	NULL	NULL	NULL
+# -inf	True	True	False
+# -0	True	False	True
+# 1	False	False	True
+# 3	False	False	True
+# inf	False	True	False
+
+# TODO: unsupported feature
+# statement ok
+# SELECT signbit(1.0 / 0.0);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+# TODO: unsupported feature
+# query III
+# SELECT signbit(3::DOUBLE), signbit(-3::DOUBLE), signbit(NULL::DOUBLE)
+# ----
+# 0	1	NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f DOUBLE)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES (3), (1.0::float), (-0.0::float), ('inf'), ('-inf'), (NULL)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT f, signbit(f), isinf(f), isfinite(f) FROM floats ORDER BY f
+# ----
+# NULL	NULL	NULL	NULL
+# -inf	True	True	False
+# -0	True	False	True
+# 1	False	False	True
+# 3	False	False	True
+# inf	False	True	False
+
+# TODO: unsupported feature
+# statement ok
+# SELECT signbit(1.0 / 0.0);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats

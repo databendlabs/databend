@@ -1,0 +1,61 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS uniform_purchase_forecast
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (tag_product VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES ('milk chickpeas apples'), ('chocolate pepper');
+
+# TODO: unsupported feature
+# query II
+# SELECT tag_product, list_aggr(list_transform(
+# 	string_split(tag_product, ' '), lambda word: lower(word)),
+#     'string_agg', ',') AS tag_material,
+# FROM tbl GROUP BY tag_product
+# ORDER BY ALL;
+# ----
+# chocolate pepper	chocolate,pepper
+# milk chickpeas apples	milk,chickpeas,apples
+
+# TODO: unsupported feature
+# query II
+# SELECT 1, list_transform([5, 4, 3], lambda x: x + 1) AS lst GROUP BY 1;
+# ----
+# 1	[6, 5, 4]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE uniform_purchase_forecast AS
+# SELECT 'gold' AS color, 10 AS forecast
+# UNION ALL SELECT 'blue', 15
+# UNION ALL SELECT 'red', 300;
+
+# TODO: unsupported feature
+# query I
+# FROM uniform_purchase_forecast SELECT list(forecast).list_transform(lambda x: x + 10);
+# ----
+# [20, 25, 310]
+
+# HAVING binder issues.
+
+# TODO: unsupported feature
+# query I
+# FROM (SELECT 1) GROUP BY ALL HAVING list_filter(NULL, lambda x: x);
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# FROM test_all_types() GROUP BY ALL HAVING array_intersect(NULL, NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT x FROM (VALUES (42)) t(x) GROUP BY x HAVING list_filter(NULL, lambda lambda_param: lambda_param = 1);
+# ----

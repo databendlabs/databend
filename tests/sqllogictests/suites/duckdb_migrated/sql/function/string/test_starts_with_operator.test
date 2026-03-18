@@ -1,0 +1,109 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query IIIIIIIIII
+SELECT CAST(LEFT('hello world', CHAR_LENGTH('h')) = 'h' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('he')) = 'he' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hel')) = 'hel' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hell')) = 'hell' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello')) = 'hello' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello ')) = 'hello ' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello w')) = 'hello w' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello wo')) = 'hello wo' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello wor')) = 'hello wor' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello worl')) = 'hello worl' AS INT)
+----
+1	1	1	1	1	1	1	1	1	1
+
+query IIIIIIIIII
+SELECT CAST(LEFT('hello world', CHAR_LENGTH('a')) = 'a' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('ha')) = 'ha' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hea')) = 'hea' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hela')) = 'hela' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hella')) = 'hella' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('helloa')) = 'helloa' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello a')) = 'hello a' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello wa')) = 'hello wa' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello woa')) = 'hello woa' AS INT),
+       CAST(LEFT('hello world', CHAR_LENGTH('hello wora')) = 'hello wora' AS INT)
+----
+0	0	0	0	0	0	0	0	0	0
+
+# empty starts_with
+
+query III
+select CAST(LEFT('hello', CHAR_LENGTH('')) = '' AS INT), CAST(LEFT('', CHAR_LENGTH('')) = '' AS INT), CAST(LEFT(NULL, CHAR_LENGTH('')) = '' AS INT)
+----
+1	1	NULL
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('h', 1, 1), (NULL, 2, 2)
+
+# Test first letter
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('h')) = 'h' AS INT) FROM strings
+----
+1
+0
+1
+NULL
+
+# Test multiple letters
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('he')) = 'he' AS INT) FROM strings
+----
+1
+0
+0
+NULL
+
+# Test no match
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('he-man')) = 'he-man' AS INT) FROM strings
+----
+0
+0
+0
+NULL
+
+# Test NULL constant in different places
+
+query I
+SELECT CAST(LEFT(NULL, CHAR_LENGTH('h')) = 'h' AS INT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH(NULL)) = NULL AS INT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT CAST(LEFT(NULL, CHAR_LENGTH(NULL)) = NULL AS INT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+# Test empty pattern
+
+query I
+SELECT CAST(LEFT(s, CHAR_LENGTH('')) = '' AS INT) FROM strings
+----
+1
+1
+1
+NULL

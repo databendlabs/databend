@@ -1,0 +1,109 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dates
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS minima
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (2)
+
+# TODO: unsupported feature
+# query I
+# SELECT ++-++-+i FROM test
+# ----
+# 2
+
+# test simple unary operators
+
+# TODO: unsupported feature
+# query I
+# SELECT +i FROM test
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT -i FROM test
+# ----
+# -2
+
+# we can also stack unary functions
+
+# TODO: unsupported feature
+# query I
+# SELECT +++++++i FROM test
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT ++-++-+i FROM test
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT -+-+-+-+-i FROM test
+# ----
+# -2
+
+# Test negation of minima
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE minima (t TINYINT, s SMALLINT, i INTEGER, b BIGINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO minima VALUES (-128, -32768, -2147483648, -9223372036854775808);
+
+# TODO: result differs
+# statement error
+# SELECT -t from minima;
+
+# TODO: unsupported feature
+# statement error
+# SELECT -s from minima;
+
+# TODO: unsupported feature
+# statement error
+# SELECT -i from minima;
+
+# TODO: unsupported feature
+# statement error
+# SELECT -b from minima;
+
+# TODO: unsupported feature
+# statement error
+# SELECT +'hello'
+
+# TODO: unsupported feature
+# statement error
+# SELECT -'hello'
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE dates(d DATE)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO dates VALUES ('1992-02-02')
+
+# TODO: unsupported feature
+# statement error
+# SELECT +d FROM dates
+
+# TODO: unsupported feature
+# statement error
+# SELECT -d FROM dates

@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS zz
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE zz AS
+#     SELECT
+#            CAST(i AS SMALLINT) AS id,
+#            CAST(i AS SMALLINT) AS si
+#     FROM generate_series(1, 1000) t(i);
+
+# TODO: result differs
+# query I
+# SELECT ROUND(53) AS ag_column3
+# FROM zz
+# GROUP BY ag_column3
+# ORDER BY ag_column3
+# ----
+# 53
+
+# TODO: unsupported feature
+# query I
+# SELECT ROUND(53, si) AS ag_column3
+# FROM zz
+# GROUP BY ag_column3
+# ORDER BY ag_column3
+# ----
+# 53
+
+# TODO: unsupported feature
+# query I
+# SELECT ROUND(53, -si) AS ag_column3
+# FROM zz
+# GROUP BY ag_column3
+# ORDER BY ag_column3
+# ----
+# 0
+# 50
+# 100
+
+# TODO: unsupported feature
+# query I
+# select round(100::INTEGER, int)
+# from test_all_types();
+# ----
+# 0
+# 100
+# NULL

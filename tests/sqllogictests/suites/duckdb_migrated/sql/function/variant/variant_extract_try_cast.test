@@ -1,0 +1,79 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(col VARIANT);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl SELECT * FROM UNNEST([
+# 	{'almost_a_number': c, 'a_number': CAST(TRY_CAST(c AS INT) AS VARCHAR)} for c in ['12', '24', '25a6', '24c', '16']
+# ])
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# from tbl order by all
+# ----
+# {'a_number': NULL, 'almost_a_number': 24c}
+# {'a_number': NULL, 'almost_a_number': 25a6}
+# {'a_number': 12, 'almost_a_number': 12}
+# {'a_number': 16, 'almost_a_number': 16}
+# {'a_number': 24, 'almost_a_number': 24}
+
+# TODO: unsupported feature
+# query I
+# select col.almost_a_number from tbl order by all
+# ----
+# 12
+# 16
+# 24
+# 24c
+# 25a6
+
+# Can't use CAST
+
+# TODO: unsupported feature
+# statement error
+# select col.almost_a_number::BIGINT from tbl order by all
+
+# TODO: unsupported feature
+# query I
+# select TRY_CAST(col.almost_a_number AS BIGINT) from tbl order by all
+# ----
+# 12
+# 16
+# 24
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select col.a_number from tbl order by all
+# ----
+# 12
+# 16
+# 24
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select col.a_number::BIGINT from tbl order by all
+# ----
+# 12
+# 16
+# 24
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN select TRY_CAST(col.almost_a_number AS BIGINT) from tbl order by all
+# ----
+# TODO: special result marker

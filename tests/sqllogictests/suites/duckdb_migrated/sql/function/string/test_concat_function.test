@@ -1,0 +1,60 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('Hello', 'World'), ('HuLlD', NULL), ('MotörHead','RÄcks')
+
+query T
+select CONCAT(a, 'SUFFIX') FROM strings
+----
+HelloSUFFIX
+HuLlDSUFFIX
+MotörHeadSUFFIX
+
+query T
+select CONCAT('PREFIX', b) FROM strings
+----
+PREFIXWorld
+NULL
+PREFIXRÄcks
+
+query T
+select CONCAT(a, b) FROM strings
+----
+HelloWorld
+NULL
+MotörHeadRÄcks
+
+query T
+select CONCAT(a, b, 'SUFFIX') FROM strings
+----
+HelloWorldSUFFIX
+NULL
+MotörHeadRÄcksSUFFIX
+
+query T
+select CONCAT(a, b, a) FROM strings
+----
+HelloWorldHello
+NULL
+MotörHeadRÄcksMotörHead
+
+query T
+select CONCAT('1', '2', '3', '4', '5', '6', '7', '8', '9', '0')
+----
+1234567890
+
+# concat a long string
+
+query TT
+select '1234567890' || '1234567890', '1234567890' || NULL
+----
+12345678901234567890	NULL
+
+query TT
+select CONCAT('1234567890', '1234567890'), CONCAT('1234567890', NULL)
+----
+12345678901234567890 NULL

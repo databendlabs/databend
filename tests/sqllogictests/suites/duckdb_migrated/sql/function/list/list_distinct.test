@@ -1,0 +1,529 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS all_types
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS enums
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS wheretest
+
+# FIXME: some of these test cases could be improved by using list_sort
+# Currently, they use UNNEST(...) ORDER BY, because unordered maps seem to 'sort'
+# different on Windows and other systems
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(NULL)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL])
+# ----
+# [[NULL]]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([])
+# ----
+# [[]]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([]) WHERE 1 = 0
+# ----
+# NULL
+
+# test incorrect syntax
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distinct()
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distinct(*)
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_distinct([1, 2], 2)
+
+# TODO: result differs
+# statement error
+# SELECT list_distinct(NULL::boolean)
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(list_distinct([1, 1, 2, 2, 2, 3])) AS l ORDER BY l
+# ----
+# 1
+# 1
+# 2
+# 2
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(list_distinct([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])) AS l ORDER BY l
+# ----
+# 1
+# 1
+# 2
+# 2
+# 2
+# 3
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(list_distinct(list_distinct([1, 1, -5, 10, 10, 2]))) AS l ORDER BY l
+# ----
+# -5
+# 1
+# 2
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers (l integer[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES ([1, 1, 1]), ([1, NULL, 1, NULL])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES ([NULL]), (NULL), ([])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(l) FROM integers
+# ----
+# [1]
+# [1]
+# []
+# NULL
+# []
+
+# aliases
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(array_distinct([1, 2, 2, NULL])) AS l ORDER BY l
+# ----
+# 1
+# 2
+
+# test all types
+
+# BOOLEAN
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(list_distinct([True, True, False, NULL])) AS l ORDER BY l
+# ----
+# 0
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::BOOLEAN])
+# ----
+# []
+
+# VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(list_distinct(['aa', 'aa', 'cd', NULL, '42'])) AS l ORDER BY l
+# ----
+# 42
+# aa
+# cd
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::VARCHAR])
+# ----
+# []
+
+# INTEGER types
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::tinyint, NULL, 1::tinyint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::tinyint])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::smallint, NULL, 1::smallint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::smallint])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::integer, NULL, 1::integer])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::integer])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::bigint, NULL, 1::bigint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::bigint])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::hugeint, NULL, 1::hugeint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::hugeint])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::utinyint, NULL, 1::utinyint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::utinyint])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::usmallint, NULL, 1::usmallint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::usmallint])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::uinteger, NULL, 1::uinteger])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::uinteger])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::ubigint, NULL, 1::ubigint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::ubigint])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([1::uhugeint, NULL, 1::uhugeint])
+# ----
+# [1]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::uhugeint])
+# ----
+# []
+
+
+# FLOAT, DOUBLE and DECIMAL types
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_distinct([1::float])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::float])
+# ----
+# []
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_distinct([1::double])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::double])
+# ----
+# []
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_distinct([1::decimal(4,1)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::decimal(4,1)])
+# ----
+# []
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_distinct([1::decimal(9,4)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::decimal(9,4)])
+# ----
+# []
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_distinct([1::decimal(18,6)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::decimal(18,6)])
+# ----
+# []
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_distinct([1::decimal(38,10)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::decimal(38,10)])
+# ----
+# []
+
+
+# TEMPORAL types
+
+# date
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['2021-08-20'::DATE])
+# ----
+# [2021-08-20]
+
+# time
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['14:59:37'::TIME])
+# ----
+# ['14:59:37']
+
+# timestamp
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['2021-08-20'::TIMESTAMP])
+# ----
+# ['2021-08-20 00:00:00']
+
+# timestamp s
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['2021-08-20'::TIMESTAMP_S])
+# ----
+# ['2021-08-20 00:00:00']
+
+# timestamp ms
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+# ----
+# ['2021-08-20 00:00:00.123']
+
+# timestamp ns
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+# ----
+# ['2021-08-20 00:00:00.123456']
+
+# time with time zone
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['14:59:37'::TIMETZ])
+# ----
+# ['14:59:37+00']
+
+# timestamp with time zone
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(['2021-08-20'::TIMESTAMPTZ])
+# ----
+# ['2021-08-20 00:00:00+00']
+
+# interval
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([INTERVAL 1 YEAR])
+# ----
+# [1 year]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::date])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::time])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::timestamp])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::timestamp_s])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::timestamp_ms])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::timestamp_ns])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::timetz])
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct([NULL::timestamptz])
+# ----
+# []
+
+
+# enums
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE enums (e mood[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO enums VALUES (['happy', 'ok'])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sort(list_distinct(e)) FROM enums
+# ----
+# [ok, happy]
+
+# test WHERE
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE wheretest (name VARCHAR, l INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO wheretest VALUES ('one1', [2, 3, 3, 4, NULL, 2]), ('one2', [NULL, NULL, 2]), ('two1', [1, 2, 3, 10, 15]),
+# 	('one3', [2, 3, 4]), ('two2', NULL), ('two3', [10, 11, 12]);
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM wheretest WHERE name ILIKE 'one%' AND list_unique(list_distinct(l)) > 1;
+# ----
+# one1
+# one3
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM wheretest WHERE name ILIKE 'two%' AND list_unique(list_distinct(l)) > 3;
+# ----
+# two1
+
+# bug in #3481
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sort(list_distinct(['a', 'b、c', 'a']))
+# ----
+# [a, b、c]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+# list distinct is supported for all types
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_distinct([COLUMNS(*)]) FROM all_types;

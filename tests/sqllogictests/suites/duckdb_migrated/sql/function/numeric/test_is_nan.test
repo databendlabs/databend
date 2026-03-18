@@ -1,0 +1,50 @@
+statement ok
+DROP TABLE IF EXISTS floats
+
+query BB?
+SELECT isnan(3::FLOAT), isnan('nan'::FLOAT), isnan(NULL::FLOAT)
+----
+0	1	NULL
+
+statement ok
+CREATE TABLE floats(f FLOAT)
+
+statement ok
+INSERT INTO floats VALUES (3), ('nan'), ('inf'), ('-inf'), (NULL)
+
+# TODO: unknown function
+# query IIII
+# SELECT f, isnan(f), isinf(f), isfinite(f) FROM floats ORDER BY f
+# ----
+# NULL	NULL	NULL	NULL
+# -inf	False	True	False
+# 3	False	False	True
+# inf	False	True	False
+# nan	True	False	False
+
+statement ok
+DROP TABLE floats
+
+query BB?
+SELECT isnan(3::DOUBLE), isnan('nan'::DOUBLE), isnan(NULL::DOUBLE)
+----
+0	1	NULL
+
+statement ok
+CREATE TABLE floats(f DOUBLE)
+
+statement ok
+INSERT INTO floats VALUES (3), ('nan'), ('inf'), ('-inf'), (NULL)
+
+# TODO: unknown function
+# query IIII
+# SELECT f, isnan(f), isinf(f), isfinite(f) FROM floats ORDER BY f
+# ----
+# NULL	NULL	NULL	NULL
+# -inf	False	True	False
+# 3	False	False	True
+# inf	False	True	False
+# nan	True	False	False
+
+statement ok
+DROP TABLE floats

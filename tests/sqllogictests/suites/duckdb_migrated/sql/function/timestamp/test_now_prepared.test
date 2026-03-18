@@ -1,0 +1,39 @@
+statement ok
+DROP TABLE IF EXISTS timestamps_now
+
+statement ok
+DROP TABLE IF EXISTS timestamps_current
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE timestamps_now(ts TIMESTAMP)
+
+statement ok
+INSERT INTO timestamps_now VALUES (NOW())
+
+statement ok
+INSERT INTO timestamps_now SELECT NOW()
+
+query I
+SELECT COUNT(DISTINCT ts) FROM timestamps_now
+----
+2
+
+statement ok
+CREATE TABLE timestamps_current(ts TIMESTAMP)
+
+statement ok
+INSERT INTO timestamps_current VALUES (CURRENT_TIMESTAMP)
+
+statement ok
+INSERT INTO timestamps_current SELECT CURRENT_TIMESTAMP
+
+query I
+SELECT COUNT(DISTINCT ts) FROM timestamps_current
+----
+2
+
+statement ok
+ROLLBACK

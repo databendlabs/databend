@@ -1,0 +1,53 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+query B
+SELECT regexp_like('https://duckdb.org', 'https\\:\\/\\/duckdb\\.org')
+----
+1
+
+query B
+SELECT regexp_like('abc123ABC', 'abc123ABC')
+----
+1
+
+query B
+SELECT regexp_like('a.b[c]*', 'a\\.b\\[c\\]\\*')
+----
+1
+
+query B
+SELECT regexp_like('a b c', 'a b c')
+----
+1
+
+query B
+SELECT regexp_like('@', '\\@')
+----
+1
+
+query B
+SELECT regexp_like('path\\\\to\\\\wonderland', 'path\\\\\\\\to\\\\\\\\wonderland')
+----
+1
+
+query B
+SELECT regexp_like('$()*+.?[\\]^{|}-', '\\$\\(\\)\\*\\+\\.\\?\\[\\\\\\]\\^\\{\\|\\}\\-')
+----
+1
+
+statement ok
+CREATE TABLE tbl (c VARCHAR(255))
+
+statement ok
+INSERT INTO tbl VALUES ('a)*.?[\\]b^{2.+_c'), ('1?ch@racter$')
+
+query I
+SELECT SUM(CAST(regexp_like(c, 'a\\)\\*\\.\\?\\[\\\\\\]b\\^\\{2\\.\\+_c') AS INT)) FROM tbl
+----
+1
+
+query I
+SELECT SUM(CAST(regexp_like(c, '1\\?ch\\@racter\\$') AS INT)) FROM tbl
+----
+1

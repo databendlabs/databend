@@ -1,0 +1,51 @@
+# Databend rewrite: manual thousands separators with regexp_replace.
+
+query T
+SELECT regexp_replace('123456789', '([0-9]{3})([0-9]{3})([0-9]{3})', '$1,$2,$3')
+----
+123,456,789
+
+query T
+SELECT regexp_replace('123456789', '([0-9]{3})([0-9]{3})([0-9]{3})', '$1.$2.$3')
+----
+123.456.789
+
+query T
+SELECT concat(substring('123456789', 1, 3), '_', substring('123456789', 4, 3), '_', substring('123456789', 7, 3))
+----
+123_456_789
+
+query T
+SELECT concat(substring('123456789', 1, 3), '''', substring('123456789', 4, 3), '''', substring('123456789', 7, 3))
+----
+123'456'789
+
+query T
+SELECT concat(substring('123456789', 1, 3), ' ', substring('123456789', 4, 3), ' ', substring('123456789', 7, 3))
+----
+123 456 789
+
+query T
+SELECT concat(substring('123456789', 1, 3), '|', substring('123456789', 4, 3), '|', substring('123456789', 7, 3))
+----
+123|456|789
+
+query T
+SELECT regexp_replace('123456789123', '([0-9]{3})([0-9]{3})([0-9]{3})([0-9]{3})', '$1,$2,$3,$4')
+----
+123,456,789,123
+
+query T
+SELECT regexp_replace('123456789.123', '([0-9]{3})([0-9]{3})([0-9]{3})[.]([0-9]+)', '$1,$2,$3.$4')
+----
+123,456,789.123
+
+query T
+SELECT concat(CASE WHEN to_varchar(round(1.724e12::DOUBLE, 0)) = '1724000000000' THEN 1 ELSE 0 END, '')
+----
+1
+
+query T
+SELECT concat(CASE WHEN to_varchar(round(1.234e4::DOUBLE, 0)) = '12340' THEN 1 ELSE 0 END, '')
+----
+1

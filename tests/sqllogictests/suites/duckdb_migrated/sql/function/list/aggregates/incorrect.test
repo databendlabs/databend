@@ -1,0 +1,175 @@
+# name: test/sql/function/list/aggregates/incorrect.test
+# description: Test incorrect and incompatible aggregate functions for lists
+# group: [aggregates]
+
+# incorrect syntax
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1], 2)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1], True)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1], NULL)
+# ----
+
+foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and bool_or count entropy first arbitrary histogram kurtosis last mad max median min mode array_agg list product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr('${func_name}')
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr(*, '${func_name}')
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr('hello', '${func_name}')
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr(1, 2, '${func_name}')
+# ----
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr(NULL::${type}, '${func_name}')
+# ----
+
+endloop
+
+endloop
+
+# incompatible aggregate functions (more than one column)
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'count_star');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'corr');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'covar_pop');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'covar_samp');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_intercept');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_sxy');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_sxx');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_syy');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_r2');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_slope');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_count');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_avgy');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'regr_avgx');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'reservoir_quantile');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'approx_quantile');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'quantile');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'quantile_cont');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'quantile_disc');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'arg_max');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'max_by');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'argmax');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'arg_min');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'min_by');
+# ----
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_aggr([1, 2, NULL], 'argmin');
+# ----

@@ -1,0 +1,64 @@
+statement ok
+DROP TABLE IF EXISTS roundme
+
+statement ok
+CREATE TABLE roundme(a DOUBLE, b INTEGER)
+
+statement ok
+INSERT INTO roundme VALUES (42.123456, 3)
+
+query R
+select round(42.12345::DOUBLE, 0)
+----
+42.0
+
+query R
+select round(42.12345::DOUBLE)
+----
+42.0
+
+query R
+select round(42.12345::DOUBLE, 2)
+----
+42.12
+
+query RR
+select round(42.12345::DOUBLE, 4), round(42.1235::DOUBLE, 1000)
+----
+42.1235 42.1235
+
+query R
+select round(42::DOUBLE, 0)
+----
+42.0
+
+query RRR
+select round(42::DOUBLE, -1), round(42::DOUBLE, -2), round(42::DOUBLE, -1000)
+----
+40.0 0.0 0.0
+
+query R
+select round(a, 1) from roundme
+----
+42.1
+
+query R
+select round(b, 1) from roundme
+----
+3.0
+
+query R
+select round(a, b) from roundme
+----
+42.123
+
+# TODO: unsupported feature
+# query I
+# SELECT round(1.0, (-2147483648)::INT);
+# ----
+# 0
+
+query R
+SELECT round(1.0::DOUBLE, (-2147483648)::INT);
+----
+0.0

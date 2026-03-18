@@ -1,0 +1,132 @@
+statement ok
+DROP TABLE IF EXISTS filenames
+
+statement ok
+CREATE TABLE filenames (filename VARCHAR)
+
+statement ok
+INSERT INTO filenames VALUES
+    ('rundate_2023-01-01_pass_1'),
+    ('rundate_2023-01-01_pass_2'),
+    ('rundate_2023-01-01_pass_3'),
+    ('rundate_2023-01-10_pass_1'),
+    ('rundate_2023-01-10_pass_2'),
+    ('rundate_2023-02-14_pass_1'),
+    ('invalid'),
+    (NULL)
+
+# Single chunk
+
+query III rowsort
+WITH files AS (
+    SELECT f.*, payload FROM filenames f, range(0, 3) t(payload)
+), extracted AS (
+    SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_pass_(\d+)', ['rundate', 'pass']) AS groups, payload
+    FROM files
+)
+SELECT groups['rundate']::DATE AS rundate, groups['pass']::SMALLINT AS pass, SUM(payload)
+FROM extracted
+WHERE LENGTH(groups['rundate']) > 0
+GROUP BY ALL
+----
+2023-01-01	1	3
+2023-01-01	2	3
+2023-01-01	3	3
+2023-01-10	1	3
+2023-01-10	2	3
+2023-02-14	1	3
+
+# Scaled up
+
+query III rowsort
+WITH files AS (
+    SELECT f.*, payload FROM filenames f, range(0, 1000) t(payload)
+), extracted AS (
+    SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_pass_(\d+)', ['rundate', 'pass']) AS groups, payload
+    FROM files
+)
+SELECT groups['rundate']::DATE AS rundate, groups['pass']::SMALLINT AS pass, SUM(payload)
+FROM extracted
+WHERE LENGTH(groups['rundate']) > 0
+GROUP BY ALL
+----
+2023-01-01	1	499500
+2023-01-01	2	499500
+2023-01-01	3	499500
+2023-01-10	1	499500
+2023-01-10	2	499500
+2023-02-14	1	499500
+
+# Optional capture success
+
+query TTII rowsort
+WITH files AS (
+    SELECT f.*, payload FROM filenames f, range(0, 3) t(payload)
+), extracted AS (
+    SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_([a-z]+?)_(\d+)', ['rundate', 'opt', 'pass']) AS groups, payload
+    FROM files
+)
+SELECT groups['rundate']::DATE AS rundate, groups['opt'] AS opt, groups['pass']::SMALLINT AS pass, SUM(payload)
+FROM extracted
+WHERE LENGTH(groups['rundate']) > 0
+GROUP BY ALL
+----
+2023-01-01	pass	1	3
+2023-01-01	pass	2	3
+2023-01-01	pass	3	3
+2023-01-10	pass	1	3
+2023-01-10	pass	2	3
+2023-02-14	pass	1	3
+
+# Optional capture failure
+
+query TTII
+WITH files AS (
+    SELECT f.*, payload FROM filenames f, range(0, 3) t(payload)
+), extracted AS (
+    SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_([0-9]+?)_(\d+)', ['rundate', 'opt', 'pass']) AS groups, payload
+    FROM files
+)
+SELECT groups['rundate']::DATE AS rundate, groups['opt'] AS opt, groups['pass']::SMALLINT AS pass, SUM(payload)
+FROM extracted
+WHERE LENGTH(groups['rundate']) > 0
+GROUP BY ALL
+----
+
+query TI
+SELECT
+    regexp_extract(
+        'rundate_2023-01-01_pass_7',
+        'rundate_(\d+-\d+-\d+)_pass_(\d+)',
+        ['rundate', 'pass']
+    )['rundate'],
+    regexp_extract(
+        'rundate_2023-01-01_pass_7',
+        'rundate_(\d+-\d+-\d+)_pass_(\d+)',
+        ['rundate', 'pass']
+    )['pass']::INT
+----
+2023-01-01	7
+
+query I
+SELECT LENGTH(
+    regexp_extract(
+        'invalid',
+        'rundate_(\d+-\d+-\d+)_pass_(\d+)',
+        ['rundate', 'pass']
+    )['rundate']
+)
+----
+0
+
+#
+# Errors
+#
+
+statement error
+SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_pass_(\d+)', ['rundate', NULL]) AS groups
+FROM filenames
+
+statement error
+SELECT regexp_extract(filename, 'rundate_(\d+-\d+-\d+)_pass_(\d+)', ['rundate', 'pass', 'overflow']) AS groups
+FROM filenames

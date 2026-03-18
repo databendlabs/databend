@@ -1,0 +1,139 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS const
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS hist_data
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS names
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE const AS SELECT LIST(2) AS i FROM range(0, 200) t1(i)
+
+# TODO: unknown function
+# query I
+# SELECT list_histogram(i) FROM const
+# ----
+# {2=200}
+
+# TODO: unsupported feature
+# query I
+# select list_histogram([1])
+# ----
+# {1=1}
+
+# integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE hist_data (g INTEGER[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO hist_data VALUES ([1, 1, 2, 2, 2, 3, 5]), ([1, 2, 3, 4, 5, 6, NULL]), ([]), (NULL), ([NULL]);
+
+# TODO: unsupported feature
+# query T
+# SELECT list_histogram(g) from hist_data
+# ----
+# {1=2, 2=3, 3=1, 5=1}
+# {1=1, 2=1, 3=1, 4=1, 5=1, 6=1}
+# NULL
+# NULL
+# NULL
+
+# strings
+
+# TODO: unsupported feature
+# statement ok
+# create table names (name string[])
+
+# TODO: unsupported feature
+# statement ok
+# insert into names values (['pedro', 'pedro', 'pedro', 'hannes', 'hannes', 'mark', NULL, 'Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.']);
+
+# TODO: unsupported feature
+# query I
+# select list_histogram(name) from names;
+# ----
+# {Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.=1, hannes=2, mark=1, pedro=3}
+
+# incorrect usage
+
+# TODO: unsupported feature
+# statement error
+# select list_histogram()
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['2021-08-20'::TIMESTAMP])
+# ----
+# {'2021-08-20 00:00:00'=1}
+
+# timestamp_s
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['2021-08-20'::TIMESTAMP_S])
+# ----
+# {'2021-08-20 00:00:00'=1}
+
+# timestamp_ms
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['2021-08-20'::TIMESTAMP_MS])
+# ----
+# {'2021-08-20 00:00:00'=1}
+
+# timestamp_ns
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['2021-08-20'::TIMESTAMP_NS])
+# ----
+# {'2021-08-20 00:00:00'=1}
+
+# timestamp with time zone
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['2021-08-20'::TIMESTAMPTZ])
+# ----
+# {'2021-08-20 00:00:00+00'=1}
+
+# date
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['2022-01-02'::DATE])
+# ----
+# {2022-01-02=1}
+
+# time
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['15:00:07'::TIME])
+# ----
+# {'15:00:07'=1}
+
+# timetz
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram(['15:00:07'::TIMETZ])
+# ----
+# {'15:00:07+00'=1}
+
+# interval
+
+# TODO: unsupported feature
+# query I
+# SELECT list_histogram([INTERVAL 1 YEAR])
+# ----
+# {1 year=1}

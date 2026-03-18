@@ -3502,3 +3502,2458 @@
 | `octet_length` | `unsupported feature` | 1 | sql/function/blob/test_blob_array_slice.test | `query I<br>select octet_length(array_slice(blob '\x00\x01\x02\x03\x04\x05', 4, 3))<br>----<br>0` |  |
 | `p2` | `unsupported feature` | 1 | sql/function/enum/test_enum_code.test | `query I<br>EXECUTE p2('happy'::mood)<br>----<br>2` |  |
 | `read_blob` | `unsupported feature` | 1 | sql/extensions/permissions_duckdb_extension.test | `statement ok<br>FROM read_blob('build/*/repository/*/*/parquet.duckdb_extension');` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T11:28:08.810908+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 5
+- Files with issues: 837
+- Unknown function TODOs: 710
+- Unsupported feature TODOs: 6729
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 4
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `enum_first` | `unsupported feature` | 2 | sql/function/enum/test_enum_first.test | `statement error<br>SELECT enum_first('bla')` |  |
+| `test_bit_and_bits` | `unsupported feature` | 1 | sql/aggregate/aggregates/test_bit_and.test | `statement ok<br>CREATE TABLE test_bit_and_bits(b BIT);` |  |
+| `test_bit_or_bits` | `unsupported feature` | 1 | sql/aggregate/aggregates/test_bit_or.test | `statement ok<br>CREATE TABLE test_bit_or_bits(b BIT);` |  |
+| `test_bit_xor_bits` | `unsupported feature` | 1 | sql/aggregate/aggregates/test_bit_xor.test | `statement ok<br>CREATE TABLE test_bit_xor_bits(b BIT);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T11:32:16.506370+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 11
+- Files with issues: 839
+- Unknown function TODOs: 710
+- Unsupported feature TODOs: 6744
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 2
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `enum_last` | `unsupported feature` | 3 | sql/function/enum/test_enum_last.test<br>sql/function/enum/test_enum_range.test | `statement error<br>SELECT enum_last('bla')` |  |
+| `enum_range_boundary` | `unsupported feature` | 8 | sql/function/enum/test_enum_range.test | `statement error<br>SELECT enum_range_boundary(NULL, NULL)` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T11:35:15.185537+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 4
+- Files with issues: 840
+- Unknown function TODOs: 714
+- Unsupported feature TODOs: 6744
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `can_cast_implicitly` | 4 | sql/function/generic/can_cast_implicitly.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T11:43:59.459365+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 9
+- Files with issues: 842
+- Unknown function TODOs: 720
+- Unsupported feature TODOs: 6748
+- Unknown function unique issues: 2
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `cast_to_type` | 4 | sql/function/generic/cast_to_type.test |  |
+| `v1` | 2 | sql/function/generic/cast_to_type.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `try_trim_null` | `unsupported feature` | 3 | sql/function/generic/cast_to_type.test | `query II<br>SELECT try_trim_null(COLUMNS(*)) FROM tbl<br>----<br>42	hello<br>100	NULL` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T11:46:31.987762+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 843
+- Unknown function TODOs: 722
+- Unsupported feature TODOs: 6748
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `constant_or_null` | 2 | sql/function/generic/constant_or_null.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T11:47:11.568099+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 844
+- Unknown function TODOs: 722
+- Unsupported feature TODOs: 6749
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `if` | `unsupported feature` | 1 | sql/function/generic/error.test | `query I<br>SELECT *<br>FROM (SELECT 4 AS x)<br>WHERE IF(x % 2 = 0, true, ERROR(FORMAT('x must be even number but is {}', x)));<br>----<br>4` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T11:59:00.353267+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 26
+- Files with issues: 845
+- Unknown function TODOs: 748
+- Unsupported feature TODOs: 6758
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `hash` | 26 | sql/function/generic/hash_func.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:04:54.512574+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 847
+- Unknown function TODOs: 749
+- Unsupported feature TODOs: 6759
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `replace_type` | 1 | sql/function/generic/replace_type.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:04:55.351747+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 848
+- Unknown function TODOs: 749
+- Unsupported feature TODOs: 6760
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `repeat_row` | `unsupported feature` | 1 | sql/function/generic/table_func_varargs.test | `query III<br>SELECT * FROM repeat_row(1, 2, 'foo', num_rows=3)<br>----<br>1	2	foo<br>1	2	foo<br>1	2	foo` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:04:56.199655+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 849
+- Unknown function TODOs: 749
+- Unsupported feature TODOs: 6761
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `duckdb_approx_database_count` | `unsupported feature` | 1 | sql/function/generic/test_approx_database_count.test | `query I<br>SELECT approx_count >= 3 FROM duckdb_approx_database_count();<br>----<br>True` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:07:00.146433+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 850
+- Unknown function TODOs: 749
+- Unsupported feature TODOs: 6762
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `duckdb_connection_count` | `unsupported feature` | 1 | sql/function/generic/test_connection_count.test | `query I<br>SELECT count FROM duckdb_connection_count();<br>----<br>3` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:08:14.674289+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 853
+- Unknown function TODOs: 751
+- Unsupported feature TODOs: 6763
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `sleep_ms` | 1 | sql/function/generic/test_sleep.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:08:23.021881+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 855
+- Unknown function TODOs: 752
+- Unsupported feature TODOs: 6764
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `summary` | `unsupported feature` | 1 | sql/function/generic/test_table_param.test | `statement ok<br>EXPLAIN SELECT * FROM summary((SELECT * FROM a))` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:08:50.351741+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 856
+- Unknown function TODOs: 753
+- Unsupported feature TODOs: 6764
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_aggr` | 1 | sql/function/list/aggregates/any_value.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:09:07.035012+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 861
+- Unknown function TODOs: 754
+- Unsupported feature TODOs: 6768
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_count` | 1 | sql/function/list/aggregates/count.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:09:10.180398+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 862
+- Unknown function TODOs: 755
+- Unsupported feature TODOs: 6768
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_entropy` | 1 | sql/function/list/aggregates/entropy.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:09:20.622016+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 864
+- Unknown function TODOs: 757
+- Unsupported feature TODOs: 6768
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_histogram` | 1 | sql/function/list/aggregates/histogram.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:09:24.333888+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 866
+- Unknown function TODOs: 758
+- Unsupported feature TODOs: 6769
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_kurtosis` | 1 | sql/function/list/aggregates/kurtosis.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:09:36.848295+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 868
+- Unknown function TODOs: 759
+- Unsupported feature TODOs: 6770
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_mad` | 1 | sql/function/list/aggregates/mad.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:11:12.583476+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 872
+- Unknown function TODOs: 760
+- Unsupported feature TODOs: 6773
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_min` | 1 | sql/function/list/aggregates/nested.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:11:16.486253+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 873
+- Unknown function TODOs: 761
+- Unsupported feature TODOs: 6773
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_sem` | 1 | sql/function/list/aggregates/sem.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:11:19.660031+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 874
+- Unknown function TODOs: 762
+- Unsupported feature TODOs: 6773
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_skewness` | 1 | sql/function/list/aggregates/skewness.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:11:22.543034+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 875
+- Unknown function TODOs: 763
+- Unsupported feature TODOs: 6773
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_string_agg` | 1 | sql/function/list/aggregates/string_agg.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:14:04.576216+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 876
+- Unknown function TODOs: 764
+- Unsupported feature TODOs: 6773
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_sum` | 1 | sql/function/list/aggregates/sum.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:14:15.821962+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 877
+- Unknown function TODOs: 765
+- Unsupported feature TODOs: 6773
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `len` | 1 | sql/function/list/array_length.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:14:17.886375+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 879
+- Unknown function TODOs: 766
+- Unsupported feature TODOs: 6774
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `array_to_string_comma_default` | 1 | sql/function/list/array_to_string_comma_default.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:14:25.108942+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 883
+- Unknown function TODOs: 767
+- Unsupported feature TODOs: 6777
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `generate_subscripts` | 1 | sql/function/list/generate_subscripts.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:14:39.587275+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 886
+- Unknown function TODOs: 770
+- Unsupported feature TODOs: 6777
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_apply` | 1 | sql/function/list/lambdas/arrow/lambda_scope_deprecated.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:14:51.051496+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 888
+- Unknown function TODOs: 772
+- Unsupported feature TODOs: 6777
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_reduce` | 1 | sql/function/list/lambdas/arrow/reduce_deprecated.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:16:22.300604+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 895
+- Unknown function TODOs: 777
+- Unsupported feature TODOs: 6779
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_has_any` | 1 | sql/function/list/list_has_any_and_has_all.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:16:23.755171+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 896
+- Unknown function TODOs: 778
+- Unsupported feature TODOs: 6779
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_inner_product` | 1 | sql/function/list/list_inner_product.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:16:35.311915+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 899
+- Unknown function TODOs: 781
+- Unsupported feature TODOs: 6779
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_reverse` | 1 | sql/function/list/list_reverse.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:16:44.010727+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 901
+- Unknown function TODOs: 783
+- Unsupported feature TODOs: 6779
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_unique` | 1 | sql/function/list/list_unique.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:16:46.275076+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 902
+- Unknown function TODOs: 784
+- Unsupported feature TODOs: 6779
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `list_value` | 1 | sql/function/list/list_value_arrays.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:16:56.494510+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 906
+- Unknown function TODOs: 786
+- Unsupported feature TODOs: 6781
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `repeat` | `unsupported feature` | 1 | sql/function/list/repeat_list.test | `query I<br>SELECT repeat([1], 10);<br>----<br>[1, 1, 1, 1, 1, 1, 1, 1, 1, 1]` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:17:29.952124+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 908
+- Unknown function TODOs: 787
+- Unsupported feature TODOs: 6782
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `even` | 1 | sql/function/numeric/test_even.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:17:33.378025+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 909
+- Unknown function TODOs: 787
+- Unsupported feature TODOs: 6783
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `factorial` | `unsupported feature` | 1 | sql/function/numeric/test_factorial.test | `query I<br>SELECT factorial(30);<br>----<br>265252859812191058636308480000000` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:17:38.757474+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 910
+- Unknown function TODOs: 788
+- Unsupported feature TODOs: 6783
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `fmod` | 1 | sql/function/numeric/test_fdiv_fmod.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:19:22.339323+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 911
+- Unknown function TODOs: 789
+- Unsupported feature TODOs: 6783
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `gamma` | 1 | sql/function/numeric/test_gamma.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:19:23.729481+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 912
+- Unknown function TODOs: 789
+- Unsupported feature TODOs: 6784
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `gcd` | `unsupported feature` | 1 | sql/function/numeric/test_gcd_lcm.test | `query IIIIII<br>SELECT a, b, gcd(a, b), gcd(a, -b), gcd(b, a), gcd(-b, a)<br>FROM (VALUES (0::int8, 0::int8),<br>             (0::int8, 29893644334::int8),<br>             (288484263558::int8, 29893644334::int8),<br>             (-288484263558::int8, 29893644334::int8),<br>             ((-9223372036854775808)::int8, 1::int8),<br>             ((-9223372036854775808)::int8, 9223372036854775807::int8),<br>             ((-9223372036854775808)::int8, 4611686018427387904::int8)) AS v(a, b);<br>----<br>0	0	0	0	0	0<br>0	29893644334	29893644334	29893644334	29893644334	29893644334<br>288484263558	29893644334	6835958	6835958	6835958	6835958<br>-288484263558	29893644334	6835958	6835958	6835958	6835958<br>-9223372036854775808	1	1	1	1	1<br>-9223372036854775808	9223372036854775807	1	1	1	1<br>-9223372036854775808	4611686018427387904	4611686018427387904	4611686018427387904	4611686018427387904	4611686018427387904` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:19:29.230913+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 913
+- Unknown function TODOs: 790
+- Unsupported feature TODOs: 6784
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `geomean` | 1 | sql/function/numeric/test_geomean.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:19:39.610256+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 914
+- Unknown function TODOs: 792
+- Unsupported feature TODOs: 6784
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `isnan` | 2 | sql/function/numeric/test_is_nan.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:19:53.422900+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 916
+- Unknown function TODOs: 793
+- Unsupported feature TODOs: 6785
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `nextafter` | 1 | sql/function/numeric/test_nextafter.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:20:51.248295+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 918
+- Unknown function TODOs: 794
+- Unsupported feature TODOs: 6786
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `roundbankers` | 1 | sql/function/numeric/test_round_even.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:20:59.576364+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 919
+- Unknown function TODOs: 795
+- Unsupported feature TODOs: 6786
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `signbit` | 1 | sql/function/numeric/test_sign_bit.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:12.189478+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 920
+- Unknown function TODOs: 796
+- Unsupported feature TODOs: 6786
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `format_bytes` | 1 | sql/function/string/format_bytes.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:14.605224+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 921
+- Unknown function TODOs: 796
+- Unsupported feature TODOs: 6787
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `hex` | `unsupported feature` | 1 | sql/function/string/hex.test | `query I<br>SELECT hex(blob '\x00\x00\x80');<br>----<br>000080` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:22.526850+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 922
+- Unknown function TODOs: 796
+- Unsupported feature TODOs: 6788
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `md5` | `unsupported feature` | 1 | sql/function/string/md5.test | `query I<br>select md5('\xff\xff'::BLOB)<br>----<br>ab2a0d28de6b77ffdd6c72afead099ab` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:30.254695+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 923
+- Unknown function TODOs: 797
+- Unsupported feature TODOs: 6788
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `parse_formatted_bytes` | 1 | sql/function/string/parse_formatted_bytes.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:31.311569+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 924
+- Unknown function TODOs: 798
+- Unsupported feature TODOs: 6788
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `parse_path` | 1 | sql/function/string/parse_path.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:39.786249+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 927
+- Unknown function TODOs: 800
+- Unsupported feature TODOs: 6789
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `regexp_escape` | 1 | sql/function/string/regex_escape.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:47.174818+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 928
+- Unknown function TODOs: 800
+- Unsupported feature TODOs: 6790
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `regexp_extract` | `unsupported feature` | 1 | sql/function/string/regex_extract.test | `query T<br>SELECT regexp_extract('foobarbaz', 'B..', 0, 'i')<br>----<br>bar` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:28:50.721961+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 929
+- Unknown function TODOs: 800
+- Unsupported feature TODOs: 6791
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `regexp_extract_all` | `unsupported feature` | 1 | sql/function/string/regex_extract_all.test | `query I<br>SELECT regexp_extract_all('1a 2b 14m', '(\\d+)([a-z]+)', -1);<br>----<br>[]` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:29:17.197872+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 934
+- Unknown function TODOs: 802
+- Unsupported feature TODOs: 6794
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `sha1` | `unsupported feature` | 1 | sql/function/string/sha1.test | `query I<br>SELECT sha1('\xff\xff'::BLOB)<br>----<br>a19f987b885f5a96069f4bc7f12b9e84ceba7dfa` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:29:19.112295+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 935
+- Unknown function TODOs: 803
+- Unsupported feature TODOs: 6794
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `sha256` | 1 | sql/function/string/sha256.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:29:20.639948+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 936
+- Unknown function TODOs: 804
+- Unsupported feature TODOs: 6794
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `strip_accents` | 1 | sql/function/string/strip_accents.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:29:26.146837+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 937
+- Unknown function TODOs: 805
+- Unsupported feature TODOs: 6794
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `array_extract` | 1 | sql/function/string/test_array_extract.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:29:30.039914+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 938
+- Unknown function TODOs: 806
+- Unsupported feature TODOs: 6794
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `bar` | 1 | sql/function/string/test_bar.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:29:35.857567+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 939
+- Unknown function TODOs: 807
+- Unsupported feature TODOs: 6794
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `length_grapheme` | 1 | sql/function/string/test_complex_unicode.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:30:32.263146+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 941
+- Unknown function TODOs: 807
+- Unsupported feature TODOs: 6796
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `contains` | `unsupported feature` | 1 | sql/function/string/test_contains.test | `query IIIIIIIIII<br>SELECT CONTAINS('hello world', 'h'),<br>       CONTAINS('hello world', 'he'),<br>       CONTAINS('hello world', 'hel'),<br>       CONTAINS('hello world', 'hell'),<br>       CONTAINS('hello world', 'hello'),<br>       CONTAINS('hello world', 'hello '),<br>       CONTAINS('hello world', 'hello w'),<br>       CONTAINS('hello world', 'hello wo'),<br>       CONTAINS('hello world', 'hello wor'),<br>       CONTAINS('hello world', 'hello worl')<br>----<br>1	1	1	1	1	1	1	1	1	1` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:30:43.389868+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 943
+- Unknown function TODOs: 808
+- Unsupported feature TODOs: 6797
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `damerau_levenshtein` | 1 | sql/function/string/test_damerau_levenshtein.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:30:44.462571+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 944
+- Unknown function TODOs: 809
+- Unsupported feature TODOs: 6797
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `format` | 1 | sql/function/string/test_format.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:30:45.481428+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 945
+- Unknown function TODOs: 810
+- Unsupported feature TODOs: 6797
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `printf` | 1 | sql/function/string/test_format_extensions.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:32:58.936183+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 946
+- Unknown function TODOs: 811
+- Unsupported feature TODOs: 6797
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `jaccard` | 1 | sql/function/string/test_jaccard.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:33:00.469843+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 947
+- Unknown function TODOs: 812
+- Unsupported feature TODOs: 6797
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `jaro_winkler_similarity` | 1 | sql/function/string/test_jaro_winkler.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:33:17.900582+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 949
+- Unknown function TODOs: 813
+- Unsupported feature TODOs: 6798
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `levenshtein` | 1 | sql/function/string/test_levenshtein.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:33:27.050168+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 951
+- Unknown function TODOs: 814
+- Unsupported feature TODOs: 6799
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `mismatches` | 1 | sql/function/string/test_mismatches.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:33:29.498239+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 952
+- Unknown function TODOs: 814
+- Unsupported feature TODOs: 6800
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `lpad` | `unsupported feature` | 1 | sql/function/string/test_pad.test | `query TTTT<br>select LPAD('Base', 7, '-'), LPAD('Base', 4, '-'), LPAD('Base', 2, ''), LPAD('Base', -1, '-')<br>----<br>---Base	Base	Ba	(empty)` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:33:31.456963+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 953
+- Unknown function TODOs: 815
+- Unsupported feature TODOs: 6800
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `prefix` | 1 | sql/function/string/test_prefix.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:33:49.504298+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 957
+- Unknown function TODOs: 817
+- Unsupported feature TODOs: 6802
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `starts_with` | 1 | sql/function/string/test_starts_with_function.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:35:59.707012+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 963
+- Unknown function TODOs: 819
+- Unsupported feature TODOs: 6806
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `substring` | `unsupported feature` | 1 | sql/function/string/test_substring.test | `query T<br>SELECT substring(s, 2, -2) FROM strings<br>----<br>h<br>w<br>b<br>NULL` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:36:10.624494+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 965
+- Unknown function TODOs: 820
+- Unsupported feature TODOs: 6807
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `suffix` | 1 | sql/function/string/test_suffix.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:36:13.869563+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 966
+- Unknown function TODOs: 821
+- Unsupported feature TODOs: 6807
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `to_base` | 1 | sql/function/string/test_to_base.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:36:32.658146+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 967
+- Unknown function TODOs: 822
+- Unsupported feature TODOs: 6807
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `url_encode` | 1 | sql/function/string/test_url_encode.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:36:33.782017+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 968
+- Unknown function TODOs: 822
+- Unsupported feature TODOs: 6808
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `epoch` | `unsupported feature` | 1 | sql/function/time/epoch.test | `query I<br>select epoch(TIME '14:21:13')<br>----<br>51673` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:43:28.888404+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 972
+- Unknown function TODOs: 825
+- Unsupported feature TODOs: 6809
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `age` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_age.test | `statement ok<br>SELECT AGE(TIMESTAMPTZ '1957-06-13') t;` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:43:40.493950+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 973
+- Unknown function TODOs: 826
+- Unsupported feature TODOs: 6809
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `strptime` | 1 | sql/function/timestamp/test_icu_strptime.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:43:58.321716+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 976
+- Unknown function TODOs: 828
+- Unsupported feature TODOs: 6810
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `try_strptime` | 1 | sql/function/timestamp/test_try_strptime.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:44:03.918020+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 977
+- Unknown function TODOs: 828
+- Unsupported feature TODOs: 6811
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `sql_tokenize` | `unsupported feature` | 1 | sql/function/tokenize/simple_tokenize.test | `query III<br>select start, token_type, word from sql_tokenize($$select a$$);<br>----<br>0	KEYWORD	select<br>7	IDENTIFIER	a` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:44:08.601699+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 978
+- Unknown function TODOs: 829
+- Unsupported feature TODOs: 6811
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `uuid_extract_version` | 1 | sql/function/uuid/test_uuid_function.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:44:09.684143+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 979
+- Unknown function TODOs: 830
+- Unsupported feature TODOs: 6811
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `variant_extract` | 1 | sql/function/variant/variant_extract.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T12:44:16.961167+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 981
+- Unknown function TODOs: 831
+- Unsupported feature TODOs: 6812
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `variant_typeof` | 1 | sql/function/variant/variant_typeof.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-17T13:32:26.016585+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 24
+- Files with issues: 978
+- Unknown function TODOs: 817
+- Unsupported feature TODOs: 6808
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 2
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `left_grapheme` | `unsupported feature` | 11 | sql/function/string/test_left.test | `query T<br>SELECT LEFT_GRAPHEME(a, b) FROM strings<br>----<br>NULL<br>NULL<br>NULL` |  |
+| `right_grapheme` | `unsupported feature` | 13 | sql/function/string/test_right.test | `statement ok<br>SELECT right_grapheme('a', -9223372036854775808);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T01:16:23.467093+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 9
+- Files with issues: 969
+- Unknown function TODOs: 823
+- Unsupported feature TODOs: 6809
+- Unknown function unique issues: 3
+- Unsupported feature unique issues: 5
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `md5_number` | 1 | sql/function/string/md5.test |  |
+| `md5_number_lower` | 1 | sql/function/string/md5.test |  |
+| `md5_number_upper` | 1 | sql/function/string/md5.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `from_binary` | `unsupported feature` | 2 | sql/function/string/hex.test | `query I<br>SELECT from_binary('011001000111010101100011011010110110010001100010');<br>----<br>duckdb` |  |
+| `from_hex` | `unsupported feature` | 1 | sql/function/string/hex.test | `query IIIIIIIIIIII<br>SELECT from_hex(to_hex(columns('^(.*int\|varchar\|bignum)$'))) FROM test_all_types();<br>----<br>\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x80	\xFF\xFF\xFF\xFF\xFF\xFF\x80\x00	\xFF\xFF\xFF\xFF\x80\x00\x00\x00	\x80\x00\x00\x00\x00\x00\x00\x00	\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00	\x00	\x00	\x00	\x00	\x00	\x7F\xFF\x7F\x00\x00\x00\x00\x00\x00\x07\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF	\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86\xF0\x9F\xA6\x86<br>\x7F	\x7F\xFF	\x7F\xFF\xFF\xFF	\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF	\x7F\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF	\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF	\xFF	\xFF\xFF	\xFF\xFF\xFF\xFF	\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF	\x80\x00\x80\xFF\xFF\xFF\xFF\xFF\xFF\xF8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00	goo\x00se<br>NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL` |  |
+| `sha256` | `unsupported feature` | 1 | sql/function/string/sha256.test | `query I<br>SELECT sha256('\xff\xff'::BLOB)<br>----<br>ca2fd00fa001190744c15c317643ab092e7048ce086a243e2be9437c898de1bb` |  |
+| `to_binary` | `unsupported feature` | 1 | sql/function/string/hex.test | `query IIIIIIIIIIII<br>SELECT to_binary(columns('^(.*int\|varchar\|bignum)$')) FROM test_all_types();<br>----<br>1111111111111111111111111111111111111111111111111111111110000000	1111111111111111111111111111111111111111111111111000000000000000	1111111111111111111111111111111110000000000000000000000000000000	1000000000000000000000000000000000000000000000000000000000000000	10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000	0	0	0	0	0	0111111111111111011111110000000000000000000000000000000000000000000000000000011111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111	111100001001111110100110100001101111000010011111101001101000011011110000100111111010011010000110111100001001111110100110100001101111000010011111101001101000011011110000100111111010011010000110<br>1111111	111111111111111	1111111111111111111111111111111	111111111111111111111111111111111111111111111111111111111111111	1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111	11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111	11111111	1111111111111111	11111111111111111111111111111111	1111111111111111111111111111111111111111111111111111111111111111	1000000000000000100000001111111111111111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000	011001110110111101101111000000000111001101100101<br>NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL` |  |
+| `to_hex` | `unsupported feature` | 1 | sql/function/string/hex.test | `query IIIIIIIIIIII<br>SELECT to_hex(columns('^(.*int\|varchar\|bignum)$')) FROM test_all_types();<br>----<br>FFFFFFFFFFFFFF80	FFFFFFFFFFFF8000	FFFFFFFF80000000	8000000000000000	80000000000000000000000000000000	0	0	0	0	0	7FFF7F00000000000007FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	F09FA686F09FA686F09FA686F09FA686F09FA686F09FA686<br>7F	7FFF	7FFFFFFF	7FFFFFFFFFFFFFFF	7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	FF	FFFF	FFFFFFFF	FFFFFFFFFFFFFFFF	800080FFFFFFFFFFFFF800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000	676F6F007365<br>NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T02:41:28.463145+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 3503
+- Files with issues: 1082
+- Unknown function TODOs: 1102
+- Unsupported feature TODOs: 13476
+- Unknown function unique issues: 10
+- Unsupported feature unique issues: 310
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `avg` | 2 | sql/function/string/test_jaro_winkler.test |  |
+| `data` | 1 | sql/function/string/parse_formatted_bytes.test |  |
+| `formatreadabledecimalsize` | 3 | sql/function/string/format_bytes.test |  |
+| `formatreadablesize` | 3 | sql/function/string/format_bytes.test |  |
+| `parse_dirname` | 23 | sql/function/string/parse_path.test<br>sql/function/string/parse_path_windows.test |  |
+| `parse_dirpath` | 23 | sql/function/string/parse_path.test<br>sql/function/string/parse_path_windows.test |  |
+| `parse_filename` | 38 | sql/function/string/parse_path.test<br>sql/function/string/parse_path_windows.test |  |
+| `pg_size_pretty` | 1 | sql/function/string/format_bytes.test |  |
+| `pg_sleep` | 10 | sql/function/generic/test_sleep.test |  |
+| `url_decode` | 3 | sql/function/string/test_url_encode.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `_` | `unsupported feature` | 1 | sql/function/list/generate_series.test | `query II<br>SELECT * FROM (SELECT 1 UNION ALL SELECT 0 UNION ALL SELECT 2) AS _(x), generate_series(1, x) AS __(y) ORDER BY x, y<br>----<br>1	1<br>2	1<br>2	2` |  |
+| `acos` | `unsupported feature` | 7 | sql/function/numeric/test_trigo.test | `statement error<br>select acos(-2);` |  |
+| `acosh` | `unsupported feature` | 1 | sql/function/numeric/test_trigo.test | `query IIII<br>select acosh(-1), acosh(0), acosh(1), acosh(2);<br>----<br>NaN	NaN	0.0	1.3169578969248166` |  |
+| `addresses` | `unsupported feature` | 1 | sql/function/list/test_lambda_with_struct_aliases.test | `statement ok<br>CREATE TABLE addresses (i INT, b INT);` |  |
+| `aggr2` | `unsupported feature` | 2 | sql/function/list/aggregates/entropy.test<br>sql/function/list/aggregates/skewness.test | `statement ok<br>create table aggr2 (k int[]);` |  |
+| `ago` | `unsupported feature` | 9 | sql/function/timestamp/current_timestamp.test | `query II<br>select <br>	current_timestamp - interval 1 day = ago(interval 1 day),<br>	current_timestamp - interval 1 day = ago('1 day');<br>----<br>True	True` |  |
+| `and` | `unsupported feature` | 1 | sql/function/operator/test_arithmetic_sqllogic.test | `query I<br>SELECT DISTINCT - col2 AS col2 FROM tab1 WHERE NOT 18 BETWEEN NULL AND ( + col0 * + CAST ( NULL AS INTEGER ) + - 3 / col2 ) OR NOT col0 BETWEEN col2 + + col1 AND NULL ORDER BY 1 DESC;<br>----<br>-68<br>-96` |  |
+| `array_aggr` | `unsupported feature` | 1 | sql/function/list/aggregates/nested.test | `query I<br>SELECT array_aggr([1, 2], 'min')<br>----<br>1` |  |
+| `array_aggregate` | `unsupported feature` | 1 | sql/function/list/aggregates/nested.test | `query I<br>SELECT array_aggregate([1, 2], 'min')<br>----<br>1` |  |
+| `array_apply` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/transform.test | `query I<br>SELECT array_apply([1, NULL], arr_elem -> arr_elem - 4)<br>----<br>[-3, NULL]` |  |
+| `array_cat` | `unsupported feature` | 1 | sql/function/list/list_concat.test | `query T<br>SELECT array_cat([1, 2], [3, 4])<br>----<br>[1, 2, 3, 4]` |  |
+| `array_contains` | `unsupported feature` | 1 | sql/function/list/list_contains.test | `query II<br>SELECT id, name FROM test WHERE ARRAY_CONTAINS(name, '2Pac');<br>----<br>3	[Oasis, 2Pac]` |  |
+| `array_extract` | `unsupported feature` | 17 | sql/function/string/test_array_extract.test | `query T<br>SELECT array_extract(s, 1) FROM strings<br>----<br>h<br>w<br>b<br>NULL` |  |
+| `array_filter` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/filter_deprecated.test<br>sql/function/list/lambdas/filter.test | `query I<br>SELECT array_filter([1, NULL], arr_elem -> arr_elem < 4)<br>----<br>[1]` |  |
+| `array_has_all` | `unsupported feature` | 1 | sql/function/list/list_has_any_and_has_all.test | `query I<br>select array_has_all(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;<br>----<br>1` |  |
+| `array_has_any` | `unsupported feature` | 1 | sql/function/list/list_has_any_and_has_all.test | `query I<br>select array_has_any(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;<br>----<br>1` |  |
+| `array_prepend` | `unsupported feature` | 1 | sql/function/list/list_concat.test | `query T<br>SELECT array_prepend(1, [2, 3])<br>----<br>[1, 2, 3]` |  |
+| `array_push_back` | `unsupported feature` | 2 | sql/function/list/list_concat.test | `query T<br>SELECT array_push_back(NULL, 3);<br>----<br>[3]` |  |
+| `array_push_front` | `unsupported feature` | 2 | sql/function/list/list_concat.test | `query T<br>SELECT array_push_front(NULL, 1);<br>----<br>[1]` |  |
+| `array_resize` | `unsupported feature` | 3 | sql/function/list/list_resize.test<br>sql/function/list/list_resize_error.test | `statement ok<br>prepare q2 as select array_resize(?, ?);` |  |
+| `array_reverse` | `unsupported feature` | 1 | sql/function/list/list_reverse.test | `query I<br>SELECT array_reverse([1, 42, 2]);<br>----<br>[2, 42, 1]` |  |
+| `array_table` | `unsupported feature` | 2 | sql/function/list/list_value_arrays.test | `statement ok<br>CREATE TABLE array_table (a STRING[3], b STRING[3], c STRING[3]);` |  |
+| `array_to_string_comma_default` | `unsupported feature` | 8 | sql/function/list/array_to_string_comma_default.test | `query I<br>SELECT array_to_string_comma_default(NULL, sep:='-')<br>----<br>NULL` |  |
+| `array_transform` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/transform.test | `query I<br>SELECT array_transform([1, NULL], arr_elem -> arr_elem - 4)<br>----<br>[-3, NULL]` |  |
+| `array_unique` | `unsupported feature` | 1 | sql/function/list/list_unique.test | `query I<br>SELECT array_unique([1, 2, 2, NULL])<br>----<br>2` |  |
+| `arrow` | `unsupported feature` | 1 | sql/function/list/lambdas/arrow/warn_deprecated_arrow.test | `query II<br>SELECT log_level, message[0:37] FROM duckdb_logs<br>----<br>WARNING	Deprecated lambda arrow (->) detected` |  |
+| `ascii` | `unsupported feature` | 1 | sql/function/string/null_byte.test | `query I<br>select ascii(chr(0));<br>----<br>0` |  |
+| `asin` | `unsupported feature` | 8 | sql/function/numeric/test_trigo.test | `statement error<br>select asin(-2);` |  |
+| `asinh` | `unsupported feature` | 1 | sql/function/numeric/test_trigo.test | `query III<br>select asinh(-1), asinh(0), asinh(2);<br>----<br>-0.881373587019543	0.0	1.4436354751788103` |  |
+| `atan` | `unsupported feature` | 6 | sql/function/numeric/test_trigo.test | `query I<br>SELECT cast(ATAN(n::float)*1000 as bigint) FROM numbers ORDER BY n<br>----<br>NULL<br>-1547<br>-785<br>0<br>785<br>1547` |  |
+| `atan2` | `unsupported feature` | 6 | sql/function/numeric/test_trigo.test | `query I<br>SELECT cast(ATAN2(n::float, 42)*1000 as bigint) FROM numbers ORDER BY n<br>----<br>NULL<br>-785<br>-24<br>0<br>24<br>785` |  |
+| `atanh` | `unsupported feature` | 4 | sql/function/numeric/test_trigo.test | `statement error<br>select atanh(1.1);` |  |
+| `bar` | `unsupported feature` | 33 | sql/function/string/test_bar.test | `query I<br>select bar(9, 10, 20)<br>----` |  |
+| `bitwise_test` | `unsupported feature` | 4 | sql/function/operator/test_bitwise_ops_types.test | `statement ok<br>CREATE TABLE bitwise_test(i BIGINT, j BIGINT)` |  |
+| `bool_table` | `unsupported feature` | 1 | sql/function/list/list_resize.test | `statement ok<br>CREATE TABLE bool_table(a bool[], b int);` |  |
+| `bools` | `unsupported feature` | 2 | sql/function/list/aggregates/bool_and_or.test<br>sql/function/list/list_zip.test | `statement ok<br>CREATE TABLE bools (b bool)` |  |
+| `cast_test` | `unsupported feature` | 1 | sql/function/list/lambdas/reduce_initial.test | `statement ok<br>CREATE TABLE cast_test (l int[], initial float);` |  |
+| `cbrt` | `unsupported feature` | 1 | sql/function/numeric/test_pg_math.test | `query R<br>select cbrt(27.0)<br>----<br>3.0` |  |
+| `ceil` | `unsupported feature` | 7 | sql/function/numeric/test_floor_ceil.test<br>sql/function/numeric/test_pg_math.test | `query I<br>select ceil(-42.8)<br>----<br>-42` |  |
+| `ceiling` | `unsupported feature` | 2 | sql/function/numeric/test_floor_ceil.test<br>sql/function/numeric/test_pg_math.test | `query I<br>select ceiling(-95.3)<br>----<br>-95` |  |
+| `century` | `unsupported feature` | 3 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT century(i) FROM times` |  |
+| `chr` | `unsupported feature` | 4 | sql/function/list/aggregates/minmax_nested.test<br>sql/function/string/null_byte.test<br>sql/function/string/regexp_unicode_literal.test | `query T<br>SELECT chr(0)<br>----<br> ` |  |
+| `cities` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/table_functions_deprecated.test<br>sql/function/list/lambdas/table_functions.test | `statement ok<br>CREATE TABLE cities AS<br>SELECT * FROM (VALUES ('Amsterdam', [90, 10]), ('London', [89, 102])) cities (name, prices);` |  |
+| `coalesce` | `unsupported feature` | 1 | sql/function/list/test_lambda_with_struct_aliases.test | `query I<br>SELECT COALESCE(*COLUMNS(lambda c: {'title': c}.title IN ('a', 'c')))<br>FROM (SELECT NULL, 2, 3) t(a, b, c);<br>----<br>3` |  |
+| `corr_test` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/filter_deprecated.test<br>sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/filter.test<br>sql/function/list/lambdas/transform.test | `statement ok<br>CREATE TABLE corr_test (n integer, l varchar[], g integer)` |  |
+| `cos` | `unsupported feature` | 8 | sql/function/list/lambdas/incorrect.test<br>sql/function/numeric/test_trigo.test | `statement error<br>SELECT cos(x -> x + 1);` |  |
+| `cosh` | `unsupported feature` | 1 | sql/function/numeric/test_trigo.test | `query IIII<br>select cosh(-1), cosh(0), cosh(1), cosh(1000);<br>----<br>1.5430806348152437	1.0	1.5430806348152437	inf` |  |
+| `cot` | `unsupported feature` | 6 | sql/function/numeric/test_trigo.test | `query I<br>SELECT cast(COT(n::float)*1000 as bigint) FROM numbers  WHERE n > 0.1 OR N < -0.1 ORDER BY n<br>----<br>-436<br>-642<br>642<br>436` |  |
+| `countif` | `unsupported feature` | 1 | sql/function/list/aggregates/sum_bool.test | `query III<br>SELECT COUNTIF(i > 500), COUNT_IF(i=1), COUNTIF(i IS NULL) FROM integers<br>----<br>6332	1	3334` |  |
+| `damerau_levenshtein` | `unsupported feature` | 51 | sql/function/string/test_damerau_levenshtein.test | `statement error<br>SELECT damerau_levenshtein()` |  |
+| `date_diff` | `unsupported feature` | 4 | sql/function/timestamp/test_icu_datediff.test | `query I<br>select date_diff('day', '2022-01-04 19:00:00'::timestamptz, '2024-03-01'::date) as c1;<br>----<br>787` |  |
+| `date_part` | `unsupported feature` | 163 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>select date_part('era', time '10:00:00');` |  |
+| `date_trunc` | `unsupported feature` | 48 | sql/function/interval/test_interval_trunc.test<br>sql/function/timestamp/test_icu_datetrunc.test | `query T<br>SELECT date_trunc(NULL, d) FROM timestamps LIMIT 3;<br>----<br>NULL<br>NULL<br>NULL` |  |
+| `datediff` | `unsupported feature` | 228 | sql/function/timestamp/test_date_diff_epoch.test<br>sql/function/timestamp/test_icu_datediff.test<br>sql/function/uuid/test_uuid_function.test | `query I<br>SELECT DATEDIFF('day', startdate, enddate) FROM datetime1<br>----<br>1` |  |
+| `dates` | `unsupported feature` | 5 | sql/function/list/aggregates/approx_count_distinct.test<br>sql/function/list/aggregates/mode.test<br>sql/function/numeric/test_unary.test<br>sql/function/operator/test_date_arithmetic.test<br>sql/function/timestamp/make_date.test | `statement ok<br>CREATE TABLE dates(d DATE)` |  |
+| `datesub` | `unsupported feature` | 235 | sql/function/timestamp/test_icu_datesub.test | `query I<br>SELECT DATESUB('day', 'infinity'::TIMESTAMPTZ, 'infinity'::TIMESTAMPTZ);<br>----<br>NULL` |  |
+| `datetrunc` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datetrunc.test | `query II<br>SELECT datetrunc(s, d), s FROM timestamps;<br>----<br>-infinity	year<br>1000-01-01 00:00:00-07:52	millennium<br>1900-01-01 00:00:00-08	century<br>1990-01-01 00:00:00-08	decade<br>1992-01-01 00:00:00-08	year<br>1992-01-01 00:00:00-08	quarter<br>1992-02-01 00:00:00-08	month<br>1992-01-27 00:00:00-08	week<br>1992-02-02 00:00:00-08	day<br>1992-02-02 02:00:00-08	hour<br>1992-02-02 02:02:00-08	minute<br>1992-02-02 02:02:03-08	second<br>1992-02-02 02:02:03.123-08	milliseconds<br>1992-02-02 02:02:03.123456-08	microseconds<br>infinity	month` |  |
+| `day` | `unsupported feature` | 3 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT day(i) FROM times` |  |
+| `dayname` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT dayname(ts), monthname(ts) from timestamps;<br>----<br>Wednesday	March<br>Tuesday	July<br>Thursday	December<br>Monday	February<br>Friday	November<br>Monday	November<br>Monday	November<br>Friday	December<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `dayofmonth` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT dayofmonth(ts), dayofmonth(ts::TIMESTAMP) FROM timestamps;<br>----<br>13	13<br>31	31<br>31	31<br>1	1<br>26	26<br>15	15<br>15	15<br>24	24<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `dayofweek` | `unsupported feature` | 4 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT dayofweek(i) FROM times` |  |
+| `dayofyear` | `unsupported feature` | 4 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT dayofyear(i) FROM times` |  |
+| `decade` | `unsupported feature` | 3 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT decade(i) FROM times` |  |
+| `decimals` | `unsupported feature` | 1 | sql/function/list/aggregates/bigints_sum_avg.test | `statement ok<br>CREATE TABLE decimals (i DECIMAL(18,1)[]);` |  |
+| `def` | `unsupported feature` | 1 | sql/function/list/list_resize.test | `statement ok<br>CREATE TABLE def(tbl INT[], b INT, d INT);` |  |
+| `degrees` | `unsupported feature` | 2 | sql/function/numeric/test_invalid_math.test<br>sql/function/numeric/test_pg_math.test | `query R<br>SELECT DEGREES(1e308)<br>----<br>inf` |  |
+| `demo` | `unsupported feature` | 12 | sql/function/list/lambdas/arrow/lambdas_and_functions_deprecated.test<br>sql/function/list/lambdas/lambdas_and_functions.test | `query I<br>FROM demo(3, 0);<br>----<br>[0, 0, 0]` |  |
+| `df` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/reduce_deprecated.test<br>sql/function/list/lambdas/arrow/reduce_initial_deprecated.test<br>sql/function/list/lambdas/reduce.test<br>sql/function/list/lambdas/reduce_initial.test | `statement ok<br>CREATE OR REPLACE TABLE df(s STRUCT(a INT, b INT)[]);` |  |
+| `double_values` | `unsupported feature` | 1 | sql/function/list/aggregates/minmax_nested.test | `statement ok<br>CREATE TABLE double_values(d DOUBLE);` |  |
+| `doubles` | `unsupported feature` | 4 | sql/function/list/aggregates/avg.test<br>sql/function/list/aggregates/sum.test | `statement ok<br>CREATE TABLE doubles(n DOUBLE[]);` |  |
+| `dummy_tbl` | `unsupported feature` | 1 | sql/function/list/lambdas/incorrect.test | `statement ok<br>CREATE TABLE dummy_tbl (y INT);` |  |
+| `editdist3` | `unsupported feature` | 2 | sql/function/string/test_levenshtein.test | `query I<br>SELECT editdist3('hallo', 'hello')<br>----<br>1` |  |
+| `empty_lists` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/filter_deprecated.test<br>sql/function/list/lambdas/filter.test | `statement ok<br>CREATE TABLE empty_lists (l integer[])` |  |
+| `entr` | `unsupported feature` | 1 | sql/function/list/aggregates/entropy.test | `statement ok<br>CREATE TABLE entr (l INTEGER[]);` |  |
+| `epoch_ms` | `unsupported feature` | 3 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timetz/test_date_part.test | `query II<br>SELECT d, epoch_ms(d) FROM times ORDER BY ALL;<br>----<br>00:01:20	80000<br>20:08:10.001	72490001<br>20:08:10.33	72490330<br>20:08:10.998	72490998` |  |
+| `epoch_ns` | `unsupported feature` | 3 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timetz/test_date_part.test | `query II<br>SELECT d, epoch_ns(d) FROM times ORDER BY ALL;<br>----<br>00:01:20	80000000000<br>20:08:10.001	72490001000000<br>20:08:10.33	72490330000000<br>20:08:10.998	72490998000000` |  |
+| `epoch_us` | `unsupported feature` | 3 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timetz/test_date_part.test | `query II<br>SELECT d, epoch_us(d) FROM times ORDER BY ALL;<br>----<br>00:01:20	80000000<br>20:08:10.001	72490001000<br>20:08:10.33	72490330000<br>20:08:10.998	72490998000` |  |
+| `era` | `unsupported feature` | 6 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timestamp/test_icu_makedate.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT era(i) FROM times` |  |
+| `even` | `unsupported feature` | 8 | sql/function/numeric/test_even.test | `query I<br>SELECT even(NULL)<br>----<br>NULL` |  |
+| `exp` | `unsupported feature` | 2 | sql/function/numeric/test_invalid_math.test<br>sql/function/numeric/test_pg_math.test | `query R<br>select exp(1.0)<br>----<br>2.718281828459045` |  |
+| `fdiv` | `unsupported feature` | 6 | sql/function/numeric/test_fdiv_fmod.test | `query I<br>SELECT fdiv(3, 2.1)<br>----<br>1` |  |
+| `float_values` | `unsupported feature` | 1 | sql/function/list/aggregates/minmax_nested.test | `statement ok<br>CREATE TABLE float_values(f FLOAT);` |  |
+| `floor` | `unsupported feature` | 7 | sql/function/numeric/test_floor_ceil.test<br>sql/function/numeric/test_pg_math.test | `query I<br>select floor(-42.8)<br>----<br>-43` |  |
+| `fmod` | `unsupported feature` | 4 | sql/function/numeric/test_fdiv_fmod.test | `query I<br>SELECT fmod(0, 0)<br>----<br>NULL` |  |
+| `format` | `unsupported feature` | 14 | sql/function/string/test_format_extensions.test | `statement error<br>select format('{1}', 123456789)` |  |
+| `formats` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_strftime.test | `statement ok<br>CREATE TABLE formats (f VARCHAR);` |  |
+| `functions` | `unsupported feature` | 1 | sql/function/list/list_contains.test | `statement ok<br>CREATE TABLE functions (function_name varchar, function_type varchar, parameter_types varchar[]);` |  |
+| `gamma` | `unsupported feature` | 9 | sql/function/numeric/test_gamma.test | `query I<br>SELECT gamma(1)<br>----<br>1` |  |
+| `gen_random_uuid` | `unsupported feature` | 4 | sql/function/uuid/test_uuid.test | `statement ok<br>SELECT * FROM uuids ORDER BY gen_random_uuid();` |  |
+| `generate_subscripts` | `unsupported feature` | 3 | sql/function/list/generate_subscripts.test | `query I<br>SELECT generate_subscripts([], 1)<br>----` |  |
+| `geomean` | `unsupported feature` | 2 | sql/function/numeric/test_geomean.test | `query I<br>SELECT geomean(x::integer) FROM numbers<br>----<br>1.414213562373095` |  |
+| `greatest` | `unsupported feature` | 4 | sql/function/generic/least_greatest_enum.test<br>sql/function/generic/least_greatest_types.test<br>sql/function/generic/test_least_greatest.test | `query II<br>SELECT greatest('x'::t, 'z'::t), 'x'::t > 'z'::t;<br>----<br>x	1` |  |
+| `hist_data` | `unsupported feature` | 1 | sql/function/list/aggregates/histogram.test | `statement ok<br>CREATE TABLE hist_data (g INTEGER[])` |  |
+| `hour` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT hour(ts), hour(ts::TIMESTAMP) FROM timestamps;<br>----<br>1	1<br>5	5<br>16	16<br>16	16<br>2	2<br>2	2<br>1	1<br>14	14<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `incorrect_test` | `unsupported feature` | 1 | sql/function/list/lambdas/incorrect.test | `statement ok<br>CREATE TABLE incorrect_test (i INTEGER);` |  |
+| `index_key` | `unsupported feature` | 45 | sql/function/index/index_key.test | `statement error<br>SELECT index_key({'table': 'tbl1'});` |  |
+| `instr` | `unsupported feature` | 8 | sql/function/string/null_byte.test<br>sql/function/string/test_instr_utf8.test | `query I<br>SELECT instr(v, chr(0)) FROM null_byte<br>----<br>4` |  |
+| `integers2` | `unsupported feature` | 1 | sql/function/list/list_zip.test | `statement ok<br>CREATE TABLE integers2 (j int[])` |  |
+| `interval_muldiv_tbl` | `unsupported feature` | 1 | sql/function/interval/test_interval_muldiv.test | `statement ok<br>CREATE TABLE INTERVAL_MULDIV_TBL (span interval);` |  |
+| `intervals` | `unsupported feature` | 4 | sql/function/interval/test_date_part.test<br>sql/function/interval/test_extract.test<br>sql/function/interval/test_interval_trunc.test<br>sql/function/list/aggregates/mode.test | `statement ok<br>CREATE TABLE intervals(i INTERVAL);` |  |
+| `isodow` | `unsupported feature` | 4 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT isodow(i) FROM times` |  |
+| `isoyear` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT isoyear(ts), isoyear(ts::TIMESTAMP) FROM timestamps;<br>----<br>-43	-43<br>1962	1962<br>2020	2020<br>2021	2021<br>2021	2021<br>2021	2021<br>2021	2021<br>2021	2021<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `issue3588` | `unsupported feature` | 1 | sql/function/generic/test_between.test | `statement ok<br>CREATE TABLE issue3588(c0 INT);` |  |
+| `issue9673` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datediff.test | `statement ok<br>CREATE TABLE issue9673(starttime TIMESTAMPTZ, recordtime TIMESTAMPTZ);` |  |
+| `julian` | `unsupported feature` | 2 | sql/function/interval/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test | `statement error<br>SELECT julian(i) FROM intervals;` |  |
+| `l_filter_test` | `unsupported feature` | 3 | sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/incorrect.test<br>sql/function/list/lambdas/lambda_scope.test | `statement ok<br>CREATE TABLE l_filter_test (l integer[]);` |  |
+| `l_test` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/lambda_scope.test | `statement ok<br>CREATE TABLE l_test (l integer[]);` |  |
+| `lambda_check` | `unsupported feature` | 4 | sql/function/list/lambdas/incorrect.test | `statement error<br>CREATE TABLE lambda_check (i BIGINT[],<br>    CHECK ([x + 1 FOR x IN i IF x > 0] = []));` |  |
+| `lambda_macro` | `unsupported feature` | 1 | sql/function/list/lambdas/test_lambda_storage.test | `query I<br>SELECT lambda_macro(1, 2);<br>----<br>[3, 5]` |  |
+| `large_lists` | `unsupported feature` | 1 | sql/function/list/list_intersect.test | `statement ok<br>create table large_lists(l1 int[], l2 int[]);` |  |
+| `last_day` | `unsupported feature` | 2 | sql/function/timestamp/test_icu_datepart.test | `query TTT<br>SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM februaries;<br>----<br>1900-02-12 00:00:00-08	1900-02-28	1900-02-28<br>1992-02-12 00:00:00-08	1992-02-29	1992-02-29<br>2000-02-12 00:00:00-08	2000-02-29	2000-02-29` |  |
+| `lcm` | `unsupported feature` | 5 | sql/function/numeric/test_gcd_lcm.test | `query I<br>select lcm(120,25);<br>----<br>600` |  |
+| `length_grapheme` | `unsupported feature` | 3 | sql/function/string/null_byte.test<br>sql/function/string/test_complex_unicode.test | `query I<br>SELECT length_grapheme('🤦🏼‍♂️')<br>----<br>1` |  |
+| `levenshtein` | `unsupported feature` | 35 | sql/function/string/test_levenshtein.test | `query I<br>SELECT levenshtein('', '')<br>----<br>0` |  |
+| `lgamma` | `unsupported feature` | 11 | sql/function/numeric/test_gamma.test | `query I<br>SELECT lgamma(1)<br>----<br>0` |  |
+| `list_aggregate` | `unsupported feature` | 1 | sql/function/list/aggregates/nested.test | `query I<br>SELECT list_aggregate([1, 2], 'min')<br>----<br>1` |  |
+| `list_any_value` | `unsupported feature` | 14 | sql/function/list/aggregates/any_value.test | `statement error<br>SELECT list_any_value()` |  |
+| `list_append` | `unsupported feature` | 4 | sql/function/list/list_concat.test | `query T<br>SELECT list_append(NULL, 3)<br>----<br>[3]` |  |
+| `list_apply` | `unsupported feature` | 24 | sql/function/list/lambdas/arrow/filter_deprecated.test<br>sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/arrow/rhs_parameters_deprecated.test<br>sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/filter.test<br>sql/function/list/lambdas/incorrect.test<br>sql/function/list/lambdas/lambda_scope.test<br>sql/function/list/lambdas/rhs_parameters.test<br>sql/function/list/lambdas/transform.test | `query I<br>SELECT list_apply(['hello'], lambda x: x) FROM t1;<br>----<br>[hello]` |  |
+| `list_approx_count_distinct` | `unsupported feature` | 5 | sql/function/list/aggregates/approx_count_distinct.test | `query I<br>select list_approx_count_distinct([]) from list_ints;<br>----<br>0` |  |
+| `list_avg` | `unsupported feature` | 12 | sql/function/list/aggregates/avg.test<br>sql/function/list/aggregates/bigints_sum_avg.test | `statement error<br>SELECT list_avg()` |  |
+| `list_bit_and` | `unsupported feature` | 5 | sql/function/list/aggregates/bit_and.test | `statement error<br>SELECT list_bit_and()` |  |
+| `list_bit_or` | `unsupported feature` | 5 | sql/function/list/aggregates/bit_or.test | `statement error<br>SELECT list_bit_or()` |  |
+| `list_bit_xor` | `unsupported feature` | 5 | sql/function/list/aggregates/bit_xor.test | `statement error<br>SELECT list_bit_xor()` |  |
+| `list_bool_and` | `unsupported feature` | 2 | sql/function/list/aggregates/bool_and_or.test | `statement error<br>select list_bool_and()` |  |
+| `list_bool_or` | `unsupported feature` | 2 | sql/function/list/aggregates/bool_and_or.test | `statement error<br>select list_bool_or()` |  |
+| `list_concat` | `unsupported feature` | 103 | sql/function/array/array_list_functions.test<br>sql/function/list/aggregates/nested.test<br>sql/function/list/lambdas/arrow/filter_deprecated.test<br>sql/function/list/lambdas/filter.test<br>sql/function/list/list_concat.test<br>sql/function/string/test_concat_binding.test | `query T<br>SELECT list_concat([], [])<br>----<br>[]` |  |
+| `list_contains` | `unsupported feature` | 81 | sql/function/array/array_list_functions.test<br>sql/function/list/list_contains.test<br>sql/function/list/list_position.test<br>sql/function/list/list_position_nan.test<br>sql/function/list/list_value_arrays.test | `statement error<br>SELECT list_contains(1)` |  |
+| `list_cosine_distance` | `unsupported feature` | 2 | sql/function/list/list_cosine_similarity.test | `query I<br>SELECT list_cosine_distance([1, 2, 3]::FLOAT[], [1, 2, 3]::FLOAT[]) = 1 - list_cosine_similarity([1, 2, 3]::FLOAT[], [1, 2, 3]::FLOAT[]);<br>----<br>1` |  |
+| `list_cosine_similarity` | `unsupported feature` | 12 | sql/function/list/list_cosine_similarity.test | `query I<br>SELECT list_cosine_similarity([], []);<br>----<br>NULL` |  |
+| `list_count` | `unsupported feature` | 16 | sql/function/list/aggregates/approx_count_distinct.test<br>sql/function/list/aggregates/count.test<br>sql/function/list/aggregates/string_agg.test<br>sql/function/list/lambdas/arrow/filter_deprecated.test<br>sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/filter.test<br>sql/function/list/lambdas/transform.test | `statement error<br>select list_count()` |  |
+| `list_data` | `unsupported feature` | 2 | sql/function/list/list_has_any_and_has_all.test<br>sql/function/list/list_intersect.test | `statement ok<br>CREATE TABLE list_data(l1 int[], l2 int[]);` |  |
+| `list_distance` | `unsupported feature` | 12 | sql/function/list/list_distance.test | `query I<br>SELECT list_distance([], []);<br>----<br>0.0` |  |
+| `list_distinct` | `unsupported feature` | 60 | sql/function/list/list_distinct.test | `statement error<br>SELECT list_distinct()` |  |
+| `list_entropy` | `unsupported feature` | 5 | sql/function/list/aggregates/entropy.test | `statement error<br>select list_entropy()` |  |
+| `list_extract` | `unsupported feature` | 3 | sql/function/array/array_list_functions.test<br>sql/function/string/test_array_extract.test | `query I<br>SELECT list_extract('1', -1);<br>----<br>1` |  |
+| `list_filter` | `unsupported feature` | 91 | sql/function/array/array_list_functions.test<br>sql/function/list/lambdas/arrow/expression_iterator_cases_deprecated.test<br>sql/function/list/lambdas/arrow/filter_deprecated.test<br>sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/arrow/lambdas_and_group_by_deprecated.test<br>sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test<br>sql/function/list/lambdas/arrow/list_comprehension_deprecated.test<br>sql/function/list/lambdas/arrow/table_functions_deprecated.test<br>sql/function/list/lambdas/arrow/transform_with_index_deprecated.test<br>sql/function/list/lambdas/expression_iterator_cases.test<br>sql/function/list/lambdas/filter.test<br>sql/function/list/lambdas/incorrect.test<br>sql/function/list/lambdas/lambda_scope.test<br>sql/function/list/lambdas/lambdas_and_group_by.test<br>sql/function/list/lambdas/lambdas_and_macros.test<br>sql/function/list/lambdas/list_comprehension.test<br>sql/function/list/lambdas/table_functions.test<br>sql/function/list/lambdas/transform_with_index.test<br>sql/function/list/list_contains.test | `statement error<br>SELECT list_filter();` |  |
+| `list_first` | `unsupported feature` | 16 | sql/function/list/aggregates/first.test<br>sql/function/list/aggregates/hugeint.test<br>sql/function/list/aggregates/uhugeint.test | `statement error<br>SELECT list_first()` |  |
+| `list_has` | `unsupported feature` | 1 | sql/function/list/list_contains.test | `query I<br>SELECT function_name FROM functions<br>WHERE function_type = 'scalar' AND list_has(parameter_types, 'TIMESTAMP');<br>----<br>last_day<br>scalar_part` |  |
+| `list_has_all` | `unsupported feature` | 20 | sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/lambda_scope.test<br>sql/function/list/list_has_any_and_has_all.test | `statement error<br>select list_has_all([1, 2], 1);` |  |
+| `list_has_any` | `unsupported feature` | 16 | sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/lambda_scope.test<br>sql/function/list/list_has_any_and_has_all.test | `query I<br>select list_has_any(l1, l2) from tbl;<br>----<br>1<br>1` |  |
+| `list_histogram` | `unsupported feature` | 13 | sql/function/list/aggregates/histogram.test | `statement error<br>select list_histogram()` |  |
+| `list_inner_product` | `unsupported feature` | 10 | sql/function/list/list_inner_product.test | `query I<br>SELECT list_inner_product([1, 1, 1]::FLOAT[], [1, 1, 1]::FLOAT[]);<br>----<br>3.0` |  |
+| `list_intersect` | `unsupported feature` | 15 | sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/lambda_scope.test<br>sql/function/list/list_intersect.test | `statement ok<br>prepare q1 as select list_intersect(?, ?);` |  |
+| `list_ints` | `unsupported feature` | 1 | sql/function/list/aggregates/approx_count_distinct.test | `statement ok<br>CREATE TABLE list_ints (l INTEGER[]);` |  |
+| `list_ints_2` | `unsupported feature` | 1 | sql/function/list/aggregates/approx_count_distinct.test | `statement ok<br>CREATE TABLE list_ints_2 (a INTEGER[], b INTEGER[]);` |  |
+| `list_kurtosis` | `unsupported feature` | 4 | sql/function/list/aggregates/kurtosis.test | `statement error<br>select list_kurtosis()` |  |
+| `list_kurtosis_pop` | `unsupported feature` | 1 | sql/function/list/aggregates/kurtosis.test | `query I<br>select list_kurtosis_pop(k) from aggr;<br>----<br>6.100000<br>-1.676857<br>-1.358688<br>NULL<br>NULL<br>NULL` |  |
+| `list_last` | `unsupported feature` | 15 | sql/function/list/aggregates/last.test<br>sql/function/list/aggregates/nested.test | `statement error<br>SELECT list_last()` |  |
+| `list_mad` | `unsupported feature` | 41 | sql/function/list/aggregates/mad.test | `statement ok<br>SELECT list_mad([NULL::date])` |  |
+| `list_max` | `unsupported feature` | 14 | sql/function/list/aggregates/max.test | `statement error<br>SELECT list_max()` |  |
+| `list_median` | `unsupported feature` | 9 | sql/function/list/aggregates/median.test | `query I<br>SELECT list_median(r) FROM quantile<br>----<br>4999.5` |  |
+| `list_min` | `unsupported feature` | 17 | sql/function/list/aggregates/hugeint.test<br>sql/function/list/aggregates/min.test<br>sql/function/list/aggregates/nested.test<br>sql/function/list/aggregates/uhugeint.test | `statement error<br>SELECT list_min()` |  |
+| `list_mode` | `unsupported feature` | 9 | sql/function/list/aggregates/mode.test | `statement error<br>select list_mode()` |  |
+| `list_negative_inner_product` | `unsupported feature` | 2 | sql/function/list/list_inner_product.test | `query I<br>SELECT list_negative_inner_product([1,2,3]::FLOAT[], [1,2,3]::FLOAT[]) = -list_inner_product([1,2,3]::FLOAT[], [1,2,3]::FLOAT[]);<br>----<br>1` |  |
+| `list_of_list` | `unsupported feature` | 3 | sql/function/list/list_contains.test<br>sql/function/list/list_has_any_and_has_all.test<br>sql/function/list/list_intersect.test | `statement ok<br>CREATE TABLE list_of_list(l1 int[][], l2 int[][]);` |  |
+| `list_of_strings` | `unsupported feature` | 2 | sql/function/list/list_has_any_and_has_all.test<br>sql/function/list/list_intersect.test | `statement ok<br>create table list_of_strings(l1 string[], l2 string[]);` |  |
+| `list_position` | `unsupported feature` | 90 | sql/function/array/array_list_functions.test<br>sql/function/list/list_position.test<br>sql/function/list/list_position_nan.test | `statement error<br>SELECT list_position(1)` |  |
+| `list_prepend` | `unsupported feature` | 1 | sql/function/list/list_concat.test | `query T<br>SELECT list_prepend(1, [2, 3])<br>----<br>[1, 2, 3]` |  |
+| `list_product` | `unsupported feature` | 4 | sql/function/list/aggregates/product.test | `statement error<br>select list_product()` |  |
+| `list_resize` | `unsupported feature` | 41 | sql/function/array/array_list_functions.test<br>sql/function/list/list_resize.test<br>sql/function/list/list_resize_error.test | `statement ok<br>SELECT list_resize([1,2,3], NULL);` |  |
+| `list_reverse` | `unsupported feature` | 26 | sql/function/list/list_reverse.test | `statement error<br>SELECT list_reverse()` |  |
+| `list_sem` | `unsupported feature` | 3 | sql/function/list/aggregates/sem.test | `statement error<br>select list_sem()` |  |
+| `list_skewness` | `unsupported feature` | 6 | sql/function/list/aggregates/skewness.test | `statement error<br>select list_skewness()` |  |
+| `list_slice` | `unsupported feature` | 4 | sql/function/array/array_list_functions.test<br>sql/function/string/test_string_array_slice.test | `query T<br>SELECT list_slice(s, 0, 2) FROM strings<br>----<br>he<br>wo<br>b<br>NULL` |  |
+| `list_sort` | `unsupported feature` | 33 | sql/function/array/array_list_functions.test<br>sql/function/list/flatten.test<br>sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/transform.test<br>sql/function/list/list_distinct.test<br>sql/function/list/list_intersect.test<br>sql/function/list/list_reverse.test<br>sql/function/list/list_sort_vector_types.test | `query I<br>select list_sort(${f}([1,2,3], [2,3,4]));<br>----<br>[2, 3]` |  |
+| `list_stddev_pop` | `unsupported feature` | 1 | sql/function/list/aggregates/var_stddev.test | `statement error<br>SELECT list_stddev_pop(c0) FROM t0;` |  |
+| `list_stddev_samp` | `unsupported feature` | 2 | sql/function/list/aggregates/var_stddev.test | `statement error<br>SELECT list_stddev_samp()` |  |
+| `list_string_agg` | `unsupported feature` | 8 | sql/function/list/aggregates/string_agg.test | `statement error<br>SELECT list_string_agg()` |  |
+| `list_sum` | `unsupported feature` | 14 | sql/function/list/aggregates/bigints_sum_avg.test<br>sql/function/list/aggregates/sum.test<br>sql/function/list/aggregates/var_stddev.test<br>sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/transform.test | `query I<br>SELECT list_sum(i) FROM bigints;<br>----<br>6` |  |
+| `list_tbl` | `unsupported feature` | 1 | sql/function/list/list_resize.test | `statement ok<br>create table list_tbl(a int[][], b int);` |  |
+| `list_unique` | `unsupported feature` | 69 | sql/function/list/list_distinct.test<br>sql/function/list/list_unique.test | `statement error<br>SELECT list_unique()` |  |
+| `list_value` | `unsupported feature` | 43 | sql/function/list/lambdas/incorrect.test<br>sql/function/list/list_value_arrays.test<br>sql/function/list/list_value_nested_lists.test<br>sql/function/list/list_value_structs.test | `statement error<br>SELECT list_value(a, b, c) FROM mixed_array_table;` |  |
+| `list_var_pop` | `unsupported feature` | 1 | sql/function/list/aggregates/var_stddev.test | `statement error<br>select list_var_pop([1e301, -1e301])` |  |
+| `list_var_samp` | `unsupported feature` | 2 | sql/function/list/aggregates/var_stddev.test | `query I<br>SELECT list_var_samp([1])<br>----<br>NULL` |  |
+| `list_where` | `unsupported feature` | 67 | sql/function/list/list_where.test | `statement ok<br>SELECT list_where([1::float], [true])` |  |
+| `list_zip` | `unsupported feature` | 84 | sql/function/list/list_zip.test | `statement error<br>SELECT list_zip('')` |  |
+| `ln` | `unsupported feature` | 3 | sql/function/numeric/test_invalid_math.test<br>sql/function/numeric/test_pg_math.test | `statement error<br>SELECT ln(0);` |  |
+| `log` | `unsupported feature` | 17 | sql/function/numeric/test_invalid_math.test<br>sql/function/numeric/test_pg_math.test | `statement error<br>SELECT log(-1);` |  |
+| `log10` | `unsupported feature` | 3 | sql/function/numeric/test_invalid_math.test<br>sql/function/numeric/test_pg_math.test | `statement error<br>SELECT log10(0);` |  |
+| `log2` | `unsupported feature` | 1 | sql/function/numeric/test_pg_math.test | `query R<br>select log2(4.0)<br>----<br>2.0` |  |
+| `macro_with_lambda` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test<br>sql/function/list/lambdas/lambdas_and_macros.test | `statement ok<br>CREATE MACRO macro_with_lambda(list, num) AS (list_transform(list, x -> x + num))` |  |
+| `make_date` | `unsupported feature` | 7 | sql/function/timestamp/make_date.test | `query I<br>SELECT *<br>FROM dates<br>WHERE d <> make_date((d - date '1970-01-01')::INT)<br>----` |  |
+| `make_time` | `unsupported feature` | 5 | sql/function/timestamp/make_date.test | `query I<br>SELECT md<br>FROM (SELECT make_time(hour(d), minute(d), NULL) md FROM dates) t<br>WHERE md IS NOT NULL<br>----` |  |
+| `make_timestamp` | `unsupported feature` | 11 | sql/function/timestamp/make_date.test | `statement error<br>SELECT make_timestamp(294247, 1, 10, 4, 0, 54.775807);` |  |
+| `make_timestamp_ms` | `unsupported feature` | 1 | sql/function/timestamp/epoch.test | `query TTTTTT<br>SELECT <br>	make_timestamp_ms(0) as epoch1, <br>	make_timestamp_ms(1574802684123) as epoch2, <br>	make_timestamp_ms(-291044928000) as epoch3, <br>	make_timestamp_ms(-291081600000) as epoch4,  <br>	make_timestamp_ms(-291081600001) as epoch5, <br>	make_timestamp_ms(-290995201000) as epoch6<br>----<br>1970-01-01 00:00:00<br>2019-11-26 21:11:24.123<br>1960-10-11 10:11:12<br>1960-10-11 00:00:00<br>1960-10-10 23:59:59.999<br>1960-10-11 23:59:59` |  |
+| `make_timestamp_ns` | `unsupported feature` | 3 | sql/function/timestamp/make_date.test | `statement error<br>SELECT make_timestamp_ns(9223372036854775807); -- Infinity` |  |
+| `make_timestamptz` | `unsupported feature` | 20 | sql/function/timestamp/test_icu_makedate.test | `statement error<br>SELECT make_timestamptz(294248, 1, 10, 4, 0, 54.775807);` |  |
+| `map_tbl` | `unsupported feature` | 1 | sql/function/list/lambdas/incorrect.test | `statement ok<br>CREATE TABLE map_tbl(m MAP(INTEGER, INTEGER));` |  |
+| `microsecond` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT microsecond(ts), microsecond(ts::TIMESTAMP) FROM timestamps;<br>----<br>43987654	43987654<br>48123456	48123456<br>0	0<br>0	0<br>13123456	13123456<br>0	0<br>0	0<br>0	0<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `millennium` | `unsupported feature` | 3 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT millennium(i) FROM times` |  |
+| `millisecond` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT millisecond(ts), millisecond(ts::TIMESTAMP) FROM timestamps;<br>----<br>43987	43987<br>48123	48123<br>0	0<br>0	0<br>13123	13123<br>0	0<br>0	0<br>0	0<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `minima` | `unsupported feature` | 1 | sql/function/numeric/test_unary.test | `statement ok<br>CREATE TABLE minima (t TINYINT, s SMALLINT, i INTEGER, b BIGINT);` |  |
+| `minute` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT minute(ts), minute(ts::TIMESTAMP) FROM timestamps;<br>----<br>40	40<br>20	20<br>0	0<br>0	0<br>15	15<br>30	30<br>30	30<br>0	0<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `mismatches` | `unsupported feature` | 20 | sql/function/string/test_mismatches.test | `statement error<br>SELECT mismatches('', '')` |  |
+| `mixed_array_table` | `unsupported feature` | 1 | sql/function/list/list_value_arrays.test | `statement ok<br>CREATE TABLE mixed_array_table (a INTEGER[2], b VARCHAR[2], c DOUBLE[2]);` |  |
+| `mixed_structs` | `unsupported feature` | 1 | sql/function/list/list_value_structs.test | `statement ok<br>CREATE TABLE mixed_structs (s struct(a int[], b varchar, c int, d varchar[], e struct(a int, b varchar)));` |  |
+| `month` | `unsupported feature` | 3 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT month(i) FROM times` |  |
+| `multiples` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_strptime.test | `statement ok<br>CREATE TABLE multiples (s VARCHAR, f VARCHAR);` |  |
+| `my_filter` | `unsupported feature` | 6 | sql/function/list/lambdas/arrow/storage_deprecated.test<br>sql/function/list/lambdas/storage.test | `query I<br>SELECT my_filter([41, 42, NULL, 43, 44])<br>----<br>[43, 44]` |  |
+| `my_nested_lambdas` | `unsupported feature` | 6 | sql/function/list/lambdas/arrow/storage_deprecated.test<br>sql/function/list/lambdas/storage.test | `query I<br>SELECT my_nested_lambdas([[40, NULL], [20, 21], [10, 10, 20]])<br>----<br>[[20, 21], [10, 10, 20]]` |  |
+| `my_reduce` | `unsupported feature` | 6 | sql/function/list/lambdas/arrow/storage_deprecated.test<br>sql/function/list/lambdas/storage.test | `query I<br>SELECT my_reduce([1, 2, 3])<br>----<br>6` |  |
+| `my_transform` | `unsupported feature` | 6 | sql/function/list/lambdas/arrow/storage_deprecated.test<br>sql/function/list/lambdas/storage.test | `query I<br>SELECT my_transform([1, 2, 3])<br>----<br>[1, 4, 9]` |  |
+| `my_window` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/expression_iterator_cases_deprecated.test<br>sql/function/list/lambdas/expression_iterator_cases.test | `statement ok<br>CREATE TABLE my_window (l integer[], g integer, o integer)` |  |
+| `nanosecond` | `unsupported feature` | 3 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timetz/test_date_part.test | `query II<br>SELECT i, nanosecond(i) AS parts<br>FROM intervals<br>ORDER BY 1;<br>----<br>00:34:26.3434	26343400000<br>42 days	0<br>1 year 4 months	0<br>2 years	0` |  |
+| `nested` | `unsupported feature` | 20 | sql/function/list/lambdas/arrow/reduce_deprecated.test<br>sql/function/list/lambdas/arrow/reduce_initial_deprecated.test<br>sql/function/list/lambdas/reduce.test<br>sql/function/list/lambdas/reduce_initial.test | `statement ok<br>CREATE TABLE nested (n integer[][])` |  |
+| `nested_array_table` | `unsupported feature` | 1 | sql/function/list/list_value_arrays.test | `statement ok<br>CREATE TABLE nested_array_table (a INTEGER[2][2], b INTEGER[2][2], c INTEGER[2][2]);` |  |
+| `nested_list` | `unsupported feature` | 1 | sql/function/list/lambdas/incorrect.test | `statement ok<br>CREATE TABLE nested_list(i INT[][], other INT[]);` |  |
+| `nested_list_table` | `unsupported feature` | 1 | sql/function/list/list_value_nested_lists.test | `statement ok<br>CREATE TABLE nested_list_table(a INTEGER[][], b INTEGER[][], c INTEGER[][]);` |  |
+| `nextafter` | `unsupported feature` | 13 | sql/function/numeric/test_nextafter.test | `statement error<br>select nextafter()` |  |
+| `no_index_tbl` | `unsupported feature` | 1 | sql/function/index/index_key.test | `statement ok<br>CREATE TABLE no_index_tbl(id INTEGER, value VARCHAR);` |  |
+| `now` | `unsupported feature` | 3 | sql/function/generic/test_between_sideeffects.test<br>sql/function/timestamp/current_time.test<br>sql/function/timestamp/test_now_prepared.test | `statement ok<br>PREPARE v1 AS INSERT INTO timestamps VALUES(NOW());` |  |
+| `null_table` | `unsupported feature` | 1 | sql/function/list/list_position.test | `statement ok<br>CREATE TABLE NULL_TABLE (n int[], i int);` |  |
+| `nulls` | `unsupported feature` | 1 | sql/function/list/list_resize.test | `statement ok<br>CREATE TABLE nulls(l INT[], b INT);` |  |
+| `nulltable` | `unsupported feature` | 1 | sql/function/string/test_string_slice.test | `statement ok<br>CREATE TABLE nulltable(n VARCHAR);` |  |
+| `numbers` | `unsupported feature` | 4 | sql/function/numeric/test_floor_ceil.test<br>sql/function/numeric/test_geomean.test<br>sql/function/numeric/test_random.test<br>sql/function/numeric/test_trigo.test | `statement ok<br>CREATE TABLE numbers(n DOUBLE)` |  |
+| `o` | `unsupported feature` | 2 | sql/function/string/test_subscript.test | `query T<br>SELECT s[2] FROM strings<br>----<br>e<br>o<br>(empty)<br>NULL` |  |
+| `or` | `unsupported feature` | 1 | sql/function/string/test_string_slice.test | `query T<br>SELECT s[2:3] FROM strings<br>----<br>el<br>or<br>(empty)<br>NULL` |  |
+| `orl` | `unsupported feature` | 1 | sql/function/string/test_string_slice.test | `query T<br>SELECT s[-4:-2] FROM strings<br>----<br>ell<br>orl<br>(empty)<br>NULL` |  |
+| `orld` | `unsupported feature` | 1 | sql/function/string/test_string_slice.test | `query T<br>SELECT s[2:] FROM strings<br>----<br>ello<br>orld<br>(empty)<br>NULL` |  |
+| `other_reduce_macro` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test<br>sql/function/list/lambdas/lambdas_and_macros.test | `statement error<br>SELECT other_reduce_macro([1, 2, 3, 4], 5, 6);` |  |
+| `palindromes` | `unsupported feature` | 1 | sql/function/list/list_reverse.test | `statement ok<br>CREATE TABLE palindromes (s VARCHAR);` |  |
+| `params` | `unsupported feature` | 1 | sql/function/string/regex_extract_all_struct.test | `statement error<br>WITH params(name_list) AS (SELECT ['g1','g2'])<br>SELECT regexp_extract_all('abc', '(a)(b)', name_list) FROM params;` |  |
+| `parts` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `statement error<br>WITH parts(p) AS (VALUES (['year', 'month', 'day']), (['hour', 'minute', 'microsecond']))<br>SELECT DATE_PART(p, ts) FROM parts, timestamps;<br>----` |  |
+| `pi` | `unsupported feature` | 1 | sql/function/numeric/test_pg_math.test | `query R<br>select pi()<br>----<br>3.141592653589793` |  |
+| `position` | `unsupported feature` | 1 | sql/function/string/test_instr_utf8.test | `query I<br>SELECT POSITION('á' in s) FROM strings<br>----<br>0<br>1` |  |
+| `pow` | `unsupported feature` | 1 | sql/function/numeric/test_invalid_math.test | `query RRR<br>SELECT POW(1e300,100), POW(-1e300,100), POW(-1.0, 0.5)<br>----<br>inf	inf	nan` |  |
+| `printf` | `unsupported feature` | 17 | sql/function/string/null_byte.test<br>sql/function/string/test_format_extensions.test | `statement error<br>select printf('%:', 'str')` |  |
+| `q1` | `unsupported feature` | 14 | sql/function/list/list_intersect.test<br>sql/function/list/list_resize.test<br>sql/function/list/list_resize_error.test | `statement error<br>execute q1();` |  |
+| `q2` | `unsupported feature` | 13 | sql/function/list/list_resize.test<br>sql/function/list/list_resize_error.test | `statement error<br>execute q2();` |  |
+| `q3` | `unsupported feature` | 3 | sql/function/list/list_resize_error.test | `statement error<br>execute q3([1, 2, 3], 2, 3, 4);` |  |
+| `q4` | `unsupported feature` | 3 | sql/function/list/list_resize_error.test | `statement error<br>execute q4([1, 2, 3], 2, 3, 4);` |  |
+| `qualified_tbl` | `unsupported feature` | 2 | sql/function/list/lambdas/arrow/lambda_scope_deprecated.test<br>sql/function/list/lambdas/lambda_scope.test | `statement ok<br>CREATE TABLE qualified_tbl (x INTEGER[]);` |  |
+| `quarter` | `unsupported feature` | 3 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT quarter(i) FROM times` |  |
+| `r` | `unsupported feature` | 1 | sql/function/string/test_subscript.test | `query T<br>SELECT s[3] FROM strings<br>----<br>l<br>r<br>(empty)<br>NULL` |  |
+| `radians` | `unsupported feature` | 1 | sql/function/numeric/test_pg_math.test | `query R<br>select radians(45.0)<br>----<br>0.7853981633974483` |  |
+| `reduce_macro` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test<br>sql/function/list/lambdas/lambdas_and_macros.test | `query I<br>SELECT reduce_macro([1, 2, 3, 4], 5);<br>----<br>25` |  |
+| `regex` | `unsupported feature` | 1 | sql/function/string/regex_filter_pushdown.test | `statement ok<br>CREATE TABLE regex(s STRING)` |  |
+| `regexp_escape` | `unsupported feature` | 9 | sql/function/string/regex_escape.test | `query T<br>SELECT regexp_escape('@');<br>----<br>\@` |  |
+| `regexp_full_match` | `unsupported feature` | 1 | sql/function/string/null_byte.test | `query I<br>SELECT * FROM null_byte WHERE regexp_full_match(v, concat('goo', chr(0), 'se'))<br>----<br>goo\0se` |  |
+| `replace_type` | `unsupported feature` | 7 | sql/function/generic/replace_type.test | `statement error<br>SELECT replace_type(42, NULL::INTEGER, NULL);` |  |
+| `reverse` | `unsupported feature` | 5 | sql/function/string/test_complex_unicode.test | `query T<br>SELECT REVERSE('S̈a︍')<br>----<br>a︍S̈` |  |
+| `right_only` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/reduce_deprecated.test<br>sql/function/list/lambdas/arrow/reduce_initial_deprecated.test<br>sql/function/list/lambdas/reduce.test<br>sql/function/list/lambdas/reduce_initial.test | `statement ok<br>CREATE TABLE right_only (v varchar[], i int);` |  |
+| `round_even` | `unsupported feature` | 2 | sql/function/numeric/test_round_even.test | `query II<br>select i, round_even(i + 0.5, 0) from generate_series(-2,4) tbl(i);<br>----<br>-2	-2<br>-1	0<br>0	0<br>1	2<br>2	2<br>3	4<br>4	4` |  |
+| `roundbankers` | `unsupported feature` | 11 | sql/function/numeric/test_round_even.test | `query II<br>SELECT roundBankers(45, -1), roundBankers(35, -1)<br>----<br>40	40` |  |
+| `rpad` | `unsupported feature` | 9 | sql/function/string/test_pad.test | `statement error<br>select RPAD()` |  |
+| `rs` | `unsupported feature` | 1 | sql/function/numeric/test_fdiv_fmod.test | `statement ok<br>CREATE TABLE rs(x DOUBLE, y INTEGER)` |  |
+| `scoping_macro` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test<br>sql/function/list/lambdas/lambdas_and_macros.test | `query I<br>SELECT scoping_macro([11, 22], 3, 4);<br>----<br>[18, 29]` |  |
+| `second` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT second(ts), second(ts::TIMESTAMP) FROM timestamps;<br>----<br>43	43<br>48	48<br>0	0<br>0	0<br>13	13<br>0	0<br>0	0<br>0	0<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `seeds` | `unsupported feature` | 1 | sql/function/numeric/test_random.test | `statement ok<br>CREATE TABLE seeds(a DOUBLE)` |  |
+| `selections` | `unsupported feature` | 1 | sql/function/list/list_where.test | `statement ok<br>CREATE TABLE selections (j boolean[])` |  |
+| `sems` | `unsupported feature` | 1 | sql/function/list/aggregates/sem.test | `statement ok<br>create table sems (l int[]);` |  |
+| `setseed` | `unsupported feature` | 6 | sql/function/numeric/test_random.test | `statement ok<br>select setseed(0.1)` |  |
+| `sign` | `unsupported feature` | 4 | sql/function/numeric/test_pg_math.test | `query I<br>select sign(0)<br>----<br>0` |  |
+| `signbit` | `unsupported feature` | 5 | sql/function/numeric/test_sign_bit.test | `statement ok<br>SELECT signbit(1.0 / 0.0);` |  |
+| `sin` | `unsupported feature` | 6 | sql/function/numeric/test_trigo.test | `query I<br>SELECT cast(SIN(n::double)*1000 as bigint) FROM numbers ORDER BY n<br>----<br>0<br>841<br>-917<br>NULL` |  |
+| `sinh` | `unsupported feature` | 1 | sql/function/numeric/test_trigo.test | `query IIII<br>select sinh(-1), sinh(0), sinh(1), sinh(1000);<br>----<br>-1.1752011936438014	0.0	1.1752011936438014	inf` |  |
+| `some_macro` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/lambdas_and_macros_deprecated.test<br>sql/function/list/lambdas/lambdas_and_macros.test | `statement error<br>SELECT some_macro([1, 2], 3, 4);` |  |
+| `sqrt` | `unsupported feature` | 3 | sql/function/numeric/test_invalid_math.test<br>sql/function/numeric/test_pg_math.test | `query I<br>SELECT SQRT(0)<br>----<br>0` |  |
+| `stddev_test` | `unsupported feature` | 1 | sql/function/list/aggregates/var_stddev.test | `statement ok<br>create table stddev_test(val integer[])` |  |
+| `str_aggs` | `unsupported feature` | 1 | sql/function/list/aggregates/string_agg.test | `statement ok<br>CREATE TABLE str_aggs (str varchar[]);` |  |
+| `str_test` | `unsupported feature` | 3 | sql/function/list/list_contains.test<br>sql/function/list/list_position.test | `statement ok<br>create table STR_TEST (i string[]);` |  |
+| `string_table` | `unsupported feature` | 1 | sql/function/list/list_value_nested_lists.test | `statement ok<br>CREATE TABLE string_table(a VARCHAR[], b VARCHAR[], c VARCHAR[]);` |  |
+| `string_tbl` | `unsupported feature` | 1 | sql/function/list/list_resize.test | `statement ok<br>create table string_tbl(a string[], b int);` |  |
+| `strings` | `unsupported feature` | 23 | sql/function/list/aggregates/string_agg.test<br>sql/function/string/test_array_extract.test<br>sql/function/string/test_damerau_levenshtein.test<br>sql/function/string/test_glob.test<br>sql/function/string/test_instr_utf8.test<br>sql/function/string/test_levenshtein.test<br>sql/function/string/test_mismatches.test<br>sql/function/string/test_pad.test<br>sql/function/string/test_repeat.test<br>sql/function/string/test_similar_to.test<br>sql/function/string/test_string_array_slice.test<br>sql/function/string/test_string_slice.test<br>sql/function/string/test_subscript.test<br>sql/function/string/test_substring.test<br>sql/function/string/test_substring_utf8.test | `statement ok<br>CREATE TABLE strings(s VARCHAR)` |  |
+| `strlen` | `unsupported feature` | 3 | sql/function/string/null_byte.test<br>sql/function/string/test_complex_unicode.test | `query I<br>SELECT strlen('S̈a')<br>----<br>4` |  |
+| `strptime` | `unsupported feature` | 144 | sql/function/timestamp/test_icu_strptime.test<br>sql/function/timestamp/test_strptime.test | `statement error<br>SELECT strptime('', '')` |  |
+| `struct_cast_data` | `unsupported feature` | 1 | sql/function/variant/variant_extract.test | `statement ok<br>CREATE MACRO struct_cast_data() AS TABLE (<br>	SELECT {'a': [<br>		{<br>			'b': 'hello',<br>			'c': NULL,<br>			'a': '1970/03/15'::DATE<br>		},<br>		{<br>			'b': NULL,<br>			'c': True,<br>			'a': '2020/11/03'::DATE<br>		}<br>	]}::VARIANT AS a<br>	UNION ALL<br>	SELECT {'a': [<br>		{<br>			'b': 'this is a long string',<br>			'c': False,<br>			'a': '1953/9/16'::DATE<br>		}<br>	]}::VARIANT<br>);` |  |
+| `struct_table` | `unsupported feature` | 1 | sql/function/list/list_value_nested_lists.test | `statement ok<br>CREATE TABLE struct_table(a ROW(a INTEGER, b INTEGER)[], b ROW(a INTEGER, b INTEGER)[], c ROW(a INTEGER, b INTEGER)[]);` |  |
+| `struct_update` | `unsupported feature` | 18 | sql/function/nested/test_struct_update.test | `statement error<br>SELECT struct_update();` |  |
+| `substring_grapheme` | `unsupported feature` | 35 | sql/function/string/test_complex_unicode.test<br>sql/function/string/test_substring.test<br>sql/function/string/test_substring_utf8.test | `query I<br>SELECT substring_grapheme('a', -1)<br>----<br>a` |  |
+| `suffix` | `unsupported feature` | 3 | sql/function/timestamp/current_timestamp.test | `query I<br>SELECT SUFFIX(now()::VARCHAR, '-06');<br>----<br>True` |  |
+| `t_struct` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/reduce_deprecated.test<br>sql/function/list/lambdas/arrow/reduce_initial_deprecated.test<br>sql/function/list/lambdas/reduce.test<br>sql/function/list/lambdas/reduce_initial.test | `statement ok<br>CREATE TABLE t_struct (s STRUCT(v VARCHAR, i INTEGER)[]);` |  |
+| `tab0` | `unsupported feature` | 1 | sql/function/operator/test_arithmetic_sqllogic.test | `statement ok<br>CREATE TABLE tab0(col0 INTEGER, col1 INTEGER, col2 INTEGER);` |  |
+| `tab1` | `unsupported feature` | 1 | sql/function/operator/test_arithmetic_sqllogic.test | `statement ok<br>CREATE TABLE tab1(col0 INTEGER, col1 INTEGER, col2 INTEGER);` |  |
+| `tab2` | `unsupported feature` | 1 | sql/function/operator/test_arithmetic_sqllogic.test | `statement ok<br>CREATE TABLE tab2(col0 INTEGER, col1 INTEGER, col2 INTEGER);` |  |
+| `tan` | `unsupported feature` | 6 | sql/function/numeric/test_trigo.test | `query I<br>SELECT cast(TAN(n::float)*1000 as bigint) FROM numbers ORDER BY n<br>----<br>NULL<br>-2291<br>-1557<br>0<br>1557<br>2291` |  |
+| `tanh` | `unsupported feature` | 1 | sql/function/numeric/test_trigo.test | `query IIII<br>select tanh(-0.5), tanh(0), tanh(0.5), tanh(1000);<br>----<br>-0.46211715726000974	0.0	0.46211715726000974	1.0` |  |
+| `tbl1` | `unsupported feature` | 5 | sql/function/index/index_key.test | `statement ok<br>CREATE UNIQUE INDEX tbl1_idx_txt ON tbl1(txt);` |  |
+| `tbl3` | `unsupported feature` | 3 | sql/function/index/index_key.test | `statement ok<br>CREATE UNIQUE INDEX tbl3_idx ON tbl3(key1, key2, key3);` |  |
+| `tbl3_wrong_type` | `unsupported feature` | 1 | sql/function/index/index_key.test | `statement ok<br>CREATE TABLE tbl3_wrong_type(c1 VARCHAR, c2 INTEGER, c3 BIGINT);` |  |
+| `test0` | `unsupported feature` | 47 | sql/function/list/list_contains.test<br>sql/function/list/list_position.test | `statement ok<br>CREATE TABLE test0 (i float[])` |  |
+| `test_twoc` | `unsupported feature` | 1 | sql/function/numeric/test_nextafter.test | `statement ok<br>create table test_twoc (a FLOAT, b FLOAT)` |  |
+| `test_vector_types` | `unsupported feature` | 3 | sql/function/list/lambdas/vector_types.test<br>sql/function/list/list_reverse.test | `query I nosort q1<br>select true from test_vector_types(null::int[], false);<br>----` |  |
+| `time_bucket` | `unsupported feature` | 101 | sql/function/timestamp/test_icu_time_bucket_timestamptz.test<br>sql/function/timestamp/test_time_bucket_timestamp.test | `query I<br>select time_bucket('-1 month'::interval, null::timestamp);<br>----<br>NULL` |  |
+| `timestamp` | `unsupported feature` | 2 | sql/function/list/aggregates/approx_count_distinct.test<br>sql/function/timestamp/age.test | `statement ok<br>CREATE TABLE timestamp(t1 TIMESTAMP, t2 TIMESTAMP)` |  |
+| `timestamps_default` | `unsupported feature` | 1 | sql/function/timestamp/test_now_prepared.test | `statement ok<br>CREATE TABLE timestamps_default(ts TIMESTAMP DEFAULT NOW());` |  |
+| `timestamps_tz` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_time_bucket_timestamptz.test | `statement ok<br>CREATE TABLE timestamps_tz(w INTERVAL, t TIMESTAMPTZ, shift INTERVAL, origin TIMESTAMPTZ, timezone VARCHAR);` |  |
+| `to_timestamp` | `unsupported feature` | 3 | sql/function/timestamp/epoch.test | `statement error<br>SELECT to_timestamp(1284352323::DOUBLE * 100000000);` |  |
+| `transformed_lists` | `unsupported feature` | 6 | sql/function/list/lambdas/arrow/transform_deprecated.test<br>sql/function/list/lambdas/transform.test | `statement ok<br>CREATE TABLE transformed_lists (g integer, l integer[]);` |  |
+| `transpose` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/test_lambda_arrow_storage_deprecated.test<br>sql/function/list/lambdas/incorrect.test | `statement ok<br>CREATE OR REPLACE FUNCTION transpose(lst) AS (<br>	SELECT list_transform(range(1, 1 + length(lst[1])),<br>		j -> list_transform(range(1, length(lst) + 1),<br>			i -> lst[i][j]<br>		)<br>	)<br>);` |  |
+| `trunc` | `unsupported feature` | 94 | sql/function/numeric/test_trunc.test<br>sql/function/numeric/test_trunc_precision.test | `query R<br>select trunc(54::BIGINT)<br>----<br>54` |  |
+| `truncme` | `unsupported feature` | 2 | sql/function/numeric/test_trunc.test<br>sql/function/numeric/test_trunc_precision.test | `statement ok<br>CREATE TABLE truncme(a DOUBLE, b INTEGER, c UINTEGER)` |  |
+| `try_strptime` | `unsupported feature` | 127 | sql/function/timestamp/test_icu_strptime.test<br>sql/function/timestamp/test_try_strptime.test | `statement error<br>SELECT try_strptime('', '')` |  |
+| `unit2` | `unsupported feature` | 1 | sql/function/list/lambdas/incorrect.test | `statement error<br>CREATE TABLE unit2(<br>	price INTEGER[],<br>	total_price INTEGER GENERATED ALWAYS AS (list_transform(price, x -> x + 1)) VIRTUAL<br>);` |  |
+| `uuid_extract_timestamp` | `unsupported feature` | 2 | sql/function/uuid/test_uuid_function.test | `statement error<br>SELECT uuid_extract_timestamp(uuidv4());` |  |
+| `uuid_extract_version` | `unsupported feature` | 4 | sql/function/uuid/test_uuid_function.test | `query I<br>SELECT uuid_extract_version(uuidv7());<br>----<br>7` |  |
+| `uuids` | `unsupported feature` | 2 | sql/function/uuid/test_uuid.test | `statement ok<br>CREATE TABLE uuids(u UUID NOT NULL DEFAULT gen_random_uuid(), a INTEGER);` |  |
+| `v_data` | `unsupported feature` | 1 | sql/function/list/flatten.test | `query IIII rowsort<br>with v_data (col, list) as ( select * FROM (VALUES ('a', [1,2,3]), ('b', [4,5]), ('a', [2,6])) ),<br>        v_list_of_lists ( col, list, list_of_lists ) as ( select v.*, array_agg(v.list) over (partition by v.col order by v.list) from v_data v )<br>select v.*, flatten(v.list_of_lists) from v_list_of_lists v;<br>----<br>a	[1, 2, 3]	[[1, 2, 3]]	[1, 2, 3]<br>a	[2, 6]	[[1, 2, 3], [2, 6]]	[1, 2, 3, 2, 6]<br>b	[4, 5]	[[4, 5]]	[4, 5]` |  |
+| `variant_extract` | `unsupported feature` | 2 | sql/function/variant/variant_extract.test | `query I<br>select variant_extract(a, 'a[1].c') from struct_cast_data();<br>----<br>NULL<br>NULL` |  |
+| `variant_typeof` | `unsupported feature` | 8 | sql/function/variant/variant_typeof.test | `query I<br>select variant_typeof(({'a': 42}::VARIANT).variant_extract('a'));<br>----<br>INT32` |  |
+| `week` | `unsupported feature` | 4 | sql/function/interval/test_date_part.test<br>sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT week(i) FROM times` |  |
+| `weekday` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT weekday(ts), weekday(ts::TIMESTAMP) FROM timestamps;<br>----<br>3	3<br>2	2<br>4	4<br>1	1<br>5	5<br>1	1<br>1	1<br>5	5<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `weekofyear` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_datepart.test | `query II<br>SELECT weekofyear(ts), weekofyear(ts::TIMESTAMP) FROM timestamps;<br>----<br>11	11<br>31	31<br>53	53<br>5	5<br>47	47<br>46	46<br>46	46<br>51	51<br>NULL	NULL<br>NULL	NULL<br>NULL	NULL` |  |
+| `where_clause` | `unsupported feature` | 4 | sql/function/list/lambdas/arrow/reduce_deprecated.test<br>sql/function/list/lambdas/arrow/reduce_initial_deprecated.test<br>sql/function/list/lambdas/reduce.test<br>sql/function/list/lambdas/reduce_initial.test | `statement ok<br>CREATE table where_clause (a int[]);` |  |
+| `wheretest` | `unsupported feature` | 1 | sql/function/list/list_distinct.test | `statement ok<br>CREATE TABLE wheretest (name VARCHAR, l INTEGER[]);` |  |
+| `xor` | `unsupported feature` | 5 | sql/function/operator/test_bitwise_ops.test<br>sql/function/operator/test_bitwise_ops_types.test | `query IIIII<br>SELECT xor(1, 1), xor(1, 0), xor(0, 0), xor(NULL, 1), xor(1, NULL)<br>----<br>0	1	0	NULL	NULL` |  |
+| `year` | `unsupported feature` | 4 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT year(i) FROM times` |  |
+| `yeartz` | `unsupported feature` | 1 | sql/function/timestamp/test_icu_makedate.test | `statement ok<br>CREATE MACRO yeartz(ts) AS year(ts::TIMESTAMPTZ) * (CASE WHEN ERA(ts::TIMESTAMPTZ) > 0 THEN 1 ELSE -1 END);` |  |
+| `yearweek` | `unsupported feature` | 3 | sql/function/time/test_date_part.test<br>sql/function/timestamp/test_icu_datepart.test<br>sql/function/timetz/test_date_part.test | `statement error<br>SELECT yearweek(i) FROM times` |  |

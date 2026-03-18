@@ -1,0 +1,44 @@
+query T
+SELECT to_timestamp(0)
+----
+1970-01-01 00:00:00.000000
+
+query T
+SELECT to_timestamp(1)
+----
+1970-01-01 00:00:01.000000
+
+query T
+SELECT to_timestamp(1574802684)
+----
+2019-11-26 21:11:24.000000
+
+query T
+SELECT to_timestamp(-1)
+----
+1969-12-31 23:59:59.000000
+
+query R
+SELECT epoch(to_timestamp(0))
+----
+0.0
+
+query R
+SELECT epoch(to_timestamp(1574802684))
+----
+1574802684.0
+
+query R
+SELECT EXTRACT(epoch FROM to_timestamp(-1))
+----
+-1.0
+
+query RR
+SELECT epoch(to_timestamp(1574802684)), date_part(EPOCH, to_timestamp(1574802684))
+----
+1574802684.0 1574802684.0
+
+query T
+SELECT to_timestamp(NULL)
+----
+NULL

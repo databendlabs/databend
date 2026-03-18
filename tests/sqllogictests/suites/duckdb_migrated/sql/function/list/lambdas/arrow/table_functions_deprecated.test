@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS cities
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tmp
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tmp AS SELECT range AS id FROM range(0, 10);
+
+# create a parquet file
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE cities AS
+# SELECT * FROM (VALUES ('Amsterdam', [90, 10]), ('London', [89, 102])) cities (name, prices);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE cities
+# ALTER COLUMN prices SET DATA TYPE INTEGER[] USING
+# 	list_filter(cities.prices, price -> price < 100);
+
+# TODO: unsupported feature
+# query II
+# SELECT name, prices AS cheap_options FROM cities;
+# ----
+# Amsterdam	[90, 10]
+# London	[89]

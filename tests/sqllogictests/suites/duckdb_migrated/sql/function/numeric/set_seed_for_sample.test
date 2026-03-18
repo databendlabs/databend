@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select * from generate_series(1,50) as t(number);
+
+# TODO: unsupported feature
+# query I rowsort result_1
+# select * from t1 using sample 5;
+# ----
+
+# TODO: unsupported feature
+# query I rowsort result_1
+# select * from t1 using sample 5;
+# ----

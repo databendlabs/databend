@@ -1,0 +1,41 @@
+# = and == are the same
+query BBBB?
+SELECT 1 = 1, 1 = 1, 1 = 0, 1 = 0, 1 = NULL
+----
+1	1	0	0	NULL
+
+# != and <> are the same
+
+query BBBB?
+SELECT 1 <> 1, 1 != 1, 1 <> 0, 1 != 0, 1 <> NULL
+----
+0	0	1	1	NULL
+
+# Test auto casting of comparison statements
+# string <> number comparisons should result in the string being cast to a number
+
+statement error
+select ('abc' between 20 and True);
+
+statement error
+select 'abc' > 10
+
+statement error
+select 20.0 = 'abc'
+
+query B
+select '1000' > 20
+----
+1
+
+# ... but '1000' < '20'!
+
+query B
+select '1000' > '20'
+----
+0
+
+query B
+select ('abc' between '20' and 'true');
+----
+1

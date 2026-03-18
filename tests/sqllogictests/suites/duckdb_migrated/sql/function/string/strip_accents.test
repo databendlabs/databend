@@ -1,0 +1,38 @@
+statement ok
+DROP TABLE IF EXISTS collate_test
+
+query TT
+SELECT translate('hello', 'é', 'e'), translate('héllo', 'é', 'e')
+----
+hello	hello
+
+query TT
+SELECT translate('mühleisen', 'ü', 'u'), translate('hannes mühleisen', 'ü', 'u')
+----
+muhleisen	hannes muhleisen
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR, str VARCHAR)
+
+statement ok
+INSERT INTO collate_test VALUES ('äää', 'aaa')
+
+statement ok
+INSERT INTO collate_test VALUES ('hännës mühlëïsën', 'hannes muhleisen')
+
+statement ok
+INSERT INTO collate_test VALUES ('olá', 'ola')
+
+statement ok
+INSERT INTO collate_test VALUES ('ôâêóáëòõç', 'oaeoaeooc')
+
+query B
+SELECT
+    translate(s, 'äëïáàâãåçèéêìíîñòóôõöùúûüýÿ', 'aeiaaaa ceeeiiinooooouuuuyy') =
+    translate(str, 'äëïáàâãåçèéêìíîñòóôõöùúûüýÿ', 'aeiaaaa ceeeiiinooooouuuuyy')
+FROM collate_test
+----
+1
+1
+1
+1

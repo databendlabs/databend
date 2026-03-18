@@ -1,0 +1,11 @@
+statement ok
+BEGIN
+
+statement ok
+BEGIN
+
+# TODO: unsupported feature
+# query I
+# SELECT count FROM duckdb_connection_count();
+# ----
+# 3

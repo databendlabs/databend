@@ -1,0 +1,95 @@
+# If logging level > warning (ie. debug or fatal) don't log
+# TODO: unsupported feature
+# statement ok
+# CALL enable_logging(level='error');
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> x + y);
+# ----
+# 6
+
+# TODO: unsupported feature
+# query II
+# SELECT log_level, message[0:37] FROM duckdb_logs
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CALL truncate_duckdb_logs();
+
+# Else log warning
+
+# TODO: unsupported feature
+# statement ok
+# CALL enable_logging(level='warning');
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> x + y);
+# ----
+# 6
+
+# TODO: unsupported feature
+# query II
+# SELECT log_level, message[0:37] FROM duckdb_logs
+# ----
+# WARNING	Deprecated lambda arrow (->) detected
+
+# TODO: unsupported feature
+# statement ok
+# CALL truncate_duckdb_logs();
+
+# Enable single arrow, should not log.
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], (x, y) -> x + y);
+# ----
+# 6
+
+# TODO: unsupported feature
+# query II
+# SELECT log_level, message[0:37] FROM duckdb_logs
+# ----
+
+# Normal lambda, should not log
+
+# TODO: unsupported feature
+# statement ok
+# RESET lambda_syntax;
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce([1, 2, 3], lambda x, y: x + y);
+# ----
+# 6
+
+# TODO: unsupported feature
+# query II
+# SELECT log_level, message[0:37] FROM duckdb_logs
+# ----
+
+# Bind Error, should not log
+
+# TODO: unsupported feature
+# statement error
+# SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
+
+# TODO: unsupported feature
+# query II
+# SELECT log_level, message[0:37] FROM duckdb_logs
+# ----
+
+# Should not log if JSON bind
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT (JSON '{ "key" : "value" }')->k AS v FROM (SELECT 'key' AS k) keys);
+# ----
+# "value"
+
+# TODO: unsupported feature
+# query II
+# SELECT log_level, message[0:37] FROM duckdb_logs
+# ----

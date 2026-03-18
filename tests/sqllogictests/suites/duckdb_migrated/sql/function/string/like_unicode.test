@@ -1,0 +1,48 @@
+statement ok
+DROP TABLE IF EXISTS t0
+
+statement ok
+CREATE TABLE t0 (c0 VARCHAR)
+
+statement ok
+INSERT INTO t0 VALUES ('票'),('t'),('%'),('丑'),('多'),('🦆')
+
+query I
+SELECT count(*) FROM t0 WHERE c0 LIKE '_'
+----
+2
+
+query I
+SELECT count(*) FROM t0 WHERE lower(c0) LIKE lower('_')
+----
+2
+
+query B
+SELECT '🦆a🦆' LIKE '_a_'
+----
+0
+
+query B
+SELECT lower('🦆a🦆') LIKE lower('_A_')
+----
+0
+
+query B
+SELECT lower('BaB') LIKE lower('_A_')
+----
+1
+
+query B
+SELECT lower('🦆🦆') LIKE lower('_')
+----
+0
+
+query B
+SELECT lower('🦆🦆') LIKE lower('__')
+----
+0
+
+query B
+SELECT lower('🦆🦆') LIKE lower('___')
+----
+0

@@ -1,0 +1,39 @@
+query T
+SELECT typeof(CURRENT_TIME)
+----
+VARCHAR
+
+query T
+SELECT typeof(CURRENT_DATE)
+----
+DATE
+
+query T
+SELECT typeof(CURRENT_TIMESTAMP)
+----
+TIMESTAMP
+
+query T
+SELECT typeof(today())
+----
+DATE
+
+query T
+SELECT typeof(current_date())
+----
+DATE
+
+query T
+SELECT typeof(now())
+----
+TIMESTAMP
+
+query T
+SELECT CAST(LENGTH(CURRENT_TIME) > 0 AS STRING)
+----
+true
+
+query T
+SELECT CAST(today() = current_date() AS STRING)
+----
+true

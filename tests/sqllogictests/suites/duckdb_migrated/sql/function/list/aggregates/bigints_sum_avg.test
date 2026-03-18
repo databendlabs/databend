@@ -1,0 +1,159 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bigints
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS decimals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bigints (i BIGINT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigints VALUES ([1, 2, 3]);
+
+# sum
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sum(i) FROM bigints;
+# ----
+# 6
+
+# avg
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg(i) FROM bigints;
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM bigints;
+
+# sum no longer fits in int64
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigints VALUES ([1, 2, 3, 9223372036854775806]);
+
+# sum
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sum(i) FROM bigints;
+# ----
+# 9223372036854775812
+
+# avg
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg(i) FROM bigints;
+# ----
+# 2305843009213693952
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM bigints;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigints VALUES ([-1, -2, -3]);
+
+# sum
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sum(i) FROM bigints;
+# ----
+# -6
+
+# avg
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg(i) FROM bigints;
+# ----
+# -2
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM bigints;
+
+# sum no longer fits in int64 [negative]
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigints VALUES ([-1, -2, -3, -9223372036854775806]);
+
+# sum
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sum(i) FROM bigints;
+# ----
+# -9223372036854775812
+
+# avg
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg(i) FROM bigints;
+# ----
+# -2305843009213693952
+
+# now with decimals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE decimals (i DECIMAL(18,1)[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO decimals VALUES ([1, 2, 3]);
+
+# sum
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sum(i) FROM decimals;
+# ----
+# 6.0
+
+# avg
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg(i) FROM decimals;
+# ----
+# 2.0
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM decimals;
+
+# sum no longer fits in int64
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO decimals VALUES ([99999999999999999.9, 99999999999999999.9, 99999999999999999.9,
+#     99999999999999999.9, 99999999999999999.9, 99999999999999999.9, 99999999999999999.9,
+#     99999999999999999.9, 99999999999999999.9, 99999999999999999.9, 1.0, 2.0, 3.0]);
+
+# sum
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sum(i) FROM decimals;
+# ----
+# 1000000000000000005.0
+
+# TODO: unsupported feature
+# query I
+# SELECT list_avg(i) FROM decimals;
+# ----
+# 76923076923076923

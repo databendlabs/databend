@@ -1,0 +1,100 @@
+# Databend rewrite: format-style string assembly with native functions.
+
+query T
+SELECT 'hello'
+----
+hello
+
+query T
+SELECT CAST(NULL AS VARCHAR)
+----
+NULL
+
+query T
+SELECT concat('hello', ': ', 'world')
+----
+hello: world
+
+query T
+SELECT concat(CAST(NULL AS VARCHAR), ': ', 'world')
+----
+NULL
+
+query T
+SELECT concat(1::INT, ' ', 0::INT)
+----
+1 0
+
+query T
+SELECT concat(3, ' + ', 5, ' = ', 3 + 5)
+----
+3 + 5 = 8
+
+query T
+SELECT concat('1992-01-01', ' 12:01:00 = ', '1992-01-01 12:01:00')
+----
+1992-01-01 12:01:00 = 1992-01-01 12:01:00
+
+query T
+SELECT quote(concat('goo', chr(0), 'se'))
+----
+goo\0se
+
+query T
+SELECT concat(cast(120381902481294715712 AS DECIMAL(38, 0)))
+----
+120381902481294715712
+
+query T
+SELECT concat(cast(1.234 AS DECIMAL(10, 3)))
+----
+1.234
+
+query T
+SELECT lpad('33', 4, '0')
+----
+0033
+
+query T
+SELECT concat('time ', lpad('12', 2, '0'), ':', lpad('3', 2, '0'), ':', lpad('16', 2, '0'), ' AM')
+----
+time 12:03:16 AM
+
+query T
+SELECT lpad('1992', 10, ' ')
+----
+      1992
+
+query T
+SELECT concat(2, ' ', 2, ' ', 1, ' ', 1)
+----
+2 2 1 1
+
+query T
+SELECT upper(to_hex(123456789))
+----
+75BCD15
+
+query T
+SELECT bin(123456789)
+----
+111010110111100110100010101
+
+query T
+SELECT concat(round(0.00023404094995959, 5), '')
+----
+0.00023
+
+query T
+SELECT concat(round(0.0, 2), '')
+----
+0.0
+
+statement error
+SELECT concat()
+
+statement error
+SELECT lpad('33')
+
+statement error
+SELECT lpad('33', 'x', '0')

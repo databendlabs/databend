@@ -1,0 +1,564 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timetzs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE timetzs(d TIMETZ, s VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timetzs VALUES 
+# 	(NULL, NULL),
+# 	('00:00:00+1559', 'timezone'),
+# 	('00:00:00+1558', 'timezone_hour'),
+# 	('02:30:00', 'hour'),
+# 	('02:30:00+04', 'timezone_hour'),
+# 	('02:30:00+04:30', 'timezone_minute'),
+# 	('02:30:00+04:30:45', 'timezone_minute'),
+# 	('16:15:03.123456', 'microseconds'),
+# 	('02:30:00+1200', 'minute'),
+# 	('02:30:00-1200', 'second'),
+# 	('24:00:00-1558', 'timezone_hour'),
+# 	('24:00:00-1559', 'timezone'),
+# 	;
+
+# test date_part with different combinations of constant/non-constant columns
+
+# TODO: unsupported feature
+# query I
+# SELECT date_part(NULL::VARCHAR, NULL::TIMETZ) FROM timetzs;
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT date_part(s, NULL::TIMETZ) FROM timetzs;
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+
+# timetzs
+
+# TODO: unsupported feature
+# query I
+# SELECT date_part(NULL, d) FROM timetzs;
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT date_part(s, '14:28:50.447+07:15'::TIMETZ) FROM timetzs;
+# ----
+# NULL
+# 26100
+# 7
+# 14
+# 7
+# 15
+# 15
+# 50447000
+# 28
+# 50
+# 7
+# 26100
+
+# TODO: unsupported feature
+# query I
+# SELECT date_part('hour', d) FROM timetzs;
+# ----
+# NULL
+# 0
+# 0
+# 2
+# 2
+# 2
+# 2
+# 16
+# 2
+# 2
+# 24
+# 24
+
+# TODO: unsupported feature
+# query I
+# SELECT date_part(s, d) FROM timetzs;
+# ----
+# NULL
+# 57540
+# 15
+# 2
+# 4
+# 30
+# 30
+# 3123456
+# 30
+# 0
+# -15
+# -57540
+
+# TODO: unsupported feature
+# query I
+# select date_part('timezone', '10:00:00'::TIMETZ);
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select date_part('timezone_hour', '10:00:00'::TIMETZ);
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select date_part('timezone_minute', '10:00:00'::TIMETZ);
+# ----
+# 0
+
+
+# time gives errors for date-only parts
+
+# TODO: unsupported feature
+# statement error
+# SELECT era(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT year(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT month(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT day(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT decade(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT century(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT millennium(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT quarter(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT dayofweek(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT isodow(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT dayofyear(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT week(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# SELECT yearweek(d) FROM timetzs
+
+# TODO: unsupported feature
+# statement error
+# select extract(dow from time '10:00:00');
+
+# TODO: unsupported feature
+# statement error
+# select extract(doy from time '10:00:00');
+
+# TODO: unsupported feature
+# statement error
+# select extract(yearweek from time '10:00:00');
+
+# TODO: unsupported feature
+# statement error
+# select extract(century from time '10:00:00');
+
+# TODO: unsupported feature
+# statement error
+# select extract(era from time '10:00:00');
+
+# TODO: unsupported feature
+# statement error
+# select date_part('era', time '10:00:00');
+
+# TODO: unsupported feature
+# statement error
+# select extract(julian from time '10:00:00');
+
+# TODO: unsupported feature
+# statement error
+# select date_part('julian', time '10:00:00');
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (
+# 	SELECT d, DATE_PART('hour', d) AS p, hour(d) AS f
+# 	FROM timetzs
+# ) tbl
+# WHERE p <> f;
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (
+# 	SELECT d, DATE_PART('minute', d) AS p, minute(d) AS f
+# 	FROM timetzs
+# ) tbl
+# WHERE p <> f;
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (
+# 	SELECT d, DATE_PART('second', d) AS p, second(d) AS f
+# 	FROM timetzs
+# ) tbl
+# WHERE p <> f;
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (
+# 	SELECT d, DATE_PART('millisecond', d) AS p, millisecond(d) AS f
+# 	FROM timetzs
+# ) tbl
+# WHERE p <> f;
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (
+# 	SELECT d, DATE_PART('microsecond', d) AS p, microsecond(d) AS f
+# 	FROM timetzs
+# ) tbl
+# WHERE p <> f;
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (
+# 	SELECT d, DATE_PART('epoch', d) AS p, epoch(d) AS f
+# 	FROM timetzs
+# ) tbl
+# WHERE p <> f;
+# ----
+
+
+#
+# Structs
+#
+
+# Correctness: Compare against scalar extract
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('hour', d) AS p, DATE_PART(['hour'], d) AS st
+# FROM timetzs
+# WHERE p <> st['hour'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('minute', d) AS p, DATE_PART(['minute'], d) AS st
+# FROM timetzs
+# WHERE p <> st['minute'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('second', d) AS p, DATE_PART(['second'], d) AS st
+# FROM timetzs
+# WHERE p <> st['second'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('millisecond', d) AS p, DATE_PART(['millisecond'], d) AS st
+# FROM timetzs
+# WHERE p <> st['millisecond'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('microsecond', d) AS p, DATE_PART(['microsecond'], d) AS st
+# FROM timetzs
+# WHERE p <> st['microsecond'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('epoch', d) AS p, DATE_PART(['epoch'], d) AS st
+# FROM timetzs
+# WHERE p <> st['epoch'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('timezone', d) AS p, DATE_PART(['timezone'], d) AS st
+# FROM timetzs
+# WHERE p <> st['timezone'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('timezone_hour', d) AS p, DATE_PART(['timezone_hour'], d) AS st
+# FROM timetzs
+# WHERE p <> st['timezone_hour'];
+# ----
+
+# TODO: unsupported feature
+# query III
+# SELECT d, DATE_PART('timezone_minute', d) AS p, DATE_PART(['timezone_minute'], d) AS st
+# FROM timetzs
+# WHERE p <> st['timezone_minute'];
+# ----
+
+
+# Time parts
+
+# TODO: unsupported feature
+# query II
+# SELECT d, DATE_PART(['hour', 'minute', 'microsecond'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+# ----
+# 00:00:00+15:59	{'hour': 0, 'minute': 0, 'microsecond': 0}
+# 00:00:00+15:58	{'hour': 0, 'minute': 0, 'microsecond': 0}
+# 02:30:00+12	{'hour': 2, 'minute': 30, 'microsecond': 0}
+# 02:30:00+04:30:45	{'hour': 2, 'minute': 30, 'microsecond': 0}
+# 02:30:00+04:30	{'hour': 2, 'minute': 30, 'microsecond': 0}
+# 02:30:00+04	{'hour': 2, 'minute': 30, 'microsecond': 0}
+# 02:30:00+00	{'hour': 2, 'minute': 30, 'microsecond': 0}
+# 02:30:00-12	{'hour': 2, 'minute': 30, 'microsecond': 0}
+# 16:15:03.123456+00	{'hour': 16, 'minute': 15, 'microsecond': 3123456}
+# 24:00:00-15:58	{'hour': 24, 'minute': 0, 'microsecond': 0}
+# 24:00:00-15:59	{'hour': 24, 'minute': 0, 'microsecond': 0}
+# NULL	NULL
+
+# Miscellaneous parts
+
+# TODO: unsupported feature
+# query II
+# SELECT d, DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_minute'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+# ----
+# 00:00:00+15:59	{'epoch': 0.0, 'second': 0, 'timezone': 57540, 'timezone_hour': 15, 'timezone_minute': 59}
+# 00:00:00+15:58	{'epoch': 0.0, 'second': 0, 'timezone': 57480, 'timezone_hour': 15, 'timezone_minute': 58}
+# 02:30:00+12	{'epoch': 9000.0, 'second': 0, 'timezone': 43200, 'timezone_hour': 12, 'timezone_minute': 0}
+# 02:30:00+04:30:45	{'epoch': 9000.0, 'second': 0, 'timezone': 16245, 'timezone_hour': 4, 'timezone_minute': 30}
+# 02:30:00+04:30	{'epoch': 9000.0, 'second': 0, 'timezone': 16200, 'timezone_hour': 4, 'timezone_minute': 30}
+# 02:30:00+04	{'epoch': 9000.0, 'second': 0, 'timezone': 14400, 'timezone_hour': 4, 'timezone_minute': 0}
+# 02:30:00+00	{'epoch': 9000.0, 'second': 0, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+# 02:30:00-12	{'epoch': 9000.0, 'second': 0, 'timezone': -43200, 'timezone_hour': -12, 'timezone_minute': 0}
+# 16:15:03.123456+00	{'epoch': 58503.123456, 'second': 3, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+# 24:00:00-15:58	{'epoch': 86400.0, 'second': 0, 'timezone': -57480, 'timezone_hour': -15, 'timezone_minute': -58}
+# 24:00:00-15:59	{'epoch': 86400.0, 'second': 0, 'timezone': -57540, 'timezone_hour': -15, 'timezone_minute': -59}
+# NULL	NULL
+
+# Function-only parts
+
+# TODO: unsupported feature
+# query II
+# SELECT d, epoch_ns(d) FROM timetzs ORDER BY ALL;
+# ----
+# 00:00:00+15:59	0
+# 00:00:00+15:58	0
+# 02:30:00+12	9000000000000
+# 02:30:00+04:30:45	9000000000000
+# 02:30:00+04:30	9000000000000
+# 02:30:00+04	9000000000000
+# 02:30:00+00	9000000000000
+# 02:30:00-12	9000000000000
+# 16:15:03.123456+00	58503123456000
+# 24:00:00-15:58	86400000000000
+# 24:00:00-15:59	86400000000000
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT d, epoch_us(d) FROM timetzs ORDER BY ALL;
+# ----
+# 00:00:00+15:59	0
+# 00:00:00+15:58	0
+# 02:30:00+12	9000000000
+# 02:30:00+04:30:45	9000000000
+# 02:30:00+04:30	9000000000
+# 02:30:00+04	9000000000
+# 02:30:00+00	9000000000
+# 02:30:00-12	9000000000
+# 16:15:03.123456+00	58503123456
+# 24:00:00-15:58	86400000000
+# 24:00:00-15:59	86400000000
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT d, epoch_ms(d) FROM timetzs ORDER BY ALL;
+# ----
+# 00:00:00+15:59	0
+# 00:00:00+15:58	0
+# 02:30:00+12	9000000
+# 02:30:00+04:30:45	9000000
+# 02:30:00+04:30	9000000
+# 02:30:00+04	9000000
+# 02:30:00+00	9000000
+# 02:30:00-12	9000000
+# 16:15:03.123456+00	58503123
+# 24:00:00-15:58	86400000
+# 24:00:00-15:59	86400000
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT d, nanosecond(d) FROM timetzs ORDER BY ALL;
+# ----
+# 00:00:00+15:59	0
+# 00:00:00+15:58	0
+# 02:30:00+12	0
+# 02:30:00+04:30:45	0
+# 02:30:00+04:30	0
+# 02:30:00+04	0
+# 02:30:00+00	0
+# 02:30:00-12	0
+# 16:15:03.123456+00	3123456000
+# 24:00:00-15:58	0
+# 24:00:00-15:59	0
+# NULL	NULL
+
+# Invalid parts
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['year'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['month'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['day'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['decade'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['century'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['millennium'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['quarter'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['dow'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['isodow'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['doy'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['week'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['isoyear'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['yearweek'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['era'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT d, DATE_PART(['julian'], d) AS parts
+# FROM timetzs
+# ORDER BY 1;

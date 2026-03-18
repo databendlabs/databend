@@ -1,0 +1,309 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS five
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS five_complex
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS five_dates
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS five_dates_tz
+
+# incorrect usage
+# TODO: unsupported feature
+# statement error
+# SELECT list_last()
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::tinyint) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::smallint) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::integer) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::bigint) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::float) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::double) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+
+# temporal
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five_dates AS
+# 	SELECT
+# 		LIST(i::integer) AS i,
+# 		LIST('2021-08-20'::DATE + i::INTEGER) AS d,
+# 		LIST('2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR) AS dt,
+# 		LIST('14:59:37'::TIME + INTERVAL (i) MINUTE) AS t,
+# 		LIST(INTERVAL (i) SECOND) AS s
+# 	FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT list_last(d), list_last(dt), list_last(t), list_last(s) FROM five_dates
+# ----
+# 2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five_dates
+
+# with time zone
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five_dates_tz AS
+# 	SELECT
+# 		LIST(('2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR)::TIMESTAMPTZ) AS dt,
+# 		LIST(('14:59:37'::TIME + INTERVAL (i) MINUTE)::TIMETZ) AS t,
+# 	FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT list_last(dt), list_last(t) FROM five_dates_tz
+# ----
+# 2021-08-20 05:00:00+00	15:04:37+00
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five_dates_tz
+
+# complex types
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five_complex AS
+# 	SELECT
+# 		LIST(i::integer) AS i,
+# 		LIST(i::VARCHAR) AS s,
+# 		LIST([i]) AS l,
+# 		LIST({'a': i}) AS r
+# 	FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query III
+# SELECT list_last(s), list_last(l), list_last(r)
+# FROM five_complex
+# ----
+# 5	[5]	{'a': 5}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five_complex
+
+# decimals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::decimal(4,1)) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5.0
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::decimal(8,1)) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5.0
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::decimal(12,1)) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5.0
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE five AS SELECT LIST(i::decimal(18,1)) AS i FROM range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([1, 2, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_last(i) FROM five
+# ----
+# 5.0
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE five

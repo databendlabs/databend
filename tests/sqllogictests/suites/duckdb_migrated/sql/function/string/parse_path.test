@@ -1,0 +1,62 @@
+# Databend rewrite: path parsing with split/regexp_extract/replace.
+
+query T
+SELECT array_to_string(split('path/to/file.csv', '/'), '|')
+----
+path|to|file.csv
+
+query T
+SELECT array_to_string(split(
+    regexp_replace(replace(concat('path/to/file.csv', chr(92), 'file2.csv'), chr(92), '/'), '/+', '/'),
+    '/'
+), '|')
+----
+path|to|file.csv|file2.csv
+
+query T
+SELECT array_to_string(split('file.csv', '/'), '|')
+----
+file.csv
+
+query T
+SELECT array_to_string(array_concat(['/'], split(trim_leading('/path/to/file.csv', '/'), '/')), '|')
+----
+/|path|to|file.csv
+
+query T
+SELECT regexp_extract('wh@t3ve%/12 ch,ars.sth', '^/?([^/]+)', 1)
+----
+wh@t3ve%
+
+query T
+SELECT regexp_extract('path/to/file.csv', '^/?([^/]+)', 1)
+----
+path
+
+query T
+SELECT regexp_extract('path/to/file.csv', '^(.*)/[^/]*$', 1)
+----
+path/to
+
+query T
+SELECT regexp_extract('file.csv', '^(.*)/[^/]*$', 1)
+----
+(empty)
+
+query T
+SELECT regexp_extract('path/to/file.csv', '([^/]*)$', 1)
+----
+file.csv
+
+query T
+SELECT regexp_extract('path/to/file.csv', '([^/]*)[.][^.]+$', 1)
+----
+file
+
+query T
+SELECT regexp_extract(NULL, '([^/]*)$', 1)
+----
+NULL
+
+statement error
+SELECT split()

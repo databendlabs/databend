@@ -1,0 +1,51 @@
+# TODO: unknown function
+# query I
+# SELECT uuid_extract_version('ac227128-7d55-7ee0-a765-5025cc52e55a');
+# ----
+# 7
+
+# TODO: unsupported feature
+# query I
+# SELECT uuid_extract_version(uuidv7());
+# ----
+# 7
+
+# Test UUIDv4 in string format.
+
+# TODO: unsupported feature
+# query I
+# SELECT uuid_extract_version('ac227128-7d55-4ee0-a765-5025cc52e55a');
+# ----
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT uuid_extract_version(uuidv4());
+# ----
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT uuid_extract_version(gen_random_uuid());
+# ----
+# 4
+
+# Test timestamp extraction with UUID v4.
+
+# TODO: unsupported feature
+# statement error
+# SELECT uuid_extract_timestamp(uuidv4());
+
+# TODO: unsupported feature
+# query I
+# SELECT uuid_extract_timestamp('0196f97a-db14-71c3-9132-9f0b1334466f');
+# ----
+# 2025-05-22 19:31:40.436+00
+
+# verify the generated timestamp is consistent with NOW()
+
+# TODO: unsupported feature
+# query I
+# SELECT datediff('month', uuid_extract_timestamp(uuidv7()), now());
+# ----
+# 0

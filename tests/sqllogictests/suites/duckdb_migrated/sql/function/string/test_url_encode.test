@@ -1,0 +1,29 @@
+query TT
+SELECT replace('', ' ', '%20'), replace('', '%20', ' ')
+----
+(empty)	(empty)
+
+query TT
+SELECT replace(NULL, ' ', '%20'), replace(NULL, '%20', ' ')
+----
+NULL	NULL
+
+query T
+SELECT replace(replace('http://www.google.com/this is a long url', ' ', '%20'), '%20', ' ')
+----
+http://www.google.com/this is a long url
+
+query I
+SELECT COUNT(*) FROM range(0, 1000) t(n) WHERE replace(replace(chr(n::INT), ' ', '%20'), '%20', ' ') = chr(n::INT)
+----
+1000
+
+query TTTT
+SELECT replace('%', '%20', '%'), replace('%5', '%20', '%5'), replace('%X', '%20', '%X'), replace('%%', '%20', '%%')
+----
+%	%5	%X	%%
+
+query T
+SELECT replace('%FF%FF%FF', '%20', ' ')
+----
+%FF%FF%FF

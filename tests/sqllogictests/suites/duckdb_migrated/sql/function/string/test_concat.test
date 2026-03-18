@@ -1,0 +1,75 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('world'), (NULL)
+
+# normal concat
+
+query T
+SELECT s || ' ' || s FROM strings ORDER BY s
+----
+hello hello
+world world
+NULL
+
+# unicode concat
+
+query T
+SELECT s || ' ' || '🦆' FROM strings ORDER BY s
+----
+hello 🦆
+world 🦆
+NULL
+
+query T
+SELECT s || ' ' || '🦆' FROM strings ORDER BY s
+----
+hello 🦆
+world 🦆
+NULL
+
+# concat with constant NULL
+
+query T
+SELECT s || ' ' || '🦆' || NULL FROM strings ORDER BY s
+----
+NULL
+NULL
+NULL
+
+# concat requires at least one argument
+
+statement error
+SELECT CONCAT()
+
+query T
+SELECT CONCAT('hello')
+----
+hello
+
+# varargs concat
+
+query T
+SELECT CONCAT('hello', 33, 22)
+----
+hello3322
+
+# CONCAT ignores null values
+
+query T
+SELECT CONCAT('hello', 33, NULL, 22, NULL)
+----
+NULL
+
+# this also applies to non-constant null values
+
+query T
+SELECT CONCAT('hello', ' ', s) FROM strings ORDER BY s
+----
+hello hello
+hello world
+NULL

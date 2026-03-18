@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query I
+# SELECT '01:00:00'::TIMETZ AS ttz
+# ----
+# 01:00:00-07
+
+# TODO: unsupported feature
+# query I
+# SELECT '01:00:00+02'::TIMETZ AS ttz
+# ----
+# 01:00:00+02

@@ -1,0 +1,152 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query IIIIIIIIII
+SELECT CAST(POSITION('h' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('he' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hel' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hell' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello ' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello w' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello wo' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello wor' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello worl' IN 'hello world') > 0 AS INT)
+----
+1	1	1	1	1	1	1	1	1	1
+
+query IIIIIIIIII
+SELECT CAST(POSITION('a' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('ha' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hea' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hela' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hella' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('helloa' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello a' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello wa' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello woa' IN 'hello world') > 0 AS INT),
+       CAST(POSITION('hello wora' IN 'hello world') > 0 AS INT)
+----
+0	0	0	0	0	0	0	0	0	0
+
+# empty contains
+
+query III
+select CAST(POSITION('' IN 'hello') > 0 AS INT), CAST(POSITION('' IN '') > 0 AS INT), CAST(POSITION('' IN NULL) > 0 AS INT)
+----
+1	1	NULL
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)
+
+# Test first letter
+
+query I
+SELECT CAST(POSITION('h' IN s) > 0 AS INT) FROM strings
+----
+1
+0
+0
+NULL
+
+# Test second letter
+
+query I
+SELECT CAST(POSITION('e' IN s) > 0 AS INT) FROM strings
+----
+1
+0
+0
+NULL
+
+# Test last letter
+
+query I
+SELECT CAST(POSITION('d' IN s) > 0 AS INT) FROM strings
+----
+0
+1
+0
+NULL
+
+# Test multiple letters
+
+query I
+SELECT CAST(POSITION('he' IN s) > 0 AS INT) FROM strings
+----
+1
+0
+0
+NULL
+
+# Test multiple letters in the middle
+
+query I
+SELECT CAST(POSITION('ello' IN s) > 0 AS INT) FROM strings
+----
+1
+0
+0
+NULL
+
+# Test multiple letters at the end
+
+query I
+SELECT CAST(POSITION('lo' IN s) > 0 AS INT) FROM strings
+----
+1
+0
+0
+NULL
+
+# Test no match
+
+query I
+SELECT CAST(POSITION('he-man' IN s) > 0 AS INT) FROM strings
+----
+0
+0
+0
+NULL
+
+# Test matching needle in multiple rows
+
+query I
+SELECT CAST(POSITION('o' IN s) > 0 AS INT) FROM strings
+----
+1
+1
+0
+NULL
+
+# Test NULL constant in different places
+
+query I
+SELECT CAST(POSITION('o' IN NULL) > 0 AS INT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT CAST(POSITION(NULL IN s) > 0 AS INT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+statement error
+SELECT CONTAINS(CAST(NULL AS STRING), CAST(NULL AS STRING)) FROM strings
+
+query I
+SELECT CAST(POSITION('' IN s) > 0 AS INT) FROM strings
+----
+1
+1
+1
+NULL

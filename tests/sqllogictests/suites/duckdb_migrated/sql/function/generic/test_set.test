@@ -1,0 +1,43 @@
+# unrecognized configuration parameter
+statement error
+SELECT CURRENT_SETTING('a');
+
+statement error
+SELECT CURRENT_SETTING('memori_limit');
+
+# TODO: unknown function
+# statement ok
+# SELECT CURRENT_SETTING('default_null_order');
+
+# TODO: unknown function
+# query I
+# SELECT CURRENT_SETTING('default_null_order');
+# ----
+# NULLS_LAST
+
+# TODO: unknown function
+# query I
+# SELECT CURRENT_SETTING('DEFAULT_NULL_ORDER');
+# ----
+# NULLS_LAST
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM range(0, 3) UNION ALL SELECT NULL ORDER BY 1
+# ----
+# 0
+# 1
+# 2
+# NULL
+
+statement error
+SELECT CURRENT_SETTING(i::VARCHAR) FROM range(0, 1) tbl(i)
+
+statement error
+SELECT CURRENT_SETTING(NULL)
+
+statement error
+SELECT CURRENT_SETTING(CAST(NULL AS TEXT))
+
+statement error
+SELECT CURRENT_SETTING('')

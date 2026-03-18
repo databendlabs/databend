@@ -1,0 +1,364 @@
+statement ok
+DROP TABLE IF EXISTS documents
+
+statement ok
+DROP TABLE IF EXISTS strings_with_null
+
+statement ok
+DROP FUNCTION IF EXISTS ddb_string_split_compat
+
+statement ok
+CREATE FUNCTION ddb_string_split_compat AS (s, delim) -> CASE
+    WHEN s IS NULL THEN NULL
+    WHEN delim IS NULL THEN [s]
+    WHEN delim = '' THEN REGEXP_SPLIT_TO_ARRAY(s, '')
+    ELSE SPLIT(s, delim)
+END
+
+query T
+SELECT ddb_string_split_compat(NULL, NULL)
+----
+NULL
+
+query T
+SELECT ddb_string_split_compat('hello world', ' ')
+UNION ALL
+SELECT ddb_string_split_compat(NULL, ' ')
+UNION ALL
+SELECT ddb_string_split_compat('a b c', NULL)
+UNION ALL
+SELECT ddb_string_split_compat('a b c', ' ')
+----
+["hello","world"]
+NULL
+["a b c"]
+["a","b","c"]
+
+statement ok
+CREATE TABLE strings_with_null (s VARCHAR)
+
+statement ok
+INSERT INTO strings_with_null VALUES ('aba'), (NULL), ('ababa')
+
+query T
+SELECT UNNEST(ddb_string_split_compat(s, 'b')) FROM strings_with_null
+----
+a
+a
+a
+a
+a
+
+query I
+SELECT CAST(UNNEST(ddb_string_split_compat(NULL, ' ')) IS NULL AS INT) LIMIT 5
+----
+
+query T
+SELECT UNNEST(ddb_string_split_compat('üüüüü', '◌̈'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(ddb_string_split_compat('üüüüü', '◌'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(REGEXP_SPLIT_TO_ARRAY('üüüüü', '◌̈'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(REGEXP_SPLIT_TO_ARRAY('üüüüü', '◌'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(ddb_string_split_compat(' 🦆🦆  🦆🦆', '  '))
+----
+ 🦆🦆
+🦆🦆
+
+query T
+SELECT UNNEST(ddb_string_split_compat('a a a a a', ' '))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(ddb_string_split_compat('🦆 🦆 🦆 🦆 🦆', ' '))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(ddb_string_split_compat('🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆', '🐈🐈'))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(ddb_string_split_compat('', 'delim'))
+----
+(empty)
+
+query T
+SELECT UNNEST(ddb_string_split_compat('aaaaa', ''))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(ddb_string_split_compat('🦆🦆🦆🦆🦆', ''))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(ddb_string_split_compat('abab', 'b'))
+----
+a
+a
+(empty)
+
+query T
+SELECT UNNEST(ddb_string_split_compat('🦆b🦆b', 'b'))
+----
+🦆
+🦆
+(empty)
+
+statement ok
+CREATE TABLE documents(id INT, s VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES (1, 'baabbaa'), (2, 'aabbaab'), (3, 'ababababa'), (4, 'b🦆🦆bb🦆🦆'), (5, '🦆🦆bb🦆🦆b'), (6, '🦆b🦆b🦆b🦆b🦆')
+
+query T
+SELECT ss FROM (SELECT id, UNNEST(ddb_string_split_compat(s, 'bb')) AS ss FROM documents WHERE 1) AS q ORDER BY id
+----
+baa
+aa
+aa
+aab
+ababababa
+b🦆🦆
+🦆🦆
+🦆🦆
+🦆🦆b
+🦆b🦆b🦆b🦆b🦆
+
+query T
+SELECT ss FROM (SELECT id, UNNEST(ddb_string_split_compat(s, 'bb')) AS ss FROM documents WHERE s LIKE 'b%') AS q ORDER BY id
+----
+baa
+aa
+b🦆🦆
+🦆🦆
+
+query T
+SELECT string_agg(ss, 'bb') FROM (SELECT id, UNNEST(ddb_string_split_compat(s, 'bb')) AS ss FROM documents) AS q GROUP BY id ORDER BY id
+----
+baabbaa
+aabbaab
+ababababa
+b🦆🦆bb🦆🦆
+🦆🦆bb🦆🦆b
+🦆b🦆b🦆b🦆b🦆
+
+query T
+SELECT UNNEST(REGEXP_SPLIT_TO_ARRAY('a1a11a111a', '[0-9]+'))
+----
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(REGEXP_SPLIT_TO_ARRAY('aaaaa', ''))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(REGEXP_SPLIT_TO_ARRAY('a a  a   a', '\s+'))
+----
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(ddb_string_split_compat('aaaaa', NULL))
+----
+aaaaa
+
+# taken from postgres string_to_array tests
+
+query T
+select UNNEST(ddb_string_split_compat('1|2|3', '|'))
+----
+1
+2
+3
+
+query T
+select UNNEST(ddb_string_split_compat('1|2|3|', '|'))
+----
+1
+2
+3
+(empty)
+
+query T
+select UNNEST(ddb_string_split_compat('1||2|3||', '||'))
+----
+1
+2|3
+(empty)
+
+query T
+select UNNEST(ddb_string_split_compat('1|2|3', ''))
+----
+1
+|
+2
+|
+3
+
+query T
+select UNNEST(ddb_string_split_compat('', '|'))
+----
+(empty)
+
+query T
+select UNNEST(ddb_string_split_compat('1|2|3', NULL))
+----
+1|2|3
+
+query I
+select CAST(ddb_string_split_compat(NULL, '|') IS NULL AS INT)
+----
+1
+
+query T
+select UNNEST(ddb_string_split_compat('abc', ''))
+----
+a
+b
+c
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('abc', '(|abc)'))
+----
+a
+b
+c
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('abc', '(abc|)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(ddb_string_split_compat('abc', ','))
+----
+abc
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('abc', '(,|abc)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('abc', '(abc|,)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(ddb_string_split_compat('1,2,3,4,,6', ','))
+----
+1
+2
+3
+4
+(empty)
+6
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('1,2,3,4,,6', '(,|)'))
+----
+1
+2
+3
+4
+(empty)
+6
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('1,2,3,4,,6', '(|,)'))
+----
+1
+,
+2
+,
+3
+,
+4
+,
+,
+6
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('1,2,3,4,*,6', '(,|\*)'))
+----
+1
+2
+3
+4
+(empty)
+(empty)
+6
+
+query T
+select UNNEST(REGEXP_SPLIT_TO_ARRAY('1,2,3,4,*,6', '(\*|,)'))
+----
+1
+2
+3
+4
+(empty)
+(empty)
+6
+
+# test incorrect usage
+
+statement error
+select string_split()
+
+statement error
+select string_split('a')
+
+statement error
+SELECT string_split_regex(a, '[') FROM test ORDER BY a;

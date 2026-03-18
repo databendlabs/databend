@@ -1,0 +1,66 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_transform(list) AS list_transform(list, lambda x: x * x)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_filter(list) AS list_filter(list, lambda x: x > 42)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_reduce(list) AS list_reduce(list, lambda x, y: x + y)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_nested_lambdas(nested_list) AS list_filter(nested_list, lambda elem: list_reduce(
+# 	list_transform(elem, lambda x: x + 1), lambda x, y: x + y) > 42)
+
+# TODO: unsupported feature
+# query I
+# SELECT my_transform([1, 2, 3])
+# ----
+# [1, 4, 9]
+
+# TODO: unsupported feature
+# query I
+# SELECT my_filter([41, 42, NULL, 43, 44])
+# ----
+# [43, 44]
+
+# TODO: unsupported feature
+# query I
+# SELECT my_reduce([1, 2, 3])
+# ----
+# 6
+
+# TODO: unsupported feature
+# query I
+# SELECT my_nested_lambdas([[40, NULL], [20, 21], [10, 10, 20]])
+# ----
+# [[20, 21], [10, 10, 20]]
+
+# restart the system
+
+# TODO: unsupported feature
+# query I
+# SELECT my_transform([1, 2, 3])
+# ----
+# [1, 4, 9]
+
+# TODO: unsupported feature
+# query I
+# SELECT my_filter([41, 42, NULL, 43, 44])
+# ----
+# [43, 44]
+
+# TODO: unsupported feature
+# query I
+# SELECT my_reduce([1, 2, 3])
+# ----
+# 6
+
+# TODO: unsupported feature
+# query I
+# SELECT my_nested_lambdas([[40, NULL], [20, 21], [10, 10, 20]])
+# ----
+# [[20, 21], [10, 10, 20]]

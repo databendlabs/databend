@@ -1,0 +1,54 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS prods
+
+# incorrect usage
+# TODO: unsupported feature
+# statement error
+# select list_product()
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES ([1, 2, 4]), (NULL), ([]), ([NULL]), ([1, 2, NULL, 4, NULL])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_product(i)  FROM integers
+# ----
+# 8
+# NULL
+# NULL
+# NULL
+# 8
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE prods AS SELECT LIST(2) AS i FROM range(0, 100) t1(i)
+
+# TODO: unsupported feature
+# query I
+# SELECT list_product(i) FROM prods;
+# ----
+# 1267650600228229401496703205376
+
+# TODO: unsupported feature
+# statement ok
+# drop table prods
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE prods AS SELECT LIST(2) AS i FROM range(100 // 2) t1(i)
+
+# TODO: unsupported feature
+# query I
+# SELECT list_product(i) FROM prods;
+# ----
+# 1125899906842624

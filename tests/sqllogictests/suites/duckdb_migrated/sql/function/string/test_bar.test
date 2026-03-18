@@ -1,0 +1,66 @@
+# Databend rewrite: hand-built bars with repeat and fractional block glyphs.
+
+query T
+WITH bars(x) AS (
+    SELECT 1
+    UNION ALL SELECT 2
+    UNION ALL SELECT 3
+    UNION ALL SELECT 4
+)
+SELECT repeat('█', x)
+FROM bars
+ORDER BY x
+----
+█
+██
+███
+████
+
+query T
+SELECT repeat('█', CAST(greatest(0, least(10, round(10 * (120 - (-10)) / (100 - (-10)), 0))) AS INT))
+----
+██████████
+
+query T
+SELECT CASE WHEN NULL IS NULL THEN NULL ELSE 'x' END
+----
+NULL
+
+query T
+WITH widths(w) AS (
+    SELECT 1.0
+    UNION ALL SELECT 1.125
+    UNION ALL SELECT 1.25
+    UNION ALL SELECT 1.375
+    UNION ALL SELECT 1.5
+    UNION ALL SELECT 1.625
+    UNION ALL SELECT 1.75
+    UNION ALL SELECT 1.875
+    UNION ALL SELECT 2.0
+)
+SELECT concat(
+    repeat('█', CAST(floor(w) AS INT)),
+    CASE CAST(round((w - floor(w)) * 8, 0) AS INT)
+        WHEN 0 THEN ''
+        WHEN 1 THEN '▏'
+        WHEN 2 THEN '▎'
+        WHEN 3 THEN '▍'
+        WHEN 4 THEN '▌'
+        WHEN 5 THEN '▋'
+        WHEN 6 THEN '▊'
+        WHEN 7 THEN '▉'
+        ELSE ''
+    END
+)
+FROM widths
+ORDER BY w
+----
+█
+█▏
+█▎
+█▍
+█▌
+█▋
+█▊
+█▉
+██

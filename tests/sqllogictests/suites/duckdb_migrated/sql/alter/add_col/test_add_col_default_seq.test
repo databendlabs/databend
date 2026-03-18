@@ -2,18 +2,21 @@ statement ok
 DROP TABLE IF EXISTS test
 
 statement ok
+DROP SEQUENCE IF EXISTS seq
+
+statement ok
+CREATE SEQUENCE seq
+
+statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 
 statement ok
 INSERT INTO test VALUES (1, 1), (2, 2)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD COLUMN m INTEGER DEFAULT nextval('seq')
+# Databend supports sequence-backed defaults, but adding such a column to a non-empty
+# table is rejected. Re-test with an empty table, then insert rows.
+statement error
+ALTER TABLE test ADD COLUMN m INTEGER DEFAULT nextval(seq)
 
 query II
 SELECT * FROM test
@@ -21,13 +24,17 @@ SELECT * FROM test
 1 1
 2 2
 
-# TODO: unknown function
-# statement ok
-# ALTER TABLE test ADD COLUMN n INTEGER DEFAULT currval('seq')
+statement ok
+DELETE FROM test
 
-# TODO: unknown function
-# query IIII
-# SELECT * FROM test
-# ----
-# 1 1
-# 2 2
+statement ok
+ALTER TABLE test ADD COLUMN m INTEGER DEFAULT nextval(seq)
+
+statement ok
+INSERT INTO test(i, j) VALUES (1, 1), (2, 2)
+
+query III
+SELECT * FROM test ORDER BY i
+----
+1 1 1
+2 2 2

@@ -1,0 +1,82 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query B
+SELECT regexp_like('aaa', '^(?:bbb)$')
+----
+0
+
+query B
+SELECT regexp_like('aaa', '^(?:aaa)$')
+----
+1
+
+query B
+SELECT regexp_like('aaa', '^(?:.*)$')
+----
+1
+
+query B
+SELECT regexp_like('aaa', '^(?:a.*)$')
+----
+1
+
+query B
+SELECT regexp_like('aaa', '^(?:.*a)$')
+----
+1
+
+query B
+SELECT regexp_like('aaa', '^(?:.*b)$')
+----
+0
+
+query B
+SELECT regexp_like('aaa', '^(?:a[a-z]a)$')
+----
+1
+
+query B
+SELECT regexp_like('aaa', '^(?:[a-z]{3})$')
+----
+1
+
+query B
+SELECT NOT regexp_like('aaa', '^(?:[b-z]{3})$')
+----
+1
+
+query B
+SELECT regexp_like('abc', '^(?:b|c)')
+----
+0
+
+statement ok
+CREATE TABLE strings (s STRING, p STRING)
+
+statement ok
+INSERT INTO strings VALUES('aaa', '^(?:a[a-z]a)$'), ('abab', '^(?:ab.*)$'), ('aaa', '^(?:a[a-z]a)$'), ('aaa', '^(?:.*b.*)$')
+
+query T
+SELECT DISTINCT s FROM strings WHERE regexp_like(s, '^(?:ab.*)$') ORDER BY s
+----
+abab
+
+query T
+SELECT DISTINCT s FROM strings WHERE regexp_like(s, '^(?:a[a-z]a)$') ORDER BY s
+----
+aaa
+
+query T
+SELECT DISTINCT s FROM strings WHERE regexp_like(s, p) ORDER BY s
+----
+aaa
+abab
+
+query T
+SELECT DISTINCT s FROM strings WHERE NOT regexp_like(s, p) ORDER BY s
+----
+aaa
+
+statement error
+SELECT s FROM strings WHERE regexp_like(s, '(')

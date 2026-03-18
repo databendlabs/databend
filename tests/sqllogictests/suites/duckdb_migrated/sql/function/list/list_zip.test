@@ -1,0 +1,597 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bools
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS enums
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers (i int[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES  ([1,2,3]), ([4,5,6])
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bools (b bool)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bools VALUES (false), (true)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers2 (j int[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES ([]), (NULL)
+
+# normal use of list_zip
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3])
+# ----
+# [(1), (2), (3)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [2,3,4], [3,4,5], []);
+# ----
+# [(1, 2, 3, NULL), (2, 3, 4, NULL), (3, 4, 5, NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [1,2,3])
+# ----
+# [(1, 1), (2, 2), (3, 3)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [1,2])
+# ----
+# [(1, 1), (2, 2), (3, NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1, 2, 3]::int[3], [1, 2]::int[2], true)
+# ----
+# [(1, 1), (2, 2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1, 2, 3]::int[3], [1, 2, 3]::int[3])
+# ----
+# [(1, 1), (2, 2), (3, 3)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1, '2', 3]::int[], [1, 2, 3]::int[3])
+# ----
+# [(1, 1), (2, 2), (3, 3)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2], [1,2,3])
+# ----
+# [(1, 1), (2, 2), (NULL, 3)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], NULL)
+# ----
+# [(1, NULL), (2, NULL), (3, NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [])
+# ----
+# [(1, NULL), (2, NULL), (3, NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], NULL, true)
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [], true)
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [2,3,4], [3,4,5], [], true);
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(a.i, b.i) as zipped_list FROM integers AS a, integers as b order by all;
+# ----
+# [(1, 1), (2, 2), (3, 3)]
+# [(1, 4), (2, 5), (3, 6)]
+# [(4, 1), (5, 2), (6, 3)]
+# [(4, 4), (5, 5), (6, 6)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(a.i, b.i, b.i) FROM integers AS a, integers AS b order by all
+# ----
+# [(1, 1, 1), (2, 2, 2), (3, 3, 3)]
+# [(1, 4, 4), (2, 5, 5), (3, 6, 6)]
+# [(4, 1, 1), (5, 2, 2), (6, 3, 3)]
+# [(4, 4, 4), (5, 5, 5), (6, 6, 6)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], true)
+# ----
+# [(1), (2), (3)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [1,2,3], true)
+# ----
+# [(1, 1), (2, 2), (3, 3)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2,3], [1,2], true)
+# ----
+# [(1, 1), (2, 2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1,2], [1,2,3], true)
+# ----
+# [(1, 1), (2, 2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(i, j, b) FROM integers, integers2, bools order by all desc
+# ----
+# [(4, NULL), (5, NULL), (6, NULL)]
+# [(4, NULL), (5, NULL), (6, NULL)]
+# [(1, NULL), (2, NULL), (3, NULL)]
+# [(1, NULL), (2, NULL), (3, NULL)]
+# []
+# []
+# []
+# []
+
+# very large lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(0, 10000) GROUP BY range % 4;
+
+# TODO: unsupported feature
+# statement ok
+# select g, list_zip(l, b) l from lists, bools
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_zip([1,2,3], [true, false, NULL], [{'list_1': 1}, {'list_1': 2}, {'list_1': 3}],  ['a', 'b', 'c'], ['2021-08-20'::DATE, '2021-08-21'::DATE, '2021-08-22'::DATE], [1.0, 2.0, 3.0], [NULL, NULL, NULL])
+
+# test all types
+
+# BOOLEAN
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([true, false, NULL])
+# ----
+# [(1), (0), (NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::BOOLEAN, true])
+# ----
+# [(NULL), (1)]
+
+# VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['aa', 'a'])
+# ----
+# [(aa), (a)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::VARCHAR])
+# ----
+# [(NULL)]
+
+# INTEGER types
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::tinyint, NULL, 2::tinyint])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::tinyint])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::smallint, NULL, 2::smallint])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::smallint])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::integer, NULL, 2::integer])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::integer])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::bigint, NULL, 2::bigint])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::bigint])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::hugeint, NULL, 2::hugeint])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::hugeint])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::utinyint, NULL, 2::utinyint])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::utinyint])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::usmallint, NULL, 2::usmallint])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::usmallint])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::uinteger, NULL, 2::uinteger])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::uinteger])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([1::ubigint, NULL, 2::ubigint])
+# ----
+# [(1), (NULL), (2)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::ubigint])
+# ----
+# [(NULL)]
+
+
+# FLOAT, DOUBLE and DECIMAL types
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_zip([1::float])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::float])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_zip([1::double])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::double])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_zip([1::decimal(4,1)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::decimal(4,1)])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_zip([1::decimal(9,4)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::decimal(9,4)])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_zip([1::decimal(18,6)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::decimal(18,6)])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# statement ok
+# SELECT list_zip([1::decimal(38,10)])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::decimal(38,10)])
+# ----
+# [(NULL)]
+
+
+# TEMPORAL types
+
+# date
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['2021-08-20'::DATE])
+# ----
+# [(2021-08-20)]
+
+# time
+
+# TODO: unsupported feature
+# query III
+# SELECT list_zip(['14:59:37'::TIME]) a, a::VARCHAR::STRUCT("time" TIME)[] b, a = b
+# ----
+# [('14:59:37')]	[{'time': '14:59:37'}]	1
+
+# timestamp
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['2021-08-20'::TIMESTAMP])
+# ----
+# [('2021-08-20 00:00:00')]
+
+# timestamp s
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['2021-08-20'::TIMESTAMP_S])
+# ----
+# [('2021-08-20 00:00:00')]
+
+# timestamp ms
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+# ----
+# [('2021-08-20 00:00:00.123')]
+
+# timestamp ns
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+# ----
+# [('2021-08-20 00:00:00.123456')]
+
+# time with time zone
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['14:59:37'::TIMETZ])
+# ----
+# [('14:59:37+00')]
+
+# timestamp with time zone
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['2021-08-20'::TIMESTAMPTZ])
+# ----
+# [('2021-08-20 00:00:00+00')]
+
+# interval
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([INTERVAL 1 YEAR])
+# ----
+# [(1 year)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::date])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::time])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::timestamp])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::timestamp_s])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::timestamp_ms])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::timestamp_ns])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::timetz])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::timestamptz])
+# ----
+# [(NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::interval])
+# ----
+# [(NULL)]
+
+
+# BLOB
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
+# ----
+# [('{a: 1}'), ('{a: 3}')]
+
+# TODO: unsupported feature
+# query III
+# SELECT list_zip(['{a: 1'::BLOB, '{a: 3'::BLOB]) a, a::VARCHAR::STRUCT(a BLOB)[] b, a = b
+# ----
+# [('{a: 1'), ('{a: 3')]	[{'a': '{a: 1'}, {'a': '{a: 3'}]	1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([NULL::BLOB])
+# ----
+# [(NULL)]
+
+# ENUMS
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE enums (e mood[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO enums VALUES (['happy', 'sad'])
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip(e) FROM enums
+# ----
+# [(happy), (sad)]
+
+# NESTED types
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([[1], [1, 2], NULL])
+# ----
+# [([1]), ([1, 2]), (NULL)]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_zip([{'a': 1}, {'a': 5}, {'a': 3}])
+# ----
+# [({'a': 1}), ({'a': 5}), ({'a': 3})]
+
+# Non-list type
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_zip('')
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_zip(3, 4)
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_zip(FALSE)
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_zip(TRUE)

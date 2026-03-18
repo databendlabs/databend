@@ -1,0 +1,18 @@
+statement ok
+DROP TABLE IF EXISTS all_types
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE all_types AS FROM test_all_types()
+
+# TODO: unsupported feature
+# query I
+# SELECT LEAST((SELECT MAX("<all_types_columns>") FROM all_types), (SELECT MIN("<all_types_columns>") FROM all_types)) IS NOT DISTINCT FROM (SELECT MIN("<all_types_columns>") FROM all_types)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT GREATEST((SELECT MAX("<all_types_columns>") FROM all_types), (SELECT MIN("<all_types_columns>") FROM all_types)) IS NOT DISTINCT FROM (SELECT MAX("<all_types_columns>") FROM all_types)
+# ----
+# 1

@@ -1,0 +1,90 @@
+# TODO: unknown function
+# query I
+# select variant_extract({'a': 1234}::VARIANT, 'a')::VARCHAR;
+# ----
+# 1234
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO struct_cast_data() AS TABLE (
+# 	SELECT {'a': [
+# 		{
+# 			'b': 'hello',
+# 			'c': NULL,
+# 			'a': '1970/03/15'::DATE
+# 		},
+# 		{
+# 			'b': NULL,
+# 			'c': True,
+# 			'a': '2020/11/03'::DATE
+# 		}
+# 	]}::VARIANT AS a
+# 	UNION ALL
+# 	SELECT {'a': [
+# 		{
+# 			'b': 'this is a long string',
+# 			'c': False,
+# 			'a': '1953/9/16'::DATE
+# 		}
+# 	]}::VARIANT
+# );
+
+# TODO: unsupported feature
+# query I
+# select variant_extract(a, 'a[1].c') from struct_cast_data();
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select variant_extract(a, 'a').variant_extract(1::UINTEGER).variant_extract('c') from struct_cast_data();
+# ----
+# NULL
+# 0
+
+# Using shorthand notation
+
+# TODO: unsupported feature
+# query I
+# select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT).b[2];
+# ----
+# test
+
+# TODO: unsupported feature
+# query I
+# select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
+# ----
+# test
+
+# When the argument is a string, it's taken as an object field, not an array index
+
+# TODO: unsupported feature
+# query I
+# select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[2]'];
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
+# ----
+# test
+
+# TODO: unsupported feature
+# query I
+# SELECT [
+# 	x.a for x in [
+# 		{'a': 42, 'b': [1,2,3]}::VARIANT,
+# 		NULL,
+# 		84
+# 	]
+# ]
+# ----
+# [42, NULL, NULL]

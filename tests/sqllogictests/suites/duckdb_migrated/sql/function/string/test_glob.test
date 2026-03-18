@@ -1,0 +1,106 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query B
+SELECT glob('aaa', 'bbb')
+----
+0
+
+query B
+SELECT glob('aaa', 'aaa')
+----
+1
+
+query B
+SELECT glob('aaa', '*')
+----
+1
+
+query B
+SELECT glob('aaa', '*a')
+----
+1
+
+query B
+SELECT glob('aaa', '*b')
+----
+0
+
+query B
+SELECT glob('aaa', 'a*')
+----
+1
+
+query B
+SELECT glob('aaa', 'a?a')
+----
+1
+
+query B
+SELECT glob('aaa', 'a?')
+----
+0
+
+query B
+SELECT glob('ababac', '*abac')
+----
+1
+
+query B
+SELECT glob('3', '[0-9]')
+----
+1
+
+query B
+SELECT glob('a', '[0-9]')
+----
+0
+
+query B
+SELECT glob('012', '[0-9][0-9][0-9]')
+----
+1
+
+query B
+SELECT glob('b3', '[abc0-9][abc0-9]')
+----
+1
+
+query B
+SELECT glob('d3', '[abc0-9][abc0-9]')
+----
+0
+
+query B
+SELECT glob('3', '3*')
+----
+1
+
+query B
+SELECT glob('1245', '*1*2*4*5*')
+----
+1
+
+statement ok
+CREATE TABLE strings(s STRING, pat STRING)
+
+statement ok
+INSERT INTO strings VALUES ('abab', 'ab*'), ('aaa', 'a?a'), ('aaa', '*b*')
+
+query T
+SELECT s FROM strings WHERE glob(s, 'ab*')
+----
+abab
+
+query T
+SELECT s FROM strings WHERE glob('aba', pat)
+----
+abab
+aaa
+aaa
+
+query T
+SELECT s FROM strings WHERE glob(s, pat)
+----
+abab
+aaa

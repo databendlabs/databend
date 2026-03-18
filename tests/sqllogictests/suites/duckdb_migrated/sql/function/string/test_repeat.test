@@ -1,0 +1,63 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query TTT
+SELECT repeat(NULL, NULL), repeat(NULL, 3), repeat('MySQL', NULL)
+----
+NULL	NULL	NULL
+
+query TTTT
+SELECT repeat('', 3), repeat('MySQL', 3), repeat('MotörHead', 2), repeat('Hello', 0)
+----
+(empty)	MySQLMySQLMySQL	MotörHeadMotörHead	(empty)
+
+query TT
+SELECT repeat('你好世界', 2), repeat('こんにちは', 2)
+----
+你好世界你好世界	こんにちはこんにちは
+
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('Hello', 'World'), ('HuLlD', NULL), ('MotörHead','RÄcks'), ('', NULL)
+
+query T
+SELECT repeat(a, 3) FROM strings
+----
+HelloHelloHello
+HuLlDHuLlDHuLlD
+MotörHeadMotörHeadMotörHead
+(empty)
+
+query T
+SELECT repeat(b, 2) FROM strings
+----
+WorldWorld
+NULL
+RÄcksRÄcks
+NULL
+
+query T
+SELECT repeat(a, 4) FROM strings WHERE b IS NOT NULL
+----
+HelloHelloHelloHello
+MotörHeadMotörHeadMotörHeadMotörHead
+
+statement error
+SELECT repeat('hello world', -1)
+
+statement error
+SELECT repeat('3', 1000001)
+
+statement error
+SELECT repeat()
+
+statement error
+SELECT repeat(1)
+
+statement error
+SELECT repeat('hello', 'world')
+
+statement error
+SELECT repeat('hello', 'world', 3)

@@ -1,0 +1,205 @@
+# prepared statement with BETWEEN
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT ? BETWEEN 1 AND 2
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(1)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(3)
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement error
+# EXECUTE v1(1, 2)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v2 AS SELECT 1 WHERE ? BETWEEN now() - INTERVAL '1 minute' AND now() + INTERVAL '1 minute';
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2(now())
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2(now() - INTERVAL '10 minute')
+# ----
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1
+
+
+# this should always be 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT BETWEEN 6 AND 5
+# ----
+# 0
+
+# this should always be 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (RANDOM() * 10)::INT NOT BETWEEN 6 AND 5
+# ----
+# 1

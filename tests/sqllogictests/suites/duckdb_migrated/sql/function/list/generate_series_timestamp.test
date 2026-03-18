@@ -1,0 +1,102 @@
+# standard generate_series (inclusive bound)
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(timestamp '2020-01-01', timestamp '2020-07-01', interval '3' month);
+# ----
+# ['2020-01-01 00:00:00', '2020-04-01 00:00:00', '2020-07-01 00:00:00']
+
+# exclusive bound
+
+# TODO: unsupported feature
+# query I
+# SELECT range(timestamp '2020-01-01', timestamp '2020-07-01', interval '3' month);
+# ----
+# ['2020-01-01 00:00:00', '2020-04-01 00:00:00']
+
+# negative interval
+
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(timestamp '2020-06-01', timestamp '2020-01-01', -interval '3' month);
+# ----
+# ['2020-06-01 00:00:00', '2020-03-01 00:00:00']
+
+# start = end
+
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(timestamp '2020-01-01', timestamp '2020-01-01', interval '1' day);
+# ----
+# ['2020-01-01 00:00:00']
+
+# TODO: unsupported feature
+# query I
+# SELECT range(timestamp '2020-01-01', timestamp '2020-01-01', interval '1' day);
+# ----
+# []
+
+# positive interval but start > end
+
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(timestamp '2020-06-01', timestamp '2020-01-01', interval '3' month);
+# ----
+# []
+
+# negative interval but start < end
+
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', -interval '3' month);
+# ----
+# []
+
+# null values
+
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(NULL, timestamp '2020-06-01', -interval '3' month);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(timestamp '2020-01-01', NULL, -interval '3' month);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', NULL);
+# ----
+# NULL
+
+# mixed sign interval not supported
+
+# TODO: unsupported feature
+# statement error
+# SELECT generate_series(timestamp '2020-01-01', timestamp '2020-06-01', interval '3' month - interval '3' day);
+
+# TODO: unsupported feature
+# statement error
+# SELECT generate_series('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+
+# TODO: unsupported feature
+# statement error
+# SELECT range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+
+# TODO: unsupported feature
+# statement error
+# SELECT generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+
+# TODO: unsupported feature
+# statement error
+# SELECT range('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM (
+# 	SELECT unnest(generate_series(timestamp '2000-01-01', timestamp '2020-06-01', interval '1' day))
+# );
+# ----
+# 7458

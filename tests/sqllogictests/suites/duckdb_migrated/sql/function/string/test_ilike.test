@@ -1,0 +1,149 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+DROP TABLE IF EXISTS unicode_strings
+
+query B
+SELECT lower('aaa') LIKE lower('bbb')
+----
+0
+
+query B
+SELECT lower('aaa') LIKE lower('aAa')
+----
+1
+
+query B
+SELECT lower('aaa') LIKE lower('%')
+----
+1
+
+query B
+SELECT lower('aaa') LIKE lower('%A')
+----
+1
+
+query B
+SELECT lower('aaa') LIKE lower('%b')
+----
+0
+
+query B
+SELECT lower('aaa') LIKE lower('A%')
+----
+1
+
+query B
+SELECT lower('aaa') LIKE lower('b%')
+----
+0
+
+query B
+SELECT lower('aaa') LIKE lower('A_a')
+----
+1
+
+query B
+SELECT lower('aaa') LIKE lower('a_')
+----
+0
+
+query B
+SELECT lower('aaa') LIKE lower('__%')
+----
+1
+
+query B
+SELECT lower('aaa') LIKE lower('____%')
+----
+0
+
+query B
+SELECT lower('ababac') LIKE lower('%abac')
+----
+1
+
+query B
+SELECT lower('ababac') LIKE lower('%aBac')
+----
+1
+
+query B
+SELECT lower('ababac') LIKE lower('abab%')
+----
+1
+
+query B
+SELECT lower('ababac') LIKE lower('%a%b%a%b%a%c%')
+----
+1
+
+query B
+SELECT lower('ababac') LIKE lower('%a%b%a%b%a%d%')
+----
+0
+
+query B
+SELECT lower('ababac') NOT LIKE lower('%Abac')
+----
+0
+
+# like with table
+
+statement ok
+CREATE TABLE strings(s STRING, pat STRING);
+
+statement ok
+INSERT INTO strings VALUES ('abab', 'Ab%'), ('aaa', 'A_a'), ('aaa', '%b%')
+
+query T
+SELECT s FROM strings WHERE s LIKE 'ab%'
+----
+abab
+
+query T
+SELECT s FROM strings WHERE lower('aba') LIKE lower(pat)
+----
+abab
+aaa
+aaa
+
+query T
+SELECT s FROM strings WHERE lower('aba') NOT LIKE lower(pat)
+----
+
+query T
+SELECT s FROM strings WHERE lower(s) LIKE lower(pat)
+----
+abab
+aaa
+
+query T
+SELECT s FROM strings WHERE lower(s) NOT LIKE lower(pat)
+----
+aaa
+
+# unicode
+
+query B
+SELECT lower('MÜHLEISEN') LIKE lower('mühleisen')
+----
+1
+
+statement ok
+CREATE TABLE unicode_strings(s STRING, pat STRING);
+
+statement ok
+INSERT INTO unicode_strings VALUES ('öäb', 'Ö%B'), ('aaÄ', 'A_ä'), ('aaa', '%b%')
+
+query T
+SELECT s FROM unicode_strings WHERE lower(s) LIKE lower(pat)
+----
+öäb
+aaÄ
+
+query T
+SELECT s FROM unicode_strings WHERE lower(s) NOT LIKE lower(pat)
+----
+aaa

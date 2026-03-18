@@ -1,0 +1,85 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+query TTTTTTT
+SELECT lpad(NULL, 7, '-'), lpad('Base', NULL, '-'), lpad('Base', 7, NULL), lpad(NULL, NULL, '-'), lpad(NULL, 7, NULL), lpad('Base', NULL, NULL), lpad(NULL, NULL, NULL)
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+query TTTTTTT
+SELECT rpad(NULL, 7, '-'), rpad('Base', NULL, '-'), rpad('Base', 7, NULL), rpad(NULL, NULL, '-'), rpad(NULL, 7, NULL), rpad('Base', NULL, NULL), rpad(NULL, NULL, NULL)
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+query TTTT
+SELECT lpad('Base', 7, '-'), lpad('Base', 4, '-'), lpad('Base', 2, ''), lpad('Base', 0, '-')
+----
+---Base	Base	Ba	(empty)
+
+query TTTT
+SELECT rpad('Base', 7, '-'), rpad('Base', 4, '-'), rpad('Base', 2, ''), rpad('Base', 0, '-')
+----
+Base---	Base	Ba	(empty)
+
+query TTTT
+SELECT lpad('Base', 7, '-|'), lpad('Base', 6, '-|'), lpad('Base', 5, '-|'), lpad('Base', 4, '-|')
+----
+-|-Base	-|Base	-Base	Base
+
+query TTTT
+SELECT rpad('Base', 7, '-|'), rpad('Base', 6, '-|'), rpad('Base', 5, '-|'), rpad('Base', 4, '-|')
+----
+Base-|-	Base-|	Base-	Base
+
+query TTT
+SELECT lpad('MotörHead', 16, 'RÄcks'), lpad('MotörHead', 12, 'RÄcks'), lpad('MotörHead', 10, 'RÄcks')
+----
+RÄcksRÄMotörHead	RÄcMotörHead	RMotörHead
+
+query TTT
+SELECT rpad('MotörHead', 16, 'RÄcks'), rpad('MotörHead', 12, 'RÄcks'), rpad('MotörHead', 10, 'RÄcks')
+----
+MotörHeadRÄcksRÄ	MotörHeadRÄc	MotörHeadR
+
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('Hello', 'World'), ('HuLlD', NULL), ('MotörHead', 'RÄcks')
+
+query TT
+SELECT lpad(a, 16, b), rpad(a, 16, b) FROM strings
+----
+WorldWorldWHello	HelloWorldWorldW
+NULL	NULL
+RÄcksRÄMotörHead	MotörHeadRÄcksRÄ
+
+query TTTT
+SELECT lpad(a, 12, b), rpad(a, 12, b), upper(a), lower(a) FROM strings WHERE b IS NOT NULL
+----
+WorldWoHello	HelloWorldWo	HELLO	hello
+RÄcMotörHead	MotörHeadRÄc	MOTÖRHEAD	motörhead
+
+statement error
+SELECT lpad()
+
+statement error
+SELECT lpad(1)
+
+statement error
+SELECT lpad(1, 2)
+
+statement error
+SELECT lpad('a', -1, '-')
+
+statement error
+SELECT rpad()
+
+statement error
+SELECT rpad(1)
+
+statement error
+SELECT rpad(1, 2)
+
+statement error
+SELECT rpad('a', -1, '-')

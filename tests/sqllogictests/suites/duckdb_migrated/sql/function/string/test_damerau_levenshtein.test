@@ -1,0 +1,106 @@
+# Databend rewrite: transposition-heavy similarity cases with jaro_winkler.
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+query T
+SELECT concat(round(jaro_winkler('out', 'out'), 2), '')
+----
+1
+
+query T
+SELECT concat(round(jaro_winkler('three', 'there'), 2), '')
+----
+0.95
+
+query T
+SELECT concat(round(jaro_winkler('potion', 'option'), 2), '')
+----
+0.94
+
+query T
+SELECT concat(round(jaro_winkler('letter', 'lettre'), 2), '')
+----
+0.97
+
+query T
+SELECT concat(round(jaro_winkler('trips', 'strip'), 2), '')
+----
+0.87
+
+query T
+SELECT concat(round(jaro_winkler('abcdefghi', 'bzacdefig'), 2), '')
+----
+0.84
+
+query T
+SELECT concat(round(jaro_winkler('amanaplanacanalpanama', 'm23aanaplancaanaalnama'), 2), '')
+----
+0.9
+
+query T
+SELECT concat(jaro_winkler('', 'great'), '')
+----
+0
+
+query T
+SELECT concat(jaro_winkler('great', ''), '')
+----
+0
+
+query T
+SELECT concat(jaro_winkler('', ''), '')
+----
+1
+
+query T
+SELECT jaro_winkler(NULL, 'drive')
+----
+NULL
+
+query T
+SELECT jaro_winkler('drive', NULL)
+----
+NULL
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('here'), ('heres'), ('there'), ('three'), ('threes')
+
+query T
+SELECT concat(round(jaro_winkler(s, 'theres'), 2), '')
+FROM strings
+ORDER BY s
+----
+0.89
+0.94
+0.97
+0.9
+0.96
+
+query T
+SELECT concat(round(jaro_winkler('herse', s), 2), '')
+FROM strings
+ORDER BY s
+----
+0.95
+0.95
+0.87
+0.73
+0.81
+
+query T
+SELECT jaro_winkler(NULL, s)
+FROM strings
+ORDER BY s
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement error
+SELECT jaro_winkler('one')

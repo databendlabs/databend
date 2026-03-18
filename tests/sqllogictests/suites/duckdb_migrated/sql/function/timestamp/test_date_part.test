@@ -1,0 +1,79 @@
+query I
+SELECT date_part(YEAR, TIMESTAMP '1992-01-01 01:01:01.400')
+----
+1992
+
+query I
+SELECT date_part(MONTH, TIMESTAMP '1993-08-14 08:22:33')
+----
+8
+
+query I
+SELECT date_part(DAY, TIMESTAMP '1993-08-14 08:22:33')
+----
+14
+
+query I
+SELECT date_part(HOUR, TIMESTAMP '1993-08-14 08:22:33')
+----
+8
+
+query I
+SELECT date_part(MINUTE, TIMESTAMP '1993-08-14 08:22:33')
+----
+22
+
+query I
+SELECT date_part(SECOND, TIMESTAMP '1993-08-14 08:22:33.42')
+----
+33
+
+query I
+SELECT date_part(WEEK, TIMESTAMP '2021-12-01 13:54:48.123456')
+----
+48
+
+query I
+SELECT date_part(DOW, TIMESTAMP '2021-12-01 13:54:48.123456')
+----
+3
+
+query I
+SELECT date_part(DOY, TIMESTAMP '2021-12-01 13:54:48.123456')
+----
+335
+
+query I
+SELECT date_part(ISOYEAR, TIMESTAMP '2022-01-01 00:00:41')
+----
+2021
+
+query I
+SELECT date_part(YEARWEEK, TIMESTAMP '2022-01-01 00:00:41')
+----
+202152
+
+query I
+SELECT millennium(TIMESTAMP '1992-01-01 01:01:01.400')
+----
+2
+
+query R
+SELECT epoch(TIMESTAMP '1992-09-20 11:30:00.0')
+----
+716988600.0
+
+query R
+SELECT date_part(EPOCH, TIMESTAMP '1992-09-20 11:30:00.0')
+----
+716988600.0
+
+query I
+SELECT date_part(YEAR, NULL::TIMESTAMP)
+----
+NULL
+
+query R
+SELECT date_part(EPOCH, NULL::TIMESTAMP)
+----
+NULL

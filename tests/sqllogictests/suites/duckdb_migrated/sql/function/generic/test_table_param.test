@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# scalar stats
+# TODO: unsupported feature
+# statement ok
+# create table a (i double, j double);
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values (1, 10), (42, 420);
+
+# TODO: unsupported feature
+# statement ok
+# EXPLAIN SELECT * FROM summary((SELECT * FROM a))
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM summary((SELECT * FROM a))
+# ----
+# [1.0, 10.0]	1.0	10.0
+# [42.0, 420.0]	42.0	420.0
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM summary((SELECT * FROM a))
+# ----
+# [1.0, 10.0]	1.0	10.0
+# [42.0, 420.0]	42.0	420.0

@@ -1,0 +1,32 @@
+query T
+SELECT to_hex('duckdb');
+----
+6475636b6462
+
+query T
+SELECT hex(unhex('abcd'));
+----
+abcd
+
+query T
+SELECT hex(unhex('000080'));
+----
+000080
+
+query I
+SELECT from_hex('6475636B6462');
+----
+6475636B6462
+
+query T
+SELECT from_hex('05');
+----
+05
+
+query T
+SELECT hex_decode_string(hex('duckdb'))
+----
+duckdb
+
+statement error
+SELECT from_hex('duckdb');

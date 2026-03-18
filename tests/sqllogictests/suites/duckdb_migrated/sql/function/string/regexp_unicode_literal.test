@@ -1,0 +1,53 @@
+statement ok
+DROP TABLE IF EXISTS data
+
+statement ok
+CREATE TABLE data(wsc INT, zipcode VARCHAR)
+
+statement ok
+INSERT INTO data VALUES (32, '00 001'), (160, '00 001'), (0, '00🦆001')
+
+query IT
+SELECT wsc, zipcode
+FROM data
+WHERE regexp_like(zipcode, '^00 001$')
+----
+32	00 001
+
+query IT
+SELECT wsc, zipcode
+FROM data
+WHERE regexp_like(zipcode, '^00 001$')
+----
+160	00 001
+
+query IT
+SELECT wsc, zipcode
+FROM data
+WHERE regexp_like(zipcode, ' 001$')
+----
+160	00 001
+
+query IT
+SELECT wsc, zipcode
+FROM data
+WHERE regexp_like(zipcode, '^00🦆001$')
+----
+0	00🦆001
+
+query IT
+SELECT wsc, zipcode
+FROM data
+WHERE regexp_like(zipcode, '🦆')
+----
+0	00🦆001
+
+query IT
+SELECT *
+FROM data
+WHERE regexp_like(zipcode, '^00 001$')
+  AND regexp_like(zipcode, '^00 001$')
+----
+
+statement error
+SELECT regexp_like(zipcode, '(') FROM data

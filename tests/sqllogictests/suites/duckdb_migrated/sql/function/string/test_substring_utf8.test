@@ -1,0 +1,48 @@
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('twoñthree₡four🦆end')
+
+query T
+SELECT substring(s FROM 1 FOR 7) FROM strings
+----
+twoñthr
+
+query T
+SELECT substring(s FROM 10 FOR 7) FROM strings
+----
+₡four🦆e
+
+query T
+SELECT substring(s FROM 15 FOR 7) FROM strings
+----
+🦆end
+
+query T
+SELECT substr(s, greatest(char_length(s) - 3, 1), 4) FROM strings
+----
+🦆end
+
+query T
+SELECT substr(s, 0, 5) FROM strings
+----
+(empty)
+
+query T
+SELECT substr(s, 5) FROM strings
+----
+three₡four🦆end
+
+query T
+SELECT substr('城区主城区其他', 1, 6)
+----
+城区主城区其
+
+query I
+SELECT length('我爱中国')
+----
+4
