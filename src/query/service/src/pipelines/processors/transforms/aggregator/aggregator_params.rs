@@ -17,7 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StatesLayout;
@@ -106,5 +108,21 @@ impl AggregatorParams {
 
     pub fn num_states(&self) -> usize {
         self.aggregate_functions.len()
+    }
+
+    pub fn spill_schema(&self) -> DataSchemaRef {
+        let mut fields = vec![];
+        if let Some(states_layout) = &self.states_layout {
+            for (idx, typ) in states_layout.serialize_type.iter().enumerate() {
+                let data_type = typ.data_type();
+                fields.push(DataField::new(&format!("agg_{}", idx), data_type));
+            }
+        }
+
+        for (idx, typ) in self.group_data_types.iter().enumerate() {
+            fields.push(DataField::new(&format!("group_{}", idx), typ.clone()));
+        }
+
+        DataSchemaRefExt::create(fields)
     }
 }
