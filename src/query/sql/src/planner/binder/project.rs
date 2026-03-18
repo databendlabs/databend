@@ -115,6 +115,10 @@ impl Binder {
                     debug_assert!(!is_grouping_sets_item);
                     agg_info.find_replaced_udaf_call(udaf, &item.alias).unwrap()
                 }
+                ScalarExpr::UDAFCall(udaf) => {
+                    debug_assert!(!is_grouping_sets_item);
+                    find_replaced_udaf_call(agg_info, udaf, &item.alias).unwrap()
+                }
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()
                 }

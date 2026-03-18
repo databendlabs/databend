@@ -14,8 +14,10 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::btree_map;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_ast::Span;
@@ -37,10 +39,12 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
+use databend_common_meta_app::principal::UserDefinedFunction;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use jsonb::keypath::OwnedKeyPaths;
+use parking_lot::RwLock;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
@@ -162,6 +166,11 @@ pub struct BindContext {
     /// True if there is udf server in current context, need rewrite.
     pub have_udf_server: bool,
 
+    /// Query-local UDF/UDAF definition cache.
+    /// We assume the same normalized function name resolves to the same definition
+    /// during a single query binding.
+    pub udf_cache: Arc<RwLock<HashMap<String, Option<UserDefinedFunction>>>>,
+
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
 
     pub vector_index_map: Box<IndexMap<IndexType, VectorIndexInfo>>,
@@ -246,6 +255,7 @@ impl BindContext {
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
+            udf_cache: Arc::new(RwLock::new(HashMap::new())),
             inverted_index_map: Box::default(),
             vector_index_map: Box::default(),
             allow_virtual_column: false,
@@ -292,6 +302,7 @@ impl BindContext {
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
+            udf_cache: parent.udf_cache.clone(),
             inverted_index_map: Box::default(),
             vector_index_map: Box::default(),
             allow_virtual_column: parent.allow_virtual_column,
@@ -306,6 +317,7 @@ impl BindContext {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
         bind_context.cte_context = self.cte_context.clone();
+        bind_context.udf_cache = self.udf_cache.clone();
         bind_context
     }
 

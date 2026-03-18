@@ -194,6 +194,7 @@ impl Binder {
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
+            udf_cache: bind_context.udf_cache.clone(),
             inverted_index_map: Box::default(),
             vector_index_map: Box::default(),
             allow_virtual_column: false,
