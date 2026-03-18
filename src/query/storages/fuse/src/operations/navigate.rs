@@ -592,7 +592,7 @@ impl FuseTable {
         check_table_ref_access(ctx.as_ref())?;
         let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let table_tag = catalog
-            .get_table_tag(self.table_info.ident.table_id, tag_name)
+            .get_table_tag(self.table_info.ident.table_id, tag_name, false)
             .await?
             .ok_or_else(|| {
                 ErrorCode::UnknownReference(format!(

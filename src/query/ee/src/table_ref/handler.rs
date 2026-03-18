@@ -141,9 +141,7 @@ impl TableRefHandler for RealTableRefHandler {
             .await?;
         let table_id = table.get_table_info().ident.table_id;
         let catalog = ctx.get_catalog(&plan.catalog).await?;
-        let seq_tag = catalog
-            .get_table_tag_with_expire_ctl(table_id, &plan.name, true)
-            .await?;
+        let seq_tag = catalog.get_table_tag(table_id, &plan.name, true).await?;
         let Some(seq_tag) = seq_tag else {
             return Err(ErrorCode::UnknownReference(format!(
                 "Unknown tag '{}'",

@@ -355,19 +355,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         )))
     }
 
-    async fn get_table_tag(&self, table_id: u64, tag_name: &str) -> Result<Option<SeqV<TableTag>>> {
-        self.get_table_tag_with_expire_ctl(table_id, tag_name, false)
-            .await
-    }
-
-    async fn get_table_tag_with_expire_ctl(
+    async fn get_table_tag(
         &self,
         _table_id: u64,
         _tag_name: &str,
         _include_expired: bool,
     ) -> Result<Option<SeqV<TableTag>>> {
         Err(ErrorCode::Unimplemented(format!(
-            "'get_table_tag_with_expire_ctl' not implemented for catalog {}",
+            "'get_table_tag' not implemented for catalog {}",
             self.name()
         )))
     }

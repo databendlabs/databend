@@ -435,14 +435,14 @@ impl Catalog for SessionCatalog {
         self.inner.drop_table_tag(req).await
     }
 
-    async fn get_table_tag_with_expire_ctl(
+    async fn get_table_tag(
         &self,
         table_id: u64,
         tag_name: &str,
         include_expired: bool,
     ) -> Result<Option<SeqV<TableTag>>> {
         self.inner
-            .get_table_tag_with_expire_ctl(table_id, tag_name, include_expired)
+            .get_table_tag(table_id, tag_name, include_expired)
             .await
     }
 

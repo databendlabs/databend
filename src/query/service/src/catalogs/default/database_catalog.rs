@@ -442,14 +442,14 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_tag_with_expire_ctl(
+    async fn get_table_tag(
         &self,
         table_id: u64,
         tag_name: &str,
         include_expired: bool,
     ) -> Result<Option<SeqV<TableTag>>> {
         self.mutable_catalog
-            .get_table_tag_with_expire_ctl(table_id, tag_name, include_expired)
+            .get_table_tag(table_id, tag_name, include_expired)
             .await
     }
 
