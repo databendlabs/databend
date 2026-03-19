@@ -1,0 +1,164 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline::core::Pipeline;
+
+use crate::processors::AccumulatingTransform;
+use crate::processors::BlockCompactMeta;
+use crate::processors::TransformCompactBlock;
+use crate::processors::TransformPipelineHelper;
+
+pub fn build_ordered_compact_pipeline(
+    pipeline: &mut Pipeline,
+    thresholds: BlockThresholds,
+    max_threads: usize,
+) -> Result<()> {
+    pipeline.try_resize(1)?;
+    pipeline.add_accumulating_transformer(|| OrderedBlockCompactBuilder::new(thresholds));
+    pipeline.try_resize(max_threads)?;
+    pipeline.add_block_meta_transformer(TransformCompactBlock::default);
+    Ok(())
+}
+
+pub struct OrderedBlockCompactBuilder {
+    thresholds: BlockThresholds,
+    // Holds blocks that exceeded the threshold and are waiting to be compacted.
+    staged_blocks: BlockGroup,
+    // Holds blocks that are partially accumulated but haven't reached the threshold.
+    pending_blocks: BlockGroup,
+}
+
+impl OrderedBlockCompactBuilder {
+    pub fn new(thresholds: BlockThresholds) -> Self {
+        Self {
+            thresholds,
+            staged_blocks: BlockGroup::default(),
+            pending_blocks: BlockGroup::default(),
+        }
+    }
+
+    fn create_output_data(blocks: &mut BlockGroup, thresholds: BlockThresholds) -> DataBlock {
+        // Ordered compact keeps input order first; the final materialization decides
+        // whether the buffered group can stay as-is, should be concatenated, or must split.
+        if thresholds.check_too_large(blocks.total_rows, blocks.total_bytes) {
+            let rows_per_block =
+                thresholds.calc_rows_for_compact(blocks.total_bytes, blocks.total_rows);
+            DataBlock::empty_with_meta(Box::new(BlockCompactMeta::Split {
+                blocks: blocks.take_blocks(),
+                rows_per_block,
+            }))
+        } else if blocks.len() > 1 {
+            DataBlock::empty_with_meta(Box::new(BlockCompactMeta::Concat(blocks.take_blocks())))
+        } else {
+            DataBlock::empty_with_meta(Box::new(BlockCompactMeta::NoChange(blocks.take_blocks())))
+        }
+    }
+}
+
+impl AccumulatingTransform for OrderedBlockCompactBuilder {
+    const NAME: &'static str = "OrderedBlockCompactBuilder";
+
+    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
+        let num_rows = data.num_rows();
+        let num_bytes = data.estimate_block_size();
+
+        // pending_blocks accumulates the current ordered run; once it reaches N we either
+        // stage it as the next output candidate or materialize it immediately if it grows past 2N.
+        let total_rows = self.pending_blocks.total_rows + num_rows;
+        let total_bytes = self.pending_blocks.total_bytes + num_bytes;
+        if !self.thresholds.check_large_enough(total_rows, total_bytes) {
+            // blocks < N
+            self.pending_blocks.push(data, num_rows, num_bytes);
+            return Ok(vec![]);
+        }
+
+        let mut res = Vec::with_capacity(2);
+        if !self.staged_blocks.is_empty() {
+            res.push(Self::create_output_data(
+                &mut self.staged_blocks,
+                self.thresholds,
+            ));
+        }
+
+        if self.pending_blocks.is_empty()
+            || self.thresholds.check_for_compact(total_rows, total_bytes)
+        {
+            // N <= blocks < 2N
+            std::mem::swap(&mut self.staged_blocks, &mut self.pending_blocks);
+            self.staged_blocks.push(data, num_rows, num_bytes);
+        } else {
+            // blocks >= 2N
+            self.pending_blocks.push(data, num_rows, num_bytes);
+            res.push(Self::create_output_data(
+                &mut self.pending_blocks,
+                self.thresholds,
+            ));
+        }
+        Ok(res)
+    }
+
+    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+        // Flush the final ordered run in one shot so create_output_data can still decide
+        // between NoChange / Concat / Split using the aggregated size.
+        self.staged_blocks.append(&mut self.pending_blocks);
+        if self.staged_blocks.is_empty() {
+            Ok(vec![])
+        } else {
+            Ok(vec![Self::create_output_data(
+                &mut self.staged_blocks,
+                self.thresholds,
+            )])
+        }
+    }
+}
+
+#[derive(Default)]
+struct BlockGroup {
+    blocks: Vec<DataBlock>,
+    total_rows: usize,
+    total_bytes: usize,
+}
+
+impl BlockGroup {
+    fn is_empty(&self) -> bool {
+        self.blocks.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.blocks.len()
+    }
+
+    fn push(&mut self, block: DataBlock, num_rows: usize, num_bytes: usize) {
+        self.total_rows += num_rows;
+        self.total_bytes += num_bytes;
+        self.blocks.push(block);
+    }
+
+    fn append(&mut self, other: &mut Self) {
+        self.total_rows += other.total_rows;
+        self.total_bytes += other.total_bytes;
+        self.blocks.append(&mut other.blocks);
+        other.total_rows = 0;
+        other.total_bytes = 0;
+    }
+
+    fn take_blocks(&mut self) -> Vec<DataBlock> {
+        self.total_rows = 0;
+        self.total_bytes = 0;
+        std::mem::take(&mut self.blocks)
+    }
+}
