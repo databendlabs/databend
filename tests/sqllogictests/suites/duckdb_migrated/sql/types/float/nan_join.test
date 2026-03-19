@@ -1,93 +1,76 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS floats
+statement ok
+DROP TABLE IF EXISTS floats
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f FLOAT);
+statement ok
+create table floats(f FLOAT);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf'), ('-inf'), ('nan');
+statement ok
+insert into floats values ('inf'), ('-inf'), ('nan');
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) USING (f)
-# ----
-# inf
+query R
+SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) USING (f)
+----
+Infinity
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM floats JOIN (SELECT '-inf'::FLOAT) tbl(f) USING (f)
-# ----
-# -inf
+query R
+SELECT * FROM floats JOIN (SELECT '-inf'::FLOAT) tbl(f) USING (f)
+----
+-Infinity
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) ON (floats.f >= tbl.f) ORDER BY 1
-# ----
-# inf	inf
-# nan	inf
+query RR
+SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) ON (floats.f >= tbl.f) ORDER BY 1
+----
+Infinity Infinity
+NaN Infinity
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) ON (floats.f <= tbl.f) ORDER BY 1
-# ----
-# -inf	inf
-# inf	inf
+query RR
+SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) ON (floats.f <= tbl.f) ORDER BY 1
+----
+-Infinity Infinity
+Infinity Infinity
 
-# TODO: unsupported feature
-# query III
-# SELECT * FROM floats JOIN (SELECT '-inf'::FLOAT, 'inf'::FLOAT) tbl(f,g ) ON (floats.f >= tbl.f AND floats.f <= tbl.g) ORDER BY 1
-# ----
-# -inf	-inf	inf
-# inf	-inf	inf
+query RRR
+SELECT * FROM floats JOIN (SELECT '-inf'::FLOAT, 'inf'::FLOAT) tbl(f,g ) ON (floats.f >= tbl.f AND floats.f <= tbl.g) ORDER BY 1
+----
+-Infinity -Infinity Infinity
+Infinity -Infinity Infinity
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f DOUBLE);
+statement ok
+create table floats(f DOUBLE);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf'), ('-inf'), ('nan');
+statement ok
+insert into floats values ('inf'), ('-inf'), ('nan');
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) USING (f)
-# ----
-# inf
+query R
+SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) USING (f)
+----
+Infinity
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM floats JOIN (SELECT '-inf'::DOUBLE) tbl(f) USING (f)
-# ----
-# -inf
+query R
+SELECT * FROM floats JOIN (SELECT '-inf'::DOUBLE) tbl(f) USING (f)
+----
+-Infinity
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) ON (floats.f >= tbl.f) ORDER BY 1
-# ----
-# inf	inf
-# nan	inf
+query RR
+SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) ON (floats.f >= tbl.f) ORDER BY 1
+----
+Infinity Infinity
+NaN Infinity
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) ON (floats.f <= tbl.f) ORDER BY 1
-# ----
-# -inf	inf
-# inf	inf
+query RR
+SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) ON (floats.f <= tbl.f) ORDER BY 1
+----
+-Infinity Infinity
+Infinity Infinity
 
-# TODO: unsupported feature
-# query III
-# SELECT * FROM floats JOIN (SELECT '-inf'::DOUBLE, 'inf'::DOUBLE) tbl(f,g ) ON (floats.f >= tbl.f AND floats.f <= tbl.g) ORDER BY 1
-# ----
-# -inf	-inf	inf
-# inf	-inf	inf
+query RRR
+SELECT * FROM floats JOIN (SELECT '-inf'::DOUBLE, 'inf'::DOUBLE) tbl(f,g ) ON (floats.f >= tbl.f AND floats.f <= tbl.g) ORDER BY 1
+----
+-Infinity -Infinity Infinity
+Infinity -Infinity Infinity
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats

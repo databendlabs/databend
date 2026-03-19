@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS a
+statement ok
+DROP TABLE IF EXISTS a
 
 # TODO: unsupported feature
 # statement ok
@@ -69,22 +68,17 @@
 
 # incorrect number of struct entries
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO a VALUES (ROW(1, 2, 3))
+statement error
+INSERT INTO a VALUES (ROW(1, 2, 3))
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO a VALUES (ROW(1))
+statement error
+INSERT INTO a VALUES (ROW(1))
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO a VALUES (ROW('hello', 1))
+statement error
+INSERT INTO a VALUES (ROW('hello', 1))
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO a VALUES (ROW('hello', [1, 2]))
+statement error
+INSERT INTO a VALUES (ROW('hello', [1, 2]))
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO a VALUES (ROW(1, ROW(1, 7)))
+statement error
+INSERT INTO a VALUES (ROW(1, ROW(1, 7)))

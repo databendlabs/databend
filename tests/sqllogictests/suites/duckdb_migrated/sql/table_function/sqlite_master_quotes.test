@@ -1,23 +1,18 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS "1a"
+statement ok
+DROP TABLE IF EXISTS "1a"
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS "a b c"
+statement ok
+DROP TABLE IF EXISTS "a b c"
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS "inte""gers"
+statement ok
+DROP TABLE IF EXISTS "inte""gers"
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # simple quotes
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);
+statement ok
+CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);
 
 # TODO: unsupported feature
 # query IIIII
@@ -25,15 +20,13 @@
 # ----
 # table	a b c	a b c	0	CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE "a b c";
+statement ok
+DROP TABLE "a b c";
 
 # quoted quotes
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE "inte""gers"(i INTEGER);
+statement ok
+CREATE TABLE "inte""gers"(i INTEGER);
 
 # TODO: unsupported feature
 # query IIIII
@@ -41,9 +34,8 @@
 # ----
 # table	inte"gers	inte"gers	0	CREATE TABLE "inte""gers"(i INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE "inte""gers"
+statement ok
+DROP TABLE "inte""gers"
 
 # multi-column primary key constraint
 
@@ -63,9 +55,8 @@
 
 # quote with numbers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE "1a"(a1 INTEGER, a2 INTEGER);
+statement ok
+CREATE TABLE "1a"(a1 INTEGER, a2 INTEGER);
 
 # TODO: unsupported feature
 # query IIIII

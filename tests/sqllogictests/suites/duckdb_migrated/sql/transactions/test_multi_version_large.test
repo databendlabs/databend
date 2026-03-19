@@ -1,50 +1,41 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER);
+statement ok
+CREATE TABLE integers(i INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (1), (2), (3), (4);
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4);
 
 # 4 -> 8
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # 8 -> 16
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # 16 -> 32
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # 32 -> 64
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers WHERE i=1
-# ----
-# 16
+query I
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+16
 
 # 64 -> 128
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -54,9 +45,8 @@
 
 # 128 -> 256
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -66,9 +56,8 @@
 
 # 256 -> 512
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -78,9 +67,8 @@
 
 # 512 -> 1024
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -90,9 +78,8 @@
 
 # 1024 -> 2048
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -102,9 +89,8 @@
 
 # 2048 -> 4096
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -114,9 +100,8 @@
 
 # 4096 -> 8192
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -126,9 +111,8 @@
 
 # 8192 -> 16384
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -138,9 +122,8 @@
 
 # 16384 -> 32768
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -150,9 +133,8 @@
 
 # 32768 -> 65536
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # TODO: unsupported feature
 # query II
@@ -162,19 +144,17 @@
 
 # 65536 -> 131072
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM integers
+statement ok
+INSERT INTO integers SELECT * FROM integers
 
 # verify the count and sum
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 131072
+query I
+SELECT COUNT(*) FROM integers
+----
+131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -186,45 +166,39 @@
 # ----
 # 32768	32768
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers WHERE i=2
-# ----
-# 32768
+query I
+SELECT COUNT(*) FROM integers WHERE i=2
+----
+32768
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers WHERE i=3
-# ----
-# 32768
+query I
+SELECT COUNT(*) FROM integers WHERE i=3
+----
+32768
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers WHERE i=4
-# ----
-# 32768
+query I
+SELECT COUNT(*) FROM integers WHERE i=4
+----
+32768
 
 # now delete some tuples
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
-# TODO: unsupported feature
-# query I
-# DELETE FROM integers WHERE i=1
-# ----
-# 32768
+query I
+DELETE FROM integers WHERE i=1
+----
+32768
 
 # check the updated count and sum
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 98304
+query I
+SELECT COUNT(*) FROM integers
+----
+98304
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -232,13 +206,13 @@
 
 # con2 still has the same count and sum
 
-# TODO: unsupported feature
+# TODO: result differs
 # query I
 # SELECT COUNT(*) FROM integers
 # ----
 # 131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -246,19 +220,17 @@
 
 # rollback
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK;
+statement ok
+ROLLBACK;
 
 # now the count and sum are back to normal
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 131072
+query I
+SELECT COUNT(*) FROM integers
+----
+131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -266,23 +238,20 @@
 
 # now delete some tuples
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM integers WHERE i=2
+statement ok
+DELETE FROM integers WHERE i=2
 
 # check the updated count and sum
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 98304
+query I
+SELECT COUNT(*) FROM integers
+----
+98304
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -290,13 +259,13 @@
 
 # con2 still has the same count and sum
 
-# TODO: unsupported feature
+# TODO: result differs
 # query I
 # SELECT COUNT(*) FROM integers
 # ----
 # 131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -304,19 +273,17 @@
 
 # rollback
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK;
+statement ok
+ROLLBACK;
 
 # now the count and sum are back to normal
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 131072
+query I
+SELECT COUNT(*) FROM integers
+----
+131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -324,23 +291,20 @@
 
 # now delete some tuples
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM integers WHERE i=3
+statement ok
+DELETE FROM integers WHERE i=3
 
 # check the updated count and sum
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 98304
+query I
+SELECT COUNT(*) FROM integers
+----
+98304
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -348,13 +312,13 @@
 
 # con2 still has the same count and sum
 
-# TODO: unsupported feature
+# TODO: result differs
 # query I
 # SELECT COUNT(*) FROM integers
 # ----
 # 131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -362,19 +326,17 @@
 
 # rollback
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK;
+statement ok
+ROLLBACK;
 
 # now the count and sum are back to normal
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 131072
+query I
+SELECT COUNT(*) FROM integers
+----
+131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -382,23 +344,20 @@
 
 # now delete some tuples
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM integers WHERE i=4
+statement ok
+DELETE FROM integers WHERE i=4
 
 # check the updated count and sum
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 98304
+query I
+SELECT COUNT(*) FROM integers
+----
+98304
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -406,13 +365,13 @@
 
 # con2 still has the same count and sum
 
-# TODO: unsupported feature
+# TODO: result differs
 # query I
 # SELECT COUNT(*) FROM integers
 # ----
 # 131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----
@@ -420,19 +379,17 @@
 
 # rollback
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK;
+statement ok
+ROLLBACK;
 
 # now the count and sum are back to normal
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 131072
+query I
+SELECT COUNT(*) FROM integers
+----
+131072
 
-# TODO: unsupported feature
+# TODO: result differs
 # query R
 # SELECT SUM(i) FROM integers
 # ----

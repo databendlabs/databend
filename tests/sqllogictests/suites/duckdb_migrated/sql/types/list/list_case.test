@@ -1,59 +1,52 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS a
+statement ok
+DROP TABLE IF EXISTS a
 
-# TODO: unsupported feature
-# query T
-# SELECT case when 1=1 then [1] else [2] end
-# ----
-# [1]
+query T
+SELECT case when 1=1 then [1] else [2] end
+----
+[1]
 
-# TODO: unsupported feature
-# query T
-# SELECT case when 1=0 then [1] else [2] end
-# ----
-# [2]
+query T
+SELECT case when 1=0 then [1] else [2] end
+----
+[2]
 
-# TODO: unsupported feature
-# query T
-# SELECT case when i%2=0 then [i] else [-i] end from range(0, 5) tbl(i)
-# ----
-# [0]
-# [-1]
-# [2]
-# [-3]
-# [4]
+query T
+SELECT case when i%2=0 then [i] else [-i] end from range(0, 5) tbl(i)
+----
+[0]
+[-1]
+[2]
+[-3]
+[4]
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE a AS SELECT case when i%2=0 then null else [i] end i from range(0, 10) tbl(i)
+statement ok
+CREATE TABLE a AS SELECT case when i%2=0 then null else [i] end i from range(0, 10) tbl(i)
 
-# TODO: unsupported feature
-# query I
-# select * from a
-# ----
-# NULL
-# [1]
-# NULL
-# [3]
-# NULL
-# [5]
-# NULL
-# [7]
-# NULL
-# [9]
+query I
+select * from a
+----
+NULL
+[1]
+NULL
+[3]
+NULL
+[5]
+NULL
+[7]
+NULL
+[9]
 
-# TODO: unsupported feature
-# query I
-# select case when i=[1] then [3] else [4] end from a
-# ----
-# [4]
-# [3]
-# [4]
-# [4]
-# [4]
-# [4]
-# [4]
-# [4]
-# [4]
-# [4]
+query I
+select case when i=[1] then [3] else [4] end from a
+----
+[4]
+[3]
+[4]
+[4]
+[4]
+[4]
+[4]
+[4]
+[4]
+[4]

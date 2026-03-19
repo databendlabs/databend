@@ -1,27 +1,23 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl
+statement ok
+DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT i, i % 1000 j FROM range(0, 1000000) tbl(i)
+statement ok
+CREATE TABLE tbl AS SELECT i, i % 1000 j FROM range(0, 1000000) tbl(i)
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM tbl ORDER BY j, i LIMIT 5
-# ----
-# 0	0
-# 1000	0
-# 2000	0
-# 3000	0
-# 4000	0
+query II
+SELECT * FROM tbl ORDER BY j, i LIMIT 5
+----
+0	0
+1000	0
+2000	0
+3000	0
+4000	0
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM tbl ORDER BY j DESC, i DESC LIMIT 5
-# ----
-# 999999	999
-# 998999	999
-# 997999	999
-# 996999	999
-# 995999	999
+query II
+SELECT * FROM tbl ORDER BY j DESC, i DESC LIMIT 5
+----
+999999	999
+998999	999
+997999	999
+996999	999
+995999	999

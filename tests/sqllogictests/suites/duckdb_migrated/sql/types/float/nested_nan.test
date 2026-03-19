@@ -1,23 +1,19 @@
-# TODO: unsupported feature
-# query I
-# SELECT ['nan'::double]
-# ----
-# [nan]
+query I
+SELECT ['nan'::double]
+----
+[NaN]
 
-# TODO: unsupported feature
-# query I
-# SELECT UNNEST(['nan'::double])
-# ----
-# nan
+query R
+SELECT UNNEST(['nan'::double])
+----
+NaN
 
-# TODO: unsupported feature
-# query I
-# SELECT {'a': 'nan'::double}
-# ----
-# {'a': nan}
+query I
+SELECT {'a': 'nan'::double}
+----
+{"a":NaN}
 
-# TODO: unsupported feature
-# query I
-# SELECT ({'a': 'nan'::double}).a
-# ----
-# nan
+query R
+SELECT ({'a': 'nan'::double}).a
+----
+NaN

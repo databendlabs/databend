@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok
@@ -12,9 +11,8 @@
 
 # local delete
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # "1" exists for both transactions
 
@@ -53,9 +51,8 @@
 # statement ok
 # DELETE FROM integers WHERE i=1
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
 # TODO: unsupported feature
 # query I
@@ -71,9 +68,8 @@
 
 # local update of primary key column
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # 1 => 4
 
@@ -132,9 +128,8 @@
 
 # commit
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # TODO: unsupported feature
 # query I

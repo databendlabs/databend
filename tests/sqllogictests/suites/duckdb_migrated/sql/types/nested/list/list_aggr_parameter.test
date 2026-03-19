@@ -18,22 +18,17 @@
 
 # non-constant argument (not supported right now)
 
-# TODO: unsupported feature
-# statement error
-# SELECT list_aggr([0, 1, 2, 3], 'arg_min', i) FROM range(1, 4) tbl(i);
+statement error
+SELECT list_aggr([0, 1, 2, 3], 'arg_min', i) FROM range(1, 4) tbl(i);
 
-# TODO: unsupported feature
-# statement error
-# SELECT list_aggr(list(i), 'quantile') FROM range(0, 10) tbl(i);
+statement error
+SELECT list_aggr(list(i), 'quantile') FROM range(0, 10) tbl(i);
 
-# TODO: unsupported feature
-# statement error
-# SELECT list_aggr(list(i), 'min', 1) FROM range(0, 10) tbl(i);
+statement error
+SELECT list_aggr(list(i), 'min', 1) FROM range(0, 10) tbl(i);
 
-# TODO: unsupported feature
-# statement error
-# SELECT list_aggr(list(i), 'quantile', 0.5, 0.3, 0.5) FROM range(0, 10) tbl(i);
+statement error
+SELECT list_aggr(list(i), 'quantile', 0.5, 0.3, 0.5) FROM range(0, 10) tbl(i);
 
-# TODO: unsupported feature
-# statement error
-# SELECT list_aggr(list(i), 'quantile', i) FROM range(0, 10) tbl(i);
+statement error
+SELECT list_aggr(list(i), 'quantile', i) FROM range(0, 10) tbl(i);

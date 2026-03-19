@@ -1,0 +1,43 @@
+# name: test/sql/tpcds/tpcds_sf0.test
+# description: Test TPC-DS SF0
+# group: [tpcds]
+
+# require tpcds
+
+# TODO: unsupported feature
+# statement ok
+# CALL dsdgen(sf=0)
+
+# loop i 1 100
+
+# TODO: unsupported feature
+# statement ok
+# PRAGMA tpcds(${i})
+
+# endloop
+
+# out of range
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpcds(-1)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpcds(3290819023812038903)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpcds(32908301298)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpcds(1.1)
+# ----
+
+# queries
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM tpcds_queries()

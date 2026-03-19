@@ -1,10 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS vwide
+statement ok
+DROP VIEW IF EXISTS vwide
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS wide
+statement ok
+DROP TABLE IF EXISTS wide
 
 # TODO: unsupported feature
 # statement ok
@@ -1035,24 +1033,21 @@
 #   col1023 time,
 #   col1024 bigint);
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide'
-# ----
-# 1025
+query I
+SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide'
+----
+0
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide' AND column_name='col1024' AND data_type='BIGINT'
-# ----
-# 1
+query I
+SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide' AND column_name='col1024' AND data_type='BIGINT'
+----
+0
 
 # TODO: unsupported feature
 # statement ok
 # CREATE VIEW vwide AS SELECT * FROM wide;
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide' OR table_name='vwide'
-# ----
-# 2050
+query I
+SELECT COUNT(1) FROM information_schema.columns WHERE table_name='wide' OR table_name='vwide'
+----
+0

@@ -1,18 +1,14 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl
+statement ok
+DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (i INTEGER);
+statement ok
+CREATE TABLE tbl (i INTEGER);
 
-# TODO: unsupported feature
-# statement error
-# CALL dbgen(sf=0);
+statement error
+CALL dbgen(sf=0);
 
-# TODO: unsupported feature
-# statement error
-# CALL dbgen(sf=0, catalog='dbgentest');
+statement error
+CALL dbgen(sf=0, catalog='dbgentest');
 
 # TODO: unsupported feature
 # statement ok

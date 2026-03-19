@@ -1,43 +1,32 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS t1
+statement ok
+DROP TABLE IF EXISTS t1
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t1(a INT, b INT[0]);
+statement error
+CREATE TABLE t1(a INT, b INT[0]);
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t1(a INT, b INT[4294967299]);
+statement error
+CREATE TABLE t1(a INT, b INT[4294967299]);
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t1(a INT, b INT[2147483647]);
+statement error
+CREATE TABLE t1(a INT, b INT[2147483647]);
 
-# TODO: unsupported feature
-# statement error
-# SELECT array_value();
+statement error
+SELECT array_value();
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t1(a INT, b INT[-1]);
+statement error
+CREATE TABLE t1(a INT, b INT[-1]);
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t1(a INT, b INT['foobar']);
+statement error
+CREATE TABLE t1(a INT, b INT['foobar']);
 
-# TODO: unsupported feature
-# statement error
-# SELECT ([1,2,3]::INTEGER[3])::INTEGER[0];
+statement error
+SELECT ([1,2,3]::INTEGER[3])::INTEGER[0];
 
-# TODO: unsupported feature
-# statement error
-# SELECT ([1,2,3]::INTEGER[3])::INTEGER[-1];
+statement error
+SELECT ([1,2,3]::INTEGER[3])::INTEGER[-1];
 
-# TODO: unsupported feature
-# statement error
-# SELECT ([1,2,3]::INTEGER[3])::INTEGER[1.5];
+statement error
+SELECT ([1,2,3]::INTEGER[3])::INTEGER[1.5];
 
-# TODO: unsupported feature
-# statement error
-# SELECT ([1,2,3]::INTEGER[3])::INTEGER['foobar'];
+statement error
+SELECT ([1,2,3]::INTEGER[3])::INTEGER['foobar'];

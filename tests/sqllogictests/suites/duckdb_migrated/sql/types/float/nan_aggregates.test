@@ -1,75 +1,60 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS floats
+statement ok
+DROP TABLE IF EXISTS floats
 
-# TODO: unsupported feature
-# query III
-# SELECT SUM('inf'::FLOAT), SUM('-inf'::FLOAT), SUM('nan'::FLOAT)
-# ----
-# inf	-inf	nan
+query RRR
+SELECT SUM('inf'::FLOAT), SUM('-inf'::FLOAT), SUM('nan'::FLOAT)
+----
+Infinity -Infinity NaN
 
-# TODO: unsupported feature
-# query III
-# SELECT MIN('inf'::FLOAT), MIN('-inf'::FLOAT), MIN('nan'::FLOAT)
-# ----
-# inf	-inf	nan
+query RRR
+SELECT MIN('inf'::FLOAT), MIN('-inf'::FLOAT), MIN('nan'::FLOAT)
+----
+Infinity -Infinity NaN
 
-# TODO: unsupported feature
-# query III
-# SELECT MAX('inf'::FLOAT), MAX('-inf'::FLOAT), MAX('nan'::FLOAT)
-# ----
-# inf	-inf	nan
+query RRR
+SELECT MAX('inf'::FLOAT), MAX('-inf'::FLOAT), MAX('nan'::FLOAT)
+----
+Infinity -Infinity NaN
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f FLOAT);
+statement ok
+create table floats(f FLOAT);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf'), ('-inf'), ('nan');
+statement ok
+insert into floats values ('inf'), ('-inf'), ('nan');
 
-# TODO: unsupported feature
-# query II
-# SELECT MIN(f), MAX(f) FROM floats
-# ----
-# -inf	nan
+query RR
+SELECT MIN(f), MAX(f) FROM floats
+----
+-Infinity NaN
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats
 
-# TODO: unsupported feature
-# query III
-# SELECT SUM('inf'::DOUBLE), SUM('-inf'::DOUBLE), SUM('nan'::DOUBLE)
-# ----
-# inf	-inf	nan
+query RRR
+SELECT SUM('inf'::DOUBLE), SUM('-inf'::DOUBLE), SUM('nan'::DOUBLE)
+----
+Infinity -Infinity NaN
 
-# TODO: unsupported feature
-# query III
-# SELECT MIN('inf'::DOUBLE), MIN('-inf'::DOUBLE), MIN('nan'::DOUBLE)
-# ----
-# inf	-inf	nan
+query RRR
+SELECT MIN('inf'::DOUBLE), MIN('-inf'::DOUBLE), MIN('nan'::DOUBLE)
+----
+Infinity -Infinity NaN
 
-# TODO: unsupported feature
-# query III
-# SELECT MAX('inf'::DOUBLE), MAX('-inf'::DOUBLE), MAX('nan'::DOUBLE)
-# ----
-# inf	-inf	nan
+query RRR
+SELECT MAX('inf'::DOUBLE), MAX('-inf'::DOUBLE), MAX('nan'::DOUBLE)
+----
+Infinity -Infinity NaN
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f DOUBLE);
+statement ok
+create table floats(f DOUBLE);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf'), ('-inf'), ('nan');
+statement ok
+insert into floats values ('inf'), ('-inf'), ('nan');
 
-# TODO: unsupported feature
-# query II
-# SELECT MIN(f), MAX(f) FROM floats
-# ----
-# -inf	nan
+query RR
+SELECT MIN(f), MAX(f) FROM floats
+----
+-Infinity NaN
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats

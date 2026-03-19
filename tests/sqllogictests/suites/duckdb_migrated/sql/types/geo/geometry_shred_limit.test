@@ -1,22 +1,18 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS t1
+statement ok
+DROP TABLE IF EXISTS t1
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t1(g GEOMETRY);
+statement ok
+CREATE TABLE t1(g GEOMETRY);
 
 # Insert point
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t1 VALUES ('POINT(0 0)'::GEOMETRY);
+statement ok
+INSERT INTO t1 VALUES ('POINT(0 0)'::GEOMETRY);
 
 # Another point
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t1 VALUES ('POINT(1 1)'::GEOMETRY);
+statement ok
+INSERT INTO t1 VALUES ('POINT(1 1)'::GEOMETRY);
 
 # Check segments
 
@@ -42,9 +38,8 @@
 
 # Now insert third point to exceed threshold
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t1 VALUES ('POINT(2 2)'::GEOMETRY);
+statement ok
+INSERT INTO t1 VALUES ('POINT(2 2)'::GEOMETRY);
 
 # TODO: unsupported feature
 # statement ok

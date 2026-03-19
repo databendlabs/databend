@@ -1,14 +1,11 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS b
+statement ok
+DROP TABLE IF EXISTS b
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE b(b blob);
+statement ok
+CREATE TABLE b(b blob);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO b VALUES (NULL);
+statement ok
+INSERT INTO b VALUES (NULL);
 
 # TODO: unsupported feature
 # statement ok

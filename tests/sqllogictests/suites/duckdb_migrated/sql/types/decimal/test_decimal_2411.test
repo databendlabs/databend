@@ -1,29 +1,22 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS decimals
+statement ok
+DROP TABLE IF EXISTS decimals
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS decimals2
+statement ok
+DROP TABLE IF EXISTS decimals2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE decimals(i DECIMAL(38,1))
+statement ok
+CREATE TABLE decimals(i DECIMAL(38,1))
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE decimals2(i DECIMAL(38,1))
+statement ok
+CREATE TABLE decimals2(i DECIMAL(38,1))
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO decimals VALUES (4642275147320176030871715840)
+statement ok
+INSERT INTO decimals VALUES (4642275147320176030871715840)
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO decimals2 VALUES (4642275147320176030871715840)
+statement ok
+INSERT INTO decimals2 VALUES (4642275147320176030871715840)
 
-# TODO: unsupported feature
-# query I
-# select count(*) from decimals inner join decimals2 on (decimals.i = decimals2.i)
-# ----
-# 1
+query I
+select count(*) from decimals inner join decimals2 on (decimals.i = decimals2.i)
+----
+1

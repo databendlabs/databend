@@ -31,6 +31,5 @@
 # ----
 # GEOMETRY('OGC:CRS84')
 
-# TODO: unsupported feature
-# statement error
-# select typeof('POINT(0 1)'::GEOMETRY('GEOGCRS["WGS 84",foo[]'));
+statement error
+select typeof('POINT(0 1)'::GEOMETRY('GEOGCRS["WGS 84",foo[]'));

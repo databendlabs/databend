@@ -3,10 +3,10 @@
 # DROP TABLE IF EXISTS floats
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'NAN'::FLOAT
 # ----
-# nan
+# NaN
 
 # storing nan in a table
 
@@ -28,19 +28,19 @@
 # nan comparison
 
 # TODO: unsupported feature
-# query I
+# query B
 # select 'nan'::FLOAT = 'nan'::FLOAT
 # ----
 # 1
 
 # TODO: unsupported feature
-# query I
+# query B
 # select 'nan'::FLOAT <> 'nan'::FLOAT
 # ----
 # 0
 
 # TODO: unsupported feature
-# query I
+# query B
 # select 'nan'::FLOAT <> 3.0::FLOAT
 # ----
 # 1

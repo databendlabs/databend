@@ -1,22 +1,17 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS v1
+statement ok
+DROP VIEW IF EXISTS v1
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tconstraint1
+statement ok
+DROP TABLE IF EXISTS tconstraint1
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tconstraint2
+statement ok
+DROP TABLE IF EXISTS tconstraint2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER);
+statement ok
+CREATE TABLE integers(i INTEGER);
 
 # TODO: unsupported feature
 # query IIIII
@@ -78,9 +73,8 @@
 # ----
 # index	i_index	integers	0	CREATE INDEX i_index ON integers(i);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v1 AS SELECT 42
+statement ok
+CREATE VIEW v1 AS SELECT 42
 
 # TODO: unsupported feature
 # query IIII

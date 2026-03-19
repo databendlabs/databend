@@ -1,3 +1,2 @@
-# TODO: unsupported feature
-# statement error
-# SELECT REPEAT ( '[{"a":' , 100000 )::INT[]
+statement error
+SELECT REPEAT ( '[{"a":' , 100000 )::INT[]

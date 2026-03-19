@@ -34,9 +34,9 @@
 # query I
 # SELECT MAP(['name'], [i]) FROM ints;
 # ----
-# {name=1}
-# {name=2}
-# {name=3}
+# {"name":1}
+# {"name":2}
+# {"name":3}
 
 # TODO: unsupported feature
 # statement error
@@ -83,9 +83,9 @@
 # query I
 # SELECT MAP(['🦆', '🦤', '🐓'], [i, i+1, i+2]) FROM ints;
 # ----
-# {🦆=1, 🦤=2, 🐓=3}
-# {🦆=2, 🦤=3, 🐓=4}
-# {🦆=3, 🦤=4, 🐓=5}
+# {"🦆":1,"🦤":2,"🐓":3}
+# {"🦆":2,"🦤":3,"🐓":4}
+# {"🦆":3,"🦤":4,"🐓":5}
 
 # TODO: unsupported feature
 # query I

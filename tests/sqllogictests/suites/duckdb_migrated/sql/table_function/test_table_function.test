@@ -1,14 +1,11 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS join_table
+statement ok
+DROP TABLE IF EXISTS join_table
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER, j INTEGER);
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
 
 # SELECT * from table function
 
@@ -30,17 +27,14 @@
 
 # project column that is not in function return
 
-# TODO: unsupported feature
-# statement error
-# SELECT blablabla FROM pragma_table_info('integers');
+statement error
+SELECT blablabla FROM pragma_table_info('integers');
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE join_table(name VARCHAR, value INTEGER);
+statement ok
+CREATE TABLE join_table(name VARCHAR, value INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO join_table VALUES ('i', 33), ('j', 44)
+statement ok
+INSERT INTO join_table VALUES ('i', 33), ('j', 44)
 
 # TODO: unsupported feature
 # query TII

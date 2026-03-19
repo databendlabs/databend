@@ -49,7 +49,7 @@
 # query I
 # SELECT * FROM repeat(1, 10000)
 # ----
-# # TODO: hash result
+# TODO: hash result
 
 # date
 

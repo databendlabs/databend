@@ -1,14 +1,11 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS aliens
+statement ok
+DROP TABLE IF EXISTS aliens
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS person
+statement ok
+DROP TABLE IF EXISTS person
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS pets
+statement ok
+DROP TABLE IF EXISTS pets
 
 # TODO: unsupported feature
 # statement ok
@@ -16,12 +13,11 @@
 
 # Test with non existent alias type
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE person (
-#     name text,
-#     current_car car
-# );
+statement error
+CREATE TABLE person (
+    name text,
+    current_car car
+);
 
 # TODO: unsupported feature
 # statement ok
@@ -110,12 +106,11 @@
 
 # Creating a new table should not
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE aliens (
-#     name text,
-#     current_alias alias
-# );
+statement error
+CREATE TABLE aliens (
+    name text,
+    current_alias alias
+);
 
 # TODO: unsupported feature
 # statement ok

@@ -1,29 +1,22 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS dates
+statement ok
+DROP TABLE IF EXISTS dates
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS timestamp
+statement ok
+DROP TABLE IF EXISTS timestamp
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE dates(i DATE)
+statement ok
+CREATE TABLE dates(i DATE)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE timestamp(i TIMESTAMP)
+statement ok
+CREATE TABLE timestamp(i TIMESTAMP)
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO dates VALUES ('1993-08-14')
+statement ok
+INSERT INTO dates VALUES ('1993-08-14')
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO timestamp VALUES ('1993-08-14 00:00:01')
+statement ok
+INSERT INTO timestamp VALUES ('1993-08-14 00:00:01')
 
-# TODO: unsupported feature
-# query I
-# select count(*) from dates inner join timestamp on (timestamp.i::DATE = dates.i)
-# ----
-# 1
+query I
+select count(*) from dates inner join timestamp on (timestamp.i::DATE = dates.i)
+----
+1

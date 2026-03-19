@@ -17,7 +17,7 @@
 # query I
 # SELECT [3, 4]
 # ----
-# [3, 4]
+# [3,4]
 
 # TODO: unsupported feature
 # query II
@@ -43,13 +43,13 @@
 # query I
 # SELECT ['hello', 'world']
 # ----
-# [hello, world]
+# ["hello","world"]
 
 # TODO: unsupported feature
 # query I
 # SELECT [interval 1 year, interval 2 year]
 # ----
-# [1 year, 2 years]
+# ["1 year","2 years"]
 
 # TODO: unsupported feature
 # statement ok

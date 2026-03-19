@@ -1,23 +1,20 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS list_int
+statement ok
+DROP VIEW IF EXISTS list_int
 
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS list_str
+statement ok
+DROP VIEW IF EXISTS list_str
 
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW list_int AS
-# SELECT * FROM (VALUES
-# 	([1]),
-# 	([1, 2]),
-# 	([1, NULL]),
-# 	([NULL, 2]),
-# 	([NULL, NULL]),
-# 	([NULL]),
-# 	(NULL)
-# ) tbl(i);
+statement ok
+CREATE VIEW list_int AS
+SELECT * FROM (VALUES
+	([1]),
+	([1, 2]),
+	([1, NULL]),
+	([NULL, 2]),
+	([NULL, NULL]),
+	([NULL]),
+	(NULL)
+) tbl(i);
 
 # TODO: unsupported feature
 # query IITTTTTTTT
@@ -81,18 +78,17 @@
 
 # String lists with NULLs in various positions
 
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW list_str AS
-# SELECT * FROM (VALUES
-# 	(['duck']),
-# 	(['duck', 'goose']),
-# 	(['duck', NULL]),
-# 	([NULL, 'goose']),
-# 	([NULL, NULL]),
-# 	([NULL]),
-# 	(NULL)
-# ) tbl(i);
+statement ok
+CREATE VIEW list_str AS
+SELECT * FROM (VALUES
+	(['duck']),
+	(['duck', 'goose']),
+	(['duck', NULL]),
+	([NULL, 'goose']),
+	([NULL, NULL]),
+	([NULL]),
+	(NULL)
+) tbl(i);
 
 # TODO: unsupported feature
 # query IITTTTTTTT

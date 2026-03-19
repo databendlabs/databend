@@ -1,26 +1,20 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS src
+statement ok
+DROP TABLE IF EXISTS src
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS test
+statement ok
+DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test AS SELECT i AS a FROM range (2048, 5000, 1) t1(i)
+statement ok
+CREATE TABLE test AS SELECT i AS a FROM range (2048, 5000, 1) t1(i)
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (1), (2), (3)
+statement ok
+INSERT INTO test VALUES (1), (2), (3)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE src(b INTEGER)
+statement ok
+CREATE TABLE src(b INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO src VALUES (3), (2), (1), (4)
+statement ok
+INSERT INTO src VALUES (3), (2), (1), (4)
 
 # TODO: unsupported feature
 # query IIII
@@ -30,26 +24,23 @@
 # 1	2	2953	2
 # 0	3	2954	3   
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
 # UPDATE src SET b = 10000 WHERE src.rowid = 0 OR src.rowid = 1 OR src.rowid = 3
 
-# TODO: unsupported feature
-# query I
-# SELECT b FROM src
-# ----
-# 10000
-# 10000
-# 1
-# 10000
+query I
+SELECT b FROM src
+----
+3
+2
+1
+4
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement error

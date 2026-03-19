@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok
@@ -14,9 +13,8 @@
 
 # start a transaction where we insert a lot of values, and finally insert the conflict
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -24,13 +22,11 @@
 
 # inserting the value "1" here fails
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (1)
+statement error
+INSERT INTO integers VALUES (1)
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
 # TODO: unsupported feature
 # query I

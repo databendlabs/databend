@@ -1,54 +1,45 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS issue14384
+statement ok
+DROP TABLE IF EXISTS issue14384
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '30' DAY > INTERVAL '1' MONTH
-# ----
-# 0
+query B
+SELECT INTERVAL '30' DAY > INTERVAL '1' MONTH
+----
+0
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '30' DAY = INTERVAL '1' MONTH
-# ----
-# 1
+query B
+SELECT INTERVAL '30' DAY = INTERVAL '1' MONTH
+----
+1
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '30' DAY >= INTERVAL '1' MONTH
-# ----
-# 1
+query B
+SELECT INTERVAL '30' DAY >= INTERVAL '1' MONTH
+----
+1
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '31' DAY > INTERVAL '1' MONTH
-# ----
-# 1
+query B
+SELECT INTERVAL '31' DAY > INTERVAL '1' MONTH
+----
+1
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '1' HOUR < INTERVAL '1' DAY
-# ----
-# 1
+query B
+SELECT INTERVAL '1' HOUR < INTERVAL '1' DAY
+----
+1
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '30' HOUR <= INTERVAL '1' DAY
-# ----
-# 0
+query B
+SELECT INTERVAL '30' HOUR <= INTERVAL '1' DAY
+----
+0
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '1' HOUR = INTERVAL '1' HOUR
-# ----
-# 1
+query B
+SELECT INTERVAL '1' HOUR = INTERVAL '1' HOUR
+----
+1
 
-# TODO: unsupported feature
-# query T
-# SELECT INTERVAL '1' YEAR = INTERVAL '12' MONTH
-# ----
-# 1
+query B
+SELECT INTERVAL '1' YEAR = INTERVAL '12' MONTH
+----
+1
 
 # Double carry left
 
@@ -60,9 +51,8 @@
 
 # Sorting with normalisation
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE issue14384(i INTERVAL);
+statement ok
+CREATE TABLE issue14384(i INTERVAL);
 
 # TODO: unsupported feature
 # statement ok
@@ -184,16 +174,15 @@
 # 2 years 3 months	1000 days
 # 2 years 3 months	1000 days
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO issue14384(i) VALUES 
-# 	('1000 DAY'),
-# 	('28 days 432000 seconds'),
-# 	('1 month 3 days'),
-# 	('2147483647 months 2147483647 days 9223372036854775807 microseconds'),
-# 	('-2147483648 months -2147483648 days -9223372036854775807 microseconds'),
-# 	(NULL)
-# ;
+statement ok
+INSERT INTO issue14384(i) VALUES 
+	('1000 DAY'),
+	('28 days 432000 seconds'),
+	('1 month 3 days'),
+	('2147483647 months 2147483647 days 9223372036854775807 microseconds'),
+	('-2147483648 months -2147483648 days -9223372036854775807 microseconds'),
+	(NULL)
+;
 
 # TODO: unsupported feature
 # query I

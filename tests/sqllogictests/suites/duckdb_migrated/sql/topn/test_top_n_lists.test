@@ -1,58 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl
+statement ok
+DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT [i] l FROM range(0, 1000) tbl(i) UNION ALL SELECT NULL l FROM range(0, 3)
-
-# TODO: unsupported feature
-# query I
-# SELECT l FROM tbl ORDER BY l NULLS FIRST LIMIT 5
-# ----
-# NULL
-# NULL
-# NULL
-# [0]
-# [1]
-
-# TODO: unsupported feature
-# query I
-# SELECT l FROM tbl ORDER BY l NULLS LAST LIMIT 5
-# ----
-# [0]
-# [1]
-# [2]
-# [3]
-# [4]
-
-# TODO: unsupported feature
-# query I
-# SELECT l FROM tbl ORDER BY l DESC NULLS FIRST LIMIT 5
-# ----
-# NULL
-# NULL
-# NULL
-# [999]
-# [998]
-
-# TODO: unsupported feature
-# query I
-# SELECT l FROM tbl ORDER BY l DESC NULLS LAST LIMIT 5
-# ----
-# [999]
-# [998]
-# [997]
-# [996]
-# [995]
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE tbl
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT NULL l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
+statement ok
+CREATE TABLE tbl AS SELECT [i] l FROM range(0, 1000) tbl(i) UNION ALL SELECT NULL l FROM range(0, 3)
 
 # TODO: unsupported feature
 # query I
@@ -94,21 +44,63 @@
 # [996]
 # [995]
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE tbl
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT NULL l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
 
 # TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT NULL l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
+# query I
+# SELECT l FROM tbl ORDER BY l NULLS FIRST LIMIT 5
+# ----
+# NULL
+# NULL
+# NULL
+# [0]
+# [1]
 
 # TODO: unsupported feature
-# statement ok
-# DROP TABLE tbl
+# query I
+# SELECT l FROM tbl ORDER BY l NULLS LAST LIMIT 5
+# ----
+# [0]
+# [1]
+# [2]
+# [3]
+# [4]
 
 # TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT [i] l FROM range(0, 1000) tbl(i) UNION ALL SELECT [NULL] l FROM range(0, 3)
+# query I
+# SELECT l FROM tbl ORDER BY l DESC NULLS FIRST LIMIT 5
+# ----
+# NULL
+# NULL
+# NULL
+# [999]
+# [998]
+
+# TODO: unsupported feature
+# query I
+# SELECT l FROM tbl ORDER BY l DESC NULLS LAST LIMIT 5
+# ----
+# [999]
+# [998]
+# [997]
+# [996]
+# [995]
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT NULL l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT [i] l FROM range(0, 1000) tbl(i) UNION ALL SELECT [NULL] l FROM range(0, 3)
 
 # TODO: unsupported feature
 # query I
@@ -150,13 +142,11 @@
 # [999]
 # [998]
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE tbl
+statement ok
+DROP TABLE tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT [NULL] l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
+statement ok
+CREATE TABLE tbl AS SELECT [NULL] l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
 
 # TODO: unsupported feature
 # query I
@@ -198,13 +188,11 @@
 # [999]
 # [998]
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE tbl
+statement ok
+DROP TABLE tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT [NULL] l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
+statement ok
+CREATE TABLE tbl AS SELECT [NULL] l FROM range(0, 3) UNION ALL SELECT [i] l FROM range(0, 1000) tbl(i)
 
 
 # bigger lists

@@ -1,11 +1,9 @@
 # start a transaction for both nodes
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # create a sequence in node one
 
@@ -23,23 +21,19 @@
 
 # node two can't see it
 
-# TODO: unsupported feature
-# statement error
-# SELECT nextval('seq');
+statement error
+SELECT nextval('seq');
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # node two still can't see it
 
-# TODO: unsupported feature
-# statement error
-# SELECT nextval('seq');
+statement error
+SELECT nextval('seq');
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # we can now see the sequence in node two
 
@@ -51,9 +45,8 @@
 
 # drop sequence seq in a transaction
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -61,9 +54,8 @@
 
 # node one can't use it anymore
 
-# TODO: unsupported feature
-# statement error
-# SELECT nextval('seq');
+statement error
+SELECT nextval('seq');
 
 # TODO: unsupported feature
 # query I
@@ -73,9 +65,8 @@
 
 # rollback cancels the drop sequence
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK;
+statement ok
+ROLLBACK;
 
 # we can still use it
 
@@ -93,10 +84,8 @@
 
 # we can't use it anymore
 
-# TODO: unsupported feature
-# statement error
-# SELECT nextval('seq');
+statement error
+SELECT nextval('seq');
 
-# TODO: unsupported feature
-# statement error
-# SELECT nextval('seq');
+statement error
+SELECT nextval('seq');

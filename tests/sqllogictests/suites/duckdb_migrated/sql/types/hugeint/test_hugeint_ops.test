@@ -1,11 +1,12 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS hugeints
+# name: test/sql/types/hugeint/test_hugeint_ops.test
+# description: Test various huge integer ops
+# group: [hugeint]
 
 # TODO: unsupported feature
 # statement ok
-# DROP TABLE IF EXISTS hugeints2
+# PRAGMA enable_verification
 
+# test storage of the HUGEINT type
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE hugeints(h HUGEINT);
@@ -20,7 +21,6 @@
 # SELECT h::INTEGER FROM hugeints
 
 # filter before cast works
-
 # TODO: unsupported feature
 # query I
 # SELECT h::INTEGER FROM hugeints WHERE h < 100
@@ -28,7 +28,6 @@
 # 42
 
 # test different comparison ops
-
 # TODO: unsupported feature
 # query I
 # SELECT COUNT(*) FROM hugeints WHERE h = 42::HUGEINT
@@ -66,7 +65,6 @@
 # 2
 
 # joins
-
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE hugeints2(h HUGEINT);

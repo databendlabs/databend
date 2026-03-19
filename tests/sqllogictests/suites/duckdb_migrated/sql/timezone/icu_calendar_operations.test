@@ -1,57 +1,45 @@
 # Normalise the testing locale
-# TODO: unsupported feature
-# statement error
-# select age('2020-01-01'::timestamptz);
+statement error
+select age('2020-01-01'::timestamptz);
 
-# TODO: unsupported feature
-# statement error
-# select '2020-01-01'::timestamptz + interval '380 days'
+statement error
+select '2020-01-01'::timestamptz + interval '380 days'
 
-# TODO: unsupported feature
-# statement error
-# select '2021-01-01'::timestamptz - interval '380 days'
+statement error
+select '2021-01-01'::timestamptz - interval '380 days'
 
-# TODO: unsupported feature
-# statement error
-# select 
-# 	'2020-01-01'::timestamptz as start_date,
-# 	'2021-01-01'::timestamptz as end_date,
-# 	age(end_date, start_date) as delta;
+statement error
+select 
+	'2020-01-01'::timestamptz as start_date,
+	'2021-01-01'::timestamptz as end_date,
+	age(end_date, start_date) as delta;
 
-# TODO: unsupported feature
-# statement error
-# select age('2020-01-01'::timestamptz);
+statement error
+select age('2020-01-01'::timestamptz);
 
-# TODO: unsupported feature
-# statement error
-# select '2020-01-01'::timestamptz + interval '380 days'
+statement error
+select '2020-01-01'::timestamptz + interval '380 days'
 
-# TODO: unsupported feature
-# statement error
-# select '2021-01-01'::timestamptz - interval '380 days'
+statement error
+select '2021-01-01'::timestamptz - interval '380 days'
 
-# TODO: unsupported feature
-# statement error
-# select 
-# 	'2020-01-01'::timestamptz as start_date,
-# 	'2021-01-01'::timestamptz as end_date,
-# 	age(end_date, start_date) as delta;
+statement error
+select 
+	'2020-01-01'::timestamptz as start_date,
+	'2021-01-01'::timestamptz as end_date,
+	age(end_date, start_date) as delta;
 
-# TODO: unsupported feature
-# statement error
-# select age('2020-01-01'::timestamptz);
+statement error
+select age('2020-01-01'::timestamptz);
 
-# TODO: unsupported feature
-# statement error
-# select '2020-01-01'::timestamptz + interval '380 days'
+statement error
+select '2020-01-01'::timestamptz + interval '380 days'
 
-# TODO: unsupported feature
-# statement error
-# select '2021-01-01'::timestamptz - interval '380 days'
+statement error
+select '2021-01-01'::timestamptz - interval '380 days'
 
-# TODO: unsupported feature
-# statement error
-# select 
-# 	'2020-01-01'::timestamptz as start_date,
-# 	'2021-01-01'::timestamptz as end_date,
-# 	age(end_date, start_date) as delta;
+statement error
+select 
+	'2020-01-01'::timestamptz as start_date,
+	'2021-01-01'::timestamptz as end_date,
+	age(end_date, start_date) as delta;

@@ -1,17 +1,16 @@
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(0, 10, 1)
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-# 5
-# 6
-# 7
-# 8
-# 9
+query I
+SELECT * FROM range(0, 10, 1)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
 
 # TODO: unsupported feature
 # query I
@@ -30,66 +29,61 @@
 
 # generate_series is similar to range, but has inclusive bounds (for postgres compatibility)
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM generate_series(0, 10, 1)
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-# 5
-# 6
-# 7
-# 8
-# 9
-# 10
+query I
+SELECT * FROM generate_series(0, 10, 1)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(10, 0, -1) ORDER BY 1 ASC
-# ----
-# 1
-# 2
-# 3
-# 4
-# 5
-# 6
-# 7
-# 8
-# 9
-# 10
+query I
+SELECT * FROM range(10, 0, -1) ORDER BY 1 ASC
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM generate_series(10, 0, -1) ORDER BY 1 ASC
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-# 5
-# 6
-# 7
-# 8
-# 9
-# 10
+query I
+SELECT * FROM generate_series(10, 0, -1) ORDER BY 1 ASC
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(0, -5, -1)
-# ----
-# 0
-# -1
-# -2
-# -3
-# -4
+query I
+SELECT * FROM range(0, -5, -1)
+----
+0
+-1
+-2
+-3
+-4
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM range(0, 10, 0)
+statement error
+SELECT * FROM range(0, 10, 0)
 
 # TODO: unsupported feature
 # query I
@@ -104,89 +98,78 @@
 # overloads
 # only one parameter defaults to start=0, interval=1
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(0, 10)
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-# 5
-# 6
-# 7
-# 8
-# 9
+query I
+SELECT * FROM range(0, 10)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
 
 # two parameters defaults to interval=1
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(0, 10)
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-# 5
-# 6
-# 7
-# 8
-# 9
+query I
+SELECT * FROM range(0, 10)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
 
-# TODO: unsupported feature
-# query I
-# SELECT EXISTS(SELECT * FROM range(0, 10))
-# ----
-# 1
+query B
+SELECT EXISTS(SELECT * FROM range(0, 10))
+----
+1
 
-# TODO: unsupported feature
-# query I
-# SELECT EXISTS(SELECT * FROM range(0, 0))
-# ----
-# 0
+query B
+SELECT EXISTS(SELECT * FROM range(0, 0))
+----
+0
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(0, 10) t1(j) WHERE j=3
-# ----
-# 3
+query I
+SELECT * FROM range(0, 10) t1(j) WHERE j=3
+----
+3
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM range('hello')
+statement error
+SELECT * FROM range('hello')
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM range(10, 'hello')
+statement error
+SELECT * FROM range(10, 'hello')
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM range(10, 10, 'hello')
+statement error
+SELECT * FROM range(10, 10, 'hello')
 
-# TODO: unsupported feature
-# query I
-# select * from generate_series(-2305843009213693951, 2305843009213693951, 2305843009213693951)
-# ----
-# -2305843009213693951
-# 0
-# 2305843009213693951
+query I
+select * from generate_series(-2305843009213693951, 2305843009213693951, 2305843009213693951)
+----
+-2305843009213693951
+0
+2305843009213693951
 
-# TODO: unsupported feature
-# query I
-# select * from generate_series(2305843009213693951, -2305843009213693951, -2305843009213693951)
-# ----
-# 2305843009213693951
-# 0
-# -2305843009213693951
+query I
+select * from generate_series(2305843009213693951, -2305843009213693951, -2305843009213693951)
+----
+2305843009213693951
+0
+-2305843009213693951
 
-# TODO: unsupported feature
-# query I
-# select * from generate_series(0, 10, 9223372036854775807);
-# ----
-# 0
+query I
+select * from generate_series(0, 10, 9223372036854775807);
+----
+0
 
 # TODO: unsupported feature
 # query I
@@ -239,11 +222,10 @@
 # 0
 # 9223372036854775807
 
-# TODO: unsupported feature
-# query I
-# select * from generate_series(0, 10, 9223372036854775807);
-# ----
-# 0
+query I
+select * from generate_series(0, 10, 9223372036854775807);
+----
+0
 
 # TODO: unsupported feature
 # query II rowsort

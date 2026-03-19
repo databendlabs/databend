@@ -1,49 +1,42 @@
 # unterminated escape
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('\\' AS BLOB)
-# ----
-# NULL
+query I
+SELECT TRY_CAST('\\' AS BLOB)
+----
+5C
 
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('\\x3' AS BLOB)
-# ----
-# NULL
+query I
+SELECT TRY_CAST('\\x3' AS BLOB)
+----
+5C7833
 
 # invalid hex escape
 
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('\\b12' AS BLOB)
-# ----
-# NULL
+query I
+SELECT TRY_CAST('\\b12' AS BLOB)
+----
+5C623132
 
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('\\xx2' AS BLOB)
-# ----
-# NULL
+query I
+SELECT TRY_CAST('\\xx2' AS BLOB)
+----
+5C787832
 
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('\\x2x' AS BLOB)
-# ----
-# NULL
+query I
+SELECT TRY_CAST('\\x2x' AS BLOB)
+----
+5C783278
 
 # unescaped ascii
 
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('ü' AS BLOB)
-# ----
-# NULL
+query I
+SELECT TRY_CAST('ü' AS BLOB)
+----
+C3BC
 
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('\x12' AS BLOB)
-# ----
-# \x12
+query I
+SELECT TRY_CAST('\x12' AS BLOB)
+----
+12
 
 # TODO: unsupported feature
 # statement error
@@ -69,8 +62,7 @@
 # statement error
 # SELECT 'ü'::BLOB
 
-# TODO: unsupported feature
-# query I
-# SELECT CAST('\x12' AS BLOB)
-# ----
-# \x12
+query I
+SELECT CAST('\x12' AS BLOB)
+----
+12

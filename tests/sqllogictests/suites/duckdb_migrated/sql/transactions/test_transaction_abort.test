@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok
@@ -12,15 +11,13 @@
 
 # start a transaction
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # parser errors do not invalidate the current transaction
 
-# TODO: unsupported feature
-# statement error
-# SELEC 42
+statement error
+SELEC 42
 
 # TODO: unsupported feature
 # query I
@@ -30,9 +27,8 @@
 
 # neither do binder errors
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM nonexistanttable
+statement error
+SELECT * FROM nonexistanttable
 
 # TODO: unsupported feature
 # query I
@@ -42,17 +38,14 @@
 
 # however primary key conflicts do invalidate it
 
-# TODO: unsupported feature
-# statement error
-# UPDATE integers SET i=2
+statement error
+UPDATE integers SET i=2
 
-# TODO: unsupported feature
-# statement error
-# SELECT 42
+statement error
+SELECT 42
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
 # TODO: unsupported feature
 # query I

@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS Hosts
+statement ok
+DROP TABLE IF EXISTS Hosts
 
 # TODO: unsupported feature
 # statement ok

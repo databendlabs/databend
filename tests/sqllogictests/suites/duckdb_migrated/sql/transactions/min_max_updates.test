@@ -1,31 +1,24 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl
+statement ok
+DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl(i INT);
+statement ok
+CREATE TABLE tbl(i INT);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl FROM range(0, 10);
+statement ok
+INSERT INTO tbl FROM range(0, 10);
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN
+statement ok
+BEGIN
 
-# TODO: unsupported feature
-# statement ok
-# UPDATE tbl SET i=i+100
+statement ok
+UPDATE tbl SET i=i+100
 
-# TODO: unsupported feature
-# query II
-# SELECT MIN(i), MAX(i) FROM tbl
-# ----
-# 0	9
+query II
+SELECT MIN(i), MAX(i) FROM tbl
+----
+100 109
 
-# TODO: unsupported feature
-# query II
-# SELECT MIN(i), MAX(i) FROM tbl
-# ----
-# 100	109
+query II
+SELECT MIN(i), MAX(i) FROM tbl
+----
+100	109

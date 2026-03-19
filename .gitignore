@@ -48,6 +48,7 @@ test/
 tests/longrun/_*.csv
 tests/longrun/**/_*.csv
 tests/sqllogictests/data/*
+*.rewrite_state.json
 tests/nox/cache/*
 
 # fuzz

@@ -7,9 +7,8 @@
 # statement error
 # COMMIT;
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN;
+statement ok
+BEGIN;
 
 # cannot start a transaction in a transaction
 
@@ -17,6 +16,5 @@
 # statement error
 # BEGIN;
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK;
+statement ok
+ROLLBACK;

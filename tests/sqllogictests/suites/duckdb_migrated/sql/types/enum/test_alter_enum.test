@@ -1,16 +1,13 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS person
+statement ok
+DROP TABLE IF EXISTS person
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE person (
-#     name text
-# );
+statement ok
+CREATE TABLE person (
+    name text
+);
 
-# TODO: unsupported feature
-# statement ok
-# insert into person values ('Pedro'), ('Mark'), ('Hannes'), ('Pedro'), ('Pedro'), ('Mark')
+statement ok
+insert into person values ('Pedro'), ('Mark'), ('Hannes'), ('Pedro'), ('Pedro'), ('Mark')
 
 # TODO: unsupported feature
 # statement ok
@@ -18,9 +15,8 @@
 
 #This should error out since we can't do this cast
 
-# TODO: unsupported feature
-# statement error
-# ALTER TABLE person ALTER name TYPE name_enum
+statement error
+ALTER TABLE person ALTER name TYPE name_enum
 
 # TODO: unsupported feature
 # statement ok
@@ -34,21 +30,19 @@
 # statement ok
 # ALTER TABLE person ALTER name TYPE name_enum
 
-# TODO: unsupported feature
-# query I
-# select * from person
-# ----
-# Pedro
-# Mark
-# Hannes
-# Pedro
-# Pedro
-# Mark
+query T
+select * from person
+----
+Pedro
+Mark
+Hannes
+Pedro
+Pedro
+Mark
 
-# TODO: unsupported feature
-# query I
-# select typeof(name) from person limit 1
-# ----
-# ENUM('Pedro', 'Mark', 'Hannes')
+query T
+select typeof(name) from person limit 1
+----
+VARCHAR NULL
 
 # FIXME: dependencies between enums and tables are currently disabled

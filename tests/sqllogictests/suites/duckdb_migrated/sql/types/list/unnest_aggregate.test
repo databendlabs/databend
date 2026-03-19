@@ -1,8 +1,7 @@
-# TODO: unsupported feature
-# query I
-# SELECT SUM(a) FROM UNNEST(RANGE(1, 11)) t(a);
-# ----
-# 55
+query I
+SELECT SUM(a) FROM UNNEST(RANGE(1, 11)) t(a);
+----
+55
 
 # TODO: unsupported feature
 # statement ok

@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS bits
+statement ok
+DROP TABLE IF EXISTS bits
 
 # TODO: unsupported feature
 # statement ok
@@ -38,9 +37,8 @@
 # 010000000000
 # 001000000010
 
-# TODO: unsupported feature
-# statement error
-# SELECT '010110'::BIT & '11000'::BIT
+statement error
+SELECT '010110'::BIT & '11000'::BIT
 
 # TODO: unsupported feature
 # query I
@@ -68,9 +66,8 @@
 # 111101111111
 # 111101011111
 
-# TODO: unsupported feature
-# statement error
-# SELECT '0110'::BIT | '11000'::BIT
+statement error
+SELECT '0110'::BIT | '11000'::BIT
 
 # TODO: unsupported feature
 # query I
@@ -92,9 +89,8 @@
 # 101101111111
 # 110101011101
 
-# TODO: unsupported feature
-# statement error
-# SELECT xor('011010110'::BIT, '11000'::BIT)
+statement error
+SELECT xor('011010110'::BIT, '11000'::BIT)
 
 # TODO: unsupported feature
 # query I
@@ -136,9 +132,8 @@
 # ----
 # 101
 
-# TODO: unsupported feature
-# statement error
-# SELECT '010101'::BIT << -2
+statement error
+SELECT '010101'::BIT << -2
 
 # TODO: unsupported feature
 # query I

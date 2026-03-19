@@ -1,68 +1,68 @@
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT + 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT + 'inf'::FLOAT
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT - 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT - 'inf'::FLOAT
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT * 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT * 'inf'::FLOAT
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT / 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT / 'inf'::FLOAT
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT % 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::FLOAT % 'inf'::FLOAT
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT -('nan'::FLOAT)
 # ----
-# nan
+# NaN
 
 
 
@@ -70,260 +70,260 @@
 # any arithmetic on a nan value will result in a nan value
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE + 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE + 'inf'::DOUBLE
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE - 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE - 'inf'::DOUBLE
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE * 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE * 'inf'::DOUBLE
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE / 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE / 'inf'::DOUBLE
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE % 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'nan'::DOUBLE % 'inf'::DOUBLE
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT -('nan'::DOUBLE)
 # ----
-# nan
+# NaN
 
 
 
 # any arithmetic on a nan value will result in a nan value
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT + 1
 # ----
-# inf
+# Infinity
 
 # inf + inf = inf
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT + 'inf'::FLOAT 
 # ----
-# inf
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT - 1
 # ----
-# inf
+# Infinity
 
 # inf - inf = nan
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT - 'inf'::FLOAT 
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT * 1
 # ----
-# inf
+# Infinity
 
 # inf * inf = inf
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT * 'inf'::FLOAT
 # ----
-# inf
+# Infinity
 
 # inf * -inf = -inf
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT * '-inf'::FLOAT
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT / 1
 # ----
-# inf
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 1 / 'inf'::FLOAT
 # ----
-# 0
+# 0.0
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::FLOAT % 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 1 % 'inf'::FLOAT
 # ----
-# 1
+# 1.0
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT -('inf'::FLOAT)
 # ----
-# -inf
+# -Infinity
 
 # any arithmetic on a nan value will result in a nan value
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE + 1
 # ----
-# inf
+# Infinity
 
 # inf + inf = inf
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE + 'inf'::DOUBLE 
 # ----
-# inf
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE - 1
 # ----
-# inf
+# Infinity
 
 # inf - inf = nan
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE - 'inf'::DOUBLE 
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE * 1
 # ----
-# inf
+# Infinity
 
 # inf * inf = inf
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE * 'inf'::DOUBLE
 # ----
-# inf
+# Infinity
 
 # inf * -inf = -inf
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE * '-inf'::DOUBLE
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE / 1
 # ----
-# inf
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 1 / 'inf'::DOUBLE
 # ----
-# 0
+# 0.0
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 'inf'::DOUBLE % 1
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT 1 % 'inf'::DOUBLE
 # ----
-# 1
+# 1.0
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT -('inf'::DOUBLE)
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT '-inf'::FLOAT + 1
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT '-inf'::FLOAT - 1
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT '-inf'::FLOAT * 1
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
 # query I
 # SELECT '-inf'::FLOAT / 1
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
 # query I

@@ -1,0 +1,38 @@
+# name: test/sql/tpch/tpch_sf0.test
+# description: Test TPC-H SF0
+# group: [tpch]
+
+# require tpch
+
+# TODO: unsupported feature
+# statement ok
+# CALL dbgen(sf=0);
+
+# loop i 1 23
+
+# TODO: unsupported feature
+# statement ok
+# PRAGMA tpch(${i})
+
+# endloop
+
+# out of range
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpch(-1)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpch(3290819023812038903)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpch(32908301298)
+# ----
+
+# TODO: unsupported feature
+# statement error
+# PRAGMA tpch(1.1)
+# ----

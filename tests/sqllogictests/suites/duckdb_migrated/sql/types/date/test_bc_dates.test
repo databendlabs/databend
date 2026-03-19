@@ -1,17 +1,14 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS bc_dates
+statement ok
+DROP TABLE IF EXISTS bc_dates
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS dates
+statement ok
+DROP TABLE IF EXISTS dates
 
 # BC dates are off-by-one because the year 0 does not exist in the gregorian calender
 # however, ISO 8601 DOES have the year 0, thus "0000-01-01" is actually equal to "0001-01-01 (BC)"
 # this means all BC dates are off-by-one, so -1000-01-01 is equal to "1001-01-01 (BC)", etc
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE dates(i DATE)
+statement ok
+CREATE TABLE dates(i DATE)
 
 # insert an ISO-8601 formatted negative date
 
@@ -46,11 +43,10 @@
 
 # the year 0 exists in the ISO-8601 format
 
-# TODO: unsupported feature
-# query T
-# SELECT DATE '0000-01-01'
-# ----
-# 0001-01-01 (BC)
+query T
+SELECT DATE '0000-01-01'
+----
+0000-01-01
 
 # year 0 does not exist in the gregorian calendar
 
@@ -58,9 +54,8 @@
 # statement error
 # SELECT DATE '0000-01-01 (BC)'
 
-# TODO: unsupported feature
-# statement error
-# SELECT DATE '-0030-01-01 (BC)'
+statement error
+SELECT DATE '-0030-01-01 (BC)'
 
 # TODO: unsupported feature
 # query T

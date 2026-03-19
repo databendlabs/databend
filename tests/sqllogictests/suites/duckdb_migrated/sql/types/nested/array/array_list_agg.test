@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS arrays
+statement ok
+DROP TABLE IF EXISTS arrays
 
 # TODO: unsupported feature
 # statement ok
@@ -28,7 +27,7 @@
 # ----
 # [[7, 8, 9], [1, 2, 4], [1, 2, 3], [4, NULL, 2], [-1, -2, -3], NULL]
 
-# note: this does not work with verification, bug is reproducible on main (with list_value), issue has been filed.
+# TODO: this does not work with verification, bug is reproducible on main (with list_value), issue has been filed.
 
 # TODO: unsupported feature
 # query I

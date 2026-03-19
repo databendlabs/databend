@@ -1,177 +1,150 @@
-# TODO: unsupported feature
-# query I
-# SELECT typeof('0.1'::DECIMAL);
-# ----
-# DECIMAL(18,3)
+query T
+SELECT typeof('0.1'::DECIMAL);
+----
+DECIMAL(18, 3)
 
 # test basic string conversions
 
-# TODO: unsupported feature
-# query II
-# SELECT '0.1'::DECIMAL::VARCHAR, '922337203685478.758'::DECIMAL::VARCHAR;
-# ----
-# 0.100	922337203685478.758
+query TT
+SELECT '0.1'::DECIMAL::VARCHAR, '922337203685478.758'::DECIMAL::VARCHAR;
+----
+0.100	922337203685478.758
 
 # negative values
 
-# TODO: unsupported feature
-# query II
-# SELECT '-0.1'::DECIMAL::VARCHAR, '-922337203685478.758'::DECIMAL::VARCHAR;
-# ----
-# -0.100	-922337203685478.758
+query TT
+SELECT '-0.1'::DECIMAL::VARCHAR, '-922337203685478.758'::DECIMAL::VARCHAR;
+----
+-0.100	-922337203685478.758
 
 # some more difficult string conversions
 
-# TODO: unsupported feature
-# query III
-# SELECT '   7   '::DECIMAL::VARCHAR, '9.'::DECIMAL::VARCHAR, '.1'::DECIMAL::VARCHAR;
-# ----
-# 7.000	9.000	0.100
+query TTT
+SELECT '   7   '::DECIMAL::VARCHAR, '9.'::DECIMAL::VARCHAR, '.1'::DECIMAL::VARCHAR;
+----
+7.000	9.000	0.100
 
 # trailing decimals get truncated
 
-# TODO: unsupported feature
-# query II
-# SELECT '0.123456789'::DECIMAL::VARCHAR, '-0.123456789'::DECIMAL::VARCHAR;
-# ----
-# 0.123	-0.123
+query TT
+SELECT '0.123456789'::DECIMAL::VARCHAR, '-0.123456789'::DECIMAL::VARCHAR;
+----
+0.123	-0.123
 
 # overflow in conversion
 
-# TODO: unsupported feature
-# statement error
-# SELECT '9223372036854788.758'::DECIMAL;
+statement error
+SELECT '9223372036854788.758'::DECIMAL;
 
-# TODO: unsupported feature
-# query I
-# SELECT '0.1'::DECIMAL(3, 0)::VARCHAR;
-# ----
-# 0
+query T
+SELECT '0.1'::DECIMAL(3, 0)::VARCHAR;
+----
+0
 
 # default scale is 0
 
-# TODO: unsupported feature
-# query I
-# SELECT '123.4'::DECIMAL(9)::VARCHAR;
-# ----
-# 123
+query T
+SELECT '123.4'::DECIMAL(9)::VARCHAR;
+----
+123
 
 # scale = width also works
 
-# TODO: unsupported feature
-# query II
-# SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;
-# ----
-# .100	-.100
+query TT
+SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;
+----
+0.100 -0.100
 
 # any value >= 1 becomes out of range, though
 
-# TODO: unsupported feature
-# statement error
-# SELECT '1'::DECIMAL(3, 3)::VARCHAR;
+statement error
+SELECT '1'::DECIMAL(3, 3)::VARCHAR;
 
-# TODO: unsupported feature
-# statement error
-# SELECT '-1'::DECIMAL(3, 3)::VARCHAR;
+statement error
+SELECT '-1'::DECIMAL(3, 3)::VARCHAR;
 
-# TODO: unsupported feature
-# query I
-# select '0.1'::decimal::decimal::decimal;
-# ----
-# 0.1
+query R
+select '0.1'::decimal::decimal::decimal;
+----
+0.100
 
 # string casts of various decimal sizes
 
-# TODO: unsupported feature
-# query I
-# select '123.4'::DECIMAL(4,1)::VARCHAR
-# ----
-# 123.4
+query T
+select '123.4'::DECIMAL(4,1)::VARCHAR
+----
+123.4
 
-# TODO: unsupported feature
-# query I
-# select '2.001'::DECIMAL(4,3)::VARCHAR
-# ----
-# 2.001
+query T
+select '2.001'::DECIMAL(4,3)::VARCHAR
+----
+2.001
 
-# TODO: unsupported feature
-# query I
-# select '123456.789'::DECIMAL(9,3)::VARCHAR
-# ----
-# 123456.789
+query T
+select '123456.789'::DECIMAL(9,3)::VARCHAR
+----
+123456.789
 
-# TODO: unsupported feature
-# query I
-# select '123456789'::DECIMAL(9,0)::VARCHAR
-# ----
-# 123456789
+query T
+select '123456789'::DECIMAL(9,0)::VARCHAR
+----
+123456789
 
-# TODO: unsupported feature
-# query I
-# select '123456789'::DECIMAL(18,3)::VARCHAR
-# ----
-# 123456789.000
+query T
+select '123456789'::DECIMAL(18,3)::VARCHAR
+----
+123456789.000
 
-# TODO: unsupported feature
-# query I
-# select '1701411834604692317316873037.1588410572'::DECIMAL(38,10)::VARCHAR
-# ----
-# 1701411834604692317316873037.1588410572
+query T
+select '1701411834604692317316873037.1588410572'::DECIMAL(38,10)::VARCHAR
+----
+1701411834604692317316873037.1588410572
 
-# TODO: unsupported feature
-# query I
-# select '0'::DECIMAL(38,10)::VARCHAR
-# ----
-# 0.0000000000
+query T
+select '0'::DECIMAL(38,10)::VARCHAR
+----
+0.0000000000
 
-# TODO: unsupported feature
-# query I
-# select '0.00003'::DECIMAL(38,10)::VARCHAR
-# ----
-# 0.0000300000
+query T
+select '0.00003'::DECIMAL(38,10)::VARCHAR
+----
+0.0000300000
 
 # Downcasting should round
 
-# TODO: unsupported feature
-# query I
-# select CAST(33.846 AS DECIMAL(5,0)) d0;
-# ----
-# 34
+query R
+select CAST(33.846 AS DECIMAL(5,0)) d0;
+----
+34
 
-# TODO: unsupported feature
-# query I
-# select CAST(-33.846 AS DECIMAL(5,0)) d0;
-# ----
-# -34
+query R
+select CAST(-33.846 AS DECIMAL(5,0)) d0;
+----
+-34
 
-# TODO: unsupported feature
-# query I
-# SELECT CAST(1234567890.1235 AS DECIMAL (13, 3));
-# ----
-# 1234567890.124
+query R
+SELECT CAST(1234567890.1235 AS DECIMAL (13, 3));
+----
+1234567890.124
 
 # various error conditions
 # scale must be bigger than or equal to width
 
-# TODO: unsupported feature
-# statement error
-# SELECT '0.1'::DECIMAL(3, 4);
+statement error
+SELECT '0.1'::DECIMAL(3, 4);
 
-# TODO: unsupported feature
-# statement error
-# SELECT '0.1'::DECIMAL('hello');
+statement error
+SELECT '0.1'::DECIMAL('hello');
 
-# TODO: unsupported feature
-# statement error
-# SELECT '0.1'::DECIMAL((-17));
+statement error
+SELECT '0.1'::DECIMAL((-17));
 
 # TODO: unsupported feature
 # statement error
 # SELECT '0.1'::DECIMAL(40);
 
-# TODO: unsupported feature
-# statement error
-# SELECT '0.1'::DECIMAL(1, 2, 3);
+statement error
+SELECT '0.1'::DECIMAL(1, 2, 3);
 
 # TODO: unsupported feature
 # statement error

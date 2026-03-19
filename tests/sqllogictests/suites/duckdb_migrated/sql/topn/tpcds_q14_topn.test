@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS final
+statement ok
+DROP TABLE IF EXISTS final
 
 # TODO: unsupported feature
 # statement ok

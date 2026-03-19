@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok
@@ -10,9 +9,8 @@
 # statement ok
 # INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -30,9 +28,8 @@
 # ----
 # 1
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
 # TODO: unsupported feature
 # query I

@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok
@@ -12,17 +11,14 @@
 
 # append only
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (1, 2)
+statement error
+INSERT INTO integers VALUES (1, 2)
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
 # if we delete we can insert that value again
 

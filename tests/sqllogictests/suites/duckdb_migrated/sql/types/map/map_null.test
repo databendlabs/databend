@@ -10,11 +10,10 @@
 # ----
 # NULL
 
-# TODO: unsupported feature
-# query I
-# select map(NULL, NULL)
-# ----
-# NULL
+query I
+select map(NULL, NULL)
+----
+NULL
 
 # TODO: unsupported feature
 # query I

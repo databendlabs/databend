@@ -1,28 +1,23 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS SampleTable
+statement ok
+DROP TABLE IF EXISTS SampleTable
 
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE SampleTable AS
-# SELECT DISTINCT id
-# FROM (VALUES
-#     ('one'),
-#     ('two'),
-#     ('three')
-# ) AS t(id);
+statement ok
+CREATE OR REPLACE TABLE SampleTable AS
+SELECT DISTINCT id
+FROM (VALUES
+    ('one'),
+    ('two'),
+    ('three')
+) AS t(id);
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM sampletable;
+statement ok
+DELETE FROM sampletable;
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE SampleTable;
+statement ok
+DROP TABLE SampleTable;
 
 # TODO: unsupported feature
 # statement ok

@@ -1,12 +1,10 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl1
+statement ok
+DROP TABLE IF EXISTS tbl1
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl1 (
-# 	id INT
-# );
+statement ok
+CREATE TABLE tbl1 (
+	id INT
+);
 
 # TODO: unsupported feature
 # statement ok
@@ -34,9 +32,8 @@
 
 # Commit the drop
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT;
+statement ok
+COMMIT;
 
 # This should no longer be able to commit
 # The sequence and the table were already dropped
@@ -49,6 +46,5 @@
 # statement error
 # drop table tbl1
 
-# TODO: unsupported feature
-# statement ok
-# drop sequence seq
+statement ok
+drop sequence seq

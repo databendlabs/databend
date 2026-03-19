@@ -1,79 +1,64 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl
+statement ok
+DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (id INT);
+statement ok
+CREATE TABLE tbl (id INT);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl FROM range(0, 10000);
+statement ok
+INSERT INTO tbl FROM range(0, 10000);
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM tbl
-# ----
-# 10000
+query I
+SELECT COUNT(*) FROM tbl
+----
+10000
 
 # deletes
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN;
+statement ok
+BEGIN;
 
-# TODO: unsupported feature
-# query I
-# DELETE FROM tbl WHERE id%2=0
-# ----
-# 5000
+query I
+DELETE FROM tbl WHERE id%2=0
+----
+5000
 
-# TODO: unsupported feature
-# query II
-# SELECT min(id), max(id) FROM tbl
-# ----
-# 1	9999
+query II
+SELECT min(id), max(id) FROM tbl
+----
+1	9999
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT;
+statement ok
+COMMIT;
 
-# TODO: unsupported feature
-# query II
-# SELECT min(id), max(id) FROM tbl
-# ----
-# 1	9999
+query II
+SELECT min(id), max(id) FROM tbl
+----
+1	9999
 
 # transaction local appends
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN;
+statement ok
+BEGIN;
 
-# TODO: unsupported feature
-# query I
-# INSERT INTO tbl FROM range(10000, 15000)
-# ----
-# 5000
+query I
+INSERT INTO tbl FROM range(10000, 15000)
+----
+5000
 
-# TODO: unsupported feature
-# query II
-# SELECT min(id), max(id) FROM tbl
-# ----
-# 1	14999
+query II
+SELECT min(id), max(id) FROM tbl
+----
+1	14999
 
-# TODO: unsupported feature
-# query II
-# SELECT min(id), max(id) FROM tbl
-# ----
-# 1	9999
+query II
+SELECT min(id), max(id) FROM tbl
+----
+1 14999
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT;
+statement ok
+COMMIT;
 
-# TODO: unsupported feature
-# query II
-# SELECT min(id), max(id) FROM tbl
-# ----
-# 1	14999
+query II
+SELECT min(id), max(id) FROM tbl
+----
+1	14999

@@ -1,18 +1,15 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE integers(i INTEGER UNIQUE);
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
 # TODO: unsupported feature
 # statement ok
@@ -30,9 +27,8 @@
 
 # con1 commits first
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT;
+statement ok
+COMMIT;
 
 # con2 fails to commit because of the conflict
 

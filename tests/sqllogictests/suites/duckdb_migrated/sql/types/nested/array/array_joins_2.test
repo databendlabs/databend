@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS test_array
+statement ok
+DROP TABLE IF EXISTS test_array
 
 # TODO: unsupported feature
 # statement ok

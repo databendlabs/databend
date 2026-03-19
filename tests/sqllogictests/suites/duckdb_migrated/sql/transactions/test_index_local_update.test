@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok
@@ -10,23 +9,19 @@
 # statement ok
 # INSERT INTO integers VALUES (1), (2), (3)
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (3)
+statement error
+INSERT INTO integers VALUES (3)
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
 # Inserting a non-conflicting value succeeds, but we cannot update it to a conflicting value.
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -38,19 +33,16 @@
 # ----
 # 4
 
-# TODO: unsupported feature
-# statement error
-# UPDATE integers SET i = 3 WHERE i = 4
+statement error
+UPDATE integers SET i = 3 WHERE i = 4
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
 # Inserting a non-conflicting value succeeds, and updating it to another non-conflicting value is possible.
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -77,9 +69,8 @@
 # SELECT i FROM integers WHERE i = 4
 # ----
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # TODO: unsupported feature
 # query I

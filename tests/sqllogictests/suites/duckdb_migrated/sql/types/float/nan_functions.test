@@ -56,63 +56,63 @@
 # query I
 # SELECT sign('nan'::FLOAT)
 # ----
-# 0
+# 1
 
 # nop unary functions
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT ceil('-inf'::FLOAT)
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT ceil('inf'::FLOAT)
 # ----
-# inf
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT ceil('nan'::FLOAT)
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT floor('-inf'::FLOAT)
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT floor('inf'::FLOAT)
 # ----
-# inf
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT floor('nan'::FLOAT)
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT round('-inf'::FLOAT)
 # ----
-# -inf
+# -Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT round('inf'::FLOAT)
 # ----
-# inf
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT round('nan'::FLOAT)
 # ----
-# nan
+# NaN
 
 # TODO: unsupported feature
 # statement ok

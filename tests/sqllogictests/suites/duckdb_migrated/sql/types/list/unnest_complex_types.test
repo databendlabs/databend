@@ -1,78 +1,82 @@
-# TODO: unsupported feature
-# query III
-# SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
-# ----
-# 3	hello	NULL
-# 3	NULL	NULL
-# 3	world	NULL
+query IT?
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
+----
+3	hello	NULL
+3	NULL	NULL
+3	world	NULL
 
 # varchars
 
-# TODO: unsupported feature
-# query III
-# SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, ['abcd', 'efgh'], ['123456789abcd']), (2, NULL, ['123456789efgh', '123456789klmnop']), (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
-# ----
-# 1	abcd	123456789abcd
-# 1	efgh	NULL
-# 2	NULL	123456789efgh
-# 2	NULL	123456789klmnop
-# 3	hello	NULL
-# 3	NULL	NULL
-# 3	world	NULL
+query ITT
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, ['abcd', 'efgh'], ['123456789abcd']), (2, NULL, ['123456789efgh', '123456789klmnop']), (3, ['hello', NULL, 'world'], [NULL])) tbl(id, i, j)
+----
+1	abcd	123456789abcd
+1	efgh	NULL
+2	NULL	123456789efgh
+2	NULL	123456789klmnop
+3	hello	NULL
+3	NULL	NULL
+3	world	NULL
 
 # multiple unnests
 
-# TODO: unsupported feature
-# query III
-# SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, [1, 2], [10]), (2, NULL, [11, 12]), (3, [3, NULL, 4], [NULL])) tbl(id, i, j)
-# ----
-# 1	1	10
-# 1	2	NULL
-# 2	NULL	11
-# 2	NULL	12
-# 3	3	NULL
-# 3	NULL	NULL
-# 3	4	NULL
+query III
+SELECT id, UNNEST(i), UNNEST(j) FROM (VALUES (1, [1, 2], [10]), (2, NULL, [11, 12]), (3, [3, NULL, 4], [NULL])) tbl(id, i, j)
+----
+1	1	10
+1	2	NULL
+2	NULL	11
+2	NULL	12
+3	3	NULL
+3	NULL	NULL
+3	4	NULL
 
 # unnest list of lists
 
-# TODO: unsupported feature
-# query I
-# SELECT UNNEST(i) FROM (VALUES ([[1, 2, 3], [4, 5]]), (NULL), ([[6, 7], NULL, [8, 9, NULL]])) tbl(i)
-# ----
-# [1, 2, 3]
-# [4, 5]
-# [6, 7]
-# NULL
-# [8, 9, NULL]
+query I
+SELECT UNNEST(i) FROM (VALUES ([[1, 2, 3], [4, 5]]), (NULL), ([[6, 7], NULL, [8, 9, NULL]])) tbl(i)
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+NULL
 
 # multiple lists of lists
 
-# TODO: unsupported feature
-# query II
-# SELECT UNNEST(i), UNNEST(j) FROM (VALUES ([[1, 2, 3], [4, 5]], [[10, 11], [12, 13]]), (NULL, [[14, 15], [NULL, 16], NULL, NULL]), ([[6, 7], NULL, [8, 9, NULL]], NULL)) tbl(i, j)
-# ----
-# [1, 2, 3]	[10, 11]
-# [4, 5]	[12, 13]
-# NULL	[14, 15]
-# NULL	[NULL, 16]
-# NULL	NULL
-# NULL	NULL
-# [6, 7]	NULL
-# NULL	NULL
-# [8, 9, NULL]	NULL
+query II
+SELECT UNNEST(i), UNNEST(j) FROM (VALUES ([[1, 2, 3], [4, 5]], [[10, 11], [12, 13]]), (NULL, [[14, 15], [NULL, 16], NULL, NULL]), ([[6, 7], NULL, [8, 9, NULL]], NULL)) tbl(i, j)
+----
+1 10
+2 11
+3 12
+4 13
+5 NULL
+NULL 14
+NULL 15
+NULL NULL
+NULL 16
+6 NULL
+7 NULL
+8 NULL
+9 NULL
+NULL NULL
 
 # structs
 
-# TODO: unsupported feature
-# query I
-# SELECT UNNEST(i) FROM (VALUES ([{'a': 10, 'b': 1}, {'a': 11, 'b': 2}]), (NULL), ([{'a': 12, 'b': 3}, NULL, {'a': NULL, 'b': NULL}])) tbl(i)
-# ----
-# {'a': 10, 'b': 1}
-# {'a': 11, 'b': 2}
-# {'a': 12, 'b': 3}
-# NULL
-# {'a': NULL, 'b': NULL}
+query I
+SELECT UNNEST(i) FROM (VALUES ([{'a': 10, 'b': 1}, {'a': 11, 'b': 2}]), (NULL), ([{'a': 12, 'b': 3}, NULL, {'a': NULL, 'b': NULL}])) tbl(i)
+----
+{"a":10,"b":1}
+{"a":11,"b":2}
+{"a":12,"b":3}
+NULL
+{"a":NULL,"b":NULL}
 
 # structs in structs
 

@@ -1,68 +1,53 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS new_incremental
+statement ok
+DROP TABLE IF EXISTS new_incremental
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS original_table
+statement ok
+DROP TABLE IF EXISTS original_table
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS temp_table
+statement ok
+DROP TABLE IF EXISTS temp_table
 
-# TODO: unsupported feature
-# statement ok
-# create or replace table original_table as from range(0, 10) select 1 as col
+statement ok
+create or replace table original_table as from range(0, 10) select 1 as col
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN
+statement ok
+BEGIN
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN
+statement ok
+BEGIN
 
-# TODO: unsupported feature
-# statement ok
-# create table new_incremental as
-#   from range(0, 10000)
-#   select 42 as col
+statement ok
+create table new_incremental as
+  from range(0, 10000)
+  select 42 as col
 
-# TODO: unsupported feature
-# statement ok
-# insert into original_table
-#   from new_incremental
+statement ok
+insert into original_table
+  from new_incremental
 
-# TODO: unsupported feature
-# statement ok
-# drop table new_incremental
+statement ok
+drop table new_incremental
 
-# TODO: unsupported feature
-# statement ok
-# create table new_incremental as
-#   from range(0, 10000)
-#   select 42 as col
+statement ok
+create table new_incremental as
+  from range(0, 10000)
+  select 42 as col
 
-# TODO: unsupported feature
-# statement ok
-# alter table original_table rename to backup_table
+statement ok
+alter table original_table rename to backup_table
 
-# TODO: unsupported feature
-# statement ok
-# create table temp_table as
-#   from range(0, 100) select 2 as col
+statement ok
+create table temp_table as
+  from range(0, 100) select 2 as col
 
-# TODO: unsupported feature
-# statement ok
-# alter table temp_table rename to original_table
+statement ok
+alter table temp_table rename to original_table
 
-# TODO: unsupported feature
-# statement ok
-# drop table backup_table
+statement ok
+drop table backup_table
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # TODO: unsupported feature
 # statement error

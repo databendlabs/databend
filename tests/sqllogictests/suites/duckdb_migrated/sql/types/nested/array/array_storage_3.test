@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl1
+statement ok
+DROP TABLE IF EXISTS tbl1
 
 # Test arrays that span row groups
 # TODO: unsupported feature

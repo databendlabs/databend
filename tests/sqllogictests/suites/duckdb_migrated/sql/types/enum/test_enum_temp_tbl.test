@@ -16,9 +16,8 @@
 # ----
 # 2
 
-# TODO: unsupported feature
-# statement error
-# insert into tbl_temp values ('bla', 'invalid')
+statement error
+insert into tbl_temp values ('bla', 'invalid')
 
 # TODO: unsupported feature
 # statement ok
@@ -34,6 +33,5 @@
 # ----
 # 4
 
-# TODO: unsupported feature
-# statement error
-# insert into tbl_temp values ('bla', 'invalid')
+statement error
+insert into tbl_temp values ('bla', 'invalid')

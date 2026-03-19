@@ -18,17 +18,14 @@
 # ----
 # 0
 
-# TODO: unsupported feature
-# statement error
-# select '+-0'::BIGNUM
+statement error
+select '+-0'::BIGNUM
 
-# TODO: unsupported feature
-# statement error
-# select '-+0'::BIGNUM
+statement error
+select '-+0'::BIGNUM
 
-# TODO: unsupported feature
-# statement error
-# select '-'::BIGNUM
+statement error
+select '-'::BIGNUM
 
 # TODO: unsupported feature
 # query I
@@ -66,9 +63,8 @@
 # ----
 # 10
 
-# TODO: unsupported feature
-# statement error
-# select '00-0010'::BIGNUM
+statement error
+select '00-0010'::BIGNUM
 
 # TODO: unsupported feature
 # query I
@@ -94,9 +90,8 @@
 # ----
 # 10
 
-# TODO: unsupported feature
-# statement error
-# select ''::BIGNUM
+statement error
+select ''::BIGNUM
 
 # TODO: unsupported feature
 # query I
@@ -104,22 +99,17 @@
 # ----
 # 0
 
-# TODO: unsupported feature
-# statement error
-# select 'bla'::BIGNUM
+statement error
+select 'bla'::BIGNUM
 
-# TODO: unsupported feature
-# statement error
-# select '1000bla'::BIGNUM
+statement error
+select '1000bla'::BIGNUM
 
-# TODO: unsupported feature
-# statement error
-# select '1000.bla'::BIGNUM
+statement error
+select '1000.bla'::BIGNUM
 
-# TODO: unsupported feature
-# statement error
-# select '1000...'::BIGNUM
+statement error
+select '1000...'::BIGNUM
 
-# TODO: unsupported feature
-# statement error
-# select '1000.0.0'::BIGNUM
+statement error
+select '1000.0.0'::BIGNUM

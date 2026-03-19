@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS timestamps
+statement ok
+DROP TABLE IF EXISTS timestamps
 
 # Normalise the testing locale
 # TODO: unsupported feature
@@ -94,6 +93,5 @@
 
 # Issue #5237
 
-# TODO: unsupported feature
-# statement error
-# SELECT strftime(TIMESTAMPTZ '-23831-1-15 2:5:17 America/La_Paz',TIMETZ '0:8:29 America/Cayman'::VARCHAR);
+statement error
+SELECT strftime(TIMESTAMPTZ '-23831-1-15 2:5:17 America/La_Paz',TIMETZ '0:8:29 America/Cayman'::VARCHAR);

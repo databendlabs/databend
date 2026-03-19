@@ -1,10 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS main.tbl
+statement ok
+DROP TABLE IF EXISTS main.tbl
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS my_schema.tbl
+statement ok
+DROP TABLE IF EXISTS my_schema.tbl
 
 # TODO: unsupported feature
 # statement ok

@@ -1,115 +1,100 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS floats
+statement ok
+DROP TABLE IF EXISTS floats
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f FLOAT, i int);
+statement ok
+create table floats(f FLOAT, i int);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
+statement ok
+insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
 
-# TODO: unsupported feature
-# query II
-# SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f
-# ----
-# -inf	5
-# -inf	5
-# inf	8
-# inf	8
-# nan	26
-# nan	26
+query RI
+SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f
+----
+-Infinity 5
+-Infinity 5
+Infinity 8
+Infinity 8
+NaN 26
+NaN 26
 
-# TODO: unsupported feature
-# query III
-# SELECT f, i, SUM(i) OVER (ORDER BY f, i) FROM floats ORDER BY f, i
-# ----
-# -inf	2	2
-# -inf	3	5
-# inf	1	6
-# inf	7	13
-# nan	7	20
-# nan	19	39
+query RII
+SELECT f, i, SUM(i) OVER (ORDER BY f, i) FROM floats ORDER BY f, i
+----
+-Infinity 2 2
+-Infinity 3 5
+Infinity 1 6
+Infinity 7 13
+NaN 7 20
+NaN 19 39
 
-# TODO: unsupported feature
-# query III
-# SELECT f, i, SUM(i) OVER (PARTITION BY f ORDER BY f, i) FROM floats ORDER BY f, i
-# ----
-# -inf	2	2
-# -inf	3	5
-# inf	1	1
-# inf	7	8
-# nan	7	7
-# nan	19	26
+query RII
+SELECT f, i, SUM(i) OVER (PARTITION BY f ORDER BY f, i) FROM floats ORDER BY f, i
+----
+-Infinity 2 2
+-Infinity 3 5
+Infinity 1 1
+Infinity 7 8
+NaN 7 7
+NaN 19 26
 
-# TODO: unsupported feature
-# query III
-# SELECT i, f, SUM(i) OVER (ORDER BY i, f) FROM floats ORDER BY i, f
-# ----
-# 1	inf	1
-# 2	-inf	3
-# 3	-inf	6
-# 7	inf	13
-# 7	nan	20
-# 19	nan	39
+query IRI
+SELECT i, f, SUM(i) OVER (ORDER BY i, f) FROM floats ORDER BY i, f
+----
+1 Infinity 1
+2 -Infinity 3
+3 -Infinity 6
+7 Infinity 13
+7 NaN 20
+19 NaN 39
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f DOUBLE, i int);
+statement ok
+create table floats(f DOUBLE, i int);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
+statement ok
+insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
 
-# TODO: unsupported feature
-# query II
-# SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f
-# ----
-# -inf	5
-# -inf	5
-# inf	8
-# inf	8
-# nan	26
-# nan	26
+query RI
+SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f
+----
+-Infinity 5
+-Infinity 5
+Infinity 8
+Infinity 8
+NaN 26
+NaN 26
 
-# TODO: unsupported feature
-# query III
-# SELECT f, i, SUM(i) OVER (ORDER BY f, i) FROM floats ORDER BY f, i
-# ----
-# -inf	2	2
-# -inf	3	5
-# inf	1	6
-# inf	7	13
-# nan	7	20
-# nan	19	39
+query RII
+SELECT f, i, SUM(i) OVER (ORDER BY f, i) FROM floats ORDER BY f, i
+----
+-Infinity 2 2
+-Infinity 3 5
+Infinity 1 6
+Infinity 7 13
+NaN 7 20
+NaN 19 39
 
-# TODO: unsupported feature
-# query III
-# SELECT f, i, SUM(i) OVER (PARTITION BY f ORDER BY f, i) FROM floats ORDER BY f, i
-# ----
-# -inf	2	2
-# -inf	3	5
-# inf	1	1
-# inf	7	8
-# nan	7	7
-# nan	19	26
+query RII
+SELECT f, i, SUM(i) OVER (PARTITION BY f ORDER BY f, i) FROM floats ORDER BY f, i
+----
+-Infinity 2 2
+-Infinity 3 5
+Infinity 1 1
+Infinity 7 8
+NaN 7 7
+NaN 19 26
 
-# TODO: unsupported feature
-# query III
-# SELECT i, f, SUM(i) OVER (ORDER BY i, f) FROM floats ORDER BY i, f
-# ----
-# 1	inf	1
-# 2	-inf	3
-# 3	-inf	6
-# 7	inf	13
-# 7	nan	20
-# 19	nan	39
+query IRI
+SELECT i, f, SUM(i) OVER (ORDER BY i, f) FROM floats ORDER BY i, f
+----
+1 Infinity 1
+2 -Infinity 3
+3 -Infinity 6
+7 Infinity 13
+7 NaN 20
+19 NaN 39
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats

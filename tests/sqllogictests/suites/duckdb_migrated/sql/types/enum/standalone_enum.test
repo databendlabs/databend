@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS test
+statement ok
+DROP TABLE IF EXISTS test
 
 # TODO: unsupported feature
 # query I
@@ -18,18 +17,14 @@
 # ----
 # hello
 
-# TODO: unsupported feature
-# statement error
-# SELECT 'hello'::ENUM;
+statement error
+SELECT 'hello'::ENUM;
 
-# TODO: unsupported feature
-# statement error
-# SELECT 'hello'::ENUM(42);
+statement error
+SELECT 'hello'::ENUM(42);
 
-# TODO: unsupported feature
-# statement error
-# SELECT 'hello'::ENUM('zzz', 42);
+statement error
+SELECT 'hello'::ENUM('zzz', 42);
 
-# TODO: unsupported feature
-# statement error
-# SELECT 'hello'::ENUM(foobar 42);
+statement error
+SELECT 'hello'::ENUM(foobar 42);

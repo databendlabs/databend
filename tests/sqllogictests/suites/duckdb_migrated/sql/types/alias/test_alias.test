@@ -4,9 +4,8 @@
 
 #Enums with the same name shouldn't work
 
-# TODO: unsupported feature
-# statement error
-# CREATE TYPE alias AS INTEGER;
+statement error
+CREATE TYPE alias AS INTEGER;
 
 # TODO: unsupported feature
 # statement ok
@@ -14,9 +13,8 @@
 
 #This won't work because alias was already deleted
 
-# TODO: unsupported feature
-# statement error
-# DROP TYPE alias;
+statement error
+DROP TYPE alias;
 
 # TODO: unsupported feature
 # statement ok
@@ -46,6 +44,5 @@
 
 # create a type with a non-existant type as source
 
-# TODO: unsupported feature
-# statement error
-# CREATE TYPE alias as BLOBL;
+statement error
+CREATE TYPE alias as BLOBL;

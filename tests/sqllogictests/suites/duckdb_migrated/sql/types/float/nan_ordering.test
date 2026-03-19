@@ -13,41 +13,41 @@
 # standard ordering
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT f FROM floats ORDER BY f
 # ----
+# -Infinity
+# -1.0
+# 1.0
+# Infinity
+# NaN
 # NULL
-# -inf
-# -1.000000
-# 1.000000
-# inf
-# nan
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT f FROM floats ORDER BY f DESC
 # ----
+# NaN
+# Infinity
+# 1.0
+# -1.0
+# -Infinity
 # NULL
-# nan
-# inf
-# 1.000000
-# -1.000000
-# -inf
 
 # top-n
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT f FROM floats ORDER BY f DESC NULLS LAST LIMIT 2
 # ----
-# nan
-# inf
+# NaN
+# Infinity
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT f FROM floats ORDER BY f NULLS LAST LIMIT 2
 # ----
-# -inf
+# -Infinity
 # -1.0
 
 # top-n with many rows
@@ -65,20 +65,20 @@
 # INSERT INTO floats VALUES ('-inf'::FLOAT)
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT f FROM floats ORDER BY f DESC NULLS LAST LIMIT 4
 # ----
-# nan
-# nan
-# inf
+# NaN
+# NaN
+# Infinity
 # 1.0
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT f FROM floats ORDER BY f NULLS LAST LIMIT 4
 # ----
-# -inf
-# -inf
+# -Infinity
+# -Infinity
 # -1.0
 # 0.0
 
@@ -114,26 +114,26 @@
 # standard ordering
 
 # TODO: unsupported feature
-# query I
+# query R
 # SELECT f FROM floats ORDER BY f
 # ----
+# -Infinity
+# -1.0
+# 1.0
+# Infinity
+# NaN
 # NULL
-# -inf
-# -1.000000
-# 1.000000
-# inf
-# nan
 
 # TODO: unsupported feature
 # query I
 # SELECT f FROM floats ORDER BY f DESC
 # ----
+# NaN
+# Infinity
+# 1.0
+# -1.0
+# -Infinity
 # NULL
-# nan
-# inf
-# 1.000000
-# -1.000000
-# -inf
 
 # top-n
 

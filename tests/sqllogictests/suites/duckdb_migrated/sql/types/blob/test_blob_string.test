@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS blobs
+statement ok
+DROP TABLE IF EXISTS blobs
 
 # TODO: unsupported feature
 # statement ok

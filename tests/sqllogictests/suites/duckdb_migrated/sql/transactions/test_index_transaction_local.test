@@ -1,10 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS issue2241
+statement ok
+DROP TABLE IF EXISTS issue2241
 
 # first test simple index usage
 # TODO: unsupported feature
@@ -17,9 +15,8 @@
 
 # inserting a duplicate value fails
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (1)
+statement error
+INSERT INTO integers VALUES (1)
 
 # TODO: unsupported feature
 # statement ok
@@ -27,9 +24,8 @@
 
 # updating a primary key to an existing value fails
 
-# TODO: unsupported feature
-# statement error
-# UPDATE integers SET i=1 WHERE i=4
+statement error
+UPDATE integers SET i=1 WHERE i=4
 
 # TODO: unsupported feature
 # statement ok
@@ -63,13 +59,11 @@
 
 # now test with multiple transactions
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # both transactions can insert the same value
 
@@ -122,19 +116,17 @@
 # conflict happens on commit
 # we can commit con
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # but then con2 fails to commit
 
-# TODO: unsupported feature
+# TODO: result differs
 # statement error
 # COMMIT
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION;
+statement ok
+BEGIN TRANSACTION;
 
 # TODO: unsupported feature
 # statement ok
@@ -156,6 +148,5 @@
 # statement ok
 # INSERT INTO issue2241 VALUES ('Bob');
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT;
+statement ok
+COMMIT;

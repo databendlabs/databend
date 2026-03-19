@@ -22,12 +22,10 @@
 # ----
 # {[1, 2, 3]=1, [0]=2, [123]=5}
 
-# TODO: unsupported feature
-# statement error
-# SELECT MAP([1, 2, 'hi'::VARCHAR], [1.0, 2.1, 4.9])::MAP(VARCHAR, TINYINT)
+statement error
+SELECT MAP([1, 2, 'hi'::VARCHAR], [1.0, 2.1, 4.9])::MAP(VARCHAR, TINYINT)
 
-# TODO: unsupported feature
-# query I
-# SELECT MAP([1, 2, 3], ['A', 'B', 'C'])::MAP(TINYINT, VARCHAR)
-# ----
-# {1=A, 2=B, 3=C}
+query I
+SELECT MAP([1, 2, 3], ['A', 'B', 'C'])::MAP(TINYINT, VARCHAR)
+----
+{1:"A",2:"B",3:"C"}

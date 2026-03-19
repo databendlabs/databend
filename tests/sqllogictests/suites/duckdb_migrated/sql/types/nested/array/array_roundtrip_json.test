@@ -1,10 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS arrays
+statement ok
+DROP TABLE IF EXISTS arrays
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS arrays2
+statement ok
+DROP TABLE IF EXISTS arrays2
 
 # TODO: unsupported feature
 # statement ok

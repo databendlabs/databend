@@ -348,11 +348,11 @@
 # statement ok
 # select localtime;
 
-# TODO: unsupported feature
+# TODO: unknown function
 # statement ok
 # select current_localtimestamp();
 
-# TODO: unsupported feature
+# TODO: unknown function
 # statement ok
 # select current_localtime();
 

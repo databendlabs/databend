@@ -1,82 +1,67 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS floats
+statement ok
+DROP TABLE IF EXISTS floats
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f FLOAT, i int);
+statement ok
+create table floats(f FLOAT, i int);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
+statement ok
+insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
 
-# TODO: unsupported feature
-# query II
-# SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
-# ----
-# -inf	5
-# inf	8
-# nan	26
+query RI
+SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
+----
+-Infinity 5
+Infinity 8
+NaN 26
 
-# TODO: unsupported feature
-# query I
-# select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
-# ----
-# inf
+query R
+select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
+----
+Infinity
 
-# TODO: unsupported feature
-# query I
-# select sum(f) from floats where 0 > f;
-# ----
-# -inf
+query R
+select sum(f) from floats where 0 > f;
+----
+-Infinity
 
-# TODO: unsupported feature
-# query I
-# select sum(f) from floats
-# ----
-# nan
+query R
+select sum(f) from floats
+----
+NaN
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats
 
-# TODO: unsupported feature
-# statement ok
-# create table floats(f DOUBLE, i int);
+statement ok
+create table floats(f DOUBLE, i int);
 
-# TODO: unsupported feature
-# statement ok
-# insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
+statement ok
+insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
 
-# TODO: unsupported feature
-# query II
-# SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
-# ----
-# -inf	5
-# inf	8
-# nan	26
+query RI
+SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
+----
+-Infinity 5
+Infinity 8
+NaN 26
 
-# TODO: unsupported feature
-# query I
-# select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
-# ----
-# inf
+query R
+select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
+----
+Infinity
 
-# TODO: unsupported feature
-# query I
-# select sum(f) from floats where 0 > f;
-# ----
-# -inf
+query R
+select sum(f) from floats where 0 > f;
+----
+-Infinity
 
-# TODO: unsupported feature
-# query I
-# select sum(f) from floats
-# ----
-# nan
+query R
+select sum(f) from floats
+----
+NaN
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE floats
+statement ok
+DROP TABLE floats
 
 
 # still need to catch overflows during sum operation

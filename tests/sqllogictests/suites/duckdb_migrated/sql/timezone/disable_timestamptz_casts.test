@@ -31,14 +31,11 @@
 # ----
 # 2020-01-01 00:00:00-08
 
-# TODO: unsupported feature
-# statement error
-# select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
+statement error
+select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
 
-# TODO: unsupported feature
-# statement error
-# select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
+statement error
+select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
 
-# TODO: unsupported feature
-# statement error
-# select cast('2020-01-01T13:00:00+00'::timestamptz as date)
+statement error
+select cast('2020-01-01T13:00:00+00'::timestamptz as date)

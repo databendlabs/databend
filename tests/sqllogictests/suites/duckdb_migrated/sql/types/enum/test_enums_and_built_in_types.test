@@ -1,19 +1,14 @@
-# TODO: unsupported feature
-# statement error
-# CREATE TYPE "integer" AS ENUM ('1', '2', '3');
+statement error
+CREATE TYPE "integer" AS ENUM ('1', '2', '3');
 
-# TODO: unsupported feature
-# statement error
-# SELECT 4::INTEGEE
+statement error
+SELECT 4::INTEGEE
 
-# TODO: unsupported feature
-# statement error
-# DROP TYPE "INTEGER"
+statement error
+DROP TYPE "INTEGER"
 
-# TODO: unsupported feature
-# statement error
-# DROP TYPE "INTEGEE"
+statement error
+DROP TYPE "INTEGEE"
 
-# TODO: unsupported feature
-# statement error
-# CREATE TYPE integer AS ENUM ('1', '2', '3');
+statement error
+CREATE TYPE integer AS ENUM ('1', '2', '3');

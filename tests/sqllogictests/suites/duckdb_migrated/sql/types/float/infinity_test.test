@@ -3,27 +3,27 @@
 # DROP TABLE IF EXISTS floats
 
 # TODO: unsupported feature
-# query II
+# query RR
 # SELECT 'INF'::FLOAT, '-INF'::FLOAT
 # ----
-# inf	-inf
+# Infinity -Infinity
 
 # inf comparison
 
 # TODO: unsupported feature
-# query I
+# query B
 # select 'inf'::FLOAT = 'inf'::FLOAT
 # ----
 # 1
 
 # TODO: unsupported feature
-# query I
+# query B
 # select 'inf'::FLOAT <> 'inf'::FLOAT
 # ----
 # 0
 
 # TODO: unsupported feature
-# query I
+# query B
 # select 'inf'::FLOAT <> 3.0::FLOAT
 # ----
 # 1

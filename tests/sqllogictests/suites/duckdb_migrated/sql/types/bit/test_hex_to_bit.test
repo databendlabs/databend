@@ -1,18 +1,14 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS invalid
+statement ok
+DROP TABLE IF EXISTS invalid
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS valid
+statement ok
+DROP TABLE IF EXISTS valid
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE valid (v VARCHAR);
+statement ok
+CREATE TABLE valid (v VARCHAR);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO valid VALUES ('x0'), ('x04'), ('x0F0'), ('xFFFF'), ('xABCDE'), ('xabcdef');
+statement ok
+INSERT INTO valid VALUES ('x0'), ('x04'), ('x0F0'), ('xFFFF'), ('xABCDE'), ('xabcdef');
 
 # TODO: unsupported feature
 # query I
@@ -25,13 +21,11 @@
 # 10101011110011011110
 # 101010111100110111101111
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE invalid (v VARCHAR);
+statement ok
+CREATE TABLE invalid (v VARCHAR);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO invalid VALUES ('x0/'), ('x0:4'), ('x@0F0'), ('xFFGF'), ('xAB`DE'), ('xabcdgf');
+statement ok
+INSERT INTO invalid VALUES ('x0/'), ('x0:4'), ('x@0F0'), ('xFFGF'), ('xAB`DE'), ('xabcdgf');
 
 # TODO: unsupported feature
 # query I
@@ -56,14 +50,11 @@
 # ----
 # 00001
 
-# TODO: unsupported feature
-# statement error
-# SELECT bitstring('x1'::BIT, 3)
+statement error
+SELECT bitstring('x1'::BIT, 3)
 
-# TODO: unsupported feature
-# statement error
-# SELECT 'x01g'::BIT
+statement error
+SELECT 'x01g'::BIT
 
-# TODO: unsupported feature
-# statement error
-# SELECT 'x'::BIT
+statement error
+SELECT 'x'::BIT

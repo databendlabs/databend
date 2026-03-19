@@ -1,8 +1,14 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS t
+# name: test/sql/topn/top_n_pruning.test
+# description: Test Top N with ordered row groups and row limits
+# group: [topn]
 
 # Alternative verify disables the offset pruning in the optimizer rule
+# require no_alternative_verify
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
 # TODO: unsupported feature
 # statement ok
 # USE db
@@ -44,12 +50,14 @@
 # INSERT INTO t SELECT 7 i UNION ALL SELECT i FROM repeat(8, 2047) t1(i)
 
 # Fill the table with nulls to trigger the topn optimizer even for larger limits
-
 # TODO: unsupported feature
 # statement ok
 # INSERT INTO t SELECT i FROM repeat(NULL, 2000000) t1(i)
 
 # Work-around for unsetting version info
+# TODO: unsupported feature
+# statement ok
+# ATTACH '__TEST_DIR__/tmp.duckdb' AS tmp
 
 # TODO: unsupported feature
 # statement ok
@@ -61,6 +69,10 @@
 
 # TODO: unsupported feature
 # statement ok
+# ATTACH '__TEST_DIR__/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+# TODO: unsupported feature
+# statement ok
 # USE db
 
 # TODO: unsupported feature
@@ -68,119 +80,123 @@
 # DETACH tmp
 
 # TODO: unsupported feature
+# statement ok
+# SET threads TO 1
+
+# TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 3
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 4097
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 4098
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 8192
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 8193
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*10,240 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2048
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2049
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2050
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4096
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4097
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 6143
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 6144
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 8190
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*8,192 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 8191
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*10,240 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 1
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 2
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 # FIXME: we don't yet do pruning with NULL values
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2 OFFSET 6144
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 8192
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
 
 # TODO: unsupported feature
 # statement ok
@@ -190,7 +206,7 @@
 # query II
 # EXPLAIN ANALYZE SELECT i FROM t ORDER by i DESC LIMIT 3
 # ----
-# # TODO: special result marker
+# analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
 
 # TODO: unsupported feature
 # query I

@@ -1,12 +1,9 @@
 # recursive type definitions are not allowed
-# TODO: unsupported feature
-# statement error
-# CREATE TYPE t4 AS UNION ( v0 SETOF t4 );
+statement error
+CREATE TYPE t4 AS UNION ( v0 SETOF t4 );
 
-# TODO: unsupported feature
-# statement error
-# CREATE TYPE t4 AS t4[]
+statement error
+CREATE TYPE t4 AS t4[]
 
-# TODO: unsupported feature
-# statement error
-# CREATE TYPE t4 AS STRUCT(a t4)
+statement error
+CREATE TYPE t4 AS STRUCT(a t4)

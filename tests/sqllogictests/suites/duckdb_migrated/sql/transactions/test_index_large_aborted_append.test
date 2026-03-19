@@ -106,7 +106,7 @@
 
 # con2 fails to commit because of the conflict
 
-# TODO: unsupported feature
+# TODO: result differs
 # statement error
 # COMMIT;
 
@@ -176,7 +176,7 @@
 
 # con2 fails to commit because of the conflict
 
-# TODO: unsupported feature
+# TODO: result differs
 # statement error
 # COMMIT;
 
@@ -246,7 +246,7 @@
 
 # con2 fails to commit because of the conflict
 
-# TODO: unsupported feature
+# TODO: result differs
 # statement error
 # COMMIT;
 
@@ -316,7 +316,7 @@
 
 # con2 fails to commit because of the conflict
 
-# TODO: unsupported feature
+# TODO: result differs
 # statement error
 # COMMIT;
 

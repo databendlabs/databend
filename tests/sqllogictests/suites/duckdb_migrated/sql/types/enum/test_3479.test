@@ -1,10 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS m
+statement ok
+DROP TABLE IF EXISTS m
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS m_2
+statement ok
+DROP TABLE IF EXISTS m_2
 
 # TODO: unsupported feature
 # statement ok
@@ -30,6 +28,5 @@
 # statement ok
 # insert into m_2 values ('1')
 
-# TODO: unsupported feature
-# statement error
-# insert into m SELECT * FROM m_2
+statement error
+insert into m SELECT * FROM m_2

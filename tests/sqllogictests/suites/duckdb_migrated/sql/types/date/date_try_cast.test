@@ -1,122 +1,103 @@
-# TODO: unsupported feature
-# query I
-# select try_cast('' as date)
-# ----
-# NULL
+query I
+select try_cast('' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('    ' as date)
-# ----
-# NULL
+query I
+select try_cast('    ' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111' as date)
-# ----
-# NULL
+query I
+select try_cast('1111' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('  1111   ' as date)
-# ----
-# NULL
+query I
+select try_cast('  1111   ' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111-' as date)
-# ----
-# NULL
+query I
+select try_cast('1111-' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111-11' as date)
-# ----
-# NULL
+query I
+select try_cast('1111-11' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111-11-' as date)
-# ----
-# NULL
+query I
+select try_cast('1111-11-' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111-111-1' as date)
-# ----
-# NULL
+query I
+select try_cast('1111-111-1' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111-11-111' as date)
-# ----
-# NULL
+query I
+select try_cast('1111-11-111' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111-11-11' as date)
-# ----
-# 1111-11-11
+query I
+select try_cast('1111-11-11' as date)
+----
+1111-11-11
 
-# TODO: unsupported feature
-# query I
-# select try_cast('1111-11-11 (bc)' as date)
-# ----
-# 1111-11-11 (BC)
+query I
+select try_cast('1111-11-11 (bc)' as date)
+----
+NULL
 
 # leap years
 
-# TODO: unsupported feature
-# query I
-# select try_cast('2001-02-29' as date)
-# ----
-# NULL
+query I
+select try_cast('2001-02-29' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('2004-02-29' as date)
-# ----
-# 2004-02-29
+query I
+select try_cast('2004-02-29' as date)
+----
+2004-02-29
 
 # separators
 
-# TODO: unsupported feature
-# query I
-# select try_cast('2004/02/29' as date)
-# ----
-# 2004-02-29
+query I
+select try_cast('2004/02/29' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('2004/02-29' as date)
-# ----
-# NULL
+query I
+select try_cast('2004/02-29' as date)
+----
+NULL
 
 # try cast on dates near the limits
 
-# TODO: unsupported feature
-# query I
-# select try_cast('5877642-06-25 (BC)' as date)
-# ----
-# 5877642-06-25 (BC)
+query I
+select try_cast('5877642-06-25 (BC)' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('5877642-06-24 (BC)' as date)
-# ----
-# NULL
+query I
+select try_cast('5877642-06-24 (BC)' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('-infinity' as date);
-# ----
-# -infinity
+query I
+select try_cast('-infinity' as date);
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('99999999-06-22 (BC)' as date);
-# ----
-# NULL
+query I
+select try_cast('99999999-06-22 (BC)' as date);
+----
+NULL
 
 # min date for timestamp micros is -290307
 
@@ -138,35 +119,30 @@
 # ----
 # NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('5881580-07-10' as date)
-# ----
-# 5881580-07-10
+query I
+select try_cast('5881580-07-10' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('5881580-07-11' as date)
-# ----
-# NULL
+query I
+select try_cast('5881580-07-11' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('infinity' as date)
-# ----
-# infinity
+query I
+select try_cast('infinity' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('5881580-08-11' as date)
-# ----
-# NULL
+query I
+select try_cast('5881580-08-11' as date)
+----
+NULL
 
-# TODO: unsupported feature
-# query I
-# select try_cast('99999999-01-01' as date)
-# ----
-# NULL
+query I
+select try_cast('99999999-01-01' as date)
+----
+NULL
 
 # max date for timestamp micros is 294246
 

@@ -1,30 +1,44 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS topn_nulls
+statement ok
+DROP TABLE IF EXISTS topn_nulls
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE topn_nulls(v INTEGER)
+statement ok
+CREATE TABLE topn_nulls(v INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO topn_nulls
-# SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END
-# FROM range(0, 12) tbl(i)
+statement ok
+INSERT INTO topn_nulls
+SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END
+FROM range(0, 12) tbl(i)
 
-# TODO: unsupported feature
-# query II nosort
-# EXPLAIN SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
-# ----
-# # TODO: special result marker
+query T nosort
+EXPLAIN SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
+----
+Limit
+├── output columns: [topn_nulls.v (#0)]
+├── limit: 6
+├── offset: 0
+├── estimated rows: 6.00
+└── Sort(Single)
+    ├── output columns: [topn_nulls.v (#0)]
+    ├── sort keys: [v ASC NULLS FIRST]
+    ├── estimated rows: 12.00
+    └── TableScan
+        ├── table: default.default.topn_nulls
+        ├── scan id: 0
+        ├── output columns: [v (#0)]
+        ├── read rows: 12
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, topn pruning: 1 to 1 cost: 1 ms>]
+        ├── push downs: [filters: [], limit: 6]
+        └── estimated rows: 12.00
 
-# TODO: unsupported feature
-# query I
-# SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
-# ----
-# NULL
-# NULL
-# NULL
-# NULL
-# 1
-# 2
+query I
+SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
+----
+NULL
+NULL
+NULL
+NULL
+1
+2

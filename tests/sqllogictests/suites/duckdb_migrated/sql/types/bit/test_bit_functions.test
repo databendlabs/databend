@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS bits
+statement ok
+DROP TABLE IF EXISTS bits
 
 # TODO: unsupported feature
 # statement ok
@@ -14,9 +13,8 @@
 
 # # insert invalid bit string
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO bits VALUES('0110108');
+statement error
+INSERT INTO bits VALUES('0110108');
 
 # TODO: unsupported feature
 # query I
@@ -91,13 +89,11 @@
 # 0
 # 1
 
-# TODO: unsupported feature
-# statement error
-# SELECT get_bit('10101'::BIT, 6)
+statement error
+SELECT get_bit('10101'::BIT, 6)
 
-# TODO: unsupported feature
-# statement error
-# SELECT get_bit('001'::BIT, -1)
+statement error
+SELECT get_bit('001'::BIT, -1)
 
 # TODO: unsupported feature
 # query I
@@ -126,17 +122,14 @@
 # 100001010110000000000001
 # 111011010100
 
-# TODO: unsupported feature
-# statement error
-# SELECT set_bit('11111'::BIT, 2, 7)
+statement error
+SELECT set_bit('11111'::BIT, 2, 7)
 
-# TODO: unsupported feature
-# statement error
-# SELECT set_bit('10101'::BIT, 6, 1)
+statement error
+SELECT set_bit('10101'::BIT, 6, 1)
 
-# TODO: unsupported feature
-# statement error
-# SELECT set_bit('011'::BIT, -1, 0)
+statement error
+SELECT set_bit('011'::BIT, -1, 0)
 
 # TODO: unsupported feature
 # query I

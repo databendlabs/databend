@@ -1,10 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS test
+statement ok
+DROP TABLE IF EXISTS test
 
 # TODO: unsupported feature
 # statement ok
@@ -14,13 +12,11 @@
 # statement ok
 # INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # insert the value "4" for both transactions
 
@@ -42,15 +38,13 @@
 # statement ok
 # DELETE FROM integers WHERE i=2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(i INTEGER)
+statement ok
+CREATE TABLE test(i INTEGER)
 
 # commit both transactions, con2 should now fail
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # TODO: unsupported feature
 # statement error
@@ -67,6 +61,6 @@
 
 # table test should not exist
 
-# TODO: unsupported feature
+# TODO: result differs
 # statement error
 # SELECT * FROM test

@@ -62,9 +62,8 @@
 # SELECT * FROM (SELECT 42 WHERE 42>84) t(i), range(i) t2(j)
 # ----
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM (SELECT '5'::VARCHAR) t(str), range(str) t2(j)
+statement error
+SELECT * FROM (SELECT '5'::VARCHAR) t(str), range(str) t2(j)
 
 # TODO: unsupported feature
 # statement ok

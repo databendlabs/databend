@@ -1,18 +1,15 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS foo
+statement ok
+DROP TABLE IF EXISTS foo
 
-# TODO: unsupported feature
-# query I
-# SELECT [1.33, 10.0]
-# ----
-# [1.33, 10.00]
+query I
+SELECT [1.33, 10.0]
+----
+[1.33,10.00]
 
-# TODO: unsupported feature
-# query I
-# SELECT [0.1, 1.33, 10.0, 9999999.999999999]
-# ----
-# [0.100000000, 1.330000000, 10.000000000, 9999999.999999999]
+query I
+SELECT [0.1, 1.33, 10.0, 9999999.999999999]
+----
+[0.100000000,1.330000000,10.000000000,9999999.999999999]
 
 # TODO: unsupported feature
 # query I

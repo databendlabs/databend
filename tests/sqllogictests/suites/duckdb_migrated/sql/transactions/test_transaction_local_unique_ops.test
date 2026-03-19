@@ -1,10 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS integers
+statement ok
+DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -23,17 +21,14 @@
 
 # appending the same value again fails
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (1, 2)
+statement error
+INSERT INTO integers VALUES (1, 2)
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -52,17 +47,14 @@
 
 # updating also fails if there is a conflict
 
-# TODO: unsupported feature
-# statement error
-# UPDATE integers SET i=1 WHERE i=2
+statement error
+UPDATE integers SET i=1 WHERE i=2
 
-# TODO: unsupported feature
-# statement ok
-# ROLLBACK
+statement ok
+ROLLBACK
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
+statement ok
+BEGIN TRANSACTION
 
 # TODO: unsupported feature
 # statement ok
@@ -85,9 +77,8 @@
 # statement ok
 # UPDATE integers SET i=3 WHERE i=2
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT
+statement ok
+COMMIT
 
 # TODO: unsupported feature
 # query II

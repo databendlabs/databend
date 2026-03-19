@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS nested_struct
+statement ok
+DROP TABLE IF EXISTS nested_struct
 
 # TODO: unsupported feature
 # statement ok

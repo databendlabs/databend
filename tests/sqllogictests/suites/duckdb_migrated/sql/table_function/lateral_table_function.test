@@ -1,7 +1,5 @@
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM read_csv(thisishopefullyanonexistentfile)
+statement error
+SELECT * FROM read_csv(thisishopefullyanonexistentfile)
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM (SELECT 'myfile.csv' AS thisishopefullyanonexistentfile), read_csv(thisishopefullyanonexistentfile)
+statement error
+SELECT * FROM (SELECT 'myfile.csv' AS thisishopefullyanonexistentfile), read_csv(thisishopefullyanonexistentfile)

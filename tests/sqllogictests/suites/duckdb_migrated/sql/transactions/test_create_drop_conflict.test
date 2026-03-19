@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS foo.bar
+statement ok
+DROP TABLE IF EXISTS foo.bar
 
 # TODO: unsupported feature
 # statement ok
@@ -19,9 +18,8 @@
 # Create a table on the schema we're dropping
 # This should succeed because the schema drop isn't committed yet
 
-# TODO: unsupported feature
-# statement ok
-# create table foo.bar as select 42;
+statement ok
+create table foo.bar as select 42;
 
 # This now fails because the 'create table' was committed
 

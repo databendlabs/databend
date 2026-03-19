@@ -63,10 +63,10 @@
 # ----
 
 # TODO: unsupported feature
-# query I
+# query T
 # SELECT ST_AsText(g) FROM t1;
 # ----
-# POINT (1 2)
+# POINT(1 2)
 
 # If we insert a non-point geometry, it should not be shredded
 

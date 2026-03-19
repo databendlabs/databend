@@ -19,49 +19,49 @@
 # DROP VIEW IF EXISTS list_str
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS NOT DISTINCT FROM [2]
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS NOT DISTINCT FROM [1]
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS NOT DISTINCT FROM [1]
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS NOT DISTINCT FROM NULL
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS DISTINCT FROM [2]
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS DISTINCT FROM [1]
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS DISTINCT FROM [1]
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS DISTINCT FROM NULL
 # ----
 # 1
@@ -78,7 +78,7 @@
 # 	) tbl(l, r);
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS NOT DISTINCT FROM r FROM list_int1
 # ----
 # 1
@@ -89,7 +89,7 @@
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS DISTINCT FROM r FROM list_int1
 # ----
 # 0
@@ -102,49 +102,49 @@
 # Constant multiple integer column distinctions
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS NOT DISTINCT FROM [1, 2]
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS NOT DISTINCT FROM [1]
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS NOT DISTINCT FROM [1]
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS NOT DISTINCT FROM NULL
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS DISTINCT FROM [1, 2]
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS DISTINCT FROM [1]
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS DISTINCT FROM [1]
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [1] IS DISTINCT FROM NULL
 # ----
 # 1
@@ -161,7 +161,7 @@
 # 	) tbl(l, r);
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS NOT DISTINCT FROM r FROM list_int
 # ----
 # 1
@@ -172,7 +172,7 @@
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS DISTINCT FROM r FROM list_int
 # ----
 # 0
@@ -185,49 +185,49 @@
 # Constant empty integer column distinctions
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [] IS NOT DISTINCT FROM [1, 2]
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [] IS NOT DISTINCT FROM []
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS NOT DISTINCT FROM []
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [] IS NOT DISTINCT FROM NULL
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [] IS DISTINCT FROM [1, 2]
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [] IS DISTINCT FROM []
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS DISTINCT FROM []
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT [] IS DISTINCT FROM NULL
 # ----
 # 1
@@ -244,7 +244,7 @@
 # 	) tbl(l, r);
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS NOT DISTINCT FROM r FROM list_int_empty
 # ----
 # 1
@@ -255,7 +255,7 @@
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS DISTINCT FROM r FROM list_int_empty
 # ----
 # 0
@@ -268,49 +268,49 @@
 # List of strings
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT ['duck'] IS NOT DISTINCT FROM ['duck', 'goose']
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT ['duck'] IS NOT DISTINCT FROM ['duck']
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS NOT DISTINCT FROM ['duck']
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT ['duck'] IS NOT DISTINCT FROM NULL
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT ['duck'] IS DISTINCT FROM ['duck', 'goose']
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT ['duck'] IS DISTINCT FROM ['duck']
 # ----
 # 0
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT NULL IS DISTINCT FROM ['duck']
 # ----
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT ['duck'] IS DISTINCT FROM NULL
 # ----
 # 1
@@ -327,7 +327,7 @@
 # 	) tbl(l, r);
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS NOT DISTINCT FROM r FROM list_str
 # ----
 # 1
@@ -338,7 +338,7 @@
 # 1
 
 # TODO: unsupported feature
-# query T
+# query B
 # SELECT l IS DISTINCT FROM r FROM list_str
 # ----
 # 0

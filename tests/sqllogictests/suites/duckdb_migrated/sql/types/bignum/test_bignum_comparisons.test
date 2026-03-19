@@ -1,6 +1,5 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS bignum_comparisons
+statement ok
+DROP TABLE IF EXISTS bignum_comparisons
 
 # TODO: unsupported feature
 # statement ok
