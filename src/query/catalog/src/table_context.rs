@@ -436,7 +436,6 @@ pub trait TableContext: Send + Sync {
         _files_info: StageFilesInfo,
         _files_to_copy: Option<Vec<StageFileInfo>>,
         _max_column_position: usize,
-        _case_sensitive: bool,
         _on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
         unimplemented!()

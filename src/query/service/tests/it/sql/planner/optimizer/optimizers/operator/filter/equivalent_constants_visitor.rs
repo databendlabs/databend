@@ -111,6 +111,7 @@ fn test_bind_context() -> BindContext {
         visibility: Visibility::Visible,
         virtual_expr: None,
         is_srf: false,
+        column_name_lower: None,
     });
     bind_context.add_column_binding(ColumnBinding {
         database_name: None,
@@ -123,6 +124,7 @@ fn test_bind_context() -> BindContext {
         visibility: Visibility::Visible,
         virtual_expr: None,
         is_srf: false,
+        column_name_lower: None,
     });
     bind_context
 }
