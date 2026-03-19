@@ -217,7 +217,7 @@ impl Mutation {
 
         for column in self.field_index_map.values() {
             if let Ok(index) = column.parse::<usize>() {
-                required.insert(index);
+                required.insert(Symbol::new(index));
             }
         }
 

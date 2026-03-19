@@ -19,8 +19,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_statistics::Datum;
 
-use crate::IndexType;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
@@ -370,10 +370,10 @@ impl Rule for RuleShrinkType {
 struct GroupByRewrite {
     position: usize,
     original_binding: ColumnBinding,
-    original_index: IndexType,
+    original_index: Symbol,
     shrink_binding: ColumnBinding,
     shrink_type: DataType,
-    shrink_index: IndexType,
+    shrink_index: Symbol,
 }
 
 struct JoinRewrite {
@@ -386,7 +386,7 @@ struct JoinColumnRewrite {
     original_binding: ColumnBinding,
     shrink_binding: ColumnBinding,
     shrink_type: DataType,
-    shrink_index: IndexType,
+    shrink_index: Symbol,
 }
 
 fn shrink_group_by_data_type(data_type: &DataType, stat: &ColumnStat) -> Option<DataType> {
