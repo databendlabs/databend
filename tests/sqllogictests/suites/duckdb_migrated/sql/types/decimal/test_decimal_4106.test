@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS from_list
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS from_values
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE from_values AS VALUES (1000000), (10.0000000005);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM from_values;
+# ----
+# 1000000.0000000000
+# 10.0000000005
+
+# From list
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE from_list AS SELECT [1000000, 10.0000000005];
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM from_list;
+# ----
+# [1000000.0000000000, 10.0000000005]

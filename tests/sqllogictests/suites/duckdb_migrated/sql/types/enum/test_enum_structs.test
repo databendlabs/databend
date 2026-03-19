@@ -1,0 +1,114 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM (
+# 	'sad',
+# 	'ok',
+# 	'happy'
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+# 	id INTEGER,
+# 	c STRUCT(
+# 		name text,
+# 		current_mood mood
+#     )
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES (
+# 	1,
+# 	ROW('Mark', 'happy')
+# );
+
+# TODO: unsupported feature
+# query II
+# FROM person
+# ----
+# 1	{'name': Mark, 'current_mood': happy}
+
+# FIXME: dependencies between enums and tables are currently disabled
+
+# TODO: unsupported feature
+# query II
+# FROM person
+# ----
+# 1	{'name': Mark, 'current_mood': happy}
+
+# after dropping the column we can drop the type
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE person DROP COLUMN c
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE mood
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE person ADD COLUMN c STRUCT(
+# 		name text,
+# 		current_mood mood
+#     )
+
+# FIXME: dependencies between enums and tables are currently disabled
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE person DROP COLUMN c
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE mood
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE person ADD COLUMN c INT
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE person ALTER c SET DATA TYPE STRUCT(
+# 		name text,
+# 		current_mood mood
+#     )
+
+# TODO: unsupported feature
+# query II
+# FROM person
+# ----
+# 1	NULL
+
+# FIXME: dependencies between enums and tables are currently disabled
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE person SET c=ROW('Mark', 'happy')
+
+# TODO: unsupported feature
+# query II
+# FROM person
+# ----
+# 1	{'name': Mark, 'current_mood': happy}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE person
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE mood

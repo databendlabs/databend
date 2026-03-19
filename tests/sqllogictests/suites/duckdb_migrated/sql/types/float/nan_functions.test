@@ -1,0 +1,500 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floats
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter(3, '-inf'::FLOAT)
+# ----
+# 3.0
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter(3, 'inf'::FLOAT)
+# ----
+# 3.0
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('inf'::FLOAT, 'inf'::FLOAT)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('-inf'::FLOAT, '-inf'::FLOAT)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('nan'::FLOAT, '-inf'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter(0, 'nan'::FLOAT)
+# ----
+# nan
+
+# sign
+
+# TODO: unsupported feature
+# query I
+# SELECT sign('-inf'::FLOAT)
+# ----
+# -1
+
+# TODO: unsupported feature
+# query I
+# SELECT sign('inf'::FLOAT)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT sign('nan'::FLOAT)
+# ----
+# 0
+
+# nop unary functions
+
+# TODO: unsupported feature
+# query I
+# SELECT ceil('-inf'::FLOAT)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT ceil('inf'::FLOAT)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT ceil('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT floor('-inf'::FLOAT)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT floor('inf'::FLOAT)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT floor('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT round('-inf'::FLOAT)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT round('inf'::FLOAT)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT round('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# create table floats(f FLOAT);
+
+# TODO: unsupported feature
+# statement ok
+# insert into floats values ('inf'), ('-inf'), ('nan');
+
+# several numeric functions
+
+# TODO: unsupported feature
+# query IIIIIIIIIIIII
+# select f, abs(f), exp(f), pow(f, 2), sqrt(case when f < 0 then NULL else f end), cbrt(f), ln(case when f < 0 then NULL else f end), degrees(f), radians(f), gamma(f), lgamma(f), atan(f), atan2(f, 0)
+# from floats;
+# ----
+# inf	inf	inf	inf	inf	inf	inf	inf	inf	inf	inf	1.570796	1.570796
+# -inf	inf	0.000000	inf	NULL	-inf	NULL	-inf	-inf	nan	inf	-1.570796	-1.570796
+# nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan
+
+# numeric functions that are undefined on infinity
+
+# TODO: unsupported feature
+# statement error
+# select sin('inf'::FLOAT)
+
+# TODO: unsupported feature
+# statement error
+# select sin('-inf'::FLOAT)
+
+# TODO: unsupported feature
+# query I
+# select sin('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select sin('inf'::FLOAT)
+
+# TODO: unsupported feature
+# statement error
+# select sin('-inf'::FLOAT)
+
+# TODO: unsupported feature
+# query I
+# select sin('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select cos('inf'::FLOAT)
+
+# TODO: unsupported feature
+# statement error
+# select cos('-inf'::FLOAT)
+
+# TODO: unsupported feature
+# query I
+# select cos('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select tan('inf'::FLOAT)
+
+# TODO: unsupported feature
+# statement error
+# select tan('-inf'::FLOAT)
+
+# TODO: unsupported feature
+# query I
+# select tan('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select asin('inf'::FLOAT)
+
+# TODO: unsupported feature
+# statement error
+# select asin('-inf'::FLOAT)
+
+# TODO: unsupported feature
+# query I
+# select asin('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select acos('inf'::FLOAT)
+
+# TODO: unsupported feature
+# statement error
+# select acos('-inf'::FLOAT)
+
+# TODO: unsupported feature
+# query I
+# select acos('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select cot('inf'::FLOAT)
+
+# TODO: unsupported feature
+# statement error
+# select cot('-inf'::FLOAT)
+
+# TODO: unsupported feature
+# query I
+# select cot('nan'::FLOAT)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# drop table floats
+
+
+# nextafter
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter(3, '-inf'::DOUBLE)
+# ----
+# 3.0
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter(3, 'inf'::DOUBLE)
+# ----
+# 3.0
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('inf'::DOUBLE, 'inf'::DOUBLE)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('-inf'::DOUBLE, '-inf'::DOUBLE)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('nan'::DOUBLE, '-inf'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter(0, 'nan'::DOUBLE)
+# ----
+# nan
+
+# sign
+
+# TODO: unsupported feature
+# query I
+# SELECT sign('-inf'::DOUBLE)
+# ----
+# -1
+
+# TODO: unsupported feature
+# query I
+# SELECT sign('inf'::DOUBLE)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT sign('nan'::DOUBLE)
+# ----
+# 0
+
+# nop unary functions
+
+# TODO: unsupported feature
+# query I
+# SELECT ceil('-inf'::DOUBLE)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT ceil('inf'::DOUBLE)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT ceil('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT floor('-inf'::DOUBLE)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT floor('inf'::DOUBLE)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT floor('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT round('-inf'::DOUBLE)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT round('inf'::DOUBLE)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT round('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# create table floats(f DOUBLE);
+
+# TODO: unsupported feature
+# statement ok
+# insert into floats values ('inf'), ('-inf'), ('nan');
+
+# several numeric functions
+
+# TODO: unsupported feature
+# query IIIIIIIIIIIII
+# select f, abs(f), exp(f), pow(f, 2), sqrt(case when f < 0 then NULL else f end), cbrt(f), ln(case when f < 0 then NULL else f end), degrees(f), radians(f), gamma(f), lgamma(f), atan(f), atan2(f, 0)
+# from floats;
+# ----
+# inf	inf	inf	inf	inf	inf	inf	inf	inf	inf	inf	1.570796	1.570796
+# -inf	inf	0.000000	inf	NULL	-inf	NULL	-inf	-inf	nan	inf	-1.570796	-1.570796
+# nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan	nan
+
+# numeric functions that are undefined on infinity
+
+# TODO: unsupported feature
+# statement error
+# select sin('inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select sin('-inf'::DOUBLE)
+
+# TODO: unsupported feature
+# query I
+# select sin('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select sin('inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select sin('-inf'::DOUBLE)
+
+# TODO: unsupported feature
+# query I
+# select sin('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select cos('inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select cos('-inf'::DOUBLE)
+
+# TODO: unsupported feature
+# query I
+# select cos('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select tan('inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select tan('-inf'::DOUBLE)
+
+# TODO: unsupported feature
+# query I
+# select tan('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select asin('inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select asin('-inf'::DOUBLE)
+
+# TODO: unsupported feature
+# query I
+# select asin('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select acos('inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select acos('-inf'::DOUBLE)
+
+# TODO: unsupported feature
+# query I
+# select acos('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement error
+# select cot('inf'::DOUBLE)
+
+# TODO: unsupported feature
+# statement error
+# select cot('-inf'::DOUBLE)
+
+# TODO: unsupported feature
+# query I
+# select cot('nan'::DOUBLE)
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# drop table floats
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('inf'::float, '-inf'::float)
+# ----
+# 340282346638528859811704183484516925440.000000
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('-inf'::float, 'inf'::float)
+# ----
+# -340282346638528859811704183484516925440.000000
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('inf'::double, '-inf'::double)
+# ----
+# 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000
+
+# TODO: unsupported feature
+# query I
+# SELECT nextafter('-inf'::double, 'inf'::double)
+# ----
+# -179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000

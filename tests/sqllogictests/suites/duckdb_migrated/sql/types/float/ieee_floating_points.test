@@ -1,0 +1,111 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE tbl(val FLOAT)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1), (-1), (0), ('nan'), ('inf')
+
+# division by zero
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val / 0::FLOAT FROM tbl
+# ----
+# 1.0	inf
+# -1.0	-inf
+# 0.0	nan
+# nan	nan
+# inf	inf
+
+# modulo by zero
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val % 0::FLOAT FROM tbl
+# ----
+# 1.0	nan
+# -1.0	nan
+# 0.0	nan
+# nan	nan
+# inf	nan
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val / 0::FLOAT FROM tbl
+# ----
+# 1.0	NULL
+# -1.0	NULL
+# 0.0	NULL
+# nan	NULL
+# inf	NULL
+
+# modulo by zero
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val % 0::FLOAT FROM tbl
+# ----
+# 1.0	NULL
+# -1.0	NULL
+# 0.0	NULL
+# nan	NULL
+# inf	NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE tbl(val DOUBLE)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1), (-1), (0), ('nan'), ('inf')
+
+# division by zero
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val / 0::DOUBLE FROM tbl
+# ----
+# 1.0	inf
+# -1.0	-inf
+# 0.0	nan
+# nan	nan
+# inf	inf
+
+# modulo by zero
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val % 0::DOUBLE FROM tbl
+# ----
+# 1.0	nan
+# -1.0	nan
+# 0.0	nan
+# nan	nan
+# inf	nan
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val / 0::DOUBLE FROM tbl
+# ----
+# 1.0	NULL
+# -1.0	NULL
+# 0.0	NULL
+# nan	NULL
+# inf	NULL
+
+# modulo by zero
+
+# TODO: unsupported feature
+# query II
+# SELECT val, val % 0::DOUBLE FROM tbl
+# ----
+# 1.0	NULL
+# -1.0	NULL
+# 0.0	NULL
+# nan	NULL
+# inf	NULL

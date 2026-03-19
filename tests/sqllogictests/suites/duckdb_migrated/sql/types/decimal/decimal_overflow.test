@@ -1,0 +1,51 @@
+# TODO: unsupported feature
+# statement error
+# select (99000000000000000.0::DECIMAL(18,1)+99000000000000000.0::DECIMAL(18,1));
+
+# TODO: unsupported feature
+# statement error
+# select (99000000000000000.0::DECIMAL(18,1)+99000000000000000.0::DECIMAL(18,1))::VARCHAR::DECIMAL(18,1);
+
+# TODO: unsupported feature
+# statement error
+# select (50000000000000000.0::DECIMAL(18,1)+50000000000000000.0::DECIMAL(18,1));
+
+# TODO: unsupported feature
+# statement error
+# select (-99000000000000000.0::DECIMAL(18,1)-99000000000000000.0::DECIMAL(18,1));
+
+# TODO: unsupported feature
+# statement error
+# select (-50000000000000000.0::DECIMAL(18,1)-50000000000000000.0::DECIMAL(18,1));
+
+# TODO: unsupported feature
+# statement error
+# select (9900000000000000000000000000000000000.0::DECIMAL(38,1)+9900000000000000000000000000000000000.0::DECIMAL(38,1));
+
+# TODO: unsupported feature
+# statement error
+# select (5000000000000000000000000000000000000.0::DECIMAL(38,1)+5000000000000000000000000000000000000.0::DECIMAL(38,1));
+
+# TODO: unsupported feature
+# statement error
+# select '10000000000000000000000000000000000000.0'::DECIMAL(38,1);
+
+# TODO: unsupported feature
+# statement error
+# select (-5000000000000000000000000000000000000.0::DECIMAL(38,1)-5000000000000000000000000000000000000.0::DECIMAL(38,1));
+
+# TODO: unsupported feature
+# statement error
+# select 90000000000000000.0::DECIMAL(18,1) * 10::DECIMAL(2,0);
+
+# TODO: unsupported feature
+# statement error
+# select 90000000000000000.0::DECIMAL(18,1) * 1000::DECIMAL(4,0);
+
+# TODO: unsupported feature
+# statement error
+# select 5000000000000000000000000000000000000.0::DECIMAL(38,1) * 2::DECIMAL(1,0);
+
+# TODO: unsupported feature
+# statement error
+# select 9900000000000000000000000000000000000.0::DECIMAL(38,1) * 1.0;

@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# select bitstring('1', 6) from range(0, 100000) group by 1;
+# ----
+# 000001

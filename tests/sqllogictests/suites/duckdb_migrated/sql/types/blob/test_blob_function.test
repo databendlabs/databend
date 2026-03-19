@@ -1,0 +1,105 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS blobs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE blobs (b BYTEA);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('a'::BYTEA)
+
+# conventional concat
+
+# TODO: unsupported feature
+# query T
+# SELECT b || 'ZZ'::BYTEA FROM blobs
+# ----
+# aZZ
+
+# TODO: unsupported feature
+# query T
+# SELECT 'abc '::BYTEA || 'klm *\xEF\xBF\xBDT'::BYTEA
+# ----
+# abc klm *\xEF\xBF\xBDT
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('abc klm *\xEF\xBF\xBDT'::BYTEA)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM blobs
+# ----
+# 2
+
+# octet_length
+
+# TODO: unsupported feature
+# query I
+# SELECT OCTET_LENGTH(b) FROM blobs
+# ----
+# 1
+# 13
+
+# HEX strings
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM blobs
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('\xFF'::BYTEA)
+
+# TODO: unsupported feature
+# query T
+# SELECT b || 'ZZ'::BYTEA FROM blobs
+# ----
+# \xFFZZ
+
+# TODO: unsupported feature
+# query T
+# SELECT b || '\x5A\x5A'::BYTEA FROM blobs
+# ----
+# \xFFZZ
+
+# BLOB 		 VARCHAR is not allowed, should fail
+
+# TODO: unsupported feature
+# query I
+# SELECT b || '5A5A'::VARCHAR FROM blobs
+# ----
+# \xFF5A5A
+
+# Octet Length tests
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM blobs
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('\xFF'::BYTEA)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('FF'::BYTEA)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01'::BYTEA)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('55AAFF55AAFF55AAFF01'::BYTEA)
+
+# TODO: unsupported feature
+# query I
+# SELECT OCTET_LENGTH(b) FROM blobs
+# ----
+# 1
+# 2
+# 10
+# 20

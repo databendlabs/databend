@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# SELECT alias('5 days'::INTERVAL DAY TO SECOND);
+# ----
+# CAST('5 days' AS INTERVAL)

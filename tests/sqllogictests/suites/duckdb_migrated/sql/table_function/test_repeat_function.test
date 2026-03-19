@@ -1,0 +1,74 @@
+# test basic repeat usage
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat(0, 3)
+# ----
+# 0
+# 0
+# 0
+
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat(NULL, 2)
+# ----
+# NULL
+# NULL
+
+# varchar
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat('hello', 2)
+# ----
+# hello
+# hello
+
+# long varchar
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat('thisisalongstring', 2)
+# ----
+# thisisalongstring
+# thisisalongstring
+
+# blob
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat(blob '\x00\x00hello', 2)
+# ----
+# \x00\x00hello
+# \x00\x00hello
+
+# many values
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat(1, 10000)
+# ----
+# # TODO: hash result
+
+# date
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat(DATE '1992-01-01', 2)
+# ----
+# 1992-01-01
+# 1992-01-01
+
+# interval
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM repeat(INTERVAL '30 days', 2)
+# ----
+# 30 days
+# 30 days
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM repeat(INTERVAL '30 days', NULL)

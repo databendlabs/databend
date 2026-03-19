@@ -1,0 +1,44 @@
+# Setting has no effect when ICU is not loaded as the two types are equivalent
+# TODO: unsupported feature
+# query I
+# select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
+# ----
+# 2020-01-01 00:00:00+00
+
+# TODO: unsupported feature
+# query I
+# select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
+# ----
+# 2020-01-01 15:00:00
+
+# TODO: unsupported feature
+# query I
+# select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
+# ----
+# 2020-01-01 00:00:00+00
+
+# TODO: unsupported feature
+# query I
+# select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
+# ----
+# 2020-01-01 15:00:00
+
+# With ICU loaded, the casts are disabled in both directions when the flag is set.
+
+# TODO: unsupported feature
+# query I
+# select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
+# ----
+# 2020-01-01 00:00:00-08
+
+# TODO: unsupported feature
+# statement error
+# select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
+
+# TODO: unsupported feature
+# statement error
+# select cast('2020-01-01T15:00:00+0000'::timestamptz as timestamp)
+
+# TODO: unsupported feature
+# statement error
+# select cast('2020-01-01T13:00:00+00'::timestamptz as date)

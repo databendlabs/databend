@@ -1,0 +1,58 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl1 (str VARCHAR, str_list VARCHAR[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 VALUES ('a', ['vibrant', 'plant', 'day']);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl2 (data struct (str VARCHAR, str_list VARCHAR[]));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl2 VALUES (('a', ['sunny', 'vibrant', 'day']));
+
+# TODO: unsupported feature
+# query II
+# SELECT UNNEST(data) FROM tbl2;
+# ----
+# a	[sunny, vibrant, day]
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(str_list) FROM tbl1;
+# ----
+# vibrant
+# plant
+# day
+
+# TODO: unsupported feature
+# query II
+# SELECT UNNEST(data) FROM tbl2 INTERSECT SELECT * FROM tbl1;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id VARCHAR, b STRUCT("n" VARCHAR, "v" STRUCT("n" VARCHAR, "v" BIGINT)[])[]);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT DISTINCT * FROM (SELECT id, UNNEST(b, recursive := true) FROM test);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT DISTINCT id, UNNEST(b, recursive := true) FROM test;

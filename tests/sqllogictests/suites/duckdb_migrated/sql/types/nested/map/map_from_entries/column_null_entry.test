@@ -1,0 +1,51 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 (list STRUCT(a INT, b VARCHAR)[]);
+
+# Provide column as parameter
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (ARRAY[(1, 'x'), (2, 'y'), (4, 's')]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (ARRAY[(2, 'a'), (3,'b')])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (ARRAY[(6, 'h'), (7,'g')])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (ARRAY[(10, NULL), (7,'g')])
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(list) FROM t1;
+# ----
+# {1=x, 2=y, 4=s}
+# {2=a, 3=b}
+# {6=h, 7=g}
+# {10=NULL, 7=g}
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(list) FROM t1;
+# ----
+# {1=x, 2=y, 4=s}
+# {2=a, 3=b}
+# {6=h, 7=g}
+# {10=NULL, 7=g}
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (ARRAY[NULL, NULL])
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP_FROM_ENTRIES(list) FROM t1;

@@ -1,0 +1,374 @@
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT + 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT + 'inf'::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT - 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT - 'inf'::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT * 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT * 'inf'::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT / 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT / 'inf'::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT % 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT % 'inf'::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT -('nan'::FLOAT)
+# ----
+# nan
+
+
+
+
+# any arithmetic on a nan value will result in a nan value
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE + 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE + 'inf'::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE - 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE - 'inf'::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE * 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE * 'inf'::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE / 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE / 'inf'::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE % 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE % 'inf'::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT -('nan'::DOUBLE)
+# ----
+# nan
+
+
+
+# any arithmetic on a nan value will result in a nan value
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT + 1
+# ----
+# inf
+
+# inf + inf = inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT + 'inf'::FLOAT 
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT - 1
+# ----
+# inf
+
+# inf - inf = nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT - 'inf'::FLOAT 
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT * 1
+# ----
+# inf
+
+# inf * inf = inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT * 'inf'::FLOAT
+# ----
+# inf
+
+# inf * -inf = -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT * '-inf'::FLOAT
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT / 1
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 / 'inf'::FLOAT
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT % 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 % 'inf'::FLOAT
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT -('inf'::FLOAT)
+# ----
+# -inf
+
+# any arithmetic on a nan value will result in a nan value
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE + 1
+# ----
+# inf
+
+# inf + inf = inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE + 'inf'::DOUBLE 
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE - 1
+# ----
+# inf
+
+# inf - inf = nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE - 'inf'::DOUBLE 
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE * 1
+# ----
+# inf
+
+# inf * inf = inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE * 'inf'::DOUBLE
+# ----
+# inf
+
+# inf * -inf = -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE * '-inf'::DOUBLE
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE / 1
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 / 'inf'::DOUBLE
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE % 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 % 'inf'::DOUBLE
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT -('inf'::DOUBLE)
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT + 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT - 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT * 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT / 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT % 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT -('-inf'::FLOAT)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE + 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE - 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE * 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE / 1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE % 1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT -('-inf'::DOUBLE)
+# ----
+# inf

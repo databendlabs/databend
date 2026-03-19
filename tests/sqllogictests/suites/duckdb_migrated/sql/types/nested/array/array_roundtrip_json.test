@@ -1,0 +1,38 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS arrays
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS arrays2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE arrays (a INTEGER[3])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL), ([4, NULL, 2])
+
+# TODO: unsupported feature
+# query I
+# SELECT a::JSON FROM arrays
+# ----
+# [1,2,3]
+# [1,2,4]
+# [7,8,9]
+# [-1,-2,-3]
+# NULL
+# [4,null,2]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE arrays2 (a INTEGER[3])
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM arrays2
+# ----
+# [0, 1, 2]
+# [1, 2, 3]
+# [2, 3, 4]

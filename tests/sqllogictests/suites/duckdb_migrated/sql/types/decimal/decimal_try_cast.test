@@ -1,0 +1,235 @@
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(1000 AS DECIMAL(3,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(100 AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('100' AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('100'::DOUBLE AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(100::DECIMAL(3,0) AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(10000::DECIMAL(5,0) AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(1000000000::DECIMAL(20,0) AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(1000 AS DECIMAL(3,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(100 AS DECIMAL(2,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('100' AS DECIMAL(2,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('100'::DOUBLE AS DECIMAL(2,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(100::DECIMAL(3,0) AS DECIMAL(2,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(10000::DECIMAL(5,0) AS DECIMAL(2,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(1000000000::DECIMAL(20,0) AS DECIMAL(2,0))
+# ----
+# NULL
+
+# integer
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(1000000 AS DECIMAL(5,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('100000' AS DECIMAL(5,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('100000'::DOUBLE AS DECIMAL(5,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(100000::DECIMAL(6,0) AS DECIMAL(5,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(1000000000::DECIMAL(20,0) AS DECIMAL(5,0))
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(1000000 AS DECIMAL(5,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('100000' AS DECIMAL(5,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('100000'::DOUBLE AS DECIMAL(5,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(100000::DECIMAL(6,0) AS DECIMAL(5,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(1000000000::DECIMAL(20,0) AS DECIMAL(5,0))
+# ----
+# NULL
+
+# bigint
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(10000000000 AS DECIMAL(10,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('10000000000' AS DECIMAL(10,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('10000000000'::DOUBLE AS DECIMAL(10,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(10000000000::DECIMAL(11,0) AS DECIMAL(10,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(10000000000::DECIMAL(20,0) AS DECIMAL(10,0))
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(10000000000 AS DECIMAL(10,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('10000000000' AS DECIMAL(10,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('10000000000'::DOUBLE AS DECIMAL(10,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(10000000000::DECIMAL(11,0) AS DECIMAL(10,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(10000000000::DECIMAL(20,0) AS DECIMAL(10,0))
+# ----
+# NULL
+
+# hugeint
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(100000000000000000000 AS DECIMAL(20,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('100000000000000000000' AS DECIMAL(20,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('100000000000000000000'::DOUBLE AS DECIMAL(20,0))
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(100000000000000000000::DECIMAL(20,0) AS DECIMAL(20,0))
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(100000000000000000000 AS DECIMAL(20,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('100000000000000000000' AS DECIMAL(20,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('100000000000000000000'::DOUBLE AS DECIMAL(20,0))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(100000000000000000000::DECIMAL(25,0) AS DECIMAL(20,0))
+# ----
+# NULL

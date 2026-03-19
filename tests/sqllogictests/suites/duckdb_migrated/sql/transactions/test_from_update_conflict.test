@@ -1,0 +1,56 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS src
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT i AS a FROM range (2048, 5000, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2), (3)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE src(b INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO src VALUES (3), (2), (1), (4)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT src.rowid sr, b, test.rowid tr, a FROM src, test WHERE src.b = test.a ORDER BY a;
+# ----
+# 2	1	2952	1
+# 1	2	2953	2
+# 0	3	2954	3   
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE src SET b = 10000 WHERE src.rowid = 0 OR src.rowid = 1 OR src.rowid = 3
+
+# TODO: unsupported feature
+# query I
+# SELECT b FROM src
+# ----
+# 10000
+# 10000
+# 1
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement error
+# UPDATE src SET b = 20000 FROM test WHERE src.b = test.a;

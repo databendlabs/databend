@@ -1,0 +1,56 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS m
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood_2 AS ENUM ('very sad', 'very ok', 'very happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE m (
+#     m mood,
+#     m_2 mood_2
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into m values ('sad', 'very sad')
+
+# TODO: unsupported feature
+# query II
+# select * from m where m = ''::VARCHAR
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT m='' FROM m
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT m=? FROM m;
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1('')
+# ----
+# 0
+
+# implicit cast
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM m WHERE m=m_2
+# ----
+
+# explicit cast
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM m WHERE m::mood_2=m_2

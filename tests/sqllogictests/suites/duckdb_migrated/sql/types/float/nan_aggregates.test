@@ -1,0 +1,75 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floats
+
+# TODO: unsupported feature
+# query III
+# SELECT SUM('inf'::FLOAT), SUM('-inf'::FLOAT), SUM('nan'::FLOAT)
+# ----
+# inf	-inf	nan
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN('inf'::FLOAT), MIN('-inf'::FLOAT), MIN('nan'::FLOAT)
+# ----
+# inf	-inf	nan
+
+# TODO: unsupported feature
+# query III
+# SELECT MAX('inf'::FLOAT), MAX('-inf'::FLOAT), MAX('nan'::FLOAT)
+# ----
+# inf	-inf	nan
+
+# TODO: unsupported feature
+# statement ok
+# create table floats(f FLOAT);
+
+# TODO: unsupported feature
+# statement ok
+# insert into floats values ('inf'), ('-inf'), ('nan');
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(f), MAX(f) FROM floats
+# ----
+# -inf	nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+# TODO: unsupported feature
+# query III
+# SELECT SUM('inf'::DOUBLE), SUM('-inf'::DOUBLE), SUM('nan'::DOUBLE)
+# ----
+# inf	-inf	nan
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN('inf'::DOUBLE), MIN('-inf'::DOUBLE), MIN('nan'::DOUBLE)
+# ----
+# inf	-inf	nan
+
+# TODO: unsupported feature
+# query III
+# SELECT MAX('inf'::DOUBLE), MAX('-inf'::DOUBLE), MAX('nan'::DOUBLE)
+# ----
+# inf	-inf	nan
+
+# TODO: unsupported feature
+# statement ok
+# create table floats(f DOUBLE);
+
+# TODO: unsupported feature
+# statement ok
+# insert into floats values ('inf'), ('-inf'), ('nan');
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(f), MAX(f) FROM floats
+# ----
+# -inf	nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats

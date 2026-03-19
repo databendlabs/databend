@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# select string_split(string_agg(NULL, ','), ',')[100] from range(0, 10);
+# ----
+# NULL

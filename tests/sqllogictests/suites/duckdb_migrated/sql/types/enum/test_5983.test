@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lineitem2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# CALL DBGEN(sf=0.01);
+
+# TODO: unsupported feature
+# statement ok
+# create type orderkey_enum as enum (Select (l_orderkey/4)::VARCHAR from lineitem);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 (c1 orderkey_enum);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 (select (l_orderkey/4)::VARCHAR from lineitem);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE l_comment_enum as ENUM(select l_comment from lineitem);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lineitem2 (comment l_comment_enum);

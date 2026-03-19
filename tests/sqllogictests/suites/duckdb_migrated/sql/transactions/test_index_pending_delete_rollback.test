@@ -1,0 +1,46 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# we can create an index with pending deletes
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3)
+
+# delete a value
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i=1
+
+# we can create an index with pending deletes
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers using art(i)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers WHERE i=1
+# ----
+# 0
+
+# now we rollback
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers WHERE i=1
+# ----
+# 1

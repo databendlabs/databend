@@ -1,0 +1,397 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bignum_nulls
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bignum_overflow
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bignum_underflow
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bignum_zero
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS mixed_values
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS numbers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE numbers ( x bignum );
+
+# TODO: unsupported feature
+# query I
+# select sum(x) from (values ('1'::bignum), ('-2'::bignum)) t(x), range(0, 100000) t(y);
+# ----
+# -100000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO numbers (x) VALUES (9223372036854775808::BIGNUM), (1::BIGNUM);
+
+# TODO: unsupported feature
+# query I
+# select (-1)::BIGNUM +  9223372036854775807::BIGNUM
+# ----
+# 9223372036854775806
+
+# TODO: unsupported feature
+# query I
+# select 9223372036854775808::BIGNUM + 1::BIGNUM
+# ----
+# 9223372036854775809
+
+# TODO: unsupported feature
+# query I
+# select (-10)::BIGNUM + (-1)::BIGNUM
+# ----
+# -11
+
+# TODO: unsupported feature
+# query I
+# select (-999999999)::BIGNUM + (-1)::BIGNUM
+# ----
+# -1000000000
+
+# TODO: unsupported feature
+# query I
+# select 9223372036854775808::BIGNUM + (-1)::BIGNUM
+# ----
+# 9223372036854775807
+
+# TODO: unsupported feature
+# query I
+# select (-1000)::BIGNUM +  (-1000)::BIGNUM
+# ----
+# -2000
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::bignum FROM numbers;
+# ----
+# 9223372036854775809
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE numbers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE numbers ( x bignum );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO numbers (x) VALUES (255::BIGNUM), (255::BIGNUM);
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::bignum FROM numbers;
+# ----
+# 510
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE numbers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE numbers ( x bignum );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO numbers (x) VALUES (1::BIGNUM), (99999999::BIGNUM);
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::bignum FROM numbers;
+# ----
+# 100000000
+
+# Test edge cases for bignum addition and aggregation
+# ================================================
+# NULL handling
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bignum_nulls (a BIGNUM, b BIGNUM);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bignum_nulls VALUES (NULL, 1::BIGNUM), (2::BIGNUM, NULL), (NULL, NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT a + b FROM bignum_nulls;
+# ----
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(a)::BIGNUM FROM bignum_nulls;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(b)::BIGNUM FROM bignum_nulls;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE bignum_nulls;
+
+# Zero handling
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bignum_zero (x BIGNUM);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bignum_zero VALUES (0::BIGNUM), (0::BIGNUM), ((-0)::BIGNUM);
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::BIGNUM FROM bignum_zero;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT 0::BIGNUM + 0::BIGNUM;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (-0)::BIGNUM + 0::BIGNUM;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE bignum_zero;
+
+
+
+# Large positive + small negative
+
+# TODO: unsupported feature
+# query I
+# SELECT 10000000000000000000::BIGNUM + (-5)::BIGNUM;
+# ----
+# 9999999999999999995
+
+# TODO: unsupported feature
+# query I
+# SELECT (-5)::BIGNUM + 10000000000000000000::BIGNUM;
+# ----
+# 9999999999999999995
+
+
+# Large negative + small positive
+
+# TODO: unsupported feature
+# query I
+# SELECT (-10000000000000000000)::BIGNUM + 5::BIGNUM;
+# ----
+# -9999999999999999995
+
+# Positive overflow-ish range
+
+# TODO: unsupported feature
+# query I
+# SELECT 18446744073709551615::BIGNUM + 1::BIGNUM;
+# ----
+# 18446744073709551616
+
+# Negative underflow-ish range
+
+# TODO: unsupported feature
+# query I
+# SELECT (-18446744073709551615)::BIGNUM + (-1)::BIGNUM;
+# ----
+# -18446744073709551616
+
+
+# Mixed range aggregation
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE mixed_values(x BIGNUM);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO mixed_values VALUES
+#     (0::BIGNUM),
+#     (1::BIGNUM),
+#     ((-1)::BIGNUM);
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::BIGNUM FROM mixed_values;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO mixed_values VALUES (9223372036854775808::BIGNUM)
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::BIGNUM FROM mixed_values;
+# ----
+# 9223372036854775808
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO mixed_values VALUES ((-9223372036854775808)::BIGNUM)
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::BIGNUM FROM mixed_values;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO mixed_values VALUES ((100)::BIGNUM)
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::BIGNUM FROM mixed_values;
+# ----
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO mixed_values VALUES ((-100)::BIGNUM)
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::BIGNUM FROM mixed_values;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO mixed_values VALUES (NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(x)::BIGNUM FROM mixed_values;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE mixed_values;
+
+
+# Chained operations
+
+# TODO: unsupported feature
+# query I
+# select (-500)::BIGNUM + 1000::BIGNUM
+# ----
+# 500
+
+# TODO: unsupported feature
+# query I
+# SELECT ((-500)::BIGNUM + 1000::BIGNUM) + ((-250)::BIGNUM);
+# ----
+# 250
+
+# TODO: unsupported feature
+# query I
+# SELECT (-500)::BIGNUM + (1000::BIGNUM + ((-250)::BIGNUM));
+# ----
+# 250
+
+# TODO: unsupported feature
+# query I
+# select (-1)::BIGNUM +  9223372036854775807::BIGNUM
+# ----
+# 9223372036854775806
+
+# Big bignum addition over INT128 range
+
+# TODO: unsupported feature
+# query I
+# SELECT 170141183460469231731687303715884105728::BIGNUM + 1::BIGNUM;
+# ----
+# 170141183460469231731687303715884105729
+
+# TODO: unsupported feature
+# query I
+# select (170141183460469231731687::BIGNUM - 170141183460469231731686::BIGNUM) + 1::BIGNUM
+# ----
+# 2
+
+# Even bigger bignum addition
+
+# TODO: unsupported feature
+# query I
+# SELECT 340282366920938463463374607431768211456::BIGNUM + 340282366920938463463374607431768211456::BIGNUM;
+# ----
+# 680564733841876926926749214863536422912
+
+# TODO: unsupported feature
+# query I
+# select '-21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958'::bignum + '1000'::bignum;
+# ----
+# -21474836460000000000958214748364600000000009582147483646000000000095821474836459999999999958
+
+# TODO: unsupported feature
+# query I
+# select '-21474836460000000000958214748364600000000009582147483646000000000095821474836459999999999958'::bignum + '-1000'::bignum;
+# ----
+# -21474836460000000000958214748364600000000009582147483646000000000095821474836460000000000958
+
+# TODO: unsupported feature
+# query I
+# select '1'::bignum + '-2'::bignum
+# ----
+# -1
+
+# TODO: unsupported feature
+# statement error
+# select bignum + '-1'::bignum from test_all_types(use_large_bignum = true) limit 1
+
+# TODO: unsupported feature
+# statement error
+# select bignum + '1'::bignum from test_all_types(use_large_bignum = true) limit 1 offset 1
+
+# TODO: unsupported feature
+# statement ok
+# create table bignum_underflow as select bignum from test_all_types(use_large_bignum = true) limit 1
+
+# TODO: unsupported feature
+# statement ok
+# insert into bignum_underflow values (-1);
+
+# TODO: unsupported feature
+# statement error
+# select sum(bignum) from bignum_underflow
+
+# TODO: unsupported feature
+# statement ok
+# create table bignum_overflow as select bignum from test_all_types(use_large_bignum = true) limit 1 offset 1
+
+# TODO: unsupported feature
+# statement ok
+# insert into bignum_overflow values (1);
+
+# TODO: unsupported feature
+# statement error
+# select sum(bignum) from bignum_overflow

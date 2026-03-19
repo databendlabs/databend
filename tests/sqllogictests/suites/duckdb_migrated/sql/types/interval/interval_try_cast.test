@@ -1,0 +1,67 @@
+# TODO: unsupported feature
+# statement error
+# SELECT cast('   ' as interval)
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast('AAAA' as interval)
+
+# TODO: unsupported feature
+# query I
+# SELECT cast('00:00:' as interval)
+# ----
+# 00:00:00
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast('3 doopiedoos' as interval)
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast('3 years 2 doy' as interval)
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast('3 yearweek' as interval)
+
+# TODO: unsupported feature
+# query I
+# SELECT cast(NULL as interval)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT try_cast('   ' as interval)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT try_cast('AAAA' as interval)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT try_cast('00:00:' as interval)
+# ----
+# 00:00:00
+
+# TODO: unsupported feature
+# query I
+# SELECT try_cast('3 doopiedoos' as interval)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT try_cast('3 years 2 doy' as interval)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT try_cast(NULL as interval)
+# ----
+# NULL

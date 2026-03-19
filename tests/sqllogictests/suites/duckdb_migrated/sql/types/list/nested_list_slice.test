@@ -1,0 +1,78 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# nesting level=2
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(id INTEGER, b INTEGER[][]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (0, [[1, 2], NULL, [3, NULL]]), (1, NULL), (2, [[4, 5, 6, 7], [NULL]])
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM a ORDER BY id
+# ----
+# 0	[[1, 2], NULL, [3, NULL]]
+# 1	NULL
+# 2	[[4, 5, 6, 7], [NULL]]
+
+# test nested list slice
+
+# TODO: unsupported feature
+# query II
+# SELECT id, b[0:1] FROM a ORDER BY id
+# ----
+# 0	[[1, 2]]
+# 1	NULL
+# 2	[[4, 5, 6, 7]]
+
+# TODO: unsupported feature
+# query II
+# SELECT id, b[0:2] FROM a ORDER BY id
+# ----
+# 0	[[1, 2], NULL]
+# 1	NULL
+# 2	[[4, 5, 6, 7], [NULL]]
+
+# TODO: unsupported feature
+# query II
+# SELECT id, b[1:1] FROM a ORDER BY id
+# ----
+# 0	[[1, 2]]
+# 1	NULL
+# 2	[[4, 5, 6, 7]]
+
+# TODO: unsupported feature
+# query II
+# SELECT id, b[1:2] FROM a ORDER BY id
+# ----
+# 0	[[1, 2], NULL]
+# 1	NULL
+# 2	[[4, 5, 6, 7], [NULL]]
+
+# TODO: unsupported feature
+# query II
+# SELECT id, b[0:0] FROM a ORDER BY id
+# ----
+# 0	[]
+# 1	NULL
+# 2	[]
+
+# TODO: unsupported feature
+# query II
+# SELECT id, b[:] FROM a ORDER BY id
+# ----
+# 0	[[1, 2], NULL, [3, NULL]]
+# 1	NULL
+# 2	[[4, 5, 6, 7], [NULL]]
+
+# TODO: unsupported feature
+# query II
+# SELECT id, list_extract(b[:], 0) FROM a ORDER BY id
+# ----
+# 0	NULL
+# 1	NULL
+# 2	NULL

@@ -1,0 +1,12 @@
+# TODO: unsupported feature
+# query IIII
+# SELECT s.child_stats.min, s.child_stats.max, s.has_no_null, s.has_null FROM (SELECT STATS(array_value(1,2)) s)
+# ----
+# 1	2	1	0
+
+
+# Trigger unknown statistics propagation
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT array_cross_product($1::float[3], $2::float[3])

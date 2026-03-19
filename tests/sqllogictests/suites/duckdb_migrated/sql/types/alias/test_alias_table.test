@@ -1,0 +1,230 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS aliens
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS pets
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE alias AS VARCHAR;
+
+# Test with non existent alias type
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE person (
+#     name text,
+#     current_car car
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_alias alias
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Moe', 'happy');
+
+# TODO: unsupported feature
+# query TT
+# select * from person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Pedro', 'ok');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Mark', 'sad');
+
+# TODO: unsupported feature
+# query TT
+# select * from person where current_alias = 'sad'
+# ----
+# Mark	sad
+
+# TODO: unsupported feature
+# query TT
+# select * from person where current_alias > 'ok'
+# ----
+# Mark	sad
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE pets (
+#     name text,
+#     current_alias alias
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO pets VALUES ('Anne', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO pets VALUES ('Oogie Boogie', 'ok');
+
+#Null Values in the column are allowed
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO pets VALUES ('Mr. Fluffles McFluffingstein', NULL);
+
+# TODO: unsupported feature
+# query TT
+# select * from pets;
+# ----
+# Anne	happy
+# Oogie Boogie	ok
+# Mr. Fluffles McFluffingstein	NULL
+
+# TODO: unsupported feature
+# query TT rowsort
+# select person.name, pets.name from person inner join pets on  (person.current_alias = pets.current_alias)
+# ----
+# Moe	Anne
+# Pedro	Oogie Boogie
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE person;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE pets;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE alias;
+
+# Creating a new table should not
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE aliens (
+#     name text,
+#     current_alias alias
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE alias AS VARCHAR;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE intelligence AS VARCHAR;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE aliens (
+#     name text,
+#     current_alias alias
+# );
+
+# ALTER TABLE ADD COLUMN with the enum type (see test/sql/alter/add_col/test_add_col.test)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO aliens VALUES ('Alf o Eteimoso', 'happy'), ('Dr Zoidberg', 'sad')
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE aliens ADD COLUMN iq_level intelligence
+
+# TODO: unsupported feature
+# query III
+# select * from aliens
+# ----
+# Alf o Eteimoso	happy	NULL
+# Dr Zoidberg	sad	NULL
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO aliens VALUES ('The Borg', 'ok', 'ehh')
+
+# TODO: unsupported feature
+# query III
+# select * from aliens
+# ----
+# Alf o Eteimoso	happy	NULL
+# Dr Zoidberg	sad	NULL
+# The Borg	ok	ehh
+
+# ALTER TABLE SET DATA TYPE with the enum type (see test/sql/alter/alter_type/test_alter_type.test)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE aliens ALTER current_alias SET DATA TYPE VARCHAR
+
+# TODO: unsupported feature
+# query III
+# select * from aliens
+# ----
+# Alf o Eteimoso	happy	NULL
+# Dr Zoidberg	sad	NULL
+# The Borg	ok	ehh
+
+# Comparisons between enum columns with the same enum type
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE car_brand AS VARCHAR;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_alias alias,
+#     last_year_alias alias,
+#     car car_brand
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Pedro', 'ok', 'ok','Seat'), ('Mark', 'sad', 'happy','Fiets');
+
+# TODO: unsupported feature
+# query IIII
+# select * from person where current_alias = last_year_alias
+# ----
+# Pedro	ok	ok	Seat
+
+# TODO: unsupported feature
+# query IIII
+# select * from person where current_alias = 'ok'
+# ----
+# Pedro	ok	ok	Seat
+
+#GROUP BY and ORDER BY on alias, both as keys and in the payload
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
+
+# TODO: unsupported feature
+# query II
+# select count(*), current_alias from person group by current_alias order by all
+# ----
+# 1	happy
+# 1	ok
+# 2	sad
+
+# TODO: unsupported feature
+# query II
+# select name, current_alias from person order by current_alias
+# ----
+# Tim	happy
+# Pedro	ok
+# Mark	sad
+# Diego	sad

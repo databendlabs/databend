@@ -1,0 +1,79 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t3
+
+# TODO: unsupported feature
+# query I
+# select st_crs(NULL);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select st_crs(st_setcrs('POINT(0 1)', 'OGC:CRS84'));
+# ----
+# OGC:CRS84
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 (g GEOMETRY('OGC:CRS84'));
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 (g GEOMETRY('OGC:CRS83'));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values ('POINT(0 1)');
+
+# We cannot insert into t1 from t2 because of CRS mismatch
+
+# TODO: unsupported feature
+# statement error
+# insert into t1 select * from t2;
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 select st_setcrs(g, '') from t1;
+
+# TODO: unsupported feature
+# query I
+# select * from t2;
+# ----
+# POINT (0 1)
+
+# TODO: unsupported feature
+# query I
+# select st_crs(g) from t2;
+# ----
+# OGC:CRS83
+
+# CRS Must be a string
+
+# TODO: unsupported feature
+# statement error
+# select 'POINT(0 1)'::GEOMETRY((['abc']));
+
+# TODO: unsupported feature
+# statement error
+# select 'POINT(0 1)'::GEOMETRY(4326);
+
+# TODO: unsupported feature
+# statement ok
+# create table t3 (srid VARCHAR, g GEOMETRY);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t3 values ('EPSG:4326', 'POINT(0 1)');
+
+# TODO: unsupported feature
+# statement error
+# select st_setcrs(g, srid) from t3;

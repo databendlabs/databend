@@ -1,0 +1,57 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (NULL, 3)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers
+# ----
+# NULL	3
+
+# begin a transaction in con2
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# update the row in con1
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE integers SET i=1,j=1
+
+# con1 should see the value "1"
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers
+# ----
+# 1	1
+
+# con2 should see the value "NULL"
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers
+# ----
+# NULL	3
+
+# after a rollback con2 should see the value "1" as well
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers
+# ----
+# 1	1

@@ -1,0 +1,89 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# create table a (a string, b mood);
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values (NULL, 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values ('woof', NULL);
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values (NULL, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values ('quack', 'ok');
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values ('moo', 'sad');
+
+# TODO: unsupported feature
+# query I
+# select coalesce(a, b) from a;
+# ----
+# happy
+# woof
+# NULL
+# quack
+# moo
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE onomatopoeia AS ENUM ('woof', 'quack', 'moo');
+
+# TODO: unsupported feature
+# statement ok
+# create table b (a onomatopoeia, b mood);
+
+# TODO: unsupported feature
+# statement ok
+# insert into b values (NULL, 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# insert into b values ('woof', NULL);
+
+# TODO: unsupported feature
+# statement ok
+# insert into b values (NULL, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# insert into b values ('quack', 'ok');
+
+# TODO: unsupported feature
+# statement ok
+# insert into b values ('moo', 'sad');
+
+# TODO: unsupported feature
+# query I
+# select coalesce(a, b) from b;
+# ----
+# happy
+# woof
+# NULL
+# quack
+# moo
+
+# TODO: unsupported feature
+# query II
+# select * from a where b in ('sad','woof', NULL)
+# ----
+# moo	sad

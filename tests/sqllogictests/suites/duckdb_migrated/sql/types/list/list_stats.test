@@ -1,0 +1,169 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# list stats
+# TODO: unsupported feature
+# query II
+# SELECT s.child_stats.min, s.child_stats.max FROM (SELECT STATS([3, 4]) s)
+# ----
+# 3	4
+
+# TODO: unsupported feature
+# query I
+# SELECT [3, 4]
+# ----
+# [3, 4]
+
+# TODO: unsupported feature
+# query II
+# SELECT s.has_null, s.has_no_null FROM (SELECT STATS(NULL::INT[]) s)
+# ----
+# 1	0
+
+# TODO: unsupported feature
+# query I
+# SELECT NULL::INT[]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# SELECT STATS(['hello', 'world'])
+
+# TODO: unsupported feature
+# statement ok
+# SELECT STATS([interval 1 year, interval 2 year])
+
+# TODO: unsupported feature
+# query I
+# SELECT ['hello', 'world']
+# ----
+# [hello, world]
+
+# TODO: unsupported feature
+# query I
+# SELECT [interval 1 year, interval 2 year]
+# ----
+# [1 year, 2 years]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i integer)
+
+# TODO: unsupported feature
+# statement ok
+# insert into integers values (3), (4);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT s.child_stats.min, s.child_stats.max, s.child_stats.has_null, s.has_null FROM (SELECT STATS([i]) s FROM integers LIMIT 1)
+# ----
+# 3	4	0	0
+
+# TODO: unsupported feature
+# query I
+# SELECT [i] FROM integers
+# ----
+# [3]
+# [4]
+
+# TODO: unsupported feature
+# statement ok
+# insert into integers values (NULL);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT s.child_stats.min, s.child_stats.max, s.child_stats.has_null, s.has_null FROM (SELECT STATS([i]) s FROM integers LIMIT 1)
+# ----
+# 3	4	1	0
+
+# TODO: unsupported feature
+# query I
+# SELECT [i] FROM integers
+# ----
+# [3]
+# [4]
+# [NULL]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists AS SELECT [3, 4] l
+
+# list_extract always propagates a null
+
+# TODO: unsupported feature
+# query III
+# SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
+# ----
+# 3	4	1
+
+# TODO: unsupported feature
+# query I
+# SELECT l[1] FROM lists
+# ----
+# 3
+
+# empty list
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists VALUES ([])
+
+# TODO: unsupported feature
+# query III
+# SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
+# ----
+# 3	4	1
+
+# TODO: unsupported feature
+# query I
+# SELECT l[1] FROM lists
+# ----
+# 3
+# NULL
+
+# null list
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists VALUES (NULL)
+
+# TODO: unsupported feature
+# query III
+# SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
+# ----
+# 3	4	1
+
+# TODO: unsupported feature
+# query I
+# SELECT l[1] FROM lists
+# ----
+# 3
+# NULL
+# NULL
+
+# null IN list
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists VALUES ([NULL])
+
+# TODO: unsupported feature
+# query III
+# SELECT s.min, s.max, s.has_null FROM (SELECT STATS(l[1]) s FROM lists LIMIT 1)
+# ----
+# 3	4	1
+
+# TODO: unsupported feature
+# query I
+# SELECT l[1] FROM lists
+# ----
+# 3
+# NULL
+# NULL
+# NULL

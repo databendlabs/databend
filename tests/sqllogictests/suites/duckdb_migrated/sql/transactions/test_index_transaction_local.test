@@ -1,0 +1,161 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS issue2241
+
+# first test simple index usage
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3)
+
+# inserting a duplicate value fails
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (4)
+
+# updating a primary key to an existing value fails
+
+# TODO: unsupported feature
+# statement error
+# UPDATE integers SET i=1 WHERE i=4
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE integers SET i=5 WHERE i=4
+
+# if we first delete a value, we can insert that value again
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i=1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1)
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i >= 4
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 3
+
+# now test with multiple transactions
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# both transactions can insert the same value
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (4)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (4)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 4
+
+# also using the index is fine
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers WHERE i=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers WHERE i=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers WHERE i=4
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers WHERE i=4
+# ----
+# 1
+
+# conflict happens on commit
+# we can commit con
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# but then con2 fails to commit
+
+# TODO: unsupported feature
+# statement error
+# COMMIT
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE issue2241 (id text primary key);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO issue2241 VALUES ('Alice');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO issue2241 VALUES ('Bob');
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM issue2241 WHERE id = 'Bob';
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO issue2241 VALUES ('Bob');
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;

@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS decs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE decs(i DEC(), j DEC)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO decs VALUES (0176030871715840, 2.2)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM decs
+# ----
+# 176030871715840.000	2.200
+
+# Test cast
+
+# TODO: unsupported feature
+# query II
+# SELECT 1.25::FLOAT::DEC, 1.25::FLOAT::DEC()
+# ----
+# 1.250	1.250

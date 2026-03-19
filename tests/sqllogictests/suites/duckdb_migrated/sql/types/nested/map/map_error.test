@@ -1,0 +1,101 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS null_keys_list
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS null_values_list
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(list_value(NULL, NULL, NULL, NULL, NULL), list_value(10, 9, 10, 11, 13))
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(list_value(1, NULL, 3), list_value(6, 5, 4))
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(list_value(1, 2, 3, 4, 1), list_value(10, 9, 8, 7, 6))
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(NULL)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (a INTEGER[], b TEXT[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (ARRAY[7, 5, 7], ARRAY['a', 'b', 'c'])
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(a, b) FROM tbl;
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(list_value(10), list_value())
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(10, 12)
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(list_value(10), list_value(10), list_value(10))
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(list_value(10), 10)
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP(list_value(10, 20), list_value(10))
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t AS SELECT MAP(list_value(1, 2, 3), list_value(10, 9, 10)) AS m;
+
+# TODO: unsupported feature
+# statement error
+# SELECT struct_extract(m, 'key') FROM t;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE null_keys_list (k INT[], v INT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO null_keys_list VALUES ([1], [2]), (NULL, [4]);
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP(k, v) FROM null_keys_list;
+# ----
+# {1=2}
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE null_values_list (k INT[], v INT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO null_values_list VALUES ([1], [2]), ([4], NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP(k, v) FROM null_values_list;
+# ----
+# {1=2}
+# NULL

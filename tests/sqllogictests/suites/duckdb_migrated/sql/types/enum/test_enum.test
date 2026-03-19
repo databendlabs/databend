@@ -1,0 +1,215 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE IF NOT EXISTS mood AS ENUM ('sad', 'ok', 'happy');
+
+# Casts should work
+
+# TODO: unsupported feature
+# query I
+# select 'happy'::mood;
+# ----
+# happy
+
+# Casts should fail if not in the enum
+
+# TODO: unsupported feature
+# statement error
+# select 'awesome-bro'::mood;
+
+# TODO: unsupported feature
+# statement error
+# select 0::mood;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE bla AS ENUM ();
+
+#Enums with the same name shouldn't work
+
+# TODO: unsupported feature
+# statement error
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE IF NOT EXISTS mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE bla;
+
+# We should only accept strings
+
+# TODO: unsupported feature
+# statement error
+# CREATE TYPE bla AS ENUM (1,2,3);
+
+# TODO: unsupported feature
+# statement error
+# CREATE TYPE bla AS ENUM ('sad',NULL);
+
+# TODO: unsupported feature
+# statement error
+# CREATE TYPE bla AS ENUM ('sad','sad');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood_2 AS ENUM ('sad','Sad','SAD');
+
+
+# Delete ENUMs
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE mood;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE mood_2;
+
+#This won't work because mood was already deleted
+
+# TODO: unsupported feature
+# statement error
+# DROP TYPE mood;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+#This will drop mood
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE IF EXISTS mood;
+
+#Nothing to drop but won't break
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE IF EXISTS mood;
+
+# We can create mood again
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE IF EXISTS mood;
+
+# We shouldn't be able to add NULL values to ENUMs
+
+# TODO: unsupported feature
+# statement error
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# query I
+# select ['happy']::mood[]
+# ----
+# [happy]
+
+# TODO: unsupported feature
+# query I
+# select [NULL,'happy',NULL]::mood[]
+# ----
+# [NULL, happy, NULL]
+
+# TODO: unsupported feature
+# query I
+# select ['happy','ok','ok']::mood[]
+# ----
+# [happy, ok, ok]
+
+# TODO: unsupported feature
+# statement error
+# select ['bla']::mood[]
+
+# TODO: unsupported feature
+# statement error
+# select [1]::mood[]
+
+# TODO: unsupported feature
+# query I
+# select []::mood[]
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# select [NULL]::mood[]
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# select {'a': 'happy'::mood};
+# ----
+# {'a': happy}
+
+# TODO: unsupported feature
+# query I
+# select {'a': 'happy'::mood, 'b': 'ok'::mood};
+# ----
+# {'a': happy, 'b': ok}
+
+# TODO: unsupported feature
+# query I
+# select {'a': 'happy'::mood, 'b': 1, 'c': 'ok'::mood};
+# ----
+# {'a': happy, 'b': 1, 'c': ok}
+
+# TODO: unsupported feature
+# statement error
+# select {'a': 'happy'::mood, 'b': 'bla'::mood};
+
+# TODO: unsupported feature
+# statement error
+# select {'a': 'bla'::mood};
+
+# TODO: unsupported feature
+# query I
+# select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
+# ----
+# {1=happy, 2=ok, 3=ok, 4=sad}
+
+# TODO: unsupported feature
+# statement error
+# select MAP([1,2,3,4],['bla','ok','ok','sad']::mood[])
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TYPE mood AS ENUM ();
+
+# TODO: unsupported feature
+# query I
+# SELECT enum_range(NULL::mood) AS my_enum_range;
+# ----
+# []
+
+
+# CREATE TEMPORARY TYPE
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# query I
+# select ['happy','ok','ok']::mood[]
+# ----
+# [happy, ok, ok]
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE mood

@@ -1,0 +1,310 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person_pet
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person_pet_den
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS pet
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS robots
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'quackity-quack', 'happy', 'ok');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into person values ('Pedro','happy'), ('Mark', NULL), ('Hannes', 'quackity-quack'), ('Tim', 'ok'), ('Diego', 'sad')
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE robots (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into robots values ('Timmynator','sad'), ('Tars', 'ok'), ('Diggernaut', NULL)
+
+# This just compares the actual uint value of the column since both are from the same mood type
+
+# TODO: unsupported feature
+# query II
+# select person.name, robots.name from person inner join robots on (person.current_mood = robots.current_mood)
+# ----
+# Tim	Tars
+# Diego	Timmynator
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE pet_mood AS ENUM ( 'happy','beaming', 'quackity-quack');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE pet (
+#     name text,
+#     current_mood pet_mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into pet values ('Oogie','happy'), ('Wilbur', 'quackity-quack'), ('Chorizo', NULL), ('Vacilo', 'beaming')
+
+# String Comparison
+
+# TODO: unsupported feature
+# query II
+# select person.name, pet.name from person inner join pet on (person.current_mood > pet.current_mood) where person.name = 'Pedro'
+# ----
+# Pedro	Vacilo
+
+
+# This actually performs the optimized comparison since they are both ENUMs but of different types.
+
+# TODO: unsupported feature
+# query II rowsort
+# select person.name, pet.name from person inner join pet on (person.current_mood = pet.current_mood)
+# ----
+# Hannes	Wilbur
+# Pedro	Oogie
+
+# TODO: unsupported feature
+# query II rowsort
+# select person_name,pet_name from
+# (select person.name as person_name, pet.name as pet_name, person.current_mood as person_mood, pet.current_mood as pet_mood
+# from person,pet) as t
+# where person_mood = pet_mood
+# ----
+# Hannes	Wilbur
+# Pedro	Oogie
+
+# TODO: unsupported feature
+# query II rowsort
+# select person_name,pet_name from
+# (select person.name as person_name, pet.name as pet_name, person.current_mood as person_mood, pet.current_mood as pet_mood
+# from person,pet) as t
+# where pet_mood = person_mood
+# ----
+# Hannes	Wilbur
+# Pedro	Oogie
+
+#SET Operations (e.g. SELECT enum_one UNION ALL SELECT enum_two)
+
+# TODO: unsupported feature
+# query I
+# SELECT person.current_mood
+# FROM person
+# UNION ALL
+# SELECT pet.current_mood
+# FROM pet
+# ----
+# happy
+# NULL
+# quackity-quack
+# ok
+# sad
+# happy
+# quackity-quack
+# NULL
+# beaming
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person_pet (
+#     person_name text,
+#     pet_name text
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into person_pet values ('Pedro','Oogie'), ('Hannes', 'Wilbur'), ('Tim', 'Chorizo'), ('Diego', 'Vacilo')
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person_pet_den as select person_name,pet_name, person_mood, pet_mood from
+# (select person.name as person_name, pet.name as pet_name, person.current_mood as person_mood, pet.current_mood as pet_mood
+# from person inner join person_pet on (person.name = person_pet.person_name) inner join pet on (pet.name = person_pet.pet_name))
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM person_pet_den
+# ----
+# Pedro	Oogie	happy	happy
+# Hannes	Wilbur	quackity-quack	quackity-quack
+# Tim	Chorizo	ok	NULL
+# Diego	Vacilo	sad	beaming
+
+#CASE expressions (e.g. SELECT CASE WHEN cond THEN enum_one ELSE enum_two END
+
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN person_name = 'Tim' THEN person_mood ELSE pet_mood END FROM person_pet_den
+# ----
+# happy
+# quackity-quack
+# ok
+# beaming
+
+#IN clause (e.g. SELECT enum_one IN (enum_two, enum_one, ....))
+
+# TODO: unsupported feature
+# query I
+# SELECT person_mood in ('sad') FROM person_pet_den
+# ----
+# False
+# False
+# False
+# True
+
+# TODO: unsupported feature
+# query I
+# SELECT person_mood in ('beaming'::pet_mood) FROM person_pet_den
+# ----
+# False
+# False
+# False
+# False
+
+# LISTS (e.g. SELECT [enum_one, enum_two])
+
+# TODO: unsupported feature
+# query I
+# SELECT [person_mood, pet_mood] FROM person_pet_den
+# ----
+# [happy, happy]
+# [quackity-quack, quackity-quack]
+# [ok, NULL]
+# [sad, beaming]
+
+# Comparison in the SELECT clause
+
+# TODO: unsupported feature
+# query I
+# SELECT person_mood = pet_mood FROM person_pet_den
+# ----
+# True
+# True
+# NULL
+# False
+
+# Tests in the WHERE clause where null-ness matters
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM person_pet_den WHERE (person_mood = pet_mood) IS NULL
+# ----
+# Tim	Chorizo	ok	NULL
+
+# Explicit casts from one enum to another
+
+# TODO: unsupported feature
+# statement error
+# SELECT person_mood::pet_mood FROM person_pet_den
+
+# TODO: unsupported feature
+# query T
+# SELECT substring(person_mood from 1 for 2) FROM person_pet_den
+# ----
+# ha
+# qu
+# ok
+# sa
+
+# TODO: unsupported feature
+# query T
+# SELECT substring(pet_mood from 1 for 2) FROM person_pet_den
+# ----
+# ha
+# qu
+# NULL
+# be
+
+# TODO: unsupported feature
+# query T
+# SELECT person_mood  FROM person_pet_den where person_mood like '%a%'
+# ----
+# happy
+# quackity-quack
+# sad
+
+# TODO: unsupported feature
+# query T
+# SELECT person_mood  FROM person_pet_den where person_mood like '%a%'
+# ----
+# happy
+# quackity-quack
+# sad
+
+# TODO: unsupported feature
+# query T
+# SELECT regexp_matches(person_mood, '.*a.*')  FROM person_pet_den
+# ----
+# True
+# True
+# False
+# True
+
+# Compare two different enum types
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE wealth AS ENUM ('poor', 'medium-class', 'rich', 'very super rich');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (
+#     a mood,
+#     b wealth
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values ('happy', 'rich'), ('ok', 'poor')
+
+# TODO: unsupported feature
+# query T
+# SELECT a = b  FROM test
+# ----
+# False
+# False
+
+# Repeat test with where clause
+
+# TODO: unsupported feature
+# query TT
+# SELECT * FROM test where a = b
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (NULL, 'very super rich')
+
+# Repeat test with where clause
+
+# TODO: unsupported feature
+# query TT
+# SELECT * FROM test where (a = b) is NULL
+# ----
+# NULL	very super rich

@@ -1,0 +1,249 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# query I
+# select distinct i::tinyint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::utinyint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::smallint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::usmallint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::integer::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::uinteger::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::bigint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::ubigint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::hugeint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::uhugeint::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::double::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::float::bignum = i::bignum from range(0, 100) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::tinyint::bignum = i::bignum from range(-100, 0) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::smallint::bignum = i::bignum from range(-100, 0) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::integer::bignum = i::bignum from range(-100, 0) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::bigint::bignum = i::bignum from range(-100, 0) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::double::bignum = i::bignum from range(-100, 0) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::float::bignum = i::bignum from range(-100, 0) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select distinct i::hugeint::bignum = i::bignum from range(-100, 0) t(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select (-1)::bignum
+# ----
+# -1
+
+# TODO: unsupported feature
+# query I
+# select 0::bignum
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 1::bignum
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(a bignum);
+
+# TODO: unsupported feature
+# statement ok
+# insert into integers values (0), (1), (-1);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers;
+# ----
+# 0
+# 1
+# -1
+
+# TODO: unsupported feature
+# query I
+# select * from integers where a >= 0::BIGNUM
+# ----
+# 0
+# 1
+
+# TODO: unsupported feature
+# query I
+# select * from integers where a < 0::BIGNUM
+# ----
+# -1
+
+# TODO: unsupported feature
+# statement ok
+# insert into integers values (300), (-300), (-10);
+
+# TODO: unsupported feature
+# query I
+# select (300)::BIGNUM
+# ----
+# 300
+
+# TODO: unsupported feature
+# query I
+# select (-300)::BIGNUM
+# ----
+# -300
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers;
+# ----
+# 0
+# 1
+# -1
+# 300
+# -300
+# -10
+
+# TODO: unsupported feature
+# query I
+# select * from integers where a >= 0::BIGNUM
+# ----
+# 0
+# 1
+# 300
+
+# TODO: unsupported feature
+# query I
+# select * from integers where a < 0::BIGNUM
+# ----
+# -1
+# -300
+# -10
+
+# TODO: unsupported feature
+# query I
+# select * from integers where a >= (-10)::BIGNUM
+# ----
+# 0
+# 1
+# -1
+# 300
+# -10
+
+# TODO: unsupported feature
+# query I
+# select * from integers where a = 1::BIGNUM
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select count(*) from integers where a = 0::BIGNUM
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select count(*) from integers where a < 0::BIGNUM
+# ----
+# 3
+
+# Check Border values
+
+# TODO: unsupported feature
+# query I
+# select 2147483647::bignum
+# ----
+# 2147483647
+
+# TODO: unsupported feature
+# query I
+# select (-2147483647)::bignum
+# ----
+# -2147483647

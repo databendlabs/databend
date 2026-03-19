@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMP TABLE tbl_temp (name varchar , cur_mood mood);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl_temp values ('bla', 'sad'), ('bla_2', 'happy')
+
+# TODO: unsupported feature
+# query I
+# select count(*) from tbl_temp;
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement error
+# insert into tbl_temp values ('bla', 'invalid')
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE mood;
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl_temp values ('bla', 'sad'), ('bla_2', 'happy')
+
+# TODO: unsupported feature
+# query I
+# select count(*) from tbl_temp;
+# ----
+# 4
+
+# TODO: unsupported feature
+# statement error
+# insert into tbl_temp values ('bla', 'invalid')

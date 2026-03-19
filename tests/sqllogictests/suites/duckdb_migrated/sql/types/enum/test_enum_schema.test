@@ -1,0 +1,186 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS foo.baz
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS foo.test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE s1.mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# query I
+# select 'happy'::s1.mood;
+# ----
+# happy
+
+# TODO: unsupported feature
+# statement ok
+# DROP TYPE s1.mood
+
+# TODO: unsupported feature
+# statement error
+# select 'happy'::s1.mood;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA foo;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE foo.bar AS ENUM ('a', 'b');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE foo.baz (
+# 	bar_col foo.bar NOT NULL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# drop schema foo cascade;
+
+# this works in postgres
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "foo";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE "foo.bar" AS ENUM ('a', 'b');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE foo.baz (
+# 	bar_col "foo.bar" NOT NULL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# drop type "foo.bar" cascade;
+
+# TODO: unsupported feature
+# statement ok
+# drop schema "foo" cascade;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "foo";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE foo.bar AS ENUM ('a', 'b');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE foo.baz (
+# 	bar_col foo.bar NOT NULL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# drop schema "foo" cascade;
+
+# All of these do not work in postgres
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "foo";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE foo.bar AS ENUM ('a', 'b');
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE foo.baz (
+# 	bar_col "foo.bar" NOT NULL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# drop type foo.bar;
+
+# TODO: unsupported feature
+# statement ok
+# drop schema "foo"
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "foo";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE "foo.bar" AS ENUM ('a', 'b');
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE foo.baz (
+# 	bar_col foo.bar NOT NULL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# drop type "foo.bar";
+
+# TODO: unsupported feature
+# statement ok
+# drop schema "foo"
+
+# This works in postgres
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "foo";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE "foo".bar AS ENUM ('a', 'b');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE foo.baz (
+# 	bar_col "foo".bar NOT NULL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# drop schema "foo" cascade;
+
+# Test schema-qualified enum types with arrays
+# https://github.com/duckdb/duckdb/issues/17041
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA foo;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE foo.bar AS ENUM ('a', 'b', 'c');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE foo.test (
+# 	qualified_array foo.bar[]
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO foo.test VALUES (['a', 'b']);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM foo.test;
+# ----
+# [a, b]
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA foo CASCADE;

@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE integers ALTER j TYPE BIGINT
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers ORDER BY 1
+# ----
+# 1	1
+# 2	2
+# 3	3
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers ORDER BY 1
+# ----
+# 1	1
+# 2	2
+# 3	3

@@ -1,0 +1,77 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS new_incremental
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS original_table
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table original_table as from range(0, 10) select 1 as col
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# create table new_incremental as
+#   from range(0, 10000)
+#   select 42 as col
+
+# TODO: unsupported feature
+# statement ok
+# drop table original_table
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# statement ok
+# delete from original_table where rowid % 2 = 0
+
+# TODO: unsupported feature
+# statement error
+# COMMIT
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table original_table as from range(0, 10) select 1 as col
+
+# do the same - but now reverse: delete from the table, then drop
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# delete from original_table where rowid % 2 = 0
+
+# TODO: unsupported feature
+# statement ok
+# create table new_incremental as
+#   from range(0, 10000)
+#   select 42 as col
+
+# TODO: unsupported feature
+# statement ok
+# drop table original_table
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# statement error
+# COMMIT

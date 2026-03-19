@@ -1,0 +1,123 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3);
+
+# we can query the database using both connections
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 6.000000
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 6.000000
+
+# now update the database in connection 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE integers SET i=5 WHERE i=1;
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 10.000000
+
+# con 2 still has the same result
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 6.000000
+
+# we can update the same data point again in con 1
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE integers SET i=10 WHERE i=5;
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 15.000000
+
+# con 2 still has the same result
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 6.000000
+
+# now delete it
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i>5;
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 5.000000
+
+# con 2 still has the same result
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 6.000000
+
+# insert some new data again
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2)
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 8.000000
+
+# con 2 still has the same result
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 6.000000
+
+# now commit
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# con 2 now has the updated results
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers
+# ----
+# 8.000000

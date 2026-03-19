@@ -1,0 +1,189 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# query I
+# SELECT array_value(1, 2, 3)::VARCHAR
+# ----
+# [1, 2, 3]
+
+# Should be able to cast to list
+
+# TODO: unsupported feature
+# query I
+# SELECT array_value(1, 2, 3)::INT[]
+# ----
+# [1, 2, 3]
+
+# Should be able to implicitly cast to list
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(array_value(1, 2, 3), 2)
+# ----
+# 2
+
+# Should not be able to implicitly cast to list with unnest
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM UNNEST(array_value(1, 2, 3))
+
+# TODO: unsupported feature
+# query I
+# SELECT unnest(array_value(1, 2, 3)::INT[])
+# ----
+# 1
+# 2
+# 3
+
+# Should be able to cast if the elements are castable
+
+# TODO: unsupported feature
+# query I
+# SELECT array_value('1.0', '2.0', '3.0')::DOUBLE[3]
+# ----
+# [1.0, 2.0, 3.0]
+
+# Should not be able to cast arrays of different lengths
+
+# TODO: unsupported feature
+# statement error
+# SELECT array_value(1, 2, 3)::INT[2]
+
+# TODO: unsupported feature
+# statement error
+# SELECT array_value(1, 2, 3)::INT[4]
+
+# TODO: unsupported feature
+# query I
+# SELECT [1,2,3]::INT[3]
+# ----
+# [1, 2, 3]
+
+# Should be able to cast from list to array if child types are castable
+
+# TODO: unsupported feature
+# query I
+# SELECT ['1.0', '2.0', '3.0']::DOUBLE[3]
+# ----
+# [1.0, 2.0, 3.0]
+
+# Should not be able to cast from list to array if child types are not castable
+
+# TODO: unsupported feature
+# statement error
+# SELECT [1, 2, 3]::BLOB[3]
+
+# TODO: unsupported feature
+# query I
+# SELECT NULL::INT[3]
+# ----
+# NULL
+
+# Should be able to cast from list if all elements have the same length
+
+# TODO: unsupported feature
+# query I
+# SELECT [[1, 2, 3], [4, 5, 6]]::INT[3][2]
+# ----
+# [[1, 2, 3], [4, 5, 6]]
+
+# Should be able to null-cast from list
+
+# TODO: unsupported feature
+# query I
+# SELECT (NULL::INT[])::INT[3]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT c::INT[3] FROM (VALUES ([1,2,3]), ([4,NULL,6]), (NULL), ([7,8,9])) as t(c);
+# ----
+# [1, 2, 3]
+# [4, NULL, 6]
+# NULL
+# [7, 8, 9]
+
+# Should not be able to cast from list if all elements do not have the same length
+
+# TODO: unsupported feature
+# statement error
+# SELECT [1,2,3]::INT[2]
+
+# TODO: unsupported feature
+# statement error
+# SELECT [[1, 2, 3], [4, 5, 6, 7]]::INT[3][2]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE t1 AS SELECT [1, 2, 3]::INT[3];
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE t2 AS SELECT ['4', '5', '6']::VARCHAR[3];
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t2 SELECT * FROM t1;
+
+
+# Should be able to cast with nulls
+
+# TODO: unsupported feature
+# query I
+# SELECT ([1, NULL, 3]::INT[3])::VARCHAR[3]
+# ----
+# [1, NULL, 3]
+
+# TODO: unsupported feature
+# query I
+# SELECT (NULL::INT[3])::VARCHAR
+# ----
+# NULL
+
+# Should not be able to cast if the elements are not castable
+
+# TODO: unsupported feature
+# statement error
+# SELECT (['2', 'abc', '3']::VARCHAR[3])::INT[]
+
+# TODO: unsupported feature
+# statement error
+# SELECT ([1,2,3]::INT[3])::INT;
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST([42, 999, NULL, NULL, -42]::INT[5] AS TIMESTAMP WITH TIME ZONE[]);
+# ----
+# [NULL, NULL, NULL, NULL, NULL]
+
+# Should be able to cast null arrays of different types
+
+# TODO: unsupported feature
+# query I
+# select (NULL::INT[3])::VARCHAR[3];
+# ----
+# NULL
+
+# Should be able to cast from varchar
+
+# TODO: unsupported feature
+# query I
+# SELECT '[1, 2, 3]'::INTEGER[3]
+# ----
+# [1, 2, 3]
+
+# Handle wonky try-casts
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(l AS INTEGER[][3]) FROM (VALUES (['foo'])) as v(l);
+# ----
+# NULL

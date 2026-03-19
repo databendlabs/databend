@@ -1,0 +1,96 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested
+
+# list extract for structs
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a AS SELECT
+# 	[
+# 		{'a': 3, 'b': NULL},
+# 		NULL,
+# 		{'a': NULL, 'b': 'hello'}
+# 	] l;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# [{'a': 3, 'b': NULL}, NULL, {'a': NULL, 'b': hello}]
+
+# TODO: unsupported feature
+# query I
+# SELECT l[1] FROM a
+# ----
+# {'a': 3, 'b': NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT l[2] FROM a
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT l[3] FROM a
+# ----
+# {'a': NULL, 'b': hello}
+
+# nested structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested AS SELECT
+# 	[
+# 		{'a': 3, 'b': {'x': 3, 'y': [1, 2, 3]}},
+# 		NULL,
+# 		{'a': NULL, 'b': {'x': NULL, 'y': [4, 5]}},
+# 		{'a': 27, 'b': NULL},
+# 		{'a': NULL, 'b': {'x': 7, 'y': NULL}}
+# 	] l;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM nested
+# ----
+# [{'a': 3, 'b': {'x': 3, 'y': [1, 2, 3]}}, NULL, {'a': NULL, 'b': {'x': NULL, 'y': [4, 5]}}, {'a': 27, 'b': NULL}, {'a': NULL, 'b': {'x': 7, 'y': NULL}}]
+
+# TODO: unsupported feature
+# query I
+# SELECT l[1] FROM nested
+# ----
+# {'a': 3, 'b': {'x': 3, 'y': [1, 2, 3]}}
+
+# TODO: unsupported feature
+# query I
+# SELECT l[2] FROM nested
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT l[3] FROM nested
+# ----
+# {'a': NULL, 'b': {'x': NULL, 'y': [4, 5]}}
+
+# TODO: unsupported feature
+# query I
+# SELECT l[4] FROM nested
+# ----
+# {'a': 27, 'b': NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT l[5] FROM nested
+# ----
+# {'a': NULL, 'b': {'x': 7, 'y': NULL}}
+
+# TODO: unsupported feature
+# query I
+# SELECT l[5]['b'] FROM nested
+# ----
+# {'x': 7, 'y': NULL}

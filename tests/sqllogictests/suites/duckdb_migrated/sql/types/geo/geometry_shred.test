@@ -1,0 +1,103 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# create table t1(g GEOMETRY);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ('POINT(1 2)'::GEOMETRY);
+
+# Unshredded before checkpointing
+
+# TODO: unsupported feature
+# query I rowsort
+# select distinct segment_type from pragma_storage_info('t1') order by all;
+# ----
+# GEOMETRY
+# VALIDITY
+
+# Check stats
+
+# TODO: unsupported feature
+# query I rowsort stats_result
+# select stats(g) from t1;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# Shredded after checkpointing
+
+# TODO: unsupported feature
+# query I rowsort
+# select distinct segment_type from pragma_storage_info('t1') order by all;
+# ----
+# DOUBLE
+# VALIDITY
+
+# Stats should be the same
+
+# TODO: unsupported feature
+# query I rowsort stats_result
+# select stats(g) from t1;
+# ----
+
+# Now restart, to ensure persistence
+
+# TODO: unsupported feature
+# query I rowsort
+# select distinct segment_type from pragma_storage_info('t1') order by all;
+# ----
+# DOUBLE
+# VALIDITY
+
+# Stats should be the same
+
+# TODO: unsupported feature
+# query I rowsort stats_result
+# select stats(g) from t1;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT ST_AsText(g) FROM t1;
+# ----
+# POINT (1 2)
+
+# If we insert a non-point geometry, it should not be shredded
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ('LINESTRING(0 0, 1 1)'::GEOMETRY);
+
+# TODO: unsupported feature
+# query I rowsort
+# select distinct segment_type from pragma_storage_info('t1') order by all;
+# ----
+# DOUBLE
+# GEOMETRY
+# VALIDITY
+
+# TODO: unsupported feature
+# query I rowsort
+# select * from t1;
+# ----
+# LINESTRING (0 0, 1 1)
+# POINT (1 2)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+# After checkpointing, we should see the old and new segment compacted back into GEOMETRY
+
+# TODO: unsupported feature
+# query I rowsort
+# select distinct segment_type from pragma_storage_info('t1') order by all;
+# ----
+# GEOMETRY
+# VALIDITY

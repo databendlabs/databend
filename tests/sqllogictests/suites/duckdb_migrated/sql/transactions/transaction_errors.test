@@ -1,0 +1,22 @@
+# nothing to rollback
+# TODO: unsupported feature
+# statement error
+# ROLLBACK;
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN;
+
+# cannot start a transaction in a transaction
+
+# TODO: unsupported feature
+# statement error
+# BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;

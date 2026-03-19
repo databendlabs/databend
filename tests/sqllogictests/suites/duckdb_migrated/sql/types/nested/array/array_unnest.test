@@ -1,0 +1,69 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS doubles_table
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(array_value(1, 2, NULL, 4, 5));
+# ----
+# 1
+# 2
+# NULL
+# 4
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(array_value('this is', 'a test', NULL, 'of unnesting arrays'));
+# ----
+# this is
+# a test
+# NULL
+# of unnesting arrays
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 AS SELECT array_value(i + 1, i + 2) j FROM range(0, 10, 2) as t(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT j, UNNEST(j) FROM t1
+# ----
+# [1, 2]	1
+# [1, 2]	2
+# [3, 4]	3
+# [3, 4]	4
+# [5, 6]	5
+# [5, 6]	6
+# [7, 8]	7
+# [7, 8]	8
+# [9, 10]	9
+# [9, 10]	10
+
+# from #16672
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE doubles_table (doubles_dynamic DOUBLE[], doubles_fixed DOUBLE[2]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO doubles_table VALUES ([1.2, 2.3], [1.2, 2.3]);
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(doubles_dynamic) FROM doubles_table;
+# ----
+# 1.2
+# 2.3
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(doubles_fixed) FROM doubles_table;
+# ----
+# 1.2
+# 2.3

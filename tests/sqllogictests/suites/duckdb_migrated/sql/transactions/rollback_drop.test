@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS original_table
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table original_table as from range(0, 10) select 1 as col
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE original_table
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# statement ok
+# delete from original_table where rowid % 2 = 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM original_table;
+# ----
+# 5

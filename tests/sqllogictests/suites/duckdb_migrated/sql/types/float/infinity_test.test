@@ -1,0 +1,726 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floats
+
+# TODO: unsupported feature
+# query II
+# SELECT 'INF'::FLOAT, '-INF'::FLOAT
+# ----
+# inf	-inf
+
+# inf comparison
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::FLOAT = 'inf'::FLOAT
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::FLOAT <> 'inf'::FLOAT
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::FLOAT <> 3.0::FLOAT
+# ----
+# 1
+
+# storing inf in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f FLOAT UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('INF'), (1), ('-INF')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# inf
+# 1
+# -inf
+
+# table filters on inf
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='inf'::FLOAT
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='-inf'::FLOAT
+# ----
+# -inf
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1 ORDER BY 1
+# ----
+# -inf
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'inf'::FLOAT ORDER BY 1
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'-inf'::FLOAT ORDER BY 1
+# ----
+# 1
+# inf
+
+# >
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>1 ORDER BY 1
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'-inf'::FLOAT ORDER BY 1
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'inf'::FLOAT
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>=1 ORDER BY ALL
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='-inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='inf'::FLOAT ORDER BY ALL
+# ----
+# inf
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'-inf'::FLOAT ORDER BY ALL
+# ----
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1 ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='-inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+
+# inf as a constant
+
+# TODO: unsupported feature
+# query II
+# SELECT 'INF'::FLOAT, '-INF'::FLOAT
+# ----
+# inf	-inf
+
+# inf comparison
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::FLOAT = 'inf'::FLOAT
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::FLOAT <> 'inf'::FLOAT
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::FLOAT <> 3.0::FLOAT
+# ----
+# 1
+
+# storing inf in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f FLOAT CHECK(1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('INF'), (1), ('-INF')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# inf
+# 1
+# -inf
+
+# table filters on inf
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='inf'::FLOAT
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='-inf'::FLOAT
+# ----
+# -inf
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1 ORDER BY 1
+# ----
+# -inf
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'inf'::FLOAT ORDER BY 1
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'-inf'::FLOAT ORDER BY 1
+# ----
+# 1
+# inf
+
+# >
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>1 ORDER BY 1
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'-inf'::FLOAT ORDER BY 1
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'inf'::FLOAT
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>=1 ORDER BY ALL
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='-inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='inf'::FLOAT ORDER BY ALL
+# ----
+# inf
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'-inf'::FLOAT ORDER BY ALL
+# ----
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1 ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='-inf'::FLOAT ORDER BY ALL
+# ----
+# -inf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+
+
+
+# inf as a constant
+
+# TODO: unsupported feature
+# query II
+# SELECT 'INF'::DOUBLE, '-INF'::DOUBLE
+# ----
+# inf	-inf
+
+# inf comparison
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::DOUBLE = 'inf'::DOUBLE
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::DOUBLE <> 'inf'::DOUBLE
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::DOUBLE <> 3.0::DOUBLE
+# ----
+# 1
+
+# storing inf in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f DOUBLE UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('INF'), (1), ('-INF')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# inf
+# 1
+# -inf
+
+# table filters on inf
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='inf'::DOUBLE
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='-inf'::DOUBLE
+# ----
+# -inf
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1 ORDER BY 1
+# ----
+# -inf
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'inf'::DOUBLE ORDER BY 1
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'-inf'::DOUBLE ORDER BY 1
+# ----
+# 1
+# inf
+
+# >
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>1 ORDER BY 1
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'-inf'::DOUBLE ORDER BY 1
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'inf'::DOUBLE
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>=1 ORDER BY ALL
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='-inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='inf'::DOUBLE ORDER BY ALL
+# ----
+# inf
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'-inf'::DOUBLE ORDER BY ALL
+# ----
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1 ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='-inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+
+# inf as a constant
+
+# TODO: unsupported feature
+# query II
+# SELECT 'INF'::DOUBLE, '-INF'::DOUBLE
+# ----
+# inf	-inf
+
+# inf comparison
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::DOUBLE = 'inf'::DOUBLE
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::DOUBLE <> 'inf'::DOUBLE
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'inf'::DOUBLE <> 3.0::DOUBLE
+# ----
+# 1
+
+# storing inf in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f DOUBLE CHECK(1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('INF'), (1), ('-INF')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# inf
+# 1
+# -inf
+
+# table filters on inf
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='inf'::DOUBLE
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='-inf'::DOUBLE
+# ----
+# -inf
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1 ORDER BY 1
+# ----
+# -inf
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'inf'::DOUBLE ORDER BY 1
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'-inf'::DOUBLE ORDER BY 1
+# ----
+# 1
+# inf
+
+# >
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>1 ORDER BY 1
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'-inf'::DOUBLE ORDER BY 1
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'inf'::DOUBLE
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>=1 ORDER BY ALL
+# ----
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='-inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='inf'::DOUBLE ORDER BY ALL
+# ----
+# inf
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'-inf'::DOUBLE ORDER BY ALL
+# ----
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1 ORDER BY ALL
+# ----
+# -inf
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+# 1
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<='-inf'::DOUBLE ORDER BY ALL
+# ----
+# -inf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats

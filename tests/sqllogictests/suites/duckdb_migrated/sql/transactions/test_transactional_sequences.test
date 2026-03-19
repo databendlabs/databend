@@ -1,0 +1,102 @@
+# start a transaction for both nodes
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# create a sequence in node one
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+# node one can see it
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq');
+# ----
+# 1
+
+# node two can't see it
+
+# TODO: unsupported feature
+# statement error
+# SELECT nextval('seq');
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# node two still can't see it
+
+# TODO: unsupported feature
+# statement error
+# SELECT nextval('seq');
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# we can now see the sequence in node two
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq');
+# ----
+# 2
+
+# drop sequence seq in a transaction
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# DROP SEQUENCE seq;
+
+# node one can't use it anymore
+
+# TODO: unsupported feature
+# statement error
+# SELECT nextval('seq');
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq');
+# ----
+# 3
+
+# rollback cancels the drop sequence
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# we can still use it
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq');
+# ----
+# 4
+
+# now we drop it for real
+
+# TODO: unsupported feature
+# statement ok
+# DROP SEQUENCE seq;
+
+# we can't use it anymore
+
+# TODO: unsupported feature
+# statement error
+# SELECT nextval('seq');
+
+# TODO: unsupported feature
+# statement error
+# SELECT nextval('seq');

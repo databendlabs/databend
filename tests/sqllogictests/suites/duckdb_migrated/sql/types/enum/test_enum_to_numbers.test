@@ -1,0 +1,854 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# create type enum_numstrings as enum ('1', '2', '3', '4');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range as a from range(0, 10);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 (a enum_numstrings);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values ('1'), ('2'), ('3');
+
+# TODO: unsupported feature
+# query II
+# select t1.a, count(*) as num_matches from t1, t2 where t1.a != t2.a group by t1.a order by t1.a;
+# ----
+# 0	3
+# 1	2
+# 2	2
+# 3	2
+# 4	3
+# 5	3
+# 6	3
+# 7	3
+# 8	3
+# 9	3
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values ('1'), ('2');
+
+# TODO: unsupported feature
+# query II
+# select * from t1, t2 where t1.a = t2.a order by t1.a;
+# ----
+# 1	1
+# 1	1
+# 2	2
+# 2	2
+# 3	3
+
+
+# null enum types cast to null varcahr
+
+# TODO: unsupported feature
+# statement ok
+# delete from t2 where 1=1;
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values (NULL), ('1');
+
+# TODO: unsupported feature
+# query II
+# select * from t1, t2 order by t1.a, t2.a NULLS FIRST;
+# ----
+# 0	NULL
+# 0	1
+# 1	NULL
+# 1	1
+# 2	NULL
+# 2	1
+# 3	NULL
+# 3	1
+# 4	NULL
+# 4	1
+# 5	NULL
+# 5	1
+# 6	NULL
+# 6	1
+# 7	NULL
+# 7	1
+# 8	NULL
+# 8	1
+# 9	NULL
+# 9	1
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values  ('2'), ('3'), ('4');
+
+# null to Varchar cast results in NULL
+# NULL != '2' results in NULL and is not included
+
+# TODO: unsupported feature
+# query II
+# select * from t1, t2 where t2.a NOT IN ('2', '3', '4') order by t1.a, t2.a NULLS FIRST;
+# ----
+# 0	1
+# 1	1
+# 2	1
+# 3	1
+# 4	1
+# 5	1
+# 6	1
+# 7	1
+# 8	1
+# 9	1
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values ('1'), ('2'), ('3');
+
+# should not do a try cast
+# cast '2' to enum should be used, which is then pushed down
+# into the enum table filters
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN select * from t1, t2 where t2.a = '2' order by t1.a;
+# ----
+# physical_plan	<!REGEX>:.*TRY_CAST\(.*
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2
+
+# TODO: unsupported feature
+# statement ok
+# create type enum_strings as enum ('hello', 'goodbye', 'mr duck');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range as a from range(0, 500);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 (a enum_strings);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t2 values ('hello'), ('goodbye'), ('mr duck'),  ('mr duck'), ('hello'), ('goodbye');
+
+# enums behave like strings so we first cast to varchar, then to int64 for 
+# integer comparison. This should error since 'hello' Cannot be converted to INT64
+
+# TODO: unsupported feature
+# statement error
+# Select * from t1, t2 where t1.a = t2.a;
+
+# TODO: unsupported feature
+# query II
+# Select * from t1, t2 where t1.a::VARCHAR = t2.a;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::varchar as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::tinyint as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::smallint as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::integer as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::bigint as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::hugeint as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::utinyint as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::usmallint as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::uinteger as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('1', '2', '3', '4', '5');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select range::ubigint as a from range(0, 8);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(0, 8);
+
+# TODO: unsupported feature
+# query I rowsort
+# select a from t1, t2 where t1.a = t2.b;
+# ----
+# 1
+# 1
+# 2
+# 2
+# 3
+# 3
+# 4
+# 4
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR < t2.b;
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR <= t2.b;
+# ----
+# 28
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR > t2.b;
+# ----
+# 36
+
+# TODO: unsupported feature
+# query I
+# select count(*) from t1, t2 where t1.a::VARCHAR >= t2.b;
+# ----
+# 44
+
+# TODO: unsupported feature
+# statement ok
+# drop type new_type;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1; 
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2; 
+
+# TODO: unsupported feature
+# statement ok
+# create type new_type as enum ('294247-01-10 04:00:54.775806', '83 years 3 months 999 days 00:16:39.999999', '1677-09-21 00:12:43.145225', 'other enum type', 'another 1', '~~~');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select date, time, timestamp, timestamp_s, timestamp_ms, timestamp_ns, time_tz, timestamp_tz, interval, blob, bool from test_all_types();
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select * FROM (VALUES ('294247-01-10 04:00:54.775806'::new_type), ('83 years 3 months 999 days 00:16:39.999999'::new_type), ('1677-09-21 00:12:43.145225'::new_type), ('other enum type'::new_type), ('another 1'::new_type), ('~~~'::new_type)) t(b);
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.date = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.time = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.timestamp = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.timestamp_s = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.timestamp_ms = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.timestamp_ns = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.time_tz = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.timestamp_tz = t2.b;
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.interval = t2.b;
+
+# TODO: unsupported feature
+# statement ok
+# select count(*) from t1, t2 where t1.blob = t2.b;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t1;
+
+# TODO: unsupported feature
+# statement ok
+# drop table t2;
+
+# TODO: unsupported feature
+# statement ok
+# create type enum_bits as enum ('11001010110', '110', '0101001010101', 'some enum val that cannot be cast to bit');
+
+# TODO: unsupported feature
+# statement ok
+# create table t1 as select * FROM (VALUES ('110010'::BIT), ('110'::BIT), ('110110110011'::BIT)) t(a);
+
+# TODO: unsupported feature
+# statement ok
+# create table t2 as select * FROM (VALUES ('11001010110'::enum_bits), ('110'::enum_bits), ('0101001010101'::enum_bits), ('some enum val that cannot be cast to bit'::enum_bits)) t(b);
+
+# TODO: unsupported feature
+# statement error
+# select count(*) from t1, t2 where t1.a = t2.b;

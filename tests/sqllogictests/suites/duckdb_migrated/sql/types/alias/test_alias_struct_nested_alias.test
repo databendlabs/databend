@@ -1,0 +1,38 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS failing
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE foobar AS ENUM(
+# 	'Foo',
+# 	'Bar'
+# );
+
+# Create a USER type which is a STRUCT that contains another USER type
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE top_nest AS STRUCT(
+#     foobar FOOBAR
+# );
+
+# Create a table out of this type
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE failing (
+#     top_nest TOP_NEST
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into failing VALUES (
+# 	{'foobar': 'Foo'}
+# )
+
+# TODO: unsupported feature
+# query I
+# SELECT top_nest FROM failing;
+# ----
+# {'foobar': Foo}

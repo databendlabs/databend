@@ -1,0 +1,217 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM UNNEST(ARRAY[1, 2, 3]);
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM UNNEST([1, 2, 3]::INT ARRAY);
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM UNNEST(ARRAY[1, 2, 3]) AS tbl(i);
+# ----
+# 1
+# 2
+# 3
+
+# string
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM UNNEST(ARRAY[NULL, 'hello', 'world', 'bleorkbaejkoreijgaiorjgare']) AS tbl(i);
+# ----
+# NULL
+# hello
+# world
+# bleorkbaejkoreijgaiorjgare
+
+# list
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM UNNEST([[1, 2], [3, 4], NULL, [4, 5, 6, 7]]) AS tbl(i);
+# ----
+# [1, 2]
+# [3, 4]
+# NULL
+# [4, 5, 6, 7]
+
+# nested nested
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM UNNEST([{'a': [1, 2, 3], 'b': [4, 5, 6]}, {'a': [4, 5], 'b': [7, 8, 9, 10]}]) AS tbl(i);
+# ----
+# {'a': [1, 2, 3], 'b': [4, 5, 6]}
+# {'a': [4, 5], 'b': [7, 8, 9, 10]}
+
+# bigger than vector size
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM UNNEST((SELECT LIST(range) FROM range(0, 4000))) AS tbl(i);
+# ----
+# 4000
+
+# null
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM UNNEST(NULL::INT[]) AS tbl(i);
+# ----
+
+# empty list
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM UNNEST([]::INT[]) AS tbl(i);
+# ----
+
+# unnest from a subquery
+# postgres returns an error here
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM UNNEST((SELECT ARRAY[1,2,3] UNION ALL SELECT ARRAY[1,2,3]));
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM UNNEST((SELECT ARRAY[1,2,3] UNION ALL SELECT ARRAY[1,2,3]));
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists AS SELECT [1,2,3] l UNION ALL SELECT [4,5] UNION ALL SELECT [] UNION ALL SELECT [NULL] UNION ALL SELECT [7, 8];
+
+# TODO: unsupported feature
+# query I
+# SELECT u FROM lists, UNNEST(l) AS unnest(u) ORDER BY l, u;
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+# 7
+# 8
+# NULL
+
+# unnest with a prepared statement parameter
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT * FROM UNNEST(?::INT[]);
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1([1,2,3,4,5]);
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# FIXME: NULL without cast (should this work?)
+
+# TODO: unsupported feature
+# statement error
+# SELECT i FROM UNNEST(NULL) AS tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT i FROM UNNEST(1) AS tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT i FROM UNNEST([1, 2], [3, 4]) AS tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS
+# SELECT * FROM (VALUES
+# 	('a', array[4, 5, 5], array[5, 7]),
+# 	('b', array[2, 3], array[1, 2, 3, 4]),
+# 	('c', array[2, 3], array[4])
+# ) t(k, a,b);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sort(array(
+# 	SELECT list_contains(b, ax)
+# 	FROM UNNEST(a) ta(ax)
+# )) ab_intersect
+# FROM tbl;
+# ----
+# [0, 1, 1]
+# [1, 1]
+# [0, 0]
+
+# TODO: unsupported feature
+# query IIII
+# SELECT k, a, b,
+# 	list_sort(ARRAY(
+# 		SELECT DISTINCT ax
+# 			FROM UNNEST(a) ta(ax)
+# 			WHERE ax = any(b)
+# 			ORDER BY ALL
+# 	)) ab_intersect
+# 	FROM tbl;
+# ----
+# a	[4, 5, 5]	[5, 7]	[5]
+# b	[2, 3]	[1, 2, 3, 4]	[2, 3]
+# c	[2, 3]	[4]	[]
+
+
+# aliases
+
+# TODO: unsupported feature
+# query I
+# SELECT unnest FROM UNNEST(ARRAY[1,2,3]);
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM UNNEST(ARRAY[1,2,3]) t(a);
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT unnest FROM (SELECT ARRAY[1,2,3] AS x), UNNEST(x);
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT b FROM (SELECT ARRAY[1,2,3] AS x), UNNEST(x) t(b);
+# ----
+# 1
+# 2
+# 3

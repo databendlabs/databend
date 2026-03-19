@@ -1,0 +1,45 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS arrays
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE arrays (a INTEGER[3])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO arrays VALUES ([1, 2, 3]), ([1, 2, 4]), ([7, 8, 9]), ([-1, -2, -3]), (NULL), ([4, NULL, 2])
+
+# TODO: unsupported feature
+# query IIIIIIIIIIII
+# SUMMARIZE arrays
+# ----
+# a	INTEGER[3]	[-1, -2, -3]	[7, 8, 9]	5	NULL	NULL	NULL	NULL	NULL	6	16.67
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM arrays ORDER BY a LIMIT 1
+# ----
+# [-1, -2, -3]
+
+# TODO: unsupported feature
+# query I
+# SELECT min(a) FROM arrays
+# ----
+# [-1, -2, -3]
+
+# TODO: unsupported feature
+# query I
+# SELECT max(a) FROM arrays
+# ----
+# [7, 8, 9]
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO arrays VALUES ([-7, -8, -9]), ([-8, -9, -10])
+
+# TODO: unsupported feature
+# query I
+# SELECT max(a) FROM arrays
+# ----
+# [7, 8, 9]

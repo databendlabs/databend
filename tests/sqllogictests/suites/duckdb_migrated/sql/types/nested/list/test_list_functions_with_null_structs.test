@@ -1,0 +1,238 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS filter_data
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS many_structs_data
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested_struct_data
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS struct_data
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS struct_data_two_lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE struct_data(str STRUCT(val VARCHAR)[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO struct_data VALUES (NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_resize(str, 1) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(str, lambda a, b: a) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT str[1] FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_aggregate(str, 'count') FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT array_pop_back(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT array_pop_front(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT len(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_any_value(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_distinct(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_grade_up(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reverse_sort(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reverse(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_sort(str) FROM struct_data;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_unique(str) FROM struct_data;
+# ----
+# NULL
+
+
+# NULL in a STRUCT.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested_struct_data(str STRUCT(str_nested STRUCT(val VARCHAR))[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested_struct_data VALUES ([NULL]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_transform(str, lambda x: x) FROM nested_struct_data;
+# ----
+# [NULL]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_filter(str, lambda x: x.str_nested IS NULL) FROM nested_struct_data;
+# ----
+# [NULL]
+
+# Two list nesting levels.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE struct_data_two_lists(str STRUCT(val VARCHAR)[][]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO struct_data_two_lists VALUES (NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT flatten(str) FROM struct_data_two_lists;
+# ----
+# NULL
+
+# Nested STRUCTs.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE many_structs_data(str1 STRUCT(val VARCHAR, str2 STRUCT(val INT[]))[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO many_structs_data VALUES (NULL), ([{'val': 'hello', 'str2': NULL}, (NULL, NULL), {'val': 'world', 'str2': {'val': [1, 2]}}]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_reduce(str1, lambda a, b: a) FROM many_structs_data;
+# ----
+# NULL
+# {'val': hello, 'str2': NULL}
+
+# Original issue.
+
+# TODO: unsupported feature
+# query IIIII
+# WITH foo AS (
+#     SELECT str.reduce(lambda a, b: a) AS str FROM struct_data
+# )
+# SELECT str, str.val, str.val = '', str.val IS NULL, str IS NULL FROM foo;
+# ----
+# NULL	NULL	NULL	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE filter_data(foo text[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO filter_data VALUES
+#     (['some value']),
+#     (['some value', 'other value']),
+#     (['some value', 'other value', 'some value']),
+#     (['some value', 'other value', 'some value', 'other value']),
+#     (['some value', 'other value', 'some value', 'other value', 'some value']),
+#     (['some value', 'other value', 'some value', 'other value', 'some value', 'other value']),
+#     (['some value', 'other value', 'some value', 'other value', 'some value', 'other value', 'some value']);
+
+# TODO: unsupported feature
+# query II
+# WITH transformed AS (
+# 	SELECT foo.list_transform(
+#                 lambda x: struct_pack(val := x, conflict := false)
+#             ).reduce(
+#                 lambda res, x: CASE
+#                     WHEN res.conflict THEN res
+#                     WHEN res.val = x.val THEN res
+#                     ELSE struct_pack(val := null, conflict := true)
+# 					END
+#             ) AS result
+#         FROM filter_data
+#     )
+# SELECT result, result.val = '' FROM transformed;
+# ----
+# {'val': some value, 'conflict': 0}	0
+# {'val': NULL, 'conflict': 1}	NULL
+# {'val': NULL, 'conflict': 1}	NULL
+# {'val': NULL, 'conflict': 1}	NULL
+# {'val': NULL, 'conflict': 1}	NULL
+# {'val': NULL, 'conflict': 1}	NULL
+# {'val': NULL, 'conflict': 1}	NULL
+
+# TODO: unsupported feature
+# query II
+# WITH data_(foo) AS (VALUES (null::text[]), (['a', 'b', 'c'])
+#     ), transformed AS (
+#         SELECT
+#             foo.list_transform(
+#                 lambda x: struct_pack(val := x, conflict := false)
+#             ).reduce(
+#                 lambda res, x: CASE
+#                     WHEN res.conflict THEN res
+#                     WHEN res.val = x.val THEN res
+#                     ELSE struct_pack(val := null, conflict := true)
+#                 	END
+#             ) AS result
+#         FROM data_
+#     )
+# SELECT result, result.val = '' FROM transformed;
+# ----
+# NULL	NULL
+# {'val': NULL, 'conflict': 1}	NULL

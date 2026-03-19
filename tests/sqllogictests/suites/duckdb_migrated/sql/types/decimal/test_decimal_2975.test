@@ -1,0 +1,22 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS q
+
+# TODO: unsupported feature
+# statement ok
+# create table q (big decimal (38,10))
+
+# TODO: unsupported feature
+# statement ok
+# insert into q (big ) values (9999999999999999899999999999.9999999999);
+
+# TODO: unsupported feature
+# statement ok
+# insert into q (big ) values (-9999999999999999899999999999.9999999999);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM q
+# ----
+# 9999999999999999899999999999.9999999999
+# -9999999999999999899999999999.9999999999

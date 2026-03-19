@@ -1,0 +1,554 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floats
+
+# TODO: unsupported feature
+# query I
+# SELECT 'NAN'::FLOAT
+# ----
+# nan
+
+# storing nan in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f FLOAT UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('NAN'), (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# nan
+# 1
+
+# nan comparison
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::FLOAT = 'nan'::FLOAT
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::FLOAT <> 'nan'::FLOAT
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::FLOAT <> 3.0::FLOAT
+# ----
+# 1
+
+# table filters on nan
+# note: for postgres compatibility, nan is equal to itself
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='nan'::FLOAT
+# ----
+# nan
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'nan'::FLOAT
+# ----
+# 1
+
+# >
+# for postgres compatibility, nan is bigger than everything
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f > 0 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'nan'::FLOAT
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f >= 1 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='nan'::FLOAT
+# ----
+# nan
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'nan'::FLOAT
+# ----
+# 1
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f <= 'nan'::FLOAT ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+
+# nan as a constant
+
+# TODO: unsupported feature
+# query I
+# SELECT 'NAN'::FLOAT
+# ----
+# nan
+
+# storing nan in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f FLOAT CHECK(1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('NAN'), (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# nan
+# 1
+
+# nan comparison
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::FLOAT = 'nan'::FLOAT
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::FLOAT <> 'nan'::FLOAT
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::FLOAT <> 3.0::FLOAT
+# ----
+# 1
+
+# table filters on nan
+# note: for postgres compatibility, nan is equal to itself
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='nan'::FLOAT
+# ----
+# nan
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'nan'::FLOAT
+# ----
+# 1
+
+# >
+# for postgres compatibility, nan is bigger than everything
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f > 0 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'nan'::FLOAT
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f >= 1 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='nan'::FLOAT
+# ----
+# nan
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'nan'::FLOAT
+# ----
+# 1
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f <= 'nan'::FLOAT ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+
+
+
+# nan as a constant
+
+# TODO: unsupported feature
+# query I
+# SELECT 'NAN'::DOUBLE
+# ----
+# nan
+
+# storing nan in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f DOUBLE UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('NAN'), (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# nan
+# 1
+
+# nan comparison
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::DOUBLE = 'nan'::DOUBLE
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::DOUBLE <> 'nan'::DOUBLE
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::DOUBLE <> 3.0::DOUBLE
+# ----
+# 1
+
+# table filters on nan
+# note: for postgres compatibility, nan is equal to itself
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='nan'::DOUBLE
+# ----
+# nan
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'nan'::DOUBLE
+# ----
+# 1
+
+# >
+# for postgres compatibility, nan is bigger than everything
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f > 0 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'nan'::DOUBLE
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f >= 1 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='nan'::DOUBLE
+# ----
+# nan
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'nan'::DOUBLE
+# ----
+# 1
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f <= 'nan'::DOUBLE ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+
+# nan as a constant
+
+# TODO: unsupported feature
+# query I
+# SELECT 'NAN'::DOUBLE
+# ----
+# nan
+
+# storing nan in a table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE floats(f DOUBLE CHECK(1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO floats VALUES ('NAN'), (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM floats
+# ----
+# nan
+# 1
+
+# nan comparison
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::DOUBLE = 'nan'::DOUBLE
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::DOUBLE <> 'nan'::DOUBLE
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select 'nan'::DOUBLE <> 3.0::DOUBLE
+# ----
+# 1
+
+# table filters on nan
+# note: for postgres compatibility, nan is equal to itself
+# =
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f='nan'::DOUBLE
+# ----
+# nan
+
+# <>
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>1
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<>'nan'::DOUBLE
+# ----
+# 1
+
+# >
+# for postgres compatibility, nan is bigger than everything
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f > 0 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>'nan'::DOUBLE
+# ----
+
+# >=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f >= 1 ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f>='nan'::DOUBLE
+# ----
+# nan
+
+# <
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<1
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<'nan'::DOUBLE
+# ----
+# 1
+
+# <=
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f<=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT f FROM floats WHERE f <= 'nan'::DOUBLE ORDER BY ALL;
+# ----
+# 1
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats

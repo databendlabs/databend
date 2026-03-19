@@ -1,0 +1,20 @@
+# TODO: unsupported feature
+# query II
+# SELECT type_name, logical_type FROM duckdb_types() WHERE NOT internal
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# query I
+# select 'happy'::mood;
+# ----
+# happy
+
+# TODO: unsupported feature
+# query II
+# SELECT type_name, logical_type FROM duckdb_types() WHERE NOT internal
+# ----
+# mood	ENUM

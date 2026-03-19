@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS topn_nulls
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE topn_nulls(v INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO topn_nulls
+# SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END
+# FROM range(0, 12) tbl(i)
+
+# TODO: unsupported feature
+# query II nosort
+# EXPLAIN SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query I
+# SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+# 1
+# 2

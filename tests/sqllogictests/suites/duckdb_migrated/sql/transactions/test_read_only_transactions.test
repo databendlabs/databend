@@ -1,0 +1,33 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (42)
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION READ ONLY
+
+# we can read from the database
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# 42
+
+# we cannot modify the database in a read-only transaction
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a VALUES (48)
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT

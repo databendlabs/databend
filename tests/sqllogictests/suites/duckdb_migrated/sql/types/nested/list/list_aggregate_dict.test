@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Hosts
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Hosts (ips varchar[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Hosts SELECT * FROM '{DATA_DIR}/csv/ips.csv.gz';
+
+# TODO: unsupported feature
+# query I
+# SELECT min(list_string_agg(ips)) FROM Hosts
+# ----
+# 248.128.0.0
+
+# TODO: unsupported feature
+# query I
+# SELECT min(ips[1]) FROM Hosts
+# ----
+# 248.128.0.0
+
+# TODO: unsupported feature
+# query I
+# SELECT min([x[2:4] for x in ips if x[1]::int > 1]) FROM Hosts
+# ----
+# [48.]

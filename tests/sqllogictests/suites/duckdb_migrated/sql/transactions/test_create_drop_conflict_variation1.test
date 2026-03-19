@@ -1,0 +1,56 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS foo.bar
+
+###
+### The variation is that con1's query is now *also* in a transaction, we first commit the DROP SCHEMA (con2's transaction)
+###
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA foo;
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION;
+
+# Drop the schema in con2
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA IF EXISTS foo CASCADE;
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION
+
+# Create a table on the schema we're dropping
+# This should succeed because the schema drop isn't committed yet
+
+# TODO: unsupported feature
+# statement ok
+# create table foo.bar as select 42;
+
+# This passes because the 'create table' was not committed yet
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# This fails because the schema has been dropped
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# statement error
+# DROP SCHEMA foo CASCADE;
+
+# TODO: unsupported feature
+# statement error
+# select * from foo.bar;
+
+# TODO: unsupported feature
+# query I
+# select schema_name from duckdb_schemas() where schema_name = 'foo';
+# ----

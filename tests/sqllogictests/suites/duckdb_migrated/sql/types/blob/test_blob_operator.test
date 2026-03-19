@@ -1,0 +1,81 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS blobs
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS blobs2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE blobs (b BYTEA, g INTEGER);
+
+# strings: hello -> \x68656C6C6F, r -> \x72
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('hello', 0), ('\x00whatisgoingon', 1), (NULL, 0), ('\xFF\xFE\xFB', 1)
+
+# simple aggregates only
+
+# TODO: unsupported feature
+# query IITT
+# SELECT COUNT(*), COUNT(b), MIN(b), MAX(b) FROM blobs
+# ----
+# 4	3	\x00whatisgoingon	\xFF\xFE\xFB
+
+# ORDER BY
+
+# TODO: unsupported feature
+# query TI
+# SELECT * FROM blobs ORDER BY b
+# ----
+# NULL	0
+# \x00whatisgoingon	1
+# hello	0
+# \xFF\xFE\xFB	1
+
+# GROUP BY
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('hello', 3), ('\x00whatisgoingon', 9), (NULL, 0), ('\xFF\xFE\xFB', 19)
+
+# TODO: unsupported feature
+# query II
+# SELECT b, SUM(g) FROM blobs GROUP BY b ORDER BY b
+# ----
+# NULL	0
+# \x00whatisgoingon	10
+# hello	3
+# \xFF\xFE\xFB	20
+
+# JOIN
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE blobs2 (b BYTEA, g INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs2 VALUES ('hello', 0), ('\x00whatisgoingon', 100), (NULL, 0), ('\xFF\xFE\xFB', 200)
+
+# group by blobs.b, explicit JOIN
+
+# TODO: unsupported feature
+# query TR
+# SELECT L.b, SUM(L.g) FROM blobs as L JOIN blobs2 AS R ON L.b=R.b GROUP BY L.b ORDER BY L.b
+# ----
+# \x00whatisgoingon	10.000000
+# hello	3.000000
+# \xFF\xFE\xFB	20.000000
+
+# group by blobs2.b, implicit JOIN
+
+# TODO: unsupported feature
+# query TR
+# SELECT R.b, SUM(R.g) FROM blobs as L, blobs2 AS R WHERE L.b=R.b GROUP BY R.b ORDER BY R.b
+# ----
+# \x00whatisgoingon	200.000000
+# hello	0.000000
+# \xFF\xFE\xFB	400.000000

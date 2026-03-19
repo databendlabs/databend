@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement error
+# select 42 having unnest([1,2,3]);
+
+# TODO: unsupported feature
+# statement error
+# select row_number() over () qualify unnest([1,2,3]);

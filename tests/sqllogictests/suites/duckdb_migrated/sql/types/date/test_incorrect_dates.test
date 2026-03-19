@@ -1,0 +1,62 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dates
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE dates(i DATE)
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('blabla')
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('1993-20-14')
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('1993-08-99')
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('1993-02-29')
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('1900-02-29')
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO dates VALUES ('1992-02-29')
+
+# day in range because of leapyear
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO dates VALUES ('2000-02-29')
+
+# test incorrect date formats
+# dd-mm-YYYY
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('02-02-1992')
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('1900a01a01')
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO dates VALUES ('1900-1-1')
+
+# out of range dates
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('-100000000-01-01')
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO dates VALUES ('1000000000-01-01')

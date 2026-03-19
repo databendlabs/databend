@@ -1,0 +1,91 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3)
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (3)
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# Inserting a non-conflicting value succeeds, but we cannot update it to a conflicting value.
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (4)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 4
+
+# TODO: unsupported feature
+# statement error
+# UPDATE integers SET i = 3 WHERE i = 4
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# Inserting a non-conflicting value succeeds, and updating it to another non-conflicting value is possible.
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (4)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 4
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE integers SET i = 5 WHERE i = 4
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM integers WHERE i = 5
+# ----
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM integers WHERE i = 4
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM integers ORDER BY i
+# ----
+# 1
+# 2
+# 3
+# 5

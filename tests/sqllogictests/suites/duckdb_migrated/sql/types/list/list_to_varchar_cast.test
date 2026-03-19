@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# SELECT concat_ws('.', list_reverse(string_split('1.2..3', '.')));
+# ----
+# [3, '', 2, 1]

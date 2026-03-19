@@ -1,0 +1,201 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# Alternative verify disables the offset pruning in the optimizer rule
+# TODO: unsupported feature
+# statement ok
+# USE db
+
+# Ordered row groups vs. guaranteed number of qualifying tuples
+
+# 0 1 2 3 4 5 6 7 8 9	 ASC     DESC
+# [     ]              : 0       10240
+# [     ]              : 2       4097
+#   [       ]          : 4097    4097
+#         [   ]        : 8192    2049
+#               [ ]    : 10240   2048
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t(
+# 	generated_col AS (i + 1),
+# 	i BIGINT
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT 1 i UNION ALL SELECT i FROM repeat(5, 2047) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT i FROM repeat(4, 2047) t1(i) UNION ALL SELECT 6 i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT 7 i UNION ALL SELECT i FROM repeat(8, 2047) t1(i)
+
+# Fill the table with nulls to trigger the topn optimizer even for larger limits
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT i FROM repeat(NULL, 2000000) t1(i)
+
+# Work-around for unsetting version info
+
+# TODO: unsupported feature
+# statement ok
+# USE tmp
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db
+
+# TODO: unsupported feature
+# statement ok
+# USE db
+
+# TODO: unsupported feature
+# statement ok
+# DETACH tmp
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 3
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 4097
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 4098
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 8192
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 8193
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2048
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2049
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 2050
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4096
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 4097
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 6143
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 6144
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 8190
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i DESC LIMIT 8191
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 1
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 2
+# ----
+# # TODO: special result marker
+
+# FIXME: we don't yet do pruning with NULL values
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 2 OFFSET 6144
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM t ORDER BY i LIMIT 1 OFFSET 8192
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT 9 i UNION ALL SELECT i FROM repeat(NULL, 2046) t1(i) UNION ALL SELECT 10 i
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT i FROM t ORDER by i DESC LIMIT 3
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM t ORDER BY i DESC LIMIT 3
+# ----
+# 10
+# 9
+# 8

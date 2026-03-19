@@ -1,0 +1,384 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::tinyint) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::smallint) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::integer) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::bigint) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::utinyint) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::usmallint) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::uinteger) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::ubigint) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1, 2, 3, 4, 5]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+
+# decimals
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::decimal(4,1)) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1.0, 2.0, 3.0, 4.0, 5.0]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::decimal(8,1)) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1.0, 2.0, 3.0, 4.0, 5.0]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::decimal(12,1)) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1.0, 2.0, 3.0, 4.0, 5.0]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i::decimal(18,1)) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1.0, 2.0, 3.0, 4.0, 5.0]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(('1e'||i::varchar)::float) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 10.000000
+# 100.000000
+# 1000.000000
+# 10000.000000
+# 100000.000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(('1e'||i::varchar)::double) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 10.000000
+# 100.000000
+# 1000.000000
+# 10000.000000
+# 100000.000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+
+
+# intervals
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(interval (i) years) AS l from range(1, 6, 1) t1(i)
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [1 year, 2 years, 3 years, 4 years, 5 years]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1
+# ----
+# 1 year
+# 2 years
+# 3 years
+# 4 years
+# 5 years
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# bools
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select list(i%2=0) AS l from range(1, 6, 1) t1(i);
+
+# TODO: unsupported feature
+# query I
+# select l from a order by 1;
+# ----
+# [0, 1, 0, 1, 0]
+
+# TODO: unsupported feature
+# query I
+# select unnest(l) from a order by 1;
+# ----
+# 0
+# 0
+# 0
+# 1
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# drop table a

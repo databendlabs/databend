@@ -1,0 +1,62 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2)
+
+# start a transaction
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# parser errors do not invalidate the current transaction
+
+# TODO: unsupported feature
+# statement error
+# SELEC 42
+
+# TODO: unsupported feature
+# query I
+# SELECT 42
+# ----
+# 42
+
+# neither do binder errors
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM nonexistanttable
+
+# TODO: unsupported feature
+# query I
+# SELECT 42
+# ----
+# 42
+
+# however primary key conflicts do invalidate it
+
+# TODO: unsupported feature
+# statement error
+# UPDATE integers SET i=2
+
+# TODO: unsupported feature
+# statement error
+# SELECT 42
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY 1
+# ----
+# 1
+# 2

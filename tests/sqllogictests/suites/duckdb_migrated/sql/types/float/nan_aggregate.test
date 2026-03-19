@@ -1,0 +1,82 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS floats
+
+# TODO: unsupported feature
+# statement ok
+# create table floats(f FLOAT, i int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
+
+# TODO: unsupported feature
+# query II
+# SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
+# ----
+# -inf	5
+# inf	8
+# nan	26
+
+# TODO: unsupported feature
+# query I
+# select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# select sum(f) from floats where 0 > f;
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# select sum(f) from floats
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+# TODO: unsupported feature
+# statement ok
+# create table floats(f DOUBLE, i int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into floats values ('inf', 1), ('inf', 7), ('-inf', 3), ('nan', 7), ('nan', 19), ('-inf', 2)
+
+# TODO: unsupported feature
+# query II
+# SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
+# ----
+# -inf	5
+# inf	8
+# nan	26
+
+# TODO: unsupported feature
+# query I
+# select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# select sum(f) from floats where 0 > f;
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# select sum(f) from floats
+# ----
+# nan
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE floats
+
+
+# still need to catch overflows during sum operation

@@ -1,0 +1,269 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS list_array_table
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(NULL, 1)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT LIST_EXTRACT(42, 1)
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(), 1)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(NULL), 1)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(NULL), -1)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42), NULL)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42), 1)
+# ----
+# 42
+
+# alias
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_ELEMENT(LIST_VALUE(42), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42, 43), 2)
+# ----
+# 43
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42, 43, 44, 45), -1)
+# ----
+# 45
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42, 43, 44, 45), -2)
+# ----
+# 44
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42, 43, 44, 45), -4)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42, 43, 44, 45), -5)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42), 2)
+# ----
+# NULL
+
+# all them types woo
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE('Hello', 'World'), 1)
+# ----
+# Hello
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE('Hello', 'World'), 2)
+# ----
+# World
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::UTINYINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::TINYINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::USMALLINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::SMALLINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::UINTEGER), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::INTEGER), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::UBIGINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::BIGINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::HUGEINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::UHUGEINT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::FLOAT), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE(42::DOUBLE), 1)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE('2019-11-26'::DATE), 1)
+# ----
+# 2019-11-26
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE('21:42:00'::TIME), 1)
+# ----
+# 21:42:00
+
+# TODO: unsupported feature
+# query I
+# SELECT LIST_EXTRACT(LIST_VALUE('2019-11-26 09:42:00'::TIMESTAMP), 1)
+# ----
+# 2019-11-26 09:42:00
+
+# Issue #4978 -- Substring overflow 2
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_extract('1', 9223372036854775807);
+
+# TODO: unsupported feature
+# statement error
+# SELECT list_extract('1', -9223372036854775808);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract('1', 0);
+# ----
+# (empty)
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract('1', 1);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract('1', -1);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract([1, 2, 3], -9223372036854775808);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE list_array_table(a int[3][]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO list_array_table VALUES ([[1,2,3], NULL, [4,5,6]]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(a, 1) FROM list_array_table;
+# ----
+# [1, 2, 3]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(a, 2) FROM list_array_table;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(a, 3) FROM list_array_table;
+# ----
+# [4, 5, 6]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(a, 4) FROM list_array_table;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(a, -1) FROM list_array_table;
+# ----
+# [4, 5, 6]
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(a, 0) FROM list_array_table;
+# ----
+# NULL

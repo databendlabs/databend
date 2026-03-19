@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE str_alias as VARCHAR;
+
+# TODO: unsupported feature
+# query I
+# SELECT upper('hello'::str_alias)
+# ----
+# HELLO

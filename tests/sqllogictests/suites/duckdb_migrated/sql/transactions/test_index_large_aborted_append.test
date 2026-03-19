@@ -1,0 +1,563 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 1) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=1 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=1, MIN(i), MAX(i), (COUNT(i)-2047)=1 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 2) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=2 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=2, MIN(i), MAX(i), (COUNT(i)-2047)=2 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 3) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=3 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=3, MIN(i), MAX(i), (COUNT(i)-2047)=3 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 4) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=4 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=4, MIN(i), MAX(i), (COUNT(i)-2047)=4 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 5) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=5 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=5, MIN(i), MAX(i), (COUNT(i)-2047)=5 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 6) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=6 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=6, MIN(i), MAX(i), (COUNT(i)-2047)=6 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 7) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=7 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=7, MIN(i), MAX(i), (COUNT(i)-2047)=7 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT -10 + i FROM range(0, 8) tbl(i);
+
+# insert the values [2..2048] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT case when i%2=0 then null else i end FROM range(2, 2049, 1) t1(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (-10);
+
+# con commits first
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# con2 fails to commit because of the conflict
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=8 FROM integers
+# ----
+# 1
+
+# now append the rows [2..2048 again]
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT (COUNT(*)-2047)=8, MIN(i), MAX(i), (COUNT(i)-2047)=8 FROM integers ORDER BY 1
+# ----
+# 1	-10	2048	1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;

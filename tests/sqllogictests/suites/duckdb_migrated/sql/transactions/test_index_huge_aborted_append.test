@@ -1,0 +1,62 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER PRIMARY KEY);
+
+# insert the value [1] into the table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1);
+
+# start a transaction where we insert a lot of values, and finally insert the conflict
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT i FROM range(2, 131068, 1) t1(i)
+
+# inserting the value "1" here fails
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1)
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers
+# ----
+# 1
+
+# now append some rows again
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (2);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (3);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (4);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY 1
+# ----
+# 1
+# 2
+# 3
+# 4

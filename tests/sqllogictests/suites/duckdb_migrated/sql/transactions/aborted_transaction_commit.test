@@ -1,0 +1,45 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS keys
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE keys(i INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO keys VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO keys VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM keys
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO keys VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO keys VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT 42;

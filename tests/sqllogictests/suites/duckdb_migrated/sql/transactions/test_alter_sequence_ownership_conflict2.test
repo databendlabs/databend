@@ -1,0 +1,56 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl1 (
+# 	id INT
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION;
+
+# drop 'tbl1' in a transaction
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl1 CASCADE;
+
+# TODO: unsupported feature
+# statement ok
+# START TRANSACTION;
+
+# change ownership of 'seq' to 'tbl1' in a transaction
+
+# TODO: unsupported feature
+# statement ok
+# ALTER SEQUENCE seq OWNED BY tbl1;
+
+# commit the ownership change
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# This should no longer be able to commit
+# New dependencies were introduced on 'tbl1'
+
+# TODO: unsupported feature
+# statement error
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# drop table tbl1
+
+# tbl1 owns 'seq', so it was already dropped
+
+# TODO: unsupported feature
+# statement error
+# drop sequence seq

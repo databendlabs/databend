@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# query I rowsort
+# SELECT TRY_CAST(test_vector AS INT[2]) AS a FROM test_vector_types(NULL::INTEGER[])
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# NULL
+# [-2147483648, 2147483647]
+# [-2147483648, 2147483647]
+# [-2147483648, 2147483647]
+# [-2147483648, 2147483647]
+# [3, 5]
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST(test_vector AS INT[2]) AS a FROM test_vector_types(NULL::INTEGER[])

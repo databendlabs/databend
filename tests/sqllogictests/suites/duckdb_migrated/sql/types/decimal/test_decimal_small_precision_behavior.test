@@ -1,0 +1,47 @@
+# TODO: unsupported feature
+# query I
+# select '1.023450000001'::DECIMAL(5,4)
+# ----
+# 1.0235
+
+# TODO: unsupported feature
+# query I
+# select '1.234499999'::DECIMAL(4,3)
+# ----
+# 1.234
+
+# TODO: unsupported feature
+# query I
+# select '1.23499999'::DECIMAL(4,3)
+# ----
+# 1.235
+
+# TODO: unsupported feature
+# query I
+# select '1.234499999'::DECIMAL(5,4)
+# ----
+# 1.2345
+
+# TODO: unsupported feature
+# query I
+# select '-1.023450000001'::DECIMAL(5,4)
+# ----
+# -1.0235
+
+# TODO: unsupported feature
+# query I
+# select '-1.234499999'::DECIMAL(4,3)
+# ----
+# -1.234
+
+# TODO: unsupported feature
+# query I
+# select '-1.23499999'::DECIMAL(4,3)
+# ----
+# -1.235
+
+# TODO: unsupported feature
+# query I
+# select '-1.234499999'::DECIMAL(5,4)
+# ----
+# -1.2345

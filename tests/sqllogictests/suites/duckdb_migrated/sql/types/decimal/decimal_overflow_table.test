@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS decimals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE decimals(d DECIMAL(18,1))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO decimals VALUES (99000000000000000.0)
+
+# addition
+
+# TODO: unsupported feature
+# query I
+# SELECT d+1 FROM decimals
+# ----
+# 99000000000000001.0
+
+# TODO: unsupported feature
+# statement error
+# SELECT d+1000000000000000.0 FROM decimals
+
+# TODO: unsupported feature
+# query I
+# SELECT -1-d FROM decimals
+# ----
+# -99000000000000001.0
+
+# TODO: unsupported feature
+# statement error
+# SELECT -1000000000000000.0-d FROM decimals
+
+# TODO: unsupported feature
+# query I
+# SELECT 1*d FROM decimals
+# ----
+# 99000000000000000.0
+
+# TODO: unsupported feature
+# statement error
+# SELECT 2*d FROM decimals

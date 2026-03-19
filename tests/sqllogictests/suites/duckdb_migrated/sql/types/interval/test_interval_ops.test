@@ -1,0 +1,55 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS interval
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE interval (t INTERVAL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO interval VALUES (INTERVAL '20' DAY), (INTERVAL '1' YEAR), (INTERVAL '1' MONTH);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(DISTINCT t) FROM interval
+# ----
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE interval SET t=INTERVAL '1' MONTH WHERE t=INTERVAL '20' DAY;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM interval i1 JOIN interval i2 USING (t) ORDER BY 1
+# ----
+# 1 month
+# 1 month
+# 1 month
+# 1 month
+# 1 year
+
+# TODO: unsupported feature
+# query TT
+# SELECT * FROM interval i1 JOIN interval i2 ON (i1.t <> i2.t) ORDER BY 1
+# ----
+# 1 month	1 year
+# 1 month	1 year
+# 1 year	1 month
+# 1 year	1 month
+
+# TODO: unsupported feature
+# query TT
+# SELECT * FROM interval i1 JOIN interval i2 ON (i1.t > i2.t) ORDER BY 1
+# ----
+# 1 year	1 month
+# 1 year	1 month
+
+# TODO: unsupported feature
+# query TI
+# SELECT t, row_number() OVER (PARTITION BY t ORDER BY t) FROM interval ORDER BY 1, 2;
+# ----
+# 1 month	1
+# 1 month	2
+# 1 year	1

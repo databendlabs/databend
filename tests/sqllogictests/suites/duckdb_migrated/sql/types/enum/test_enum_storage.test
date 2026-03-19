@@ -1,0 +1,98 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Moe', 'happy');
+
+# TODO: unsupported feature
+# query TT
+# select * from person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE person;
+
+# reload the database from disk a few times, and check that the data in the catalog is still there
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Moe', 'happy');
+
+# TODO: unsupported feature
+# query TT
+# select * from person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE person;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Moe', 'happy');
+
+# TODO: unsupported feature
+# query TT
+# select * from person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE person;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Moe', 'happy');
+
+# TODO: unsupported feature
+# query TT
+# select * from person
+# ----
+# Moe	happy
+
+# reload the database from disk a few times, and check that the data in the table is still there
+
+
+# FIXME: dependencies between enums and tables are currently disabled
+
+
+
+# FIXME: dependencies between enums and tables are currently disabled

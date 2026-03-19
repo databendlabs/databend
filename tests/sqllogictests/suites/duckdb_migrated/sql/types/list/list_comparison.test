@@ -1,0 +1,1194 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS list_int
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS list_int1
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS list_int_empty
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS list_of_struct
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS list_str
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] < [2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] < [1]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL < [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] < NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <= [2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <= [1]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <= [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] = [2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] = [1]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL = [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] = NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <> [2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <> [1]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <> [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <> NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] >= [2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] >= [1]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL >= [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] >= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] > [2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] > [1]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL > [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] > NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW list_int1 AS SELECT * FROM (VALUES
+# 	([1], [1]),
+# 	([1], [2]),
+# 	([2], [1]),
+# 	(NULL, [1]),
+# 	([2], NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l < r FROM list_int1
+# ----
+# 0
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <= r FROM list_int1
+# ----
+# 1
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l = r FROM list_int1
+# ----
+# 1
+# 0
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <> r FROM list_int1
+# ----
+# 0
+# 1
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l >= r FROM list_int1
+# ----
+# 1
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l > r FROM list_int1
+# ----
+# 0
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# Constant multiple integer column comparisons
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] < [1, 2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] < [1]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL < [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] < NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <= [1, 2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <= [1]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <= [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] = [1, 2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] = [1]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL = [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] = NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <> [1, 2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <> [1]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <> [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] <> NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] >= [1, 2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] >= [1]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL >= [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] >= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] > [1, 2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] > [1]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL > [1]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [1] > NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW list_int AS SELECT * FROM (VALUES
+# 	([1], [1]),
+# 	([1], [1, 2]),
+# 	([1, 2], [1]),
+# 	(NULL, [1]),
+# 	([1, 2], NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l < r FROM list_int
+# ----
+# 0
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <= r FROM list_int
+# ----
+# 1
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l = r FROM list_int
+# ----
+# 1
+# 0
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <> r FROM list_int
+# ----
+# 0
+# 1
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l >= r FROM list_int
+# ----
+# 1
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l > r FROM list_int
+# ----
+# 0
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# Constant empty integer column comparisons
+
+# TODO: unsupported feature
+# query T
+# SELECT [] < [1, 2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [] < []
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL < []
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] < NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] <= [1, 2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [] <= []
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <= []
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] <= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] = [1, 2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [] = []
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL = []
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] = NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] <> [1, 2]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [] <> []
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <> []
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] <> NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] >= [1, 2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [] >= []
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL >= []
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] >= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] > [1, 2]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [] > []
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL > []
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [] > NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW list_int_empty AS SELECT * FROM (VALUES
+# 	([], []),
+# 	([], [1, 2]),
+# 	([1, 2], []),
+# 	(NULL, []),
+# 	([1, 2], NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l < r FROM list_int_empty
+# ----
+# 0
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <= r FROM list_int_empty
+# ----
+# 1
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l = r FROM list_int_empty
+# ----
+# 1
+# 0
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <> r FROM list_int_empty
+# ----
+# 0
+# 1
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l >= r FROM list_int_empty
+# ----
+# 1
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l > r FROM list_int_empty
+# ----
+# 0
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# Constant multiple string column comparisons
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] < ['duck', 'goose']
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] < ['duck']
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL < ['duck']
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] < NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] <= ['duck', 'goose']
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] <= ['duck']
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <= ['duck']
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] <= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] = ['duck', 'goose']
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] = ['duck']
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL = ['duck']
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] = NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] <> ['duck', 'goose']
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] <> ['duck']
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <> ['duck']
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] <> NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] >= ['duck', 'goose']
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] >= ['duck']
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL >= ['duck']
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] >= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] > ['duck', 'goose']
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] > ['duck']
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL > ['duck']
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT ['duck'] > NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW list_str AS SELECT * FROM (VALUES
+# 	(['duck'], ['duck']),
+# 	(['duck'], ['duck', 'goose']),
+# 	(['duck', 'goose'], ['duck']),
+# 	(NULL, ['duck']),
+# 	(['duck', 'goose'], NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l < r FROM list_str
+# ----
+# 0
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <= r FROM list_str
+# ----
+# 1
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l = r FROM list_str
+# ----
+# 1
+# 0
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <> r FROM list_str
+# ----
+# 0
+# 1
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l >= r FROM list_str
+# ----
+# 1
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l > r FROM list_str
+# ----
+# 0
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# List of structs
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] < [{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] < [{'x': 'duck', 'y': 1}]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL < [{'x': 'duck', 'y': 1}]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] < NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] <= [{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] <= [{'x': 'duck', 'y': 1}]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <= [{'x': 'duck', 'y': 1}]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] <= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] = [{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] = [{'x': 'duck', 'y': 1}]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL = [{'x': 'duck', 'y': 1}]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] = NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] <> [{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] <> [{'x': 'duck', 'y': 1}]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL <> [{'x': 'duck', 'y': 1}]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] <> NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] >= [{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] >= [{'x': 'duck', 'y': 1}]
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL >= [{'x': 'duck', 'y': 1}]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] >= NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] > [{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] > [{'x': 'duck', 'y': 1}]
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL > [{'x': 'duck', 'y': 1}]
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT [{'x': 'duck', 'y': 1}] > NULL
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW list_of_struct AS SELECT * FROM (VALUES
+# 	([{'x': 'duck', 'y': 1}], [{'x': 'duck', 'y': 1}]),
+# 	([{'x': 'duck', 'y': 1}], [{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}]),
+# 	([{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}], [{'x': 'duck', 'y': 1}]),
+# 	(NULL, [{'x': 'duck', 'y': 1}]),
+# 	([{'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}], NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l < r FROM list_of_struct
+# ----
+# 0
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <= r FROM list_of_struct
+# ----
+# 1
+# 1
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l = r FROM list_of_struct
+# ----
+# 1
+# 0
+# 0
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l <> r FROM list_of_struct
+# ----
+# 0
+# 1
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l >= r FROM list_of_struct
+# ----
+# 1
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT l > r FROM list_of_struct
+# ----
+# 0
+# 0
+# 1
+# NULL
+# NULL
+# NULL
+
+# Filter by constant
+
+# TODO: unsupported feature
+# query T
+# select [a,a+1,a+2]<[1,2,3] from range(0, 5) tbl(a);
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+
+# TODO: unsupported feature
+# query T
+# select [a,a+1,a+2]<=[1,2,3] from range(0, 5) tbl(a);
+# ----
+# 1
+# 1
+# 0
+# 0
+# 0
+
+# TODO: unsupported feature
+# query T
+# select [a,a+1,a+2]=[1,2,3] from range(0, 5) tbl(a);
+# ----
+# 0
+# 1
+# 0
+# 0
+# 0
+
+# TODO: unsupported feature
+# query T
+# select [a,a+1,a+2]<>[1,2,3] from range(0, 5) tbl(a);
+# ----
+# 1
+# 0
+# 1
+# 1
+# 1
+
+# TODO: unsupported feature
+# query T
+# select [a,a+1,a+2]>=[1,2,3] from range(0, 5) tbl(a);
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+
+# TODO: unsupported feature
+# query T
+# select [a,a+1,a+2]>[1,2,3] from range(0, 5) tbl(a);
+# ----
+# 0
+# 0
+# 1
+# 1
+# 1

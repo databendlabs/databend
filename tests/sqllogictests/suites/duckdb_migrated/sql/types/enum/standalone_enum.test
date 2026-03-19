@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# query I
+# SELECT 'hello'::ENUM('world', 'hello');
+# ----
+# hello
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT 'hello'::ENUM('world', 'hello') AS h;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# hello
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'hello'::ENUM;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'hello'::ENUM(42);
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'hello'::ENUM('zzz', 42);
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'hello'::ENUM(foobar 42);

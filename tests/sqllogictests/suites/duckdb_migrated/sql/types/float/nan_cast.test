@@ -1,0 +1,881 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::tinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::tinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::tinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::smallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::smallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::smallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::integer
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::integer
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::integer
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::bigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::bigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::bigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::utinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::utinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::utinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::usmallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::usmallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::usmallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::uinteger
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::uinteger
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::uinteger
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::ubigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::ubigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::ubigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::DECIMAL(4,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::DECIMAL(4,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::DECIMAL(4,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::DECIMAL(9,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::DECIMAL(9,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::DECIMAL(9,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::DECIMAL(18,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::DECIMAL(18,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::DECIMAL(18,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::FLOAT::DECIMAL(38,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::FLOAT::DECIMAL(38,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::FLOAT
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::FLOAT::DECIMAL(38,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::tinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::tinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::tinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::smallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::smallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::smallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::integer
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::integer
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::integer
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::bigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::bigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::bigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::utinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::utinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::utinyint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::usmallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::usmallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::usmallint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::uinteger
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::uinteger
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::uinteger
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::ubigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::ubigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::ubigint
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::DECIMAL(4,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::DECIMAL(4,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::DECIMAL(4,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::DECIMAL(9,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::DECIMAL(9,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::DECIMAL(9,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::DECIMAL(18,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::DECIMAL(18,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::DECIMAL(18,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'nan'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'nan'::DOUBLE::DECIMAL(38,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 'inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'inf'::DOUBLE::DECIMAL(38,1)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT '-inf'::DOUBLE
+
+# cannot cast nan, inf or -inf to these types
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-inf'::DOUBLE::DECIMAL(38,1)
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT::FLOAT
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT::FLOAT
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT::DOUBLE
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT::DOUBLE
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::FLOAT::VARCHAR
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::FLOAT::VARCHAR
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::FLOAT::VARCHAR
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE::FLOAT
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE::FLOAT
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE::DOUBLE
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE::DOUBLE
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::DOUBLE::VARCHAR
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::DOUBLE::VARCHAR
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::DOUBLE::VARCHAR
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::VARCHAR::FLOAT
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::VARCHAR::FLOAT
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::VARCHAR::FLOAT
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::VARCHAR::DOUBLE
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::VARCHAR::DOUBLE
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::VARCHAR::DOUBLE
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 'nan'::VARCHAR::VARCHAR
+# ----
+# nan
+
+# TODO: unsupported feature
+# query I
+# SELECT 'inf'::VARCHAR::VARCHAR
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '-inf'::VARCHAR::VARCHAR
+# ----
+# -inf

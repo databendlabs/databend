@@ -1,0 +1,41 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS blobs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE blobs (b BYTEA);
+
+# insert BLOB from string
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES ('aaaaaaaaaa')
+
+# sizes: 10, 100, 1000, 10000 -> double plus two due to hexadecimal representation
+# The concat function casts BLOB to VARCHAR,resulting in a hex string
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)
+
+# The concat function casts BLOB to VARCHAR,resulting in a hex string
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)
+
+# The concat function casts BLOB to VARCHAR,resulting in a hex string
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)
+
+# TODO: unsupported feature
+# query I
+# SELECT OCTET_LENGTH(b) FROM blobs ORDER BY 1
+# ----
+# 10
+# 100
+# 1000
+# 10000

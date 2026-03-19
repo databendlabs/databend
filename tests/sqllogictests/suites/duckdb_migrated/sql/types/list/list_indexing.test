@@ -1,0 +1,65 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (l INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ([1, 2, 3]), ([NULL]), (NULL), ([-2, NULL, 4, 2]);
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(l, 0) FROM test;
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT list_extract(l, 1) FROM test;
+# ----
+# 1
+# NULL
+# NULL
+# -2
+
+# TODO: unsupported feature
+# query I
+# SELECT l[:] FROM test;
+# ----
+# [1, 2, 3]
+# [NULL]
+# NULL
+# [-2, NULL, 4, 2]
+
+# TODO: unsupported feature
+# query I
+# SELECT l[0:0] FROM test;
+# ----
+# []
+# []
+# NULL
+# []
+
+# TODO: unsupported feature
+# query I
+# SELECT l[0:1] FROM test;
+# ----
+# [1]
+# [NULL]
+# NULL
+# [-2]
+
+# TODO: unsupported feature
+# query I
+# SELECT l[1:0] FROM test;
+# ----
+# []
+# []
+# NULL
+# []

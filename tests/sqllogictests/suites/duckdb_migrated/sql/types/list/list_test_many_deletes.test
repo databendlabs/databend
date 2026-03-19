@@ -1,0 +1,51 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists(i INT[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists SELECT [i, NULL, i+1] FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM lists WHERE i[1] <= 9995
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM lists
+# ----
+# [9996, NULL, 9997]
+# [9997, NULL, 9998]
+# [9998, NULL, 9999]
+# [9999, NULL, 10000]
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE lists
+
+# now with nested lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists(i INT[][])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists SELECT [[i], NULL, [i+1, 4], [NULL, 1, 2]] FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM lists WHERE i[1][1] <= 9995
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM lists
+# ----
+# [[9996], NULL, [9997, 4], [NULL, 1, 2]]
+# [[9997], NULL, [9998, 4], [NULL, 1, 2]]
+# [[9998], NULL, [9999, 4], [NULL, 1, 2]]
+# [[9999], NULL, [10000, 4], [NULL, 1, 2]]

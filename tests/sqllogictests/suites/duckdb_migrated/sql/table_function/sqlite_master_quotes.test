@@ -1,0 +1,74 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "1a"
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "a b c"
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "inte""gers"
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# simple quotes
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT * FROM sqlite_master;
+# ----
+# table	a b c	a b c	0	CREATE TABLE "a b c"("d e" INTEGER, f INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE "a b c";
+
+# quoted quotes
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "inte""gers"(i INTEGER);
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT * FROM sqlite_master;
+# ----
+# table	inte"gers	inte"gers	0	CREATE TABLE "inte""gers"(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE "inte""gers"
+
+# multi-column primary key constraint
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers("a b" INTEGER, "c d" INTEGER, PRIMARY KEY("a b", "c d"))
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT * FROM sqlite_master;
+# ----
+# table	integers	integers	0	CREATE TABLE integers("a b" INTEGER, "c d" INTEGER, PRIMARY KEY("a b", "c d"));
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers
+
+# quote with numbers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "1a"(a1 INTEGER, a2 INTEGER);
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT * FROM sqlite_master;
+# ----
+# table	1a	1a	0	CREATE TABLE "1a"(a1 INTEGER, a2 INTEGER);
