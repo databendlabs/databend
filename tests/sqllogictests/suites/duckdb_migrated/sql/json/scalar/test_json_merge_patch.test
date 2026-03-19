@@ -1,0 +1,119 @@
+# TODO: unknown function
+# query T
+# SELECT json_merge_patch('{"a": 1}', '{"a": 2}')
+# ----
+# {"a":2}
+
+# TODO: unknown function
+# query T
+# SELECT json_merge_patch('{"a": 1}', '{"b": 2}')
+# ----
+# {"a":1,"b":2}
+
+# TODO: unknown function
+# query T
+# SELECT json_merge_patch('{"a": {"c": 1}}', '{"a": {"d": 2}}')
+# ----
+# {"a":{"c":1,"d":2}}
+
+# TODO: unknown function
+# query T
+# SELECT json_merge_patch('{"a": {"b": 1}}', '{"a": {"b": 2}}')
+# ----
+# {"a":{"b":2}}
+
+# from MySQL documentation
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('[1, 2]', '[true, false]');
+# ----
+# [1,0]
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}');
+# ----
+# {"name":"x","id":47}
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('1', 'true');
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('[1, 2]', '{"id": 47}');
+# ----
+# {"id":47}
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }');
+# ----
+# {"b":2,"a":3,"c":4}
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }','{ "a": 5, "d":6 }');
+# ----
+# {"b":2,"c":4,"a":5,"d":6}
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('{"a":1, "b":2}', '{"b":null}');
+# ----
+# {"a":1}
+
+# TODO: unknown function
+# query T
+# SELECT JSON_MERGE_PATCH('{"a":{"x":1}}', '{"a":{"y":2}}');
+# ----
+# {"a":{"x":1,"y":2}}
+
+# test NULL behaviour
+
+# TODO: unknown function
+# query T
+# select json_merge_patch(NULL, '3')
+# ----
+# 3
+
+# TODO: unknown function
+# query T
+# select json_merge_patch('3', NULL)
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_merge_patch(NULL, NULL)
+# ----
+# NULL
+
+# test vararg behaviour
+
+# TODO: unknown function
+# query T
+# select json_merge_patch('{"a":1}', '{"b":2}', '{"c":3}')
+# ----
+# {"a":1,"b":2,"c":3}
+
+# TODO: unknown function
+# query T
+# select json_merge_patch(NULL, '{"b":2}', '{"c":3}')
+# ----
+# {"b":2,"c":3}
+
+# TODO: unknown function
+# query T
+# select json_merge_patch('{"a":1}', NULL, '{"c":3}')
+# ----
+# {"c":3}
+
+# TODO: unknown function
+# query T
+# select json_merge_patch('{"a":1}', '{"b":2}', NULL)
+# ----
+# NULL

@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# from '{DATA_DIR}/json/issue14259.json'

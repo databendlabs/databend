@@ -1,0 +1,2 @@
+statement error
+from '{DATA_DIR}/json/internal_3197.json'

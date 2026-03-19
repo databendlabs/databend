@@ -1,0 +1,91 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+# con2 insert 5 rows and begins a transaction
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 5)
+
+statement ok
+BEGIN TRANSACTION
+
+# con3 inserts 17 rows and begins a transaction
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 17)
+
+statement ok
+BEGIN TRANSACTION
+
+# con4 inserts 1007 rows and begins a transaction
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 1007)
+
+statement ok
+BEGIN TRANSACTION
+
+# con5 inserts 3020 rows and begins a transaction
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 3020)
+
+statement ok
+BEGIN TRANSACTION
+
+# con6 inserts 3 rows and begins a transaction
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 3)
+
+statement ok
+BEGIN TRANSACTION
+
+# now we verify all the counts
+# con1: 0
+
+query I
+SELECT COUNT(*) FROM integers
+----
+4052
+
+# con2: 5
+
+query I
+SELECT COUNT(*) FROM integers
+----
+4052
+
+# con3: 22
+
+query I
+SELECT COUNT(*) FROM integers
+----
+4052
+
+# con4: 1029
+
+query I
+SELECT COUNT(*) FROM integers
+----
+4052
+
+# con5: 4049
+
+query I
+SELECT COUNT(*) FROM integers
+----
+4052
+
+# con6: 4052
+
+query I
+SELECT COUNT(*) FROM integers
+----
+4052

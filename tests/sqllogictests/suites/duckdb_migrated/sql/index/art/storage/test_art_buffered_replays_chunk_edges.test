@@ -1,0 +1,100 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx_tbl_i ON tbl(i);
+
+# Range 1: partial first chunk [0, 250]
+
+statement ok
+INSERT INTO tbl SELECT r FROM range(0, 251) t(r);
+
+statement ok
+DELETE FROM tbl WHERE i BETWEEN 0 AND 250;
+
+# Range 2: crosses the 2048 chunk boundary [251, 2048]
+
+statement ok
+INSERT INTO tbl SELECT r FROM range(251, 2049) t(r);
+
+statement ok
+DELETE FROM tbl WHERE i BETWEEN 251 AND 2048;
+
+# Range 3: remainder of the second chunk [2049, 4095]
+
+statement ok
+INSERT INTO tbl SELECT r FROM range(2049, 4096) t(r);
+
+statement ok
+DELETE FROM tbl WHERE i BETWEEN 2049 AND 4095;
+
+statement ok
+INSERT INTO tbl VALUES (5000);
+
+statement ok
+INSERT INTO tbl VALUES (6000);
+
+statement ok
+DELETE FROM tbl WHERE i = 5000;
+
+query T
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 5000;
+----
+TableScan
+├── table: default.default.tbl
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 0 cost: 1 ms>]
+├── push downs: [filters: [is_true(tbl.i (#0) = 5000)], limit: NONE]
+└── estimated rows: 0.00
+
+query I
+SELECT i FROM tbl WHERE i = 5000;
+----
+
+query T
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 5000;
+----
+TableScan
+├── table: default.default.tbl
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 1 to 0 cost: 1 ms>]
+├── push downs: [filters: [is_true(tbl.i (#0) = 5000)], limit: NONE]
+└── estimated rows: 0.00
+
+query I
+SELECT i FROM tbl WHERE i = 5000;
+----
+
+query T
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 6000;
+----
+TableScan
+├── table: default.default.tbl
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 1
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+├── push downs: [filters: [is_true(tbl.i (#0) = 6000)], limit: NONE]
+└── estimated rows: 1.00
+
+query I
+SELECT i FROM tbl WHERE i = 6000;
+----
+6000

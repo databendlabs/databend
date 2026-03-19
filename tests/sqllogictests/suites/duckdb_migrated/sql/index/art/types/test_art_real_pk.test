@@ -1,0 +1,47 @@
+statement ok
+DROP TABLE IF EXISTS numbers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE numbers(i REAL PRIMARY KEY, j INTEGER)
+
+# insert two conflicting pairs at the same time
+
+statement error
+INSERT INTO numbers VALUES (3.45, 4), (3.45, 5)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO numbers VALUES (3.45, 4), (2.2, 5)
+
+# TODO: unsupported feature
+# query RI
+# SELECT * FROM numbers
+# ----
+# 3.450000	4
+# 2.200000	5
+
+# insert a duplicate value as part of a chain of values
+
+statement error
+INSERT INTO numbers VALUES (6, 6), (3.45, 4);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO numbers VALUES (6, 6);
+
+# TODO: unsupported feature
+# query RI
+# SELECT * FROM numbers
+# ----
+# 3.450000	4
+# 2.200000	5
+# 6.000000	6
+
+# insert NULL value in PRIMARY KEY is not allowed
+
+statement error
+INSERT INTO numbers VALUES (NULL, 4);
+
+statement error
+UPDATE numbers SET i=NULL;

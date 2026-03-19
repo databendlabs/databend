@@ -1,0 +1,27 @@
+statement ok
+DROP TABLE IF EXISTS pk_integers
+
+statement ok
+DROP TABLE IF EXISTS pk_integers2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO pk_integers VALUES (1)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE pk_integers2(i INTEGER PRIMARY KEY)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO pk_integers2 VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM pk_integers WHERE i = 1;
+# ----
+# 1

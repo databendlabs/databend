@@ -1,0 +1,26 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS json_test
+
+# issue 10751
+# TODO: unsupported feature
+# statement error
+# create or replace table json_test as select * from read_json_auto('{DATA_DIR}/json/10751.json', format = 'newline_delimited');
+
+# TODO: unsupported feature
+# statement ok
+# create table json_test as select * from read_json_auto('{DATA_DIR}/json/10751.json', format = 'newline_delimited', ignore_errors=true);
+
+# TODO: unsupported feature
+# statement ok
+# select * from json_test;
+
+# issue 11152
+
+# TODO: unsupported feature
+# statement error
+# FROM read_json_auto('{DATA_DIR}/json/11152.json');
+
+# TODO: unsupported feature
+# statement ok
+# FROM read_json_auto('{DATA_DIR}/json/11152.json', ignore_errors=true);

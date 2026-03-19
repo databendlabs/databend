@@ -1,0 +1,35 @@
+# TODO: unknown function
+# query I
+# SELECT json_exists('{"duck": null}', '$.duck')
+# ----
+# 1
+
+# TODO: unknown function
+# query I
+# with path AS (
+#     SELECT '$.duck' p
+# )
+# SELECT json_exists('{"duck": null}', p) FROM path
+# ----
+# 1
+
+# TODO: unknown function
+# query I
+# SELECT json_exists('{"duck": null}', '$.goose')
+# ----
+# 0
+
+# TODO: unknown function
+# query I
+# with path AS (
+#     SELECT '$.goose' p
+# )
+# SELECT json_exists('{"duck": null}', p) FROM path
+# ----
+# 0
+
+# TODO: unknown function
+# query I
+# SELECT json_exists('{"duck": null}', ['$.duck', '$.goose'])
+# ----
+# [1, 0]

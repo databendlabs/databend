@@ -1,4 +1,4 @@
-query I
+query T
 select typeof(x) from (select 1::INT as x group by x);
 ----
-INTEGER
+INT

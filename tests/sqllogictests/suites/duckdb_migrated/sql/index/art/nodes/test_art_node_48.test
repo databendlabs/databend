@@ -287,16 +287,17 @@ statement ok
 CREATE TABLE n48_tbl(i varchar, k integer)
 
 statement ok
-INSERT INTO n48_tbl SELECT 'a', range FROM range(0, 10000);
+INSERT INTO n48_tbl SELECT 'a', generate_series FROM generate_series(0, 9999);
 
 statement ok
-INSERT INTO n48_tbl SELECT 'b', range FROM range(0, 25);
+INSERT INTO n48_tbl SELECT 'b', generate_series FROM generate_series(0, 24);
 
 statement ok
-INSERT INTO n48_tbl SELECT 'c', range FROM range(0, 25);
+INSERT INTO n48_tbl SELECT 'c', generate_series FROM generate_series(0, 24);
 
-statement ok
-CREATE INDEX n48_tbl_idx ON n48_tbl(i, k);
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX n48_tbl_idx ON n48_tbl(i, k);
 
 # test freeing all the children of a Node48
 
@@ -304,7 +305,7 @@ statement ok
 CREATE TABLE n48_free (id INTEGER);
 
 statement ok
-INSERT INTO n48_free SELECT range % 100 FROM range(0, 2048);
+INSERT INTO n48_free SELECT generate_series % 100 FROM generate_series(0, 2047);
 
 statement ok
 INSERT INTO n48_free VALUES (0 + 107);
@@ -366,5 +367,6 @@ INSERT INTO n48_free VALUES (18 + 107);
 statement ok
 INSERT INTO n48_free VALUES (19 + 107);
 
-statement ok
-CREATE INDEX idx_n48_free ON n48_free(id);
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_n48_free ON n48_free(id);

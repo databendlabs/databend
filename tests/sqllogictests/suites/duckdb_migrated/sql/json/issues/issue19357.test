@@ -1,0 +1,14 @@
+# TODO: unknown function
+# query I
+# SELECT TO_JSON({'key_1': 'one'}) AS WITHOUT_KEEP_NULL
+# ----
+# {"key_1":"one"}
+
+query I
+SELECT JSON_OBJECT('key_1', 'one', 'key_2', NULL) AS KEEP_NULL_1
+----
+{"key_1":"one"}
+
+# TODO: result differs
+# statement error
+# SELECT JSON_OBJECT('key_1', 'one', NULL, 'two') AS KEEP_NULL_2

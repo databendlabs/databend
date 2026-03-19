@@ -1,0 +1,59 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT i FROM range(0, 100) tbl(i);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers SELECT i FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT NULL FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT i FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT NULL FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT i FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT NULL FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT i FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT NULL FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT i FROM range(0, 100) tbl(i);
+
+statement ok
+INSERT INTO integers SELECT NULL FROM range(0, 100) tbl(i);
+
+query IIIII
+SELECT COUNT(i), SUM(i), MIN(i), MAX(i), COUNT(*) FROM integers
+----
+600	29700	0	99	1100
+
+statement ok
+COMMIT
+
+query IIIII
+SELECT COUNT(i), SUM(i), MIN(i), MAX(i), COUNT(*) FROM integers
+----
+600	29700	0	99	1100
+
+query I
+SELECT SUM(CASE WHEN i IS NULL THEN 1 ELSE 0 END) FROM integers
+----
+500

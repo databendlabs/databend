@@ -1,0 +1,3 @@
+# TODO: unknown function
+# statement ok
+# select * from range(0, 1) tbl(i) left join range(0, 2) tbl2(j) on (i=j) where j+random()<0;

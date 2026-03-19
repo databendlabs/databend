@@ -1,0 +1,38 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t0
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t0(c0 INT, c1 INT);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(c0 INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (0);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX t0i0 ON t0(c0, c1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t0 VALUES (1,0), (-1,NULL);
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE t0 SET c1 = NULL WHERE c0 = 1;
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM t1 POSITIONAL JOIN t0 WHERE (t1.c0 > t0.c1) IS NULL;
+# ----
+# 0	-1	NULL
+# NULL	1	NULL

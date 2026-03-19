@@ -1,0 +1,148 @@
+statement ok
+DROP TABLE IF EXISTS bigtbl
+
+statement ok
+DROP TABLE IF EXISTS smalltbl
+
+statement ok
+CREATE TABLE bigtbl AS FROM range(0, 1000) t(i);
+
+statement ok
+CREATE TABLE smalltbl AS SELECT i AS low, i + 1 AS high FROM range(0, 100) t(i);
+
+query T
+EXPLAIN SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high)
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#3)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── IEJoin
+        ├── output columns: [smalltbl.low (#1), smalltbl.high (#2), bigtbl.i (#0)]
+        ├── join type: INNER
+        ├── range join conditions: [smalltbl.low (#1) "lte" bigtbl.i (#0), smalltbl.high (#2) "gte" bigtbl.i (#0)]
+        ├── other conditions: []
+        ├── estimated rows: 100000.00
+        ├── TableScan(Left)
+        │   ├── table: default.default.smalltbl
+        │   ├── scan id: 1
+        │   ├── output columns: [low (#1), high (#2)]
+        │   ├── read rows: 100
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 100.00
+        └── TableScan(Right)
+            ├── table: default.default.bigtbl
+            ├── scan id: 0
+            ├── output columns: [i (#0)]
+            ├── read rows: 1000
+            ├── read size: 4.04 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1000.00
+
+query T
+EXPLAIN SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high)
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#3)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── IEJoin
+        ├── output columns: [smalltbl.low (#1), smalltbl.high (#2), bigtbl.i (#0)]
+        ├── join type: INNER
+        ├── range join conditions: [smalltbl.low (#1) "lte" bigtbl.i (#0), smalltbl.high (#2) "gte" bigtbl.i (#0)]
+        ├── other conditions: []
+        ├── estimated rows: 100000.00
+        ├── TableScan(Left)
+        │   ├── table: default.default.smalltbl
+        │   ├── scan id: 1
+        │   ├── output columns: [low (#1), high (#2)]
+        │   ├── read rows: 100
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 100.00
+        └── TableScan(Right)
+            ├── table: default.default.bigtbl
+            ├── scan id: 0
+            ├── output columns: [i (#0)]
+            ├── read rows: 1000
+            ├── read size: 4.04 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1000.00
+
+query T
+EXPLAIN SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high)
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#3)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── IEJoin
+        ├── output columns: [smalltbl.low (#1), smalltbl.high (#2), bigtbl.i (#0)]
+        ├── join type: INNER
+        ├── range join conditions: [smalltbl.low (#1) "lte" bigtbl.i (#0), smalltbl.high (#2) "gte" bigtbl.i (#0)]
+        ├── other conditions: []
+        ├── estimated rows: 100000.00
+        ├── TableScan(Left)
+        │   ├── table: default.default.smalltbl
+        │   ├── scan id: 1
+        │   ├── output columns: [low (#1), high (#2)]
+        │   ├── read rows: 100
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 100.00
+        └── TableScan(Right)
+            ├── table: default.default.bigtbl
+            ├── scan id: 0
+            ├── output columns: [i (#0)]
+            ├── read rows: 1000
+            ├── read size: 4.04 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1000.00
+
+# TODO: result differs
+# query II
+# EXPLAIN 
+# SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high AND bigtbl.i IS NOT DISTINCT FROM high - low)
+# ----
+# TODO: special result marker
+
+# Execute to trigger the switch case
+
+query I
+SELECT COUNT(*) FROM bigtbl JOIN smalltbl ON (bigtbl.i BETWEEN low AND high AND bigtbl.i IS NOT DISTINCT FROM high - low)
+----
+2

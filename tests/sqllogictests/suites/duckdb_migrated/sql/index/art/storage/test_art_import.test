@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS tracking
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE tracking("nflId" VARCHAR , "frameId" INTEGER, "gameId" INTEGER, "playId" INTEGER);
+
+statement ok
+INSERT INTO tracking values ('a', 0,0,0);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX nflid_idx ON tracking (nflid)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX tracking_key_idx ON tracking (gameId, playId, frameId, nflId)
+
+statement ok
+ROLLBACK

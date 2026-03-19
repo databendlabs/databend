@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# query I
+# select * from '{DATA_DIR}/json/empty.ndjson'
+# ----
+
+# TODO: unsupported feature
+# query I
+# select * from '{DATA_DIR}/json/whitespace_only.json'
+# ----
+
+# empty array
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_json_auto('{DATA_DIR}/json/empty_array.json')
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_json_auto('{DATA_DIR}/json/empty_no_newline.json')
+# ----
+
+# malformed files
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM read_json_auto('{DATA_DIR}/json/malformed/empty_array_malformed.json')
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM read_json_auto('{DATA_DIR}/json/malformed/empty_array_trailing.json', format='array')
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM read_json_auto('{DATA_DIR}/json/malformed/array_comma_malformed.json', format='array')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_json_auto('{DATA_DIR}/json/array_of_empty_arrays.json', format='array')
+# ----
+# []
+# []
+# []

@@ -1,0 +1,14 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+create table test as select {i: generate_series}::JSON j from generate_series(0, 9)
+
+query II
+select min(j), max(j) from test
+----
+{"i":0}	{"i":9}
+
+# TODO: unsupported feature
+# statement ok
+# summarize test

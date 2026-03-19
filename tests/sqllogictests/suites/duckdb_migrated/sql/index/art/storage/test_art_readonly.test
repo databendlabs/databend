@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl (i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_drop ON tbl(i);
+
+# try index creation in readonly
+
+statement error
+CREATE INDEX idx ON tbl (i);
+
+statement error
+DROP INDEX idx_drop
+
+# TODO: unsupported feature
+# query I
+# SELECT index_name FROM duckdb_indexes();
+# ----
+# idx_drop

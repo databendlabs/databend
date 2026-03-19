@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx_tbl_idx_col ON tbl(idx_col);
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT idx_col FROM tbl WHERE idx_col = 0 * 2;
+# ----
+# analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl (col1, col2, idx_col, col5) VALUES (1, 2, 1, 'duplicate1');

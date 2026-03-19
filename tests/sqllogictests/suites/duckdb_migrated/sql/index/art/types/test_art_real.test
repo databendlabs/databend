@@ -1,0 +1,33 @@
+statement ok
+DROP TABLE IF EXISTS numbers
+
+statement ok
+CREATE TABLE numbers(i REAL)
+
+# +0
+
+statement ok
+INSERT INTO numbers VALUES (CAST(0 AS REAL))
+
+# -0
+
+statement ok
+INSERT INTO numbers VALUES (CAST(-0 AS REAL))
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON numbers(i)
+
+# +0
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = CAST(0 AS REAL)
+----
+2
+
+# -0
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = CAST(-0 AS REAL)
+----
+2

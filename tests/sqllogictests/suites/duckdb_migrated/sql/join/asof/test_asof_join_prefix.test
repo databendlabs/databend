@@ -1,0 +1,257 @@
+statement ok
+DROP TABLE IF EXISTS prices_array
+
+statement ok
+DROP TABLE IF EXISTS prices_int
+
+statement ok
+DROP TABLE IF EXISTS prices_list
+
+statement ok
+DROP TABLE IF EXISTS prices_multiple
+
+statement ok
+DROP TABLE IF EXISTS prices_nested
+
+statement ok
+DROP TABLE IF EXISTS prices_struct
+
+statement ok
+DROP TABLE IF EXISTS prices_varchar
+
+statement ok
+DROP TABLE IF EXISTS trades_array
+
+statement ok
+DROP TABLE IF EXISTS trades_int
+
+statement ok
+DROP TABLE IF EXISTS trades_list
+
+statement ok
+DROP TABLE IF EXISTS trades_multiple
+
+statement ok
+DROP TABLE IF EXISTS trades_nested
+
+statement ok
+DROP TABLE IF EXISTS trades_struct
+
+statement ok
+DROP TABLE IF EXISTS trades_varchar
+
+statement ok
+CREATE TABLE prices_int("when" TIMESTAMP, symbol INTEGER, price INTEGER);
+
+# TODO: type_error
+# statement ok
+# INSERT INTO prices_int VALUES 
+# 	('2020-01-01 00:00:00', 1, 42),
+# 	('2020-01-01 00:00:00', 2, 55),
+
+statement ok
+CREATE TABLE trades_int("when" timestamp, symbol INTEGER);
+
+# TODO: type_error
+# statement ok
+# INSERT INTO trades_int VALUES 
+# 	('2020-01-01 00:00:03', 1),
+# 	('2020-01-01 00:00:03', 3),
+
+# TODO: unsupported feature
+# query III
+# SELECT t.*, p.price
+# FROM trades_int t ASOF JOIN prices_int p 
+#   ON t.symbol = p.symbol AND t.when >= p.when;
+# ----
+# 2020-01-01 00:00:03	1	42
+
+#
+# VARCHARs
+#
+
+statement ok
+CREATE TABLE prices_varchar("when" TIMESTAMP, symbol VARCHAR, price INTEGER);
+
+# TODO: type_error
+# statement ok
+# INSERT INTO prices_varchar VALUES 
+# 	('2020-01-01 00:00:00', 'APPL', 42),
+# 	('2020-01-01 00:00:00', 'MEL', 55),
+
+statement ok
+CREATE TABLE trades_varchar("when" timestamp, symbol VARCHAR);
+
+# TODO: type_error
+# statement ok
+# INSERT INTO trades_varchar VALUES 
+# 	('2020-01-01 00:00:03', 'APPL'),
+# 	('2020-01-01 00:00:03', 'VCT'),
+
+# TODO: unsupported feature
+# query III
+# SELECT t.*, p.price
+# FROM trades_varchar t ASOF JOIN prices_varchar p 
+#   ON t.symbol = p.symbol AND t.when >= p.when;
+# ----
+# 2020-01-01 00:00:03	APPL	42
+
+#
+# STRUCTs
+#
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE prices_struct("when" TIMESTAMP, symbol STRUCT(ticker VARCHAR, exchange INTEGER), price INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO prices_struct VALUES 
+# 	('2020-01-01 00:00:00', {'ticker': 'APPL', 'exchange': 1}, 42),
+# 	('2020-01-01 00:00:00', {'ticker': 'MEL', 'exchange': 2}, 55),
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE trades_struct("when" timestamp, symbol STRUCT(ticker VARCHAR, exchange INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO trades_struct VALUES 
+# 	('2020-01-01 00:00:03', {'ticker': 'APPL', 'exchange': 1}),
+# 	('2020-01-01 00:00:03', {'ticker': 'VCT', 'exchange': 2}),
+
+# TODO: unsupported feature
+# query III
+# SELECT t.*, p.price
+# FROM trades_struct t ASOF JOIN prices_struct p 
+#   ON t.symbol = p.symbol AND t.when >= p.when;
+# ----
+# 2020-01-01 00:00:03	{'ticker': APPL, 'exchange': 1}	42
+
+#
+# LISTs
+#
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE prices_list("when" TIMESTAMP, symbol INTEGER[], price INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO prices_list VALUES 
+# 	('2020-01-01 00:00:00', [1, 0], 42),
+# 	('2020-01-01 00:00:00', [2, 0], 55),
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE trades_list("when" timestamp, symbol INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO trades_list VALUES 
+# 	('2020-01-01 00:00:03', [1, 0]),
+# 	('2020-01-01 00:00:03', [2, 1]),
+
+# TODO: unsupported feature
+# query III
+# SELECT t.*, p.price
+# FROM trades_list t ASOF JOIN prices_list p 
+#   ON t.symbol = p.symbol AND t.when >= p.when;
+# ----
+# 2020-01-01 00:00:03	[1, 0]	42
+
+#
+# ARRAYs
+#
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE prices_array("when" TIMESTAMP, symbol INTEGER[2], price INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO prices_array VALUES 
+# 	('2020-01-01 00:00:00', [1, 0], 42),
+# 	('2020-01-01 00:00:00', [2, 0], 55),
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE trades_array("when" timestamp, symbol INTEGER[2]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO trades_array VALUES 
+# 	('2020-01-01 00:00:03', [1, 0]),
+# 	('2020-01-01 00:00:03', [2, 1]),
+
+# TODO: unsupported feature
+# query III
+# SELECT t.*, p.price
+# FROM trades_array t ASOF JOIN prices_array p 
+#   ON t.symbol = p.symbol AND t.when >= p.when;
+# ----
+# 2020-01-01 00:00:03	[1, 0]	42
+
+#
+# Nested
+#
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE prices_nested("when" TIMESTAMP, symbol STRUCT(ticker VARCHAR[], exchange INTEGER), price INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO prices_nested VALUES 
+# 	('2020-01-01 00:00:00', {'ticker': ['APPL', 'Apple Inc'], 'exchange': 1}, 42),
+# 	('2020-01-01 00:00:00', {'ticker': ['MEL', 'Meridian Energy'], 'exchange': 2}, 55),
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE trades_nested("when" timestamp, symbol STRUCT(ticker VARCHAR[], exchange INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO trades_nested VALUES 
+# 	('2020-01-01 00:00:03', {'ticker': ['APPL', 'Apple Inc'], 'exchange': 1}),
+# 	('2020-01-01 00:00:03', {'ticker': ['VCT', 'Vector Ltd'], 'exchange': 2}),
+
+# TODO: unsupported feature
+# query III
+# SELECT t.*, p.price
+# FROM trades_nested t ASOF JOIN prices_nested p 
+#   ON t.symbol = p.symbol AND t.when >= p.when;
+# ----
+# 2020-01-01 00:00:03	{'ticker': [APPL, Apple Inc], 'exchange': 1}	42
+
+#
+# Multiple keys
+#
+
+statement ok
+CREATE TABLE prices_multiple("when" TIMESTAMP, symbol VARCHAR, exchange INTEGER, price INTEGER);
+
+# TODO: type_error
+# statement ok
+# INSERT INTO prices_multiple VALUES 
+# 	('2020-01-01 00:00:00', 'APPL', 1, 42),
+# 	('2020-01-01 00:00:00', 'MEL', 2, 55),
+
+statement ok
+CREATE TABLE trades_multiple("when" timestamp, symbol VARCHAR, exchange INTEGER);
+
+# TODO: type_error
+# statement ok
+# INSERT INTO trades_multiple VALUES 
+# 	('2020-01-01 00:00:03', 'APPL', 1),
+# 	('2020-01-01 00:00:03', 'MEL', 3),
+
+# TODO: unsupported feature
+# query IIII
+# SELECT t.*, p.price
+# FROM trades_multiple t ASOF JOIN prices_multiple p 
+#   ON t.symbol = p.symbol 
+#  AND t.exchange = p.exchange
+#  AND t.when >= p.when
+# ----
+# 2020-01-01 00:00:03	APPL	1	42

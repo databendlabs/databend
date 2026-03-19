@@ -1,0 +1,35 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers2
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers2(k INTEGER, l INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (1, 10)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i<>integers2.k ORDER BY 1, 2, 3, 4
+# ----
+# NULL	NULL	1	10
+# 1	1	NULL	NULL
+
+# empty RHS
+
+# TODO: unsupported feature
+# query IIII
+# SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT * FROM integers2 WHERE 1=0) integers2 ON integers.i<>integers2.k ORDER BY 1, 2, 3, 4
+# ----
+# 1	1	NULL	NULL

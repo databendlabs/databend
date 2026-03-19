@@ -1,0 +1,45 @@
+query II
+WITH cte1 AS MATERIALIZED (
+    SELECT
+        'col1' AS col1,
+        UNNEST(
+            ['2025-01-01 00:00:11+00'::TIMESTAMP_TZ, '2025-01-01 00:00:41+00'::TIMESTAMP_TZ]
+        ) AS col2
+),
+cte2 AS (
+    SELECT
+        'col1' AS col1,
+        '2025-01-01 00:00:40+00'::TIMESTAMP_TZ AS col2,
+        'col3' AS col3
+)
+SELECT
+    *
+FROM
+    cte1 ANTI
+    JOIN cte2 ON cte1.col1 = cte2.col1
+    AND cte1.col2 > cte2.col2;
+----
+col1	2025-01-01 00:00:11+00
+
+query II
+WITH cte1 AS MATERIALIZED (
+    SELECT
+        'col1' AS col1,
+        UNNEST(
+            ['2025-01-01 00:00:11+00'::TIMESTAMP_TZ, '2025-01-01 00:00:41+00'::TIMESTAMP_TZ]
+        ) AS col2
+),
+cte2 AS (
+    SELECT
+        'col1' AS col1,
+        '2025-01-01 00:00:40+00'::TIMESTAMP_TZ AS col2,
+        'col3' AS col3
+)
+SELECT
+    *
+FROM
+    cte1 SEMI
+    JOIN cte2 ON cte1.col1 = cte2.col1
+    AND cte1.col2 > cte2.col2;
+----
+col1	2025-01-01 00:00:41+00

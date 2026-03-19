@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS cricket_staging
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE cricket_staging AS
+# SELECT * FROM read_json('{DATA_DIR}/json/18301/*.json', filename=true)
+# WHERE 1=0;
+
+# TODO: unsupported feature
+# statement ok
+# TRUNCATE cricket_staging;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO cricket_staging
+# SELECT * FROM read_json('{DATA_DIR}/json/18301/*.json',
+#     union_by_name=true,
+#     filename=true
+# );
+
+# TODO: unsupported feature
+# query I
+# SELECT info->>'$.outcome.by' as outcome_by
+# FROM cricket_staging
+# WHERE info->>'$.city' = 'Colombo';
+# ----
+# {"runs":175,"wickets":null,"innings":1}

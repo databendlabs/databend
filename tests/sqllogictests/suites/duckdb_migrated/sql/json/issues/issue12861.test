@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+create table tbl (test struct(one bigint, two varchar));
+
+statement ok
+insert into tbl values ({'one': 1, 'two': 2}), (null)
+
+statement ok
+insert into tbl select null from generate_series(0, 8)

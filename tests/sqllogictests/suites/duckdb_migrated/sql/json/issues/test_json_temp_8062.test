@@ -1,0 +1,8 @@
+statement ok
+CREATE TEMP TABLE j1(x json);
+
+statement ok
+INSERT INTO j1(x) VALUES ('[1, 2, 3]');
+
+statement ok
+SELECT * FROM j1;

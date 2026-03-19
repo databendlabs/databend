@@ -1,0 +1,68 @@
+statement ok
+DROP TABLE IF EXISTS all_null
+
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(x INT);
+
+query II
+SELECT * 
+FROM test AS a, test AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----
+
+statement ok
+INSERT INTO test(x) VALUES (1), (2), (3), (NULL), (NULL), (NULL);
+
+statement ok
+CREATE TABLE all_null AS SELECT * FROM test;
+
+statement ok
+UPDATE all_null SET x=(NULL);
+
+# TODO: result differs
+# query II
+# EXPLAIN
+# SELECT * 
+# FROM all_null AS a, all_null AS b 
+# WHERE (a.x BETWEEN b.x AND b.x);
+# ----
+# TODO: special result marker
+
+query II
+SELECT * 
+FROM all_null AS a, all_null AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----
+
+# TODO: result differs
+# query II
+# EXPLAIN
+# SELECT * 
+# FROM test AS a, all_null AS b 
+# WHERE (a.x BETWEEN b.x AND b.x);
+# ----
+# TODO: special result marker
+
+query II
+SELECT * 
+FROM test AS a, all_null AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----
+
+# TODO: result differs
+# query II
+# EXPLAIN
+# SELECT * 
+# FROM all_null AS a, test AS b 
+# WHERE (a.x BETWEEN b.x AND b.x);
+# ----
+# TODO: special result marker
+
+query II
+SELECT * 
+FROM all_null AS a, test AS b 
+WHERE (a.x BETWEEN b.x AND b.x);
+----

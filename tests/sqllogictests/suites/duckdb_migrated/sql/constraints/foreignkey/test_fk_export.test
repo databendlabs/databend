@@ -4,55 +4,72 @@ DROP TABLE IF EXISTS fk_integers
 statement ok
 DROP TABLE IF EXISTS pk_integers
 
-statement ok
-CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
 
-statement ok
-CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))
 
-statement ok
-INSERT INTO pk_integers VALUES (1), (2), (3)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO pk_integers VALUES (1), (2), (3)
 
-statement ok
-INSERT INTO fk_integers VALUES (1), (2)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO fk_integers VALUES (1), (2)
 
 # now export the db
 
-statement ok
-DROP TABLE fk_integers;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE fk_integers;
 
-statement ok
-DROP TABLE pk_integers;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE pk_integers;
 
-statement error
-INSERT INTO fk_integers VALUES (4)
+# TODO: unsupported feature
+# statement error
+# INSERT INTO fk_integers VALUES (4)
 
-statement ok
-INSERT INTO fk_integers VALUES (3)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO fk_integers VALUES (3)
 
-statement error
-DELETE FROM pk_integers WHERE i=3
+# TODO: unsupported feature
+# statement error
+# DELETE FROM pk_integers WHERE i=3
 
-statement ok
-DELETE FROM fk_integers WHERE j=3
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM fk_integers WHERE j=3
 
-statement ok
-DELETE FROM pk_integers WHERE i=3
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM pk_integers WHERE i=3
 
-statement error
-UPDATE pk_integers SET i=5 WHERE i=2
+# TODO: unsupported feature
+# statement error
+# UPDATE pk_integers SET i=5 WHERE i=2
 
-statement error
-UPDATE fk_integers SET i=4 WHERE j=2
+# TODO: unsupported feature
+# statement error
+# UPDATE fk_integers SET i=4 WHERE j=2
 
-statement error
-UPDATE fk_integers SET i=4 WHERE j=2
+# TODO: unsupported feature
+# statement error
+# UPDATE fk_integers SET i=4 WHERE j=2
 
-statement error
-DROP TABLE pk_integers;
+# TODO: unsupported feature
+# statement error
+# DROP TABLE pk_integers;
 
-statement ok
-DROP TABLE fk_integers;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE fk_integers;
 
-statement ok
-DROP TABLE pk_integers;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE pk_integers;

@@ -1,0 +1,15 @@
+# TODO: unknown function
+# query T
+# select json_structure('{"id":9223372036854775808}')
+# ----
+# {"id":"UBIGINT"}
+
+# json_structure detects UBIGINT for small positive integers too (yyjson tags all positive ints as UINT)
+
+# TODO: unknown function
+# query T
+# select json_structure('{"id":42}')
+# ----
+# {"id":"UBIGINT"}
+
+# small positive integers should still be BIGINT from read_json

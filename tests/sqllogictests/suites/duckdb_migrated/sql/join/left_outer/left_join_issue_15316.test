@@ -1,0 +1,65 @@
+statement ok
+DROP TABLE IF EXISTS big_table
+
+statement ok
+DROP TABLE IF EXISTS integers1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers2
+
+statement ok
+DROP TABLE IF EXISTS integers3
+
+statement ok
+DROP TABLE IF EXISTS single_col_table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE big_table AS
+# SELECT i.range AS col1,
+#        CAST(random() * 1000 AS INTEGER) AS col2
+# FROM range(0, 100) i;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE single_col_table AS
+# SELECT i.range AS col1
+# FROM range(0, 50) i;
+
+# TODO: unsupported feature
+# query II
+# explain SELECT * 
+# FROM big_table c
+# LEFT OUTER JOIN single_col_table hd ON hd.col1=c.col1 
+# AND (
+#     FALSE
+# );
+# ----
+# TODO: special result marker
+
+# RHS contains multiple tables
+
+statement ok
+CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers2 AS SELECT * FROM (VALUES (1, '1'), (2, '2'), (3, '3')) tbl(i, s);
+
+statement ok
+CREATE TABLE integers3 AS SELECT * FROM (VALUES (1, '4'), (2, '5'), (3, '6')) tbl(i, s);
+
+# TODO: unsupported feature
+# query III
+# SELECT
+#     i1.i AS i1_i,
+#     i2.s,
+#     i3.i AS i3_i
+# FROM
+#     integers1 i1
+# LEFT OUTER JOIN (integers2 i2 LEFT OUTER JOIN integers3 i3 ON i2.i = i3.i) on false;
+# ----
+# 1	NULL	NULL
+# 2	NULL	NULL
+# 3	NULL	NULL

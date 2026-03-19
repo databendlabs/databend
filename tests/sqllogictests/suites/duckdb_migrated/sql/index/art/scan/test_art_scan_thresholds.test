@@ -1,0 +1,66 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# Take the maximum of the absolute count and the percentage, which is 100%.
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers SELECT 42 FROM range(0, 1000);
+
+statement ok
+INSERT INTO integers SELECT 43 FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx ON integers(i);
+
+query T
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 42;
+----
+TableScan
+├── table: default.default.integers
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 1000
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+├── push downs: [filters: [is_true(integers.i (#0) = 42)], limit: NONE]
+└── estimated rows: 5500.00
+
+query T
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 42;
+----
+TableScan
+├── table: default.default.integers
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 1000
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+├── push downs: [filters: [is_true(integers.i (#0) = 42)], limit: NONE]
+└── estimated rows: 5500.00
+
+# Let's also test more than STANDARD_VECTOR_SIZE values.
+
+statement ok
+INSERT INTO integers SELECT 4242 FROM range(0, 4000);
+
+query T
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 4242;
+----
+TableScan
+├── table: default.default.integers
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 4000
+├── read size: < 1 KiB
+├── partitions total: 3
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 3 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+├── push downs: [filters: [is_true(integers.i (#0) = 4242)], limit: NONE]
+└── estimated rows: 5000.00

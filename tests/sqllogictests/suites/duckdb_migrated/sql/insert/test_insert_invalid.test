@@ -1,0 +1,39 @@
+statement ok
+DROP TABLE IF EXISTS a
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(i STRING)
+
+statement ok
+INSERT INTO strings VALUES ('�(')
+
+statement ok
+SELECT * FROM strings WHERE i = '�('
+
+# Test insert with too few or too many cols
+
+statement ok
+CREATE TABLE a(i integer, j integer)
+
+statement ok
+INSERT INTO a VALUES (1, 2)
+
+# scalar inserts
+
+statement error
+INSERT INTO a VALUES (1)
+
+statement error
+INSERT INTO a VALUES (1,2,3)
+
+statement error
+INSERT INTO a VALUES (1,2),(3)
+
+statement error
+INSERT INTO a VALUES (1,2),(3,4,5)
+
+statement error
+INSERT INTO a SELECT 42

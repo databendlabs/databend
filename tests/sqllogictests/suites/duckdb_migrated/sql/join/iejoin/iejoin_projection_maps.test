@@ -1,0 +1,61 @@
+statement ok
+DROP TABLE IF EXISTS df
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE df (id INTEGER, id2 INTEGER, id3 INTEGER, value_double DOUBLE, value as (value_double::DECIMAL(4,3)), one_min_value as ((1.0 - value_double)::DECIMAL(4,3)))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO df
+#     SELECT 
+#         (random() * 100)::INTEGER + 1 as id,
+#         (random() * 10)::INTEGER + 1 as id2,
+#         (random() * 5)::INTEGER + 1 as id3,
+#         (ROUND(random(), 4)) as value_double,
+#     FROM range(0, 5000);
+
+# Verify table contents
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT SUM(id) AS id, SUM(id2) AS id2, SUM(id3) AS id3, SUM(value) AS sum_value, SUM(one_min_value) AS sum_one_min_value, sum_value + sum_one_min_value AS sum
+# FROM df
+# ----
+# 252652	29774	17657	2498.192	2502.191	5000.383
+
+# TODO: unsupported feature
+# query I
+# SELECT id2, id3, id3_right, sum(value * value_right) as value
+# FROM (
+# 	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
+# 	FROM df JOIN df as df2
+# 		ON (df.id = df2.id
+# 		AND df.id2 = df2.id2
+# 		AND df.id3 > df2.id3
+# 		AND df.id3 < df2.id3 + 30)
+# 	) tbl
+# GROUP BY ALL
+# ORDER BY ALL
+# ----
+# TODO: hash result
+
+# TODO: unsupported feature
+# query I
+# SELECT id2, id3, id3_right, sum(value * value_right) as value
+# FROM (
+# 	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
+# 	FROM df JOIN df as df2
+# 		ON (df.id = df2.id
+# 		AND df.id2 = df2.id2
+# 		AND df.id3 > df2.id3
+# 		AND df.id3 < df2.id3 + 30)
+# 	) tbl
+# GROUP BY ALL
+# ORDER BY ALL
+# ----
+# TODO: hash result
+
+
+# Test left_projection_map
+# (Once it can acutally happen...)

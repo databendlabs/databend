@@ -1,0 +1,48 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (4);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i);
+
+query T
+EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 2;
+----
+TableScan
+├── table: default.default.integers
+├── scan id: 0
+├── output columns: [i (#0)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 2 ms>]
+├── push downs: [filters: [is_true(integers.i (#0) = 2)], limit: NONE]
+└── estimated rows: 1.00
+
+query I
+SELECT i FROM integers WHERE i = 2;
+----
+2
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT * FROM integers WHERE i = $1;
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE EXECUTE v1(2);
+# ----
+# TODO: special result marker
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(2);
+# ----
+# 2

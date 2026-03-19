@@ -1,0 +1,32 @@
+statement ok
+DROP TABLE IF EXISTS history
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE history(id TEXT, type TEXT, PRIMARY KEY(id, type));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO history(id, type) VALUES ('5_create_aaaaaaaaaaa_mapping', 'sql');
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# Original issue #3019
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE history(id TEXT, type TEXT, PRIMARY KEY(id, type));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO history(id, type) VALUES ('m0001_initialize', 'sql');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO history(id, type) VALUES ('m0005_create_aaaaaaaaaaa_mapping_table', 'sql');
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT

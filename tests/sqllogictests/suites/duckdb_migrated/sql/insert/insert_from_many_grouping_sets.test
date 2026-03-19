@@ -1,0 +1,51 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers2
+
+statement ok
+CREATE TABLE integers AS SELECT i, i%2 as j FROM generate_series(0,999999,1) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers2 AS SELECT * FROM integers GROUP BY GROUPING SETS ((), (i), (i, j), (j));
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers;
+----
+499999500000	500000	1000000	1000000	1000000
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers2;
+# ----
+# 999999000000	500001	2000003	2000000	1000002
+
+statement ok
+DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers2;
+
+# now with null values
+
+statement ok
+CREATE TABLE integers AS SELECT case when i%2=0 then null else i end AS i, i%2 as j  FROM generate_series(0,999999,1) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers2 AS SELECT * FROM integers GROUP BY GROUPING SETS ((), (i), (i, j), (j));
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers
+----
+250000000000	500000	1000000	500000	1000000
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers2
+# ----
+# 500000000000	500001	1000005	1000000	500003

@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(-500, 500, 1)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i)
+
+query I
+SELECT sum(i) FROM integers WHERE i >= -500 AND i <= -498
+----
+-1497
+
+query I
+SELECT sum(i) FROM integers WHERE i >= -10 AND i <= 5
+----
+-40
+
+query I
+SELECT sum(i) FROM integers WHERE i >= 10 AND i <= 15
+----
+75
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index
+
+statement ok
+DROP TABLE integers

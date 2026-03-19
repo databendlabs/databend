@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# select count(*) from '{DATA_DIR}/json/sample_utf8_bom.json'
+# ----
+# 1

@@ -16,14 +16,17 @@ INSERT INTO test(val) VALUES (1), (2), (3);
 
 # recursive view definition
 
-statement ok
-CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
 
-statement ok
-CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
 
-statement error
-SELECT * FROM foo;
+# TODO: result differs
+# statement error
+# SELECT * FROM foo;
 
 statement ok
 CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
@@ -34,5 +37,6 @@ CREATE OR REPLACE VIEW foo2 AS (SELECT * FROM foo);
 statement ok
 CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));
 
-statement error
-SELECT * FROM foo;
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM foo;

@@ -4,45 +4,56 @@ DROP TABLE IF EXISTS a
 statement ok
 DROP TABLE IF EXISTS b
 
-statement ok
-create table a (i int primary key);
+# TODO: unsupported feature
+# statement ok
+# create table a (i int primary key);
 
-statement ok
-create table b (i int references a);
+# TODO: unsupported feature
+# statement ok
+# create table b (i int references a);
 
-statement error
-insert into b values (1)
+# TODO: unsupported feature
+# statement error
+# insert into b values (1)
 
-statement ok
-insert into a values (1);
+# TODO: unsupported feature
+# statement ok
+# insert into a values (1);
 
-statement ok
-insert into b values (1)
-
+# TODO: unsupported feature
+# statement ok
+# insert into b values (1)
 
 # other tests
 
-statement ok
-drop table b;
+# TODO: unsupported feature
+# statement ok
+# drop table b;
 
-statement ok
-drop table a;
+# TODO: unsupported feature
+# statement ok
+# drop table a;
 
 # what if a does not have a primary key
 
-statement ok
-create table a (i int);
+# TODO: unsupported feature
+# statement ok
+# create table a (i int);
 
-statement error
-create table b (i int references a);
+# TODO: unsupported feature
+# statement error
+# create table b (i int references a);
 
-statement ok
-drop table a
+# TODO: unsupported feature
+# statement ok
+# drop table a
 
 # what if there is a column count mismatch
 
-statement ok
-create table a (i int, j int, primary key(i,j));
+# TODO: unsupported feature
+# statement ok
+# create table a (i int, j int, primary key(i,j));
 
-statement error
-create table b (i int references a);
+# TODO: unsupported feature
+# statement error
+# create table b (i int references a);

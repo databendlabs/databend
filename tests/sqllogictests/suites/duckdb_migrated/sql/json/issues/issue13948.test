@@ -1,0 +1,81 @@
+# TODO: unsupported feature
+# query I
+# SELECT '{"Status / SubStatus": "test"}' -> 'Status / SubStatus';
+# ----
+# "test"
+
+# TODO: unsupported feature
+# query I
+# WITH path AS (
+#     SELECT 'Status / SubStatus' p
+# )
+# SELECT '{"Status / SubStatus": "test"}' -> p
+# FROM path
+# ----
+# "test"
+
+# TODO at some point we should escape supplied JSON paths automatically so that this works
+
+# TODO: unsupported feature
+# query I
+# SELECT '{"\"Status / SubStatus\"": "test"}' -> '"Status / SubStatus"';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# WITH path AS (
+#     SELECT NULL p
+# )
+# SELECT '{"\"Status / SubStatus\"": "test"}' -> p
+# FROM path
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT '{"Status / SubStatus": "test"}' -> '$."Status / SubStatus"';
+# ----
+# "test"
+
+# TODO: unsupported feature
+# query I
+# WITH path AS (
+#     SELECT '$."Status / SubStatus"' p
+# )
+# SELECT '{"Status / SubStatus": "test"}' -> p
+# FROM path
+# ----
+# "test"
+
+# TODO: unsupported feature
+# query I
+# SELECT '[1, 2, 3]'->0
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# WITH path AS (
+#     SELECT 0 p
+# )
+# SELECT '[1, 2, 3]' -> p
+# FROM path
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT '[1, 2, 3]'->'0'
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# WITH path AS (
+#     SELECT '0' p
+# )
+# SELECT '[1, 2, 3]' -> p
+# FROM path
+# ----
+# NULL

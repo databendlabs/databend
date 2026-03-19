@@ -1,27 +1,33 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-statement ok
-CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))
 
-statement ok
-INSERT INTO integers VALUES (3, 'hello'), (3, 'world')
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (3, 'hello'), (3, 'world')
 
-query IT
-SELECT * FROM integers
-----
-3	hello
-3	world
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM integers
+# ----
+# 3	hello
+# 3	world
 
-statement error
-INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (6, 'bla'), (3, 'hello');
 
-statement ok
-INSERT INTO integers VALUES (6, 'bla');
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (6, 'bla');
 
-query IT
-SELECT * FROM integers
-----
-3	hello
-3	world
-6	bla
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM integers
+# ----
+# 3	hello
+# 3	world
+# 6	bla

@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# SELECT '{ "foo": ["bar", "baz"], "": 0 }' -> '/'
+# ----
+# 0

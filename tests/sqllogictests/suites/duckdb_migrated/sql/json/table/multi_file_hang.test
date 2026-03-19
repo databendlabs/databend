@@ -1,0 +1,6 @@
+# needs more threads than the number of files for this to happen
+statement error
+from read_json('{DATA_DIR}/json/multi_file_hang/*.json', sample_size=1, maximum_sample_files=1)
+
+statement error
+SELECT * FROM read_json('{DATA_DIR}/json/fuzzer_hang.json', ignore_errors=true);

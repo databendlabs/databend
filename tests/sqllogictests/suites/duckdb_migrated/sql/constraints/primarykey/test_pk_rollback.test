@@ -1,22 +1,28 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-statement ok
-CREATE TABLE integers(i INTEGER PRIMARY KEY)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER PRIMARY KEY)
 
-statement ok
-BEGIN TRANSACTION
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
 
-statement ok
-INSERT INTO integers VALUES (1);
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1);
 
-statement ok
-ROLLBACK
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
 
-statement ok
-INSERT INTO integers VALUES (1);
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1);
 
-query I
-SELECT * FROM integers
-----
-1
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers
+# ----
+# 1

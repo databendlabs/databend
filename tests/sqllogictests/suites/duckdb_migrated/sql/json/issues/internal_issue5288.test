@@ -1,0 +1,6 @@
+statement ok
+DROP TABLE IF EXISTS foo2
+
+# TODO: unsupported feature
+# statement ok
+# create table foo2 (bar JSON using compression 'zstd');

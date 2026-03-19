@@ -1,0 +1,50 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (u_2 UNION("string" VARCHAR, "bool" BOOLEAN))
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx_1 ON tbl ((u_2.string));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx_2 ON tbl ((u_2.string));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx_3 ON tbl ((u_2.string));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx_4 ON tbl ((u_2.string));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx_5 ON tbl ((u_2.string));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES ('helloo');
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl ORDER BY ALL;
+# ----
+# helloo
+# hellooo_0
+# hellooo_1
+# hellooo_2
+# hellooo_3
+# hellooo_4
+# hellooo_5
+# hellooo_6
+# hellooo_7
+# hellooo_8
+# hellooo_9

@@ -1,0 +1,22 @@
+query I
+select from_hex('aa')::json;
+----
+"AA"
+
+# TODO: unknown function
+# query I
+# select json(from_hex('aa'));
+# ----
+# "\\xAA"
+
+# TODO: unsupported feature
+# query I
+# select '1101'::BIT::JSON
+# ----
+# "1101"
+
+# TODO: unsupported feature
+# query I
+# select json('1101'::BIT)
+# ----
+# "1101"

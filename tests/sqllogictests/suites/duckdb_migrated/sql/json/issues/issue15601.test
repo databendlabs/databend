@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# FROM '{DATA_DIR}/json/15601/fragment*.json'
+
+# created an even worse example
+
+# TODO: unsupported feature
+# statement ok
+# FROM '{DATA_DIR}/json/15601/bunch_of_key_collisions.json'

@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+DROP TABLE IF EXISTS strings
+
+statement ok
+CREATE TABLE strings(a VARCHAR)
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (3), (4), (NULL)
+
+statement ok
+INSERT INTO strings SELECT * FROM integers
+
+query T
+SELECT * FROM strings
+----
+3
+4
+NULL
+
+statement ok
+UPDATE strings SET a=13 WHERE a='3'
+
+query T
+SELECT * FROM strings ORDER BY cast(a AS INTEGER)
+----
+4
+13
+NULL

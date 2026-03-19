@@ -1,0 +1,24 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers VALUES (0), (1), (2)
+
+query I
+SELECT COUNT(*) FROM integers
+----
+3
+
+statement ok
+ROLLBACK
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0

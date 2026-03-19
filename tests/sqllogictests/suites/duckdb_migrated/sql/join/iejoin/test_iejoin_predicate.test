@@ -1,0 +1,134 @@
+statement ok
+DROP TABLE IF EXISTS tleft
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table tleft as
+# 	select 
+# 		i as k100,
+# 		'2024-01-01'::TIMESTAMP + INTERVAL (i) seconds as b100,
+# 		b100 + INTERVAL 1 second as e100,
+# 	from range(0, 10) as tbl(i);
+
+# TODO: unsupported feature
+# query II
+# select l.k100 as lid, r.k100 as rid
+# from tleft l 
+# inner join tleft r 
+# on l.b100 < r.e100
+# and r.b100 < l.e100
+# and l.k100 + r.k100 < 10
+# order by 1
+# ----
+# 0	0
+# 1	1
+# 2	2
+# 3	3
+# 4	4
+
+# TODO: unsupported feature
+# query II
+# explain
+# select l.k100 as lid, r.k100 as rid
+# from tleft l 
+# left join tleft r 
+# on l.b100 < r.e100
+# and r.b100 < l.e100
+# and l.k100 + r.k100 < 10
+# order by 1
+# ----
+# TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# select l.k100 as lid, r.k100 as rid
+# from tleft l 
+# left join tleft r 
+# on l.b100 < r.e100
+# and r.b100 < l.e100
+# and l.k100 + r.k100 < 10
+# order by 1
+# ----
+# 0	0
+# 1	1
+# 2	2
+# 3	3
+# 4	4
+# 5	NULL
+# 6	NULL
+# 7	NULL
+# 8	NULL
+# 9	NULL
+
+# TODO: unsupported feature
+# query II
+# explain
+# select l.k100 as lid, r.k100 as rid
+# from tleft l 
+# right join tleft r 
+# on l.b100 < r.e100
+# and r.b100 < l.e100
+# and l.k100 + r.k100 < 10
+# order by 2
+# ----
+# TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# select l.k100 as lid, r.k100 as rid
+# from tleft l 
+# right join tleft r 
+# on l.b100 < r.e100
+# and r.b100 < l.e100
+# and l.k100 + r.k100 < 10
+# order by 2
+# ----
+# 0	0
+# 1	1
+# 2	2
+# 3	3
+# 4	4
+# NULL	5
+# NULL	6
+# NULL	7
+# NULL	8
+# NULL	9
+
+# TODO: unsupported feature
+# query II
+# explain
+# select l.k100 as lid, r.k100 as rid
+# from tleft l 
+# full join tleft r 
+# on l.b100 < r.e100
+# and r.b100 < l.e100
+# and l.k100 + r.k100 < 10
+# order by all
+# ----
+# TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# select l.k100 as lid, r.k100 as rid
+# from tleft l 
+# full join tleft r 
+# on l.b100 < r.e100
+# and r.b100 < l.e100
+# and l.k100 + r.k100 < 10
+# order by all
+# ----
+# 0	0
+# 1	1
+# 2	2
+# 3	3
+# 4	4
+# 5	NULL
+# 6	NULL
+# 7	NULL
+# 8	NULL
+# 9	NULL
+# NULL	5
+# NULL	6
+# NULL	7
+# NULL	8
+# NULL	9

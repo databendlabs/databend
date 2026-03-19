@@ -10,89 +10,116 @@ DROP TABLE IF EXISTS t3
 statement ok
 DROP TABLE IF EXISTS t4
 
-statement ok
-CREATE TABLE t1(i1 INTEGER UNIQUE)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(i1 INTEGER UNIQUE)
 
-statement ok
-INSERT INTO t1 VALUES (1), (2), (3), (4)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (1), (2), (3), (4)
 
-statement ok
-CREATE TABLE t2(i2 INTEGER PRIMARY KEY, FOREIGN KEY (i2) REFERENCES t1(i1))
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2(i2 INTEGER PRIMARY KEY, FOREIGN KEY (i2) REFERENCES t1(i1))
 
-statement ok
-INSERT INTO t2 VALUES (1), (2), (3)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t2 VALUES (1), (2), (3)
 
-statement ok
-CREATE TABLE t3(i3 INTEGER UNIQUE, FOREIGN KEY (i3) REFERENCES t2(i2))
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t3(i3 INTEGER UNIQUE, FOREIGN KEY (i3) REFERENCES t2(i2))
 
-statement ok
-INSERT INTO t3 VALUES (1), (2)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t3 VALUES (1), (2)
 
-statement ok
-CREATE TABLE t4(i4 INTEGER, FOREIGN KEY (i4) REFERENCES t3(i3))
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t4(i4 INTEGER, FOREIGN KEY (i4) REFERENCES t3(i3))
 
-statement ok
-INSERT INTO t4 VALUES (1)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t4 VALUES (1)
 
 # insert
 
-statement error
-INSERT INTO t2 VALUES (5)
+# TODO: unsupported feature
+# statement error
+# INSERT INTO t2 VALUES (5)
 
-statement error
-INSERT INTO t3 VALUES (4)
+# TODO: unsupported feature
+# statement error
+# INSERT INTO t3 VALUES (4)
 
-statement error
-INSERT INTO t4 VALUES (3)
+# TODO: unsupported feature
+# statement error
+# INSERT INTO t4 VALUES (3)
 
-statement ok
-INSERT INTO t2 VALUES (4)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t2 VALUES (4)
 
-statement ok
-INSERT INTO t3 VALUES (3)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t3 VALUES (3)
 
-statement ok
-INSERT INTO t4 VALUES (2)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t4 VALUES (2)
 
 # delete
 
-statement error
-DELETE FROM t1 WHERE i1=4
+# TODO: unsupported feature
+# statement error
+# DELETE FROM t1 WHERE i1=4
 
-statement error
-DELETE FROM t2 WHERE i2=3
+# TODO: unsupported feature
+# statement error
+# DELETE FROM t2 WHERE i2=3
 
-statement error
-DELETE FROM t3 WHERE i3=2
+# TODO: unsupported feature
+# statement error
+# DELETE FROM t3 WHERE i3=2
 
-statement ok
-DELETE FROM t2 WHERE i2=4
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM t2 WHERE i2=4
 
-statement ok
-DELETE FROM t3 WHERE i3=3
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM t3 WHERE i3=3
 
-statement ok
-DELETE FROM t4 WHERE i4=2
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM t4 WHERE i4=2
 
 # drop table
 
-statement error
-DROP TABLE t1;
+# TODO: unsupported feature
+# statement error
+# DROP TABLE t1;
 
-statement error
-DROP TABLE t2;
+# TODO: unsupported feature
+# statement error
+# DROP TABLE t2;
 
-statement error
-DROP TABLE t3;
+# TODO: unsupported feature
+# statement error
+# DROP TABLE t3;
 
-statement ok
-DROP TABLE t4;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t4;
 
-statement ok
-DROP TABLE t3;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t3;
 
-statement ok
-DROP TABLE t2;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t2;
 
-statement ok
-DROP TABLE t1;
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t1;

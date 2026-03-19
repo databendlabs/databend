@@ -1,0 +1,8 @@
+query II
+with cte as (
+    select '{"a":1}'::JSON as j
+)
+select typeof(j[2:3]), typeof(substring(j, 2, 3))
+from cte
+----
+VARCHAR	VARCHAR

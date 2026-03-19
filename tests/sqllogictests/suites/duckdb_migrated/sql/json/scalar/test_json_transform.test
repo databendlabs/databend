@@ -1,0 +1,994 @@
+# TODO: unknown function
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unknown function
+# query T
+# select from_json('42', '"UBIGINT"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select from_json_strict('42', '"UBIGINT"')
+# ----
+# 42
+
+# TODO: unknown function
+# statement error
+# select from_json_strict('42', '"DATE"')
+
+# TODO: unknown function
+# statement error
+# select json_transform('42', '42')
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"UBIGINT"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('4.2', '"DOUBLE"')
+# ----
+# 4.2
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"NULL"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"BOOLEAN"')
+# ----
+# True
+
+# TODO: unknown function
+# query T
+# select json_transform('"duck"', '"VARCHAR"')
+# ----
+# duck
+
+# TODO: unknown function
+# query T
+# select json_transform('"duuuuuuuuuuuuuuuuck"', '"VARCHAR"')
+# ----
+# duuuuuuuuuuuuuuuuck
+
+# simple structs
+
+# TODO: unknown function
+# query T
+# select json_transform('{"a": 42}', '{"a":"UBIGINT"}')
+# ----
+# {'a': 42}
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{"a": 42, "a":43}', '{"a":"UBIGINT"}')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '{"a":"UBIGINT"}')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '["UBIGINT"]')
+
+# TODO: unknown function
+# query T
+# select json_transform('[{}, [42]]', '[["UBIGINT"]]')
+# ----
+# [NULL, [42]]
+
+# TODO: unknown function
+# query T
+# select json_transform('{"a": null}', '{"a":"UBIGINT"}')
+# ----
+# {'a': NULL}
+
+# TODO: unknown function
+# query T
+# select json_transform('{"a": 42}', '{"a":"NULL"}')
+# ----
+# {'a': NULL}
+
+# TODO: unknown function
+# statement error
+# select json_transform('{"a": 42}', '{"a":"ARRAY"}')
+
+# TODO: unknown function
+# statement error
+# select json_transform('[1,2,3]', '["UBIGINT", "BIGINT"]')
+
+# TODO: unknown function
+# query T
+# select list_sum(json_transform(range(0, 5000)::JSON, '["UBIGINT"]'))::UBIGINT s
+# ----
+# 12497500
+
+# TODO: unknown function
+# query T
+# select json_transform('[1,2,3]', '["UBIGINT"]')
+# ----
+# [1, 2, 3]
+
+# TODO: unknown function
+# query T
+# select json_transform('[1,2,3]', '["NULL"]')
+# ----
+# [NULL, NULL, NULL]
+
+# TODO: unknown function
+# query T
+# select json_transform('[{"a": 42}, {"a": null}, {"a": 7}]', '[{"a": "UBIGINT"}]')
+# ----
+# [{'a': 42}, {'a': NULL}, {'a': 7}]
+
+# we can have missing keys, these become NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('[{"a": 42}, {"a": null, "b": 33}, {"b": 7}]', '[{"a": "UBIGINT", "b": "UBIGINT"}]')
+# ----
+# [{'a': 42, 'b': NULL}, {'a': NULL, 'b': 33}, {'a': NULL, 'b': 7}]
+
+# TODO: unknown function
+# statement ok
+# create table test (j json);
+
+# TODO: unknown function
+# statement ok
+# insert into test values
+#     ('{"family": "anatidae", "species": ["duck", "goose", "swan", null], "coolness": 1000}'),
+#     ('{"family": "canidae", "species": ["labrador", null, "bulldog", "shepherd"], "hair": true, "coolness": 999}'),
+#     (NULL),
+#     ('{"family": null, "species": null, "hair": null, "coolness": null}'),
+#     ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
+
+# TODO: unknown function
+# query T
+# select json_transform(j, '{"family": "VARCHAR", "coolness": "UBIGINT", "species": ["VARCHAR"]}') from test
+# ----
+# {'family': anatidae, 'coolness': 1000, 'species': [duck, goose, swan, NULL]}
+# {'family': canidae, 'coolness': 999, 'species': [labrador, NULL, bulldog, shepherd]}
+# NULL
+# {'family': NULL, 'coolness': NULL, 'species': NULL}
+# {'family': felidae, 'coolness': 999, 'species': [tiger, lion, NULL, british shorthair]}
+
+# conflicting names
+
+# TODO: unknown function
+# statement error
+# select json_transform('{"a": 4, "a": 2}', '{"a": "UBIGINT", "a": "UBIGINT"}')
+
+# TODO: unknown function
+# query T
+# select json_transform('{"a": {"duck": 42, "goose": 7}}', '{"a": "JSON"}')
+# ----
+# {'a': '{"duck":42,"goose":7}'}
+
+# loops over all types for coverage
+
+# all integer types
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"tinyint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"tinyint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"tinyint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"tinyint"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"tinyint"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"tinyint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"tinyint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"tinyint"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"tinyint"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"tinyint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"smallint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"smallint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"smallint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"smallint"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"smallint"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"smallint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"smallint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"smallint"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"smallint"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"smallint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"integer"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"integer"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"integer"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"integer"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"integer"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"integer"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"integer"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"integer"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"integer"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"integer"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"bigint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"bigint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"bigint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"bigint"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"bigint"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"bigint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"bigint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"bigint"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"bigint"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"bigint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"utinyint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"utinyint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"utinyint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"utinyint"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"utinyint"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"utinyint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"utinyint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"utinyint"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"utinyint"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"utinyint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"usmallint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"usmallint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"usmallint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"usmallint"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"usmallint"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"usmallint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"usmallint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"usmallint"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"usmallint"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"usmallint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"uinteger"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"uinteger"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"uinteger"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"uinteger"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"uinteger"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"uinteger"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"uinteger"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"uinteger"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"uinteger"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"uinteger"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"ubigint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"ubigint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"ubigint"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"ubigint"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"ubigint"')
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"ubigint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"ubigint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('[]', '"ubigint"')
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('{}', '"ubigint"')
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"ubigint"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('-42', '"INTEGER"')
+# ----
+# -42
+
+# TODO: unknown function
+# query T
+# select json_transform('-42', '"UINTEGER"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('-42', '"UINTEGER"')
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"VARCHAR"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"JSON"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"BLOB"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('-42', '"VARCHAR"')
+# ----
+# -42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"VARCHAR"')
+# ----
+# 42.42
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"VARCHAR"')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"VARCHAR"')
+# ----
+# []
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"VARCHAR"')
+# ----
+# {}
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"VARCHAR"')
+# ----
+# NULL
+
+# decimal
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"DECIMAL"')
+# ----
+# 42.000
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"DECIMAL(2)"')
+# ----
+# 42
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"DECIMAL(3,1)"')
+# ----
+# 42.0
+
+# TODO: unknown function
+# query T
+# select json_transform('-42', '"DECIMAL(3,1)"')
+# ----
+# -42.0
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"DECIMAL(3,1)"')
+# ----
+# 42.0
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"DECIMAL(4,2)"')
+# ----
+# 42.42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"DECIMAL(10,2)"')
+# ----
+# 42.42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"DECIMAL(20,2)"')
+# ----
+# 42.42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"DECIMAL(38,2)"')
+# ----
+# 42.42
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"DECIMAL(38,17)"')
+# ----
+# 42.42000000000000000
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"DECIMAL(3,1)"')
+# ----
+# 1.0
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"DECIMAL(3,1)"')
+# ----
+# 0.0
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"DECIMAL(3,1)"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"DECIMAL(2,1)"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"DECIMAL(2,1)"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"DECIMAL(2,1)"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('42', '"DECIMAL(2,1)"')
+
+# TODO: unknown function
+# statement error
+# select json_transform('42', '"DECIMAL(39)"')
+
+# TODO: unknown function
+# statement error
+# select json_transform('42', '"DECIMAL(2,4)"')
+
+# TODO: unknown function
+# statement error
+# select json_transform('42', '"DECIMAL(5,1,1)"')
+
+# TODO: unknown function
+# query T
+# select json_transform('"A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"', '"UUID"')
+# ----
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"UUID"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('42', '"UUID"')
+
+# TODO: unknown function
+# query T
+# select json_transform('-42', '"UUID"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"UUID"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"UUID"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"UUID"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"UUID"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('42', '"UUID"')
+
+# TODO: unknown function
+# query T
+# select json_transform('"1996-03-27"', '"DATE"')
+# ----
+# 1996-03-27
+
+# TODO: unknown function
+# query T
+# select json_transform('"11:59:59"', '"TIME"')
+# ----
+# 11:59:59
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('-42', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42.42', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('"42"', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('true', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('false', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('[]', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('{}', '"DATE"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('false', '"DATE"')
+
+# TODO: unknown function
+# query T
+# select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP"')
+# ----
+# 1996-03-27 11:59:59
+
+# TODO: unknown function
+# query T
+# select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP_MS"')
+# ----
+# 1996-03-27 11:59:59
+
+# TODO: unknown function
+# query T
+# select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP_NS"')
+# ----
+# 1996-03-27 11:59:59
+
+# TODO: unknown function
+# query T
+# select json_transform('"1996-03-27 11:59:59"', '"TIMESTAMP_S"')
+# ----
+# 1996-03-27 11:59:59
+
+# TODO: unknown function
+# query T
+# select json_transform('null', '"TIMESTAMP"')
+# ----
+# NULL
+
+# TODO: unknown function
+# query T
+# select json_transform('42', '"TIMESTAMP"')
+# ----
+# NULL
+
+# TODO: unknown function
+# statement error
+# select json_transform_strict('42', '"TIMESTAMP"')
+
+# TODO: unknown function
+# statement ok
+# CREATE OR REPLACE TYPE test_enum AS ENUM ('a', 'b', 'c');
+
+# TODO: unknown function
+# query T
+# select json_transform('{"test": "a"}', '{"test": "test_enum"}')
+# ----
+# {'test': a}
+
+# TODO: unknown function
+# query T
+# select json_transform('{"test": ["a","b"]}', '{"test": "test_enum[]"}')
+# ----
+# {'test': [a, b]}
+
+# TODO: unknown function
+# query T
+# select json_transform('{"test": ["a","b"]}', '{"test": "test_enum[2]"}')
+# ----
+# {'test': [a, b]}
+
+# TODO: unknown function
+# statement ok
+# DROP TYPE test_enum;

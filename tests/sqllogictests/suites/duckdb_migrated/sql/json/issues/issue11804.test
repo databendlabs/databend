@@ -1,0 +1,37 @@
+# TODO: unknown function
+# query I
+# select json_type(JSON 'null') = 'NULL';
+# ----
+# 1
+
+# TODO: unknown function
+# query I
+# select json_type(JSON '{"a": null}', '/a') = 'NULL';
+# ----
+# 1
+
+# TODO: unknown function
+# query I
+# select json_type(JSON '{"a": null}', '$.a') = 'NULL';
+# ----
+# 1
+
+# Test issue 13436 - JSON_TYPE function produces wrong result if path is a column expression
+
+# TODO: unknown function
+# query II
+# SELECT
+#   json_type (json '{"a":1,"b":null}', p),
+#   json_type (json '{"a":1,"b":null}', 'b')
+# FROM (VALUES ('b')) AS t (p);
+# ----
+# NULL	NULL
+
+# let's also test the extract many functionality
+
+# TODO: unknown function
+# query I
+# select unnest(json_type(JSON '{"a": null}', ['$.a', '$.a'])) = 'NULL';
+# ----
+# 1
+# 1

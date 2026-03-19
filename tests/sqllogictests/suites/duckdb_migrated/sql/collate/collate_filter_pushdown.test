@@ -4,19 +4,24 @@ DROP TABLE IF EXISTS t0
 statement ok
 DROP TABLE IF EXISTS t63
 
-statement ok
-CREATE TABLE t0(c0 BOOLEAN, PRIMARY KEY(c0));
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t0(c0 BOOLEAN, PRIMARY KEY(c0));
 
-statement ok
-CREATE TABLE t63(c0 VARCHAR COLLATE C, PRIMARY KEY(c0));
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t63(c0 VARCHAR COLLATE C, PRIMARY KEY(c0));
 
-statement ok
-insert into t0(c0) values (0.7);
+# TODO: unsupported feature
+# statement ok
+# insert into t0(c0) values (0.7);
 
-statement ok
-insert into t63(c0) values ('1');
+# TODO: unsupported feature
+# statement ok
+# insert into t63(c0) values ('1');
 
-query I
-SELECT t63.c0 FROM t0 NATURAL LEFT JOIN t63;
-----
-1
+# TODO: unsupported feature
+# query I
+# SELECT t63.c0 FROM t0 NATURAL LEFT JOIN t63;
+# ----
+# 1

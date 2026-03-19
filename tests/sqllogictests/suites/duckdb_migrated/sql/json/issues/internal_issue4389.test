@@ -1,0 +1,8 @@
+statement ok
+DROP TABLE IF EXISTS todos
+
+statement ok
+CREATE TABLE todos (userId UINT64, id UINT64, title VARCHAR, completed BOOLEAN);
+
+statement ok
+insert into todos values (42, 42, 'duck', true)

@@ -1,0 +1,25 @@
+statement ok
+DROP TABLE IF EXISTS numbers
+
+statement ok
+CREATE TABLE numbers(i DOUBLE)
+
+statement ok
+INSERT INTO numbers VALUES (CAST(0 AS DOUBLE))
+
+statement ok
+INSERT INTO numbers VALUES (CAST(-0 AS DOUBLE))
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON numbers(i)
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = CAST(0 AS DOUBLE)
+----
+2
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = CAST(-0 AS DOUBLE)
+----
+2

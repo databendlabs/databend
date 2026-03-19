@@ -6504,3 +6504,1405 @@
 | `leaf_merge_1` | `unsupported feature` | 1 | sql/index/art/nodes/test_art_leaf_coverage.test | `statement ok<br>CREATE INDEX idx_merge_1 ON leaf_merge_1(id, id2);` |  |
 | `leaf_merge_2` | `unsupported feature` | 1 | sql/index/art/nodes/test_art_leaf_coverage.test | `statement ok<br>CREATE INDEX idx_merge_2 ON leaf_merge_2(id, id2);` |  |
 | `tbl_dup_ser` | `unsupported feature` | 1 | sql/index/art/nodes/test_art_leaf_coverage.test | `statement ok<br>CREATE INDEX idx_dup_ser ON tbl_dup_ser(id);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:44:26.701081+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 34
+- Files with issues: 1105
+- Unknown function TODOs: 856
+- Unsupported feature TODOs: 12055
+- Unknown function unique issues: 3
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_extract` | 29 | sql/json/scalar/test_json_extract.test |  |
+| `json_extract_path` | 1 | sql/json/scalar/test_json_extract.test |  |
+| `json_extract_string` | 3 | sql/json/scalar/test_json_extract.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `json_extract_path_text` | `unsupported feature` | 1 | sql/json/scalar/test_json_extract.test | `query T<br>select json_extract_path_text('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')<br>----<br>duck` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:44:44.704809+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1107
+- Unknown function TODOs: 856
+- Unsupported feature TODOs: 12071
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `varchars` | `unsupported feature` | 1 | sql/index/art/scan/test_art_null_bytes.test | `statement ok<br>CREATE TABLE varchars(v VARCHAR PRIMARY KEY);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:46:24.660899+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 4
+- Files with issues: 1110
+- Unknown function TODOs: 856
+- Unsupported feature TODOs: 12125
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 3
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `not` | `unsupported feature` | 2 | sql/index/art/scan/test_art_scan_coverage.test | `query I rowsort label-225<br>SELECT pk FROM tab1 WHERE NOT (col3 = 54 AND col1 <= 76.83)<br>----` |  |
+| `t0_scan` | `unsupported feature` | 1 | sql/index/art/scan/test_art_scan_coverage.test | `statement ok<br>CREATE INDEX t0i0 ON t0_scan(c0 DESC);` |  |
+| `t0_varchar` | `unsupported feature` | 1 | sql/index/art/scan/test_art_scan_coverage.test | `statement ok<br>CREATE INDEX t0i0_idx ON t0_varchar(c0 );` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:46:30.874370+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 7
+- Files with issues: 1111
+- Unknown function TODOs: 856
+- Unsupported feature TODOs: 12133
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 4
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `t_1` | `unsupported feature` | 1 | sql/index/art/scan/test_art_scan_duplicate_filters.test | `statement ok<br>CREATE TABLE t_1 (fIdx VARCHAR, sIdx UUID,);` |  |
+| `t_3` | `unsupported feature` | 1 | sql/index/art/scan/test_art_scan_duplicate_filters.test | `statement ok<br>CREATE TABLE t_3 (fIdx VARCHAR, sIdx UUID);` |  |
+| `t_4` | `unsupported feature` | 2 | sql/index/art/scan/test_art_scan_duplicate_filters.test | `statement ok<br>CREATE TABLE t_4 (sIdx UUID);` |  |
+| `t_5` | `unsupported feature` | 3 | sql/index/art/scan/test_art_scan_duplicate_filters.test | `statement ok<br>CREATE TABLE t_5 (sIdx UUID);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:58:46.730036+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 6
+- Files with issues: 1121
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12210
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 3
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `duckdb_constraints` | `unsupported feature` | 3 | sql/index/art/storage/test_art_duckdb_versions.test | `query II<br>SELECT table_name, constraint_type FROM duckdb_constraints() ORDER BY ALL;<br>----<br>fk_tbl	FOREIGN KEY<br>pk_tbl	NOT NULL<br>pk_tbl	PRIMARY KEY<br>pk_tbl	UNIQUE` |  |
+| `get_block_size` | `unsupported feature` | 2 | sql/index/art/storage/test_art_duckdb_versions.test | `query I<br>SELECT used_blocks > 2621440 / get_block_size('test_art_import') FROM pragma_database_size();<br>----<br>1` |  |
+| `idx_tbl` | `unsupported feature` | 1 | sql/index/art/storage/test_art_duckdb_versions.test | `statement ok<br>CREATE INDEX ART_index ON idx_tbl(i);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:58:50.507863+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 1122
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12212
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `tracking` | `unsupported feature` | 2 | sql/index/art/storage/test_art_import.test | `statement ok<br>CREATE INDEX nflid_idx ON tracking (nflid)` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:58:54.277914+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1123
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12213
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `raw` | `unsupported feature` | 1 | sql/index/art/storage/test_art_import_export.test | `statement ok<br>CREATE UNIQUE INDEX customer_year_month_idx ON raw (customer_ID, year, month);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T12:58:56.093178+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1124
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12216
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `duckdb_memory` | `unsupported feature` | 1 | sql/index/art/storage/test_art_mem_limit.test | `statement ok<br>FROM duckdb_memory();` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:01:57.700592+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1127
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12230
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `tbl_deser_scan` | `unsupported feature` | 1 | sql/index/art/storage/test_art_storage.test | `statement ok<br>CREATE INDEX idx_deser_scan ON tbl_deser_scan(id);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:02:00.086487+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 5
+- Files with issues: 1128
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12237
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `history` | `unsupported feature` | 5 | sql/index/art/storage/test_art_storage_long_prefixes.test | `statement ok<br>CREATE TABLE history(id TEXT, type TEXT, PRIMARY KEY(id, type));` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:02:02.365020+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 1129
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12242
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 2
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `pk_integers` | `unsupported feature` | 1 | sql/index/art/storage/test_art_storage_multi_checkpoint.test | `statement ok<br>CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)` |  |
+| `pk_integers2` | `unsupported feature` | 1 | sql/index/art/storage/test_art_storage_multi_checkpoint.test | `statement ok<br>CREATE TABLE pk_integers2(i INTEGER PRIMARY KEY)` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:02:15.663040+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1130
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12244
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `minimal_tbl` | `unsupported feature` | 1 | sql/index/art/storage/test_art_wal_checkpoint_minimal.test | `statement ok<br>CREATE UNIQUE INDEX idx_minimal ON minimal_tbl(i);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:03:08.060756+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1132
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12258
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `drop_test` | `unsupported feature` | 1 | sql/index/art/storage/test_art_wal_replay_in_tx.test | `statement ok<br>CREATE INDEX drop_idx ON drop_test(a);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:04:25.726510+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 8
+- Files with issues: 1137
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12301
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 7
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `int128_first` | `unsupported feature` | 2 | sql/index/art/types/test_art_coverage_types.test | `statement ok<br>CREATE TABLE int128_first (id INT128, id2 INT128);` |  |
+| `int128_point` | `unsupported feature` | 1 | sql/index/art/types/test_art_coverage_types.test | `statement ok<br>CREATE INDEX idx_int128_point ON int128_point(id);` |  |
+| `uint32_point` | `unsupported feature` | 1 | sql/index/art/types/test_art_coverage_types.test | `statement ok<br>CREATE INDEX idx_uint32_point ON uint32_point(id);` |  |
+| `uint64_first` | `unsupported feature` | 1 | sql/index/art/types/test_art_coverage_types.test | `statement ok<br>CREATE INDEX idx_3 ON uint64_first(id, id2, id3, id4);` |  |
+| `uint64_point` | `unsupported feature` | 1 | sql/index/art/types/test_art_coverage_types.test | `statement ok<br>CREATE INDEX idx_uint64_point ON uint64_point(id);` |  |
+| `uint8_first` | `unsupported feature` | 1 | sql/index/art/types/test_art_coverage_types.test | `statement ok<br>CREATE INDEX idx_2 ON uint8_first(id, id2);` |  |
+| `uint8_point` | `unsupported feature` | 1 | sql/index/art/types/test_art_coverage_types.test | `statement ok<br>CREATE INDEX idx_uint8_point ON uint8_point(id);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:06:25.473189+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 5
+- Files with issues: 1145
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12399
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 5
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `t5` | `unsupported feature` | 1 | sql/index/art/vacuum/test_art_vacuum_rollback.test | `statement ok<br>CREATE TABLE t5(i INTEGER UNIQUE);` |  |
+| `t6` | `unsupported feature` | 1 | sql/index/art/vacuum/test_art_vacuum_rollback.test | `statement ok<br>CREATE TABLE t6(i INTEGER UNIQUE);` |  |
+| `t7` | `unsupported feature` | 1 | sql/index/art/vacuum/test_art_vacuum_rollback.test | `statement ok<br>CREATE TABLE t7(i INTEGER UNIQUE);` |  |
+| `t8` | `unsupported feature` | 1 | sql/index/art/vacuum/test_art_vacuum_rollback.test | `statement ok<br>CREATE TABLE t8(i INTEGER UNIQUE);` |  |
+| `t9` | `unsupported feature` | 1 | sql/index/art/vacuum/test_art_vacuum_rollback.test | `statement ok<br>CREATE TABLE t9(i INTEGER UNIQUE);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:07:02.712321+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 3
+- Files with issues: 1146
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12413
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `name` | `unsupported feature` | 3 | sql/insert/insert_by_name.test | `statement ok<br>INSERT INTO tbl2 BY NAME (SELECT 22 AS b);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:07:35.961494+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 1147
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12419
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `sets` | `unsupported feature` | 2 | sql/insert/insert_from_many_grouping_sets.test | `statement ok<br>CREATE TABLE integers2 AS SELECT * FROM integers GROUP BY GROUPING SETS ((), (i), (i, j), (j));` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:08:52.472545+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1148
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12421
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `presentations` | `unsupported feature` | 1 | sql/insert/test_insert.test | `statement ok<br>CREATE TABLE IF NOT EXISTS presentations(presentation_date Date NOT NULL UNIQUE, author VARCHAR NOT NULL, title VARCHAR NOT NULL, bio VARCHAR, abstract VARCHAR, zoom_link VARCHAR);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:14:13.713423+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 8
+- Files with issues: 1154
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12502
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 8
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `prices_array` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE prices_array("when" TIMESTAMP, symbol INTEGER[2], price INTEGER);` |  |
+| `prices_list` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE prices_list("when" TIMESTAMP, symbol INTEGER[], price INTEGER);` |  |
+| `prices_nested` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE prices_nested("when" TIMESTAMP, symbol STRUCT(ticker VARCHAR[], exchange INTEGER), price INTEGER);` |  |
+| `prices_struct` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE prices_struct("when" TIMESTAMP, symbol STRUCT(ticker VARCHAR, exchange INTEGER), price INTEGER);` |  |
+| `trades_array` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE trades_array("when" timestamp, symbol INTEGER[2]);` |  |
+| `trades_list` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE trades_list("when" timestamp, symbol INTEGER[]);` |  |
+| `trades_nested` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE trades_nested("when" timestamp, symbol STRUCT(ticker VARCHAR[], exchange INTEGER));` |  |
+| `trades_struct` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_prefix.test | `statement ok<br>CREATE TABLE trades_struct("when" timestamp, symbol STRUCT(ticker VARCHAR, exchange INTEGER));` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:18:11.494177+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 3
+- Files with issues: 1164
+- Unknown function TODOs: 857
+- Unsupported feature TODOs: 12609
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 3
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `df1` | `unsupported feature` | 1 | sql/join/full_outer/test_full_outer_join_issue_4252.test | `statement ok<br>CREATE TABLE df1(day DATE, value INTEGER, organization VARCHAR);<br>INSERT INTO df1 VALUES <br>    ('2022-01-01', 10, 'org1'),<br>    ('2022-01-05', 20, 'org2'),<br>    ('2022-01-10', 30, 'org3');` |  |
+| `df2` | `unsupported feature` | 1 | sql/join/full_outer/test_full_outer_join_issue_4252.test | `statement ok<br>CREATE TABLE df2(day DATE, value INTEGER, organization VARCHAR);<br>INSERT INTO df2 VALUES <br>    ('2022-01-01', 100, 'org1'),<br>    ('2022-09-01', 200, 'org2'),<br>    ('2022-03-01', 300, 'org3');` |  |
+| `df3` | `unsupported feature` | 1 | sql/join/full_outer/test_full_outer_join_issue_4252.test | `statement ok<br>CREATE TABLE df3(day DATE, value INTEGER, organization VARCHAR);<br>INSERT INTO df3 VALUES<br>    ('2022-01-02',  1000, 'org1'),<br>    ('2022-02-03',  2000, 'org2'),<br>    ('2022-04-01',  3000, 'org3');` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:20:10.213680+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1172
+- Unknown function TODOs: 858
+- Unsupported feature TODOs: 12687
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `interval` | 1 | sql/join/iejoin/test_iejoin_events.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:26:54.876917+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 5
+- Files with issues: 1176
+- Unknown function TODOs: 858
+- Unsupported feature TODOs: 12739
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `u` | `unsupported feature` | 5 | sql/join/inner/equality_join_limits.test | `statement ok<br>CREATE TABLE u(u_k0 HUGEINT);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-18T13:30:19.032256+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 8
+- Files with issues: 1180
+- Unknown function TODOs: 858
+- Unsupported feature TODOs: 12786
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 6
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `tb1` | `unsupported feature` | 2 | sql/join/inner/test_join_is_distinct.test | `statement ok<br>insert into tb1 (select NULL from range(0, 20));` |  |
+| `tb2` | `unsupported feature` | 2 | sql/join/inner/test_join_is_distinct.test | `statement ok<br>insert into tb2 (select NULL from range(0, 20));` |  |
+| `tbl_l` | `unsupported feature` | 1 | sql/join/inner/test_join_is_distinct.test | `statement ok<br>CREATE TABLE tbl_l (col0 INTEGER[], col1 INTEGER[]);` |  |
+| `tbl_l_null` | `unsupported feature` | 1 | sql/join/inner/test_join_is_distinct.test | `statement ok<br>CREATE TABLE tbl_l_null (col0 INTEGER[], col1 INTEGER[]);` |  |
+| `tbl_s` | `unsupported feature` | 1 | sql/join/inner/test_join_is_distinct.test | `statement ok<br>CREATE TABLE tbl_s (col0 STRUCT(x INTEGER), col1 STRUCT(x INTEGER));` |  |
+| `tbl_s_null` | `unsupported feature` | 1 | sql/join/inner/test_join_is_distinct.test | `statement ok<br>CREATE TABLE tbl_s_null (col0 STRUCT(x INTEGER), col1 STRUCT(x INTEGER));` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:11:07.477554+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1184
+- Unknown function TODOs: 824
+- Unsupported feature TODOs: 12866
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `tbl_m` | `unsupported feature` | 1 | sql/index/art/storage/test_art_storage.test | `statement ok<br>CREATE UNIQUE INDEX idx_m on tbl_m (m(tbl_m.x));` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:49:11.142760+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1186
+- Unknown function TODOs: 824
+- Unsupported feature TODOs: 12870
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `v3` | `unsupported feature` | 1 | sql/catalog/view/test_stacked_view.test | `statement ok<br>CREATE VIEW v3 (v3c1, v3c2) AS SELECT v2c1, v2c3 FROM v2 WHERE v2c1 > 43` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:51:01.830105+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1191
+- Unknown function TODOs: 824
+- Unsupported feature TODOs: 12888
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `integers4` | `unsupported feature` | 1 | sql/constraints/check/test_check.test | `statement ok<br>CREATE TABLE integers4(i INTEGER CHECK(integers4.i < 10), j INTEGER)` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:52:47.375544+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1208
+- Unknown function TODOs: 824
+- Unsupported feature TODOs: 12930
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `iiiiiiiiii` | `unsupported feature` | 1 | sql/copy/csv/auto/test_auto_cranlogs.test | `query IIIIIIIIII<br>(SELECT * FROM cranlogs EXCEPT SELECT * FROM cranlogs2)<br>UNION ALL<br>(SELECT * FROM cranlogs2 EXCEPT SELECT * FROM cranlogs)<br>----` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:52:51.849298+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1210
+- Unknown function TODOs: 824
+- Unsupported feature TODOs: 12937
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `iiiii` | `unsupported feature` | 1 | sql/copy/csv/auto/test_auto_imdb.test | `query IIIII<br>(FROM movie_info EXCEPT FROM movie_info2)<br>UNION ALL<br>(FROM movie_info2 EXCEPT FROM movie_info)<br>----` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:52:56.790700+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1211
+- Unknown function TODOs: 824
+- Unsupported feature TODOs: 12942
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `iiiiiiiiiiiiii` | `unsupported feature` | 1 | sql/copy/csv/auto/test_auto_web_page.test | `query IIIIIIIIIIIIII<br>(SELECT * FROM web_page EXCEPT SELECT * FROM web_page2)<br>UNION ALL<br>(SELECT * FROM web_page2 EXCEPT SELECT * FROM web_page)<br>----` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:54:25.599660+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1220
+- Unknown function TODOs: 825
+- Unsupported feature TODOs: 13094
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `tbl` | 1 | sql/join/left_outer/non_foldable_left_join.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:55:54.117067+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1224
+- Unknown function TODOs: 825
+- Unsupported feature TODOs: 13122
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `sqlancer_v0` | `unsupported feature` | 1 | sql/join/natural/natural_join.test | `statement ok<br>CREATE VIEW sqlancer_v0(c0, c1) AS SELECT sqlancer_t0.c0, ((sqlancer_t0.rowid)//(-1694294358))<br>FROM sqlancer_t0<br>ORDER BY TIMESTAMP '1970-01-08 16:19:01' ASC;` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:06:49.368483+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 1235
+- Unknown function TODOs: 825
+- Unsupported feature TODOs: 13207
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `t63` | `unsupported feature` | 2 | sql/collate/collate_filter_pushdown.test | `statement ok<br>insert into t63(c0) values ('1');` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:11:25.130125+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 3
+- Files with issues: 1238
+- Unknown function TODOs: 825
+- Unsupported feature TODOs: 13216
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 2
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `collate_test` | `unsupported feature` | 2 | sql/collate/test_combined_collation.test<br>sql/collate/test_unsupported_collations.test | `statement ok<br>CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOCASE)` |  |
+| `pragma_collations` | `unsupported feature` | 1 | sql/collate/test_pragma_collations.test | `query I<br>from pragma_collations() <br>where collname like 'n%'<br>order by all<br>----<br>nb<br>nb_no<br>ne<br>nfc<br>nl<br>nn<br>no<br>noaccent<br>nocase<br>nso` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:24:34.629106+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 1248
+- Unknown function TODOs: 825
+- Unsupported feature TODOs: 13242
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 2
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `icu_sort_key` | `unsupported feature` | 1 | sql/collate/test_icu_collate.test | `statement ok<br>SELECT icu_sort_key('Ş', 'ro')` |  |
+| `strpos` | `unsupported feature` | 1 | sql/collate/test_strpos_collate.test | `query I<br>SELECT strpos('HELLO' COLLATE NOCASE, 'el')<br>----<br>2` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:26:59.098652+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1248
+- Unknown function TODOs: 826
+- Unsupported feature TODOs: 13242
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `strpos` | 1 | sql/collate/test_strpos_collate.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:40:55.228644+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 59
+- Files with issues: 1289
+- Unknown function TODOs: 826
+- Unsupported feature TODOs: 13947
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 29
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `agency` | `unsupported feature` | 3 | sql/constraints/foreignkey/foreign_key_matching_columns.test | `statement ok<br>CREATE TABLE agency (<br>	agency_id TEXT,<br>	agency_name TEXT NOT NULL<br>);` |  |
+| `child` | `unsupported feature` | 3 | sql/constraints/foreignkey/test_fk_create_type.test | `statement ok<br>create table child (<br>	parent integer references parent<br>);` |  |
+| `d` | `unsupported feature` | 1 | sql/constraints/foreignkey/fk_19469.test | `statement ok<br>CREATE TABLE D (<br>    d1 INTEGER,<br>    d2 INTEGER,<br>    d3 VARCHAR(1),<br>    d4 VARCHAR(1),<br>    payload INTEGER,<br>    FOREIGN KEY (d1, d2) REFERENCES C (c1, c2),<br>    FOREIGN KEY (d3, d4) REFERENCES C (c3, c4)<br>);` |  |
+| `departments` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_alter.test | `statement ok<br>CREATE TABLE departments (<br>    department_id INTEGER PRIMARY KEY,<br>    department_name VARCHAR(100) NOT NULL<br>);` |  |
+| `employee` | `unsupported feature` | 2 | sql/constraints/foreignkey/test_fk_self_referencing.test | `statement ok<br>CREATE TABLE employee(<br>	id INTEGER PRIMARY KEY,<br>	managerid INTEGER,<br>	name VARCHAR,<br>	FOREIGN KEY(managerid) REFERENCES employee(id));` |  |
+| `employees` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_alter.test | `statement ok<br>CREATE TABLE employees (<br>    employee_id INTEGER PRIMARY KEY,<br>    employee_name VARCHAR(100) NOT NULL,<br>    department_id INT REFERENCES departments(department_id)<br>);` |  |
+| `fk_integers` | `unsupported feature` | 7 | sql/constraints/foreignkey/test_fk_concurrency_conflicts.test<br>sql/constraints/foreignkey/test_fk_cross_schema.test<br>sql/constraints/foreignkey/test_fk_export.test<br>sql/constraints/foreignkey/test_fk_rollback.test | `statement ok<br>CREATE TABLE fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))` |  |
+| `fk_integers_another` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_concurrency_conflicts.test | `statement ok<br>CREATE TABLE fk_integers_another(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))` |  |
+| `fkt` | `unsupported feature` | 9 | sql/constraints/foreignkey/test_fk_temporary.test<br>sql/constraints/foreignkey/test_fk_transaction.test<br>sql/constraints/foreignkey/test_foreignkey.test | `statement ok<br>CREATE INDEX l_index ON fkt(l)` |  |
+| `fkt1` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_multiple.test | `statement ok<br>CREATE TABLE fkt1(<br>	k1 INTEGER,<br>	l1 INTEGER,<br>	FOREIGN KEY(k1) REFERENCES pkt1(i1),<br>	FOREIGN KEY(l1) REFERENCES pkt2(i2)<br>);` |  |
+| `fkt2` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_multiple.test | `statement ok<br>CREATE TABLE fkt2(<br>	k2 INTEGER,<br>	l2 INTEGER,<br>	FOREIGN KEY(k2) REFERENCES pkt1(j1),<br>	FOREIGN KEY(l2) REFERENCES pkt2(j2)<br>);` |  |
+| `george` | `unsupported feature` | 1 | sql/constraints/foreignkey/fk_20530.test | `statement ok<br>CREATE TABLE george(<br>    zippy_id INTEGER,<br>    FOREIGN KEY (zippy_id) REFERENCES zippy(id)<br>);` |  |
+| `george_main` | `unsupported feature` | 1 | sql/constraints/foreignkey/fk_20530.test | `statement ok<br>CREATE TABLE george_main(<br>    zippy_id INTEGER,<br>    FOREIGN KEY (zippy_id) REFERENCES zippy_main(id)<br>);` |  |
+| `pkt` | `unsupported feature` | 8 | sql/constraints/foreignkey/test_fk_temporary.test<br>sql/constraints/foreignkey/test_foreignkey.test | `statement ok<br>CREATE INDEX k_index ON pkt(k)` |  |
+| `pkt2` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_multiple.test | `statement ok<br>CREATE TABLE pkt2(<br>	i2 INTEGER PRIMARY KEY,<br>	j2 INTEGER UNIQUE CHECK (j2 > 1000)<br>);` |  |
+| `primary_table` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_pk_multi_transaction_delete.test | `statement ok<br>CREATE TABLE primary_table (id INT PRIMARY KEY)` |  |
+| `routes` | `unsupported feature` | 5 | sql/constraints/foreignkey/foreign_key_matching_columns.test | `statement ok<br>CREATE TABLE routes (<br>	route_id TEXT PRIMARY KEY,<br>	agency_id TEXT,<br>	FOREIGN KEY (agency_id) REFERENCES agency<br>);` |  |
+| `secondary_table` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_pk_multi_transaction_delete.test | `statement ok<br>CREATE TABLE secondary_table (primary_id INT, FOREIGN KEY (primary_id) REFERENCES primary_table(id))` |  |
+| `self_ref` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_self_reference_export.test | `statement ok<br>CREATE TABLE self_ref(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES self_ref(id));` |  |
+| `t10` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_action.test | `statement error<br>CREATE TABLE t10(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE SET DEFAULT);` |  |
+| `t11` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_action.test | `statement error<br>CREATE TABLE t11(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE SET NULL);` |  |
+| `t12` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_action.test | `statement error<br>CREATE TABLE t12(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE SET NULL);` |  |
+| `tbl_fk` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_eager_constraint_checking.test | `statement ok<br>CREATE TABLE tbl_fk (i INT REFERENCES tbl_pk(i));` |  |
+| `tbl_pk` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_eager_constraint_checking.test | `statement ok<br>CREATE TABLE tbl_pk (i INT PRIMARY KEY, payload STRUCT(v VARCHAR, i INTEGER[]));` |  |
+| `tf_2` | `unsupported feature` | 1 | sql/constraints/foreignkey/fk_4309.test | `statement ok<br>CREATE TABLE tf_2 (<br>  d integer, e integer, f integer,<br>  FOREIGN KEY (d) REFERENCES tf_1 (a),<br>  FOREIGN KEY (e) REFERENCES tf_1 (b),<br>  FOREIGN KEY (f) REFERENCES tf_1 (c)<br>);` |  |
+| `tst` | `unsupported feature` | 1 | sql/constraints/primarykey/test_pk_multi_string.test | `statement ok<br>CREATE TABLE tst(a varchar, b varchar,PRIMARY KEY(a,b))` |  |
+| `v` | `unsupported feature` | 1 | sql/constraints/foreignkey/test_fk_on_view_error.test | `statement ok<br>CREATE TABLE vdata AS SELECT * FROM (VALUES ('v2',)) v(id);` |  |
+| `zippy` | `unsupported feature` | 1 | sql/constraints/foreignkey/fk_20530.test | `statement ok<br>CREATE TABLE zippy(<br>    id INTEGER PRIMARY KEY<br>);` |  |
+| `zippy_main` | `unsupported feature` | 1 | sql/constraints/foreignkey/fk_20530.test | `statement ok<br>CREATE TABLE zippy_main(<br>    id INTEGER PRIMARY KEY<br>);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:42:53.646995+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1290
+- Unknown function TODOs: 826
+- Unsupported feature TODOs: 13948
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `read_json` | `unsupported feature` | 1 | sql/json/issues/internal_issue2732.test | `statement ok<br>select * from read_json('{DATA_DIR}/json/internal_2732.json', map_inference_threshold=0);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:43:01.833618+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 7
+- Files with issues: 1291
+- Unknown function TODOs: 833
+- Unsupported feature TODOs: 13948
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_array_length` | 7 | sql/json/scalar/test_json_array_length.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:44:25.567920+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 1295
+- Unknown function TODOs: 834
+- Unsupported feature TODOs: 13953
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `read_json_auto` | `unsupported feature` | 2 | sql/json/issues/issue10784.test | `query I<br>SELECT * FROM read_json_auto('{DATA_DIR}/json/arr.json', columns={'v':'VARCHAR'});<br>----<br>4<br>hello` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:44:27.578173+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 4
+- Files with issues: 1296
+- Unknown function TODOs: 839
+- Unsupported feature TODOs: 13953
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_type` | 4 | sql/json/issues/issue11804.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:44:32.370428+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1298
+- Unknown function TODOs: 839
+- Unsupported feature TODOs: 13964
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `read_ndjson_auto` | `unsupported feature` | 1 | sql/json/issues/issue14167.test | `query I<br>select columns.v4_c6 from read_ndjson_auto('{DATA_DIR}/json/14167.json');<br>----<br>{'statistics': {'nonNullCount': 0}}` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:44:34.972454+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1301
+- Unknown function TODOs: 842
+- Unsupported feature TODOs: 13965
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json` | 1 | sql/json/issues/issue16968.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:44:36.776227+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1303
+- Unknown function TODOs: 843
+- Unsupported feature TODOs: 13966
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `to_json` | 1 | sql/json/issues/issue19357.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:44:47.124283+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 14
+- Files with issues: 1306
+- Unknown function TODOs: 858
+- Unsupported feature TODOs: 13968
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_contains` | 14 | sql/json/scalar/test_json_contains.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:44:57.181652+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 5
+- Files with issues: 1308
+- Unknown function TODOs: 872
+- Unsupported feature TODOs: 13969
+- Unknown function unique issues: 1
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_exists` | 5 | sql/json/scalar/test_json_exists.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:46:14.767566+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 24
+- Files with issues: 1311
+- Unknown function TODOs: 930
+- Unsupported feature TODOs: 13971
+- Unknown function unique issues: 2
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_keys` | 5 | sql/json/scalar/test_json_keys.test |  |
+| `json_merge_patch` | 19 | sql/json/scalar/test_json_merge_patch.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:46:48.114632+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1313
+- Unknown function TODOs: 951
+- Unsupported feature TODOs: 13972
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `json_pretty` | `unsupported feature` | 1 | sql/json/scalar/test_json_pretty.test | `query I<br>SELECT json_pretty('[1,2,{"a":43,    "g":[true, true]}]') = '[<br>    1,<br>    2,<br>    {<br>        "a": 43,<br>        "g": [<br>            true,<br>            true<br>        ]<br>    }<br>]'<br>----<br>1` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:48:17.117986+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 12
+- Files with issues: 1316
+- Unknown function TODOs: 1032
+- Unsupported feature TODOs: 13972
+- Unknown function unique issues: 3
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `from_json` | 1 | sql/json/scalar/test_json_transform.test |  |
+| `from_json_strict` | 1 | sql/json/scalar/test_json_transform.test |  |
+| `json_transform` | 10 | sql/json/scalar/test_json_transform.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T02:49:23.616442+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 36
+- Files with issues: 1318
+- Unknown function TODOs: 1068
+- Unsupported feature TODOs: 13972
+- Unknown function unique issues: 2
+- Unsupported feature unique issues: 0
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_valid` | 14 | sql/json/scalar/test_json_valid.test |  |
+| `json_value` | 22 | sql/json/scalar/test_json_value.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| _none_ |  |  |  |  |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T03:19:02.140693+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1322
+- Unknown function TODOs: 1069
+- Unsupported feature TODOs: 14000
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `iiiiiiiiiiiiiiii` | `unsupported feature` | 1 | sql/copy/csv/auto/test_auto_lineitem.test | `query IIIIIIIIIIIIIIII<br>(SELECT * FROM lineitem EXCEPT SELECT * FROM lineitem2)<br>UNION ALL<br>(SELECT * FROM lineitem2 EXCEPT SELECT * FROM lineitem)<br>----` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T03:20:48.551260+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 2
+- Files with issues: 1325
+- Unknown function TODOs: 1069
+- Unsupported feature TODOs: 14011
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 2
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii` | `unsupported feature` | 1 | sql/copy/csv/auto/test_auto_greek_ncvoter.test | `query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII<br>(SELECT * FROM ncvoters EXCEPT SELECT * FROM ncvoters2)<br>UNION ALL<br>(SELECT * FROM ncvoters2 EXCEPT SELECT * FROM ncvoters)<br>----` |  |
+| `iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii` | `unsupported feature` | 1 | sql/copy/csv/auto/test_auto_ontime.test | `query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII<br>(SELECT * FROM ontime EXCEPT SELECT * FROM ontime2)<br>UNION ALL<br>(SELECT * FROM ontime2 EXCEPT SELECT * FROM ontime)<br>----` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T00:00:00+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 571 (from 39 abort→pass/partial fixes)
+- Files with issues: 39
+- Unknown function TODOs: 305
+- Unsupported feature TODOs: 261
+- Special result marker TODOs: 5
+- Unknown function unique issues: 10
+- Unsupported feature unique issues: 8
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `json_extract` | ~100 | test_json_extract.test, test_json_path.test, test_json_arrow_expr.test | DuckDB json_extract semantics differ from Databend |
+| `json_transform` | 175 | test_json_transform.test | No equivalent in Databend |
+| `json_valid` | 14 | test_json_valid.test | Rewritten to check_json() IS NULL where possible |
+| `to_json` | ~30 | test_json_create.test, issue15038.test | No equivalent in Databend |
+| `json_quote` | ~10 | test_json_create.test | No equivalent in Databend |
+| `json_structure` | ~5 | test_json_dot_syntax.test | No equivalent in Databend |
+| `json_keys` (2-arg) | ~5 | test_json_keys.test | json_object_keys used for 1-arg version |
+| `row_to_json` | ~3 | test_json_create.test | No equivalent in Databend |
+| `array_to_json` | ~3 | test_json_create.test | No equivalent in Databend |
+| `json_extract_string` | ~5 | test_json_extract.test | No equivalent in Databend |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | Refs |
+| --- | --- | ---: | --- | --- |
+| `POSITIONAL JOIN` | DuckDB-specific join type | 28 | issue20086.test, test_positional_join.test | |
+| `DATA_DIR / read_json` | DuckDB test data file references | ~150 | 12 json/issues + 3 json/table files | |
+| `rowid` pseudo-column | Not supported in Databend | 10 | right_join_complex_null.test | |
+| `CREATE INDEX` | Limited index support | 4 | test_art_node_48.test | |
+| `USING COMPRESSION` | Not supported in Databend | 1 | internal_issue5288.test | |
+| `::BIT` type | Not supported in Databend | 2 | issue16968.test | |
+| `SUMMARIZE` | Not supported in Databend | 1 | internal_issue391.test | |
+| `ROW/UNION/struct literals` | DuckDB-specific nested type syntax | 72 | json_nested_casts.test | |
+
+## Rewrites Applied
+
+| Original | Rewritten To | Files |
+| --- | --- | --- |
+| `UBIGINT` | `UINT64` | internal_issue4389.test |
+| `TIMESTAMPTZ '...'` | `'...'::TIMESTAMP_TZ` | mix_equality_inequality.test |
+| `range(0, N)` | `generate_series(0, N-1)` | test_art_node_48.test, pushdown_many_joins.test, internal_issue391.test, issue12861.test, test_json_keys.test |
+| `ORDER BY ALL` | `ORDER BY 1, 2` | plan_blockwise_NL_join.test, test_json_keys.test |
+| `json()` function | `parse_json()` | test_json_dot_syntax.test, test_json_extract.test |
+| `json_keys()` | `json_object_keys()` | test_json_keys.test |
+| `json_valid()` | `CASE WHEN check_json() IS NULL THEN 1 ELSE 0 END` | test_json_valid.test |
+| `(FROM tbl WHERE ...)` | `(SELECT * FROM tbl WHERE ...)` | pushdown_many_joins.test |
+| `INTERVAL (i) seconds` | `date_add(SECOND, i, ...)` | test_merge_join_predicate.test |
+| `JSON '...'` literal | `'...'::JSON` | test_json_arrow_expr.test |
+| Trailing comma in SELECT | Removed | mix_equality_inequality.test |

@@ -1,0 +1,54 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers (i INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (4), (5);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+
+# Trigger a constraint violation.
+
+statement error
+INSERT INTO integers VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+statement ok
+CREATE TABLE integers (i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx ON integers(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# PREFIX, LEAF, NODE4, NODE256.
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers (SELECT range FROM range(0, 512) UNION ALL SELECT 55);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# We expect fewer than 4 additional blocks,
+# because we combine partial blocks.
+
+# TODO: unsupported feature
+# query I
+# SELECT total_blocks < 5 FROM pragma_database_size();
+# ----
+# 1

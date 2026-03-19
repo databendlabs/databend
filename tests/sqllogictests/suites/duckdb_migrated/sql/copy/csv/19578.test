@@ -1,9 +1,11 @@
-query III
-SELECT Delimiter, Quote, Escape FROM sniff_csv("data/19578.csv");
-----
-;	"	(empty)
+# TODO: unsupported feature
+# query III
+# SELECT Delimiter, Quote, Escape FROM sniff_csv("data/19578.csv");
+# ----
+# ;	"	(empty)
 
-query III
-SELECT Delimiter, Quote, Escape FROM sniff_csv("data/19578.csv",  strict_mode=false);
-----
-;	"	(empty)
+# TODO: unsupported feature
+# query III
+# SELECT Delimiter, Quote, Escape FROM sniff_csv("data/19578.csv",  strict_mode=false);
+# ----
+# ;	"	(empty)

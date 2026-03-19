@@ -1,0 +1,627 @@
+statement ok
+DROP TABLE IF EXISTS j1
+
+# TODO: unknown function
+# query T
+# select json_valid('{"bla": inf}')
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# select json_valid('{"bla": infinity}')
+# ----
+# 1
+
+# some SQLite JSON valid tests
+
+statement ok
+CREATE TABLE j1(x varchar);
+
+statement ok
+INSERT INTO j1(x)
+   VALUES('true'),('false'),('null'),('123'),('-234'),('34.5e+6'),
+         ('""'),('"\""'),('"\\"'),('"abcdefghijlmnopqrstuvwxyz"'),
+         ('[]'),('{}'),('[true,false,null,123,-234,34.5e+6,{},[]]'),
+         ('{"a":true,"b":{"c":false}}');
+
+# TODO: unknown function
+# query T
+# SELECT * FROM j1 WHERE NOT json_valid(x);
+# ----
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('{"a":55,"b":72,}');
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('{"a":55,"b":72}');
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('["a",55,"b",72,]');
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('["a",55,"b",72]');
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('" \  "');
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('" \! "');
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('" \" "');
+# ----
+# 1
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('" \# "');
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('" \$ "');
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('" \% "');
+# ----
+# 0
+
+# TODO: unknown function
+# query T
+# SELECT json_valid('" \& "');
+# ----
+# 0
+
+query T
+SELECT CASE WHEN check_json('" \'' "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \( "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \) IS NULL THEN 1 ELSE 0 END "');
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \* "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \+ "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \, "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \- "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \. "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \/ "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \0 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \1 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \2 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \3 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \4 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \5 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \6 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \7 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \8 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \9 "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \: "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \; "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \< "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \= "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \> "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \? "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \@ "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \A "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \B "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \C "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \D "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \E "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \F "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \G "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \H "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \I "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \J "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \K "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \L "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \M "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \N "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \O "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \P "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \Q "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \R "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \S "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \T "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \U "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \V "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \W "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \X "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \Y "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \Z "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \[ "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \\ "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \] "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \^ "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \_ "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \` "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \a "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \b "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \c "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \d "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \e "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \f "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \g "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \h "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \i "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \j "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \k "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \l "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \m "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \n "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \o "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \p "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \q "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \r "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \s "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \t "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \u "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \ua "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \uab "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \uabc "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \uabcd "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \uFEDC "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \u1234 "') IS NULL THEN 1 ELSE 0 END;
+----
+1
+
+query T
+SELECT CASE WHEN check_json('" \v "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \w "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \x "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \y "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \z "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \{ "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \| "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \} "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('" \~ "') IS NULL THEN 1 ELSE 0 END;
+----
+0
+
+query T
+SELECT CASE WHEN check_json('{"x":01}') IS NULL THEN 1 ELSE 0 END
+----
+0
+
+query T
+SELECT CASE WHEN check_json('{"x":-01}') IS NULL THEN 1 ELSE 0 END
+----
+0
+
+query T
+SELECT CASE WHEN check_json('{"x":0}') IS NULL THEN 1 ELSE 0 END
+----
+1
+
+query T
+SELECT CASE WHEN check_json('{"x":-0}') IS NULL THEN 1 ELSE 0 END
+----
+1
+
+query T
+SELECT CASE WHEN check_json('{"x":0.1}') IS NULL THEN 1 ELSE 0 END
+----
+1
+
+query T
+SELECT CASE WHEN check_json('{"x":-0.1}') IS NULL THEN 1 ELSE 0 END
+----
+1
+
+query T
+SELECT CASE WHEN check_json('{"x":0.0000}') IS NULL THEN 1 ELSE 0 END
+----
+1
+
+query T
+SELECT CASE WHEN check_json('{"x":-0.0000}') IS NULL THEN 1 ELSE 0 END
+----
+1
+
+query T
+SELECT CASE WHEN check_json('{"x":01.5}') IS NULL THEN 1 ELSE 0 END
+----
+0
+
+query T
+SELECT CASE WHEN check_json('{"x":-01.5}') IS NULL THEN 1 ELSE 0 END
+----
+0
+
+query T
+SELECT CASE WHEN check_json('{"x":00}') IS NULL THEN 1 ELSE 0 END
+----
+0
+
+query T
+SELECT CASE WHEN check_json('{"x":-00}') IS NULL THEN 1 ELSE 0 END
+----
+0
