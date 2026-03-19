@@ -1,4 +1,3 @@
-
 query TT
 select $1, $2 from @data/tsv/escape.tsv (file_format => 'text')
 ----
