@@ -139,3 +139,73 @@ impl TransformCompactBlock {
         Ok(output)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::Result;
+    use databend_common_expression::FromData;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::number::NumberScalar;
+
+    use super::*;
+
+    fn block_with_range(start: i32, end: i32) -> DataBlock {
+        DataBlock::new_from_columns(vec![Int32Type::from_data((start..end).collect::<Vec<_>>())])
+    }
+
+    fn block_values(block: &DataBlock) -> Vec<i32> {
+        (0..block.num_rows())
+            .map(|row| match block.get_by_offset(0).index(row).unwrap() {
+                ScalarRef::Number(NumberScalar::Int32(value)) => value,
+                value => panic!("unexpected scalar: {value:?}"),
+            })
+            .collect()
+    }
+
+    fn assert_split_matches_reference(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<()> {
+        let actual = TransformCompactBlock::split_blocks(blocks.clone(), rows_per_block)?;
+        let expected = DataBlock::concat(&blocks)?.split_by_rows_if_needed_no_tail(rows_per_block);
+
+        assert_eq!(
+            actual.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
+            expected.iter().map(DataBlock::num_rows).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            actual.iter().map(block_values).collect::<Vec<_>>(),
+            expected.iter().map(block_values).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_split_blocks_matches_reference_across_block_boundaries() -> Result<()> {
+        assert_split_matches_reference(
+            vec![
+                block_with_range(0, 2),
+                block_with_range(2, 6),
+                block_with_range(6, 10),
+            ],
+            3,
+        )?;
+        assert_split_matches_reference(
+            vec![
+                block_with_range(0, 1),
+                block_with_range(1, 2),
+                block_with_range(2, 3),
+                block_with_range(3, 10),
+            ],
+            4,
+        )?;
+        assert_split_matches_reference(
+            vec![
+                block_with_range(0, 2),
+                block_with_range(2, 4),
+                block_with_range(4, 6),
+                block_with_range(6, 8),
+            ],
+            5,
+        )?;
+        Ok(())
+    }
+}
