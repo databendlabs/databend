@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_statistics::Datum;
 
 use crate::MetadataRef;
@@ -24,6 +26,7 @@ use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
+use crate::match_op;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -35,7 +38,9 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
+use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -52,16 +57,7 @@ impl RuleShrinkType {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::ShrinkGroupByType,
-            matchers: vec![
-                Matcher::MatchOp {
-                    op_type: RelOp::Aggregate,
-                    children: vec![Matcher::Leaf],
-                },
-                Matcher::MatchOp {
-                    op_type: RelOp::Join,
-                    children: vec![Matcher::Leaf, Matcher::Leaf],
-                },
-            ],
+            matchers: vec![match_op!(Aggregate -> *), match_op!(Join[*, *])],
             metadata,
         }
     }
@@ -90,12 +86,10 @@ impl RuleShrinkType {
             };
 
             let origin_type = col_ref.column.data_type.as_ref();
-            let Some(target_type) = shrink_group_by_data_type(origin_type, stat) else {
+            let Some((target_type, base_min)) = normalize_group_by_data_type(origin_type, stat)
+            else {
                 continue;
             };
-            if target_type == *origin_type {
-                continue;
-            }
 
             let shrink_index = {
                 let mut metadata = self.metadata.write();
@@ -121,6 +115,7 @@ impl RuleShrinkType {
                 shrink_binding,
                 shrink_type: target_type,
                 shrink_index,
+                base_min,
             });
         }
 
@@ -143,10 +138,11 @@ impl RuleShrinkType {
                 scalar: ScalarExpr::CastExpr(CastExpr {
                     span: None,
                     is_try: false,
-                    argument: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: rewrite.original_binding.clone(),
-                    })),
+                    argument: Box::new(make_offset_expr(
+                        "minus",
+                        rewrite.original_binding.clone(),
+                        rewrite.base_min.clone(),
+                    )),
                     target_type: Box::new(rewrite.shrink_type.clone()),
                 }),
             });
@@ -156,10 +152,11 @@ impl RuleShrinkType {
                 scalar: ScalarExpr::CastExpr(CastExpr {
                     span: None,
                     is_try: false,
-                    argument: Box::new(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: rewrite.shrink_binding.clone(),
-                    })),
+                    argument: Box::new(make_offset_expr(
+                        "plus",
+                        rewrite.shrink_binding.clone(),
+                        rewrite.base_min.clone(),
+                    )),
                     target_type: Box::new((*rewrite.original_binding.data_type).clone()),
                 }),
             });
@@ -374,6 +371,7 @@ struct GroupByRewrite {
     shrink_binding: ColumnBinding,
     shrink_type: DataType,
     shrink_index: Symbol,
+    base_min: Scalar,
 }
 
 struct JoinRewrite {
@@ -389,14 +387,91 @@ struct JoinColumnRewrite {
     shrink_index: Symbol,
 }
 
-fn shrink_group_by_data_type(data_type: &DataType, stat: &ColumnStat) -> Option<DataType> {
-    minimal_data_type(data_type, stat).and_then(|minimal| {
-        if minimal.eq(data_type) {
-            None
-        } else {
-            Some(minimal)
+fn normalize_group_by_data_type(
+    data_type: &DataType,
+    stat: &ColumnStat,
+) -> Option<(DataType, Scalar)> {
+    let (origin_number_type, nullable) = integer_number_type(data_type)?;
+    let min = datum_to_i128(&stat.origin_min)?;
+    let max = datum_to_i128(&stat.origin_max)?;
+
+    if max < min {
+        return None;
+    }
+
+    // Current integer `minus` path is bounded by Int64 for UInt64 inputs.
+    // We only normalize UInt64 when all values are safely representable in Int64.
+    if matches!(origin_number_type, NumberDataType::UInt64) && max > i64::MAX as i128 {
+        return None;
+    }
+
+    let range = max.checked_sub(min)?;
+
+    // Keep the normalized range within Int64 to avoid overflow in `minus/plus` rewrite.
+    if range > i64::MAX as i128 {
+        return None;
+    }
+
+    let target_unsigned = minimal_unsigned_type_for_range(range as u128)?;
+    let target_type = if nullable {
+        DataType::Nullable(Box::new(DataType::Number(target_unsigned)))
+    } else {
+        DataType::Number(target_unsigned)
+    };
+
+    if data_type_byte_size(&target_type)? >= data_type_byte_size(data_type)? {
+        return None;
+    }
+
+    let base_min = datum_to_scalar(&stat.origin_min)?;
+    Some((target_type, base_min))
+}
+
+fn integer_number_type(data_type: &DataType) -> Option<(NumberDataType, bool)> {
+    match data_type {
+        DataType::Number(number_type) if is_integer_number_type(*number_type) => {
+            Some((*number_type, false))
         }
-    })
+        DataType::Nullable(inner) => match inner.as_ref() {
+            DataType::Number(number_type) if is_integer_number_type(*number_type) => {
+                Some((*number_type, true))
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn is_integer_number_type(number_type: NumberDataType) -> bool {
+    matches!(
+        number_type,
+        NumberDataType::UInt8
+            | NumberDataType::UInt16
+            | NumberDataType::UInt32
+            | NumberDataType::UInt64
+            | NumberDataType::Int8
+            | NumberDataType::Int16
+            | NumberDataType::Int32
+            | NumberDataType::Int64
+    )
+}
+
+fn minimal_unsigned_type_for_range(range: u128) -> Option<NumberDataType> {
+    if range <= u8::MAX as u128 {
+        Some(NumberDataType::UInt8)
+    } else if range <= u16::MAX as u128 {
+        Some(NumberDataType::UInt16)
+    } else if range <= u32::MAX as u128 {
+        Some(NumberDataType::UInt32)
+    } else if range <= u64::MAX as u128 {
+        Some(NumberDataType::UInt64)
+    } else {
+        None
+    }
+}
+
+fn data_type_byte_size(data_type: &DataType) -> Option<usize> {
+    data_type.remove_nullable().numeric_byte_size()
 }
 
 fn minimal_data_type(data_type: &DataType, stat: &ColumnStat) -> Option<DataType> {
@@ -524,6 +599,33 @@ fn datum_to_i128(value: &Datum) -> Option<i128> {
     }
 }
 
+fn datum_to_scalar(value: &Datum) -> Option<Scalar> {
+    match value {
+        Datum::Int(v) => Some(Scalar::Number(NumberScalar::Int64(*v))),
+        Datum::UInt(v) => Some(Scalar::Number(NumberScalar::UInt64(*v))),
+        _ => None,
+    }
+}
+
+fn make_offset_expr(
+    func_name: &'static str,
+    column: ColumnBinding,
+    base_min: Scalar,
+) -> ScalarExpr {
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: func_name.to_string(),
+        params: vec![],
+        arguments: vec![
+            ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span: None,
+                value: base_min,
+            }),
+        ],
+    })
+}
+
 fn shrink_join_target_type(
     left_type: &DataType,
     left_stat: &ColumnStat,
@@ -594,75 +696,6 @@ mod tests {
     use super::*;
     use crate::optimizer::ir::ColumnStat;
     use crate::optimizer::ir::Ndv;
-
-    #[test]
-    fn test_shrink_unsigned() {
-        let stat = ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(100),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
-            origin_min: Datum::UInt(0),
-            origin_max: Datum::UInt(100),
-            histogram: None,
-        };
-        let t = shrink_group_by_data_type(&DataType::Number(NumberDataType::UInt64), &stat);
-        assert_eq!(t, Some(DataType::Number(NumberDataType::UInt8)));
-    }
-
-    #[test]
-    fn test_shrink_signed() {
-        let stat = ColumnStat {
-            min: Datum::Int(-100),
-            max: Datum::Int(100),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
-            origin_min: Datum::Int(-100),
-            origin_max: Datum::Int(100),
-            histogram: None,
-        };
-        let t = shrink_group_by_data_type(&DataType::Number(NumberDataType::Int64), &stat);
-        assert_eq!(t, Some(DataType::Number(NumberDataType::Int8)));
-    }
-
-    #[test]
-    fn test_shrink_nullable() {
-        let stat = ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(50000),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
-            origin_min: Datum::UInt(0),
-            origin_max: Datum::UInt(50000),
-            histogram: None,
-        };
-        let t = shrink_group_by_data_type(
-            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-            &stat,
-        );
-        assert_eq!(
-            t,
-            Some(DataType::Nullable(Box::new(DataType::Number(
-                NumberDataType::UInt16
-            ))))
-        );
-    }
-
-    #[test]
-    fn test_no_shrink() {
-        let stat = ColumnStat {
-            min: Datum::UInt(0),
-            max: Datum::UInt(u32::MAX as u64 + 1),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
-            origin_min: Datum::UInt(0),
-            origin_max: Datum::UInt(u32::MAX as u64 + 1),
-            histogram: None,
-        };
-        assert!(
-            shrink_group_by_data_type(&DataType::Number(NumberDataType::UInt64), &stat).is_none()
-        );
-    }
 
     #[test]
     fn test_shrink_join_target_unsigned() {
@@ -758,6 +791,95 @@ mod tests {
                 &right_stat,
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn test_normalize_group_by_data_type() {
+        let stat = ColumnStat {
+            min: Datum::Int(-10),
+            max: Datum::Int(245),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::Int(-10),
+            origin_max: Datum::Int(245),
+            histogram: None,
+        };
+        let (target, base_min) =
+            normalize_group_by_data_type(&DataType::Number(NumberDataType::Int64), &stat).unwrap();
+        assert_eq!(target, DataType::Number(NumberDataType::UInt8));
+        assert_eq!(base_min, Scalar::Number(NumberScalar::Int64(-10)));
+    }
+
+    #[test]
+    fn test_normalize_group_by_data_type_nullable() {
+        let stat = ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(50000),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::UInt(0),
+            origin_max: Datum::UInt(50000),
+            histogram: None,
+        };
+        let (target, base_min) = normalize_group_by_data_type(
+            &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+            &stat,
+        )
+        .unwrap();
+        assert_eq!(
+            target,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt16)))
+        );
+        assert_eq!(base_min, Scalar::Number(NumberScalar::UInt64(0)));
+    }
+
+    #[test]
+    fn test_normalize_group_by_data_type_skip_same_width_target() {
+        let stat = ColumnStat {
+            min: Datum::Int(0),
+            max: Datum::Int(i64::MAX),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::Int(0),
+            origin_max: Datum::Int(i64::MAX),
+            histogram: None,
+        };
+        assert!(
+            normalize_group_by_data_type(&DataType::Number(NumberDataType::Int64), &stat).is_none()
+        );
+    }
+
+    #[test]
+    fn test_normalize_group_by_data_type_skip_large_uint64() {
+        let stat = ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(i64::MAX as u64 + 1),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::UInt(0),
+            origin_max: Datum::UInt(i64::MAX as u64 + 1),
+            histogram: None,
+        };
+        assert!(
+            normalize_group_by_data_type(&DataType::Number(NumberDataType::UInt64), &stat)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_normalize_group_by_data_type_skip_int32_same_width_target() {
+        let stat = ColumnStat {
+            min: Datum::Int(0),
+            max: Datum::Int(i32::MAX as i64),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            origin_min: Datum::Int(0),
+            origin_max: Datum::Int(i32::MAX as i64),
+            histogram: None,
+        };
+        assert!(
+            normalize_group_by_data_type(&DataType::Number(NumberDataType::Int32), &stat).is_none()
         );
     }
 }
