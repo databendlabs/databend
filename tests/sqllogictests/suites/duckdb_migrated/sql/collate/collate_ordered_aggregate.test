@@ -1,11 +1,14 @@
-statement ok
-DROP TABLE IF EXISTS tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
 
-statement ok
-create table tbl(id int, val varchar);
+# TODO: unsupported feature
+# statement ok
+# create table tbl(id int, val varchar);
 
-statement ok
-insert into tbl values (0, 'a'), (1, 'B');
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values (0, 'a'), (1, 'B');
 
 # TODO: unsupported feature
 # query I

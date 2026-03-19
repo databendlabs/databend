@@ -1,8 +1,10 @@
-statement ok
-DROP TABLE IF EXISTS orders_shuffled
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS orders_shuffled
 
-statement ok
-DROP TABLE IF EXISTS random_orders
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS random_orders
 
 # TODO: unsupported feature
 # statement ok
@@ -23,7 +25,7 @@ DROP TABLE IF EXISTS random_orders
 # 	OFFSET (SELECT COUNT(*) FROM orders) / 2 + 100000
 # 	LIMIT 3));
 
-# TODO: unknown function
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE orders_shuffled AS FROM orders ORDER BY random();
 
@@ -34,7 +36,7 @@ DROP TABLE IF EXISTS random_orders
 # 	SELECT UNNEST(LIST(o_orderkey)) FROM random_orders
 # ) ORDER BY ALL;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # statement ok
@@ -47,4 +49,4 @@ DROP TABLE IF EXISTS random_orders
 # 	SELECT UNNEST(LIST(o_orderkey)) FROM random_orders
 # ) ORDER BY ALL;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

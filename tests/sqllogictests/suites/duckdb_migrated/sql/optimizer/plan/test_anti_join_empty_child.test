@@ -1,0 +1,22 @@
+query I
+SELECT lhs.id FROM (SELECT 1 id) lhs ANTI JOIN (SELECT 1 id WHERE FALSE) rhs ON lhs.id = rhs.id
+----
+1
+
+query T
+EXPLAIN SELECT lhs.id FROM (SELECT 1 id) lhs ANTI JOIN (SELECT 1 id WHERE FALSE) rhs ON lhs.id = rhs.id
+----
+HashJoin
+├── output columns: [id (#0)]
+├── join type: LEFT ANTI
+├── build keys: [rhs.id (#1)]
+├── probe keys: [lhs.id (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── estimated rows: 1.00
+├── EmptyResultScan(Build)
+└── EvalScalar(Probe)
+    ├── output columns: [id (#0)]
+    ├── expressions: [1]
+    ├── estimated rows: 1.00
+    └── DummyTableScan

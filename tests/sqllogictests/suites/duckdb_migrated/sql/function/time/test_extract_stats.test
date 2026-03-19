@@ -14,34 +14,34 @@
 # query I
 # SELECT stats(EXTRACT(second FROM i)) FROM times LIMIT 1
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(minute FROM i)) FROM times LIMIT 1
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(hour FROM i)) FROM times LIMIT 1
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(milliseconds FROM i)) FROM times LIMIT 1
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(microseconds FROM i)) FROM times LIMIT 1
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(epoch FROM i)) FROM times LIMIT 1
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

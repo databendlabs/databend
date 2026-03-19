@@ -1,0 +1,223 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS smallints
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS smallints2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tinyints
+
+# TODO: unsupported feature
+# statement ok
+# PRAGMA enable_verification
+# tinyint
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tinyints(i TINYINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tinyints VALUES (1), (10);
+
+# addition
+
+# TODO: unsupported feature
+# query I
+# SELECT i+100::TINYINT FROM tinyints ORDER BY 1;
+# ----
+# 101
+# 110
+
+# overflow in addition
+
+# TODO: unsupported feature
+# statement error
+# SELECT i+120::TINYINT FROM tinyints ORDER BY 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT i+120::TINYINT FROM tinyints WHERE i=1 ORDER BY 1;
+# ----
+# 121
+
+# subtraction
+
+# TODO: unsupported feature
+# query I
+# SELECT -100::TINYINT-i FROM tinyints ORDER BY 1;
+# ----
+# -110
+# -101
+
+# TODO: unsupported feature
+# statement error
+# SELECT -120::TINYINT-i FROM tinyints ORDER BY 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT -120::TINYINT-i FROM tinyints WHERE i=1 ORDER BY 1;
+# ----
+# -121
+
+# addition with negation
+
+# TODO: unsupported feature
+# statement error
+# SELECT -120::TINYINT + (-i) FROM tinyints ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT -120::TINYINT + (-(-(-i))) FROM tinyints ORDER BY 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT i*10::TINYINT FROM tinyints ORDER BY 1;
+# ----
+# 10
+# 100
+
+# TODO: unsupported feature
+# statement error
+# SELECT i*15::TINYINT FROM tinyints ORDER BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT (i*10::TINYINT)*10::TINYINT FROM tinyints ORDER BY 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT (i*10::TINYINT)*10::TINYINT FROM tinyints WHERE i=1 ORDER BY 1;
+# ----
+# 100
+
+# what if we have a subquery?
+
+# TODO: unsupported feature
+# statement error
+# SELECT (i*10::TINYINT)*10::TINYINT FROM (SELECT * FROM tinyints) tbl(i) ORDER BY 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT (i*10::TINYINT)*10::TINYINT FROM (SELECT * FROM tinyints) tbl(i) WHERE i=1 ORDER BY 1;
+# ----
+# 100
+
+# what if we have a UNION in the subquery
+
+# TODO: unsupported feature
+# statement error
+# SELECT (i*10::TINYINT)*10::TINYINT FROM (SELECT * FROM tinyints WHERE i=1 UNION ALL SELECT * FROM tinyints WHERE i=10) tbl(i) ORDER BY 1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE smallints(i SMALLINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO smallints VALUES (1), (10);
+
+# overflow in various smallint ops
+
+# TODO: unsupported feature
+# statement error
+# SELECT i+32765::SMALLINT FROM smallints
+
+# TODO: unsupported feature
+# query I
+# SELECT i+32765::SMALLINT FROM smallints WHERE i=1
+# ----
+# 32766
+
+# TODO: unsupported feature
+# statement error
+# SELECT -32765::SMALLINT-i FROM smallints
+
+# TODO: unsupported feature
+# query I
+# SELECT -32765::SMALLINT-i FROM smallints WHERE i=1
+# ----
+# -32766
+
+# TODO: unsupported feature
+# statement error
+# SELECT i*10000::SMALLINT FROM smallints
+
+# TODO: unsupported feature
+# query I
+# SELECT i*10000::SMALLINT FROM smallints WHERE i=1
+# ----
+# 10000
+
+# including a cast to tinyint
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::TINYINT+120::TINYINT FROM smallints
+
+# TODO: unsupported feature
+# query I
+# SELECT i::TINYINT+120::TINYINT FROM smallints WHERE i=1
+# ----
+# 121
+
+# what if the smallint doesn't fit?
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO smallints VALUES (1000)
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::TINYINT FROM smallints
+
+# TODO: unsupported feature
+# query I
+# SELECT i::TINYINT+120::TINYINT FROM smallints WHERE i=1
+# ----
+# 121
+
+# include multiple projections...
+# include joins (specifically left joins! they add nulls)
+
+# What about adding column types that end up overflowing?
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO smallints VALUES (30000);
+
+# TODO: unsupported feature
+# statement error
+# SELECT integers1.i::SMALLINT + integers2.i::SMALLINT from smallints integers1, smallints integers2 where integers1.i = integers2.i;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE smallints2 (j SMALLINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO smallints2 VALUES (1), (10);
+
+# no overflow, just some null values
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT i + j from smallints si_left LEFT JOIN smallints2 si_right ON (i = j);
+# ----
+# 2
+# 20
+# NULL
+# NULL
+
+# insert 30000 into smallints 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO smallints2 VALUES (30000);
+
+# TODO: unsupported feature
+# statement error
+# SELECT i + j from smallints LEFT JOIN smallints2  ON (i = j);

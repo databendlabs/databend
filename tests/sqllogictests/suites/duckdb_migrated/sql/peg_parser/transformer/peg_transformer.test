@@ -1,0 +1,4 @@
+query I
+select 1;
+----
+1

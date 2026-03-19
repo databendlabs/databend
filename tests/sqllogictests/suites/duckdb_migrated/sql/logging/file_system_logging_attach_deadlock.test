@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db.test
+
+# We directly compare to the number of bytes written in the last statement,
+# which is the block size.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db.test AS SELECT 1;
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM duckdb_logs;

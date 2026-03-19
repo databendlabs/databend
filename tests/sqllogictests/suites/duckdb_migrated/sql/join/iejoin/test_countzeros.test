@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS states
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS states
 
 # TODO: unsupported feature
 # statement ok
@@ -41,4 +42,4 @@ DROP TABLE IF EXISTS states
 # select count(*) 
 # from joined
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

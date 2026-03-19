@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
 
 # TODO: unsupported feature
 # statement ok
@@ -13,7 +14,7 @@ DROP TABLE IF EXISTS tbl
 # query II
 # EXPLAIN ANALYZE DELETE FROM tbl WHERE i IN (3, 50, 299, 123);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -27,7 +28,7 @@ DROP TABLE IF EXISTS tbl
 # query II
 # EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -44,7 +45,7 @@ DROP TABLE IF EXISTS tbl
 # query II
 # EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i != 42 AND i <= 100;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -57,7 +58,7 @@ DROP TABLE IF EXISTS tbl
 # query II
 # EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i = 42 AND i <= 100;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -69,7 +70,7 @@ DROP TABLE IF EXISTS tbl
 # query II
 # EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i < 101 AND i >= 42;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -82,7 +83,7 @@ DROP TABLE IF EXISTS tbl
 # query II
 # EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i >= 42;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -97,7 +98,7 @@ DROP TABLE IF EXISTS tbl
 # query II
 # EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i IN (56, 200, 2, 100);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I

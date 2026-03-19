@@ -76,4 +76,4 @@
 # query II
 # EXPLAIN select TRY_CAST(col.almost_a_number AS BIGINT) from tbl order by all
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

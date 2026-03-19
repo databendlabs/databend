@@ -1,0 +1,12 @@
+statement ok
+DROP TABLE IF EXISTS people
+
+statement ok
+CREATE TABLE people(Name VARCHAR, STATE VARCHAR, Country VARCHAR);
+
+query TTTTT
+DESCRIBE people
+----
+name VARCHAR YES NULL (empty)
+state VARCHAR YES NULL (empty)
+country VARCHAR YES NULL (empty)

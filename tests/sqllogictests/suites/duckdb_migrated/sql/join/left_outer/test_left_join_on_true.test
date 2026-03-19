@@ -1,9 +1,6 @@
-## test non-lateral left joins
+# test non-lateral left joins
 statement ok
 drop table if exists integers;
-
-statement ok
-drop view if exists integers2;
 
 statement ok
 drop table if exists integers2;
@@ -34,7 +31,7 @@ SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE AND integers.i=integers
 2	3	NULL	NULL
 3	4	NULL	NULL
 
-## this is just a cross product
+# this is just a cross product
 
 query IIII
 SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i, j, k, l
@@ -45,3 +42,5 @@ SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i, j, k, l
 2	3	2	20
 3	4	1	10
 3	4	2	20
+
+

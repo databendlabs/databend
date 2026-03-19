@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# query IIIIIIIIII
+# FROM duckdb_logs
+# ----
+
+# TODO: unsupported feature
+# query IIIIII
+# DESCRIBE FROM duckdb_logs
+# ----
+# context_id	UBIGINT	YES	NULL	NULL	NULL
+# scope	VARCHAR	YES	NULL	NULL	NULL
+# connection_id	UBIGINT	YES	NULL	NULL	NULL
+# transaction_id	UBIGINT	YES	NULL	NULL	NULL
+
+# query_id UBIGINT YES NULL NULL NULL
+# thread_id	UBIGINT	YES	NULL	NULL	NULL
+# timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL
+# type	VARCHAR	YES	NULL	NULL	NULL
+# log_level	VARCHAR	YES	NULL	NULL	NULL
+# message	VARCHAR	YES	NULL	NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1;
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+# ----
+# CONNECTION	NULL	QueryLog	INFO	SELECT 1;
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs where type = 'QueryLog'
+# ----
+# CONNECTION	NULL	QueryLog	INFO	SELECT 1;
+# CONNECTION	NULL	QueryLog	INFO	SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+# CONNECTION	NULL	QueryLog	INFO	set enable_logging=0;
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id) FROM duckdb_logs
+# ----

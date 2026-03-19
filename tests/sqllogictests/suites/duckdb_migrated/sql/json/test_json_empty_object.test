@@ -1,0 +1,16 @@
+# TODO: unsupported feature
+# query I
+# select json_structure('{}')
+# ----
+# "JSON"
+
+# TODO: unsupported feature
+# statement error
+# select json_transform('{}', '{}')
+
+# TODO: unsupported feature
+# query II
+# select typeof(c1), typeof(c2) from tbl;
+# ----
+# VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, JSON))
+# VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, JSON))

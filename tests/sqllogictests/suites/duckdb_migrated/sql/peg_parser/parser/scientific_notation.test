@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$select +1234.56789e-1$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$select 1e30, 1e100, 1e-1$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT 1e308+1e308$TEST_PEG_PARSER$);

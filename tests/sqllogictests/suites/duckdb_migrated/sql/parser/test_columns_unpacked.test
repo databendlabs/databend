@@ -1,0 +1,309 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS contains_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS data
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS sales
+
+# TODO: unsupported feature
+# query I
+# select COALESCE(*COLUMNS(*)) from (select NULL, 2, 3) t(a, b, c);
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# select column_name from (describe select COALESCE(*COLUMNS(*)) from (select NULL, 2, 3) t(a, b, c));
+# ----
+# COALESCE(t.a, t.b, t.c)
+
+# Aliasing the result
+
+# TODO: unsupported feature
+# query I
+# select column_name from (describe select COALESCE(*COLUMNS(*)) as a from (select NULL, 2, 3) t(a, b, c));
+# ----
+# a
+
+# TODO: unsupported feature
+# statement ok
+# create table contains_test as select '123abc234' a, 4 b, 'abc' c;
+
+# Feed columns a and c into contains, equivalent to contains(a, c)
+
+# TODO: unsupported feature
+# query I
+# select contains(*COLUMNS('[a|c]')) from contains_test;
+# ----
+# 1
+
+# COLUMNS and *COLUMNS are equivalent as a root expression
+
+# TODO: unsupported feature
+# query II
+# select COLUMNS('[a|c]') from contains_test;
+# ----
+# 123abc234	abc
+
+# TODO: unsupported feature
+# statement error
+# select *COLUMNS('[a|c]') from contains_test;
+
+# TODO: unsupported feature
+# statement ok
+# create table sales as from ( values
+# 	(150, '2017/06/12'::DATE, 3),
+# 	(125, '2017/08/29'::DATE, 2),
+# 	(175, '2017/06/12'::DATE, 4),
+# ) t(amount, date, priority)
+
+# TODO: unsupported feature
+# query I
+# SELECT first(amount ORDER BY date ASC, priority DESC) FROM sales;
+# ----
+# 175
+
+# this could be supported
+
+# TODO: unsupported feature
+# statement error
+# select first(amount ORDER BY *COLUMNS('date|priority') ASC) from sales;
+
+# TODO: unsupported feature
+# query I
+# select COALESCE(*COLUMNS(lambda c: c in ('a', 'c'))) from (select NULL, 2, 3) t(a, b, c);
+# ----
+# 3
+
+# IN (...)
+
+# TODO: unsupported feature
+# query I
+# select 2 in (*COLUMNS(*)) from (select 1, 2, 3) t(a, b, c);
+# ----
+# 1
+
+# IN in WHERE clause
+
+# TODO: unsupported feature
+# query III
+# from (VALUES (1, 2, 3), (2, 3, 0), (0, 0, 1)) tbl(a, b, c) where 1 IN (*COLUMNS(*));
+# ----
+# 1	2	3
+# 0	0	1
+
+# TODO: unsupported feature
+# statement ok
+# create table data AS (
+# 	SELECT * FROM (VALUES
+# 	(1, 'Alice'),
+# 	(2, 'Bob'),
+# 	(3, 'Alice'),
+# 	(4, 'Carol')
+# 	) AS t(id, name)
+# )
+
+# Using struct pack:
+
+# TODO: unsupported feature
+# query I
+# select struct_pack(*COLUMNS(*)) from data
+# ----
+# {'id': 1, 'name': Alice}
+# {'id': 2, 'name': Bob}
+# {'id': 3, 'name': Alice}
+# {'id': 4, 'name': Carol}
+
+# It can not be used inside a COLUMNS expression
+
+# TODO: unsupported feature
+# statement error
+# SELECT COLUMNS(*COLUMNS(*)) FROM (VALUES ('test'))
+
+# TODO: unsupported feature
+# statement error
+# SELECT *COLUMNS(COLUMNS(*)) FROM (VALUES ('test'))
+
+# TODO: unsupported feature
+# query III
+# select COLUMNS(*), struct_pack(COLUMNS(['id'])) from data
+# ----
+# 1	Alice	{'id': 1}
+# 2	Bob	{'id': 2}
+# 3	Alice	{'id': 3}
+# 4	Carol	{'id': 4}
+
+# (temporary limitation)
+# *COLUMNS with different expressions can not appear in the same expression
+
+# TODO: unsupported feature
+# statement error
+# select struct_pack(struct_pack(*COLUMNS(['id']), struct_pack(*COLUMNS(['name'])))) from data
+
+# TODO: unsupported feature
+# query I
+# select struct_pack(
+# 	b := struct_pack(*COLUMNS(['id'])),
+# 	a := struct_pack(*COLUMNS(['id']))
+# ) from data
+# ----
+# {'b': {'id': 1}, 'a': {'id': 1}}
+# {'b': {'id': 2}, 'a': {'id': 2}}
+# {'b': {'id': 3}, 'a': {'id': 3}}
+# {'b': {'id': 4}, 'a': {'id': 4}}
+
+# Multiple *COLUMNS in the same statement are allowed
+# Whether they share the same expression or not:
+
+# TODO: unsupported feature
+# query II
+# select struct_pack(*COLUMNS('id')) a, struct_pack(*COLUMNS('name')) from data
+# ----
+# {'id': 1}	{'name': Alice}
+# {'id': 2}	{'name': Bob}
+# {'id': 3}	{'name': Alice}
+# {'id': 4}	{'name': Carol}
+
+# Varargs function
+
+# TODO: unsupported feature
+# query I
+# select CONCAT(*COLUMNS(*), *COLUMNS(*)) from data
+# ----
+# 1Alice1Alice
+# 2Bob2Bob
+# 3Alice3Alice
+# 4Carol4Carol
+
+# *COLUMNS inside COLUMNS lambda
+
+# TODO: unsupported feature
+# statement error
+# select COLUMNS(lambda col: *COLUMNS('id')) from data
+
+# TODO: unsupported feature
+# statement error
+# select *COLUMNS(lambda col: *COLUMNS(*)) from data
+
+# TODO: unsupported feature
+# statement error
+# with integers as (
+# 	SELECT * FROM (VALUES
+# 		(42, 31),
+# 		(85, 76),
+# 	) as t(a, b)
+# )
+# select *COLUMNS(*) + 42 from integers
+
+# TODO: unsupported feature
+# query I
+# with integers as (
+# 	SELECT * FROM (VALUES
+# 		(42, 31),
+# 		(85, 76),
+# 	) as t(a, b)
+# )
+# select *COLUMNS('a') + 42 from integers
+# ----
+# 84
+# 127
+
+# Expands to the expression: [a + a, a + b]
+
+# TODO: unsupported feature
+# query I
+# with integers as (
+# 	select * FROM (VALUES
+# 		(21, 42),
+# 		(1337, 7331)
+# 	) as t(a, b)
+# )
+# select [(UNPACK(a + COLUMNS(['a', 'b'])))] from integers
+# ----
+# [42, 63]
+# [2674, 8668]
+
+
+# UNPACK operator nested inside another UNPACK operator
+
+# TODO: unsupported feature
+# statement error
+# select
+# 	[
+# 		UNPACK([
+# 			UNPACK(COLUMNS(*)),
+# 			a + b
+# 		])
+# 	]
+# from (
+# 	select 42 a, 21 b
+# )
+
+# TODO: unsupported feature
+# query I
+# select
+# 	[UNPACK(COLUMNS(*)::VARCHAR)]
+# from (
+# 	select
+# 		21::INTEGER a,
+# 		True::BOOL b,
+# 		0.1234::DOUBLE c
+# )
+# ----
+# [21, 1, 0.1234]
+
+# Two different COLUMNS inside an UNPACK (could be supported in the future)
+
+# TODO: unsupported feature
+# statement error
+# select
+# 	[
+# 		UNPACK(
+# 			[
+# 				COLUMNS(['a', 'b']),
+# 				COLUMNS(['c'])
+# 			]
+# 		)
+# 	]
+# from (select 21 a, 42 b, 1337 c)
+
+# TODO: unsupported feature
+# statement error
+# select
+# 	[
+# 		UNPACK(
+# 			[
+# 				'test'
+# 			]
+# 		)
+# 	]
+# from (select 21 a, 42 b, 1337 c)
+
+# TODO: unsupported feature
+# statement error
+# select
+# 	[
+# 		UNPACK(
+# 			[
+# 				COLUMNS([]::VARCHAR[])
+# 			]
+# 		)
+# 	]
+# from (select 21 a, 42 b, 1337 c)
+
+# TODO: unsupported feature
+# statement error
+# select
+# 	[
+# 		UNPACK(
+# 			[
+# 				COLUMNS(['d'])
+# 			]
+# 		)
+# 	]
+# from (select 21 a, 42 b, 1337 c)

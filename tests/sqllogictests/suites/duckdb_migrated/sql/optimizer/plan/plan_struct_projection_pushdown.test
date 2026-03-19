@@ -1,0 +1,105 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested_struct_pushdown_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS struct_pushdown_test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE struct_pushdown_test(id INT, struct_col STRUCT(sub_col1 integer, sub_col2 bool));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO struct_pushdown_test VALUES (1, {'sub_col1': 42, 'sub_col2': true}), (2, NULL), (3, {'sub_col1': 84, 'sub_col2': NULL}), (4, {'sub_col1': NULL, 'sub_col2': false});
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.sub_col2 FROM struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# verify we are only selecting sub_col1
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.sub_col1 FROM struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.sub_col1, struct_col.sub_col2 FROM struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# here we need to select the entire column
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.sub_col1, struct_col FROM struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# verify we are only selecting sub_col2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested_struct_pushdown_test(id INT, struct_col STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool)));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested_struct_pushdown_test
+# VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}),
+#        (2, NULL),
+#        (3, {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}),
+#        (4, {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}});
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.name.id FROM nested_struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.name.id, struct_col.name FROM nested_struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.name.id, struct_col FROM nested_struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE nested_struct_pushdown_test(id INT, struct_col STRUCT(s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool))));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested_struct_pushdown_test
+# VALUES (1, {'s': {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}}),
+#        (2, NULL),
+#        (3, {'s': {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}}),
+#        (4, {'s': {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}});
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.s.name.id FROM nested_struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.s.name.id, struct_col.s.name FROM nested_struct_pushdown_test;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT struct_col.s.name.id, struct_col FROM nested_struct_pushdown_test;
+# ----
+# # TODO: special result marker

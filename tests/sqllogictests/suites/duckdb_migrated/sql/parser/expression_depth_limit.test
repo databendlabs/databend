@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+
+# TODO: unsupported feature
+# statement error
+# SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
+
+# TODO: unsupported feature
+# statement ok
+# SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));

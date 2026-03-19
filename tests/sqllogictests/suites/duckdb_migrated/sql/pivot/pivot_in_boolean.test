@@ -1,0 +1,59 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Cities
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+# TODO: unsupported feature
+# query III rowsort
+# pivot cities on (Country='NL') using avg(Population) group by name;
+# ----
+# Amsterdam	NULL	1076.0
+# New York City	8320.666666666666	NULL
+# Seattle	636.6666666666666	NULL
+
+# TODO: unsupported feature
+# query III rowsort
+# pivot cities on (Country='NL') in (false, true) using avg(Population) group by name;
+# ----
+# Amsterdam	NULL	1076.0
+# New York City	8320.666666666666	NULL
+# Seattle	636.6666666666666	NULL

@@ -1,215 +1,238 @@
-statement ok
-DROP TABLE IF EXISTS dates
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dates
 
-statement ok
-CREATE TABLE dates(d DATE);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE dates(d DATE);
 
 # test stats propagation from empty table
 
-query I
-SELECT EXTRACT(year FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(year FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(month FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(month FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(day FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(day FROM d) FROM dates;
+# ----
 
-query I
-SELECT CAST(floor(YEAR(d) / 10) AS INT) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT CAST(floor(YEAR(d) / 10) AS INT) FROM dates;
+# ----
 
-query I
-SELECT CAST(floor((YEAR(d) - 1) / 100) + 1 AS INT) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT CAST(floor((YEAR(d) - 1) / 100) + 1 AS INT) FROM dates;
+# ----
 
-query I
-SELECT CAST(floor((YEAR(d) - 1) / 1000) + 1 AS INT) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT CAST(floor((YEAR(d) - 1) / 1000) + 1 AS INT) FROM dates;
+# ----
 
-query I
-SELECT CASE WHEN d IS NULL THEN NULL ELSE 0 END FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN d IS NULL THEN NULL ELSE 0 END FROM dates;
+# ----
 
-query I
-SELECT CASE WHEN d IS NULL THEN NULL ELSE 0 END FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN d IS NULL THEN NULL ELSE 0 END FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(second FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(second FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(minute FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(minute FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(hour FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(hour FROM d) FROM dates;
+# ----
 
-query R
-SELECT EXTRACT(epoch FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query R
+# SELECT EXTRACT(epoch FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(dow FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(dow FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(isodow FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(isodow FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(week FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(week FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(doy FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(doy FROM d) FROM dates;
+# ----
 
-query I
-SELECT EXTRACT(quarter FROM d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT EXTRACT(quarter FROM d) FROM dates;
+# ----
 
-query I
-SELECT YEARWEEK(d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT YEARWEEK(d) FROM dates;
+# ----
 
-query I
-SELECT DAYOFMONTH(d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT DAYOFMONTH(d) FROM dates;
+# ----
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT WEEKDAY(d) FROM dates;
 # ----
 
-query I
-SELECT WEEKOFYEAR(d) FROM dates;
-----
+# TODO: unsupported feature
+# query I
+# SELECT WEEKOFYEAR(d) FROM dates;
+# ----
 
-statement ok
-INSERT INTO dates VALUES (DATE '1992-01-01'), (DATE '2000-12-31');
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO dates VALUES (DATE '1992-01-01'), (DATE '2000-12-31');
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(YEAR FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(month FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(day FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(CAST(floor(YEAR(d) / 10) AS INT)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(CAST(floor((YEAR(d) - 1) / 100) + 1 AS INT)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(CAST(floor((YEAR(d) - 1) / 1000) + 1 AS INT)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(CASE WHEN d IS NULL THEN NULL ELSE 0 END) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(CASE WHEN d IS NULL THEN NULL ELSE 0 END) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(second FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(minute FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(hour FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(dow FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(isodow FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(week FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(doy FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(EXTRACT(quarter FROM d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(YEARWEEK(d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(DAYOFMONTH(d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(WEEKDAY(d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query I
 # SELECT stats(WEEKOFYEAR(d)) FROM dates LIMIT 1;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

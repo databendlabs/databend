@@ -1,0 +1,21 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# query IIIIII nosort pg_attribute
+# SELECT * FROM pg_attribute
+
+# TODO: unsupported feature
+# query IIIIII nosort pg_attribute
+# SELECT * FROM pg_catalog.pg_attribute
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i integer)
+
+# TODO: unsupported feature
+# query III
+# select relname, attname, attnum from pg_attribute join pg_class on (pg_attribute.attrelid=pg_class.oid) where relname='integers' and attnum>=0;
+# ----
+# integers	i	1

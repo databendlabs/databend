@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test(i INT, j VARCHAR);
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING SUM(test.i);
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING get_current_timestamp();
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING get_current_timestamp();
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING sum(41) over ();
+
+statement error
+PIVOT test ON j IN ('a', 'b') USING sum(sum(41) over ());
+
+statement error
+FROM tbl PIVOT (c FOR IN enum_val);

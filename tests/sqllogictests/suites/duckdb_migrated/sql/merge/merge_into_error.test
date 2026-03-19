@@ -1,0 +1,40 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Buys
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Stock
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Stock(item_id int, balance int);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Buys(item_id int, volume int);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Buys VALUES (42, 100);
+
+# TODO: unsupported feature
+# query I
+# MERGE INTO Stock USING Buys USING (item_id)
+# WHEN NOT MATCHED AND true THEN INSERT
+# WHEN NOT MATCHED AND error('this should not be executed') THEN INSERT
+# WHEN NOT MATCHED THEN ERROR
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM Stock
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# FROM Stock
+# ----
+# 42	100

@@ -22,7 +22,6 @@
 # explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where id > 1000;
 # ----
 
-
 # verify min/max stats on double cols work
 
 # TODO: unsupported feature
@@ -31,6 +30,7 @@
 # ----
 
 # max is nan because of parquet's unique setup - so we can't prune here
+# TODO: unsupported feature
 # query I nosort empty
 # explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where salary > 286593 and salary < 286594;
 # ----
@@ -69,14 +69,15 @@
 
 # TODO string comparisons are not pruned yet
 # verify min/max stats on string cols work
-#query I nosort empty
-#explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where country < 'Aruba';
-#----
+# TODO: unsupported feature
+# query I nosort empty
+# explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where country < 'Aruba';
+# ----
 
-#query I nosort empty
-#explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where country > 'Zimbabwe';
-#----
-
+# TODO: unsupported feature
+# query I nosort empty
+# explain select * from parquet_scan('{DATA_DIR}/parquet-testing/userdata1.parquet') where country > 'Zimbabwe';
+# ----
 
 # see if stats work correctly for globs
 

@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS text
+
+# TODO: unsupported feature
+# statement ok
+# create table text(i varchar);
+
+# TODO: unsupported feature
+# statement ok
+# insert into text values ('bla');
+
+# TODO: unsupported feature
+# statement ok
+# drop table text;
+
+# TODO: unsupported feature
+# query I
+# select * from text;
+# ----
+# bla
+
+# TODO: unsupported feature
+# statement ok
+# drop table text;
+
+# TODO: unsupported feature
+# statement ok
+# create table text(i varchar);
+
+# TODO: unsupported feature
+# query I
+# select * from text;
+# ----
+# bla

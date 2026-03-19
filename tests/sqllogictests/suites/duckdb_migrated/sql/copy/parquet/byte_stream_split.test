@@ -2,4 +2,4 @@
 # query III
 # SELECT * FROM '{DATA_DIR}/parquet-testing/byte_stream_split.parquet'
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

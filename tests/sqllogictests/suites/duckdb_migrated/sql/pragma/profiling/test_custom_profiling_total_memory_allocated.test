@@ -1,0 +1,92 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS large_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS metrics_children
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test AS SELECT range AS id, hash(range) AS data FROM range(0, 100000);
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# Test with a query that's more likely to allocate memory (large join/aggregation)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT id, COUNT(*) as cnt FROM test GROUP BY id ORDER BY id LIMIT 1000;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# Verify that total_memory_allocated only appears at root level, not in children
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test WHERE id < 1000 ORDER BY id;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# Verify that children nodes don't have total_memory_allocated
+# We'll check by looking at the JSON structure - children should not have this field
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(children, recursive := true) FROM metrics_output;
+
+# Verify that total_memory_allocated field does not exist in children nodes
+
+# TODO: unsupported feature
+# statement error
+# SELECT total_memory_allocated FROM metrics_children;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test2 AS SELECT range AS id FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement error
+# SELECT total_memory_allocated FROM metrics_output;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE large_test AS SELECT range AS id, hash(range) AS data FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN total_memory_allocated >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1

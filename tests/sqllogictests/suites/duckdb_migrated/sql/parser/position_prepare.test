@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT POSITION(? in ?)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1('e', 'hello world')
+# ----
+# 2

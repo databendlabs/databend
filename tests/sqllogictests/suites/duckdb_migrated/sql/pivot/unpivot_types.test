@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE unpivot ( select 42) on columns(*))
+# ----
+# name	VARCHAR
+# value	INTEGER
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE unpivot ( select {n : 1 }) on columns(*))
+# ----
+# name	VARCHAR
+# value	STRUCT(n INTEGER)

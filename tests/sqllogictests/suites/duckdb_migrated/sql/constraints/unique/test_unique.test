@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS integers
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
 
 # TODO: unsupported feature
 # statement ok

@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bigdata
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT (SELECT COUNT(*) FROM bigdata WHERE col_a = 1) + (SELECT COUNT(*) FROM bigdata WHERE col_b = 1);
+
+# TODO: unsupported feature
+# query I
+# SELECT unnest(res) FROM (
+# 	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+# 	raw_setting.trim('{}') AS setting,
+# 	string_split(setting, ', ') AS res
+# ) ORDER BY ALL
+# ----
+# "BLOCKED_THREAD_TIME": "1"
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(blocked_thread_time) FROM metrics_output;
+# ----
+# 1

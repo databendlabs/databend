@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS tleft
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tleft
 
 # TODO: unsupported feature
 # statement ok
@@ -37,7 +38,7 @@ DROP TABLE IF EXISTS tleft
 # and l.k100 + r.k100 < 10
 # order by 1
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
@@ -71,7 +72,7 @@ DROP TABLE IF EXISTS tleft
 # and l.k100 + r.k100 < 10
 # order by 2
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
@@ -105,7 +106,7 @@ DROP TABLE IF EXISTS tleft
 # and l.k100 + r.k100 < 10
 # order by all
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II

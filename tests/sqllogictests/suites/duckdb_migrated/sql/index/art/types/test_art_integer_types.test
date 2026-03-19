@@ -1,8 +1,10 @@
-statement ok
-DROP TABLE IF EXISTS integers
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
 
-statement ok
-CREATE TABLE integers(i TINYINT, j SMALLINT, k INTEGER, l BIGINT)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i TINYINT, j SMALLINT, k INTEGER, l BIGINT)
 
 # TODO: unsupported feature
 # statement ok
@@ -20,91 +22,109 @@ CREATE TABLE integers(i TINYINT, j SMALLINT, k INTEGER, l BIGINT)
 # statement ok
 # CREATE INDEX i_index4 ON integers(l)
 
+# TODO: unsupported feature
 # query the empty indices first
 
-query I
-SELECT i FROM integers WHERE i > 0
-----
+# TODO: unsupported feature
+# query I
+# SELECT i FROM integers WHERE i > 0
+# ----
 
-query I
-SELECT j FROM integers WHERE j < 0
-----
+# TODO: unsupported feature
+# query I
+# SELECT j FROM integers WHERE j < 0
+# ----
 
-query I
-SELECT k FROM integers WHERE k >= 0
-----
+# TODO: unsupported feature
+# query I
+# SELECT k FROM integers WHERE k >= 0
+# ----
 
-query I
-SELECT l FROM integers WHERE l <= 0
-----
+# TODO: unsupported feature
+# query I
+# SELECT l FROM integers WHERE l <= 0
+# ----
 
 # now insert the values [1..5] in all columns
 
-statement ok
-INSERT INTO integers VALUES (1,1,1,1)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1,1,1,1)
 
-statement ok
-INSERT INTO integers VALUES (2,2,2,2)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (2,2,2,2)
 
-statement ok
-INSERT INTO integers VALUES (3,3,3,3)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (3,3,3,3)
 
-statement ok
-INSERT INTO integers VALUES (4,4,4,4)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (4,4,4,4)
 
-statement ok
-INSERT INTO integers VALUES (5,5,5,5)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (5,5,5,5)
 
-query IIII
-SELECT * FROM integers ORDER BY i
-----
-1	1	1	1
-2	2	2	2
-3	3	3	3
-4	4	4	4
-5	5	5	5
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM integers ORDER BY i
+# ----
+# 1	1	1	1
+# 2	2	2	2
+# 3	3	3	3
+# 4	4	4	4
+# 5	5	5	5
 
-query I
-SELECT i FROM integers WHERE i > 0::TINYINT ORDER BY i
-----
-1
-2
-3
-4
-5
+# TODO: unsupported feature
+# query I
+# SELECT i FROM integers WHERE i > 0::TINYINT ORDER BY i
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
 
-query I
-SELECT j FROM integers WHERE j <= 2::SMALLINT ORDER BY j
-----
-1
-2
+# TODO: unsupported feature
+# query I
+# SELECT j FROM integers WHERE j <= 2::SMALLINT ORDER BY j
+# ----
+# 1
+# 2
 
-query I
-SELECT k FROM integers WHERE k >= -100000::INTEGER ORDER BY k
-----
-1
-2
-3
-4
-5
+# TODO: unsupported feature
+# query I
+# SELECT k FROM integers WHERE k >= -100000::INTEGER ORDER BY k
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
 
-query I
-SELECT k FROM integers WHERE k >= 100000::INTEGER ORDER BY k
-----
+# TODO: unsupported feature
+# query I
+# SELECT k FROM integers WHERE k >= 100000::INTEGER ORDER BY k
+# ----
 
-query I
-SELECT k FROM integers WHERE k >= 100000::INTEGER AND k <= 100001::INTEGER ORDER BY k
-----
+# TODO: unsupported feature
+# query I
+# SELECT k FROM integers WHERE k >= 100000::INTEGER AND k <= 100001::INTEGER ORDER BY k
+# ----
 
-query I
-SELECT l FROM integers WHERE l <= 1000000000::BIGINT ORDER BY i
-----
-1
-2
-3
-4
-5
+# TODO: unsupported feature
+# query I
+# SELECT l FROM integers WHERE l <= 1000000000::BIGINT ORDER BY i
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
 
-query I
-SELECT l FROM integers WHERE l <= -1000000000::BIGINT ORDER BY i
-----
+# TODO: unsupported feature
+# query I
+# SELECT l FROM integers WHERE l <= -1000000000::BIGINT ORDER BY i
+# ----

@@ -1,0 +1,129 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test3
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test3(s integer);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test3 ADD COLUMN l INTEGER DEFAULT 42;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER)[])
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ([ROW(1, 1)]), ([ROW(2, 2)])
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN s.element.k INTEGER
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# [{'i': 1, 'j': 1, 'k': NULL}]
+# [{'i': 2, 'j': 2, 'k': NULL}]
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM (
+# 	'sad',
+# 	'ok',
+# 	'happy'
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+# 	id INTEGER,
+# 	c STRUCT(
+# 		name text,
+# 		current_mood mood
+#     )
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES (0, ('Bob', 'happy'))
+
+# TODO: unsupported feature
+# statement ok
+# alter table person add column b integer default 5;
+
+# TODO: unsupported feature
+# query III
+# select * from person;
+# ----
+# 0	{'name': Bob, 'current_mood': happy}	5
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE person ADD COLUMN c STRUCT(
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE test2 DROP s.s2.v1;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE tbl SET PARTITIONED BY (i);
+
+# TODO: unsupported feature
+# statement error
+# ALTER SEQUENCE seq OWNED BY tbl1;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE integers ALTER j TYPE BIGINT;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE data ALTER COLUMN value SET NOT NULL;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE T_1 ADD COLUMN b INTEGER DEFAULT 2;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE alter_test ADD PRIMARY KEY(a);
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE tbl_alter_column ALTER COLUMN drop_def DROP DEFAULT;
+
+# TODO: unsupported feature
+# statement error
+# ALTER VIEW new_database.s1.v1 RENAME TO v2;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE t0 DROP COLUMN rowid;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE aliens ADD COLUMN iq_level intelligence;
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;

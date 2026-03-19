@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS t1
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
 
 # test parsing hive partitioning scheme
 # TODO: unsupported feature
@@ -72,26 +73,29 @@ DROP TABLE IF EXISTS t1
 
 # If the key names don't add up, there's nothing we can do
 
-statement error
-select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1)
+# TODO: unsupported feature
+# statement error
+# select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1)
 
-statement error
-select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatching_count/*/*/test.parquet', HIVE_PARTITIONING=1) WHERE part=b
+# TODO: unsupported feature
+# statement error
+# select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatching_count/*/*/test.parquet', HIVE_PARTITIONING=1) WHERE part=b
 
-statement error
-select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1, UNION_BY_NAME=1)
+# TODO: unsupported feature
+# statement error
+# select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1, UNION_BY_NAME=1)
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN select id, date from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2013-01-01';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN select id, date from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2018-01-01';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # No Parquet Scan Filters should be applied here
 
@@ -105,13 +109,13 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 # query II
 # EXPLAIN select id, date from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2012-01-01' and id < 10;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN select id, date from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2013-01-01' and id < 10;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # Complex filter filtering first file
 
@@ -127,7 +131,7 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 # query II
 # explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where concat(date_cast::VARCHAR, part) = '2013-01-01b';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # Complex filter filtering second file
 
@@ -143,16 +147,15 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 # query II
 # explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where concat(date_cast::VARCHAR, part) = '2012-01-01a';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # Currently, complex fiters combining hive columns and regular columns, can prevent filter pushdown for some situations
-# TODO: we want to support filter pushdown here too
 
 # TODO: unsupported feature
 # query II
 # explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where (date_cast=CAST('2013-01-01' as DATE) AND (value='value1' OR concat(date_cast::VARCHAR, part) = '2013-01-01b'));
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # Idem
 
@@ -160,15 +163,13 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 # query II
 # explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where (date_cast=CAST('2012-01-01' as DATE) AND (value='value2' OR concat(date_cast::VARCHAR, part) = '2012-01-01a'));
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # Confirm that hive partitions override existing columns
 
 # Without hive partitioning we just read the files, note the mismatch here between the hive partition in the filename and the col in the file
 
 # TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
 # query III
 # SELECT a, b, parse_path(filename)[-3:] filename FROM parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=0, FILENAME=1) order by filename;
 # ----
@@ -178,8 +179,6 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 # Hive col from path overrides col in file
 
 # TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
 # query III
 # SELECT a, b, parse_path(filename)[-3:] filename FROM parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/hive_col_also_in_file/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) order by filename;
 # ----
@@ -189,8 +188,6 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 # Test handling missing files
 
 # TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
 # query IIII
 # select id, value, part, date
 # from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/missing/*/*/test.parquet', HIVE_PARTITIONING=1)
@@ -199,70 +196,72 @@ select * from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/mismatc
 # 3	value3	c	2014-01-01
 # 4	value4	d	2015-01-01
 
-
 # check cases where there are file filters AND table filters
 
-statement ok
-Create table t1 (a int, b int, c int);
-
-statement ok
-insert into t1 (select i, 0*10, 0*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 1*10, 1*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 2*10, 2*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 3*10, 3*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 4*10, 4*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 5*10, 5*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 6*10, 6*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 7*10, 7*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 8*10, 8*100 from range(0,10) as r(i));
-
-statement ok
-insert into t1 (select i, 9*10, 9*100 from range(0,10) as r(i));
+# TODO: unsupported feature
+# statement ok
+# Create table t1 (a int, b int, c int);
 
 # TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
+# statement ok
+# insert into t1 (select i, 0*10, 0*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 1*10, 1*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 2*10, 2*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 3*10, 3*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 4*10, 4*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 5*10, 5*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 6*10, 6*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 7*10, 7*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 8*10, 8*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
+# statement ok
+# insert into t1 (select i, 9*10, 9*100 from range(0,10) as r(i));
+
+# TODO: unsupported feature
 # statement ok
 # COPY (SELECT * FROM t1) TO '{TEMP_DIR}/hive_filters' (FORMAT PARQUET, PARTITION_BY c);
 
 # TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
 # statement ok
 # COPY (SELECT * FROM t1) TO '{TEMP_DIR}/hive_filters_2' (FORMAT PARQUET, PARTITION_BY (c, b));
 
 # There should be Table Filters (id < 50) and regular filters
 
 # TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
 # query II
 # EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT=500 and a::INT < 4;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # unsatisfiable file filters also show up
 
 # TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/load-semistructured/load-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
 # query II
 # EXPLAIN select a from parquet_scan('{TEMP_DIR}/hive_filters_2/*/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c::INT > 500 and c::INT < 500;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

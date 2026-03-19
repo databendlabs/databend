@@ -258,52 +258,52 @@
 # query II
 # EXPLAIN FROM range(0, 0);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM range(0, -1);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM range(-5, -20, -1);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM range(1, 4, 2);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM range(1, 5, 2);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM generate_series(0);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM generate_series(1);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM generate_series(1, 4, 2);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II
 # EXPLAIN FROM generate_series(1, 5, 2);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

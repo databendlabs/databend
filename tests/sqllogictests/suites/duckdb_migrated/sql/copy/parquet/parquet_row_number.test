@@ -56,7 +56,6 @@
 # ----
 # 6501	9999	3499
 
-
 # stats tests
 
 # TODO: unsupported feature
@@ -69,16 +68,16 @@
 # query II nosort empty_result
 # explain select 1 from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1) where file_row_number > 10000;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II nosort empty_result
 # explain select 1 from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1) where file_row_number < 0;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II nosort empty_result
 # explain select 1 from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1) where file_row_number is null;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker

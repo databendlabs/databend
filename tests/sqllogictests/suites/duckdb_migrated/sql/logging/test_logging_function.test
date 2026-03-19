@@ -1,0 +1,58 @@
+# TODO: unsupported feature
+# query IIIIIIIIII
+# from duckdb_logs
+# ----
+
+# TODO: unsupported feature
+# statement ok
+#  CALL enable_logging();
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the global log scope', level := 'info', scope := 'database', log_type := 'global_type' ) from range(0,3);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the connection log scope', level := 'info', scope := 'connection', log_type := 'client_context_type' ) from range(0,3);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the file_opener log scope', level := 'info', scope := 'file_opener', log_type := 'opener_type' ) from range(0,3);
+
+# TODO: unsupported feature
+# statement ok
+# from duckdb_logs
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * EXCLUDE (context_id, timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
+# ----
+# CONNECTION	client_context_type	INFO	hello from the connection log scope
+# CONNECTION	client_context_type	INFO	hello from the connection log scope
+# CONNECTION	client_context_type	INFO	hello from the connection log scope
+# CONNECTION	opener_type	INFO	hello from the file_opener log scope
+# CONNECTION	opener_type	INFO	hello from the file_opener log scope
+# CONNECTION	opener_type	INFO	hello from the file_opener log scope
+# DATABASE	global_type	INFO	hello from the global log scope
+# DATABASE	global_type	INFO	hello from the global log scope
+# DATABASE	global_type	INFO	hello from the global log scope
+
+# TODO: unsupported feature
+# query IIII
+# SELECT
+#     type,
+#     connection_id - getvariable('base_connection_id'),
+#     transaction_id - getvariable('base_transaction_id'),
+
+# query_id - getvariable('base_query_id')
+# FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
+# ----
+# client_context_type	0	1	1
+# client_context_type	0	1	1
+# client_context_type	0	1	1
+# opener_type	0	2	2
+# opener_type	0	2	2
+# opener_type	0	2	2
+# global_type	NULL	NULL	NULL
+# global_type	NULL	NULL	NULL
+# global_type	NULL	NULL	NULL

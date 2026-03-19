@@ -1,0 +1,10 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+0 NULL

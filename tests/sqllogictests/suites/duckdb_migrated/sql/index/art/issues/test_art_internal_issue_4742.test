@@ -2,8 +2,9 @@
 # statement ok
 # DROP TABLE IF EXISTS sample
 
-statement ok
-DROP TABLE IF EXISTS test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
 
 # needs this vector size otherwise the sample is somehow not repeatable
 # TODO: unsupported feature
@@ -20,7 +21,7 @@ DROP TABLE IF EXISTS test
 # query II
 # explain analyze select i from test SEMI JOIN (select i from test using sample reservoir(10) repeatable (42)) USING (i);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # should return exactly 10 values, as we join with a sample of size 10 of itself
 
@@ -59,7 +60,7 @@ DROP TABLE IF EXISTS test
 # query II
 # explain analyze select i from test SEMI JOIN sample USING (i);
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # again should be 10 values
 

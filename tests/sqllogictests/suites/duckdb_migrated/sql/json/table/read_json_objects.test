@@ -1,0 +1,245 @@
+# we cannot check the error output for the specific byte, because on Windows the \n are replaced with \r\n
+# therefore, the byte count is different. So, we cut off the error message here
+# TODO: unsupported feature
+# statement error
+# select * from read_json_objects('{DATA_DIR}/json/unterminated_quotes.ndjson')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_csv('{DATA_DIR}/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL, auto_detect = false)
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# example_n is with regular \n newlines
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_ndjson_objects('{DATA_DIR}/json/example_n.ndjson')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# this one does not have the 'records' param
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM read_ndjson_objects('{DATA_DIR}/json/example_n.ndjson', records='false')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_ndjson_objects('{DATA_DIR}/json/example_n.ndjson')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# we can auto-detect that it's newline-delimited
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_json_objects('{DATA_DIR}/json/example_n.ndjson', format='auto')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# example_r is with \r newlines - works with unstructured
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_json_objects('{DATA_DIR}/json/example_r.ndjson', format='unstructured')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# we can detect that it's not newline-delimited
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_json_objects('{DATA_DIR}/json/example_r.ndjson', format='auto')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# \r newlines are NOT valid according to ndjson spec - this does not work, all a single line
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM read_ndjson_objects('{DATA_DIR}/json/example_r.ndjson')
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_ndjson_objects('{DATA_DIR}/json/example_rn.ndjson')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_ndjson_objects('{DATA_DIR}/json/example_rn.ndjson')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# same but gzipped
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_ndjson_objects('{DATA_DIR}/json/example_rn.ndjson.gz')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM read_json_objects('{DATA_DIR}/json/example_rn.ndjson.gz', format='nd')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# multi-file scan
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) from read_json_objects(['{DATA_DIR}/json/example_n.ndjson', '{DATA_DIR}/json/example_r.ndjson', '{DATA_DIR}/json/example_rn.ndjson'], format='auto')
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) from read_ndjson_objects(['{DATA_DIR}/json/example_n.ndjson', '{DATA_DIR}/json/example_rn.ndjson'])
+# ----
+# 10
+
+# globbing
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) from read_json_objects('{DATA_DIR}/json/example_*.ndjson', format='auto')
+# ----
+# 15
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) from read_ndjson_objects('{DATA_DIR}/json/example_*n.ndjson')
+# ----
+# 10
+
+# empty file
+
+# TODO: unsupported feature
+# query I
+# select * from read_json_objects('{DATA_DIR}/json/empty.ndjson')
+# ----
+
+# TODO: unsupported feature
+# query I
+# select * from read_ndjson_objects('{DATA_DIR}/json/empty.ndjson')
+# ----
+
+# invalid json stuff
+
+# TODO: unsupported feature
+# statement error
+# select * from read_json_objects('{DATA_DIR}/json/unterminated_quotes.ndjson', format='nd')
+
+# TODO: unsupported feature
+# statement error
+# select * from read_ndjson_objects('{DATA_DIR}/json/unterminated_quotes.ndjson')
+
+# TODO: unsupported feature
+# query I
+# select * from read_json_objects('{DATA_DIR}/json/unterminated_quotes.ndjson', format='auto', ignore_errors=true)
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# NULL
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# multiple values per line (works for read_json_objects)
+
+# TODO: unsupported feature
+# query I
+# select * from read_json_objects('{DATA_DIR}/json/multiple_objects_per_line.ndjson', format='unstructured')
+# ----
+# {"id":1,"name":"O Brother, Where Art Thou?"}
+# {"id":2,"name":"Home for the Holidays"}
+# {"id":3,"name":"The Firm"}
+# {"id":4,"name":"Broadcast News"}
+# {"id":5,"name":"Raising Arizona"}
+
+# does not work for read_ndjson_objects
+
+# TODO: unsupported feature
+# statement error
+# select * from read_ndjson_objects('{DATA_DIR}/json/multiple_objects_per_line.ndjson')
+
+# TODO: unsupported feature
+# statement error
+# select * from read_json_objects('{DATA_DIR}/csv/tpcds_14.csv')
+
+# TODO: unsupported feature
+# statement error
+# select * from read_ndjson_objects('{DATA_DIR}/csv/tpcds_14.csv')
+
+# TODO: unsupported feature
+# statement error
+# select * from read_json_objects('{DATA_DIR}/parquet-testing/blob.parquet')
+
+# TODO: unsupported feature
+# statement error
+# select * from read_ndjson_objects('{DATA_DIR}/parquet-testing/blob.parquet')
+
+# TODO: unsupported feature
+# query I
+# select * from read_json_objects('{DATA_DIR}/json/top_level_array.json')
+# ----
+# {"conclusion":"cancelled"}
+# {"conclusion":"cancelled"}
+
+# and auto-detect it
+
+# TODO: unsupported feature
+# query I
+# select * from read_json_objects('{DATA_DIR}/json/top_level_array.json', format='auto')
+# ----
+# {"conclusion":"cancelled"}
+# {"conclusion":"cancelled"}
+
+# the file only has one line, so if we read this as ndjson, we just get the array
+
+# TODO: unsupported feature
+# query I
+# select * from read_json_objects('{DATA_DIR}/json/top_level_array.json', format='nd')
+# ----
+# [{"conclusion":"cancelled"}, {"conclusion":"cancelled"}]

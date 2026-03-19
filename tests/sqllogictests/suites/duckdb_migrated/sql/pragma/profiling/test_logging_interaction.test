@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS big
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS medium
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS small
+
+# TODO: unsupported feature
+# statement ok
+# USE my_db;
+
+# TODO: unsupported feature
+# statement ok
+# call enable_logging();
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE small AS FROM range(0, 100);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE medium AS FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE big AS FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM duckdb_logs_parsed('Metrics') WHERE metric = 'CPU_TIME';
+# ----
+# 3

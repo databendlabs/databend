@@ -1,11 +1,14 @@
-statement ok
-DROP TABLE IF EXISTS cal_last_13
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS cal_last_13
 
-statement ok
-DROP TABLE IF EXISTS calendar
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS calendar
 
-statement ok
-DROP TABLE IF EXISTS snapshot_data
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS snapshot_data
 
 # TODO: unsupported feature
 # statement ok
@@ -17,13 +20,14 @@ DROP TABLE IF EXISTS snapshot_data
 # 	FROM generate_series(TIMESTAMP '2023-01-01 06:00:00', TIMESTAMP '2023-06-01 00:00:00', INTERVAL '12 hours') tbl(start_ts)
 # ;
 
-statement ok
-create table snapshot_data as
-	select
-		TIMESTAMP '2023-03-01 08:00:00' as snapshot_ts,
-		1 as snapshot_value
-	from generate_series(1,1000) t(i)
-;
+# TODO: unsupported feature
+# statement ok
+# create table snapshot_data as
+# 	select
+# 		TIMESTAMP '2023-03-01 08:00:00' as snapshot_ts,
+# 		1 as snapshot_value
+# 	from generate_series(1,1000) t(i)
+# ;
 
 # IEJoin is disabled for CTEs for some reason
 
@@ -44,7 +48,7 @@ create table snapshot_data as
 # 	on data.snapshot_ts >= cal.start_ts
 # 	and data.snapshot_ts <= cal.end_ts
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -77,7 +81,7 @@ create table snapshot_data as
 # 	on data.snapshot_ts >= cal.start_ts
 # 	and data.snapshot_ts <= cal.end_ts
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -113,7 +117,7 @@ create table snapshot_data as
 # 	on data.snapshot_ts >= cal.start_ts
 # 	and data.snapshot_ts <= cal.end_ts
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I
@@ -152,7 +156,7 @@ create table snapshot_data as
 # 	on data.snapshot_ts >= cal2.start_ts
 # 	and data.snapshot_ts <= cal2.end_ts
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I

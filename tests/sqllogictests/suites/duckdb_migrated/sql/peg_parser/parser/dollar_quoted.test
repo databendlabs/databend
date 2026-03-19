@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$set variable time_travel_snapshot_id = $$foo$$$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$select $🦆$du ck$🦆$ = $🦆$du　ck$🦆$;$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$prepare q123 as select $param, $other_name, $param;$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$select $tag$ $duck$ $tag$ = $tag$　$duck$　$tag$;$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$select $tag$ $tag$ = $tag$　$tag$;$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT $marker$[hello, world]$marker$::VARCHAR[];$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT $$[hello, world]$$::VARCHAR[];$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT $${quote_at_start: "\"test\"", age: 30}$$::STRUCT(age INT);$TEST_PEG_PARSER$);

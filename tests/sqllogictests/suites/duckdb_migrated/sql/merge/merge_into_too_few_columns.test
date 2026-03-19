@@ -1,0 +1,22 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS people
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE people (id INTEGER, name VARCHAR, salary FLOAT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO people VALUES (1, 'John', 92_000.0), (2, 'Anna', 100_000.0);
+
+# TODO: unsupported feature
+# statement error
+# MERGE INTO people
+# USING (
+# 	SELECT
+# 		3 AS id,
+# 		89_000.0 AS salary
+# ) AS upserts
+# ON (upserts.id = people.id)
+# WHEN NOT MATCHED THEN INSERT;

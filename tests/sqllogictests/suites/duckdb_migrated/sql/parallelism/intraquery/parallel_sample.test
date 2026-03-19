@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers AS SELECT * FROM range(0, 50000) tbl(i)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers TABLESAMPLE RESERVOIR(100)
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers TABLESAMPLE RESERVOIR(100)
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers TABLESAMPLE RESERVOIR(100)
+# ----
+# 100

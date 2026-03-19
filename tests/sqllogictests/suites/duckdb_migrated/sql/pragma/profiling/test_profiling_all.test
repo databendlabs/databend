@@ -1,0 +1,58 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS profile_attach.tbl
+
+# Test ATTACH.
+# TODO: unsupported feature
+# query II
+# SELECT latency != 0, contains(query_name, 'ATTACH') FROM metrics_output;
+# ----
+# 1	1
+
+# Test CREATE TABLE.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE profile_attach.tbl AS SELECT range AS id FROM range(0, 10000);
+
+# TODO: unsupported feature
+# query II
+# SELECT latency != 0, contains(query_name, 'CREATE TABLE') FROM metrics_output;
+# ----
+# 1	1
+
+# Test INSERT.
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO profile_attach.tbl SELECT range + 20000 FROM range(0, 10000);
+
+# TODO: unsupported feature
+# query II
+# SELECT latency != 0, contains(query_name, 'INSERT INTO') FROM metrics_output;
+# ----
+# 1	1
+
+# Test CREATE INDEX.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx ON profile_attach.tbl(id);
+
+# TODO: unsupported feature
+# query II
+# SELECT latency != 0, contains(query_name, 'CREATE INDEX') FROM metrics_output;
+# ----
+# 1	1
+
+# Test DETACH.
+
+# TODO: unsupported feature
+# statement ok
+# DETACH profile_attach;
+
+# TODO: unsupported feature
+# query II
+# SELECT latency != 0, contains(query_name, 'DETACH') FROM metrics_output;
+# ----
+# 1	1

@@ -1,0 +1,37 @@
+statement ok
+DROP VIEW IF EXISTS v1
+
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# perform a query with many pipelines
+
+query R
+SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i) FROM integers UNION ALL SELECT MAX(i) FROM integers;
+----
+6.0
+2.0
+1.0
+3.0
+
+statement ok
+CREATE VIEW v1(i) AS SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i) FROM integers UNION ALL SELECT MAX(i) FROM integers;
+
+# errors in separate pipelines
+
+statement error
+SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i::DATE) FROM integers UNION ALL SELECT MAX(i::DATE) FROM integers;
+
+query R sort
+SELECT * FROM v1 t1 JOIN v1 t2 USING (i);
+----
+6.0
+2.0
+1.0
+3.0

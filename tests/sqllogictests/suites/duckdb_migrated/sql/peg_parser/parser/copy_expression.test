@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM foo) TO ('foo') WITH (HEADER)$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM range(0, 5) t(i)) TO (getvariable('copy_target')) WITH (HEADER)$TEST_PEG_PARSER$);

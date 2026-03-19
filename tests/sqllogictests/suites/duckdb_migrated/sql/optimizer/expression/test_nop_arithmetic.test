@@ -1,0 +1,155 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (42, 10), (43, 100);
+
+# a + 0
+
+# TODO: unsupported feature
+# query I
+# SELECT a + 0 FROM test
+# ----
+# 42
+# 43
+
+# 0 + a
+
+# TODO: unsupported feature
+# query I
+# SELECT 0 + a FROM test
+# ----
+# 42
+# 43
+
+# a - 0
+
+# TODO: unsupported feature
+# query I
+# SELECT a - 0 FROM test
+# ----
+# 42
+# 43
+
+# 0 - a
+
+# TODO: unsupported feature
+# query I
+# SELECT 0 - a FROM test
+# ----
+# -42
+# -43
+
+# a * 1
+
+# TODO: unsupported feature
+# query I
+# SELECT a * 1 FROM test
+# ----
+# 42
+# 43
+
+# 1 * a
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 * a FROM test
+# ----
+# 42
+# 43
+
+# a * 0 => 0
+
+# TODO: unsupported feature
+# query I
+# SELECT a * 0 FROM test
+# ----
+# 0
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT 0 * a FROM test
+# ----
+# 0
+# 0
+
+# a / 1
+
+# TODO: unsupported feature
+# query R
+# SELECT a / 1 FROM test
+# ----
+# 42.0
+# 43.0
+
+# 1 / a
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 // a FROM test
+# ----
+# 0
+# 0
+
+# a / 0 => NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT a // 0 FROM test
+# ----
+# NULL
+# NULL
+
+# 0 / a => 0
+
+# TODO: unsupported feature
+# query I
+# SELECT 0 // a FROM test
+# ----
+# 0
+# 0
+
+# test expressions involving NULL as well
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=NULL
+
+# NULL * 0 = NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT a * 0 FROM test
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT rowid * 0 FROM test
+# ----
+# 0
+# 0
+
+# 0 / NULL = NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT 0 / a FROM test
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT 0 / rowid FROM test
+# ----
+# NULL
+# 0

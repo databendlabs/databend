@@ -1,0 +1,16 @@
+statement ok
+DROP TABLE IF EXISTS dates
+
+statement ok
+CREATE TABLE dates(lo_commitdate DATE);
+
+statement ok
+INSERT INTO dates VALUES (DATE '1992-02-10');
+
+query I
+SELECT CAST('2020-02-20' AS date) - CAST(min("ta_1"."lo_commitdate") AS date) AS "ca_1"
+FROM dates AS "ta_1"
+HAVING CAST('2020-02-20' AS date) - CAST(min("ta_1"."lo_commitdate") AS date) > 4
+ORDER BY "ca_1" ASC;
+----
+10237

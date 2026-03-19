@@ -1,0 +1,867 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS vals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v tinyint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+(127-10)::tinyint=-100::tinyint;
+# ----
+
+# TODO: unsupported feature
+# query B
+# SELECT v+(127-10)::tinyint=-100::tinyint FROM vals;
+# ----
+# 0
+# NULL
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-127::tinyint=127::tinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE (-128+100)::tinyint-v=127::tinyint;
+# ----
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::tinyint=1::tinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::tinyint=0::tinyint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::tinyint=0::tinyint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::tinyint=1::tinyint FROM vals;
+# ----
+# 0
+# NULL
+
+# negative numbers
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-1)::tinyint=(-128)::tinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-2)::tinyint=(-128)::tinyint;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v smallint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+(32767-10)::smallint=-100::smallint;
+# ----
+
+# TODO: unsupported feature
+# query B
+# SELECT v+(32767-10)::smallint=-100::smallint FROM vals;
+# ----
+# 0
+# NULL
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-32767::smallint=32767::smallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE (-32768+100)::smallint-v=32767::smallint;
+# ----
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::smallint=1::smallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::smallint=0::smallint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::smallint=0::smallint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::smallint=1::smallint FROM vals;
+# ----
+# 0
+# NULL
+
+# negative numbers
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-1)::smallint=(-32768)::smallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-2)::smallint=(-32768)::smallint;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+(2147483647-10)::integer=-100::integer;
+# ----
+
+# TODO: unsupported feature
+# query B
+# SELECT v+(2147483647-10)::integer=-100::integer FROM vals;
+# ----
+# 0
+# NULL
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-2147483647::integer=2147483647::integer;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE (-2147483648+100)::integer-v=2147483647::integer;
+# ----
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::integer=1::integer;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::integer=0::integer;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::integer=0::integer FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::integer=1::integer FROM vals;
+# ----
+# 0
+# NULL
+
+# negative numbers
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-1)::integer=(-2147483648)::integer;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-2)::integer=(-2147483648)::integer;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v bigint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+(9223372036854775807-10)::bigint=-100::bigint;
+# ----
+
+# TODO: unsupported feature
+# query B
+# SELECT v+(9223372036854775807-10)::bigint=-100::bigint FROM vals;
+# ----
+# 0
+# NULL
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-9223372036854775807::bigint=9223372036854775807::bigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE (-9223372036854775808+100)::bigint-v=9223372036854775807::bigint;
+# ----
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::bigint=1::bigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::bigint=0::bigint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::bigint=0::bigint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query B
+# SELECT v*0::bigint=1::bigint FROM vals;
+# ----
+# 0
+# NULL
+
+# negative numbers
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-1)::bigint=(-9223372036854775808)::bigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-2)::bigint=(-9223372036854775808)::bigint;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v hugeint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+(170141183460469231731687303715884105727-10)::hugeint=-100::hugeint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v+(170141183460469231731687303715884105727-10)::hugeint=-100::hugeint FROM vals;
+# ----
+# 0
+# NULL
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-170141183460469231731687303715884105727::hugeint=170141183460469231731687303715884105727::hugeint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE (-170141183460469231731687303715884105728+100)::hugeint-v=170141183460469231731687303715884105727::hugeint;
+# ----
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::hugeint=1::hugeint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::hugeint=0::hugeint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::hugeint=0::hugeint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::hugeint=1::hugeint FROM vals;
+# ----
+# 0
+# NULL
+
+# negative numbers
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-1)::hugeint=(-170141183460469231731687303715884105728)::hugeint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*(-2)::hugeint=(-170141183460469231731687303715884105728)::hugeint;
+# ----
+
+# move constants with unsigned values
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v utinyint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+5::utinyint=3::utinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v+5::utinyint=3::utinyint FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 5::utinyint+v=3::utinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+1::utinyint=3::utinyint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 1::utinyint+v=3::utinyint;
+# ----
+# 2
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-2::utinyint=255::utinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 2::utinyint-v=3::utinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-1::utinyint=1::utinyint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 4::utinyint-v=2::utinyint;
+# ----
+# 2
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::utinyint=1::utinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::utinyint=0::utinyint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::utinyint=0::utinyint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::utinyint=1::utinyint FROM vals;
+# ----
+# 0
+# NULL
+
+# rhs value is not cleanly divisible
+# this is always 0, since there is no integer value for which x*3=7
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::utinyint=7::utinyint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::utinyint=7::utinyint FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::utinyint=6::utinyint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::utinyint=6::utinyint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE vals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v usmallint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+5::usmallint=3::usmallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v+5::usmallint=3::usmallint FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 5::usmallint+v=3::usmallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+1::usmallint=3::usmallint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 1::usmallint+v=3::usmallint;
+# ----
+# 2
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-2::usmallint=255::usmallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 2::usmallint-v=3::usmallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-1::usmallint=1::usmallint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 4::usmallint-v=2::usmallint;
+# ----
+# 2
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::usmallint=1::usmallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::usmallint=0::usmallint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::usmallint=0::usmallint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::usmallint=1::usmallint FROM vals;
+# ----
+# 0
+# NULL
+
+# rhs value is not cleanly divisible
+# this is always 0, since there is no integer value for which x*3=7
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::usmallint=7::usmallint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::usmallint=7::usmallint FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::usmallint=6::usmallint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::usmallint=6::usmallint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE vals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v uinteger);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+5::uinteger=3::uinteger;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v+5::uinteger=3::uinteger FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 5::uinteger+v=3::uinteger;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+1::uinteger=3::uinteger;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 1::uinteger+v=3::uinteger;
+# ----
+# 2
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-2::uinteger=255::uinteger;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 2::uinteger-v=3::uinteger;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-1::uinteger=1::uinteger;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 4::uinteger-v=2::uinteger;
+# ----
+# 2
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::uinteger=1::uinteger;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::uinteger=0::uinteger;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::uinteger=0::uinteger FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::uinteger=1::uinteger FROM vals;
+# ----
+# 0
+# NULL
+
+# rhs value is not cleanly divisible
+# this is always 0, since there is no integer value for which x*3=7
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::uinteger=7::uinteger;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::uinteger=7::uinteger FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::uinteger=6::uinteger;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::uinteger=6::uinteger FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE vals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(v ubigint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (2), (NULL);
+
+# +
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+5::ubigint=3::ubigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v+5::ubigint=3::ubigint FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 5::ubigint+v=3::ubigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v+1::ubigint=3::ubigint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 1::ubigint+v=3::ubigint;
+# ----
+# 2
+
+# -
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-2::ubigint=255::ubigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 2::ubigint-v=3::ubigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v-1::ubigint=1::ubigint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE 4::ubigint-v=2::ubigint;
+# ----
+# 2
+
+# *
+# multiply by 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::ubigint=1::ubigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*0::ubigint=0::ubigint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::ubigint=0::ubigint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT v*0::ubigint=1::ubigint FROM vals;
+# ----
+# 0
+# NULL
+
+# rhs value is not cleanly divisible
+# this is always 0, since there is no integer value for which x*3=7
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::ubigint=7::ubigint;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::ubigint=7::ubigint FROM vals;
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vals WHERE v*3::ubigint=6::ubigint;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v*3::ubigint=6::ubigint FROM vals;
+# ----
+# 1
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE vals

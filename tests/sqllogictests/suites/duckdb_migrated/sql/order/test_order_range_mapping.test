@@ -1,0 +1,576 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i tinyint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query I
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i smallint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query I
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i integer)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query I
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i bigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query I
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i utinyint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i usmallint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i uinteger)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i ubigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (100), (25), (75), (50);
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 25
+# 50
+# 75
+# 100
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# cast to usmallint
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i smallint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i usmallint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i integer)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i uinteger)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i bigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i ubigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i hugeint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i uhugeint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (10000), (2500), (7500), (5000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 2500
+# 5000
+# 7500
+# 10000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# cast to uint
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i integer)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000), (250000), (750000), (500000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000
+# 500000
+# 750000
+# 1000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i uinteger)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000), (250000), (750000), (500000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000
+# 500000
+# 750000
+# 1000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i bigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000), (250000), (750000), (500000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000
+# 500000
+# 750000
+# 1000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i ubigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000), (250000), (750000), (500000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000
+# 500000
+# 750000
+# 1000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i hugeint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000), (250000), (750000), (500000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000
+# 500000
+# 750000
+# 1000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i uhugeint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000), (250000), (750000), (500000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000
+# 500000
+# 750000
+# 1000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# cast to ubigint
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i bigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000000), (250000000), (750000000), (500000000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000000
+# 500000000
+# 750000000
+# 1000000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i ubigint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000000), (250000000), (750000000), (500000000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000000
+# 500000000
+# 750000000
+# 1000000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i hugeint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000000), (250000000), (750000000), (500000000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000000
+# 500000000
+# 750000000
+# 1000000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i uhugeint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (1000000000), (250000000), (750000000), (500000000)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 250000000
+# 500000000
+# 750000000
+# 1000000000
+
+# TODO: unsupported feature
+# statement ok
+# drop table test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (i hugeint)
+
+# TODO: unsupported feature
+# statement ok
+# insert into test values (295147905179352825856), (73786976294838206464), (147573952589676412928), (36893488147419103232)
+
+# TODO: unsupported feature
+# query T
+# select * from test order by i
+# ----
+# 36893488147419103232
+# 73786976294838206464
+# 147573952589676412928
+# 295147905179352825856
+
+# TODO: unsupported feature
+# statement ok
+# drop table test

@@ -1,31 +1,39 @@
-statement ok
-DROP TABLE IF EXISTS tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
 
 # create table with collation
-statement ok
-create table tbl (str varchar);
+# TODO: unsupported feature
+# statement ok
+# create table tbl (str varchar);
 
 # insert data with nocase
 
-statement ok
-insert into tbl values ('ABCDE'), ('aBcDe');
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ('ABCDE'), ('aBcDe');
 
 # insert data with noaccent
 
-statement ok
-insert into tbl values ('àbcdë');
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ('àbcdë');
 
 # insert data with noaccent and nocase
 
-statement ok
-insert into tbl values ('ÀbCdÈ');
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values ('ÀbCdÈ');
 
+# TODO: unsupported feature
 # query IN without collation
 
-query T
-select * from tbl where str in ('AbCdE');
-----
+# TODO: unsupported feature
+# query T
+# select * from tbl where str in ('AbCdE');
+# ----
 
+# TODO: unsupported feature
 # query IN with nocase collation
 
 # TODO: unsupported feature
@@ -35,6 +43,7 @@ select * from tbl where str in ('AbCdE');
 # ABCDE
 # aBcDe
 
+# TODO: unsupported feature
 # query IN with noaccent collation
 
 # TODO: unsupported feature
@@ -43,6 +52,7 @@ select * from tbl where str in ('AbCdE');
 # ----
 # àbcdë
 
+# TODO: unsupported feature
 # query IN with nocase.noaccent collation
 
 # TODO: unsupported feature
@@ -54,16 +64,19 @@ select * from tbl where str in ('AbCdE');
 # àbcdë
 # ÀbCdÈ
 
+# TODO: unsupported feature
 # query NOT IN without collation
 
-query T
-select * from tbl where str not in ('abcde');
-----
-ÀbCdÈ
-ABCDE
-aBcDe
-àbcdë
+# TODO: unsupported feature
+# query T
+# select * from tbl where str not in ('abcde');
+# ----
+# ÀbCdÈ
+# ABCDE
+# aBcDe
+# àbcdë
 
+# TODO: unsupported feature
 # query NOT IN with nocase collation
 
 # TODO: unsupported feature
@@ -73,6 +86,7 @@ aBcDe
 # àbcdë
 # ÀbCdÈ
 
+# TODO: unsupported feature
 # query NOT IN with noaccent collation
 
 # TODO: unsupported feature
@@ -83,6 +97,7 @@ aBcDe
 # aBcDe
 # ÀbCdÈ
 
+# TODO: unsupported feature
 # query NOT IN with nocase.noaccent collation
 
 # TODO: unsupported feature

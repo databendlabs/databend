@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS movie_info
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS movie_info
 
 # TODO: unsupported feature
 # statement ok
@@ -15,4 +16,4 @@ DROP TABLE IF EXISTS movie_info
 # query IIITT
 # SELECT * FROM movie_info;
 # ----
-# TODO: hash result
+# EXPECTED TODO: hash result

@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# query I
+# SELECT * EXCLUDE(value, description) FROM duckdb_profiling_settings();
+# ----
+# custom_profiling_settings
+# enable_profiling
+# profiling_coverage
+# profiling_mode
+# profiling_output

@@ -1,0 +1,70 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Buy
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Totals
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dummy_edge
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dummy_null
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS dummy_user
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Totals(item_id int, balance int, biggest_item BOOL);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Buy(item_id int, volume int);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Buy values(10, 1000), (30, 300), (20, 2000);
+
+# TODO: unsupported feature
+# statement ok
+# MERGE INTO Totals USING Buy USING (item_id)
+# WHEN NOT MATCHED AND Buy.volume = (SELECT MAX(Volume) FROM Buy)
+# 	THEN INSERT VALUES (Buy.item_id, Buy.volume, true)
+# WHEN NOT MATCHED
+# 	THEN INSERT VALUES (Buy.item_id, Buy.volume, false)
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM Totals ORDER BY item_id
+# ----
+# 10	1000	0
+# 20	2000	1
+# 30	300	0
+
+# original issue
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE dummy_edge(id INTEGER, ref_id INTEGER, "value" VARCHAR, note VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE dummy_user(user_id INTEGER, "name" VARCHAR, email VARCHAR, created_at DATE);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE dummy_null(id INTEGER, "value" INTEGER, optional_text VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# MERGE INTO main.dummy_edge as target_0
+# USING dummy_user as ref_0
+# ON target_0.note = ref_0.name
+# WHEN NOT MATCHED AND EXISTS (
+#   SELECT id FROM main.dummy_null WHERE true
+# ) THEN DO NOTHING

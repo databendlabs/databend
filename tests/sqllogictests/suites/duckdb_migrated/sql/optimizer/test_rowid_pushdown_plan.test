@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# CALL dbgen(sf=0.01);
+
+# TODO: unsupported feature
+# query IIIIIIIIIIIIIIII rowsort top5_result
+# SELECT * FROM lineitem ORDER BY l_orderkey DESC LIMIT 5;
+# ----
+
+# Rewritten using rowid pushdown
+
+# TODO: unsupported feature
+# query IIIIIIIIIIIIIIII rowsort top5_result
+# SELECT * FROM lineitem WHERE rowid IN (SELECT rowid FROM lineitem ORDER BY l_orderkey DESC LIMIT 5);
+# ----
+
+# TODO: unsupported feature
+# query IIIIIIIIIIIIIIII rowsort filter_result
+# SELECT * FROM lineitem WHERE l_orderkey % 20000 = 0;
+# ----
+
+# Rewritten using rowid pushdown
+
+# TODO: unsupported feature
+# query IIIIIIIIIIIIIIII rowsort filter_result
+# SELECT * FROM lineitem WHERE rowid IN (SELECT rowid FROM lineitem WHERE l_orderkey % 20000 = 0);
+# ----
+
+# The above use dynamic join filters so the pushdown doesnt show up in the plan, but static filters do
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT * FROM lineitem WHERE rowid = 20058;
+# ----
+# # TODO: special result marker

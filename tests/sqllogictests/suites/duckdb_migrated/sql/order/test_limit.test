@@ -1,0 +1,344 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t0
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
+
+# constant limit
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM test LIMIT 1
+# ----
+# 11
+
+# decimal limit
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM test LIMIT 1.25
+# ----
+# 11
+
+# LIMIT with operation
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM test LIMIT 2-1
+# ----
+# 11
+
+# LIMIT with non-scalar should fail
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM test LIMIT a
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM test LIMIT a+1
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM test LIMIT SUM(42)
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM test LIMIT row_number() OVER ()
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test2 (a STRING);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test2 VALUES ('Hello World')
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT * FROM test2 LIMIT 3
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1
+# ----
+# Hello World
+
+# can only limit by integers
+
+# TODO: unsupported feature
+# statement error
+# select 1 limit date '1992-01-01';
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (4), (5);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq START 3;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers LIMIT nextval('seq');
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers LIMIT nextval('seq');
+# ----
+# 1
+# 2
+# 3
+# 4
+
+# non-foldable expression in limit
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM integers LIMIT RANDOM();
+
+# subquery in limit
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers as int LIMIT (SELECT MIN(integers.i) FROM integers);
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE of_seq START 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers OFFSET nextval('of_seq');
+# ----
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers OFFSET nextval('of_seq');
+# ----
+# 3
+# 4
+# 5
+
+# non-foldable expression in limit
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM integers OFFSET RANDOM();
+
+# subquery in limit
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers as int OFFSET (SELECT MIN(integers.i) FROM integers);
+# ----
+# 2
+# 3
+# 4
+# 5
+
+#Both LIMIT and OFFSET together with subqueries
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers as int LIMIT (SELECT MAX(integers.i) FROM integers) OFFSET (SELECT MIN(integers.i) FROM integers);
+# ----
+# 2
+# 3
+# 4
+# 5
+
+#Subqueries that return zero rows = Same as ommiting limit clause
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5)
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+#Limit of NULL, offset of NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5)
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+#Subqueries that return NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers as int LIMIT (SELECT NULL)
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+#Subqueries that return negative values
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM integers as int LIMIT (SELECT -1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM integers as int LIMIT (SELECT 'ab');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE t AS SELECT range x FROM range(0, 10);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t ORDER BY x;
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+# 5
+# 6
+# 7
+# 8
+# 9
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t ORDER BY x OFFSET 5;
+# ----
+# 5
+# 6
+# 7
+# 8
+# 9
+
+# scalar subquery in offset
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t ORDER BY x OFFSET (SELECT 5);
+# ----
+# 5
+# 6
+# 7
+# 8
+# 9
+
+# scalar subquery in limit
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t ORDER BY x LIMIT (SELECT 5);
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+
+# scalar subquery both in limit and offset
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t ORDER BY x LIMIT (SELECT 3) OFFSET (SELECT 3);
+# ----
+# 3
+# 4
+# 5
+
+# scalar subquery in offset
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t ORDER BY x LIMIT 3 OFFSET (SELECT 3);
+# ----
+# 3
+# 4
+# 5
+
+# scalar subquery in limit
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t ORDER BY x LIMIT (SELECT 3) OFFSET 3;
+# ----
+# 3
+# 4
+# 5
+
+# negeive number in the limit
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM t ORDER BY x LIMIT (SELECT -1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM t ORDER BY x OFFSET (SELECT -1);
+
+# TODO: unsupported feature
+# statement ok
+# create table t0(c0 int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t0 values (1), (2), (3), (4), (5), (6), (7);
+
+# some complex expression in the offset clause
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM t0 ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t0 ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
+# ----
+# 7

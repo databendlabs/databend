@@ -1,0 +1,125 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS varchars
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE varchars(v VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO varchars VALUES ('Hello'), ('World')
+
+# TODO: unsupported feature
+# statement error
+# SELECT x.lower() FROM varchars
+
+# TODO: unsupported feature
+# statement error
+# SELECT main.lower() FROM varchars AS t(main)
+
+# TODO: unsupported feature
+# query I
+# SELECT v.lower() FROM varchars
+# ----
+# hello
+# world
+
+# TODO: unsupported feature
+# query I
+# SELECT (v).lower() FROM varchars
+# ----
+# hello
+# world
+
+# TODO: unsupported feature
+# statement error
+# SELECT v.lowe() FROM varchars
+
+# TODO: unsupported feature
+# query I
+# SELECT varchars.v.lower() FROM varchars
+# ----
+# hello
+# world
+
+# TODO: unsupported feature
+# query I
+# SELECT v.lower().upper() FROM varchars
+# ----
+# HELLO
+# WORLD
+
+# TODO: unsupported feature
+# query I
+# SELECT v.lower()[:3] FROM varchars
+# ----
+# hel
+# wor
+
+# TODO: unsupported feature
+# query I
+# SELECT v.lower()[:3] FROM varchars
+# ----
+# hel
+# wor
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM varchars
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO varchars VALUES ('Hello World');
+
+# list functions
+
+# TODO: unsupported feature
+# query I
+# SELECT v.split(' ') FROM varchars
+# ----
+# [Hello, World]
+
+# TODO: unsupported feature
+# query I
+# SELECT v.split(' ').apply(lambda x: x.lower()) FROM varchars
+# ----
+# [hello, world]
+
+# TODO: unsupported feature
+# query I
+# SELECT v.split(' ').apply(lambda x: x.lower()).filter(lambda x: x[1] = 'h') FROM varchars
+# ----
+# [hello]
+
+# TODO: unsupported feature
+# query I
+# SELECT v.split(' ').length() FROM varchars
+# ----
+# 2
+
+# list aggr
+
+# TODO: unsupported feature
+# query I
+# SELECT v.split(' ').aggregate('count') FROM varchars
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT v.split(' ').aggregate('min') FROM varchars
+# ----
+# Hello
+
+# prepared statements
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT ?.split(' ')[1].lower()
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1('Hello World')
+# ----
+# hello

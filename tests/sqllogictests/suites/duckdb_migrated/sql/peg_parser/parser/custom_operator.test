@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT i FROM tbl WHERE i >>= '127.0.0.1/8';$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT j->>'duck';$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$SELECT 2**2 + 1;$TEST_PEG_PARSER$);
+
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$select 1 not null; $TEST_PEG_PARSER$);

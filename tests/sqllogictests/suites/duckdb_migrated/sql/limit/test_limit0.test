@@ -1,0 +1,13 @@
+# not running with verification on purpose, since running this without the optimizer will take forever
+# TODO: unsupported feature
+# query I
+# SELECT * FROM (SELECT SUM(i) FROM range(0, 100000000000) tbl(i)) LIMIT 0;
+# ----
+
+# TODO: unsupported feature
+# query II nosort emptyset
+# EXPLAIN SELECT * FROM (SELECT SUM(i) FROM range(0, 100000000000) tbl(i)) LIMIT 0;
+
+# TODO: unsupported feature
+# query II nosort emptyset
+# EXPLAIN SELECT * FROM (SELECT SUM(i) FROM range(0, 100000000000) tbl(i)) WHERE 1=0;

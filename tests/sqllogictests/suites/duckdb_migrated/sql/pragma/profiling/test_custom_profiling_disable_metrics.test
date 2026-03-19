@@ -1,0 +1,118 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT unnest(res) FROM (
+# 	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+# 	raw_setting.trim('{}') AS setting,
+# 	string_split(setting, ', ') AS res
+# ) ORDER BY ALL;
+# ----
+# "EXTRA_INFO": "1"
+# "LATENCY": "1"
+# "OPERATOR_CARDINALITY": "1"
+# "OPERATOR_TIMING": "1"
+
+# TODO: unsupported feature
+# statement error
+# SELECT cpu_time FROM metrics_output;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT extra_info, latency FROM metrics_output;
+
+# Re-enable the CPU TIME.
+
+# TODO: unsupported feature
+# query I
+# SELECT unnest(res) FROM (
+# 	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+# 	raw_setting.trim('{}') AS setting,
+# 	string_split(setting, ', ') AS res
+# ) ORDER BY ALL
+# ----
+# "CPU_TIME": "1"
+# "CUMULATIVE_CARDINALITY": "1"
+# "CUMULATIVE_ROWS_SCANNED": "1"
+# "EXTRA_INFO": "1"
+# "QUERY_NAME": "1"
+
+# Re-enabled profiling.
+
+# TODO: unsupported feature
+# statement ok
+# SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN cpu_time > 0 THEN 'true'
+#     ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN cumulative_cardinality > 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# Only collect ROWS_SCANNED for table queries.
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 0
+
+# Check if the column query is present when it is requested.
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN EXISTS(
+# 		SELECT
+# 			1
+# 		FROM information_schema.columns
+# 		WHERE table_name = 'metrics_output' AND column_name = 'query_name'
+# 	) THEN 'true'
+# 	ELSE 'false' END;
+# ----
+# 1
+
+# Check if the column `query_name` contains the query.
+
+# TODO: unsupported feature
+# query I
+# SELECT
+#
+# query_name
+# FROM metrics_output;
+# ----
+# SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+# TODO: unsupported feature
+# statement ok
+# SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN EXISTS(
+# 		SELECT
+# 			1
+# 		FROM information_schema.columns
+# 		WHERE table_name = 'metrics_output' AND column_name = 'query_name'
+# 	) THEN 'true'
+# 	ELSE 'false' END;
+# ----
+# 0

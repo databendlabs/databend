@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Cities
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Cities (Name VARCHAR, id INTEGER);
+# INSERT INTO Cities VALUES ('Test', 1);
+# INSERT INTO Cities VALUES ('test',2);
+
+# TODO: unsupported feature
+# query II
+# FROM Cities
+# PIVOT (
+#     array_agg(id)
+#     FOR
+#         name IN ('test','Test')
+# );
+# ----
+# [2]	[1]
+
+# TODO: unsupported feature
+# query IIII
+# FROM Cities
+# PIVOT (
+#     array_agg(id), sum(id)
+#     FOR
+#         name IN ('test','Test')
+# );
+# ----
+# [2]	2	[1]	1

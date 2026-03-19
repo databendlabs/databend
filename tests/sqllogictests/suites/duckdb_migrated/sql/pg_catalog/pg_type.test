@@ -1,0 +1,137 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE greeting AS ENUM('hi', 'bonjour', 'konnichiwa', 'howdy')
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM pg_type
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM pg_catalog.pg_type
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'int8' AND oid IS NOT NULL
+# ----
+# 20
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'bytea' AND oid IS NOT NULL
+# ----
+# 17
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'bit' AND oid IS NOT NULL
+# ----
+# 1560
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'bool' AND oid IS NOT NULL
+# ----
+# 16
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'varchar' AND oid IS NOT NULL
+# ----
+# 1043
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'date' AND oid IS NOT NULL
+# ----
+# 1082
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'float8' AND oid IS NOT NULL
+# ----
+# 701
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'float4' AND oid IS NOT NULL
+# ----
+# 700
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'uuid' AND oid IS NOT NULL
+# ----
+# 2950
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'int4' AND oid IS NOT NULL
+# ----
+# 23
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'int2' AND oid IS NOT NULL
+# ----
+# 21
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'interval' AND oid IS NOT NULL
+# ----
+# 1186
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'time' AND oid IS NOT NULL
+# ----
+# 1083
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'timestamp' AND oid IS NOT NULL
+# ----
+# 1114
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'timestamptz' AND oid IS NOT NULL
+# ----
+# 1184
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'timetz' AND oid IS NOT NULL
+# ----
+# 1266
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM pg_type where typname = 'greeting'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT oid FROM pg_type WHERE typname = 'numeric' AND oid IS NOT NULL
+# ----
+# 1700
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM pg_type where typname = 'enum' AND oid is NOT NULL
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT pg_catalog.format_pg_type('DECIMAL', 'test');
+# ----
+# numeric
+
+# TODO: unsupported feature
+# query I
+# SELECT pg_catalog.format_pg_type('decimal', 'test');
+# ----
+# numeric

@@ -1,0 +1,76 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 AS SELECT i + 100 as x FROM range(0, 250000) AS t(i);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t1 where rowid = 6;
+# ----
+# 106
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT * FROM t1 where rowid = 6;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t1 where rowid = 200000;
+# ----
+# 200100
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT * FROM t1 where rowid = 200000;
+# ----
+# # TODO: special result marker
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t1 where rowid IN (SELECT rowid FROM t1 ORDER BY rowid DESC LIMIT 10) ORDER BY rowid;
+# ----
+# 250090
+# 250091
+# 250092
+# 250093
+# 250094
+# 250095
+# 250096
+# 250097
+# 250098
+# 250099
+
+# IN filter
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t1 where rowid IN (6, 9) ORDER BY ALL;
+# ----
+# 106
+# 109
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT * FROM t1 where rowid IN (6, 9);
+# ----
+# # TODO: special result marker
+
+# OR clause
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t1 where rowid = 6 OR rowid = 9 ORDER BY ALL;
+# ----
+# 106
+# 109
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT * FROM t1 where rowid = 6 OR rowid = 9 ORDER BY ALL;
+# ----
+# # TODO: special result marker

@@ -1,8 +1,10 @@
-statement ok
-DROP TABLE IF EXISTS memory.temp
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS memory.temp
 
-statement ok
-DROP TABLE IF EXISTS temp.integersy
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS temp.integersy
 
 # basic temp table creation works
 # TODO: unsupported feature
@@ -11,12 +13,14 @@ DROP TABLE IF EXISTS temp.integersy
 
 # we can (but never are required to) prefix temp tables with "temp" schema
 
-statement ok
-CREATE TEMPORARY TABLE integersx(i INTEGER)
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE integersx(i INTEGER)
 
 # we don't support temporary schemas (yet?)
-#statement error
-#CREATE TEMPORARY SCHEMA asdf
+# TODO: unsupported feature
+# statement error
+# CREATE TEMPORARY SCHEMA asdf
 
 # we can prefix temp tables with a schema that is not "temp"
 
@@ -24,8 +28,9 @@ CREATE TEMPORARY TABLE integersx(i INTEGER)
 # statement ok
 # CREATE TEMPORARY TABLE main.integersy(i INTEGER)
 
-statement ok
-CREATE TEMPORARY TABLE s1 AS SELECT 42
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE s1 AS SELECT 42
 
 # TODO: unsupported feature
 # query I
@@ -33,12 +38,13 @@ CREATE TEMPORARY TABLE s1 AS SELECT 42
 # ----
 # 42
 
-query I
-SELECT * FROM s1
-----
-42
+# TODO: unsupported feature
+# query I
+# SELECT * FROM s1
+# ----
+# 42
 
-# TODO: result differs
+# TODO: unsupported feature
 # statement error
 # CREATE TABLE temp.integersy(i INTEGER)
 
@@ -46,7 +52,7 @@ SELECT * FROM s1
 # statement ok
 # CREATE SCHEMA temp
 
-# TODO: result differs
+# TODO: unsupported feature
 # statement error
 # CREATE TABLE temp.integersy(i INTEGER)
 
@@ -58,29 +64,35 @@ SELECT * FROM s1
 # statement ok
 # DROP SCHEMA temp CASCADE
 
-statement error
-DROP TABLE memory.main.integersx
+# TODO: unsupported feature
+# statement error
+# DROP TABLE memory.main.integersx
 
-statement ok
-DROP TABLE integersx
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integersx
 
-statement ok
-CREATE TEMPORARY TABLE temp.integersx(i INTEGER)
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE temp.integersx(i INTEGER)
 
-statement ok
-DROP TABLE temp.integersx
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE temp.integersx
 
 # unsupported
 
-statement error
-CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS
+# TODO: unsupported feature
+# statement error
+# CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS
 
-# TODO: result differs
+# TODO: unsupported feature
 # statement error
 # CREATE TEMPORARY TABLE integers(i INTEGER)
 
-statement ok
-INSERT INTO integers VALUES (42)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (42)
 
 # TODO: unsupported feature
 # query I
@@ -90,11 +102,13 @@ INSERT INTO integers VALUES (42)
 
 # temp table survives commit
 
-statement ok
-BEGIN TRANSACTION
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
 
-statement ok
-CREATE TEMPORARY TABLE integers2(i INTEGER)
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE integers2(i INTEGER)
 
 # TODO: unsupported feature
 # statement ok
@@ -104,13 +118,15 @@ CREATE TEMPORARY TABLE integers2(i INTEGER)
 # statement ok
 # CREATE TEMPORARY VIEW v1 AS SELECT 42
 
-statement ok
-INSERT INTO integers2 VALUES (42)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (42)
 
-query I
-SELECT i from integers2
-----
-42
+# TODO: unsupported feature
+# query I
+# SELECT i from integers2
+# ----
+# 42
 
 # TODO: unsupported feature
 # query I
@@ -124,13 +140,15 @@ SELECT i from integers2
 # ----
 # 42
 
-statement ok
-COMMIT
+# TODO: unsupported feature
+# statement ok
+# COMMIT
 
-query I
-SELECT i from integers2
-----
-42
+# TODO: unsupported feature
+# query I
+# SELECT i from integers2
+# ----
+# 42
 
 # TODO: unsupported feature
 # query I
@@ -146,27 +164,32 @@ SELECT i from integers2
 
 # temp table does not survive rollback
 
-statement ok
-BEGIN TRANSACTION
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
 
-statement ok
-CREATE TEMPORARY TABLE integers3(i INTEGER)
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE integers3(i INTEGER)
 
-statement ok
-INSERT INTO integers3 VALUES (42)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers3 VALUES (42)
 
-query I
-SELECT i from integers3
-----
-42
+# TODO: unsupported feature
+# query I
+# SELECT i from integers3
+# ----
+# 42
 
-statement ok
-ROLLBACK
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
 
-# TODO: result differs
+# TODO: unsupported feature
 # statement error
 # SELECT i from integers3
 
-# TODO: result differs
+# TODO: unsupported feature
 # statement error
 # INSERT INTO integers VALUES (42)

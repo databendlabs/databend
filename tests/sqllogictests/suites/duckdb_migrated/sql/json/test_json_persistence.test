@@ -1,0 +1,23 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# load the DB from disk
+statement ok
+create table test (j json)
+
+statement ok
+insert into test values ('{"duck": 42}'), (NULL), ('{"goose": 43}')
+
+query T?
+select typeof(j), j from test
+----
+OBJECT {"duck":42}
+NULL NULL
+OBJECT {"goose":43}
+
+query T?
+select typeof(j), j from test
+----
+OBJECT {"duck":42}
+NULL NULL
+OBJECT {"goose":43}

@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS memory_compressed (COMPRESS);
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS memory_comp;
+
+# TODO: unsupported feature
+# statement ok
+# COPY FROM DATABASE memory_comp TO memory_compressed;

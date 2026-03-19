@@ -47,12 +47,12 @@
 #1       [nan, 1.0]                   None
 #2            [4.0]  [efg, None, hij, xyz]
 
-
 ## need to fix data page v2 for this
-#query II
-#SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/datapage_v2.snappy.parquet')
-#----
-#
+# TODO: unsupported feature
+# query II
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/datapage_v2.snappy.parquet')
+# ----
+# 
 
 # TODO: unsupported feature
 # query II

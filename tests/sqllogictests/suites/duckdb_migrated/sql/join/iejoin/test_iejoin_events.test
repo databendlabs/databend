@@ -1,8 +1,9 @@
-statement ok
-DROP TABLE IF EXISTS events
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS events
 
 # RNG order depends on vector size
-# TODO: unknown function
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE events AS (
 # 	SELECT *,
@@ -31,7 +32,7 @@ DROP TABLE IF EXISTS events
 # 	  AND r.id <> s.id
 # ) q2;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query I

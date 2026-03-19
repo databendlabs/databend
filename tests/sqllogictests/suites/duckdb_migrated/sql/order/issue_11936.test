@@ -1,0 +1,21 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(col1 INT, col2 INT2[][][][][][]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES(1000000000, null), (1000000001, [[[[[[]]]]]]), (null, [[[[[[]]]]]]), (null, [[[[[[]]]]]]), (1, [[[[[[]]]]]]);
+
+# TODO: unsupported feature
+# query II
+# SELECT col1, col2 FROM test ORDER BY col1 NULLS LAST, col2;
+# ----
+# 1	[[[[[[]]]]]]
+# 1000000000	NULL
+# 1000000001	[[[[[[]]]]]]
+# NULL	[[[[[[]]]]]]
+# NULL	[[[[[[]]]]]]

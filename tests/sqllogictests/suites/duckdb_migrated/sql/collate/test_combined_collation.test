@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS collate_test
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS collate_test
 
 # TODO: unsupported feature
 # statement ok

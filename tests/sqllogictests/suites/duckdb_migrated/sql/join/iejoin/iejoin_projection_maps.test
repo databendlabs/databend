@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS df
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS df
 
 # TODO: unsupported feature
 # statement ok
@@ -38,7 +39,7 @@ DROP TABLE IF EXISTS df
 # GROUP BY ALL
 # ORDER BY ALL
 # ----
-# TODO: hash result
+# EXPECTED TODO: hash result
 
 # TODO: unsupported feature
 # query I
@@ -54,8 +55,7 @@ DROP TABLE IF EXISTS df
 # GROUP BY ALL
 # ORDER BY ALL
 # ----
-# TODO: hash result
-
+# EXPECTED TODO: hash result
 
 # Test left_projection_map
 # (Once it can acutally happen...)

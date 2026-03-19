@@ -1,0 +1,63 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS profile_fs.other_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS profile_fs.tbl
+
+# the disk is finicky on windows so checkpoint_latency sometimes == 0 when it should be > 0
+# Setup.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(100_000);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT profile_fs;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN checkpoint_latency >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# WAITING_TO_ATTACH_LATENCY, ATTACH_LOAD_STORAGE_LATENCY and ATTACH_REPLAY_WAL_LATENCY.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE profile_fs.other_tbl AS SELECT range AS id FROM range(100_000);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH profile_fs;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN waiting_to_attach_latency >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN attach_load_storage_latency >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN attach_replay_wal_latency >= 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1

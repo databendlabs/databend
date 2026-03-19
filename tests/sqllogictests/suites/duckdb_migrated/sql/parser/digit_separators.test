@@ -1,0 +1,287 @@
+# TODO: unsupported feature
+# query I
+# SELECT 1_2
+# ----
+# 12
+
+# With decimal notation
+
+# TODO: unsupported feature
+# query I
+# SELECT 1_2.1_2E1_0
+# ----
+# 12.12e10
+
+# With string converison
+
+# TODO: unsupported feature
+# query I
+# SELECT '1_2.1_2E1_0'::DOUBLE
+# ----
+# 12.12e10
+
+# We cant have multiple underscores, in that case it gets interpreted as the column name
+
+# TODO: unsupported feature
+# query I
+# SELECT 1__2
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT 1_000_000
+# ----
+# 1000000
+
+# TODO: unsupported feature
+# query I
+# SELECT '1000_000_000'::INT
+# ----
+# 1_000_000_000
+
+# TODO: unsupported feature
+# statement error
+# SELECT '1000__000__000'::INT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '_1_2'::INT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '1_2_'::INT
+
+# TODO: unsupported feature
+# query I
+# SELECT 1_2.1_2
+# ----
+# 12.12
+
+# TODO: unsupported feature
+# query I
+# SELECT 12.1_2
+# ----
+# 12.12
+
+# TODO: unsupported feature
+# query I
+# SELECT 1_2.12
+# ----
+# 12.12
+
+# Cant start with an underscore
+
+# TODO: unsupported feature
+# statement error
+# SELECT '_12.12'::DECIMAL(4,2)
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12._12'::DECIMAL(4,2)
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12_.12'::DECIMAL(4,2)
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12.12_'::DECIMAL(4,2)
+
+# TODO: unsupported feature
+# statement error
+# SELECT '1__2.1__2'::FLOAT
+
+# TODO: unsupported feature
+# query I
+# SELECT '12.1_2'::FLOAT
+# ----
+# 12.12
+
+# TODO: unsupported feature
+# query I
+# SELECT '1_2.12'::FLOAT
+# ----
+# 12.12
+
+# TODO: unsupported feature
+# query I
+# SELECT '12.1_2e2'::FLOAT
+# ----
+# 12.12e2
+
+# Cant start with an underscore
+
+# TODO: unsupported feature
+# statement error
+# SELECT '_12.12'::FLOAT = 12.12
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12._12'::FLOAT = 12.12
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12._12e2'::FLOAT = 12.12e2
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12_.12'::FLOAT = 12.12
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12.12_'::FLOAT = 12.12
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12.12_e2'::FLOAT = 12.12e2
+
+# TODO: unsupported feature
+# query I
+# SELECT 1_000_000_000_000_000_000_000::DOUBLE
+# ----
+# 1e+21
+
+# TODO: unsupported feature
+# query I
+# SELECT .000_000_000_000_000_000_000_123::DOUBLE
+# ----
+# 123e-23
+
+# TODO: unsupported feature
+# query I
+# SELECT 1_000_000_000_000_000_000_000.5::DOUBLE
+# ----
+# 1000000000000000000000.5
+
+# TODO: unsupported feature
+# query I
+# SELECT '1_000_000_000.000_000_000_5'::DOUBLE
+# ----
+# 1000000000.0000000005
+
+# Cant start with an underscore
+
+# TODO: unsupported feature
+# statement error
+# SELECT '_1_000_000_000_000_000_000_000'::DOUBLE = 1e+21
+
+# TODO: unsupported feature
+# statement error
+# SELECT '._000_000_000_000_000_000_000_123'::DOUBLE = 123e-23
+
+# TODO: unsupported feature
+# statement error
+# SELECT '1_000_000_000_000_000_000_000_'::DOUBLE = 1e+21
+
+# TODO: unsupported feature
+# statement error
+# SELECT '.000_000_000_000_000_000_000_123_'::DOUBLE = 123e-23
+
+# TODO: unsupported feature
+# statement error
+# select '20e10_'::FLOAT
+
+# TODO: unsupported feature
+# statement error
+# select '20e_10'::FLOAT
+
+# TODO: unsupported feature
+# statement error
+# select '20e10_'::BIGINT
+
+# TODO: unsupported feature
+# statement error
+# select '20e_10'::BIGINT
+
+# TODO: unsupported feature
+# query I
+# SELECT 12e1_0::BIGINT = 12e10::BIGINT
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement error
+# SELECT '12e10_'::BIGINT = 12e10::BIGINT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '_12e10::BIGINT' = 12e10::BIGINT
+
+# TODO: unsupported feature
+# query I
+# SELECT '0b01_01'::INT
+# ----
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT '0b0_1_0_1'::INT
+# ----
+# 5
+
+# TODO: unsupported feature
+# statement error
+# SELECT '0b0_1_0_1_'::INT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '0b_0_1_0_1'::INT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '0b0__1_0_1'::INT
+
+# TODO: unsupported feature
+# query I
+# SELECT '0xFF_FF'::INT;
+# ----
+# 65535
+
+# TODO: unsupported feature
+# query I
+# SELECT '0xF_F_F_F'::INT;
+# ----
+# 65535
+
+# TODO: unsupported feature
+# statement error
+# SELECT '0x0_F_F_F_'::INT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '0x_F_F_F'::INT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '0x0__F_F_F'::INT
+
+# TODO: unsupported feature
+# query IIII
+# SELECT typeof(10.00), typeof(10.0_0), typeof(1_0.00), typeof(1_0.0_0);
+# ----
+# DECIMAL(4,2)	DECIMAL(4,2)	DECIMAL(4,2)	DECIMAL(4,2)
+
+# TODO: unsupported feature
+# query I
+# select 1_2e1_0::FLOAT
+# ----
+# 1.2e+11
+
+# TODO: unsupported feature
+# query I
+# select '1_2e1_0'::FLOAT
+# ----
+# 1.2e+11
+
+# TODO: unsupported feature
+# query I
+# select 1_2e1_0::BIGINT
+# ----
+# 120000000000
+
+# TODO: unsupported feature
+# query I
+# select '1_2e1_0'::BIGINT
+# ----
+# 120000000000

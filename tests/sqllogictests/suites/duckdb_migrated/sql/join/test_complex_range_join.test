@@ -1,21 +1,3 @@
-statement ok
-DROP TABLE IF EXISTS limits
-
-statement ok
-DROP TABLE IF EXISTS limits_nulls
-
-statement ok
-DROP TABLE IF EXISTS many_bounds
-
-statement ok
-DROP TABLE IF EXISTS many_values
-
-statement ok
-DROP TABLE IF EXISTS wide
-
-statement ok
-DROP TABLE IF EXISTS wide_nulls
-
 # Coverage for multiple slicing predicates
 query IIIIII
 WITH lhs(i, j, k) AS (VALUES
@@ -33,7 +15,6 @@ WHERE i <= p AND j <> q AND k IS DISTINCT FROM r
 100	10	1	200	20	2
 
 # Coverage for multiple range predicates
-
 query IIIIII
 WITH lhs(i, j, k) AS (VALUES
 	(100, 10, 1),
@@ -54,6 +35,9 @@ ORDER BY i
 # A test involving many (~10) predicates, each filtering out a certain subset of the rows
 # (e.g. a<z and b<z and c<z and d<z and e<z and ... where z=1..100 in random order
 # and a=10, b=20, c=30, etc)
+
+statement ok
+drop table if exists wide;
 
 statement ok
 CREATE TABLE wide AS (
@@ -84,6 +68,9 @@ SELECT * FROM wide;
 7	70	80	90	100	110	120	130	140	150	160
 8	80	90	100	110	120	130	140	150	160	170
 9	90	100	110	120	130	140	150	160	170	180
+
+statement ok
+drop table if exists limits;
 
 statement ok
 CREATE TABLE limits AS (
@@ -161,8 +148,10 @@ ORDER BY 1, 2
 8	185
 9	185
 
-# The same test but with NULLs mixed in as well
+statement ok
+drop table if exists wide_nulls;
 
+# The same test but with NULLs mixed in as well
 statement ok
 CREATE TABLE wide_nulls AS (
 	SELECT i, c0, c1, c2,
@@ -185,6 +174,9 @@ SELECT * FROM wide_nulls;
 7	70	80	90	NULL	110	120	130	140	150	160
 8	80	90	100	110	120	130	140	150	160	170
 9	90	100	110	120	130	140	150	160	170	180
+
+statement ok
+drop table if exists limits_nulls;
 
 statement ok
 CREATE TABLE limits_nulls AS (
@@ -250,7 +242,6 @@ ORDER BY 1, 2
 9	185
 
 # Joins on BETWEEN
-
 query II
 SELECT i, z
 FROM wide, limits
@@ -278,7 +269,6 @@ ORDER BY 1, 2;
 8	168
 
 # and NOT BETWEEN
-
 query II
 SELECT i, z
 FROM wide, limits
@@ -422,7 +412,6 @@ ORDER BY 1, 2;
 9	185
 
 # Some more tests with joins on COMPARE_DISTINCT_FROM
-
 query II
 SELECT lhs.i, rhs.i
 FROM wide_nulls lhs, wide_nulls rhs
@@ -443,35 +432,48 @@ ORDER BY 1, 2;
 4	8
 5	9
 
-# TODO: result differs
-# query II
-# EXPLAIN
-# SELECT lhs.i, rhs.i
-# FROM wide_nulls lhs, wide_nulls rhs
-# WHERE lhs.c3 < rhs.c0
-#   AND lhs.c8 IS DISTINCT FROM rhs.c3
-# ORDER BY 1, 2;
-# ----
+query II
+SELECT lhs.i, rhs.i
+FROM wide_nulls lhs, wide_nulls rhs
+WHERE lhs.c3 < rhs.c0
+  AND lhs.c8 IS DISTINCT FROM rhs.c3
+ORDER BY 1, 2;
+----
+1 5
+1 7
+1 8
+1 9
+2 6
+2 7
+2 8
+2 9
+3 7
+3 9
+4 8
+5 9
 
-# Multi-predicate merge joins with many matches
+# Multi-predicate range joins with many matches
 # (similar to test/sql/join/inner/test_unequal_join_duplicates.test
-# but with a merge join with multiple predicates)
+# but with a range join with multiple predicates)
+statement ok
+drop table if exists many_bounds;
 
 statement ok
 CREATE TABLE many_bounds AS (
 	SELECT * FROM (VALUES (2000, 4000)) tbl(lo, hi)
 );
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE many_values AS (
-# 	SELECT * from range(10 * 1024) tbl(val)
-# );
+statement ok
+drop table if exists many_values;
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*)
-# FROM many_values, many_bounds
-# WHERE val BETWEEN lo AND hi;
-# ----
-# 2001
+statement ok
+CREATE TABLE many_values AS (
+	SELECT * from numbers(10 * 1024) tbl(val)
+);
+
+query I
+SELECT COUNT(*)
+FROM many_values, many_bounds
+WHERE val BETWEEN lo AND hi;
+----
+2001

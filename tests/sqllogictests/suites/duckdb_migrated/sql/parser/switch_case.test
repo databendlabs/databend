@@ -1,0 +1,128 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS map_expr
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS null_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nums
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS FROM (VALUES(1), (4), (8), (0)) i(x);
+
+# TODO: unsupported feature
+# query I
+# SELECT SWITCH(x, MAP { 1: 'yes', 0: 'no'}, 'maybe') FROM tbl;
+# ----
+# yes
+# maybe
+# maybe
+# no
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nums AS FROM range(0, 5) tbl(i);
+
+# TODO: unsupported feature
+# query I
+# SELECT SWITCH(i % 2, MAP { 0 : 'even', 1 : 'odd'}, 'error') FROM nums ORDER BY i;
+# ----
+# even
+# odd
+# even
+# odd
+# even
+
+# TODO: unsupported feature
+# query T
+# SELECT
+#     CASE (i % 2)
+#         WHEN 0 THEN 'even'
+#         WHEN 1 THEN 'odd'
+#         ELSE 'error'
+#     END
+# FROM nums
+# ORDER BY i;
+# ----
+# even
+# odd
+# even
+# odd
+# even
+
+# TODO: unsupported feature
+# query I
+# SELECT switch(i, MAP {1 : 100, 3 : 300}) FROM nums ORDER BY i;
+# ----
+# NULL
+# 100
+# NULL
+# 300
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT
+#     CASE i
+#         WHEN 1 THEN 100
+#         WHEN 3 THEN 300
+#     END
+# FROM nums
+# ORDER BY i;
+# ----
+# NULL
+# 100
+# NULL
+# 300
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE null_test AS FROM (VALUES (1), (NULL), (2)) i(val);
+
+# TODO: unsupported feature
+# statement error
+# SELECT switch(val, MAP { 1 : 'one', NULL : 'is_null'}, 'other') FROM null_test ORDER BY val;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+#     CASE val
+#         WHEN 1 THEN 'one'
+#         WHEN NULL THEN 'is_null'
+#         ELSE 'other'
+#     END
+# FROM null_test
+# ORDER BY val;
+# ----
+# one
+# other
+# other
+
+# TODO: unsupported feature
+# statement error
+# SELECT switch(val, MAP { 1+1 : 'one', 1: 'is_null'}, 'other') FROM null_test ORDER BY val;
+
+# TODO: unsupported feature
+# statement error
+# SELECT switch(val, MAP {}, 'other') FROM null_test ORDER BY val;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE map_expr(i map(integer, integer));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO map_expr VALUES (MAP {1 : 2});
+
+# TODO: unsupported feature
+# statement error
+# SELECT SWITCH (1, i) FROM map_expr;

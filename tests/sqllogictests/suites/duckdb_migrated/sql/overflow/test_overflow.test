@@ -1,0 +1,96 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# insert too large value for domain should cause error
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (-1099511627776, 3)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)
+
+# Casting NULL should still work though
+
+# TODO: unsupported feature
+# query I
+# SELECT ALL CAST ( - SUM ( DISTINCT - CAST ( NULL AS INTEGER ) ) AS INTEGER ) FROM test
+# ----
+# NULL
+
+# proper upcasting of integer columns in AVG
+
+# TODO: unsupported feature
+# query IR
+# SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;
+# ----
+# 21	12.000000
+# 22	12.500000
+
+# cast overflows
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast(200 AS TINYINT)
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast(-129 AS TINYINT)
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test2 (a INTEGER, b TINYINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)
+
+# TODO: unsupported feature
+# statement error
+# SELECT cast(a AS TINYINT) FROM test2
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(b) FROM test2
+# ----
+# 180
+
+# subtraction
+
+# TODO: unsupported feature
+# statement error
+# SELECT 100::TINYINT - -50::TINYINT
+
+# TODO: unsupported feature
+# statement error
+# SELECT 100::TINYINT * 2::TINYINT
+
+# TODO: unsupported feature
+# statement error
+# SELECT 100::TINYINT + b::TINYINT FROM test2
+
+# TODO: unsupported feature
+# statement error
+# SELECT 100::TINYINT - -b::TINYINT FROM test2
+
+# TODO: unsupported feature
+# statement error
+# SELECT 100::TINYINT * b::TINYINT FROM test2
+
+# TODO: unsupported feature
+# statement error
+# SELECT a + b FROM (SELECT cast(100 AS TINYINT) AS a, cast(100 AS TINYINT) AS b) tbl1

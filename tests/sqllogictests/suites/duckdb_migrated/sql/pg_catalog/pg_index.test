@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers((j + 1), k)
+
+# TODO: unsupported feature
+# query IIIIII nosort pg_index
+# SELECT * FROM pg_index
+
+# TODO: unsupported feature
+# query IIIIII nosort pg_index
+# SELECT * FROM pg_catalog.pg_index
+
+# TODO: unsupported feature
+# query IIIIII nosort pg_indexes
+# SELECT * FROM pg_indexes
+
+# TODO: unsupported feature
+# query IIIIII nosort pg_indexes
+# SELECT * FROM pg_catalog.pg_indexes

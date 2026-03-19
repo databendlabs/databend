@@ -1,0 +1,631 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS date_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS date_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamp_test
+
+# TODO: unsupported feature
+# query I
+# select * from read_json_auto('{DATA_DIR}/json/simple_timestamp.json', columns={"ts": "TIMESTAMP[]"});
+# ----
+# ['2022-06-01 06:41:58', '2021-08-21 08:26:55.5', '2009-11-15 21:58:54.636']
+
+# create date and timestamp tables
+
+# TODO: unsupported feature
+# statement ok
+# create table date_test as select '1996/03/27'::DATE d
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_test as select '1996-03-27 07:42:33'::TIMESTAMP t
+
+# cannot be empty
+
+# TODO: unsupported feature
+# statement error
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat)
+
+# TODO: unsupported feature
+# statement error
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (timestampformat)
+
+# TODO: unsupported feature
+# statement error
+# copy date_test from '{DATA_DIR}/json/simple_timestamp.json' (dateformat)
+
+# TODO: unsupported feature
+# statement error
+# copy date_test from '{DATA_DIR}/json/simple_timestamp.json' (timestampformat)
+
+# TODO: unsupported feature
+# statement ok
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat '%m-%d-%Y')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from '{TEMP_DIR}/my_file.json'
+# ----
+# DATE	1996-03-27
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%m-%d-%Y')
+# ----
+# DATE	1996-03-27
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists date_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table date_copy_test (d date)
+
+# TODO: unsupported feature
+# statement ok
+# copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat '%m-%d-%Y')
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from date_copy_test
+# ----
+# DATE	1996-03-27
+
+# TODO: unsupported feature
+# statement ok
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat '%m-%d-%y')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from '{TEMP_DIR}/my_file.json'
+# ----
+# DATE	1996-03-27
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%m-%d-%y')
+# ----
+# DATE	1996-03-27
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists date_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table date_copy_test (d date)
+
+# TODO: unsupported feature
+# statement ok
+# copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat '%m-%d-%y')
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from date_copy_test
+# ----
+# DATE	1996-03-27
+
+# TODO: unsupported feature
+# statement ok
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat '%d-%m-%Y')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from '{TEMP_DIR}/my_file.json'
+# ----
+# DATE	1996-03-27
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%m-%Y')
+# ----
+# DATE	1996-03-27
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists date_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table date_copy_test (d date)
+
+# TODO: unsupported feature
+# statement ok
+# copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat '%d-%m-%Y')
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from date_copy_test
+# ----
+# DATE	1996-03-27
+
+# TODO: unsupported feature
+# statement ok
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat '%d-%m-%y')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from '{TEMP_DIR}/my_file.json'
+# ----
+# DATE	1996-03-27
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%m-%y')
+# ----
+# DATE	1996-03-27
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists date_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table date_copy_test (d date)
+
+# TODO: unsupported feature
+# statement ok
+# copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat '%d-%m-%y')
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from date_copy_test
+# ----
+# DATE	1996-03-27
+
+# TODO: unsupported feature
+# statement ok
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat '%Y-%m-%d')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from '{TEMP_DIR}/my_file.json'
+# ----
+# DATE	1996-03-27
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%Y-%m-%d')
+# ----
+# DATE	1996-03-27
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists date_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table date_copy_test (d date)
+
+# TODO: unsupported feature
+# statement ok
+# copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat '%Y-%m-%d')
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from date_copy_test
+# ----
+# DATE	1996-03-27
+
+# TODO: unsupported feature
+# statement ok
+# copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat '%y-%m-%d')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from '{TEMP_DIR}/my_file.json'
+# ----
+# DATE	1996-03-27
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%y-%m-%d')
+# ----
+# DATE	1996-03-27
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists date_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table date_copy_test (d date)
+
+# TODO: unsupported feature
+# statement ok
+# copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat '%y-%m-%d')
+
+# TODO: unsupported feature
+# query II
+# select typeof(d), d from date_copy_test
+# ----
+# DATE	1996-03-27
+
+# test all supported timestamp formats (hacky way to do foreach parameters that need spaces in them)
+
+# TODO: unsupported feature
+# statement ok
+# copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d %H:%M:%S.%f ')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from '{TEMP_DIR}/my_file.json'
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%Y-%m-%d %H:%M:%S.%f ')
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_copy_test (t timestamp)
+
+# TODO: unsupported feature
+# statement ok
+# copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d %H:%M:%S.%f ')
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from timestamp_copy_test
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# TODO: unsupported feature
+# statement ok
+# copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%m-%d-%Y %I:%M:%S %p')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from '{TEMP_DIR}/my_file.json'
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%m-%d-%Y %I:%M:%S %p')
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_copy_test (t timestamp)
+
+# TODO: unsupported feature
+# statement ok
+# copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat '%m-%d-%Y %I:%M:%S %p')
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from timestamp_copy_test
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# TODO: unsupported feature
+# statement ok
+# copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%m-%d-%y %I:%M:%S %p')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from '{TEMP_DIR}/my_file.json'
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%m-%d-%y %I:%M:%S %p')
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_copy_test (t timestamp)
+
+# TODO: unsupported feature
+# statement ok
+# copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat '%m-%d-%y %I:%M:%S %p')
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from timestamp_copy_test
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# TODO: unsupported feature
+# statement ok
+# copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%d-%m-%Y %H:%M:%S ')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from '{TEMP_DIR}/my_file.json'
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%d-%m-%Y %H:%M:%S ')
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_copy_test (t timestamp)
+
+# TODO: unsupported feature
+# statement ok
+# copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat '%d-%m-%Y %H:%M:%S ')
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from timestamp_copy_test
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# TODO: unsupported feature
+# statement ok
+# copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%d-%m-%y %H:%M:%S ')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from '{TEMP_DIR}/my_file.json'
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%d-%m-%y %H:%M:%S ')
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_copy_test (t timestamp)
+
+# TODO: unsupported feature
+# statement ok
+# copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat '%d-%m-%y %H:%M:%S ')
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from timestamp_copy_test
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# TODO: unsupported feature
+# statement ok
+# copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d %H:%M:%S ')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from '{TEMP_DIR}/my_file.json'
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%Y-%m-%d %H:%M:%S ')
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_copy_test (t timestamp)
+
+# TODO: unsupported feature
+# statement ok
+# copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d %H:%M:%S ')
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from timestamp_copy_test
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# TODO: unsupported feature
+# statement ok
+# copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%y-%m-%d %H:%M:%S ')
+
+# auto-detect
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from '{TEMP_DIR}/my_file.json'
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# forced format read_ndjson
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%y-%m-%d %H:%M:%S ')
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+
+# TODO: unsupported feature
+# statement error
+# select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists timestamp_copy_test
+
+# TODO: unsupported feature
+# statement ok
+# create table timestamp_copy_test (t timestamp)
+
+# TODO: unsupported feature
+# statement ok
+# copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat '%y-%m-%d %H:%M:%S ')
+
+# TODO: unsupported feature
+# query II
+# select typeof(t), t from timestamp_copy_test
+# ----
+# TIMESTAMP	1996-03-27 07:42:33
+
+# test this format too
+
+# TODO: unsupported feature
+# query II
+# select typeof(createdAt), createdAt from '{DATA_DIR}/json/timestamp_example.json'
+# ----
+# TIMESTAMP	2023-02-07 19:12:28

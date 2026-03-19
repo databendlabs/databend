@@ -1,0 +1,16 @@
+# Both the file types and the outputs match!
+# TODO: unsupported feature
+# statement ok
+# RESET profiling_output;
+
+# now we can set it to html
+
+# TODO: unsupported feature
+# statement ok
+# RESET profiling_output;
+
+# TODO: unsupported feature
+# statement ok
+# RESET enable_profiling;
+
+# Setting a JSON out of the box doesn't work because the default output type is 'query_tree'

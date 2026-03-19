@@ -1,0 +1,22 @@
+# TODO: unsupported feature
+# statement ok
+# CALL enable_logging('HTTP')
+
+# TODO: unsupported feature
+# statement error
+# FROM "http://localhost:2338/test.csv"
+
+# TODO: unsupported feature
+# query III
+# SELECT 
+# 	request.type, 
+# 	request.duration_ms >= 0,
+# 	request.duration_ms <= 1000 * 1000
+# FROM 
+# 	duckdb_logs_parsed('HTTP')
+# WHERE 
+# 	request.type='HEAD'
+# ----
+# HEAD	1	1
+# HEAD	1	1
+# HEAD	1	1

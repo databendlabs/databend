@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$ALTER TABLE tbl SET SORTED BY (i DESC NULLS FIRST)$TEST_PEG_PARSER$);

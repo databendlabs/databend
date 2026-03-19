@@ -1,0 +1,26 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS df
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS wtf
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE df AS (SELECT * AS i FROM range(0, 10));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE wtf AS (SELECT 1 AS i);
+
+# TODO: unsupported feature
+# query II
+# explain FROM
+# df, wtf
+# SELECT
+# df.i
+# WHERE df.i > 8
+# USING SAMPLE 1;
+# ----
+# # TODO: special result marker

@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query II
+# explain from range(0, 10) r1 right join range(0, 10) r2 using (range)
+# ----
+# logical_opt	<!REGEX>:.*LEFT.*

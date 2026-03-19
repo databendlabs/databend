@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE OR REPLACE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(0, 10000);
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+10000 49995000

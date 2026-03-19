@@ -1,0 +1,33 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
+
+# TODO: unsupported feature
+# query I
+# SELECT unnest(res) FROM (
+# 	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+# 	raw_setting.trim('{}') AS setting,
+# 	string_split(setting, ', ') AS res
+# ) ORDER BY ALL
+# ----
+# (empty)
+
+# TODO: unsupported feature
+# statement error
+# SELECT cpu_time FROM metrics_output;
+
+# TODO: unsupported feature
+# statement error
+# SELECT extra_info FROM metrics_output;
+
+# TODO: unsupported feature
+# statement error
+# SELECT operator_cardinality FROM metrics_output;
+
+# TODO: unsupported feature
+# statement error
+# SELECT operator_timing FROM metrics_output;
+
+# TODO: unsupported feature
+# statement error
+# SELECT cumulative_cardinality FROM metrics_output;

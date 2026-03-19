@@ -1,0 +1,49 @@
+# this is tested extra because floats and doubles can represent inf and nan as well. And we 
+# want to make sure we still catch overflows for these functions
+# TODO: unsupported feature
+# query R
+# SELECT 1e308::DOUBLE + 1e308::DOUBLE;
+# ----
+# Infinity
+
+# TODO: unsupported feature
+# query R
+# SELECT 0::DOUBLE - 1e308::DOUBLE - 1e308::DOUBLE;
+# ----
+# -Infinity
+
+# TODO: unsupported feature
+# query R
+# SELECT 1e308::DOUBLE * 1e308::DOUBLE;
+# ----
+# Infinity
+
+# TODO: unsupported feature
+# query R
+# SELECT 1e308::DOUBLE * 1e308::DOUBLE;
+# ----
+# Infinity
+
+# TODO: unsupported feature
+# query R
+# SELECT 1e308::DOUBLE / 0.1;
+# ----
+# Infinity
+
+# TODO: unsupported feature
+# query R
+# SELECT 2e38::FLOAT + 2e38::FLOAT;
+# ----
+# 3.999999872114277e+38
+
+# TODO: unsupported feature
+# query R
+# SELECT 2e38::FLOAT * 2e38::FLOAT;
+# ----
+# 3.999999744228558e+76
+
+# TODO: unsupported feature
+# query I
+# SELECT 2e38::FLOAT / 0.1;
+# ----
+# 1.9999999360571385e+39

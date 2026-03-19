@@ -1,0 +1,72 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
+
+# ORDER BY index out of range
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM test ORDER BY 2
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM test ORDER BY 'hello', a
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM test ORDER BY 'hello', a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# query II
+# SELECT a AS k, b FROM test UNION SELECT a, b AS k FROM test ORDER BY k
+# ----
+# 11	22
+# 12	21
+# 13	22
+
+# TODO: unsupported feature
+# query II
+# SELECT a AS k, b FROM test UNION SELECT a AS k, b FROM test ORDER BY k
+# ----
+# 11	22
+# 12	21
+# 13	22
+
+# ambiguous reference in union parameter
+
+# TODO: unsupported feature
+# statement error
+# SELECT a % 2, b FROM test UNION SELECT b, a % 2 AS k ORDER BY a % 2
+
+# TODO: unsupported feature
+# query II
+# SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY a % 2
+# ----
+# 0	21
+# 1	22
+
+# out of range order also happens for unions
+
+# TODO: unsupported feature
+# statement error
+# SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY 3
+
+# TODO: unsupported feature
+# statement error
+# SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY -1
+
+# TODO: unsupported feature
+# statement error
+# SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1

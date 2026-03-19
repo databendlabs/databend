@@ -1,0 +1,52 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl1 (i int);
+
+# Example with simple query
+
+# TODO: unsupported feature
+# query I
+# SELECT json_serialize_plan('SELECT 1 + 2 FROM tbl1');
+# ----
+# # TODO: special result marker
+
+# Example with skip_null and skip_empty
+
+# TODO: unsupported feature
+# query I
+# SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_empty := true);
+# ----
+# # TODO: special result marker
+
+# Example with skip_null and skip_empty and optimize
+
+# TODO: unsupported feature
+# query I
+# SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_empty := true, optimize := true);
+# ----
+# # TODO: special result marker
+
+# Example with syntax error
+
+# TODO: unsupported feature
+# query I
+# SELECT json_serialize_plan('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');
+# ----
+# # TODO: special result marker
+
+# Example with binding error
+# The binding error message "did you mean table xyz" is not deterministic, so use a LIKE here.
+
+# TODO: unsupported feature
+# query I
+# SELECT json_serialize_plan('SELECT * FROM nonexistent_table') LIKE '%Table with name nonexistent_table does not exist%';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# select json_serialize_plan('select blob ''\\x00''');

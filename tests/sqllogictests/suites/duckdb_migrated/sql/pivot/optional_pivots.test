@@ -1,0 +1,77 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Cities
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+# TODO: unsupported feature
+# query I
+# PIVOT Cities USING SUM(Population);
+# ----
+# 30100
+
+# TODO: unsupported feature
+# query II rowsort
+# PIVOT Cities USING SUM(Population) GROUP BY Country;
+# ----
+# NL	3228
+# US	26872
+
+# TODO: unsupported feature
+# query I rowsort
+# PIVOT Cities GROUP BY Country;
+# ----
+# NL
+# US
+
+# TODO: unsupported feature
+# query IIII rowsort
+# PIVOT Cities ON Year GROUP BY Country;
+# ----
+# NL	1	1	1
+# US	2	2	2
+
+# TODO: unsupported feature
+# query IIII rowsort
+# PIVOT (SELECT Country, Year FROM Cities) ON Year;
+# ----
+# NL	1	1	1
+# US	2	2	2

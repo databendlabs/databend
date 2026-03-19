@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM integers i1, integers i2 WHERE i1.i = i2.i ORDER BY 1;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT cumulative_cardinality, cumulative_rows_scanned FROM metrics_output;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN cumulative_rows_scanned = 8 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# Only output the cumulative metric.
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM integers i1, integers i2 WHERE i1.i = i2.i ORDER BY 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1

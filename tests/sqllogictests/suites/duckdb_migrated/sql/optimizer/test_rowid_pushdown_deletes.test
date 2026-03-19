@@ -1,0 +1,417 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl_grow_shrink
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl_grow_shrink (id_var VARCHAR, id_int INTEGER, id_point BIGINT);
+
+# growing
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 0);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 2);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 3);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 4);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 5);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 6);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 7);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 9);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 10);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 11);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 12);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 13);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 14);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 15);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 17);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 18);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 19);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 20);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 21);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 22);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 23);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 24);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 25);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 26);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 27);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, 28);
+
+# shrinking
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 0 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 1 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 2 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 3 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 4 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 5 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 6 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 7 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 8 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 9 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 10 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 11 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 12 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 13 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 14 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 15 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 16 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 17 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 18 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 19 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 20 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 21 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 22 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 23 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 24 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 25 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 26 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 27 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+# TODO: unsupported feature
+# query II
+# SELECT id_int, id_point = 28 FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+# ----
+# 2	1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);

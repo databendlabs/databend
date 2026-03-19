@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
+
+# default is ORDER BY ASC
+
+query I
+SELECT a FROM test ORDER BY a
+----
+11
+12
+13
+
+# we can change the default with a pragma
+
+query I
+SELECT a FROM test ORDER BY a
+----
+11
+12
+13

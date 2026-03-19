@@ -1,0 +1,95 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "SCHEMA"."TABLE"
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "SCHEMA";
+
+# TODO: unsupported feature
+# statement error
+# CREATE TYPE "ENUM" AS ENUM('ALL');
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE "SCHEMA"."TABLE"("COLUMN" "ENUM");
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE E AS ENUM('ALL');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "SCHEMA"."TABLE"("COLUMN" E);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO "SCHEMA"."TABLE" VALUES ('ALL');
+
+# column references
+
+# TODO: unsupported feature
+# query I
+# SELECT "COLUMN" FROM "SCHEMA"."TABLE";
+# ----
+# ALL
+
+# TODO: unsupported feature
+# query I
+# SELECT "TABLE"."COLUMN" FROM "SCHEMA"."TABLE";
+# ----
+# ALL
+
+# TODO: unsupported feature
+# query I
+# SELECT "SCHEMA"."TABLE"."COLUMN" FROM "SCHEMA"."TABLE";
+# ----
+# ALL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE "SCHEMA"."TABLE";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "SCHEMA"."TABLE"("COLUMN" ROW("SOME" ROW("IN" INTEGER)));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO "SCHEMA"."TABLE" VALUES ({'some': {'in': 3}});
+
+# struct fields with column references
+
+# TODO: unsupported feature
+# query I
+# SELECT "COLUMN"."SOME"."IN" FROM "SCHEMA"."TABLE";
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT "TABLE"."COLUMN"."SOME"."IN" FROM "SCHEMA"."TABLE";
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT "SCHEMA"."TABLE"."COLUMN"."SOME"."IN" FROM "SCHEMA"."TABLE";
+# ----
+# 3
+
+# struct extract
+
+# TODO: unsupported feature
+# query I
+# SELECT (("SCHEMA"."TABLE"."COLUMN")."SOME")."IN" FROM "SCHEMA"."TABLE";
+# ----
+# 3
+
+# array index
+
+# TODO: unsupported feature
+# query I
+# SELECT "SCHEMA"."TABLE"."COLUMN"['SOME']['IN'] FROM "SCHEMA"."TABLE";
+# ----
+# 3

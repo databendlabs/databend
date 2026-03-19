@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# query IIIIII nosort pg_constraint
+# SELECT * FROM pg_constraint
+
+# TODO: unsupported feature
+# statement ok
+# create table a (id int , primary key (id));
+
+# TODO: unsupported feature
+# statement ok
+# create table b (id int , foreign_a int, foreign key (foreign_a) references a);
+
+# TODO: unsupported feature
+# statement ok
+# insert into a (id) values (0);
+
+# TODO: unsupported feature
+# statement ok
+# insert into b (id, foreign_a) VALUES (0, 0);
+
+# TODO: unsupported feature
+# query IIIIIIIIIIIIIIIIIIIIII
+# SELECT * EXCLUDE (OID, CONRELID, connamespace) FROM pg_catalog.pg_constraint
+# ----
+# PRIMARY KEY(id)								p	0	0	1	0	0	0	0	NULL	NULL	NULL	1	0	0	[0]	NULL	NULL	NULL	NULL	NULL	NULL
+# NOT NULL									x	0	0	1	0	0	0	0	NULL	NULL	NULL	1	0	0	[0]	NULL	NULL	NULL	NULL	NULL	NULL
+# FOREIGN KEY (foreign_a) REFERENCES a(id)	f	0	0	1	0	0	0	0	NULL	NULL	NULL	1	0	0	[1]	NULL	NULL	NULL	NULL	NULL	NULL

@@ -1,0 +1,95 @@
+# TODO: unsupported feature
+# query R
+# SELECT 1e1000
+# ----
+# Infinity
+
+# overflow on cast from double to real results in an error
+
+# TODO: unsupported feature
+# statement error
+# SELECT 1e308::REAL
+
+# TODO: unsupported feature
+# query I
+# SELECT 1e1000::REAL
+# ----
+# inf
+
+# test string casts
+
+# TODO: unsupported feature
+# query I
+# SELECT '1e1000'::DOUBLE
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT '1e100'::REAL
+# ----
+# inf
+
+# overflow in SUM/AVG overflow
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM (VALUES (1e308), (1e308)) tbl(i)
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT AVG(i) FROM (VALUES (1e308), (1e308)) tbl(i)
+# ----
+# inf
+
+# overflow in arithmetic as well
+
+# TODO: unsupported feature
+# query I
+# SELECT 1e308+1e308
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 1e308*2
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT -1e308-1e308
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 1e308/0.1
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 2e38::REAL+2e38::REAL
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 2e38::REAL*2
+# ----
+# inf
+
+# TODO: unsupported feature
+# query I
+# SELECT -2e38::REAL-2e38::REAL
+# ----
+# -inf
+
+# TODO: unsupported feature
+# query I
+# SELECT 2e38::REAL/0.1::REAL
+# ----
+# inf

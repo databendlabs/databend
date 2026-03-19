@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement error
+SELECT * FROM generate_series(0,10,1) LIMIT 3 OFFSET -1;
+
+statement error
+SELECT * FROM generate_series(0,10,1) LIMIT -3;
+
+statement error
+SELECT * FROM generate_series(0,10,1) LIMIT -1%
+
+statement ok
+CREATE TABLE integers AS SELECT -1 k;
+
+statement error
+SELECT * FROM generate_series(0,10,1) LIMIT (SELECT k FROM integers);
+
+statement error
+SELECT * FROM generate_series(0,10,1) LIMIT 1 OFFSET (SELECT k FROM integers);

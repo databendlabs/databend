@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH DATABASE ':memory:' AS database;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA database.schema;
+
+# TODO: unsupported feature
+# statement error
+# ATTACH DATABASE ':memory:' AS temp;
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' AS db1 (TYPE getvariable('db_type'));
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db2

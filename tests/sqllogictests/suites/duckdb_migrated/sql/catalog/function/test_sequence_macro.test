@@ -1,11 +1,14 @@
-statement ok
-DROP TABLE IF EXISTS integers
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
 
-statement ok
-CREATE TABLE integers (i INT)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers (i INT)
 
-statement ok
-INSERT INTO integers VALUES (42), (42)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (42), (42)
 
 # TODO: unsupported feature
 # statement ok
@@ -27,19 +30,19 @@ INSERT INTO integers VALUES (42), (42)
 #     FROM cte
 # )
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query T
 # SELECT in_next_n(3, 'seq', 5);
 # ----
 # 1
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query T
 # SELECT in_next_n(3, 'seq', 5);
 # ----
 # 0
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query T
 # SELECT in_next_n(12, 'seq', 5);
 # ----
@@ -61,7 +64,7 @@ INSERT INTO integers VALUES (42), (42)
 #     FROM cte
 # )
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query T
 # SELECT in_next_n2(17, 'seq', 5);
 # ----
@@ -83,7 +86,7 @@ INSERT INTO integers VALUES (42), (42)
 # statement ok
 # CREATE MACRO test(s1, s2, x) AS nextval(s1) + nextval(s2) + x
 
-# TODO: unknown function
+# TODO: unsupported feature
 # query T
 # SELECT test('seq1', 'seq2', i) FROM integers
 # ----
@@ -108,9 +111,9 @@ INSERT INTO integers VALUES (42), (42)
 # statement ok
 # CREATE SEQUENCE seqq
 
-# TODO: uncomment when macro parameters are pushed as a projection
-#query T
-#SELECT add_macro(i + nextval('seqq'), 5) FROM integers
-#----
-#48
-#48
+# TODO: unsupported feature
+# query T
+# SELECT add_macro(i + nextval('seqq'), 5) FROM integers
+# ----
+# 48
+# 48

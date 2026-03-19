@@ -1,0 +1,118 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS events
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE events(
+#     col1 INT, 
+#     col2 INT, 
+#     col3 INT,
+#     unused1 INT,
+#     unused2 INT,
+#     unused3 INT
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO events VALUES 
+#     (1, 1, 1, 100, 200, 300),
+#     (1, 2, 2, 100, 200, 300),
+#     (2, 1, 3, 100, 200, 300);
+
+# TODO: unsupported feature
+# query T
+# EXPLAIN SELECT col1, COUNT(*) FROM events GROUP BY ROLLUP(col1);
+# ----
+# AggregateFinal
+# ├── output columns: [COUNT(*) (#8), events.col1 (#0), _grouping_id (#7)]
+# ├── group by: [col1, _grouping_id]
+# ├── aggregate functions: [count()]
+# ├── estimated rows: 1.00
+# └── AggregatePartial
+#     ├── group by: [col1, _grouping_id]
+#     ├── aggregate functions: [count()]
+#     ├── estimated rows: 1.00
+#     └── AggregateExpand
+#         ├── output columns: [events.col1 (#0), _dup_group_item_0 (#6), _grouping_id (#7)]
+#         ├── grouping sets: [(col1), ()]
+#         ├── estimated rows: 1.00
+#         └── TableScan
+#             ├── table: default.default.events
+#             ├── scan id: 0
+#             ├── output columns: [col1 (#0)]
+#             ├── read rows: 3
+#             ├── read size: < 1 KiB
+#             ├── partitions total: 1
+#             ├── partitions scanned: 1
+#             ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+#             ├── push downs: [filters: [], limit: NONE]
+#             └── estimated rows: 3.00
+
+# Test 2: ROLLUP with join - ensure join column replacement is disabled
+# but column pruning still works for truly unused columns
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2(col4 INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t2 VALUES (1), (2);
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT col1, col2, col4 
+# FROM events JOIN t2 ON events.col1 = t2.col4 
+# GROUP BY ROLLUP(col1, col2, col4);
+# ----
+# logical_opt	<!REGEX>:.*unused.*
+
+# Test 3: CTE + ROLLUP should allow column pruning in outer table scan
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN WITH limited AS (
+#     SELECT col1, col2 FROM events WHERE col3 = 1 LIMIT 10
+# )
+# SELECT e.col1, COUNT(*) 
+# FROM events e
+# WHERE e.col1 IN (SELECT col1 FROM limited)
+# GROUP BY ROLLUP(e.col1);
+# ----
+# logical_opt	<!REGEX>:.*unused.*
+
+# TODO: unsupported feature
+# query IIII rowsort
+# SELECT col1, col2, col4, COUNT(*) 
+# FROM events JOIN t2 ON events.col1 = t2.col4 
+# GROUP BY ROLLUP(col1, col2, col4);
+# ----
+# 1	1	1	1
+# 1	1	NULL	1
+# 1	2	1	1
+# 1	2	NULL	1
+# 1	NULL	NULL	2
+# 2	1	2	1
+# 2	1	NULL	1
+# 2	NULL	NULL	1
+# NULL	NULL	NULL	3
+
+# Test 5: Verify results with CTE + ROLLUP
+
+# TODO: unsupported feature
+# query II rowsort
+# WITH limited AS (
+#     SELECT col1, col2 FROM events WHERE col3 = 1 LIMIT 10
+# )
+# SELECT e.col1, COUNT(*) 
+# FROM events e
+# WHERE e.col1 IN (SELECT col1 FROM limited)
+# GROUP BY ROLLUP(e.col1);
+# ----
+# 1	2
+# NULL	2

@@ -1,0 +1,91 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS doubles
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS strings
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT 5
+# ----
+# 10000
+# 9999
+# 9998
+# 9997
+# 9996
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers AS SELECT 5 k
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT (SELECT k FROM integers)
+# ----
+# 10000
+# 9999
+# 9998
+# 9997
+# 9996
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE strings AS SELECT '5'::VARCHAR k
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT (SELECT k FROM strings)
+# ----
+# 10000
+# 9999
+# 9998
+# 9997
+# 9996
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT ?::VARCHAR
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(5)
+# ----
+# 10000
+# 9999
+# 9998
+# 9997
+# 9996
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT ?::VARCHAR %
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1('0.05')
+# ----
+# 10000
+# 9999
+# 9998
+# 9997
+# 9996
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE doubles AS SELECT 0.05 d
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM generate_series(0, 10000, 1) tbl(i) ORDER BY i DESC LIMIT (SELECT d FROM doubles) %
+# ----
+# 10000
+# 9999
+# 9998
+# 9997
+# 9996

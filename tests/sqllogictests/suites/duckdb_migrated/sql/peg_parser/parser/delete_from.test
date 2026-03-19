@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$DELETE FROM integers i1 WHERE i>(SELECT MAX(i) FROM integers WHERE i1.i<>i)$TEST_PEG_PARSER$);

@@ -34,7 +34,7 @@
 # GROUP BY partition
 # ORDER BY ALL
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # distinct aggregate
 

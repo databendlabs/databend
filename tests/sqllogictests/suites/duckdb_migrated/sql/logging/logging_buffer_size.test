@@ -1,0 +1,145 @@
+# By default we flush the logger automatically at certain sensible moments (most importantly, on Query End)
+# for this test we want to disable automatic flushing to test the buffer size param  
+# TODO: unsupported feature
+# statement ok
+# CALL enable_logging('QueryLog', storage_config={'buffer_size': 10, 'only_flush_on_full_buffer': true});
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM duckdb_logs
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1 as a;
+
+# We expect a single flush to have happened, e.g. 10 log entries
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM duckdb_logs
+# ----
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# CALL disable_logging()
+
+# TODO: unsupported feature
+# statement ok
+# CALL truncate_duckdb_logs()
+
+# Change logging to manualog log type
+
+# TODO: unsupported feature
+# statement ok
+# CALL enable_logging('', level='trace', storage='memory', storage_config={'buffer_size': 3000, 'only_flush_on_full_buffer': true});
+
+# Buffers aaaaalmost full
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,2999);
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM duckdb_logs()
+# ----
+# 0
+
+# "it's only a wafer-thin mint"
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection');
+
+# Buffer has expl.. been flushed
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM duckdb_logs() where type=''
+# ----
+# 3000
+
+# Note that there are 2 logging contexts now, since we wrote the log entries across 2 queries with each their own logging context
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM duckdb_log_contexts()
+# ----
+# 2
+
+# Try with some big buffers now
+
+# TODO: unsupported feature
+# statement ok
+# CALL disable_logging()
+
+# TODO: unsupported feature
+# statement ok
+# CALL truncate_duckdb_logs()
+
+# TODO: unsupported feature
+# statement ok
+# CALL enable_logging(level='trace', storage='memory', storage_config={'buffer_size': 20*2048});
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,40*2048);
+
+# TODO: unsupported feature
+# statement ok
+# FROM duckdb_logs()
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0,40*2048);
+
+# Try direct flushing 
+
+# TODO: unsupported feature
+# statement ok
+# SELECT write_log('hello from the connection log scope', level := 'error', scope := 'connection') from range(0, 2048);
+
+# Try weird buffer size

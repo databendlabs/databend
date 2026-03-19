@@ -1,0 +1,33 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a hugeint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test values ((-170141183460469231731687303715884105728)::hugeint), (-1111::hugeint), (-1::hugeint), (0::hugeint), (1::hugeint), (1111::hugeint);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test order by a;
+# ----
+# -170141183460469231731687303715884105728
+# -1111
+# -1
+# 0
+# 1
+# 1111
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test order by a DESC;
+# ----
+# 1111
+# 1
+# 0
+# -1
+# -1111
+# -170141183460469231731687303715884105728

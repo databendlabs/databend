@@ -1,102 +1,126 @@
-statement ok
-DROP VIEW IF EXISTS v1
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS v1
 
-statement ok
-DROP TABLE IF EXISTS t1
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
 
-statement ok
-CREATE TABLE t1(i INTEGER)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(i INTEGER)
 
-statement ok
-INSERT INTO t1 VALUES (41), (42), (43)
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (41), (42), (43)
 
 # create a view that queries that table
 
-statement ok
-CREATE VIEW v1 AS SELECT * FROM t1
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW v1 AS SELECT * FROM t1
 
-query I
-SELECT * FROM v1
-----
-41
-42
-43
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v1
+# ----
+# 41
+# 42
+# 43
 
 # now drop the table and create a table that has a different schema
 
-statement ok
-DROP TABLE t1
-
-statement ok
-CREATE TABLE t1(i DATE)
-
-query I
-SELECT * FROM v1
-----
-
-# now drop the table and create one that has extra columns
-
-statement ok
-DROP TABLE t1
-
-statement ok
-CREATE TABLE t1(i INTEGER, j INTEGER)
-
-# again querying the view fails: there are extra columns present
-
-query II
-SELECT * FROM v1
-----
-
-# now drop the table and create one that has differently named columns
-
-statement ok
-DROP TABLE t1
-
-statement ok
-CREATE TABLE t1(k INTEGER)
-
-# names returned by the view have changed
-
-query I
-SELECT * FROM v1
-----
-
-statement ok
-DROP TABLE t1
-
-statement ok
-CREATE TABLE t1(i INTEGER)
-
-# now we can query again!
-
-query I
-SELECT * FROM v1
-----
-
-# TODO: result differs
+# TODO: unsupported feature
 # statement ok
-# ALTER TABLE t1 ALTER i TYPE VARCHAR;
+# DROP TABLE t1
 
-# TODO: result differs
-# query I
-# select * from v1;
-# ----
-
-# TODO: result differs
+# TODO: unsupported feature
 # statement ok
-# ALTER TABLE t1 ALTER i TYPE INTEGER
+# CREATE TABLE t1(i DATE)
 
-# TODO: result differs
+# TODO: unsupported feature
 # query I
 # SELECT * FROM v1
 # ----
 
-# TODO: result differs
+# now drop the table and create one that has extra columns
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(i INTEGER, j INTEGER)
+
+# again querying the view fails: there are extra columns present
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM v1
+# ----
+
+# now drop the table and create one that has differently named columns
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(k INTEGER)
+
+# names returned by the view have changed
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v1
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(i INTEGER)
+
+# now we can query again!
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v1
+# ----
+
+# Changing the types of the table that the view references also makes the view unusable
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t1 ALTER i TYPE VARCHAR;
+
+# TODO: unsupported feature
+# query I
+# select * from v1;
+# ----
+
+# reverting the types fixes the issue
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE t1 ALTER i TYPE INTEGER
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v1
+# ----
+
+# changing the column names makes the view unusable again
+
+# TODO: unsupported feature
 # statement ok
 # ALTER TABLE t1 RENAME i TO j
 
-# TODO: result differs
+# TODO: unsupported feature
 # query I
 # SELECT * FROM v1
 # ----

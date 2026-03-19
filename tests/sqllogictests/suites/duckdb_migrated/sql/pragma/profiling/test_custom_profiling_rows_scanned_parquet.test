@@ -1,0 +1,12 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT cumulative_cardinality, cumulative_rows_scanned FROM metrics_output;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN cumulative_rows_scanned = 10 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1

@@ -1,0 +1,102 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# PRAGMA enable_verification
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers (i bigint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers values (1), (2), (3);
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM integers WHERE i%2 AND i<157353;
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i=2;
+
+# TODO: unsupported feature
+# statement ok
+# create table test (pk bigint);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE pk > 738645 AND pk < 978908;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i=(1-1)*100+0;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i <> i::DECIMAL(9,1);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i%3=0;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i IS NULL;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i BETWEEN 200 AND 300;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers
+# WHERE i < 5 RETURNING i;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE integers.rowid;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i = 7 RETURNING *;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers
+# WHERE i>=10 AND i <=13  RETURNING i as aliasc;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers2 (i bigint);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers USING integers2;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM integers WHERE i < 5 RETURNING i;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM a WHERE (b).i=1;

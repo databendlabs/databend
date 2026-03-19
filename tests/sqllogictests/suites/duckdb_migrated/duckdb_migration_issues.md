@@ -7906,3 +7906,238 @@
 | `INTERVAL (i) seconds` | `date_add(SECOND, i, ...)` | test_merge_join_predicate.test |
 | `JSON '...'` literal | `'...'::JSON` | test_json_arrow_expr.test |
 | Trailing comma in SELECT | Removed | mix_equality_inequality.test |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T05:22:23.608542+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 17
+- Files with issues: 1326
+- Unknown function TODOs: 1277
+- Unsupported feature TODOs: 14100
+- Unknown function unique issues: 4
+- Unsupported feature unique issues: 9
+
+## Unknown Functions
+
+| Function | Count | Files | Doc |
+| --- | ---: | --- | --- |
+| `decimal` | 1 | sql/json/issues/issue15038.test |  |
+| `enum` | 1 | sql/json/scalar/test_json_transform.test |  |
+| `json_array` | 1 | sql/json/scalar/test_json_create.test |  |
+| `sum` | 1 | sql/json/scalar/test_json_path.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Doc |
+| --- | --- | ---: | --- | --- | --- |
+| `foo2` | `unsupported feature` | 1 | sql/json/issues/internal_issue5288.test | `statement ok<br>create table foo2 (bar JSON using compression 'zstd');` |  |
+| `json` | `unsupported feature` | 3 | sql/json/issues/issue16968.test<br>sql/json/scalar/json_nested_casts.test | `query I<br>select json('1101'::BIT)<br>----<br>"1101"` |  |
+| `json_structure` | `unsupported feature` | 3 | sql/json/table/read_json.test | `statement error<br>select json_structure(json ->> '$.metadata') as structure,<br>from read_json('{DATA_DIR}/json/issue.json', format='array', columns={'json': 'JSON'}, maximum_object_size=104857600)<br>limit 1;` |  |
+| `jsons` | `unsupported feature` | 1 | sql/json/scalar/json_nested_casts.test | `statement ok<br>CREATE TABLE jsons (j JSON)` |  |
+| `maps` | `unsupported feature` | 1 | sql/json/scalar/json_nested_casts.test | `statement ok<br>CREATE table maps (v MAP(VARCHAR, INTEGER))` |  |
+| `n48_free` | `unsupported feature` | 1 | sql/index/art/nodes/test_art_node_48.test | `statement ok<br>CREATE INDEX idx_n48_free ON n48_free(id);` |  |
+| `n48_tbl` | `unsupported feature` | 1 | sql/index/art/nodes/test_art_node_48.test | `statement ok<br>CREATE INDEX n48_tbl_idx ON n48_tbl(i, k);` |  |
+| `partition_by` | `unsupported feature` | 1 | sql/json/table/json_multi_file_reader.test | `statement ok<br>COPY test TO '{TEMP_DIR}/json_part' (FORMAT csv, quote '', PARTITION_BY (j), HEADER 0);` |  |
+| `read_json_objects_auto` | `unsupported feature` | 1 | sql/json/table/json_multi_file_reader.test | `query I<br>select * from read_json_objects_auto(['{DATA_DIR}/json/example_n.ndjson', '{DATA_DIR}/json/top_level_array.json'], union_by_name=true) order by all<br>----<br>{"conclusion":"cancelled"}<br>{"conclusion":"cancelled"}<br>{"id":1,"name":"O Brother, Where Art Thou?"}<br>{"id":2,"name":"Home for the Holidays"}<br>{"id":3,"name":"The Firm"}<br>{"id":4,"name":"Broadcast News"}<br>{"id":5,"name":"Raising Arizona"}` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T06:38:23.835403+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 417
+- Files with issues: 1475
+- Unknown function TODOs: 1277
+- Unsupported feature TODOs: 15500
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 51
+
+## Unknown Functions
+
+| Function | Count | Files | Doc |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Doc |
+| --- | --- | ---: | --- | --- | --- |
+| `any` | `unsupported feature` | 1 | sql/pg_catalog/sqlalchemy.test | `statement ok<br>SELECT<br>	cons.conname as name,<br>	cons.conkey as key,<br>	a.attnum as col_num,<br>	a.attname as col_name<br>FROM<br>	pg_catalog.pg_constraint cons<br>	join pg_attribute a<br>		on cons.conrelid = a.attrelid AND<br>		a.attnum = ANY(cons.conkey)<br>WHERE<br>	cons.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND<br>	cons.contype = 'u'` |  |
+| `check_constraint_tbl` | `unsupported feature` | 1 | sql/pg_catalog/sqlalchemy.test | `statement ok<br>CREATE TABLE check_constraint_tbl (<br>	i INTEGER CHECK (i < 42)<br>);` |  |
+| `check_peg_parser` | `unsupported feature` | 211 | sql/peg_parser/parser/alter.test<br>sql/peg_parser/parser/analyze_vacuum.test<br>sql/peg_parser/parser/array_subquery.test<br>sql/peg_parser/parser/collate.test<br>sql/peg_parser/parser/colon_alias.test<br>sql/peg_parser/parser/copy_expression.test<br>sql/peg_parser/parser/create_macro.test<br>sql/peg_parser/parser/create_table.test<br>sql/peg_parser/parser/create_type.test<br>sql/peg_parser/parser/custom_operator.test<br>sql/peg_parser/parser/delete_from.test<br>sql/peg_parser/parser/dollar_quoted.test<br>sql/peg_parser/parser/dotted_functions.test<br>sql/peg_parser/parser/empty_map.test<br>sql/peg_parser/parser/ignore_nulls.test<br>sql/peg_parser/parser/index.test<br>sql/peg_parser/parser/insert.test<br>sql/peg_parser/parser/insert_statement.test<br>sql/peg_parser/parser/invisible_space.test<br>sql/peg_parser/parser/lambda_functions.test<br>sql/peg_parser/parser/list_slices.test<br>sql/peg_parser/parser/load_extension.test<br>sql/peg_parser/parser/map.test<br>sql/peg_parser/parser/merge_into.test<br>sql/peg_parser/parser/nested_join.test<br>sql/peg_parser/parser/on_conflict.test<br>sql/peg_parser/parser/pivot_statement.test<br>sql/peg_parser/parser/prepare_statement.test<br>sql/peg_parser/parser/recursive.test<br>sql/peg_parser/parser/sample.test<br>sql/peg_parser/parser/scientific_notation.test<br>sql/peg_parser/parser/select_star.test<br>sql/peg_parser/parser/show_table.test<br>sql/peg_parser/parser/struct_identifier.test<br>sql/peg_parser/parser/support_optional_not_null_constraint.test<br>sql/peg_parser/parser/support_try.test<br>sql/peg_parser/parser/support_unreserved_keywords.test<br>sql/peg_parser/parser/type.test<br>sql/peg_parser/parser/update_statement.test<br>sql/peg_parser/parser/use_statement.test<br>sql/peg_parser/parser/window_function.test<br>sql/peg_parser/parser/with_ordinality.test | `statement ok<br>CALL check_peg_parser($TEST_PEG_PARSER$ $TEST_PEG_PARSER$);` |  |
+| `col_description` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `query III<br>SELECT col_description(0, 0), obj_description(0, 'duckdb'), shobj_description(0, 'duckdb');<br>----<br>NULL	NULL	NULL` |  |
+| `columns` | `unsupported feature` | 61 | sql/parser/columns_aliases.test<br>sql/parser/star_expression.test<br>sql/parser/test_columns.test<br>sql/parser/test_columns_lists.test<br>sql/parser/test_columns_order.test<br>sql/parser/test_columns_prepared.test<br>sql/parser/test_columns_unpacked.test<br>sql/parser/test_columns_where.test<br>sql/pivot/unpivot_internal_names.test | `statement error<br>SELECT COLUMNS([43]) FROM integers` |  |
+| `cpb` | `unsupported feature` | 9 | sql/pivot/pivot_6390.test | `statement ok<br>CREATE TABLE cpb_tbl AS<br>WITH CPB(CPDH,NF,JG) AS (<br>SELECT 'C1',2022,10<br>UNION ALL<br>SELECT 'C1',2018,20<br>UNION ALL<br>SELECT 'C1',2017,0<br>UNION ALL<br>SELECT 'C2',2022,10<br>UNION ALL<br>SELECT 'C2',2010,30<br>UNION ALL<br>SELECT 'C3',2010,80<br>) FROM CPB;` |  |
+| `creditcardtable` | `unsupported feature` | 1 | sql/collate/collate_order_by_alias.test | `statement ok<br>CREATE TABLE CreditCardTable(id BIGINT, creditCard_number VARCHAR);` |  |
+| `current_database` | `unsupported feature` | 2 | sql/pg_catalog/system_functions.test | `query I<br>SELECT CURRENT_DATABASE()<br>----<br>memory` |  |
+| `current_query` | `unsupported feature` | 3 | sql/pg_catalog/system_functions.test | `query I<br>SELECT current_query();<br>----<br>SELECT current_query();` |  |
+| `current_schema` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `query I<br>SELECT current_schema();<br>----<br>main` |  |
+| `current_user` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `statement error<br>SELECT temp.current_user()` |  |
+| `customertable` | `unsupported feature` | 1 | sql/collate/collate_order_by_alias.test | `statement ok<br>CREATE TABLE CustomerTable(id BIGINT, pk BIGINT);` |  |
+| `disable_peg_parser` | `unsupported feature` | 1 | sql/peg_parser/enable_peg_parser.test | `statement ok<br>call disable_peg_parser();` |  |
+| `disable_profiling` | `unsupported feature` | 1 | sql/pragma/profiling/call_enable_profiling_function.test | `statement ok<br>CALL disable_profiling();` |  |
+| `enable_peg_parser` | `unsupported feature` | 2 | sql/peg_parser/enable_peg_parser.test<br>sql/peg_parser/peg_syntax_error.test | `statement ok<br>call enable_peg_parser();` |  |
+| `enable_profiling` | `unsupported feature` | 21 | sql/pragma/profiling/call_enable_profiling_function.test | `statement ok<br>CALL enable_profiling();` |  |
+| `format_pg_type` | `unsupported feature` | 2 | sql/pg_catalog/pg_type.test | `query I<br>SELECT pg_catalog.format_pg_type('DECIMAL', 'test');<br>----<br>numeric` |  |
+| `format_type` | `unsupported feature` | 2 | sql/pg_catalog/sqlalchemy.test | `statement ok<br>SELECT t.typname as "name",<br>	pg_catalog.format_type(t.typbasetype, t.typtypmod) as "attype",<br>	not t.typnotnull as "nullable",<br>	t.typdefault as "default",<br>	pg_catalog.pg_type_is_visible(t.oid) as "visible",<br>	n.nspname as "schema"<br>FROM pg_catalog.pg_type t<br>	LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace<br>WHERE t.typtype = 'd'` |  |
+| `has_any_column_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_any_column_privilege('main', 'test')<br>----<br>1` |  |
+| `has_column_privilege` | `unsupported feature` | 1 | sql/pg_catalog/pg_privilege.test | `query II<br>SELECT has_column_privilege('main', 'test', 'col'), has_column_privilege(current_user, 'main', 'test', 'col')<br>----<br>1	1` |  |
+| `has_database_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_database_privilege('main', 'test')<br>----<br>1` |  |
+| `has_foreign_data_wrapper_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_foreign_data_wrapper_privilege('main', 'test')<br>----<br>1` |  |
+| `has_function_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_function_privilege('main', 'test')<br>----<br>1` |  |
+| `has_language_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_language_privilege('main', 'test')<br>----<br>1` |  |
+| `has_schema_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_schema_privilege('main', 'test')<br>----<br>1` |  |
+| `has_sequence_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_sequence_privilege('main', 'test')<br>----<br>1` |  |
+| `has_server_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_server_privilege('main', 'test')<br>----<br>1` |  |
+| `has_table_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_table_privilege('main', 'test')<br>----<br>1` |  |
+| `has_tablespace_privilege` | `unsupported feature` | 2 | sql/pg_catalog/pg_privilege.test | `query I<br>SELECT has_tablespace_privilege('main', 'test')<br>----<br>1` |  |
+| `hash` | `unsupported feature` | 2 | sql/pragma/profiling/test_custom_profiling_total_memory_allocated.test | `statement ok<br>CREATE OR REPLACE TABLE test AS SELECT range AS id, hash(range) AS data FROM range(0, 100000);` |  |
+| `i` | `unsupported feature` | 2 | sql/parser/switch_case.test | `statement ok<br>CREATE TABLE tbl AS FROM (VALUES(1), (4), (8), (0)) i(x);` |  |
+| `inet_client_addr` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `query IIII<br>SELECT inet_client_addr(), inet_client_port(), inet_server_addr(), inet_server_port();<br>----<br>NULL	NULL	NULL	NULL` |  |
+| `integral_values` | `unsupported feature` | 1 | sql/pg_catalog/sqlalchemy.test | `statement ok<br>CREATE TABLE integral_values (<br>    j smallint,<br>    k integer,<br>    l bigint,<br>    i real,<br>    z double precision,<br>    m DECIMAL(4, 1),<br>    n DECIMAL(9, 2),<br>    o DECIMAL(18, 4),<br>    p DECIMAL(37, 2),<br>    q varchar,<br>    r bytea,<br>    s date,<br>    t time,<br>    u timestamp,<br>	v date[],<br>	w greeting<br>);` |  |
+| `lowe` | `unsupported feature` | 1 | sql/parser/function_chaining.test | `statement error<br>SELECT v.lowe() FROM varchars` |  |
+| `map_expr` | `unsupported feature` | 1 | sql/parser/switch_case.test | `statement ok<br>CREATE TABLE map_expr(i map(integer, integer));` |  |
+| `memory_compressed` | `unsupported feature` | 1 | sql/peg_parser/transformer/statement_length.test | `statement ok<br>ATTACH ':memory:' AS memory_compressed (COMPRESS);` |  |
+| `monthly_sales` | `unsupported feature` | 7 | sql/pivot/pivot_enum.test<br>sql/pivot/pivot_operator_expression.test<br>sql/pivot/pivot_prepare.test<br>sql/pivot/pivot_storage.test<br>sql/pivot/test_pivot.test<br>sql/pivot/test_unpivot.test<br>sql/pivot/top_level_pivot_syntax.test | `statement ok<br>CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);` |  |
+| `oncall` | `unsupported feature` | 1 | sql/pivot/pivot_databricks.test | `statement ok<br>CREATE OR REPLACE TEMPORARY VIEW oncall<br>         (year, week, area      , name1   , email1              , phone1     , name2   , email2              , phone2) AS<br>  VALUES (2022, 1   , 'frontend', 'Freddy', 'fred@alwaysup.org' , 15551234567, 'Fanny' , 'fanny@lwaysup.org' , 15552345678),<br>         (2022, 1   , 'backend' , 'Boris' , 'boris@alwaysup.org', 15553456789, 'Boomer', 'boomer@lwaysup.org', 15554567890),<br>         (2022, 2   , 'frontend', 'Franky', 'frank@lwaysup.org' , 15555678901, 'Fin'   , 'fin@alwaysup.org'  , 15556789012),<br>         (2022, 2   , 'backend' , 'Bonny' , 'bonny@alwaysup.org', 15557890123, 'Bea'   , 'bea@alwaysup.org'  , 15558901234);` |  |
+| `pg_get_constraintdef` | `unsupported feature` | 2 | sql/pg_catalog/sqlalchemy.test | `query II<br>SELECT<br>	cons.conname as name,<br>	pg_get_constraintdef(cons.oid) as src<br>FROM<br>	pg_catalog.pg_constraint cons<br>WHERE<br>	cons.contype = 'c'<br>----<br>CHECK((i < 42))	CHECK((i < 42))` |  |
+| `pg_is_other_temp_schema` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `query I<br>SELECT pg_is_other_temp_schema(33)<br>----<br>0` |  |
+| `pg_postmaster_start_time` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `statement ok<br>select pg_postmaster_start_time();` |  |
+| `pg_table_is_visible` | `unsupported feature` | 2 | sql/pg_catalog/sqlalchemy.test | `query I<br>select relname from pg_class c join pg_namespace n on<br>n.oid=c.relnamespace where<br>pg_catalog.pg_table_is_visible(c.oid)<br>and relname='f'<br>----` |  |
+| `pg_type_is_visible` | `unsupported feature` | 1 | sql/pg_catalog/sqlalchemy.test | `query IIII<br>SELECT t.typname as "name",<br>	-- no enum defaults in 8.4 at least<br>	-- t.typdefault as "default",<br>	pg_catalog.pg_type_is_visible(t.oid) as "visible",<br>	n.nspname as "schema",<br>	e.enumlabel as "label"<br>FROM pg_catalog.pg_type t<br>		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace<br>		LEFT JOIN pg_catalog.pg_enum e ON t.oid = e.enumtypid<br>WHERE t.typtype = 'e' AND e.enumlabel IS NOT NULL<br>ORDER BY e.enumsortorder<br>----<br>greeting	1	main	hi<br>greeting	1	main	bonjour<br>greeting	1	main	konnichiwa<br>greeting	1	main	howdy` |  |
+| `pg_typeof` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `query I<br>select pg_typeof(1);<br>----<br>integer` |  |
+| `pivot_macro` | `unsupported feature` | 3 | sql/pivot/pivot_storage.test | `query IIIII<br>FROM pivot_macro(1);<br>----<br>1	10402	8002	11002	18002<br>2	39502	90702	12002	5302` |  |
+| `switch` | `unsupported feature` | 7 | sql/parser/switch_case.test | `statement error<br>SELECT SWITCH (1, i) FROM map_expr;` |  |
+| `txid_current` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `statement ok<br>select txid_current();` |  |
+| `unpack` | `unsupported feature` | 6 | sql/parser/test_columns_unpacked.test | `statement error<br>select<br>	[<br>		UNPACK(<br>			[<br>				'test'<br>			]<br>		)<br>	]<br>from (select 21 a, 42 b, 1337 c)` |  |
+| `unpivot` | `unsupported feature` | 30 | sql/pivot/pivot_bigquery.test<br>sql/pivot/pivot_databricks.test<br>sql/pivot/test_unpivot.test<br>sql/pivot/unpivot_expression.test<br>sql/pivot/unpivot_types.test<br>sql/pivot/unpivot_unnamed_subquery.test | `statement error<br>unpivot (select 42 as col1, 'woot' as col2)<br>    on col1 + col2;` |  |
+| `unpivot_names` | `unsupported feature` | 1 | sql/pivot/unpivot_internal_names.test | `statement ok<br>CREATE TABLE unpivot_names(unpivot_names VARCHAR, unpivot_list VARCHAR, unpivot_list_2 VARCHAR, col1 INT, col2 INT, col3 INT);` |  |
+| `version` | `unsupported feature` | 1 | sql/pg_catalog/system_functions.test | `statement ok<br>SELECT version();` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T06:48:00.952440+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 265
+- Files with issues: 1576
+- Unknown function TODOs: 1208
+- Unsupported feature TODOs: 17948
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 75
+
+## Unknown Functions
+
+| Function | Count | Files | Doc |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Doc |
+| --- | --- | ---: | --- | --- | --- |
+| `aaa` | `unsupported feature` | 1 | sql/merge/merge_into_join_as_filter.test | `statement ok<br>create or replace table aaa (id int, status varchar, flag int, starttime datetime, endtime datetime);` |  |
+| `abac_tbl` | `unsupported feature` | 23 | sql/copy/csv/multidelimiter/test_abac.test | `statement ok<br>CREATE TABLE abac_tbl (a VARCHAR);` |  |
+| `accounts` | `unsupported feature` | 1 | sql/merge/merge_into_index.test | `statement ok<br>CREATE TABLE Accounts(id INTEGER, username VARCHAR PRIMARY KEY, favorite_numbers INT[]);` |  |
+| `buy` | `unsupported feature` | 4 | sql/merge/merge_into.test<br>sql/merge/merge_into_returning.test<br>sql/merge/merge_into_subquery.test<br>sql/merge/merge_into_subquery_action.test | `statement ok<br>CREATE TABLE Buy(item_id int, volume int);` |  |
+| `buys` | `unsupported feature` | 1 | sql/merge/merge_into_error.test | `statement ok<br>CREATE TABLE Buys(item_id int, volume int);` |  |
+| `cohort` | `unsupported feature` | 2 | sql/optimizer/plan/test_filter_pushdown.test | `statement ok<br>CREATE TABLE cohort (<br>  person_id INTEGER,<br>  cohort_start_date DATE,<br>  cohort_end_date DATE<br>);` |  |
+| `cube` | `unsupported feature` | 2 | sql/optimizer/test_duplicate_groups_optimizer.test | `query III<br>select<br>	col1,<br>	col2,<br>	col3<br>from t1<br>	join t2<br>	on t1.col1 = t2.col3<br>group by cube(col1, col2, col3) order by 1, 2 ,3;<br>----<br>1	1	1<br>1	1	NULL<br>1	NULL	1<br>1	NULL	NULL<br>NULL	1	1<br>NULL	1	NULL<br>NULL	NULL	1<br>NULL	NULL	NULL` |  |
+| `date_copy_test` | `unsupported feature` | 6 | sql/json/table/read_json_dates.test | `statement ok<br>create table date_copy_test (d date)` |  |
+| `deleted_stocks` | `unsupported feature` | 1 | sql/merge/merge_into_returning.test | `query III<br>WITH deleted_stocks(item_id) AS (VALUES (30))<br>MERGE INTO Stock USING deleted_stocks ON Stock.item_id = deleted_stocks.item_id<br>WHEN MATCHED THEN DELETE<br>RETURNING *, merge_action;<br>----<br>30	300	DELETE` |  |
+| `disable_logging` | `unsupported feature` | 17 | sql/logging/logging_buffer_size.test<br>sql/logging/logging_call_functions.test<br>sql/logging/logging_csv.test<br>sql/logging/logging_file_bind_replace.test<br>sql/logging/logging_file_persistence.test | `statement ok<br>CALL disable_logging()` |  |
+| `disabled_log_types` | `unsupported feature` | 10 | sql/logging/logging_call_functions.test | `query II<br>FROM log_settings;<br>----<br>disabled_log_types	(empty)<br>enable_logging	1<br>enabled_log_types	(empty)<br>logging_level	INFO<br>logging_mode	LEVEL_ONLY<br>logging_storage	file` |  |
+| `duckdb_logs` | `unsupported feature` | 1 | sql/logging/logging_buffer_size.test | `statement ok<br>FROM duckdb_logs()` |  |
+| `duckdb_logs_parsed` | `unsupported feature` | 8 | sql/logging/http_log_timing.test<br>sql/logging/logging_file_bind_replace.test<br>sql/logging/logging_types.test | `statement ok<br>FROM duckdb_logs_parsed('FileSystem');` |  |
+| `duckdb_settings` | `unsupported feature` | 1 | sql/logging/logging_call_functions.test | `statement ok<br>CREATE VIEW log_settings AS select name, value from duckdb_settings() where name in ['logging_level', 'logging_mode', 'logging_storage', 'enable_logging', 'enabled_log_types', 'disabled_log_types'] ORDER BY name` |  |
+| `dummy_edge` | `unsupported feature` | 1 | sql/merge/merge_into_subquery_action.test | `statement ok<br>CREATE TABLE dummy_edge(id INTEGER, ref_id INTEGER, "value" VARCHAR, note VARCHAR);` |  |
+| `dummy_null` | `unsupported feature` | 1 | sql/merge/merge_into_subquery_action.test | `statement ok<br>CREATE TABLE dummy_null(id INTEGER, "value" INTEGER, optional_text VARCHAR);` |  |
+| `dummy_user` | `unsupported feature` | 1 | sql/merge/merge_into_subquery_action.test | `statement ok<br>CREATE TABLE dummy_user(user_id INTEGER, "name" VARCHAR, email VARCHAR, created_at DATE);` |  |
+| `east` | `unsupported feature` | 1 | sql/join/iejoin/test_iejoin_east_west.test | `statement ok<br>CREATE TABLE east AS SELECT * FROM (VALUES<br>    ('r1', 100, 140, 12, 2),<br>    ('r2', 101, 100, 12, 8),<br>    ('r3', 103,  90,  5, 4)<br>) east(rid, id, dur, rev, cores)` |  |
+| `events` | `unsupported feature` | 1 | sql/optimizer/test_rollup_column_pruning.test | `statement ok<br>CREATE TABLE events(<br>    col1 INT, <br>    col2 INT, <br>    col3 INT,<br>    unused1 INT,<br>    unused2 INT,<br>    unused3 INT<br>);` |  |
+| `glob` | `unsupported feature` | 1 | sql/ordinality/ordinality_constant.test | `query II<br>SELECT col = '{DATA_DIR}/csv/customer.csv' OR col = '{DATA_DIR}\csv\customer.csv', o FROM glob('{DATA_DIR}/csv/customer.csv') with ordinality AS _(col,o);<br>----<br>1	1` |  |
+| `groups` | `unsupported feature` | 1 | sql/optimizer/expression/test_common_aggregate.test | `statement ok<br>CREATE TABLE groups(grp INTEGER, aggr1 INTEGER, aggr2 INTEGER, aggr3 INTEGER)` |  |
+| `initial_stocks` | `unsupported feature` | 6 | sql/merge/merge_into.test<br>sql/merge/merge_into_returning.test | `statement error<br>WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900))<br>MERGE INTO Stock USING initial_stocks ON (Stock.item_id = initial_stocks.item_id)` |  |
+| `integers3` | `unsupported feature` | 1 | sql/catalog/test_temporary.test | `statement ok<br>CREATE TEMPORARY TABLE integers3(i INTEGER)` |  |
+| `integersx` | `unsupported feature` | 2 | sql/catalog/test_temporary.test | `statement ok<br>CREATE TEMPORARY TABLE integersx(i INTEGER)` |  |
+| `issue8316` | `unsupported feature` | 1 | sql/optimizer/expression/test_comparison_simplification.test | `statement ok<br>CREATE TABLE issue8316 (dt TIMESTAMP);` |  |
+| `j1` | `unsupported feature` | 2 | sql/json/test_json_sqlite.test | `statement ok<br>CREATE TABLE j1(x varchar);` |  |
+| `j2` | `unsupported feature` | 4 | sql/json/test_json_sqlite.test | `statement ok<br>CREATE TABLE j2(id INTEGER PRIMARY KEY, json VARCHAR, src VARCHAR);` |  |
+| `json_deserialize_sql` | `unsupported feature` | 7 | sql/json/test_json_serialize_sql.test | `query I<br>SELECT json_deserialize_sql(json_serialize_sql('SELECT 1;SELECT 2'));<br>----<br>SELECT 1; SELECT 2` |  |
+| `json_execute_serialized_sql` | `unsupported feature` | 6 | sql/json/test_json_serialize_sql.test | `query I<br>SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT 1 + 2'));<br>----<br>3` |  |
+| `json_group_array` | `unsupported feature` | 1 | sql/json/test_json_macros.test | `query T<br>select json_group_array(v) from t1<br>----<br>[0,1,2,3,4,5,6,7,8,9]` |  |
+| `json_group_object` | `unsupported feature` | 3 | sql/json/test_json_macros.test | `query T<br>select json_group_object(n, v) from t1<br>----<br>{"10":0,"11":1,"12":2,"13":3,"14":4,"15":5,"16":6,"17":7,"18":8,"19":9}` |  |
+| `json_group_structure` | `unsupported feature` | 1 | sql/json/test_json_macros.test | `query T<br>select json_group_structure(j) from t2<br>----<br>{"a":"DOUBLE","b":"VARCHAR"}` |  |
+| `json_serialize_plan` | `unsupported feature` | 6 | sql/json/test_json_serialize_plan.test | `statement ok<br>select json_serialize_plan('select blob ''\\x00''');` |  |
+| `json_serialize_sql` | `unsupported feature` | 6 | sql/json/test_json_serialize_sql.test | `statement ok<br>SELECT json_serialize_sql('SELECT 1 + 2 FROM tbl1');` |  |
+| `json_transform` | `unsupported feature` | 1 | sql/json/test_json_empty_object.test | `statement error<br>select json_transform('{}', '{}')` |  |
+| `json_type` | `unsupported feature` | 38 | sql/json/scalar/test_json_type.test | `query T<br>select json_type(NULL)<br>----<br>NULL` |  |
+| `json_valid` | `unsupported feature` | 1 | sql/json/test_json_sqlite.test | `query TTT<br>SELECT id, json_valid(json), json_type(json) FROM j2 ORDER BY id;<br>----<br>1	1	OBJECT<br>2	1	OBJECT<br>3	1	ARRAY` |  |
+| `l` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_predicates.test | `statement ok<br>create table l (id integer, date timestamp, item varchar);` |  |
+| `left_table` | `unsupported feature` | 2 | sql/join/semianti/right_anti.test<br>sql/join/semianti/right_semi.test | `statement ok<br>CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);` |  |
+| `main_t1` | `unsupported feature` | 1 | sql/alter/add_col/test_add_col_user_type.test | `statement ok<br>CREATE TABLE main_t1 (i INT);` |  |
+| `my_timeseries` | `unsupported feature` | 1 | sql/merge/merge_into_parenthesis_bug.test | `statement ok<br>CREATE TABLE my_timeseries (ts TIMESTAMP, x DOUBLE PRECISION, y DOUBLE PRECISION);` |  |
+| `my_timeseries_new` | `unsupported feature` | 1 | sql/merge/merge_into_parenthesis_bug.test | `statement ok<br>CREATE TABLE my_timeseries_new (ts TIMESTAMP, x DOUBLE PRECISION, y DOUBLE PRECISION);` |  |
+| `nested_struct_pushdown_test` | `unsupported feature` | 2 | sql/optimizer/plan/plan_struct_projection_pushdown.test | `statement ok<br>CREATE TABLE nested_struct_pushdown_test(id INT, struct_col STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool)));` |  |
+| `newentry` | `unsupported feature` | 1 | sql/merge/merge_into_multiple_updates.test | `statement ok<br>CREATE TABLE NewEntry(type varchar, number int, text varchar, country VARCHAR, date DATE);` |  |
+| `null_partition_test` | `unsupported feature` | 1 | sql/optimizer/test_window_self_join.test | `statement ok<br>CREATE TABLE null_partition_test (id INT, category VARCHAR);` |  |
+| `nullif` | `unsupported feature` | 1 | sql/join/iejoin/test_iejoin_null_keys.test | `statement ok<br>insert into tt select nullif(r % 3, 0), nullif (r % 5, 0), r from range(0, 10) tbl(r);` |  |
+| `obs` | `unsupported feature` | 2 | sql/optimizer/plan/test_filter_pushdown.test | `statement ok<br>CREATE TABLE obs (<br>  person_id INTEGER,<br>  observation_period_start_date DATE<br>);` |  |
+| `parse_duckdb_log_message` | `unsupported feature` | 2 | sql/logging/logging_csv.test | `query III<br>SELECT <br>	scope, <br>	path: parse_duckdb_log_message('FileSystem', message)['path'],<br>	op: parse_duckdb_log_message('FileSystem', message)['op'],<br>FROM "{TEMP_DIR}/logging_csv_log.csv"<br>WHERE path = '{DATA_DIR}/csv/big_number.csv';<br>----<br>CONNECTION	{DATA_DIR}/csv/big_number.csv	OPEN<br>CONNECTION	{DATA_DIR}/csv/big_number.csv	READ<br>CONNECTION	{DATA_DIR}/csv/big_number.csv	READ<br>CONNECTION	{DATA_DIR}/csv/big_number.csv	CLOSE` |  |
+| `people` | `unsupported feature` | 1 | sql/merge/merge_into_too_few_columns.test | `statement ok<br>CREATE TABLE people (id INTEGER, name VARCHAR, salary FLOAT);` |  |
+| `quote` | `unsupported feature` | 1 | sql/copy/csv/multidelimiter/test_abac.test | `statement ok<br>DROP TABLE abac_tbl<br><br># Mix of complex quotes/delimiters/escapes<br># CSV contains ABABABACABABABABABADABABABADABACABABABABABADABAC<br># quote -> "ABAB"<br># escape -> "ABAC"<br># delimiter -> "ABAD"<br># first value is an escaped quote (ABAB)<br># second value is a quoted delimiter followed by an escaped quote<br># third value is an escape outside of a set of quotes (interpreted as a literal value)` |  |
+| `read_ndjson_objects` | `unsupported feature` | 12 | sql/json/table/read_json_objects.test | `query I<br>select * from read_ndjson_objects('{DATA_DIR}/json/empty.ndjson')<br>----` |  |
+| `right_table` | `unsupported feature` | 2 | sql/join/semianti/right_anti.test<br>sql/join/semianti/right_semi.test | `statement ok<br>CREATE TABLE right_table (a INTEGER, b INTEGER);` |  |
+| `rollup` | `unsupported feature` | 2 | sql/optimizer/test_duplicate_groups_optimizer.test<br>sql/optimizer/test_rollup_column_pruning.test | `query II<br>EXPLAIN SELECT col1, col2, col4 <br>FROM events JOIN t2 ON events.col1 = t2.col4 <br>GROUP BY ROLLUP(col1, col2, col4);<br>----<br>logical_opt	<!REGEX>:.*unused.*` |  |
+| `sale` | `unsupported feature` | 2 | sql/merge/merge_into.test<br>sql/merge/merge_into_returning.test | `statement ok<br>CREATE TABLE Sale(item_id int, volume int);` |  |
+| `services` | `unsupported feature` | 1 | sql/optimizer/test_window_self_join.test | `statement ok<br>CREATE TABLE services (date DATE, train_number INT);` |  |
+| `smallints2` | `unsupported feature` | 1 | sql/overflow/table_overflow.test | `statement ok<br>CREATE TABLE smallints2 (j SMALLINT);` |  |
+| `stock` | `unsupported feature` | 9 | sql/merge/merge_into.test<br>sql/merge/merge_into_by_source.test<br>sql/merge/merge_into_constraint.test<br>sql/merge/merge_into_default.test<br>sql/merge/merge_into_error.test<br>sql/merge/merge_into_insert_star.test<br>sql/merge/merge_into_returning.test<br>sql/merge/merge_into_update_star.test | `statement ok<br>CREATE TABLE Stock(item_id int, balance int);` |  |
+| `struct_data` | `unsupported feature` | 1 | sql/order/test_limit_percent.test | `statement ok<br>CREATE TABLE struct_data (g INTEGER, e INTEGER)` |  |
+| `struct_pushdown_test` | `unsupported feature` | 1 | sql/optimizer/plan/plan_struct_projection_pushdown.test | `statement ok<br>CREATE TABLE struct_pushdown_test(id INT, struct_col STRUCT(sub_col1 integer, sub_col2 bool));` |  |
+| `tbl_grow_shrink` | `unsupported feature` | 1 | sql/optimizer/test_rowid_pushdown_deletes.test | `statement ok<br>CREATE TABLE tbl_grow_shrink (id_var VARCHAR, id_int INTEGER, id_point BIGINT);` |  |
+| `test_t1` | `unsupported feature` | 1 | sql/alter/add_col/test_add_col_user_type.test | `statement ok<br>CREATE TABLE test_schema.test_t1 (i INT);` |  |
+| `text` | `unsupported feature` | 2 | sql/json/test_json_export.test | `statement ok<br>create table text(i varchar);` |  |
+| `timestamp_copy_test` | `unsupported feature` | 7 | sql/json/table/read_json_dates.test | `statement ok<br>create table timestamp_copy_test (t timestamp)` |  |
+| `totals` | `unsupported feature` | 2 | sql/merge/merge_into_subquery.test<br>sql/merge/merge_into_subquery_action.test | `statement ok<br>CREATE TABLE Totals(item_id int, balance int);` |  |
+| `tt` | `unsupported feature` | 1 | sql/join/iejoin/test_iejoin_null_keys.test | `statement ok<br>create table tt (x int, y int, z int);` |  |
+| `tt1` | `unsupported feature` | 1 | sql/join/asof/test_asof_join_predicates.test | `statement ok<br>CREATE TABLE tt1 (i INTEGER, j VARCHAR);` |  |
+| `tt2` | `unsupported feature` | 2 | sql/join/asof/test_asof_join_predicates.test<br>sql/join/iejoin/test_iejoin_null_keys.test | `statement ok<br>create table tt2 (x int);` |  |
+| `unnest_test` | `unsupported feature` | 1 | sql/ordinality/ordinality_inout.test | `statement ok<br>CREATE TABLE unnest_test(a char[]);` |  |
+| `v4` | `unsupported feature` | 2 | sql/order/test_limit_parameter.test | `query I<br>EXECUTE v4(3)<br>----<br>17<br>18<br>19` |  |
+| `v5` | `unsupported feature` | 2 | sql/order/test_limit_parameter.test | `query I<br>EXECUTE v5(3, 0)<br>----<br>0<br>1<br>2` |  |
+| `v6` | `unsupported feature` | 2 | sql/order/test_limit_parameter.test | `query I<br>EXECUTE v6(1, 0, 0)<br>----<br>0<br>1<br>2<br>3` |  |
+| `v7` | `unsupported feature` | 7 | sql/order/test_limit_parameter.test | `query I<br>EXECUTE v7(2, NULL)<br>----<br>0<br>1` |  |
+| `vw` | `unsupported feature` | 2 | sql/catalog/view/test_view_sql.test<br>sql/catalog/view/test_view_sql_with_dependencies.test | `statement ok<br>create or replace view vw (c1, c2) as select * from tbl;` |  |
+| `west` | `unsupported feature` | 1 | sql/join/iejoin/test_iejoin_east_west.test | `statement ok<br>CREATE TABLE west AS SELECT * FROM (VALUES<br>    ('s1', 404, 100,  6, 4),<br>    ('s2', 498, 140, 11, 2),<br>    ('s3', 676,  80, 10, 1),<br>    ('s4', 742,  90,  5, 4)<br>) west(rid, t_id, time, cost, cores)` |  |
+| `write_log` | `unsupported feature` | 12 | sql/logging/logging_buffer_size.test<br>sql/logging/logging_context_ids.test<br>sql/logging/test_logging_function.test | `statement ok<br>SELECT write_log('hey1', log_type := 'test_logging_autocommit')` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T06:50:32.581040+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 1
+- Files with issues: 1580
+- Unknown function TODOs: 1208
+- Unsupported feature TODOs: 18009
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 1
+
+## Unknown Functions
+
+| Function | Count | Files | Doc |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Doc |
+| --- | --- | ---: | --- | --- | --- |
+| `j` | `unsupported feature` | 1 | sql/optimizer/expression/test_equal_or_null_optimization.test | `query T nosort distinctrewrite1<br>EXPLAIN SELECT i IS NOT DISTINCT FROM j FROM test;<br>----<br>EvalScalar<br>├── output columns: [i IS NOT DISTINCT FROM j (#3)]<br>├── expressions: [assume_not_null(if(CAST((NOT is_not_null(test.i (#0)) AND NOT is_not_null(test.j (#1))) AS Boolean NULL), true, CAST((NOT is_not_null(test.i (#0)) OR NOT is_not_null(test.j (#1))) AS Boolean NULL), false, test.i (#0) = test.j (#1)))]<br>├── estimated rows: 3.00<br>└── TableScan<br>    ├── table: default.default.test<br>    ├── scan id: 0<br>    ├── output columns: [i (#0), j (#1)]<br>    ├── read rows: 3<br>    ├── read size: < 1 KiB<br>    ├── partitions total: 1<br>    ├── partitions scanned: 1<br>    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]<br>    ├── push downs: [filters: [], limit: NONE]<br>    └── estimated rows: 3.00` |  |

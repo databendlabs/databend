@@ -1,3 +1,4 @@
+# Check Norwegian collations are primary, not aliases
 # TODO: unsupported feature
 # query I
 # from pragma_collations() 

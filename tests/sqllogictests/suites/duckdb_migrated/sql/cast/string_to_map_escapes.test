@@ -39,10 +39,11 @@
 
 ## FIXME: not sure what to do here, maybe we shouldn't "respect scopes" if the child type is not nested
 ## Valid: key and value with parentheses
-#query I
-#SELECT $${key\ (with\ parens) = value\ (with\ parens)}$$::MAP(VARCHAR, VARCHAR);
-#----
-#{key (with parens)=value (with parens)}
+# TODO: unsupported feature
+# query I
+# SELECT $${key\ (with\ parens) = value\ (with\ parens)}$$::MAP(VARCHAR, VARCHAR);
+# ----
+# {key (with parens)=value (with parens)}
 
 # Valid: key contains unescaped space
 

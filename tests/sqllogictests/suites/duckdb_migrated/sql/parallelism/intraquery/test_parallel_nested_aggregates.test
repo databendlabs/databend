@@ -1,0 +1,71 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# create table t as select range a, range%10 b from range(0, 100000);
+
+# non-deterministic so we can't check the result
+
+# TODO: unsupported feature
+# statement ok
+# select first([a]) from t group by b%2;
+
+# TODO: unsupported feature
+# query II rowsort
+# select min([a]), max([a]) from t group by b%2;
+# ----
+# [0]	[99998]
+# [1]	[99999]
+
+# TODO: unsupported feature
+# query II rowsort
+# select min([-a, 1, a]), max([-a, 1, a]) from t group by b%2;
+# ----
+# [-99998, 1, 99998]	[0, 1, 0]
+# [-99999, 1, 99999]	[-1, 1, 1]
+
+# TODO: unsupported feature
+# query II rowsort
+# select min({'i': a}), max({'i': a}) from t group by b%2 order by all;
+# ----
+# {'i': 0}	{'i': 99998}
+# {'i': 1}	{'i': 99999}
+
+# TODO: unsupported feature
+# query II rowsort
+# select min({'i': a, 'j': a % 2}), max({'i': a, 'j': a % 2}) from t group by b%2;
+# ----
+# {'i': 0, 'j': 0}	{'i': 99998, 'j': 0}
+# {'i': 1, 'j': 1}	{'i': 99999, 'j': 1}
+
+# NULL inputs
+
+# TODO: unsupported feature
+# query I
+# select first(NULL::INT[]) from t group by b%2;
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select min(NULL::INT[]) from t group by b%2;
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select first(NULL::ROW(i INTEGER)) from t group by b%2;
+# ----
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select min(NULL::ROW(i INTEGER)) from t group by b%2;
+# ----
+# NULL
+# NULL

@@ -1,8 +1,11 @@
+# uncorrelated
 # TODO: unsupported feature
 # query I
 # select 'ABC' collate nocase in (select 'aBc');
 # ----
 # 1
+
+# correlated
 
 # TODO: unsupported feature
 # query I

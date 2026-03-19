@@ -1,0 +1,29 @@
+query R
+SELECT 6 * 1 / 2
+----
+3.0
+
+query I
+SELECT 6 * 1 // 2
+----
+3
+
+query I
+SELECT (6 * 1) // 2
+----
+3
+
+query I
+SELECT 6 * (1 // 2)
+----
+0
+
+query R
+SELECT 6 + 1 / 2
+----
+6.5
+
+query I
+SELECT 6 + 1 // 2
+----
+6

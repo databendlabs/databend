@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# query II nosort pg_dbase
+# SELECT * FROM pg_database
+
+# TODO: unsupported feature
+# query II nosort pg_dbase
+# SELECT * FROM pg_catalog.pg_database

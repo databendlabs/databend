@@ -1,0 +1,107 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS vals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(id INTEGER, v tinyint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (0, -128), (1, 127), (2, 0), (3, -2), (4, 2);
+
+# cannot negate the min value
+
+# TODO: unsupported feature
+# statement error
+# SELECT -v FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT -v FROM vals WHERE id>0
+
+# TODO: unsupported feature
+# query I
+# SELECT -v FROM vals WHERE id>1 ORDER BY id
+# ----
+# 0
+# 2
+# -2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(id INTEGER, v smallint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (0, -32768), (1, 32767), (2, 0), (3, -2), (4, 2);
+
+# cannot negate the min value
+
+# TODO: unsupported feature
+# statement error
+# SELECT -v FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT -v FROM vals WHERE id>0
+
+# TODO: unsupported feature
+# query I
+# SELECT -v FROM vals WHERE id>1 ORDER BY id
+# ----
+# 0
+# 2
+# -2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(id INTEGER, v integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (0, -2147483648), (1, 2147483647), (2, 0), (3, -2), (4, 2);
+
+# cannot negate the min value
+
+# TODO: unsupported feature
+# statement error
+# SELECT -v FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT -v FROM vals WHERE id>0
+
+# TODO: unsupported feature
+# query I
+# SELECT -v FROM vals WHERE id>1 ORDER BY id
+# ----
+# 0
+# 2
+# -2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE vals(id INTEGER, v bigint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals VALUES (0, -9223372036854775808), (1, 9223372036854775807), (2, 0), (3, -2), (4, 2);
+
+# cannot negate the min value
+
+# TODO: unsupported feature
+# statement error
+# SELECT -v FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT -v FROM vals WHERE id>0
+
+# TODO: unsupported feature
+# query I
+# SELECT -v FROM vals WHERE id>1 ORDER BY id
+# ----
+# 0
+# 2
+# -2

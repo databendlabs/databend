@@ -1,0 +1,126 @@
+# Test duplicate aggregates with 21+ values (original bug - issue #20187)
+# This used to throw: "Pivot aggregate count mismatch (expected 2, found 1)"
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 21)) ON range USING sum(range), sum(range);
+
+# Should have 42 columns (21 pivot values × 2 aggregates)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM (PIVOT (FROM range(0, 21)) ON range USING sum(range), sum(range));
+# ----
+# 1
+
+# Test with range(20)
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 20)) ON range USING sum(range), sum(range);
+
+# Test with smaller range
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 10)) ON range USING sum(range), sum(range);
+
+# Test with three duplicate aggregates
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 10)) ON range USING sum(range), sum(range), sum(range);
+
+# Verify three duplicates create 3x columns (30 columns = 10 values × 3 aggregates)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM (PIVOT (FROM range(0, 10)) ON range USING sum(range), sum(range), sum(range));
+# ----
+# 1
+
+# Test mix of duplicate and unique aggregates
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 21)) ON range USING sum(range), max(range), sum(range);
+
+# should have 63 columns (21 values × 3 aggregates)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM (PIVOT (FROM range(0, 21)) ON range USING sum(range), max(range), sum(range));
+# ----
+# 1
+
+# Test with complex expressions
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 20)) ON range USING sum(range), sum(range);
+
+# Test different aggregate functions
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 21)) ON range USING avg(range), avg(range);
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (FROM range(0, 21)) ON range USING count(range), count(range);
+
+# Test with actual data to verify correctness
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT * FROM (
+#   PIVOT (FROM range(0, 3)) ON range USING sum(range), sum(range)
+# );
+# ----
+# 0	0	1	1	2	2
+
+# Test that values are correct
+
+# TODO: unsupported feature
+# query II
+# SELECT "0_sum(""range"")", "0_sum(""range"")_1" FROM (
+#   PIVOT (FROM range(0, 21)) ON range USING sum(range), sum(range)
+# );
+# ----
+# 0	0
+
+# TODO: unsupported feature
+# query II
+# SELECT "5_sum(""range"")", "5_sum(""range"")_1" FROM (
+#   PIVOT (FROM range(0, 21)) ON range USING sum(range), sum(range)
+# );
+# ----
+# 5	5
+
+# Test with mixed aggregates to ensure correct mapping
+
+# TODO: unsupported feature
+# query III
+# SELECT "0_sum(""range"")", "0_max(""range"")", "0_sum(""range"")_1" FROM (
+#   PIVOT (FROM range(0, 21)) ON range USING sum(range), max(range), sum(range)
+# );
+# ----
+# 0	0	0
+
+# TODO: unsupported feature
+# query III
+# SELECT "5_sum(""range"")", "5_max(""range"")", "5_sum(""range"")_1" FROM (
+#   PIVOT (FROM range(0, 21)) ON range USING sum(range), max(range), sum(range)
+# );
+# ----
+# 5	5	5
+
+# Test with string aggregates
+
+# TODO: unsupported feature
+# statement ok
+# PIVOT (
+#   SELECT range, range::VARCHAR as str_range
+#   FROM range(0, 21)
+# )
+# ON range
+# USING max(str_range), max(str_range);

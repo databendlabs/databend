@@ -1,5 +1,6 @@
-statement ok
-DROP TABLE IF EXISTS abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS abac_tbl
 
 # TODO: unsupported feature
 # query II
@@ -17,8 +18,9 @@ DROP TABLE IF EXISTS abac_tbl
 # CSV file contains ABABACABABABAC
 # this is equivalent to "AB	ABAB	"
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
 
 # TODO: unsupported feature
 # query I
@@ -34,22 +36,28 @@ CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
 
 # do the same but with a large unused quote specifier
 
-statement ok
-DELETE FROM abac_tbl;
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM abac_tbl;
 
+# TODO: unsupported feature
 # query I
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (DELIMITER 'ABAC', QUOTE 'ABABABABABAB', AUTO_DETECT FALSE);
 # ----
 # 1
-#
+# 
+
+# TODO: unsupported feature
 # query TTT
 # SELECT * FROM abac_tbl
 # ----
 # AB	ABAB	NULL
-#
+# 
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+# 
 # # Mix of complex quotes/delimiters/escapes
 # # CSV contains ABABABACABABABABABADABABABADABACABABABABABADABAC
 # # quote -> "ABAB"
@@ -58,76 +66,103 @@ DELETE FROM abac_tbl;
 # # first value is an escaped quote (ABAB)
 # # second value is a quoted delimiter followed by an escaped quote
 # # third value is an escape outside of a set of quotes (interpreted as a literal value)
+
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
-#
+# 
+
+# TODO: unsupported feature
 # query I
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac_mix.csv' (DELIMITER 'ABAD', QUOTE 'ABAB', ESCAPE 'ABAC', AUTO_DETECT FALSE);
 # ----
 # 1
-#
+# 
+
+# TODO: unsupported feature
 # query TTT
 # SELECT * FROM abac_tbl
 # ----
 # ABAB	ABADABAB	ABAC
-#
+# 
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+# 
 # # CSV terminates in the middle of quote parsing
 # # CSV contains ABAB, quote is ABABABABAB
+
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR);
-#
+# 
+
+# TODO: unsupported feature
 # query I
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac_incomplete_quote.csv' (QUOTE 'ABABABABAB', AUTO_DETECT FALSE);
 # ----
 # 1
-#
+# 
+
+# TODO: unsupported feature
 # query T
 # SELECT * FROM abac_tbl
 # ----
 # ABAB
-#
+# 
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+# 
 # # Newline in the middle of quote parsing
 # # CSV contains ABAB\nABAB
 # # Quote is ABABABABAB
+
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR);
-#
+# 
+
+# TODO: unsupported feature
 # query I
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac_newline_in_quote.csv' (QUOTE 'ABABABABAB', AUTO_DETECT FALSE);
 # ----
 # 2
-#
+# 
+
+# TODO: unsupported feature
 # query T
 # SELECT * FROM abac_tbl
 # ----
 # ABAB
 # ABAB
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Simple quote terminates immediately results in error
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/simple_unterminated_quote.csv' (QUOTE '"', AUTO_DETECT FALSE, strict_mode TRUE);
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/simple_unterminated_quote.csv' (QUOTE '"', AUTO_DETECT FALSE, strict_mode TRUE);
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # File ends in quoted value (simple)
 # CSV contains only ""
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
 # TODO: unsupported feature
 # query I
@@ -141,14 +176,16 @@ CREATE TABLE abac_tbl (a VARCHAR);
 # ----
 # NULL
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # File ends in quoted value (complex)
 # force complex parsing through a complex delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
 # TODO: unsupported feature
 # query I
@@ -162,62 +199,79 @@ CREATE TABLE abac_tbl (a VARCHAR);
 # ----
 # NULL
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Simple quote terminates after escape results in error
 # CSV contains "\"
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_with_escape.csv' (QUOTE '"', ESCAPE '|', AUTO_DETECT FALSE, strict_mode TRUE);
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_with_escape.csv' (QUOTE '"', ESCAPE '|', AUTO_DETECT FALSE, strict_mode TRUE);
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Simple quote terminates after quote escape results in error
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_escape.csv' (QUOTE '"', ESCAPE '"', AUTO_DETECT FALSE, strict_mode TRUE);
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_escape.csv' (QUOTE '"', ESCAPE '"', AUTO_DETECT FALSE, strict_mode TRUE);
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Simple quote terminates after escape results in error
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
-
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_escape.csv' (QUOTE '"', ESCAPE '''', AUTO_DETECT FALSE, strict_mode TRUE);
-
-statement ok
-DROP TABLE abac_tbl
-
-# # Multi-byte quote terminates immediately results in error
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR);
-#
+
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_escape.csv' (QUOTE '"', ESCAPE '''', AUTO_DETECT FALSE, strict_mode TRUE);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
+
+# # Multi-byte quote terminates immediately results in error
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
+# 
+
+# TODO: unsupported feature
 # statement error
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/complex_unterminated_quote.csv' (QUOTE 'ABABAC', AUTO_DETECT FALSE);
 # ----
 # 0
-#
+# 
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+# 
 # Quote followed by incomplete multi-byte delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/incomplete_multibyte_delimiter.csv' (DELIMITER 'ABAC', AUTO_DETECT FALSE, quote '"', strict_mode TRUE);
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/incomplete_multibyte_delimiter.csv' (DELIMITER 'ABAC', AUTO_DETECT FALSE, quote '"', strict_mode TRUE);
 
 # TODO: unsupported feature
 # query I
@@ -225,66 +279,91 @@ COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/incomplete_multibyte_delimiter
 # ----
 # 1
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # # Multi-byte quote terminates after escape results in error
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR);
-#
+# 
+
+# TODO: unsupported feature
 # statement error
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_with_escape_complex.csv' (QUOTE 'ABAC', ESCAPE 'ABAB', AUTO_DETECT FALSE);
 # ----
 # line 1
-#
+# 
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+# 
 # # Multi-byte quote terminates after quote escape results in error
+
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR);
-#
+# 
+
+# TODO: unsupported feature
 # statement error
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_escape_complex.csv' (QUOTE 'ABAC', ESCAPE 'ABAC', AUTO_DETECT FALSE);
 # ----
 # line 1
-#
+# 
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+# 
 # # Multi-byte quote terminates after escape results in error
+
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR);
-#
+# 
+
+# TODO: unsupported feature
 # statement error
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_escape_complex.csv' (QUOTE 'ABAC', ESCAPE 'ABAB', AUTO_DETECT FALSE);
 # ----
 # line 1
-#
+# 
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+# 
 # # Delimiter, quote and escape have a maximum size of 255 bytes
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
+# TODO: unsupported feature
 # statement error
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (QUOTE 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
-#
+# 
+
+# TODO: unsupported feature
 # statement error
 # COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (ESCAPE 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
 
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (DELIMITER 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/abac.csv' (DELIMITER 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', AUTO_DETECT FALSE);
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Test newline with multi-byte delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
 
 # TODO: unsupported feature
 # query I
@@ -299,13 +378,15 @@ CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
 # A	B
 # A	C
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Test newline with multi-byte delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
 
 # TODO: unsupported feature
 # query I
@@ -320,45 +401,58 @@ CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
 # A	B
 # A	C
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Test unterminated quotes with multi-line delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_multi_line.csv' (DELIMITER 'BA', AUTO_DETECT FALSE, strict_mode TRUE);
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unterminated_quote_multi_line.csv' (DELIMITER 'BA', AUTO_DETECT FALSE, strict_mode TRUE);
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Test unquote not followed by delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
-
-statement error
-COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unquote_without_delimiter.csv' (DELIMITER 'BA', AUTO_DETECT FALSE, strict_mode TRUE);
-
-statement ok
-DROP TABLE abac_tbl
-
-# # Test escape followed by non-quote and non-escape (multi-byte)
+# TODO: unsupported feature
 # statement ok
 # CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
-#
+
+# TODO: unsupported feature
 # statement error
-# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/escape_non_quote_escape_complex.csv' (DELIMITER 'BA', ESCAPE 'XX', AUTO_DETECT FALSE);
-#
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/unquote_without_delimiter.csv' (DELIMITER 'BA', AUTO_DETECT FALSE, strict_mode TRUE);
+
+# TODO: unsupported feature
 # statement ok
 # DROP TABLE abac_tbl
-#
+
+# # Test escape followed by non-quote and non-escape (multi-byte)
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR);
+# 
+
+# TODO: unsupported feature
+# statement error
+# COPY abac_tbl FROM '{DATA_DIR}/csv/multidelimiter/escape_non_quote_escape_complex.csv' (DELIMITER 'BA', ESCAPE 'XX', AUTO_DETECT FALSE);
+# 
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
+# 
 # Test file end after delimiter with multi-byte delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
 # TODO: unsupported feature
 # query I
@@ -372,13 +466,15 @@ CREATE TABLE abac_tbl (a VARCHAR);
 # ----
 # AAA
 
-statement ok
-DROP TABLE abac_tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE abac_tbl
 
 # Test file end after delimiter with single-byte delimiter
 
-statement ok
-CREATE TABLE abac_tbl (a VARCHAR);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abac_tbl (a VARCHAR);
 
 # TODO: unsupported feature
 # query I

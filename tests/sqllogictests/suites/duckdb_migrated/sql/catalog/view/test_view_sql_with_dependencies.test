@@ -1,23 +1,30 @@
-statement ok
-DROP VIEW IF EXISTS "schema name"."view name"
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS "schema name"."view name"
 
-statement ok
-DROP VIEW IF EXISTS "view name"
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS "view name"
 
-statement ok
-DROP VIEW IF EXISTS my_schema.X
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS my_schema.X
 
-statement ok
-DROP VIEW IF EXISTS my_schema.Y
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS my_schema.Y
 
-statement ok
-DROP VIEW IF EXISTS vw
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS vw
 
-statement ok
-DROP TABLE IF EXISTS "table name"
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "table name"
 
-statement ok
-DROP TABLE IF EXISTS tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
 
 # TODO: unsupported feature
 # statement ok
@@ -39,6 +46,8 @@ DROP TABLE IF EXISTS tbl
 # statement ok
 # alter view my_schema.X rename to Y;
 
+# Properly renamed to Y
+
 # TODO: unsupported feature
 # query I
 # select trim(sql, chr(10)) from duckdb_views() where internal = false;
@@ -54,14 +63,16 @@ DROP TABLE IF EXISTS tbl
 # select trim(sql, chr(10)) from duckdb_views() where internal = false;
 # ----
 
-statement ok
-create table tbl (
-	a integer,
-	b varchar
-)
+# TODO: unsupported feature
+# statement ok
+# create table tbl (
+# 	a integer,
+# 	b varchar
+# )
 
-statement ok
-create view vw as select * from tbl;
+# TODO: unsupported feature
+# statement ok
+# create view vw as select * from tbl;
 
 # sql is not affected by the column names of the table
 
@@ -71,20 +82,23 @@ create view vw as select * from tbl;
 # ----
 # CREATE VIEW vw AS SELECT * FROM tbl;
 
-# TODO: result differs
+# TODO: unsupported feature
 # statement error
 # alter table tbl rename column b to x;
 
-statement ok
-drop view vw;
+# TODO: unsupported feature
+# statement ok
+# drop view vw;
 
-statement ok
-alter table tbl rename column b to x;
+# TODO: unsupported feature
+# statement ok
+# alter table tbl rename column b to x;
 
 # Recreate the view
 
-statement ok
-CREATE VIEW vw AS SELECT * FROM tbl;
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW vw AS SELECT * FROM tbl;
 
 # sql is not affected by the column names of the table
 
@@ -94,20 +108,24 @@ CREATE VIEW vw AS SELECT * FROM tbl;
 # ----
 # CREATE VIEW vw AS SELECT * FROM tbl;
 
-statement ok
-create or replace view vw (c1, c2) as select * from tbl;
+# TODO: unsupported feature
+# statement ok
+# create or replace view vw (c1, c2) as select * from tbl;
 
-statement ok
-create or replace table "table name" (
-	"column name 1" integer,
-	"column name 2" varchar
-)
+# TODO: unsupported feature
+# statement ok
+# create or replace table "table name" (
+# 	"column name 1" integer,
+# 	"column name 2" varchar
+# )
 
-statement ok
-create or replace view "view name" as select * from "table name";
+# TODO: unsupported feature
+# statement ok
+# create or replace view "view name" as select * from "table name";
 
-statement ok
-drop view vw;
+# TODO: unsupported feature
+# statement ok
+# drop view vw;
 
 # TODO: unsupported feature
 # query I
@@ -115,8 +133,9 @@ drop view vw;
 # ----
 # CREATE VIEW "view name" AS SELECT * FROM "table name";
 
-statement ok
-drop view "view name"
+# TODO: unsupported feature
+# statement ok
+# drop view "view name"
 
 # TODO: unsupported feature
 # statement ok

@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS v0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE v0 (v1 INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO v0(x) VALUES (2) ON CONFLICT DO NOTHING;

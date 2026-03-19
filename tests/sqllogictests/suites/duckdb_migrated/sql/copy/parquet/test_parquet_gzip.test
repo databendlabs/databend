@@ -2,4 +2,4 @@
 # query IIIIIIIIIIIIIIII
 # select * from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet')
 # ----
-# TODO: hash result
+# EXPECTED TODO: hash result

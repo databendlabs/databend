@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers SELECT * FROM range(0, 10000);
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM integers
+# ----
+# 12000	71994000

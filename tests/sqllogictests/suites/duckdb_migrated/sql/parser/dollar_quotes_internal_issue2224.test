@@ -1,0 +1,95 @@
+# we replace unicode spaces in query strings, except if they are quoted
+# internal issue 2224 found that this doesn't work properly for double-dollar quoting
+# lhs is regular space, rhs is a wider unicode space, so this should be false
+# TODO: unsupported feature
+#query I
+#select $$ $$ = $$　$$;
+#----
+#false
+# TODO: unsupported feature
+# query I
+# select $tag$ $tag$ = $tag$　$tag$;
+# ----
+# 0
+
+# worked properly before for these quotes
+
+# TODO: unsupported feature
+# query I
+# select ' ' = '　';
+# ----
+# 0
+
+# just checking if parsing didn't break by fixing the dollar thing
+
+# TODO: unsupported feature
+# query I
+# select $$$$ = '';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select $tag$$tag$ = '';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '' = $$$$;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '' = $tag$$tag$;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select $$ $$ = $$　$$ or ' ' = '　';
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select $tag$ $tag$ = $tag$　$tag$ or ' ' = '　';
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select ' ' = '　' or $$ $$ = $$　$$;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select ' ' = '　' or $tag$ $tag$ = $tag$　$tag$;
+# ----
+# 0
+
+# we can nest dollars if tags don't match
+
+# TODO: unsupported feature
+# query I
+# select $tag$ $duck$ $tag$ = $tag$　$duck$　$tag$;
+# ----
+# 0
+
+# of course we have to try this too
+
+# TODO: unsupported feature
+# query I
+# select $🦆$du ck$🦆$ = $🦆$du　ck$🦆$;
+# ----
+# 0
+
+# and some more unicode
+
+# TODO: unsupported feature
+# query I
+# select $ü$x x$ü$ = $ü$x　x$ü$;
+# ----
+# 0

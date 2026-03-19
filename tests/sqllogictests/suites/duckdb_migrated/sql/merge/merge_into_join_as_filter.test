@@ -1,0 +1,41 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS aaa
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS foo
+
+# TODO: unsupported feature
+# statement ok
+# create table foo (bar integer);
+
+# TODO: unsupported feature
+# statement ok
+# insert into foo values (1);
+
+# TODO: unsupported feature
+# statement ok
+# merge into foo as f using (select 2 as bar) b on f.bar is not null when matched then update when not matched then insert;
+
+# TODO: unsupported feature
+# query I
+# FROM foo
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table aaa (id int, status varchar, flag int, starttime datetime, endtime datetime);
+
+# TODO: unsupported feature
+# statement ok
+# merge into aaa
+#     using (
+#     	select 	1 as id, 'xx' as status, 1 as flag, now() as starttime, null as endtime
+#     ) as upserts
+#     on  (upserts.id = aaa.id and aaa.flag =1::int and aaa.status = upserts.status)
+#     when matched then
+#         update set endtime = upserts.starttime
+#     when not matched then
+#         insert by name;

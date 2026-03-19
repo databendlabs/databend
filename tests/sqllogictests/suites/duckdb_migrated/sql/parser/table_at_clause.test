@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => TIMESTAMP '2020-01-01')
+
+statement error
+SELECT * FROM tbl AT (VERSION => 42)
+
+statement error
+SELECT * FROM tbl t(c1, c2) AT (TIMESTAMP => '2020-01-01')
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => getvariable('my_timestamp'))
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => NOW() - INTERVAL '3 days')
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => TIMESTAMP '2020-01-01' + a)
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => (SELECT MIN(ts) FROM tbl))

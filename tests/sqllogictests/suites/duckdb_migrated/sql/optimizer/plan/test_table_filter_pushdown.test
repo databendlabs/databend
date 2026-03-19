@@ -1,0 +1,29 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers AS SELECT i AS i, i AS j FROM range(0, 100) tbl(i)
+
+query I
+SELECT j FROM integers where j = 99
+----
+99
+
+query I
+SELECT j FROM integers where j = 99 AND i=99
+----
+99
+
+query I
+SELECT j FROM integers where j = 99 AND i=90
+----
+
+query I
+SELECT count(i) FROM integers where j > 90 and i < 95
+----
+4
+
+query I
+SELECT count(i) FROM integers where j > 90 and j < 95
+----
+4

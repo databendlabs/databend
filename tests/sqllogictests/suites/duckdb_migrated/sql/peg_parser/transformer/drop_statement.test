@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers (i bigint);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement error
+# DROP SCHEMA s1;
+
+# TODO: unsupported feature
+# statement error
+# DROP INDEX test_index;
+
+# TODO: unsupported feature
+# statement error
+# DROP MACRO plus1;
+
+# TODO: unsupported feature
+# statement error
+# DROP SEQUENCE temp.t1;
+
+# TODO: unsupported feature
+# statement error
+# DROP MACRO test.test_macro2;

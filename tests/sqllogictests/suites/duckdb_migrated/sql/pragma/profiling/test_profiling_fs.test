@@ -1,0 +1,46 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS profile_fs.tbl
+
+# FIXME: Enable when more read paths have been added to profiling.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE profile_fs.tbl AS SELECT range AS id FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT profile_fs;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT total_bytes_written FROM metrics_output;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN total_bytes_written > 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx ON profile_fs.tbl(id);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH profile_fs;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM profile_fs.tbl;
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN total_bytes_read > 0 THEN 'true'
+# 	ELSE 'false' END
+# FROM metrics_output;
+# ----
+# 1

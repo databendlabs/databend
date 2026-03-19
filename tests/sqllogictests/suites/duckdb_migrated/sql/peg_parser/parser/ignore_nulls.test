@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$explain select first_value(i IGNORE NULLS) over () from integers$TEST_PEG_PARSER$);

@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement error
+# SELECT 42 ORDER BY -9223372036854775808;

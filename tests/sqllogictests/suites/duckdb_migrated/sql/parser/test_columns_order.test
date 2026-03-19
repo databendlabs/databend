@@ -1,0 +1,65 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(col1 INTEGER, col2 INTEGER, col3 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1, 200, 10), (2, 100, 20), (3, 200, 0)
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl ORDER BY COLUMNS('col1|col3')
+# ----
+# 1	200	10
+# 2	100	20
+# 3	200	0
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl ORDER BY COLUMNS('col2|col3')
+# ----
+# 2	100	20
+# 3	200	0
+# 1	200	10
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl ORDER BY COLUMNS('col2|col3') DESC
+# ----
+# 1	200	10
+# 3	200	0
+# 2	100	20
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl ORDER BY COLUMNS('col2') DESC, COLUMNS('col3') ASC
+# ----
+# 3	200	0
+# 1	200	10
+# 2	100	20
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl ORDER BY COLUMNS(lambda x: x[-1] IN ('2', '3'))
+# ----
+# 2	100	20
+# 3	200	0
+# 1	200	10
+
+# set ops
+
+# TODO: unsupported feature
+# query III
+# FROM tbl UNION FROM tbl ORDER BY COLUMNS('col2|col3') DESC
+# ----
+# 1	200	10
+# 3	200	0
+# 2	100	20
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM tbl ORDER BY COLUMNS('xxxx')

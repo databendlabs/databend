@@ -1,0 +1,79 @@
+# TODO: unsupported feature
+# query I
+# SELECT 2*3+1
+# ----
+# 7
+
+# TODO: unsupported feature
+# query I
+# SELECT 1+2*3
+# ----
+# 7
+
+# ** precedence (issue 3561)
+
+# TODO: unsupported feature
+# query R
+# SELECT 2^2 + 1;
+# ----
+# 5.0
+
+# TODO: unsupported feature
+# query I
+# SELECT 2**2 + 1;
+# ----
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT 1+2**2;
+# ----
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT 1+2^2;
+# ----
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT 2**4 / 2;
+# ----
+# 8
+
+# TODO: unsupported feature
+# query I
+# SELECT 2**(4 / 2);
+# ----
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT 16/2**4;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (16/2)**4;
+# ----
+# 4096
+
+# TODO: unsupported feature
+# query I
+# SELECT 2**3**2;
+# ----
+# 64
+
+# TODO: unsupported feature
+# query I
+# SELECT 2^3**2;
+# ----
+# 64
+
+# TODO: unsupported feature
+# query I
+# SELECT 2**3^2;
+# ----
+# 64

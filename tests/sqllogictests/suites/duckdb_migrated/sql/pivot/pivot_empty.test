@@ -1,0 +1,32 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS Cities
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+# TODO: unsupported feature
+# query II
+# PIVOT Cities ON Country USING SUM(Population);
+# ----
+
+# TODO: unsupported feature
+# query I
+# PIVOT Cities ON Country, Name USING SUM(Population);
+# ----
+
+# TODO: unsupported feature
+# query III
+# PIVOT Cities ON Country IN ('xx') USING SUM(Population);
+# ----
+
+# TODO: unsupported feature
+# query II
+# PIVOT Cities ON (Country, Name) IN ('xx') USING SUM(Population);
+# ----
+
+# TODO: unsupported feature
+# query IIII
+# PIVOT Cities ON Country IN ('xx', 'yy') USING SUM(Population);
+# ----

@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' as "my""db";
+
+# TODO: unsupported feature
+# statement ok
+# USE "my""db";

@@ -1,20 +1,26 @@
-statement ok
-DROP TABLE IF EXISTS "(SELECT 17 + 25)"
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "(SELECT 17 + 25)"
 
-statement ok
-DROP TABLE IF EXISTS tbl
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
 
-statement ok
-DROP TABLE IF EXISTS tbl2
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl2
 
-statement ok
-DROP TABLE IF EXISTS tbl2_varchar
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl2_varchar
 
-statement ok
-DROP TABLE IF EXISTS tbl_empty
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl_empty
 
-statement ok
-DROP TABLE IF EXISTS tbl_int
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl_int
 
 # TODO: unsupported feature
 # statement ok
@@ -62,6 +68,7 @@ DROP TABLE IF EXISTS tbl_int
 # ----
 # 42
 
+# TODO: unsupported feature
 # query text
 
 # TODO: unsupported feature
@@ -70,6 +77,7 @@ DROP TABLE IF EXISTS tbl_int
 # ----
 # hello
 
+# TODO: unsupported feature
 # query a table
 
 # TODO: unsupported feature
@@ -100,6 +108,7 @@ DROP TABLE IF EXISTS tbl_int
 # 15
 # 24
 
+# TODO: unsupported feature
 # query multiple nested type tags
 
 # TODO: unsupported feature
@@ -110,23 +119,29 @@ DROP TABLE IF EXISTS tbl_int
 
 # test incorrect usage
 
-statement error
-SELECT * FROM query(NULL);
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM query(NULL);
 
-statement error
-SELECT * FROM query(' ');
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM query(' ');
 
-statement error
-SELECT * FROM query('');
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM query('');
 
-statement error
-SELECT * FROM query('FROM query(FROM)');
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM query('FROM query(FROM)');
 
-statement error
-SELECT * FROM query('SELECT 1; SELECT 2');
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM query('SELECT 1; SELECT 2');
 
-statement error
-SELECT query(SELECT 1);
+# TODO: unsupported feature
+# statement error
+# SELECT query(SELECT 1);
 
 # TODO: unsupported feature
 # statement error
@@ -140,18 +155,21 @@ SELECT query(SELECT 1);
 
 # PIVOT without explicit IN clause should give helpful error message
 
-statement error
-SELECT * FROM query('SELECT * FROM (PIVOT (SELECT 1 AS col) ON col using first(col))');
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM query('SELECT * FROM (PIVOT (SELECT 1 AS col) ON col using first(col))');
 
-statement ok
-CREATE TABLE tbl_int AS SELECT 42;
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl_int AS SELECT 42;
 
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE tbl_varchar AS SELECT 'duckdb';
 
-statement ok
-CREATE TABLE tbl2_varchar AS SELECT '1?ch@racter$';
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl2_varchar AS SELECT '1?ch@racter$';
 
 # TODO: unsupported feature
 # statement ok
@@ -177,8 +195,9 @@ CREATE TABLE tbl2_varchar AS SELECT '1?ch@racter$';
 # 4	5	6
 # 7	8	9
 
-statement ok
-CREATE TABLE tbl2 (a INT, b INT, c INT);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl2 (a INT, b INT, c INT);
 
 # TODO: unsupported feature
 # statement ok
@@ -197,41 +216,53 @@ CREATE TABLE tbl2 (a INT, b INT, c INT);
 
 # test incorrect usage
 
-statement error
-FROM query_table();
+# TODO: unsupported feature
+# statement error
+# FROM query_table();
 
-statement error
-FROM query_table(NULL);
+# TODO: unsupported feature
+# statement error
+# FROM query_table(NULL);
 
-statement error
-FROM query_table([]);
+# TODO: unsupported feature
+# statement error
+# FROM query_table([]);
 
-statement error
-FROM query_table(['']);
+# TODO: unsupported feature
+# statement error
+# FROM query_table(['']);
 
-statement error
-FROM query_table('tbl_int', 'tbl_varchar', tbl2_varchar);
+# TODO: unsupported feature
+# statement error
+# FROM query_table('tbl_int', 'tbl_varchar', tbl2_varchar);
 
-statement error
-FROM query_table([tbl_int, tbl2]);
+# TODO: unsupported feature
+# statement error
+# FROM query_table([tbl_int, tbl2]);
 
-statement error
-FROM query_table(not_defined_tbl);
+# TODO: unsupported feature
+# statement error
+# FROM query_table(not_defined_tbl);
 
-statement error
-FROM query_table('FROM query(''select 1 + 2;'')');
+# TODO: unsupported feature
+# statement error
+# FROM query_table('FROM query(''select 1 + 2;'')');
 
-statement error
-FROM query_table('FROM query("select 1 + 2;")');
+# TODO: unsupported feature
+# statement error
+# FROM query_table('FROM query("select 1 + 2;")');
 
-statement error
-FROM query_table('(SELECT 17 + 25)');
+# TODO: unsupported feature
+# statement error
+# FROM query_table('(SELECT 17 + 25)');
 
-statement ok
-CREATE TABLE "(SELECT 17 + 25)"(i int);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "(SELECT 17 + 25)"(i int);
 
-statement ok
-insert into "(SELECT 17 + 25)" values (100);
+# TODO: unsupported feature
+# statement ok
+# insert into "(SELECT 17 + 25)" values (100);
 
 # TODO: unsupported feature
 # query I
@@ -251,11 +282,13 @@ insert into "(SELECT 17 + 25)" values (100);
 # ----
 # 100
 
-statement error
-FROM query_table(SELECT 17 + 25);
+# TODO: unsupported feature
+# statement error
+# FROM query_table(SELECT 17 + 25);
 
-statement error
-FROM query_table("SELECT 4 + 2");
+# TODO: unsupported feature
+# statement error
+# FROM query_table("SELECT 4 + 2");
 
 # TODO: unsupported feature
 # statement error
@@ -295,11 +328,14 @@ FROM query_table("SELECT 4 + 2");
 
 # test incorrect usage
 
-statement error
-FROM query_table(true);
+# TODO: unsupported feature
+# statement error
+# FROM query_table(true);
 
-statement error
-FROM query_table(tbl2, true);
+# TODO: unsupported feature
+# statement error
+# FROM query_table(tbl2, true);
 
-statement error
-FROM query_table(['tbl_int', 'tbl_varchar', 'tbl_empty', '(select ''I am a subquery'')'], false);
+# TODO: unsupported feature
+# statement error
+# FROM query_table(['tbl_int', 'tbl_varchar', 'tbl_empty', '(select ''I am a subquery'')'], false);

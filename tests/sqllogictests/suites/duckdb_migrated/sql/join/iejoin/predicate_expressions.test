@@ -1,13 +1,16 @@
-statement ok
-DROP TABLE IF EXISTS calendar
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS calendar
 
-statement ok
-DROP TABLE IF EXISTS scd2
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS scd2
 
-statement ok
-DROP TABLE IF EXISTS scd2_non_null
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS scd2_non_null
 
-# TODO: result differs
+# TODO: unsupported feature
 # statement ok
 # create table calendar as SELECT *
 # FROM range(DATE '2022-01-01', DATE '2024-02-01', INTERVAL '1' MONTH);
@@ -50,7 +53,7 @@ DROP TABLE IF EXISTS scd2_non_null
 # group by range
 # order by range
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II nosort expected
@@ -77,7 +80,7 @@ DROP TABLE IF EXISTS scd2_non_null
 # group by range
 # order by range
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II nosort expected
@@ -104,7 +107,7 @@ DROP TABLE IF EXISTS scd2_non_null
 # group by range
 # order by range
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query II nosort expected

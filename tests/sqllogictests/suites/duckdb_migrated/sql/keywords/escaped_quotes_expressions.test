@@ -1,0 +1,87 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "SCH""EMA"."TA""BLE"
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA "SCH""EMA";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE "EN""UM" AS ENUM('ALL');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "SCH""EMA"."TA""BLE"("COL""UMN" "EN""UM");
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO "SCH""EMA"."TA""BLE" VALUES ('ALL');
+
+# column references
+
+# TODO: unsupported feature
+# query I
+# SELECT "COL""UMN" FROM "SCH""EMA"."TA""BLE";
+# ----
+# ALL
+
+# TODO: unsupported feature
+# query I
+# SELECT "TA""BLE"."COL""UMN" FROM "SCH""EMA"."TA""BLE";
+# ----
+# ALL
+
+# TODO: unsupported feature
+# query I
+# SELECT "SCH""EMA"."TA""BLE"."COL""UMN" FROM "SCH""EMA"."TA""BLE";
+# ----
+# ALL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE "SCH""EMA"."TA""BLE";
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "SCH""EMA"."TA""BLE"("COL""UMN" ROW("SO""ME" ROW("I""N" INTEGER)));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO "SCH""EMA"."TA""BLE" VALUES ({'so"me': {'i"n': 3}});
+
+# struct fields with column references
+
+# TODO: unsupported feature
+# query I
+# SELECT "COL""UMN"."SO""ME"."I""N" FROM "SCH""EMA"."TA""BLE";
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT "TA""BLE"."COL""UMN"."SO""ME"."I""N" FROM "SCH""EMA"."TA""BLE";
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT "SCH""EMA"."TA""BLE"."COL""UMN"."SO""ME"."I""N" FROM "SCH""EMA"."TA""BLE";
+# ----
+# 3
+
+# struct extract
+
+# TODO: unsupported feature
+# query I
+# SELECT (("SCH""EMA"."TA""BLE"."COL""UMN")."SO""ME")."I""N" FROM "SCH""EMA"."TA""BLE";
+# ----
+# 3
+
+# array index
+
+# TODO: unsupported feature
+# query I
+# SELECT "SCH""EMA"."TA""BLE"."COL""UMN"['SO"ME']['I"N'] FROM "SCH""EMA"."TA""BLE";
+# ----
+# 3

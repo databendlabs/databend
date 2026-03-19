@@ -1,0 +1,113 @@
+# TODO: unsupported feature
+# query I
+# SELECT 42;
+# ----
+# 42
+
+# test all special unicode spaces
+# see https://jkorpela.fi/chars/spaces.html for a list
+
+# TODO: unsupported feature
+# query I
+# SELECT​42;
+# ----
+# 42
+
+# unicode space in strings are not modified
+
+# TODO: unsupported feature
+# query I
+# SELECT​strlen('​')>=2;
+# ----
+# 1
+
+# unicode spaces in strings with escaped quotes
+
+# TODO: unsupported feature
+# query I
+# SELECT​strlen(' ''​')>=4;
+# ----
+# 1
+
+# unicode space in comment
+
+# TODO: unsupported feature
+# query I
+# SELECT​ -- ​;
+# 42
+# ----
+# 42
+
+# multiple unicode spaces
+
+# TODO: unsupported feature
+# query I
+# SELECT​42​​​​​
+# ----
+# 42
+
+# invisible space in identifiers
+
+# TODO: unsupported feature
+# query I
+# SELECT a​ FROM (SELECT 42) t(a);
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT﻿42;
+# ----
+# 42
+
+# unicode space in strings are not modified
+
+# TODO: unsupported feature
+# query I
+# SELECT﻿strlen('﻿')>=2;
+# ----
+# 1
+
+# unicode spaces in strings with escaped quotes
+
+# TODO: unsupported feature
+# query I
+# SELECT﻿strlen(' ''﻿')>=4;
+# ----
+# 1
+
+# unicode space in comment
+
+# TODO: unsupported feature
+# query I
+# SELECT﻿ -- ﻿;
+# 42
+# ----
+# 42
+
+# multiple unicode spaces
+
+# TODO: unsupported feature
+# query I
+# SELECT﻿42﻿﻿﻿﻿﻿
+# ----
+# 42
+
+# invisible space in identifiers
+
+# TODO: unsupported feature
+# query I
+# SELECT a﻿ FROM (SELECT 42) t(a);
+# ----
+# 42
+
+
+# the query can still fail even after replacing unicode spaces
+
+# TODO: unsupported feature
+# statement error
+# SELEC 
+
+# TODO: unsupported feature
+# statement error
+# S

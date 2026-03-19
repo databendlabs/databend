@@ -1,0 +1,95 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# call enable_peg_parser();
+
+# TODO: unsupported feature
+# statement error
+# SELECT (1 + (2 * 3);
+
+# TODO: unsupported feature
+# statement error
+# SELECT 1 + 2 * ;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM users JOIN orders;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM users WHERE id = 1 WHERE age > 20;
+
+# TODO: unsupported feature
+# statement error
+# SELECT (10).;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM tbl WHERE id IN ();
+
+# TODO: unsupported feature
+# statement error
+# SELECT a, b,, FROM tbl;
+
+# TODO: unsupported feature
+# statement error
+# SELECT users..id FROM users;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM tbl WHERE x = (SELECT 1 FROM (SELECT 2);
+
+# TODO: unsupported feature
+# statement error
+# SELECT x -> x + FROM tbl;
+
+# TODO: unsupported feature
+# statement error
+# WITH cte AS (SELECT 1) SELECT * FROM cte WHERE (SELECT 1 FROM cte2;
+
+# TODO: unsupported feature
+# statement error
+# SELECT id, SUM(amount) OVER (PARTITION BY ) FROM sales;
+
+# TODO: unsupported feature
+# statement error
+# WITH cte1 AS (SELECT 1), cte2 AS (SELECT ) SELECT * FROM cte1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT count(*) FILTER (WHERE ) FROM tbl;
+
+# TODO: unsupported feature
+# statement error
+# SELECT {'a': 1, 'b': };
+
+# TODO: unsupported feature
+# statement error
+# SELECT CASE WHEN x > 10 THEN 'large' WHEN x < 5;
+
+# TODO: unsupported feature
+# statement error
+# SELECT '2023-01-01':: ;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 1 INTERSECT;
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (a bigint, b bigint, c bigint); 
+
+# TODO: unsupported feature
+# statement ok
+# SELECT a, b, SUM(c) FROM tbl GROUP BY GROUPING SETS (a, (b, ));
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE t1 (id INTEGER, name );

@@ -1,0 +1,18 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+create table t1 as FROM (VALUES
+	('A', 1),
+	('B', 3),
+	('C', 12),
+	('A', 5),
+	('B', 8),
+	('C', 9),
+	('A', 10),
+	('B', 20),
+	('C', 3))
+	t(a, b);
+
+statement ok
+from t1 order by a

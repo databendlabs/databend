@@ -1,0 +1,47 @@
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM pg_namespace WHERE nspname='myschema'
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA myschema
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM pg_namespace WHERE nspname='myschema'
+# ----
+# 1
+
+# can query through the "pg_catalog" namespace
+
+# TODO: unsupported feature
+# query IIII nosort pgnamespace
+# SELECT * FROM pg_namespace
+
+# TODO: unsupported feature
+# query IIII nosort pgnamespace
+# SELECT * FROM pg_catalog.pg_namespace
+
+# oid of an entry does not change even after adding new entries
+
+# TODO: unsupported feature
+# query I nosort pgmyschema
+# SELECT * FROM pg_namespace WHERE nspname='myschema'
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA bla
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA myschema33
+
+# TODO: unsupported feature
+# query I nosort pgmyschema
+# SELECT * FROM pg_namespace WHERE nspname='myschema'

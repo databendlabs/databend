@@ -1,0 +1,146 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS groups
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3)
+
+# TODO: unsupported feature
+# query T
+# EXPLAIN SELECT COUNT(*), COUNT(), COUNT(i) FROM integers;
+# ----
+# EvalScalar
+# ├── output columns: [COUNT(*) (#1), COUNT(i) (#3), COUNT() (#2)]
+# ├── expressions: [COUNT(*) (#1)]
+# ├── estimated rows: 1.00
+# └── EvalScalar
+#     ├── output columns: [COUNT(*) (#1), COUNT(i) (#3)]
+#     ├── expressions: [3, 3]
+#     ├── estimated rows: 1.00
+#     └── DummyTableScan
+
+# TODO: unsupported feature
+# query III
+# SELECT COUNT(*), COUNT(), COUNT(i) FROM integers;
+# ----
+# 3	3	3
+
+# again, here there is only a single count and a single sum
+
+# TODO: unsupported feature
+# query T
+# EXPLAIN SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+# ----
+# EvalScalar
+# ├── output columns: [COUNT(*) (#1), SUM(i) (#3), COUNT(i) (#4), COUNT() (#2), sum(i) / count(i) (#5)]
+# ├── expressions: [SUM(i) (#3) / CAST(COUNT(i) (#4) AS UInt64 NULL)]
+# ├── estimated rows: 1.00
+# └── EvalScalar
+#     ├── output columns: [COUNT(*) (#1), SUM(i) (#3), COUNT(i) (#4), COUNT() (#2)]
+#     ├── expressions: [COUNT(*) (#1)]
+#     ├── estimated rows: 1.00
+#     └── AggregateFinal
+#         ├── output columns: [COUNT(*) (#1), SUM(i) (#3), COUNT(i) (#4)]
+#         ├── group by: []
+#         ├── aggregate functions: [count(), sum(i), count(i)]
+#         ├── estimated rows: 1.00
+#         └── AggregatePartial
+#             ├── group by: []
+#             ├── aggregate functions: [count(), sum(i), count(i)]
+#             ├── estimated rows: 1.00
+#             └── TableScan
+#                 ├── table: default.default.integers
+#                 ├── scan id: 0
+#                 ├── output columns: [i (#0)]
+#                 ├── read rows: 3
+#                 ├── read size: < 1 KiB
+#                 ├── partitions total: 1
+#                 ├── partitions scanned: 1
+#                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+#                 ├── push downs: [filters: [], limit: NONE]
+#                 └── estimated rows: 3.00
+
+# TODO: unsupported feature
+# query IIIIR
+# SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+# ----
+# 3 3 6 3 2.0
+
+# however, once we add a null value COUNT(i) is no longer equal to COUNT(*)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (NULL)
+
+# now there are two counts!
+
+# TODO: unsupported feature
+# query T
+# EXPLAIN SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+# ----
+# EvalScalar
+# ├── output columns: [COUNT(*) (#1), SUM(i) (#3), COUNT(i) (#4), COUNT() (#2), sum(i) / count(i) (#5)]
+# ├── expressions: [SUM(i) (#3) / CAST(COUNT(i) (#4) AS UInt64 NULL)]
+# ├── estimated rows: 1.00
+# └── EvalScalar
+#     ├── output columns: [COUNT(*) (#1), SUM(i) (#3), COUNT(i) (#4), COUNT() (#2)]
+#     ├── expressions: [COUNT(*) (#1)]
+#     ├── estimated rows: 1.00
+#     └── AggregateFinal
+#         ├── output columns: [COUNT(*) (#1), SUM(i) (#3), COUNT(i) (#4)]
+#         ├── group by: []
+#         ├── aggregate functions: [count(), sum(i), count(i)]
+#         ├── estimated rows: 1.00
+#         └── AggregatePartial
+#             ├── group by: []
+#             ├── aggregate functions: [count(), sum(i), count(i)]
+#             ├── estimated rows: 1.00
+#             └── TableScan
+#                 ├── table: default.default.integers
+#                 ├── scan id: 0
+#                 ├── output columns: [i (#0)]
+#                 ├── read rows: 4
+#                 ├── read size: < 1 KiB
+#                 ├── partitions total: 2
+#                 ├── partitions scanned: 2
+#                 ├── pruning stats: [segments: <range pruning: 2 to 2 cost: 1 ms>, blocks: <range pruning: 2 to 2 cost: 1 ms>]
+#                 ├── push downs: [filters: [], limit: NONE]
+#                 └── estimated rows: 4.00
+
+# TODO: unsupported feature
+# query IIIIR
+# SELECT COUNT(*), COUNT(), SUM(i), COUNT(i), SUM(i) / COUNT(i) FROM integers;
+# ----
+# 4 4 6 3 2.0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE groups(grp INTEGER, aggr1 INTEGER, aggr2 INTEGER, aggr3 INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO groups VALUES (1, 1, 2, 3), (1, 2, 4, 6), (2, 1, 2, 3),  (2, 3, 6, 9);
+
+# TODO: unsupported feature
+# query III
+# SELECT
+#     sum(aggr1)::DOUBLE / count(aggr1)::DOUBLE AS avg_qty,
+#     sum(aggr2)::DOUBLE / count(aggr2)::DOUBLE AS avg_price,
+#     sum(aggr3)::DOUBLE / count(aggr3)::DOUBLE AS avg_disc
+# FROM
+#     groups
+# GROUP BY
+#     grp
+# ORDER BY grp;
+# ----
+# 1.5	3	4.5
+# 2	4	6

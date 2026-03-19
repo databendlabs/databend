@@ -1,8 +1,10 @@
-statement ok
-DROP TABLE IF EXISTS t0
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t0
 
-statement ok
-DROP TABLE IF EXISTS t63
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t63
 
 # TODO: unsupported feature
 # statement ok

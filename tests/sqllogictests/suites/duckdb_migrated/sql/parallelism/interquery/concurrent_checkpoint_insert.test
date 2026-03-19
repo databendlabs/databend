@@ -1,0 +1,799 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db0.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db1.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db10.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db11.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db12.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db13.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db14.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db15.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db16.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db17.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db18.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db19.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db2.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db20.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db21.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db22.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db23.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db24.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db25.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db26.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db27.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db28.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db29.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db3.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db30.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db31.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db32.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db33.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db34.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db35.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db36.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db37.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db38.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db39.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db4.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db40.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db41.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db42.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db43.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db44.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db45.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db46.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db47.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db48.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db49.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db5.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db50.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db51.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db52.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db53.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db54.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db55.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db56.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db57.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db58.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db59.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db6.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db60.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db61.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db62.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db63.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db64.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db65.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db66.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db67.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db68.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db69.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db7.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db70.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db71.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db72.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db73.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db74.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db75.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db76.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db77.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db78.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db79.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db8.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db80.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db81.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db82.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db83.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db84.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db85.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db86.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db87.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db88.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db89.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db9.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db90.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db91.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db92.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db93.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db94.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db95.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db96.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db97.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db98.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db99.tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db0.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db2.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db3.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db4.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db5.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db6.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db7.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db8.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db9.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db10.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db11.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db12.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db13.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db14.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db15.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db16.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db17.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db18.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db19.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db20.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db21.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db22.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db23.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db24.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db25.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db26.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db27.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db28.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db29.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db30.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db31.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db32.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db33.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db34.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db35.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db36.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db37.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db38.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db39.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db40.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db41.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db42.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db43.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db44.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db45.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db46.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db47.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db48.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db49.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db50.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db51.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db52.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db53.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db54.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db55.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db56.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db57.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db58.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db59.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db60.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db61.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db62.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db63.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db64.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db65.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db66.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db67.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db68.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db69.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db70.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db71.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db72.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db73.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db74.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db75.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db76.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db77.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db78.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db79.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db80.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db81.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db82.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db83.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db84.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db85.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db86.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db87.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db88.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db89.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db90.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db91.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db92.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db93.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db94.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db95.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db96.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db97.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db98.tbl (key INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db99.tbl (key INTEGER PRIMARY KEY);

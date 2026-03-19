@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# CALL check_peg_parser($TEST_PEG_PARSER$from tenk1 join tenk1 join int8_tbl on 1 = 1 on 1 = 1;$TEST_PEG_PARSER$);

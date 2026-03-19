@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS wal_latency.tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE wal_latency.tbl AS SELECT range AS id, 0 AS v FROM range(500_000);
+
+# Perform a large change in a single transaction so COMMIT must write a big WAL
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE wal_latency.tbl SET v = id;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN COMMIT_LOCAL_STORAGE_LATENCY >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN WRITE_TO_WAL_LATENCY >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DETACH wal_latency;
+
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN wal_replay_entry_count > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN attach_replay_wal_latency > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
+# ----
+# 1

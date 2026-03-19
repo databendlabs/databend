@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement maybe
+# select xvariable a = 1;
+# ----
+# Parser Error: syntax error at or near "="
+
+# TODO: unsupported feature
+# statement ok
+# call enable_peg_parser();
+
+# Here we should get the error from the parser override
+
+# TODO: unsupported feature
+# statement error
+# select xvariable a = 1;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM (VALUES(1));
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# call disable_peg_parser(); 
+
+# Here we should get the original PostgreSQL error again
+
+# TODO: unsupported feature
+# statement error
+# select xvariable a = 1;

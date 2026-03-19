@@ -1,0 +1,110 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(id BIGINT, "Sales (05/19/2020)" BIGINT, "Sales (06/03/2020)" BIGINT, "Sales (10/23/2020)" BIGINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES(10629465, 23, 47, 99);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES(98765432, 10, 99, 33);
+
+# SQL standard syntax
+
+# TODO: unsupported feature
+# query III
+# SELECT id, regexp_replace(date, 'Sales [(]([0-9]+)/([0-9]+)/([0-9]+)[)]', '\3-\1-\2')::DATE AS date, sales
+# FROM t1
+#     UNPIVOT (sales FOR date IN ("Sales (05/19/2020)", "Sales (06/03/2020)", "Sales (10/23/2020)"))
+#  ORDER BY ALL;
+# ----
+# 10629465	2020-05-19	23
+# 10629465	2020-06-03	47
+# 10629465	2020-10-23	99
+# 98765432	2020-05-19	10
+# 98765432	2020-06-03	99
+# 98765432	2020-10-23	33
+
+# base unpivot statement
+
+# TODO: unsupported feature
+# query III
+# SELECT id, regexp_replace(date, 'Sales [(]([0-9]+)/([0-9]+)/([0-9]+)[)]', '\3-\1-\2')::DATE AS date, sales
+# FROM
+#     (UNPIVOT t1 ON "Sales (05/19/2020)", "Sales (06/03/2020)", "Sales (10/23/2020)" INTO NAME date VALUE sales)
+#  ORDER BY ALL;
+# ----
+# 10629465	2020-05-19	23
+# 10629465	2020-06-03	47
+# 10629465	2020-10-23	99
+# 98765432	2020-05-19	10
+# 98765432	2020-06-03	99
+# 98765432	2020-10-23	33
+
+# alias
+
+# TODO: unsupported feature
+# query III
+# SELECT *
+# FROM
+# 	(UNPIVOT t1 ON "Sales (05/19/2020)" AS "2020-05-19", "Sales (06/03/2020)" AS "2020-06-03", "Sales (10/23/2020)" AS "2020-10-23" INTO NAME date VALUE sales)
+# ORDER BY ALL;
+# ----
+# 10629465	2020-05-19	23
+# 10629465	2020-06-03	47
+# 10629465	2020-10-23	99
+# 98765432	2020-05-19	10
+# 98765432	2020-06-03	99
+# 98765432	2020-10-23	33
+
+# regex in UNPIVOT
+
+# TODO: unsupported feature
+# query III
+# SELECT id, regexp_replace(date, 'Sales [(]([0-9]+)/([0-9]+)/([0-9]+)[)]', '\3-\1-\2')::DATE AS date, sales FROM t1
+#     UNPIVOT (Sales FOR Date IN (COLUMNS('Sales.*')))
+#  ORDER BY ALL;
+# ----
+# 10629465	2020-05-19	23
+# 10629465	2020-06-03	47
+# 10629465	2020-10-23	99
+# 98765432	2020-05-19	10
+# 98765432	2020-06-03	99
+# 98765432	2020-10-23	33
+
+# UNPIVOT statement
+
+# TODO: unsupported feature
+# query III
+# SELECT id, regexp_replace(date, 'Sales [(]([0-9]+)/([0-9]+)/([0-9]+)[)]', '\3-\1-\2')::DATE AS date, sales
+# FROM
+# 	(UNPIVOT t1 ON COLUMNS('Sales.*') INTO NAME date VALUE sales)
+# ORDER BY ALL;
+# ----
+# 10629465	2020-05-19	23
+# 10629465	2020-06-03	47
+# 10629465	2020-10-23	99
+# 98765432	2020-05-19	10
+# 98765432	2020-06-03	99
+# 98765432	2020-10-23	33
+
+# exclude clause
+
+# TODO: unsupported feature
+# query III
+# SELECT id, regexp_replace(date, 'Sales [(]([0-9]+)/([0-9]+)/([0-9]+)[)]', '\3-\1-\2')::DATE AS date, sales
+# FROM
+# 	(UNPIVOT t1 ON * EXCLUDE (id) INTO NAME date VALUE sales)
+# ORDER BY ALL;
+# ----
+# 10629465	2020-05-19	23
+# 10629465	2020-06-03	47
+# 10629465	2020-10-23	99
+# 98765432	2020-05-19	10
+# 98765432	2020-06-03	99
+# 98765432	2020-10-23	33

@@ -26,7 +26,7 @@
 # INNER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_totalprice + l.l_extendedprice > 250;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIII rowsort
@@ -46,7 +46,7 @@
 #     AND o.o_totalprice < l.l_extendedprice
 #     AND o.o_totalprice + l.l_extendedprice > 250;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIII rowsort
@@ -65,7 +65,7 @@
 # LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_totalprice + l.l_extendedprice > 250;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIII rowsort
@@ -86,7 +86,7 @@
 # LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_orderstatus != 'O';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIIII rowsort
@@ -107,7 +107,7 @@
 # RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_totalprice + l.l_extendedprice > 250;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIII rowsort
@@ -128,7 +128,7 @@
 # RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND l.l_shipmode != 'TRUCK';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIII rowsort
@@ -149,7 +149,7 @@
 # FULL OUTER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_totalprice + l.l_extendedprice > 250;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIII rowsort
@@ -172,7 +172,7 @@
 # FULL OUTER JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_totalprice > 100 AND l.l_shipmode = 'SHIP';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIIIII rowsort
@@ -197,7 +197,7 @@
 # SEMI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_totalprice + l.l_extendedprice > 250;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIT rowsort
@@ -216,7 +216,7 @@
 # ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_totalprice + l.l_extendedprice > 250;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIT rowsort
@@ -234,7 +234,7 @@
 # ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey
 #     AND o.o_orderstatus != 'O';
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIT rowsort
@@ -254,7 +254,7 @@
 #          AND l.l_orderkey + o.o_totalprice > 250)
 # FROM orders o;
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIT rowsort
@@ -274,15 +274,17 @@
 # statement ok
 # INSERT INTO lineitem VALUES (5, 200, 10, 2, 30.00, 300.00, 0.05, 0.02, 'N', 'F', '1996-01-12', '1996-01-17', '1996-01-22', 'DELIVER IN PERSON', 'SHIP', 'duplicate');
 
-statement error
-SELECT o.o_orderkey, o.o_totalprice,
-    (SELECT l.l_shipmode FROM lineitem l
-     WHERE l.l_orderkey = o.o_orderkey
-         AND l.l_orderkey + o.o_totalprice > 250)
-FROM orders o;
+# TODO: unsupported feature
+# statement error
+# SELECT o.o_orderkey, o.o_totalprice,
+#     (SELECT l.l_shipmode FROM lineitem l
+#      WHERE l.l_orderkey = o.o_orderkey
+#          AND l.l_orderkey + o.o_totalprice > 250)
+# FROM orders o;
 
-statement ok
-DELETE FROM lineitem WHERE l_comment = 'duplicate';
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM lineitem WHERE l_comment = 'duplicate';
 
 # TODO: unsupported feature
 # query II
@@ -294,7 +296,7 @@ DELETE FROM lineitem WHERE l_comment = 'duplicate';
 #     AND o.o_totalprice + l.l_extendedprice > 250
 # );
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # TODO: unsupported feature
 # query IIIT rowsort

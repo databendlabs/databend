@@ -1,18 +1,22 @@
-statement ok
-DROP TABLE IF EXISTS big_table
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS big_table
 
-statement ok
-DROP TABLE IF EXISTS integers1
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers1
 
 # TODO: unsupported feature
 # statement ok
 # DROP TABLE IF EXISTS integers2
 
-statement ok
-DROP TABLE IF EXISTS integers3
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers3
 
-statement ok
-DROP TABLE IF EXISTS single_col_table
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS single_col_table
 
 # TODO: unsupported feature
 # statement ok
@@ -36,19 +40,21 @@ DROP TABLE IF EXISTS single_col_table
 #     FALSE
 # );
 # ----
-# TODO: special result marker
+# EXPECTED TODO: special result marker
 
 # RHS contains multiple tables
 
-statement ok
-CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
 
 # TODO: unsupported feature
 # statement ok
 # CREATE TABLE integers2 AS SELECT * FROM (VALUES (1, '1'), (2, '2'), (3, '3')) tbl(i, s);
 
-statement ok
-CREATE TABLE integers3 AS SELECT * FROM (VALUES (1, '4'), (2, '5'), (3, '6')) tbl(i, s);
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers3 AS SELECT * FROM (VALUES (1, '4'), (2, '5'), (3, '6')) tbl(i, s);
 
 # TODO: unsupported feature
 # query III

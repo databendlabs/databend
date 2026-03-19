@@ -1,5 +1,8 @@
+# TODO: unsupported feature
 # statement ok
 # PRAGMA enable_verification
+# EXPECTED TODO: unsupported feature
+
 # TODO: unsupported feature
 # query I
 # SELECT struct_val.i
