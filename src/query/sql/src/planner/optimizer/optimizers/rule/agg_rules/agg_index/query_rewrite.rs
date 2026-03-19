@@ -1512,7 +1512,8 @@ impl<'a, 'b> ScalarExprMatcher<'a, 'b> {
 
         match (left, right) {
             (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => {
-                l.column.index == r.column.index && l.column.table_index == r.column.table_index
+                l.column.table_index == r.column.table_index
+                    && l.column.column_name == r.column.column_name
             }
             (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r))
             | (ScalarExpr::ConstantExpr(l), ScalarExpr::TypedConstantExpr(r, _))

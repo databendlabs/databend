@@ -166,11 +166,13 @@ fn unsupported<T>(name: &str) -> Result<T> {
 type TableKey = (String, String);
 type TableMap = HashMap<TableKey, Arc<dyn Table>>;
 type ColumnStatsMap = HashMap<String, BasicColumnStatistics>;
+type IndexMap = HashMap<MetaId, Vec<(u64, String, IndexMeta)>>;
 
 #[derive(Clone)]
 struct DummyCatalog {
     info: Arc<CatalogInfo>,
     tables: Arc<RwLock<TableMap>>,
+    indexes: Arc<RwLock<IndexMap>>,
 }
 
 impl std::fmt::Debug for DummyCatalog {
@@ -192,6 +194,7 @@ impl Default for DummyCatalog {
                 ..Default::default()
             }),
             tables: Arc::new(RwLock::new(HashMap::new())),
+            indexes: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -205,6 +208,27 @@ impl DummyCatalog {
 
     fn clear_tables(&self) {
         self.tables.write().clear();
+    }
+
+    fn insert_index(&self, table_id: MetaId, index_id: u64, name: &str, query: &str) {
+        self.indexes
+            .write()
+            .entry(table_id)
+            .or_default()
+            .push((
+                index_id,
+                name.to_string(),
+                IndexMeta {
+                    table_id,
+                    original_query: query.to_string(),
+                    query: query.to_string(),
+                    ..Default::default()
+                },
+            ));
+    }
+
+    fn clear_indexes(&self) {
+        self.indexes.write().clear();
     }
 }
 
@@ -294,6 +318,10 @@ impl Table for FakeTable {
     fn support_prewhere(&self) -> bool {
         true
     }
+
+    fn support_index(&self) -> bool {
+        true
+    }
 }
 
 #[async_trait::async_trait]
@@ -352,6 +380,36 @@ impl Catalog for DummyCatalog {
 
     async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         unsupported("catalog::update_index")
+    }
+
+    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        if let Some(table_id) = req.table_id {
+            Ok(self
+                .indexes
+                .read()
+                .get(&table_id)
+                .cloned()
+                .unwrap_or_default())
+        } else {
+            Ok(self
+                .indexes
+                .read()
+                .values()
+                .flat_map(|indexes| indexes.iter().cloned())
+                .collect())
+        }
+    }
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>> {
+        Ok(self
+            .indexes
+            .read()
+            .get(&req.table_id)
+            .cloned()
+            .unwrap_or_default())
     }
 
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
@@ -649,11 +707,112 @@ pub struct LiteTableContext {
     merge_into_join: RwLock<MergeIntoJoin>,
     variables: RwLock<HashMap<String, Scalar>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
+    can_scan_from_agg_index: RwLock<bool>,
     queued_duration: RwLock<Duration>,
     next_table_id: AtomicU64,
+    next_index_id: AtomicU64,
 }
 
 impl LiteTableContext {
+    async fn create_with_catalog_manager(shared_catalog_manager: bool) -> Result<Arc<Self>> {
+        init_globals();
+
+        let tenant = Tenant::new_literal("default");
+        let settings = Settings::create(tenant.clone());
+        let shared_settings = Settings::create(tenant.clone());
+        let catalog_manager = if shared_catalog_manager {
+            if let Some(catalog_manager) = GLOBAL_CATALOG_MANAGER.get() {
+                catalog_manager.clone()
+            } else {
+                let default_catalog = Arc::new(DummyCatalog::default());
+                let default_catalog_dyn: Arc<dyn Catalog> = default_catalog;
+                let mut rpc_conf = RpcClientConf::empty();
+                rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
+                rpc_conf.timeout = Some(Duration::from_millis(1));
+                let catalog_manager = Arc::new(CatalogManager {
+                    meta: MetaStoreProvider::new(rpc_conf)
+                        .create_meta_store::<DatabendRuntime>()
+                        .await
+                        .map_err(|err| ErrorCode::Internal(err.to_string()))?,
+                    default_catalog: default_catalog_dyn,
+                    external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
+                    catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
+                    catalog_caches: Default::default(),
+                });
+                let catalog_manager = GLOBAL_CATALOG_MANAGER
+                    .get_or_init(|| catalog_manager.clone())
+                    .clone();
+                INIT_GLOBAL_CATALOG_MANAGER.call_once(|| {
+                    GlobalInstance::set(catalog_manager.clone());
+                });
+                catalog_manager
+            }
+        } else {
+            let default_catalog = Arc::new(DummyCatalog::default());
+            let default_catalog_dyn: Arc<dyn Catalog> = default_catalog;
+            let mut rpc_conf = RpcClientConf::empty();
+            rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
+            rpc_conf.timeout = Some(Duration::from_millis(1));
+            Arc::new(CatalogManager {
+                meta: MetaStoreProvider::new(rpc_conf)
+                    .create_meta_store::<DatabendRuntime>()
+                    .await
+                    .map_err(|err| ErrorCode::Internal(err.to_string()))?,
+                default_catalog: default_catalog_dyn,
+                external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
+                catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
+                catalog_caches: Default::default(),
+            })
+        };
+        let default_catalog: Arc<DummyCatalog> = catalog_manager
+            .default_catalog
+            .as_any()
+            .downcast_ref::<DummyCatalog>()
+            .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
+            .clone()
+            .into();
+        default_catalog.clear_tables();
+        default_catalog.clear_indexes();
+
+        Ok(Arc::new(Self {
+            catalog_manager,
+            default_catalog,
+            settings,
+            shared_settings,
+            tenant,
+            current_catalog: "default".to_string(),
+            current_database: "default".to_string(),
+            cluster: RwLock::new(Arc::new(Cluster {
+                unassign: false,
+                local_id: "local".to_string(),
+                nodes: vec![],
+            })),
+            warehouse_distribution: RwLock::new(false),
+            abort_notify: Arc::new(WatchNotify::new()),
+            query: RwLock::new(String::new()),
+            query_text_hash: RwLock::new(String::new()),
+            query_parameterized_hash: RwLock::new(String::new()),
+            scan_progress: Arc::new(Progress::create()),
+            write_progress: Arc::new(Progress::create()),
+            join_spill_progress: Arc::new(Progress::create()),
+            group_by_spill_progress: Arc::new(Progress::create()),
+            aggregate_spill_progress: Arc::new(Progress::create()),
+            window_partition_spill_progress: Arc::new(Progress::create()),
+            result_progress: Arc::new(Progress::create()),
+            data_cache_metrics: DataCacheMetrics::new(),
+            copy_status: Arc::new(CopyStatus::default()),
+            mutation_status: Arc::new(RwLock::new(MutationStatus::default())),
+            multi_table_insert_status: Arc::new(Mutex::new(MultiTableInsertStatus::default())),
+            merge_into_join: RwLock::new(MergeIntoJoin::default()),
+            variables: RwLock::new(HashMap::new()),
+            runtime_filter_ready: RwLock::new(HashMap::new()),
+            can_scan_from_agg_index: RwLock::new(false),
+            queued_duration: RwLock::new(Duration::default()),
+            next_table_id: AtomicU64::new(1),
+            next_index_id: AtomicU64::new(1),
+        }))
+    }
+
     pub fn configure_for_optimizer_case(&self, auto_stats: bool) -> Result<()> {
         let settings = self.get_settings();
         settings.set_enable_auto_materialize_cte(0)?;
@@ -700,84 +859,11 @@ impl LiteTableContext {
     }
 
     pub async fn create() -> Result<Arc<Self>> {
-        init_testing_globals();
+        Self::create_with_catalog_manager(true).await
+    }
 
-        let tenant = Tenant::new_literal("default");
-        let settings = Settings::create(tenant.clone());
-        let shared_settings = Settings::create(tenant.clone());
-        let catalog_manager = if let Some(catalog_manager) =
-            THREAD_CATALOG_MANAGER.with(|cell| cell.get().cloned())
-        {
-            catalog_manager
-        } else {
-            let default_catalog = Arc::new(DummyCatalog::default());
-            let default_catalog_dyn: Arc<dyn Catalog> = default_catalog.clone();
-            let mut rpc_conf = RpcClientConf::empty();
-            rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
-            rpc_conf.timeout = Some(Duration::from_millis(1));
-            let catalog_manager = Arc::new(CatalogManager {
-                meta: MetaStoreProvider::new(rpc_conf)
-                    .create_meta_store::<DatabendRuntime>()
-                    .await
-                    .map_err(|err| ErrorCode::Internal(err.to_string()))?,
-                default_catalog: default_catalog_dyn,
-                external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
-                catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
-                catalog_caches: Default::default(),
-            });
-            THREAD_CATALOG_MANAGER.with(|cell| {
-                assert!(
-                    cell.set(catalog_manager.clone()).is_ok(),
-                    "catalog manager should be initialized once per thread"
-                );
-            });
-            GlobalInstance::set(catalog_manager.clone());
-            catalog_manager
-        };
-        let default_catalog: Arc<DummyCatalog> = catalog_manager
-            .default_catalog
-            .as_any()
-            .downcast_ref::<DummyCatalog>()
-            .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
-            .clone()
-            .into();
-        default_catalog.clear_tables();
-
-        Ok(Arc::new(Self {
-            catalog_manager,
-            default_catalog,
-            settings,
-            shared_settings,
-            tenant,
-            current_catalog: "default".to_string(),
-            current_database: "default".to_string(),
-            cluster: RwLock::new(Arc::new(Cluster {
-                unassign: false,
-                local_id: "local".to_string(),
-                nodes: vec![],
-            })),
-            warehouse_distribution: RwLock::new(false),
-            abort_notify: Arc::new(WatchNotify::new()),
-            query: RwLock::new(String::new()),
-            query_text_hash: RwLock::new(String::new()),
-            query_parameterized_hash: RwLock::new(String::new()),
-            scan_progress: Arc::new(Progress::create()),
-            write_progress: Arc::new(Progress::create()),
-            join_spill_progress: Arc::new(Progress::create()),
-            group_by_spill_progress: Arc::new(Progress::create()),
-            aggregate_spill_progress: Arc::new(Progress::create()),
-            window_partition_spill_progress: Arc::new(Progress::create()),
-            result_progress: Arc::new(Progress::create()),
-            data_cache_metrics: DataCacheMetrics::new(),
-            copy_status: Arc::new(CopyStatus::default()),
-            mutation_status: Arc::new(RwLock::new(MutationStatus::default())),
-            multi_table_insert_status: Arc::new(Mutex::new(MultiTableInsertStatus::default())),
-            merge_into_join: RwLock::new(MergeIntoJoin::default()),
-            variables: RwLock::new(HashMap::new()),
-            runtime_filter_ready: RwLock::new(HashMap::new()),
-            queued_duration: RwLock::new(Duration::default()),
-            next_table_id: AtomicU64::new(1),
-        }))
+    pub async fn create_isolated() -> Result<Arc<Self>> {
+        Self::create_with_catalog_manager(false).await
     }
 
     pub fn set_table_warehouse_distribution(&self, enabled: bool) {
@@ -944,6 +1030,26 @@ impl LiteTableContext {
         }
     }
 
+    pub fn register_agg_index(
+        &self,
+        database: &str,
+        table_name: &str,
+        name: &str,
+        sql: &str,
+    ) -> Result<u64> {
+        let table = self
+            .default_catalog
+            .tables
+            .read()
+            .get(&(database.to_string(), table_name.to_string()))
+            .cloned()
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("{}.{}", database, table_name)))?;
+        let index_id = self.next_index_id.fetch_add(1, Ordering::Relaxed);
+        self.default_catalog
+            .insert_index(table.get_id(), index_id, name, sql);
+        Ok(index_id)
+    }
+
     pub async fn bind_sql(self: &Arc<Self>, sql: &str) -> Result<Plan> {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
@@ -1060,9 +1166,11 @@ impl TableContext for LiteTableContext {
     }
     fn set_cacheable(&self, _cacheable: bool) {}
     fn get_can_scan_from_agg_index(&self) -> bool {
-        false
+        *self.can_scan_from_agg_index.read()
     }
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {}
+    fn set_can_scan_from_agg_index(&self, enable: bool) {
+        *self.can_scan_from_agg_index.write() = enable;
+    }
     fn get_enable_sort_spill(&self) -> bool {
         false
     }

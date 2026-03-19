@@ -19,9 +19,14 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::AggIndexPlan;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::AggIndexInfo;
+use databend_common_sql::plans::BoundColumnRef;
+use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::Visitor;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
@@ -187,7 +192,7 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
             .find(|spec| spec.matches(&case))
             .map(|spec| (case, spec))
     }) {
-        let ctx = LiteTableContext::create().await?;
+        let ctx = LiteTableContext::create_isolated().await?;
         run_test_case(&ctx, &case, spec, &mut mints).await?;
     }
     Ok(())
@@ -338,10 +343,135 @@ fn format_filter(info: &AggIndexInfo) -> Vec<String> {
     predicates
 }
 
+fn find_scan(s_expr: &SExpr) -> Result<Option<&databend_common_sql::plans::Scan>> {
+    match s_expr.plan() {
+        RelOperator::Scan(scan) => Ok(Some(scan)),
+        _ => find_scan(s_expr.child(0)?),
+    }
+}
+
+fn describe_table_columns(
+    metadata: &databend_common_sql::Metadata,
+    table_index: usize,
+) -> Vec<String> {
+    metadata
+        .columns_by_table_index(table_index)
+        .into_iter()
+        .map(|column| match column {
+            databend_common_sql::ColumnEntry::BaseTableColumn(col) => {
+                format!(
+                    "{} idx={} table_index={}",
+                    col.column_name, col.column_index, col.table_index
+                )
+            }
+            databend_common_sql::ColumnEntry::InternalColumn(col) => {
+                format!(
+                    "{} idx={} table_index={}",
+                    col.internal_column.column_name(),
+                    col.column_index,
+                    col.table_index
+                )
+            }
+            databend_common_sql::ColumnEntry::VirtualColumn(col) => {
+                format!(
+                    "{} idx={} table_index={}",
+                    col.column_name, col.column_index, col.table_index
+                )
+            }
+            databend_common_sql::ColumnEntry::DerivedColumn(_) => unreachable!(),
+        })
+        .collect()
+}
+
+fn describe_bound_columns(s_expr: &SExpr) -> Result<Vec<String>> {
+    struct BoundColumnCollector {
+        columns: Vec<String>,
+    }
+
+    impl SExprVisitor for BoundColumnCollector {
+        fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+            for scalar in expr.plan().scalar_expr_iter() {
+                let mut scalar_collector = ScalarBoundColumnCollector {
+                    columns: &mut self.columns,
+                };
+                scalar_collector.visit(scalar)?;
+            }
+            Ok(VisitAction::Continue)
+        }
+    }
+
+    struct ScalarBoundColumnCollector<'a> {
+        columns: &'a mut Vec<String>,
+    }
+
+    impl<'a, 'b> Visitor<'a> for ScalarBoundColumnCollector<'b> {
+        fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
+            if col.column.table_index.is_none() {
+                return Ok(());
+            }
+            self.columns.push(format!(
+                "db={:?} table={:?} col={} idx={} table_index={:?}",
+                col.column.database_name,
+                col.column.table_name,
+                col.column.column_name,
+                col.column.index,
+                col.column.table_index
+            ));
+            Ok(())
+        }
+    }
+
+    let mut collector = BoundColumnCollector {
+        columns: Vec::new(),
+    };
+    let _ = s_expr.accept(&mut collector)?;
+    collector.columns.sort();
+    collector.columns.dedup();
+    Ok(collector.columns)
+}
+
+async fn optimize_with_debug_agg_index(
+    ctx: &Arc<LiteTableContext>,
+    query_sql: &str,
+    index_sql: &str,
+) -> Result<Plan> {
+    let plan = ctx.bind_sql(query_sql).await?;
+    let metadata = match &plan {
+        Plan::Query { metadata, .. } => metadata.clone(),
+        _ => unreachable!("query sql must bind to query plan"),
+    };
+
+    let index_plan = ctx.bind_sql(index_sql).await?;
+    let Plan::Query { s_expr, .. } = index_plan else {
+        unreachable!("index sql must bind to query plan");
+    };
+    metadata
+        .write()
+        .add_agg_indices("default.default.t".to_string(), vec![AggIndexPlan {
+            index_id: 0,
+            sql: index_sql.to_string(),
+            s_expr: *s_expr,
+        }]);
+
+    ctx.optimize_plan(plan).await
+}
+
+async fn create_auto_bound_agg_index_ctx(index_sql: &str) -> Result<Arc<LiteTableContext>> {
+    let ctx = LiteTableContext::create_isolated().await?;
+    ctx.configure_for_optimizer_case(false)?;
+    ctx.get_settings()
+        .set_setting("enable_aggregating_index_scan".to_string(), "1".to_string())?;
+    ctx.set_can_scan_from_agg_index(true);
+    ctx.register_table_sql("create table t(a int, b int, c int)")
+        .await?;
+    ctx.register_agg_index("default", "t", "idx1", index_sql)?;
+    Ok(ctx)
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_lite_agg_index_optimizer_cases() -> Result<()> {
     for test in agg_index_test_cases() {
-        let ctx = LiteTableContext::create().await?;
+        let ctx = LiteTableContext::create_isolated().await?;
         ctx.configure_for_optimizer_case(test.case.auto_stats)?;
         setup_tables(&ctx, &test.case).await?;
 
@@ -391,6 +521,94 @@ async fn test_lite_agg_index_optimizer_cases() -> Result<()> {
             );
         }
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lite_agg_index_auto_bound_matches_manual_injection() -> Result<()> {
+    let index_sql = "select b, sum(a) from t where b > 1 group by b";
+    for query_sql in [
+        "select sum(a), b from t where b > 1 group by b",
+        "select b from t where b > 1 group by b",
+        "select sum(a) + 1 from t where b > 1 group by b",
+    ] {
+        let auto_ctx = create_auto_bound_agg_index_ctx(index_sql).await?;
+        let auto_plan = auto_ctx
+            .optimize_plan(auto_ctx.bind_sql(query_sql).await?)
+            .await?;
+        let auto_info = find_push_down_index_info_from_plan(&auto_plan)?
+            .expect("auto-bound agg index should match");
+
+        let manual_ctx = LiteTableContext::create_isolated().await?;
+        manual_ctx.configure_for_optimizer_case(false)?;
+        manual_ctx
+            .register_table_sql("create table t(a int, b int, c int)")
+            .await?;
+        let manual_plan = optimize_with_debug_agg_index(&manual_ctx, query_sql, index_sql).await?;
+        let manual_info = find_push_down_index_info_from_plan(&manual_plan)?
+            .expect("manually injected agg index should match");
+
+        assert_eq!(format_selection(auto_info), format_selection(manual_info));
+        assert_eq!(format_filter(auto_info), format_filter(manual_info));
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lite_agg_index_auto_bound_index_plan_is_normalized() -> Result<()> {
+    let index_sql = "select b, sum(a) from t where b > 1 group by b";
+    let query_sql = "select sum(a), b from t where b > 1 group by b";
+    let ctx = create_auto_bound_agg_index_ctx(index_sql).await?;
+    let plan = ctx.bind_sql(query_sql).await?;
+
+    let (query_scan, metadata) = match &plan {
+        Plan::Query { s_expr, metadata, .. } => (
+            find_scan(s_expr)?.expect("query scan should exist"),
+            metadata.read(),
+        ),
+        _ => unreachable!("debug test must bind to query plan"),
+    };
+
+    let agg_index = metadata
+        .get_agg_indices("default.default.t")
+        .expect("agg index should be bound from catalog")
+        .first()
+        .expect("agg index should not be empty");
+    let index_scan = find_scan(&agg_index.s_expr)?.expect("index scan should exist");
+    let query_columns = describe_table_columns(&metadata, query_scan.table_index);
+    let index_columns = describe_table_columns(&metadata, index_scan.table_index);
+    let index_bound_columns = describe_bound_columns(&agg_index.s_expr)?;
+
+    assert_eq!(
+        index_scan.table_index, query_scan.table_index,
+        "catalog-bound agg index scan should be normalized to query table_index"
+    );
+    assert_eq!(
+        index_columns, query_columns,
+        "catalog-bound agg index table metadata should match query table metadata"
+    );
+    assert!(
+        index_scan.statistics.table_stats.is_none(),
+        "normalized catalog-bound agg index scan should clear table statistics"
+    );
+    assert!(
+        index_scan.statistics.column_stats.is_empty(),
+        "normalized catalog-bound agg index scan should clear column statistics"
+    );
+    assert!(
+        index_scan.statistics.histograms.is_empty(),
+        "normalized catalog-bound agg index scan should clear histograms"
+    );
+    assert_eq!(
+        index_bound_columns,
+        vec![
+            "db=Some(\"default\") table=Some(\"t\") col=a idx=0 table_index=Some(0)".to_string(),
+            "db=Some(\"default\") table=Some(\"t\") col=b idx=1 table_index=Some(0)".to_string(),
+        ],
+        "catalog-bound agg index raw plan should keep canonical bound column names and table_index",
+    );
 
     Ok(())
 }
