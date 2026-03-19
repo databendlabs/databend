@@ -114,7 +114,7 @@ copy into @unload from ii file_format=(format_name='text');
 query ??
 select right(name, 4), size from list_stage(location=>'@unload');
 ----
-.tsv 12
+.txt 12
 
 query ??
 select $1, $2 from @unload(file_format => 'text');

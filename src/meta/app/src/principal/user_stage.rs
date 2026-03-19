@@ -190,7 +190,7 @@ impl FromStr for StageFileFormatType {
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
-            "TEXT" | "TABSEPARATED" => Ok(StageFileFormatType::Text),
+            "TEXT" | "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Text),
             "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
             "LANCE" => Ok(StageFileFormatType::Lance),

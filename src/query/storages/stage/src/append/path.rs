@@ -23,10 +23,9 @@ pub fn unload_path(
     compression: Option<CompressAlgorithm>,
     partition: Option<&str>,
 ) -> String {
-    let format_name =
-        format!("{:?}", info.stage.file_format_params.get_type()).to_ascii_lowercase();
+    let format_suffix = info.stage.file_format_params.suffix();
 
-    let suffix: &str = &compression
+    let compression_suffix: &str = &compression
         .map(|c| format!(".{}", c.extension()))
         .unwrap_or_default();
 
@@ -55,8 +54,8 @@ pub fn unload_path(
                     + prefix.len()
                     + partition.len()
                     + query_id.len()
-                    + format_name.len()
-                    + suffix.len()
+                    + format_suffix.len()
+                    + compression_suffix.len()
                     + 48,
             );
 
@@ -73,14 +72,12 @@ pub fn unload_path(
             full_path.push_str(prefix);
             full_path.push_str(&query_id);
             full_path.push_str(&format!(
-                "{:0>4}_{:0>8}.{}{}",
-                group_id, batch_id, format_name, suffix
+                "{group_id:0>4}_{batch_id:0>8}{format_suffix}{compression_suffix}",
             ));
             return full_path;
         }
         return format!(
-            "{}{}{:0>4}_{:0>8}.{}{}",
-            path, query_id, group_id, batch_id, format_name, suffix
+            "{path}{query_id}{group_id:0>4}_{batch_id:0>8}{format_suffix}{compression_suffix}",
         );
     }
     let (path, sep) = if path == "/" {
@@ -104,8 +101,7 @@ pub fn unload_path(
     full_path.push_str("data_");
     full_path.push_str(&query_id);
     full_path.push_str(&format!(
-        "{:0>4}_{:0>8}.{}{}",
-        group_id, batch_id, format_name, suffix
+        "{group_id:0>4}_{batch_id:0>8}{format_suffix}{compression_suffix}",
     ));
     full_path
 }

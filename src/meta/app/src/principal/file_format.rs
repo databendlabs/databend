@@ -59,6 +59,7 @@ const OPT_USE_LOGIC_TYPE: &str = "use_logic_type";
 #[serde(tag = "type")]
 pub enum FileFormatParams {
     Csv(CsvFileFormatParams),
+    #[serde(alias = "Tsv")]
     Text(TextFileFormatParams),
     NdJson(NdJsonFileFormatParams),
     Json(JsonFileFormatParams),
@@ -87,7 +88,7 @@ impl FileFormatParams {
     pub fn suffix(&self) -> &str {
         match self {
             FileFormatParams::Csv(_) => ".csv",
-            FileFormatParams::Text(_) => ".tsv",
+            FileFormatParams::Text(_) => ".txt",
             FileFormatParams::NdJson(_) => ".ndjson",
             FileFormatParams::Json(_) => ".json",
             FileFormatParams::Xml(_) => ".xml",

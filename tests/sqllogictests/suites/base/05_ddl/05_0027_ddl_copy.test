@@ -30,7 +30,7 @@ statement ok
 COPY INTO @st FROM t FILE_FORMAT=(type=TEXT)
 
 statement ok
-COPY INTO t_copy from @st PATTERN='.*[.]tsv' file_format = (type = TEXT) PURGE = true force=false max_files=1
+COPY INTO t_copy from @st PATTERN='.*[.]txt' file_format = (type = TEXT) PURGE = true force=false max_files=1
 
 ###### CSV ######
 statement ok
