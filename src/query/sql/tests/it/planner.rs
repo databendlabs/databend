@@ -564,7 +564,9 @@ async fn test_lite_agg_index_auto_bound_index_plan_is_normalized() -> Result<()>
     let plan = ctx.bind_sql(query_sql).await?;
 
     let (query_scan, metadata) = match &plan {
-        Plan::Query { s_expr, metadata, .. } => (
+        Plan::Query {
+            s_expr, metadata, ..
+        } => (
             find_scan(s_expr)?.expect("query scan should exist"),
             metadata.read(),
         ),

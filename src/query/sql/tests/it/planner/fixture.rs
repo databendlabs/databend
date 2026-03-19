@@ -211,20 +211,16 @@ impl DummyCatalog {
     }
 
     fn insert_index(&self, table_id: MetaId, index_id: u64, name: &str, query: &str) {
-        self.indexes
-            .write()
-            .entry(table_id)
-            .or_default()
-            .push((
-                index_id,
-                name.to_string(),
-                IndexMeta {
-                    table_id,
-                    original_query: query.to_string(),
-                    query: query.to_string(),
-                    ..Default::default()
-                },
-            ));
+        self.indexes.write().entry(table_id).or_default().push((
+            index_id,
+            name.to_string(),
+            IndexMeta {
+                table_id,
+                original_query: query.to_string(),
+                query: query.to_string(),
+                ..Default::default()
+            },
+        ));
     }
 
     fn clear_indexes(&self) {

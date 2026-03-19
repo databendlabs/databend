@@ -37,9 +37,9 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_expression::types::DataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
@@ -58,6 +58,7 @@ use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 use crate::Symbol;
+use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
@@ -77,7 +78,6 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::Visibility;
 
 const MAXIMUM_BLOOM_SIZE: u64 = 10 * 1024 * 1024;
 const MINIMUM_BLOOM_SIZE: u64 = 512;
@@ -1016,7 +1016,9 @@ fn normalize_agg_index_s_expr(
         canonical_table_index,
         replacements: &replacements,
     };
-    Ok(s_expr.accept(&mut visitor)?.unwrap_or_else(|| s_expr.clone()))
+    Ok(s_expr
+        .accept(&mut visitor)?
+        .unwrap_or_else(|| s_expr.clone()))
 }
 
 fn find_scan_table_index(s_expr: &SExpr) -> Result<usize> {
@@ -1048,7 +1050,8 @@ fn build_agg_index_column_replacements(
         let ColumnEntry::BaseTableColumn(actual_base_column) = actual_column else {
             continue;
         };
-        let Some(canonical_base_column) = canonical_base_columns.get(&actual_base_column.column_name)
+        let Some(canonical_base_column) =
+            canonical_base_columns.get(&actual_base_column.column_name)
         else {
             return Err(ErrorCode::Internal(format!(
                 "missing canonical column mapping for aggregating index column {}",
@@ -1122,11 +1125,7 @@ impl SExprVisitor for AggIndexSExprNormalizer<'_> {
                 RelOperator::Sort(sort)
             }
             RelOperator::Scan(mut scan) => {
-                normalize_scan(
-                    &mut scan,
-                    self.canonical_table_index,
-                    self.replacements,
-                )?;
+                normalize_scan(&mut scan, self.canonical_table_index, self.replacements)?;
                 RelOperator::Scan(scan)
             }
             _ => return Ok(VisitAction::Continue),
