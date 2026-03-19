@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_version::BUILD_INFO;
 use databend_query::sessions::BuildInfoRef;
@@ -27,6 +29,72 @@ use crate::dataframe::PyDataFrame;
 use crate::dataframe::default_box_size;
 use crate::utils::RUNTIME;
 use crate::utils::wait_for_future;
+
+fn resolve_file_path(path: &str) -> String {
+    if path.contains("://") {
+        return path.to_owned();
+    }
+
+    if path.starts_with('/') {
+        return format!("fs://{}", path);
+    }
+
+    format!(
+        "fs://{}/{}",
+        std::env::current_dir().unwrap().to_str().unwrap(),
+        path
+    )
+}
+
+fn extract_string_column(
+    entry: &BlockEntry,
+) -> Option<&databend_common_expression::types::StringColumn> {
+    match entry {
+        BlockEntry::Column(Column::String(col)) => Some(col),
+        BlockEntry::Column(Column::Nullable(n)) => match &n.column {
+            Column::String(col) => Some(col),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn build_infer_schema_sql(
+    file_path: &str,
+    file_format: &str,
+    pattern: Option<&str>,
+    connection: Option<&str>,
+) -> String {
+    let connection_clause = connection
+        .map(|c| format!(", connection_name => '{}'", c))
+        .unwrap_or_default();
+    let pattern_clause = pattern
+        .map(|p| format!(", pattern => '{}'", p))
+        .unwrap_or_default();
+
+    format!(
+        "SELECT column_name FROM infer_schema(location => '{}', file_format => '{}'{}{})",
+        file_path,
+        file_format.to_uppercase(),
+        pattern_clause,
+        connection_clause
+    )
+}
+
+fn build_position_select(col_names: &[String]) -> PyResult<String> {
+    if col_names.is_empty() {
+        return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            "Could not infer schema: no columns found",
+        ));
+    }
+
+    Ok(col_names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| format!("${} AS `{}`", i + 1, name))
+        .collect::<Vec<_>>()
+        .join(", "))
+}
 
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
 #[derive(Clone)]
@@ -171,36 +239,26 @@ impl PySessionContext {
         connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        let sql = if let Some(connection_name) = connection {
-            let pattern_clause = pattern
-                .map(|p| format!(", pattern => '{}'", p))
-                .unwrap_or_default();
-            format!(
-                "create view {} as select * from '{}' (file_format => '{}'{}, connection => '{}')",
-                name, path, file_format, pattern_clause, connection_name
-            )
-        } else {
-            let mut path = path.to_owned();
-            if path.starts_with('/') {
-                path = format!("fs://{}", path);
-            }
-
-            if !path.contains("://") {
-                path = format!(
-                    "fs://{}/{}",
-                    std::env::current_dir().unwrap().to_str().unwrap(),
-                    path.as_str()
-                );
-            }
-
-            let pattern_clause = pattern
-                .map(|p| format!(", pattern => '{}'", p))
-                .unwrap_or_default();
-            format!(
-                "create view {} as select * from '{}' (file_format => '{}'{})",
-                name, path, file_format, pattern_clause
-            )
+        let file_path = match connection {
+            Some(_) => path.to_owned(),
+            None => resolve_file_path(path),
         };
+        let connection_clause = connection
+            .map(|c| format!(", connection => '{}'", c))
+            .unwrap_or_default();
+        let pattern_clause = pattern
+            .map(|p| format!(", pattern => '{}'", p))
+            .unwrap_or_default();
+        let select_clause = match file_format {
+            "csv" | "tsv" => {
+                self.build_column_select(&file_path, file_format, pattern, connection, py)?
+            }
+            _ => "*".to_string(),
+        };
+        let sql = format!(
+            "create view {} as select {} from '{}' (file_format => '{}'{}{})",
+            name, select_clause, file_path, file_format, pattern_clause, connection_clause
+        );
 
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
@@ -349,8 +407,59 @@ impl PySessionContext {
     }
 }
 
+impl PySessionContext {
+    fn build_column_select(
+        &mut self,
+        file_path: &str,
+        file_format: &str,
+        pattern: Option<&str>,
+        connection: Option<&str>,
+        py: Python,
+    ) -> PyResult<String> {
+        let sql = build_infer_schema_sql(file_path, file_format, pattern, connection);
+        let blocks = self.sql(&sql, py)?.collect(py)?;
+
+        let col_names = blocks
+            .blocks
+            .iter()
+            .filter(|b| b.num_rows() > 0)
+            .filter_map(|b| extract_string_column(b.get_by_offset(0)))
+            .flat_map(|col| col.iter().map(|s| s.to_string()))
+            .collect::<Vec<_>>();
+
+        build_position_select(&col_names)
+    }
+}
+
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
     Ok(PyDataFrame::new(ctx.clone(), plan, default_box_size()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_file_path_absolute() {
+        assert_eq!(resolve_file_path("/tmp/data.csv"), "fs:///tmp/data.csv");
+    }
+
+    #[test]
+    fn test_build_position_select() {
+        let col_names = vec!["column_1".to_string(), "column_2".to_string()];
+        let select = build_position_select(&col_names).unwrap();
+        assert_eq!(select, "$1 AS `column_1`, $2 AS `column_2`");
+    }
+
+    #[test]
+    fn test_build_infer_schema_sql_with_pattern_and_connection() {
+        let sql = build_infer_schema_sql("s3://bucket/logs/", "tsv", Some("*.tsv"), Some("my_s3"));
+
+        assert_eq!(
+            sql,
+            "SELECT column_name FROM infer_schema(location => 's3://bucket/logs/', file_format => 'TSV', pattern => '*.tsv', connection_name => 'my_s3')"
+        );
+    }
 }
