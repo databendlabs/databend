@@ -107,7 +107,7 @@ statement ok
 remove @unload;
 
 query ???
-copy into @unload from ii file_format=(format_name='tsv');
+copy into @unload from ii file_format=(format_name='text');
 ----
 3 12 12
 
@@ -117,7 +117,7 @@ select right(name, 4), size from list_stage(location=>'@unload');
 .tsv 12
 
 query ??
-select $1, $2 from @unload(file_format => 'tsv');
+select $1, $2 from @unload(file_format => 'text');
 ----
 1 2
 3 4

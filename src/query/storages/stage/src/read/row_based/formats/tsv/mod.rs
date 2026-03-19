@@ -17,5 +17,5 @@ mod format;
 mod parser;
 mod separator;
 
-pub use format::TsvInputFormat;
+pub use format::TextInputFormat;
 pub use parser::parse_tsv_records_for_infer_schema;

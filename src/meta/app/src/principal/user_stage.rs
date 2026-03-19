@@ -168,7 +168,7 @@ impl Display for StageFileCompression {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageFileFormatType {
     Csv,
-    Tsv,
+    Text,
     Json,
     NdJson,
     Avro,
@@ -190,7 +190,7 @@ impl FromStr for StageFileFormatType {
     fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "CSV" => Ok(StageFileFormatType::Csv),
-            "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Tsv),
+            "TEXT" | "TABSEPARATED" => Ok(StageFileFormatType::Text),
             "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
             "LANCE" => Ok(StageFileFormatType::Lance),
@@ -199,7 +199,7 @@ impl FromStr for StageFileFormatType {
             "ORC" => Ok(StageFileFormatType::Orc),
             "AVRO" => Ok(StageFileFormatType::Avro),
             _ => Err(format!(
-                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET | LANCE | ORC | AVRO | JSON )"
+                "Unknown file format type '{s}', must be one of ( CSV | TEXT | NDJSON | PARQUET | LANCE | ORC | AVRO | JSON )"
             )),
         }
     }
@@ -209,7 +209,7 @@ impl Display for StageFileFormatType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             StageFileFormatType::Csv => write!(f, "CSV"),
-            StageFileFormatType::Tsv => write!(f, "TSV"),
+            StageFileFormatType::Text => write!(f, "TEXT"),
             StageFileFormatType::Json => write!(f, "JSON"),
             StageFileFormatType::NdJson => write!(f, "NDJSON"),
             StageFileFormatType::Avro => write!(f, "AVRO"),
@@ -311,7 +311,7 @@ impl FileFormatOptions {
             StageFileFormatType::Csv => {
                 options.quote = "\"".to_string();
             }
-            StageFileFormatType::Tsv => {
+            StageFileFormatType::Text => {
                 options.field_delimiter = "\t".to_string();
                 options.escape = "\\".to_string();
             }
@@ -378,7 +378,7 @@ impl Display for FileFormatOptions {
                 write!(f, " SKIP_HEADER = {}", &self.skip_header)?;
                 write!(f, " NAN_DISPLAY = '{}'", escape_string(&self.nan_display))?;
             }
-            StageFileFormatType::Tsv => {
+            StageFileFormatType::Text => {
                 write!(
                     f,
                     " FIELD_DELIMITER = '{}'",

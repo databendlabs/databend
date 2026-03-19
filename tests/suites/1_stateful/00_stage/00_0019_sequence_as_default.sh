@@ -14,7 +14,7 @@ stmt "insert into src1 values (1), (2)"
 stmt "create or replace table src2(seq int, a int)"
 stmt "insert into src2 values (-1, 3), (-2, 4)"
 
-for fmt in "csv" "ndjson" "parquet" "tsv"
+for fmt in "csv" "ndjson" "parquet" "text"
 do
 	 echo "---- ${fmt}"
 	 stmt "remove @${name}"

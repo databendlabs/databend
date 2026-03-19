@@ -29,7 +29,7 @@ python3 -c "import databend; ctx = databend.SessionContext(); ctx.sql('SELECT ve
 | `register_parquet(name, path, pattern=None, connection=None)` | Register Parquet files as table |
 | `register_csv(name, path, pattern=None, connection=None)` | Register CSV files as table |
 | `register_ndjson(name, path, pattern=None, connection=None)` | Register NDJSON files as table |
-| `register_tsv(name, path, pattern=None, connection=None)` | Register TSV files as table |
+| `register_tsv(name, path, pattern=None, connection=None)` | Register TEXT files as table |
 
 ### Cloud Storage Connections
 | Method | Description |

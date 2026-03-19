@@ -11,9 +11,9 @@ ok	110	a	2020-01-02
 <<<<
 >>>> truncate table streaming_load_07
 --tsv
->>>> copy into @streaming_load_07/data.tsv from (select '2020-01-02' as c4, 110 as c2) file_format=(type='tsv')  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
+>>>> copy into @streaming_load_07/data.tsv from (select '2020-01-02' as c4, 110 as c2) file_format=(type='text')  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
 data.tsv	15	1
-+ curl -sS -H x-databend-query-id:load-tsv -H 'X-Databend-SQL:insert into streaming_load_07(c3, c4, c2) values ('\''a'\'', ?, ?) from @_databend_load file_format = (type=tsv)' -F upload=@/tmp/streaming_load_07/data.tsv -u root: -XPUT http://localhost:8000/v1/streaming_load
++ curl -sS -H x-databend-query-id:load-tsv -H 'X-Databend-SQL:insert into streaming_load_07(c3, c4, c2) values ('\''a'\'', ?, ?) from @_databend_load file_format = (type=TSV)' -F upload=@/tmp/streaming_load_07/data.tsv -u root: -XPUT http://localhost:8000/v1/streaming_load
 {"id":"load-tsv","stats":{"rows":1,"bytes":44}}
 <<<<
 >>>> select * from streaming_load_07;

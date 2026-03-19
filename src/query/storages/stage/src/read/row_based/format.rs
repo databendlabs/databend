@@ -25,7 +25,7 @@ use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::formats::CsvInputFormat;
 use crate::read::row_based::formats::NdJsonInputFormat;
-use crate::read::row_based::formats::TsvInputFormat;
+use crate::read::row_based::formats::TextInputFormat;
 
 pub trait SeparatorState: Send + Sync {
     fn append(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatchWithPosition>, FileStatus)>;
@@ -53,7 +53,7 @@ pub fn create_row_based_file_format(params: &FileFormatParams) -> Arc<dyn RowBas
     match params {
         FileFormatParams::Csv(p) => Arc::new(CsvInputFormat { params: p.clone() }),
         FileFormatParams::NdJson(p) => Arc::new(NdJsonInputFormat { params: p.clone() }),
-        FileFormatParams::Tsv(p) => Arc::new(TsvInputFormat { params: p.clone() }),
+        FileFormatParams::Text(p) => Arc::new(TextInputFormat { params: p.clone() }),
         _ => {
             unreachable!("Unsupported row based file format")
         }

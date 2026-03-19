@@ -146,7 +146,7 @@ async fn test_output_formats() -> PoemResult<()> {
 
     let cases = [
         ("CSV", "0,\"a\"\n1,\"b\"\n"),
-        ("TSV", "0\ta\n1\tb\n"),
+        ("TEXT", "0\ta\n1\tb\n"),
         ("TSVWithNames", "a\tb\n0\ta\n1\tb\n"),
         (
             "TSVWithNamesAndTypes",
