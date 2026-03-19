@@ -2112,7 +2112,6 @@ impl TableContext for QueryContext {
         files_info: StageFilesInfo,
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
-        case_sensitive: bool,
         on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
         let copy_options = CopyIntoTableOptions {
@@ -2156,7 +2155,6 @@ impl TableContext for QueryContext {
                         files_to_copy,
                         self.get_settings(),
                         self.get_query_kind(),
-                        case_sensitive,
                         fmt,
                     )
                     .await

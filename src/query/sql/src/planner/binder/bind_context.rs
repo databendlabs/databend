@@ -359,7 +359,7 @@ impl BindContext {
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
         let name = &column.name;
-
+        let column_case_sensitive = name_resolution_ctx.is_case_sensitive(column);
         if name_resolution_ctx.deny_column_reference {
             let err = if column.is_quoted() {
                 ErrorCode::SemanticError(format!(
@@ -387,10 +387,22 @@ impl BindContext {
             }
 
             if alias_match_count == 0 {
-                self.search_bound_columns_recursively(database, table, name, &mut result);
+                self.search_bound_columns_recursively(
+                    database,
+                    table,
+                    column,
+                    column_case_sensitive,
+                    &mut result,
+                );
             }
         } else {
-            self.search_bound_columns_recursively(database, table, name, &mut result);
+            self.search_bound_columns_recursively(
+                database,
+                table,
+                column,
+                column_case_sensitive,
+                &mut result,
+            );
 
             if result.is_empty() {
                 for (alias, scalar) in available_aliases {
@@ -460,13 +472,29 @@ impl BindContext {
         &self,
         database: Option<&str>,
         table: Option<&str>,
-        column: &str,
+        column: &Identifier,
+        column_case_sensitive: bool,
         result: &mut Vec<NameResolutionResult>,
     ) {
         let mut bind_context: &BindContext = self;
         loop {
             for column_binding in bind_context.columns.iter() {
-                if Self::match_column_binding(database, table, column, column_binding) {
+                if let Some(lower) = &column_binding.column_name_lower {
+                    if !column_case_sensitive
+                        && &column.name == lower
+                        && Self::match_column_binding_case_insensitive(
+                            database,
+                            table,
+                            column_binding,
+                        )
+                    {
+                        let mut binding = column_binding.clone();
+                        binding.column_name = lower.clone();
+                        result.push(NameResolutionResult::Column(binding));
+                        continue;
+                    }
+                }
+                if Self::match_column_binding(database, table, &column.name, column_binding) {
                     result.push(NameResolutionResult::Column(column_binding.clone()));
                 }
             }
@@ -476,7 +504,8 @@ impl BindContext {
             }
 
             // look up internal column
-            if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(column) {
+            if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(&column.name)
+            {
                 let column_binding = InternalColumnBinding {
                     database_name: database.map(|n| n.to_owned()),
                     table_name: table.map(|n| n.to_owned()),
@@ -524,6 +553,33 @@ impl BindContext {
             // Qualified column reference with database name
             ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
                 if db == db_name && table == table_name && column == column_binding.column_name =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn match_column_binding_case_insensitive(
+        database: Option<&str>,
+        table: Option<&str>,
+        column_binding: &ColumnBinding,
+    ) -> bool {
+        match (
+            (database, column_binding.database_name.as_ref()),
+            (table, column_binding.table_name.as_ref()),
+        ) {
+            // No qualified table name specified
+            ((None, _), (None, None)) | ((None, _), (None, Some(_))) => {
+                column_binding.visibility != Visibility::UnqualifiedWildcardInVisible
+            }
+
+            // Qualified column reference without database name
+            ((None, _), (Some(table), Some(table_name))) if table == table_name => true,
+
+            // Qualified column reference with database name
+            ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
+                if db == db_name && table == table_name =>
             {
                 true
             }
