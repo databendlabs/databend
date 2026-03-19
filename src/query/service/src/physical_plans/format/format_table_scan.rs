@@ -137,16 +137,17 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
 
         // Aggregating index
         if let Some(agg_index) = agg_index {
-            let (_, agg_index_sql, _) = ctx
+            let index = ctx
                 .metadata
                 .get_agg_indices(&table_name)
                 .unwrap()
                 .iter()
-                .find(|(index, _, _)| *index == agg_index.index_id)
+                .find(|index| index.index_id == agg_index.index_id)
                 .unwrap();
 
             children.push(FormatTreeNode::new(format!(
-                "aggregating index: [{agg_index_sql}]"
+                "aggregating index: [{}]",
+                index.sql
             )));
 
             let agg_sel = agg_index

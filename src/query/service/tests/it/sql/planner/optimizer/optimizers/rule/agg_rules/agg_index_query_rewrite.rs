@@ -21,6 +21,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_sql::AggIndexPlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::OptimizerContext;
@@ -381,11 +382,11 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
         let (mut query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         {
             let mut metadata = metadata.write();
-            metadata.add_agg_indices("default.default.t".to_string(), vec![(
-                0,
-                suite.index.to_string(),
-                index,
-            )]);
+            metadata.add_agg_indices("default.default.t".to_string(), vec![AggIndexPlan {
+                index_id: 0,
+                sql: suite.index.to_string(),
+                s_expr: index,
+            }]);
         }
         query.clear_applied_rules();
 
