@@ -94,16 +94,21 @@ jobs:
         uses: actions/github-script@v7
         env:
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
+          BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
-            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_RESULT != 'failure') {
+            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_CHANGED == 'false') {
               core.info('No source file changes detected, skipping');
               return;
             }
-            if (process.env.BENDPY_RESULT == 'failure') {
-              core.setFailed('Bendpy tests failed, not ready to merge');
+            if (process.env.BENDPY_CHANGED == 'true' && process.env.BENDPY_RESULT != 'success') {
+              core.setFailed(`Bendpy tests did not complete successfully (${process.env.BENDPY_RESULT}), not ready to merge`);
+              return;
+            }
+            if (process.env.SRC_CHANGED == 'false') {
+              core.info('Required bendpy checks succeeded, ready to merge');
               return;
             }
             if (process.env.LINUX_BUILD_RESULT == 'success') {
