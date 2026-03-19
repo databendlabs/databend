@@ -6,7 +6,7 @@ This file is the entry point for repository-specific working rules. Keep it focu
 - Build context from the codebase first. Databend is a multi-crate Rust workspace, so understand the affected module boundaries before editing.
 - Validate incrementally. Run the smallest relevant checks early, and apply the verification standard that matches the task type.
 - Treat tests as part of the change. Planner, executor, storage, and behavior changes should come with regression coverage.
-- Keep contributions reviewable. Commits should stay scoped, and pull requests should be pushed to your fork and opened against `origin`.
+- Keep contributions reviewable. Commits should stay scoped, and pull requests should follow the repository's expected collaboration workflow.
 
 ## Task Types
 - Implementation tasks: the result is intended to stay in the branch, be reviewed, or be submitted. Follow the normal quality bar for edits, validation, tests, commits, and PR readiness.
