@@ -14,7 +14,6 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
 
 use async_channel::Receiver;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -31,7 +30,10 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::SourcePipeBuilder;
 use log::info;
 
-use super::parquet_data_transform_reader::ReadStats;
+use super::block_format::FuseNativeBlockFormat;
+use super::block_format::FuseParquetBlockFormat;
+use super::read_data_transform::ReadDataTransform;
+use crate::FuseStorageFormat;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -41,12 +43,11 @@ use crate::operations::read::NativeDeserializeDataTransform;
 use crate::operations::read::TransformRuntimeFilterWait;
 use crate::operations::read::block_partition_receiver_source::BlockPartitionReceiverSource;
 use crate::operations::read::block_partition_source::BlockPartitionSource;
-use crate::operations::read::native_data_transform_reader::ReadNativeDataTransform;
-use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
 
 #[allow(clippy::too_many_arguments)]
-pub fn build_fuse_native_source_pipeline(
+pub fn build_fuse_source_pipeline(
     ctx: Arc<dyn TableContext>,
+    storage_format: FuseStorageFormat,
     table_schema: Arc<TableSchema>,
     pipeline: &mut Pipeline,
     block_reader: Arc<BlockReader>,
@@ -55,12 +56,17 @@ pub fn build_fuse_native_source_pipeline(
     topk: Option<TopK>,
     mut max_io_requests: usize,
     index_reader: Arc<Option<AggIndexReader>>,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
     receiver: Option<Receiver<Result<PartInfoPtr>>>,
 ) -> Result<()> {
-    (max_threads, max_io_requests) =
-        adjust_threads_and_request(true, max_threads, max_io_requests, plan);
+    (max_threads, max_io_requests) = adjust_threads_and_request(
+        matches!(storage_format, FuseStorageFormat::Native),
+        max_threads,
+        max_io_requests,
+        plan,
+    );
 
-    if topk.is_some() {
+    if matches!(storage_format, FuseStorageFormat::Native) && topk.is_some() {
         max_threads = max_threads.min(16);
         max_io_requests = max_io_requests.min(16);
     }
@@ -68,9 +74,10 @@ pub fn build_fuse_native_source_pipeline(
     let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
     let mut partitions = StealablePartitions::new(partitions, ctx.clone());
 
-    if topk.is_some() {
+    if matches!(storage_format, FuseStorageFormat::Native) && topk.is_some() {
         partitions.disable_steal();
     }
+
     match receiver {
         Some(rx) => {
             let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
@@ -83,6 +90,16 @@ pub fn build_fuse_native_source_pipeline(
             pipeline.add_pipe(pipe);
         }
     }
+    let block_format = match storage_format {
+        FuseStorageFormat::Native => {
+            FuseNativeBlockFormat::create(ctx.clone(), block_reader.clone(), index_reader.clone())
+        }
+        FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(
+            block_reader.clone(),
+            index_reader.clone(),
+            virtual_reader.clone(),
+        ),
+    };
 
     pipeline.add_transform(|input, output| {
         Ok(TransformRuntimeFilterWait::create(
@@ -94,102 +111,21 @@ pub fn build_fuse_native_source_pipeline(
     })?;
 
     pipeline.add_transform(|input, output| {
-        ReadNativeDataTransform::create(
+        ReadDataTransform::create(
             plan.scan_id,
             ctx.clone(),
             table_schema.clone(),
             block_reader.clone(),
-            index_reader.clone(),
+            block_format.clone(),
             input,
             output,
         )
     })?;
-
-    pipeline.try_resize(max_threads)?;
-
-    pipeline.add_transform(|transform_input, transform_output| {
-        NativeDeserializeDataTransform::create(
-            ctx.clone(),
-            block_reader.clone(),
-            plan,
-            topk.clone(),
-            transform_input,
-            transform_output,
-            index_reader.clone(),
-        )
-    })?;
-
-    pipeline.try_resize(max_threads)?;
-
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn build_fuse_parquet_source_pipeline(
-    ctx: Arc<dyn TableContext>,
-    table_schema: Arc<TableSchema>,
-    pipeline: &mut Pipeline,
-    block_reader: Arc<BlockReader>,
-    plan: &DataSourcePlan,
-    mut max_threads: usize,
-    mut max_io_requests: usize,
-    index_reader: Arc<Option<AggIndexReader>>,
-    virtual_reader: Arc<Option<VirtualColumnReader>>,
-    receiver: Option<Receiver<Result<PartInfoPtr>>>,
-) -> Result<()> {
-    (max_threads, max_io_requests) =
-        adjust_threads_and_request(false, max_threads, max_io_requests, plan);
-
-    let stats = Arc::new(ReadStats {
-        blocks_total: AtomicU64::new(0),
-        blocks_pruned: AtomicU64::new(0),
-    });
 
     info!(
         "[FUSE-SOURCE] Block data reader adjusted max_io_requests to {}",
         max_io_requests
     );
-
-    let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-    let partitions = StealablePartitions::new(partitions, ctx.clone());
-
-    match receiver {
-        Some(rx) => {
-            let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
-            pipeline.add_pipe(pipe);
-        }
-        None => {
-            let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-            let pipe =
-                build_block_source(max_io_requests, partitions.clone(), batch_size, ctx.clone())?;
-            pipeline.add_pipe(pipe);
-        }
-    }
-    let unfinished_processors_count = Arc::new(AtomicU64::new(pipeline.output_len() as u64));
-
-    pipeline.add_transform(|input, output| {
-        Ok(TransformRuntimeFilterWait::create(
-            ctx.clone(),
-            plan.scan_id,
-            input,
-            output,
-        ))
-    })?;
-
-    pipeline.add_transform(|input, output| {
-        ReadParquetDataTransform::create(
-            plan.table_index,
-            ctx.clone(),
-            table_schema.clone(),
-            block_reader.clone(),
-            index_reader.clone(),
-            virtual_reader.clone(),
-            input,
-            output,
-            stats.clone(),
-            unfinished_processors_count.clone(),
-        )
-    })?;
 
     pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
 
@@ -199,17 +135,34 @@ pub fn build_fuse_parquet_source_pipeline(
         pipeline.output_len()
     );
 
-    pipeline.add_transform(|transform_input, transform_output| {
-        DeserializeDataTransform::create(
-            ctx.clone(),
-            block_reader.clone(),
-            plan,
-            transform_input,
-            transform_output,
-            index_reader.clone(),
-            virtual_reader.clone(),
-        )
-    })?;
+    match storage_format {
+        FuseStorageFormat::Native => {
+            pipeline.add_transform(|transform_input, transform_output| {
+                NativeDeserializeDataTransform::create(
+                    ctx.clone(),
+                    block_reader.clone(),
+                    plan,
+                    topk.clone(),
+                    transform_input,
+                    transform_output,
+                    index_reader.clone(),
+                )
+            })?;
+        }
+        FuseStorageFormat::Parquet => {
+            pipeline.add_transform(|transform_input, transform_output| {
+                DeserializeDataTransform::create(
+                    ctx.clone(),
+                    block_reader.clone(),
+                    plan,
+                    transform_input,
+                    transform_output,
+                    index_reader.clone(),
+                    virtual_reader.clone(),
+                )
+            })?;
+        }
+    }
 
     Ok(())
 }

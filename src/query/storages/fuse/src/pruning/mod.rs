@@ -18,6 +18,7 @@ mod expr_bloom_filter;
 mod expr_runtime_pruner;
 mod fuse_pruner;
 mod inverted_index_pruner;
+mod profile_guard;
 mod pruner_location;
 mod pruning_statistics;
 mod segment_pruner;
