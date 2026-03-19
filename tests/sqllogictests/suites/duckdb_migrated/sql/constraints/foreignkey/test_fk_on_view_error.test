@@ -1,21 +1,6 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS v
-
 statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
 DROP TABLE IF EXISTS vdata
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE vdata AS SELECT * FROM (VALUES ('v2',)) v(id);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v AS SELECT * FROM vdata;
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t(v_id TEXT, FOREIGN KEY (v_id) REFERENCES v(id));

@@ -4,12 +4,6 @@ DROP TABLE IF EXISTS test
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
-# TODO: unsupported feature
-# query I
-# COPY test FROM '{DATA_DIR}/csv/test/windows_newline.csv';
-# ----
-# 20000
-
 query IIIII
 SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;
 ----
@@ -31,12 +25,6 @@ DROP TABLE test;
 
 statement ok
 CREATE TABLE test (a INTEGER);
-
-# TODO: unsupported feature
-# query I
-# COPY test FROM '{DATA_DIR}/csv/test/windows_newline_empty.csv' (HEADER 0);
-# ----
-# 20000
 
 query I
 SELECT SUM(a) FROM test;

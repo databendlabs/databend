@@ -10,29 +10,13 @@ DROP TABLE IF EXISTS test
 statement ok
 CREATE TABLE test (a INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test SELECT range + 42 FROM range(0, 100);
-
 statement ok
 CREATE TABLE alter_test (a INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO alter_test SELECT range + 42 FROM range(0, 100);
 
 statement ok
 CREATE TABLE drop_test (a INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO drop_test SELECT range + 42 FROM range(0, 100);
-
 # Let's also have an index outside the transaction.
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX other_idx ON test(a);
 
 statement ok
 BEGIN TRANSACTION
@@ -50,22 +34,6 @@ INSERT INTO drop_test VALUES (0), (1);
 
 # We add this to the UndoBuffer immediately.
 
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX i_index ON test(a);
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE alter_test ADD PRIMARY KEY(a);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX drop_idx ON drop_test(a);
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX drop_idx;
-
 statement ok
 DELETE FROM test WHERE a = 1;
 
@@ -75,20 +43,9 @@ DELETE FROM alter_test WHERE a = 1;
 statement ok
 COMMIT;
 
-# TODO: result differs
-# statement error
-# INSERT INTO test VALUES (0);
-
-# TODO: result differs
-# statement error
-# INSERT INTO alter_test VALUES (0);
-
 statement ok
 INSERT INTO test VALUES (1);
 
 statement ok
 INSERT INTO alter_test VALUES (1);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX drop_idx ON test(a);

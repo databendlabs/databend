@@ -16,13 +16,3 @@ INSERT INTO T0(C1) VALUES (1);
 statement ok
 INSERT INTO T1(C1) VALUES (1);
 
-# TODO: unsupported feature
-# query I
-# WITH CTE AS MATERIALIZED (
-# SELECT A1, * FROM T0
-#   LEFT JOIN (
-#     SELECT C1 AS A1 FROM T1
-#   ) ON T0.C1 = A1
-# ) SELECT A1 FROM CTE;
-# ----
-# 1

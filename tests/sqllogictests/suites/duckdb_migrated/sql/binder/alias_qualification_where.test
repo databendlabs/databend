@@ -2,33 +2,9 @@ statement ok
 DROP TABLE IF EXISTS alias
 
 # basic filtering using projection alias in WHERE
-# TODO: unsupported feature
-# query I
-# SELECT a AS x FROM (VALUES (1),(2),(3)) t(a)
-# WHERE alias.x > 1
-# ORDER BY a;
-# ----
-# 2
-# 3
-
 # alias chaining shouldn't be necessary in WHERE, but referencing another alias should work
 
-# TODO: unsupported feature
-# query II
-# SELECT a + 1 AS x, alias.x * 2 AS y FROM (VALUES (1),(2)) t(a)
-# WHERE alias.y >= 6
-# ORDER BY a;
-# ----
-# 3	6
-
 # quoted alias in WHERE
-
-# TODO: unsupported feature
-# query I
-# SELECT a AS "MiXeD" FROM (VALUES (0),(1)) t(a)
-# WHERE alias."MiXeD" = 1;
-# ----
-# 1
 
 # ensure a table actually named `alias` still works and does not conflict with alias references
 

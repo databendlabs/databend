@@ -34,54 +34,7 @@ DROP TABLE IF EXISTS t8
 statement ok
 DROP TABLE IF EXISTS t9
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t1(id INTEGER PRIMARY KEY);
-
 # this is fine
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t2(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id));
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t3(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE NO ACTION);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t4(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE NO ACTION);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t5(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE RESTRICT);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t6(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE RESTRICT);
 
 # this is not
 
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t7(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE CASCADE);
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t8(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE CASCADE);
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t9(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE SET DEFAULT);
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t10(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE SET DEFAULT);
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t11(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON UPDATE SET NULL);
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE t12(id INTEGER PRIMARY KEY, t1_id INTEGER, FOREIGN KEY (t1_id) REFERENCES t1(id) ON DELETE SET NULL);

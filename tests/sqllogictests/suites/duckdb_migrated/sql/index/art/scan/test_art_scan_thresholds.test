@@ -11,10 +11,6 @@ INSERT INTO integers SELECT 42 FROM range(0, 1000);
 statement ok
 INSERT INTO integers SELECT 43 FROM range(0, 10000);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx ON integers(i);
-
 query T
 EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 42;
 ----

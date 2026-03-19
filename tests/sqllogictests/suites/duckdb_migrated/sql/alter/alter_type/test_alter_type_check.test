@@ -12,6 +12,3 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement error
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER j SET DATA TYPE VARCHAR

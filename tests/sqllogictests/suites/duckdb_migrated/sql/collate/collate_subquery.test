@@ -7,14 +7,3 @@ create table t0(c1 varchar);
 statement ok
 insert into t0 values ('XXX');
 
-# TODO: unsupported feature
-# query I
-# select (select c1 from t0) collate nocase;
-# ----
-# XXX
-
-# TODO: unsupported feature
-# query I
-# select (select c1 from t0) collate nocase='xxx';
-# ----
-# 1

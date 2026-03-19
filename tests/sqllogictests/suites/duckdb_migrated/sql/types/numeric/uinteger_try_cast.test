@@ -1,0 +1,206 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS strings
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS uintegers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE uintegers AS SELECT i::UINTEGER i FROM (VALUES (0), (4294967295)) tbl(i)
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UTINYINT FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UTINYINT) FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::USMALLINT FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS USMALLINT) FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i::UBIGINT FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# signed
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::TINYINT FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS TINYINT) FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::SMALLINT FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS SMALLINT) FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::INTEGER FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS INTEGER) FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i::BIGINT FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# TODO: unsupported feature
+# query I
+# SELECT i::HUGEINT FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# -> float
+
+# TODO: unsupported feature
+# query I
+# SELECT i::FLOAT FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DOUBLE FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# -> bool
+
+# TODO: unsupported feature
+# query I
+# SELECT i::BOOL FROM uintegers ORDER BY i
+# ----
+# False
+# True
+
+# -> varchar
+
+# TODO: unsupported feature
+# query I
+# SELECT i::VARCHAR FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# from string casts
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'), ('-1'), ('-0'), ('0'), ('4294967295'), ('10000000000')) tbl(s)
+
+# TODO: unsupported feature
+# statement error
+# SELECT s::UINTEGER FROM strings
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(s AS UINTEGER) FROM strings
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+# 0
+# 0
+# 4294967295
+# NULL
+
+# -> decimal casts
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(3,0)::UINTEGER FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(9,0)::UINTEGER FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DECIMAL(18,0)::UINTEGER FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DECIMAL(38,0)::UINTEGER FROM uintegers ORDER BY i
+# ----
+# 0
+# 4294967295
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(18,9)::UINTEGER FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(38,29)::UINTEGER FROM uintegers ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(3,0))::UINTEGER FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(9,0))::UINTEGER FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(18,9))::UINTEGER FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(38,29))::UINTEGER FROM uintegers ORDER BY i
+# ----
+# 0
+# NULL

@@ -37,10 +37,6 @@ CREATE TABLE venue_2 (
     , venueseats     VARCHAR
 );
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO venue_2 SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = 1);
-
 query I
 SELECT COUNT(*) from venue_2
 ----
@@ -58,26 +54,12 @@ CREATE TABLE venue_2 (
     , venueseats     VARCHAR
 );
 
-
-
 # Check our  possible solutions:
 #* Override the type for this column manually by setting the type explicitly, e.g., types={'venueseats': 'VARCHAR'}
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO venue_2 SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = 1, types={'venueseats': 'VARCHAR'});
-
 #* Set the sample size to a larger value to enable the auto-detection to scan more values, e.g., sample_size=-1
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO venue_2 SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = -1);
-
 #* Use a COPY statement to automatically derive types from an existing table.
-
-# TODO: unsupported feature
-# statement ok
-# copy venue_2 from '{DATA_DIR}/csv/venue_pipe_big.csv'
 
 statement error
 SELECT * FROM read_csv('{DATA_DIR}/csv/venue_pipe_big.csv', sample_size = 1);

@@ -1,0 +1,447 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamp
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamp_two
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS timestamp (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01.594','2008-01-01 00:00:01.88926','2008-01-01 00:00:01.889268321' )
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT * from timestamp;
+# ----
+# 2008-01-01 00:00:01	2008-01-01 00:00:01.594	2008-01-01 00:00:01.88926	2008-01-01 00:00:01.889268321
+
+# Apply Year Function
+
+# TODO: unsupported feature
+# query TTT
+# SELECT YEAR(sec),YEAR(milli),YEAR(nano) from timestamp;
+# ----
+# 2008	2008	2008
+
+# Do some conversions
+
+# TODO: unsupported feature
+# query TTT
+# SELECT nano::TIMESTAMP, milli::TIMESTAMP,sec::TIMESTAMP from timestamp;
+# ----
+# 2008-01-01 00:00:01.889268	2008-01-01 00:00:01.594	2008-01-01 00:00:01
+
+# TODO: unsupported feature
+# query TTT
+# SELECT micro::TIMESTAMP_S, micro::TIMESTAMP_MS,micro::TIMESTAMP_NS from timestamp;
+# ----
+# 2008-01-01 00:00:02	2008-01-01 00:00:01.889	2008-01-01 00:00:01.88926
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:51','2008-01-01 00:00:01.894','2008-01-01 00:00:01.99926','2008-01-01 00:00:01.999268321' )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )
+
+
+# Overflow from US to NS
+
+# TODO: unsupported feature
+# statement error
+# select '90000-01-19 03:14:07.999999'::TIMESTAMP_US::TIMESTAMP_NS
+
+# TODO: unsupported feature
+# query I
+# SELECT s::TIMESTAMP_NS
+# FROM (VALUES 
+# 	('2024-06-04 10:17:10.987654321'),
+# 	('2024-06-04 10:17:10.98765432'),
+# 	('2024-06-04 10:17:10.9876543'),
+# 	('2024-06-04 10:17:10.9876543'),
+# 	('2024-06-04 10:17:10.987654'),
+# 	('2024-06-04 10:17:10.98765'),
+# 	('2024-06-04 10:17:10.9876'),
+# 	('2024-06-04 10:17:10.987'),
+# 	('2024-06-04 10:17:10.98'),
+# 	('2024-06-04 10:17:10.9'),
+# 	('2024-06-04 10:17:10'))
+# AS tbl(s)
+# ----
+# 2024-06-04 10:17:10.987654321
+# 2024-06-04 10:17:10.98765432
+# 2024-06-04 10:17:10.9876543
+# 2024-06-04 10:17:10.9876543
+# 2024-06-04 10:17:10.987654
+# 2024-06-04 10:17:10.98765
+# 2024-06-04 10:17:10.9876
+# 2024-06-04 10:17:10.987
+# 2024-06-04 10:17:10.98
+# 2024-06-04 10:17:10.9
+# 2024-06-04 10:17:10
+
+# TODO: unsupported feature
+# statement error
+# SELECT TIMESTAMP_NS '2262-04-11 23:47:16.854775808';
+
+# TODO: unsupported feature
+# query I
+# select '1969-01-01T23:59:59.9999999'::timestamp_ns;
+# ----
+# 1969-01-01 23:59:59.9999999
+
+# Zero µs witn non-zero ns
+
+# TODO: unsupported feature
+# query I
+# SELECT '1970-01-01 00:00:00.000000123'::TIMESTAMP_NS;
+# ----
+# 1970-01-01 00:00:00.000000123
+
+# TIME conversions are now supported
+
+# TODO: unsupported feature
+# query I
+# select sec::TIME from timestamp;
+# ----
+# 00:00:01
+# 00:00:51
+# 00:00:11
+
+# TODO: unsupported feature
+# query I
+# select milli::TIME from timestamp;
+# ----
+# 00:00:01.594
+# 00:00:01.894
+# 00:00:01.794
+
+# TODO: unsupported feature
+# query I
+# select nano::TIME from timestamp;
+# ----
+# 00:00:01.889268
+# 00:00:01.999268
+# 00:00:01.899268
+
+# Direct timestamp promotions
+
+# TODO: unsupported feature
+# statement ok
+# SELECT sec, sec 
+# FROM timestamp 
+# WHERE sec = sec ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT sec, milli 
+# FROM timestamp 
+# WHERE sec = milli ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT sec, micro 
+# FROM timestamp 
+# WHERE sec = micro ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT sec, nano 
+# FROM timestamp 
+# WHERE sec = nano ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT milli, sec 
+# FROM timestamp 
+# WHERE milli = sec ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT milli, milli 
+# FROM timestamp 
+# WHERE milli = milli ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT milli, micro 
+# FROM timestamp 
+# WHERE milli = micro ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT milli, nano 
+# FROM timestamp 
+# WHERE milli = nano ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT micro, sec 
+# FROM timestamp 
+# WHERE micro = sec ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT micro, milli 
+# FROM timestamp 
+# WHERE micro = milli ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT micro, micro 
+# FROM timestamp 
+# WHERE micro = micro ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT micro, nano 
+# FROM timestamp 
+# WHERE micro = nano ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT nano, sec 
+# FROM timestamp 
+# WHERE nano = sec ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT nano, milli 
+# FROM timestamp 
+# WHERE nano = milli ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT nano, micro 
+# FROM timestamp 
+# WHERE nano = micro ;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT nano, nano 
+# FROM timestamp 
+# WHERE nano = nano ;
+
+
+
+# Cast to DATE
+
+# TODO: unsupported feature
+# query I
+# SELECT sec::DATE from timestamp
+# ----
+# 2008-01-01
+# 2008-01-01
+# 2008-01-01
+
+# TODO: unsupported feature
+# query I
+# SELECT milli::DATE from timestamp
+# ----
+# 2008-01-01
+# 2008-01-01
+# 2008-01-01
+
+# TODO: unsupported feature
+# query I
+# SELECT micro::DATE from timestamp
+# ----
+# 2008-01-01
+# 2008-01-01
+# 2008-01-01
+
+# TODO: unsupported feature
+# query I
+# SELECT nano::DATE from timestamp
+# ----
+# 2008-01-01
+# 2008-01-01
+# 2008-01-01
+
+
+#Sorting on the timestamps
+
+# TODO: unsupported feature
+# query T
+# select sec from timestamp order by sec;
+# ----
+# 2008-01-01 00:00:01
+# 2008-01-01 00:00:11
+# 2008-01-01 00:00:51
+
+# TODO: unsupported feature
+# query T
+# select milli from timestamp order by milli;
+# ----
+# 2008-01-01 00:00:01.594
+# 2008-01-01 00:00:01.794
+# 2008-01-01 00:00:01.894
+
+# TODO: unsupported feature
+# query T
+# select nano from timestamp order by nano;
+# ----
+# 2008-01-01 00:00:01.889268321
+# 2008-01-01 00:00:01.899268321
+# 2008-01-01 00:00:01.999268321
+
+#GROUP BY on each of these timestamp types
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:51','2008-01-01 00:00:01.894','2008-01-01 00:00:01.99926','2008-01-01 00:00:01.999268321' )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )
+
+# TODO: unsupported feature
+# query TT
+# select count(*), nano from timestamp group by nano order by nano;
+# ----
+# 1	2008-01-01 00:00:01.889268321
+# 2	2008-01-01 00:00:01.899268321
+# 2	2008-01-01 00:00:01.999268321
+
+# TODO: unsupported feature
+# query TT
+# select count(*), sec from timestamp group by sec order by sec;
+# ----
+# 1	2008-01-01 00:00:01
+# 2	2008-01-01 00:00:11
+# 2	2008-01-01 00:00:51
+
+# TODO: unsupported feature
+# query TT
+# select count(*), milli from timestamp group by milli order by milli;
+# ----
+# 1	2008-01-01 00:00:01.594
+# 2	2008-01-01 00:00:01.794
+# 2	2008-01-01 00:00:01.894
+
+#Joins on the timestamps
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS timestamp_two (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp_two VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )
+
+# TODO: unsupported feature
+# query T
+# select timestamp.sec from timestamp inner join  timestamp_two on (timestamp.sec = timestamp_two.sec);
+# ----
+# 2008-01-01 00:00:11
+# 2008-01-01 00:00:11
+
+# TODO: unsupported feature
+# query T
+# select timestamp.milli from timestamp inner join  timestamp_two on (timestamp.milli = timestamp_two.milli);
+# ----
+# 2008-01-01 00:00:01.794
+# 2008-01-01 00:00:01.794
+
+# TODO: unsupported feature
+# query T
+# select timestamp.nano from timestamp inner join  timestamp_two on (timestamp.nano = timestamp_two.nano);
+# ----
+# 2008-01-01 00:00:01.899268321
+# 2008-01-01 00:00:01.899268321
+
+#Comparisons between all the different timestamp types (e.g. TIMESTAMP = TIMESTAMP_MS, etc)
+
+# TODO: unsupported feature
+# query T
+# select '2008-01-01 00:00:11'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_MS
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# select '2008-01-01 00:00:11'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_NS
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# select '2008-01-01 00:00:11'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_S
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# select '2008-01-01 00:00:11.1'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_MS
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# select '2008-01-01 00:00:11.1'::TIMESTAMP_US = '2008-01-01 00:00:11'::TIMESTAMP_NS
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# select '2008-01-01 00:00:11.1'::TIMESTAMP_US = '2008-01-01 00:00:11.1'::TIMESTAMP_S
+# ----
+# 0
+
+# Precision casts
+
+# TODO: unsupported feature
+# query I
+# select '2008-01-01 00:00:11.1'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_NS
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '2008-01-01 00:00:11.1'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_S
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '2008-01-01 00:00:11.1'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select '2008-01-01 00:00:11'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_NS
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '2008-01-01 00:00:11'::TIMESTAMP_MS = '2008-01-01 00:00:11'::TIMESTAMP_S
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select '2008-01-01 00:00:11'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT CAST(t0.c0 AS TIME)>=('12:34:56') FROM (VALUES ('2030-01-01'::TIMESTAMP_S), ('1969-12-23 20:44:40'::TIMESTAMP_S)) as t0(c0)
+# ----
+# 0
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT NOT CAST(t0.c0 AS TIME)>=('12:34:56') FROM (VALUES ('2030-01-01'::TIMESTAMP_MS), ('1969-12-23 20:44:40'::TIMESTAMP_MS)) as t0(c0)
+# ----
+# 1
+# 0

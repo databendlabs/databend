@@ -10,10 +10,6 @@ DROP VIEW IF EXISTS v1
 statement ok
 DROP VIEW IF EXISTS v2
 
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS v3
-
 statement ok
 DROP TABLE IF EXISTS "SAME_NAME"
 
@@ -53,24 +49,8 @@ CREATE TABLE integers(i INTEGER, j INTEGER, CHECK(i+j<10))
 statement ok
 CREATE TABLE strings(v VARCHAR, d DATE)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE enums(current_mood mood)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (1, 3), (4, 2), (NULL, 1)
-
 statement ok
 INSERT INTO strings VALUES ('NULL', DATE '1992-01-01'), (NULL, DATE '1993-01-01');
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO enums VALUES ('sad'),('ok'),('sad'),('happy')
 
 statement ok
 CREATE TABLE "table.with-symbols"(i INTEGER)
@@ -87,10 +67,6 @@ INSERT INTO "table ""." ("col "".") VALUES ('quote_escaped_quote_''')
 statement ok
 CREATE TABLE "SAME_NAME"(i INTEGER, j INTEGER);
 
-# TODO: result differs
-# statement error
-# CREATE TABLE "same_name"(i INTEGER, j INTEGER);
-
 statement ok
 INSERT INTO "SAME_NAME" VALUES (1, 1), (2, 2)
 
@@ -106,68 +82,13 @@ CREATE VIEW "view.with-symbols" AS SELECT * FROM "table.with-symbols" WHERE i < 
 statement ok
 CREATE VIEW "view ""." AS SELECT * FROM "table.with-symbols" WHERE i < 3;
 
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v3 AS SELECT * FROM integers WHERE i IS NULL --
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq
-
-# TODO: unsupported feature
-# query I
-# SELECT nextval('seq')
-# ----
-# 1
-
-# TODO: result differs
-# query II
-# SELECT * FROM v2 ORDER BY 1
-# ----
-# 1	3
-
 # check data
-
-# TODO: result differs
-# query II
-# SELECT * FROM integers ORDER BY 1
-# ----
-# NULL	1
-# 1	3
-# 4	2
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM enums ORDER BY 1
-# ----
-# sad
-# sad
-# ok
-# happy
 
 query TT
 SELECT * FROM strings ORDER BY 1
 ----
 NULL	1992-01-01
 NULL	1993-01-01
-
-# TODO: result differs
-# query II
-# SELECT * FROM v1 ORDER BY 1
-# ----
-# 4	2
-
-# TODO: result differs
-# query II
-# SELECT * FROM v2 ORDER BY 1
-# ----
-# 1	3
-
-# TODO: result differs
-# query II
-# SELECT * FROM v3 ORDER BY 1
-# ----
-# NULL	1
 
 query I
 SELECT * FROM "table.with-symbols" ORDER BY 1
@@ -197,122 +118,10 @@ SELECT * FROM "SAME_NAME" ORDER BY i
 1	1
 2	2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA s1;
-# CREATE SCHEMA s2;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE table01(i INTEGER, j INTEGER);
-# CREATE TABLE s1.table01(i INTEGER, j INTEGER);
-# CREATE TABLE s2.table01(i INTEGER, j INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO table01 VALUES (1, 1), (2, 2);
-# INSERT INTO s1.table01 VALUES (3, 3), (4, 4);
-# INSERT INTO s2.table01 VALUES (5, 5), (6, 6);
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM table01 ORDER BY i;
-# ----
-# 1	1
-# 2	2
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM s1.table01 ORDER BY i;
-# ----
-# 3	3
-# 4	4
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM s2.table01 ORDER BY i;
-# ----
-# 5	5
-# 6	6
-
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM integers ORDER BY 1
-# ----
-# NULL	1
-# 1	3
-# 4	2
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM strings ORDER BY 1
-# ----
-# NULL	1993-01-01
-# NULL	1992-01-01
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM enums ORDER BY 1
-# ----
-# sad
-# sad
-# ok
-# happy
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM v1 ORDER BY 1
-# ----
-# 4	2
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM v2 ORDER BY 1
-# ----
-# 1	3
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM v3 ORDER BY 1
-# ----
-# NULL	1
-
 # sequence is not reset to base value, but keeps the value it had
-
-# TODO: unsupported feature
-# query I
-# SELECT nextval('seq')
-# ----
-# 2
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM "table.with-symbols" ORDER BY 1
-# ----
-# NULL
-# 1
-# 4
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM "view.with-symbols" ORDER BY 1
-# ----
-# 1
-
-# TODO: unsupported feature
-# query TT
-# SELECT "table ""."."col "".", "col ""." FROM "table "".";
-# ----
-# quote_escaped_quote_'	quote_escaped_quote_'
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM "view ""." ORDER BY 1
-# ----
-# 1
 
 query II
 SELECT * FROM "SAME_NAME" ORDER BY i
@@ -320,32 +129,8 @@ SELECT * FROM "SAME_NAME" ORDER BY i
 1	1
 2	2
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM table01 ORDER BY i;
-# ----
-# 1	1
-# 2	2
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM s1.table01 ORDER BY i;
-# ----
-# 3	3
-# 4	4
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM s2.table01 ORDER BY i;
-# ----
-# 5	5
-# 6	6
-
 # verify that constraints are still there
 
 statement error
 INSERT INTO integers VALUES (5, 6)
 
-# TODO: result differs
-# statement error
-# INSERT INTO strings VALUES(NULL, NULL)

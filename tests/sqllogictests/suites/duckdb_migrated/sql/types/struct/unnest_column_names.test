@@ -1,0 +1,99 @@
+# TODO: unsupported feature
+# query II
+# SELECT unnest([{'a':{ 'aa': 42}, 'b':{'bb': 84}}], recursive := true, keep_parent_names := true);
+# ----
+# 42	84
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a':{ 'aa': 42}, 'b':{'bb':  84}}], recursive := true, keep_parent_names := true))
+# ----
+# a.aa	INTEGER
+# b.bb	INTEGER
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a':{ 'aa': {'aaa': 42}}, 'b':{'bb':  84}}], recursive := true, keep_parent_names := true));
+# ----
+# a.aa.aaa	INTEGER
+# b.bb	INTEGER
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, keep_parent_names := true));
+# ----
+# a	INTEGER
+# b.bb.bbb	INTEGER
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, keep_parent_names := false));
+# ----
+# a	INTEGER
+# bbb	INTEGER
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, max_depth := 3, keep_parent_names := true));
+# ----
+# a	INTEGER
+# b.bb	STRUCT(bbb INTEGER)
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], recursive := true, max_depth := 2, keep_parent_names := true));
+# ----
+# a	INTEGER
+# b	STRUCT(bb STRUCT(bbb INTEGER))
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'bb': {'bbb': 12}}}], max_depth := 3));
+# ----
+# a	INTEGER
+# bb	STRUCT(bbb INTEGER)
+
+# Tests unnamed structs
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42)), recursive := true, keep_parent_names := true));
+# ----
+# element1	INTEGER
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42)), recursive := true));
+# ----
+# element1	INTEGER
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42))));
+# ----
+# element1	STRUCT(INTEGER)
+
+# Check empty names
+
+# TODO: unsupported feature
+# statement error
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'a': 12, 'b': {'': {'': 12}}}], max_depth := 3));
+
+# TODO: unsupported feature
+# statement error
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{'': {'': 12}}], recursive := true, keep_parent_names := true));
+
+# TODO: unsupported feature
+# statement error
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([{}], recursive := true, keep_parent_names := true));
+
+# TODO: unsupported feature
+# statement error
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest([]), recursive := true, keep_parent_names := true));
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE SELECT unnest(row(row(42), 41), keep_parent_names := true, recursive := true));
+# ----
+# element1	INTEGER
+# element2	INTEGER

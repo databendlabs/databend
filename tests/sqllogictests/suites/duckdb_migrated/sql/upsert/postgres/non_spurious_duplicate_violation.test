@@ -1,0 +1,62 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS insertconflicttest
+
+# TODO: unsupported feature
+# statement ok
+# create table insertconflicttest(
+# 	key int4,
+# 	fruit text,
+# 	other int4,
+# 	unique (key),
+# 	unique (fruit)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (25, 'Fig', 0) on conflict (fruit) do update set other = 1
+
+# Succeeds
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (23, 'Blackberry', 0) on conflict (key) do update set other = 1 where fruit like '%berry'
+
+# Test that wholerow references to ON CONFLICT's EXCLUDED work
+
+# Succeeds, updates existing row:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest as i values (23, 'Jackfruit', 0) on conflict (key) do update set other = 1
+# No update this time, though:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest as i values (23, 'Jackfruit', 0) on conflict (key) do update set other = 1
+# Predicate changed to require match rather than non-match, so updates once more:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest as i values (23, 'Jackfruit', 0) on conflict (key) do update set other = 1
+# Assign:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest as i values (23, 'Avocado', 0) on conflict (key) do update set other = 1
+# deparse whole row var in WHERE and SET clauses:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest as i values (23, 'Avocado', 0) on conflict (key) do update set other = 1
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest as i values (23, 'Avocado', 0) on conflict (key) do update set other = 1
+
+
+# Cleanup
+
+# TODO: unsupported feature
+# statement ok
+# drop table insertconflicttest;

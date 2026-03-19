@@ -4,10 +4,6 @@ DROP VIEW IF EXISTS s1.v
 statement ok
 DROP TABLE IF EXISTS s1.t
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA s1;
-
 statement ok
 CREATE VIEW s1.v AS SELECT 42 c;
 

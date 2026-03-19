@@ -1,23 +1,7 @@
 statement ok
 DROP TABLE IF EXISTS unit
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE unit (
-# 	price INTEGER,
-# 	amount_sold INTEGER,
-# 	total_profit AS (price * amount_sold)
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO unit VALUES (5,4)
-
 # Delete the generated column
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE unit DROP COLUMN total_profit;
 
 # We can now no longer select it
 

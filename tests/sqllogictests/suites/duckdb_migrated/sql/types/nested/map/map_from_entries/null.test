@@ -1,0 +1,67 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(NULL);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	input STRUCT(a INTEGER, b INTEGER)[]
+# );
+# INSERT INTO tbl VALUES(NULL);
+# INSERT INTO tbl VALUES(NULL);
+# INSERT INTO tbl VALUES(NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT input FROM tbl;
+# ----
+# NULL
+# NULL
+# NULL
+
+# Multi row NULLs
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(input) FROM tbl;
+# ----
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES ([(5,3), (6,4), (7,3)])
+
+# With valid MAPs mixed in
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(input) FROM tbl;
+# ----
+# NULL
+# NULL
+# NULL
+# {5=3, 6=4, 7=3}
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (NULL)
+
+# Followed by another NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(input) FROM tbl;
+# ----
+# NULL
+# NULL
+# NULL
+# {5=3, 6=4, 7=3}
+# NULL

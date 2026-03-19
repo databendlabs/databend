@@ -4,23 +4,10 @@ DROP TABLE IF EXISTS test
 statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER);
 
-# TODO: unsupported feature
-# query I
-# COPY test FROM '{DATA_DIR}/csv/test/quoted_newline.csv' (DELIMITER ',', AUTO_DETECT 0);
-# ----
-# 2
-
 query I
 SELECT SUM(b) FROM test;
 ----
 NULL
-
-# TODO: unsupported feature
-# query T
-# SELECT string_split_regex(a, '[\r\n]+') FROM test ORDER BY a;
-# ----
-# [hello, world]
-# ['what,', ' brings, you here', ' , today']
 
 statement ok
 DROP TABLE test;

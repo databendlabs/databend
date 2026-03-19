@@ -16,20 +16,8 @@ CREATE TABLE src(b INTEGER)
 statement ok
 INSERT INTO src VALUES (3), (2), (1), (4)
 
-# TODO: unsupported feature
-# query IIII
-# SELECT src.rowid sr, b, test.rowid tr, a FROM src, test WHERE src.b = test.a ORDER BY a;
-# ----
-# 2	1	2952	1
-# 1	2	2953	2
-# 0	3	2954	3   
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE src SET b = 10000 WHERE src.rowid = 0 OR src.rowid = 1 OR src.rowid = 3
 
 query I
 SELECT b FROM src
@@ -42,6 +30,3 @@ SELECT b FROM src
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement error
-# UPDATE src SET b = 20000 FROM test WHERE src.b = test.a;

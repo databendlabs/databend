@@ -10,6 +10,3 @@ INSERT INTO t0(c1, c0) VALUES (TIMESTAMP '1969-12-28 23:02:08', 1);
 statement ok
 INSERT INTO t0(c0) VALUES (DEFAULT);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i2 ON t0(c1, c0);

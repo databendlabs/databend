@@ -5,54 +5,5 @@ DROP TABLE IF EXISTS enc.test
 statement error
 ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM', READ_ONLY);
-
-# TODO: unsupported feature
-# query I
-# FROM enc.test ORDER BY value
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-
-# TODO: unsupported feature
-# statement ok
-# DETACH enc
-
 # Creating a new table will also fail
 
-# TODO: unsupported feature
-# statement ok
-# DETACH enc
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
-
-# TODO: unsupported feature
-# query I
-# FROM enc.test ORDER BY value
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-
-# TODO: unsupported feature
-# statement ok
-# DETACH enc
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE enc.test AS SELECT 1 as a;
-
-# TODO: unsupported feature
-# query I
-# FROM enc.test
-# ----
-# 1

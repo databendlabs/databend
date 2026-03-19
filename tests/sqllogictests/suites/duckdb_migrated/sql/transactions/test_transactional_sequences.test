@@ -7,17 +7,7 @@ BEGIN TRANSACTION
 
 # create a sequence in node one
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq;
-
 # node one can see it
-
-# TODO: unsupported feature
-# query I
-# SELECT nextval('seq');
-# ----
-# 1
 
 # node two can't see it
 
@@ -37,31 +27,15 @@ COMMIT
 
 # we can now see the sequence in node two
 
-# TODO: unsupported feature
-# query I
-# SELECT nextval('seq');
-# ----
-# 2
-
 # drop sequence seq in a transaction
 
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# DROP SEQUENCE seq;
-
 # node one can't use it anymore
 
 statement error
 SELECT nextval('seq');
-
-# TODO: unsupported feature
-# query I
-# SELECT nextval('seq');
-# ----
-# 3
 
 # rollback cancels the drop sequence
 
@@ -70,17 +44,7 @@ ROLLBACK;
 
 # we can still use it
 
-# TODO: unsupported feature
-# query I
-# SELECT nextval('seq');
-# ----
-# 4
-
 # now we drop it for real
-
-# TODO: unsupported feature
-# statement ok
-# DROP SEQUENCE seq;
 
 # we can't use it anymore
 

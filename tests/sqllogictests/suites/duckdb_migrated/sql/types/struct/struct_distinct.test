@@ -1,0 +1,805 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS list_in_struct
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS struct_int
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS struct_nested
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS struct_str
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS struct_str_int
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::tinyint} IS NOT DISTINCT FROM {'x': 2::tinyint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::tinyint} IS NOT DISTINCT FROM {'x': 1::tinyint}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1::tinyint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::tinyint} IS DISTINCT FROM {'x': 2::tinyint}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::tinyint} IS DISTINCT FROM {'x': 1::tinyint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::tinyint} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
+# 	({'x': 1::tinyint}, {'x': 1::tinyint}),
+# 	({'x': 1::tinyint}, {'x': 2::tinyint}),
+# 	({'x': 2::tinyint}, {'x': 1::tinyint}),
+# 	(NULL, {'x': 1::tinyint}),
+# 	({'x': 2::tinyint}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_int
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_int
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+
+# Constant single integer column distinct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::smallint} IS NOT DISTINCT FROM {'x': 2::smallint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::smallint} IS NOT DISTINCT FROM {'x': 1::smallint}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1::smallint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::smallint} IS DISTINCT FROM {'x': 2::smallint}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::smallint} IS DISTINCT FROM {'x': 1::smallint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::smallint} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
+# 	({'x': 1::smallint}, {'x': 1::smallint}),
+# 	({'x': 1::smallint}, {'x': 2::smallint}),
+# 	({'x': 2::smallint}, {'x': 1::smallint}),
+# 	(NULL, {'x': 1::smallint}),
+# 	({'x': 2::smallint}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_int
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_int
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+
+# Constant single integer column distinct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::integer} IS NOT DISTINCT FROM {'x': 2::integer}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::integer} IS NOT DISTINCT FROM {'x': 1::integer}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1::integer}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::integer} IS DISTINCT FROM {'x': 2::integer}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::integer} IS DISTINCT FROM {'x': 1::integer}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::integer} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
+# 	({'x': 1::integer}, {'x': 1::integer}),
+# 	({'x': 1::integer}, {'x': 2::integer}),
+# 	({'x': 2::integer}, {'x': 1::integer}),
+# 	(NULL, {'x': 1::integer}),
+# 	({'x': 2::integer}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_int
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_int
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+
+# Constant single integer column distinct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::bigint} IS NOT DISTINCT FROM {'x': 2::bigint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::bigint} IS NOT DISTINCT FROM {'x': 1::bigint}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1::bigint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::bigint} IS DISTINCT FROM {'x': 2::bigint}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::bigint} IS DISTINCT FROM {'x': 1::bigint}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::bigint} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
+# 	({'x': 1::bigint}, {'x': 1::bigint}),
+# 	({'x': 1::bigint}, {'x': 2::bigint}),
+# 	({'x': 2::bigint}, {'x': 1::bigint}),
+# 	(NULL, {'x': 1::bigint}),
+# 	({'x': 2::bigint}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_int
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_int
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+
+# Constant single integer column distinct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::float} IS NOT DISTINCT FROM {'x': 2::float}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::float} IS NOT DISTINCT FROM {'x': 1::float}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1::float}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::float} IS DISTINCT FROM {'x': 2::float}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::float} IS DISTINCT FROM {'x': 1::float}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::float} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
+# 	({'x': 1::float}, {'x': 1::float}),
+# 	({'x': 1::float}, {'x': 2::float}),
+# 	({'x': 2::float}, {'x': 1::float}),
+# 	(NULL, {'x': 1::float}),
+# 	({'x': 2::float}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_int
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_int
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+
+# Constant single integer column distinct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::double} IS NOT DISTINCT FROM {'x': 2::double}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::double} IS NOT DISTINCT FROM {'x': 1::double}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1::double}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::double} IS DISTINCT FROM {'x': 2::double}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::double} IS DISTINCT FROM {'x': 1::double}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1::double} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
+# 	({'x': 1::double}, {'x': 1::double}),
+# 	({'x': 1::double}, {'x': 2::double}),
+# 	({'x': 2::double}, {'x': 1::double}),
+# 	(NULL, {'x': 1::double}),
+# 	({'x': 2::double}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_int
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_int
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+
+# Constant single string column distinct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck'} IS NOT DISTINCT FROM {'x': 'goose'}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck'} IS NOT DISTINCT FROM {'x': 'duck'}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck'} IS NOT DISTINCT FROM NULL
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 'duck'}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck'} IS DISTINCT FROM {'x': 'goose'}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck'} IS DISTINCT FROM {'x': 'duck'}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck'} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS DISTINCT FROM {'x': 'duck'}
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW struct_str AS SELECT * FROM (VALUES
+# 	({'x': 'duck'}, {'x': 'duck'}),
+# 	({'x': 'duck'}, {'x': 'goose'}),
+# 	({'x': 'goose'}, {'x': 'duck'}),
+# 	(NULL, {'x': 'duck'}),
+# 	({'x': 'goose'}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_str
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_str
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+# Constant string, integer column distinct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck', 'y': 1} IS NOT DISTINCT FROM {'x': 'goose', 'y': 2}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck', 'y': 1} IS NOT DISTINCT FROM {'x': 'duck', 'y': 1}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 'duck', 'y': 1}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck', 'y': 1} IS NOT DISTINCT FROM NULL
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck', 'y': 1} IS DISTINCT FROM {'x': 'goose', 'y': 2}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck', 'y': 1} IS DISTINCT FROM {'x': 'duck', 'y': 1}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS DISTINCT FROM {'x': 'duck', 'y': 1}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 'duck', 'y': 1} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW struct_str_int AS SELECT * FROM (VALUES
+# 	({'x': 'duck', 'y': 1}, {'x': 'duck', 'y': 1}),
+# 	({'x': 'duck', 'y': 1}, {'x': 'goose', 'y': 2}),
+# 	({'x': 'goose', 'y': 2}, {'x': 'duck', 'y': 1}),
+# 	(NULL, {'x': 'duck', 'y': 1}),
+# 	({'x': 'goose', 'y': 2}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_str_int
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_str_int
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+# Nested structs
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} IS NOT DISTINCT FROM {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} IS NOT DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} IS NOT DISTINCT FROM NULL
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} IS DISTINCT FROM {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} IS DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS DISTINCT FROM {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': {'a': 'duck', 'b': 1.5}} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW struct_nested AS SELECT * FROM (VALUES
+# 	({'x': 1, 'y': {'a': 'duck', 'b': 1.5}}, {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}),
+# 	({'x': 1, 'y': {'a': 'duck', 'b': 1.5}}, {'x': 2, 'y': {'a': 'goose', 'b': 2.5}}),
+# 	({'x': 2, 'y': {'a': 'goose', 'b': 2.5}}, {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}),
+# 	(NULL, {'x': 1, 'y': {'a': 'duck', 'b': 1.5}}),
+# 	({'x': 2, 'y': {'a': 'goose', 'b': 2.5}}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM struct_nested
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM struct_nested
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+# List nested inside struct
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': ['duck', 'somateria']} IS NOT DISTINCT FROM {'x': 2, 'y': ['goose']}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': ['duck', 'somateria']} IS NOT DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS NOT DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': ['duck', 'somateria']} IS NOT DISTINCT FROM NULL
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': ['duck', 'somateria']} IS DISTINCT FROM {'x': 2, 'y': ['goose']}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': ['duck', 'somateria']} IS DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IS DISTINCT FROM {'x': 1, 'y': ['duck', 'somateria']}
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT {'x': 1, 'y': ['duck', 'somateria']} IS DISTINCT FROM NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW list_in_struct AS SELECT * FROM (VALUES
+# 	({'x': 1, 'y': ['duck', 'somateria']}, {'x': 1, 'y': ['duck', 'somateria']}),
+# 	({'x': 1, 'y': ['duck', 'somateria']}, {'x': 2, 'y': ['goose']}),
+# 	({'x': 2, 'y': ['goose']}, {'x': 1, 'y': ['duck', 'somateria']}),
+# 	(NULL, {'x': 1, 'y': ['duck', 'somateria']}),
+# 	({'x': 2, 'y': ['goose']}, NULL),
+# 	(NULL, NULL)
+# 	) tbl(l, r);
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS NOT DISTINCT FROM r FROM list_in_struct
+# ----
+# 1
+# 0
+# 0
+# 0
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT l IS DISTINCT FROM r FROM list_in_struct
+# ----
+# 0
+# 1
+# 1
+# 1
+# 1
+# 0
+
+# Filter by constant
+
+# TODO: unsupported feature
+# query T
+# select CASE WHEN a < 4 THEN {'x': a, 'y': a+1, 'z': a+2} ELSE NULL END IS NOT DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
+# from range(0, 5) tbl(a);
+# ----
+# 0
+# 1
+# 0
+# 0
+# 0
+
+# TODO: unsupported feature
+# query T
+# select CASE WHEN a < 4 THEN {'x': a, 'y': a+1, 'z': a+2} ELSE NULL END IS DISTINCT FROM {'x': 1, 'y': 2, 'z': 3}
+# from range(0, 5) tbl(a);
+# ----
+# 1
+# 0
+# 1
+# 1
+# 1

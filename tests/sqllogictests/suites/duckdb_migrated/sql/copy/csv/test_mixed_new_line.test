@@ -1,46 +1,8 @@
-# TODO: unsupported feature
-# query III
-# select * from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', strict_mode=false)
-# ----
-# 1	2	3
-# 4	5	6
-# 7	8	9
-
-# TODO: unsupported feature
-# query III
-# select * from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = '\r', strict_mode = false)
-# ----
-# 1	2	3
-# 4	5	6
-# 7	8	9
-
-# TODO: unsupported feature
-# query III
-# select * from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = '\n', strict_mode = false)
-# ----
-# 1	2	3
-# 4	5	6
-# 7	8	9
-
-# TODO: unsupported feature
-# query III
-# select * from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', new_line = '\r\n', strict_mode = false)
-# ----
-# 1	2	3
-# 4	5	6
-# 7	8	9
-
 statement error
 from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',')
 
 statement error
 from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',', auto_detect= false)
-
-# TODO: unsupported feature
-# query I
-# select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
-# ----
-# 3
 
 statement error
 select count(*) from read_csv('{DATA_DIR}/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
@@ -51,25 +13,11 @@ SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{
 statement error
 SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
 
-# TODO: unsupported feature
-# query I
-# SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_r_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
-# ----
-# one
-# two
-
 statement error
 SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
 
 statement error
 SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
-
-# TODO: unsupported feature
-# query I
-# SELECT column0 FROM read_csv('{DATA_DIR}/csv/one_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
-# ----
-# one
-# two
 
 statement error
 SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('{DATA_DIR}/csv/one_r_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)

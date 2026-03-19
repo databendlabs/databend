@@ -1,0 +1,244 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bigints
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS strings
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bigints AS SELECT i::BIGINT i FROM (VALUES (-9223372036854775808), (0), (9223372036854775807)) tbl(i)
+
+# -> unsigned
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UTINYINT FROM bigints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::USMALLINT FROM bigints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UINTEGER FROM bigints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UBIGINT FROM bigints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UTINYINT FROM bigints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::USMALLINT FROM bigints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UINTEGER FROM bigints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT i::UBIGINT FROM bigints WHERE i>=0 ORDER BY i
+# ----
+# 0
+# 9223372036854775807
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UTINYINT) FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS USMALLINT) FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UINTEGER) FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UBIGINT) FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# 9223372036854775807
+
+# -> signed
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::TINYINT FROM bigints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS TINYINT) FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::SMALLINT FROM bigints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS SMALLINT) FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::INTEGER FROM bigints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS INTEGER) FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i::HUGEINT::BIGINT FROM bigints ORDER BY i
+# ----
+# -9223372036854775808
+# 0
+# 9223372036854775807
+
+# tinyint -> float
+
+# TODO: unsupported feature
+# query I
+# SELECT i::FLOAT FROM bigints ORDER BY i
+# ----
+# -9223372036854775808
+# 0
+# 9223372036854775807
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DOUBLE FROM bigints ORDER BY i
+# ----
+# -9223372036854775808
+# 0
+# 9223372036854775807
+
+# -> bool
+
+# TODO: unsupported feature
+# query I
+# SELECT i::BOOL FROM bigints ORDER BY i
+# ----
+# True
+# False
+# True
+
+# -> varchar
+
+# TODO: unsupported feature
+# query I
+# SELECT i::VARCHAR FROM bigints ORDER BY i
+# ----
+# -9223372036854775808
+# 0
+# 9223372036854775807
+
+# from string casts
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-10000000000000000000'), ('-9223372036854775808'), ('0'), ('9223372036854775807'), ('10000000000000000000')) tbl(s)
+
+# TODO: unsupported feature
+# statement error
+# SELECT s::BIGINT FROM strings
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(s AS BIGINT) FROM strings
+# ----
+# NULL
+# NULL
+# NULL
+# -9223372036854775808
+# 0
+# 9223372036854775807
+# NULL
+
+# -> decimal casts
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(3,0)::BIGINT FROM bigints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(9,0)::BIGINT FROM bigints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(18,0)::BIGINT FROM bigints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DECIMAL(38,0)::BIGINT FROM bigints ORDER BY i
+# ----
+# -9223372036854775808
+# 0
+# 9223372036854775807
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(38,20)::BIGINT FROM bigints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(3,0))::BIGINT FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(9,0))::BIGINT FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(18,0))::BIGINT FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(38,20))::BIGINT FROM bigints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL

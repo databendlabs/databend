@@ -4,13 +4,6 @@ DROP TABLE IF EXISTS a
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (
-# 	price INTEGER,
-# 	total_price AS ((price)::DATE)
-# );
-
 # Insert value(s) into the column(s)
 # Because of the silently generated CHECK constraint, this insert fails
 # '(Error: Conversion Error: Unimplemented type for cast (INTEGER -> DATE))'
@@ -18,24 +11,7 @@ DROP TABLE IF EXISTS tbl
 statement error
 INSERT INTO tbl VALUES (5);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE a (
-# 	gen_x AS (x),
-# 	gen_y AS (y),
-# 	x TEXT,
-# 	y INTEGER
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a VALUES ('hello', 42)
-
 # TEXT -> TEXT: OK
-
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM a;
 
 # Change type to BOOLEAN
 # Not supported yet

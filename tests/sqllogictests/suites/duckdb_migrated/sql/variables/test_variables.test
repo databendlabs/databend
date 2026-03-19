@@ -1,0 +1,81 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS animal_list
+
+# TODO: unsupported feature
+# query I
+# SELECT GETVARIABLE('animal')
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT GETVARIABLE($1);
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1('animal');
+# ----
+# duck
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO _(x) AS getvariable(x);
+
+# TODO: unsupported feature
+# query I
+# SELECT _('animal')
+# ----
+# duck
+
+# overwriting
+
+# TODO: unsupported feature
+# query I
+# SELECT GETVARIABLE('animal')
+# ----
+# bird
+
+# TODO: unsupported feature
+# query III
+# FROM duckdb_variables();
+# ----
+# animal	bird	VARCHAR
+
+# TODO: unsupported feature
+# query III
+# SHOW VARIABLES
+# ----
+# animal	bird	VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# RESET VARIABLE animal
+
+# TODO: unsupported feature
+# query I
+# SELECT GETVARIABLE('animal')
+# ----
+# NULL
+
+# setting from a subquery
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE animal_list(a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO animal_list VALUES ('duck'), ('goose');
+
+# TODO: unsupported feature
+# query I
+# SELECT GETVARIABLE('animals')
+# ----
+# [duck, goose]
+
+# TODO: unsupported feature
+# query I
+# SELECT GETVARIABLE('xxx')
+# ----
+# NULL

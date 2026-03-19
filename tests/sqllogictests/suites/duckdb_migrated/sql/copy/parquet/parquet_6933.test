@@ -4,31 +4,3 @@ DROP TABLE IF EXISTS table1
 statement ok
 DROP TABLE IF EXISTS table2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE table1 (
-#     name VARCHAR,
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO table1 VALUES ('Test value 1!');
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO table1 VALUES ('Test value 2!');
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE table2 (
-#     name VARCHAR,
-#     number INTEGER,
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO table2 VALUES ('Other test value', 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO table2 VALUES ('Other test value', 2);

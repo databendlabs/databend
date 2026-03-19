@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table tbl (
+# 	a integer unique,
+# 	b integer
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl VALUES (3,2), (1,3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(b) VALUES (5) ON CONFLICT (a) DO UPDATE SET b = 8;
+
+# UNIQUE can be NULL, PRIMARY KEY can't be
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# 3	2
+# 1	3
+# NULL	5
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(b) VALUES (5) ON CONFLICT (a) DO UPDATE SET b = 8;
+
+# And NULL does not take part in the UNIQUE Index, so it does not activate the ON CONFLICT clause
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# 3	2
+# 1	3
+# NULL	5
+# NULL	5

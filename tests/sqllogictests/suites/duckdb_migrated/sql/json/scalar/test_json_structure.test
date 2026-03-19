@@ -1,189 +1,15 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unknown function
-# query T
-# select json_structure('42')
-# ----
-# "UBIGINT"
-
-# TODO: unknown function
-# query T
-# select json_structure('4.2')
-# ----
-# "DOUBLE"
-
-# TODO: unknown function
-# query T
-# select json_structure('null')
-# ----
-# "NULL"
-
-# TODO: unknown function
-# query T
-# select json_structure('true')
-# ----
-# "BOOLEAN"
-
-# TODO: unknown function
-# query T
-# select json_structure('"duck"')
-# ----
-# "VARCHAR"
-
 # simple values
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": 42}')
-# ----
-# {"a":"UBIGINT"}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": 4.2}')
-# ----
-# {"a":"DOUBLE"}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": "42"}')
-# ----
-# {"a":"VARCHAR"}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": "looooooooooooooooong"}')
-# ----
-# {"a":"VARCHAR"}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": null}')
-# ----
-# {"a":"NULL"}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": true}')
-# ----
-# {"a":"BOOLEAN"}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": []}')
-# ----
-# {"a":["NULL"]}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": [42]}')
-# ----
-# {"a":["UBIGINT"]}
-
-# TODO: unknown function
-# query T
-# select json_structure('{"a": {"b": 42}}')
-# ----
-# {"a":{"b":"UBIGINT"}}
 
 # we want strong typing for JSON arrays. If we find inconsistent types, we just set the type to JSON
 
-# TODO: unknown function
-# query T
-# select json_structure('[null,null]')
-# ----
-# ["NULL"]
-
-# TODO: unknown function
-# query T
-# select json_structure('[true,null,false]')
-# ----
-# ["BOOLEAN"]
-
-# TODO: unknown function
-# query T
-# select json_structure('[true,null,false,1]')
-# ----
-# ["JSON"]
-
-# TODO: unknown function
-# query T
-# select json_structure('[true,null,false,1,-1]')
-# ----
-# ["JSON"]
-
-# TODO: unknown function
-# query T
-# select json_structure('[true,null,false,1,-1,0.42]')
-# ----
-# ["JSON"]
-
-# TODO: unknown function
-# query T
-# select json_structure('[true,null,false,1,-1,0.42,"42"]')
-# ----
-# ["JSON"]
-
 # nested stuff
-
-# TODO: unknown function
-# query T
-# select json_structure('[{"a": 42}, {"a": null}]')
-# ----
-# [{"a":"UBIGINT"}]
-
-# TODO: unknown function
-# query T
-# select json_structure('[{"a": 42}, {"b": 4.2}]')
-# ----
-# [{"a":"UBIGINT","b":"DOUBLE"}]
-
-# TODO: unknown function
-# query T
-# select json_structure('[{"a": [42, null]}, {"a": [7]}]')
-# ----
-# [{"a":["UBIGINT"]}]
-
-# TODO: unknown function
-# query T
-# select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"b": 7}]}]')
-# ----
-# [{"a":[{"b":"UBIGINT"}]}]
-
-# TODO: unknown function
-# query T
-# select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"c": 7}]}]')
-# ----
-# [{"a":[{"b":"UBIGINT","c":"UBIGINT"}]}]
 
 # inconsistent types
 
-# TODO: unknown function
-# query T
-# select json_structure('[1, [1]]')
-# ----
-# ["JSON"]
-
-# TODO: unknown function
-# query T
-# select json_structure('[1, {"a": 1}]')
-# ----
-# ["JSON"]
-
-# TODO: unknown function
-# query T
-# select json_structure('[[1], {"a": 1}]')
-# ----
-# ["JSON"]
-
 # duplicate key, used to throw an error, now the error is ignored
-
-# TODO: unknown function
-# query I
-# select json_structure('{"a": 42, "a": 7}')
-# ----
-# {"a":"UBIGINT"}
 
 # from a table
 
@@ -198,20 +24,5 @@ insert into test values
     ('{"family": null, "species": null, "hair": null, "coolness": null}'),
     ('{"family": "felidae", "species": ["tiger", "lion", null, "british shorthair"], "hair": true, "coolness": 999}')
 
-# TODO: unknown function
-# query T
-# select json_structure(j) from test
-# ----
-# {"family":"VARCHAR","species":["VARCHAR"],"coolness":"UBIGINT"}
-# {"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
-# NULL
-# {"family":"NULL","species":"NULL","hair":"NULL","coolness":"NULL"}
-# {"family":"VARCHAR","species":["VARCHAR"],"hair":"BOOLEAN","coolness":"UBIGINT"}
-
 # issue 11886
 
-# TODO: unknown function
-# query I
-# select json_structure('{"a": 1, "A": 1}');
-# ----
-# {"a":"UBIGINT","A":"UBIGINT"}

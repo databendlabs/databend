@@ -61,15 +61,6 @@ INSERT INTO test2 VALUES (1, NULL), (NULL, 10)
 
 # join result should be unchanged
 
-# TODO: result differs
-# query IIII rowsort
-# SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AND test.b <= test2.b
-# ----
-# 11 1 1 10
-# 11 1 NULL 10
-# NULL 1 1 NULL
-# NULL 1 NULL 10
-
 # Forced external
 
 statement ok

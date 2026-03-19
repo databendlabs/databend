@@ -4,59 +4,11 @@ DROP TABLE IF EXISTS blob_empty
 statement ok
 DROP TABLE IF EXISTS blobs
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE blobs (b BYTEA);
-
 # Insert valid hex strings
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO blobs VALUES('\xaa\xff\xaa'), ('\xAA\xFF\xAA\xAA\xFF\xAA'), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA')
-
-# TODO: unsupported feature
-# query T
-# SELECT * FROM blobs
-# ----
-# \xAA\xFF\xAA
-# \xAA\xFF\xAA\xAA\xFF\xAA
-# \xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA
 
 # Insert valid hex strings, lower case
 
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM blobs
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO blobs VALUES('\xaa\xff\xaa'), ('\xaa\xff\xaa\xaa\xff\xaa'), ('\xaa\xff\xaa\xaa\xff\xaa\xaa\xff\xaa')
-
-# TODO: unsupported feature
-# query T
-# SELECT * FROM blobs
-# ----
-# \xAA\xFF\xAA
-# \xAA\xFF\xAA\xAA\xFF\xAA
-# \xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA
-
 # Insert valid hex strings with number and letters
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM blobs
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO blobs VALUES('\xaa1199'), ('\xaa1199aa1199'), ('\xaa1199aa1199aa1199')
-
-# TODO: unsupported feature
-# query T
-# SELECT * FROM blobs
-# ----
-# \xAA1199
-# \xAA1199aa1199
-# \xAA1199aa1199aa1199
 
 # Insert invalid hex strings (invalid hex chars: G, H, I)
 
@@ -85,35 +37,5 @@ SELECT NULL::BLOB
 ----
 NULL
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE blob_empty (b BYTEA);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO blob_empty VALUES(''), (''::BLOB)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO blob_empty VALUES(NULL), (NULL::BLOB)
-
-# TODO: unsupported feature
-# query T
-# SELECT * FROM blob_empty
-# ----
-# (empty)
-# (empty)
-# NULL
-# NULL
-
 # convert non-ascii string to blob using cat
 
-# TODO: result differs
-# statement error
-# select 'ü'::blob;
-
-# TODO: result differs
-# query I
-# SELECT '\x7F'::BLOB;
-# ----
-# \x7F

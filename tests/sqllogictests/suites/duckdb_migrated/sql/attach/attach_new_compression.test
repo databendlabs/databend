@@ -18,48 +18,13 @@ CREATE TABLE db1.str_tbl AS SELECT STRING_AGG('long_string_' || i, '-') FROM ran
 
 # verify new compression methods are not used when attaching with a low storage version
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*)>0 FROM pragma_storage_info('db1.tbl') WHERE compression='Roaring'
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*)>0 FROM pragma_storage_info('db1.str_tbl') WHERE compression='ZSTD'
-# ----
-# 0
-
-# TODO: unsupported feature
-# statement ok
-# DETACH db1
-
 # attach with a new storage version and re-write the table
 
 statement ok
 CREATE TABLE db1.tbl2 AS FROM db1.tbl
 
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT db1
-
 statement ok
 CREATE TABLE db1.str_tbl2 AS FROM db1.str_tbl
 
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT db1
-
 # roaring is used now
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*)>0 FROM pragma_storage_info('db1.tbl2') WHERE compression='Roaring'
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*)>0 FROM pragma_storage_info('db1.str_tbl2') WHERE compression='ZSTD'
-# ----
-# 1

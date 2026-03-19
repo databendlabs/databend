@@ -3,46 +3,6 @@ DROP TABLE IF EXISTS T
 
 # This test defaults to another compression function for smaller block sizes,
 # because the bitpacking groups no longer fit the blocks.
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE T (a INTEGER USING COMPRESSION RLE)
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE T
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE T (a INTEGER USING COMPRESSION )
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
-
-# TODO: unsupported feature
-# statement error
-# CREATE TABLE T (a INTEGER USING COMPRESSION bla)
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE T
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b VARCHAR )
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE T
-
 statement ok
 CREATE TABLE T (a INTEGER, b INTEGER, c INTEGER)
 
@@ -69,18 +29,6 @@ SELECT * FROM T
 2	2	2
 3	3	3
 
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT
-
-# TODO: unsupported feature
-# query I
-# SELECT compression FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
-# ----
-# RLE
-# BitPacking
-# Uncompressed
-
 statement ok
 ALTER TABLE T RENAME COLUMN a TO a_1
 
@@ -100,14 +48,6 @@ SELECT * FROM T
 2	2	2
 3	3	3
 
-# TODO: unsupported feature
-# query I
-# SELECT compression FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
-# ----
-# RLE
-# BitPacking
-# Uncompressed
-
 statement ok
 ALTER TABLE T RENAME TO T_1
 
@@ -120,14 +60,6 @@ SELECT * FROM T_1
 2	2	2
 2	2	2
 3	3	3
-
-# TODO: unsupported feature
-# query I
-# SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
-# ----
-# RLE
-# BitPacking
-# Uncompressed
 
 # Test Drop Column
 
@@ -147,12 +79,6 @@ SELECT * FROM T_1
 2
 3
 
-# TODO: unsupported feature
-# query I
-# SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
-# ----
-# RLE
-
 # Test Add Column
 
 statement ok
@@ -168,13 +94,3 @@ SELECT * FROM T_1
 2	2
 3	2
 
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT
-
-# TODO: unsupported feature
-# query I
-# SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
-# ----
-# RLE
-# Constant

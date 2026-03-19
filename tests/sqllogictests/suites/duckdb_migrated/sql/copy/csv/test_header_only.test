@@ -1,116 +1,11 @@
 statement ok
 DROP TABLE IF EXISTS T
 
-# TODO: unsupported feature
-# query I
-# SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only.csv', header=True, ignore_errors=True)
-# ----
-# [{'name': abs_file_name, 'type': VARCHAR}]
-
-# TODO: unsupported feature
-# query I
-# SELECT abs_file_name FROM read_csv('{DATA_DIR}/csv/header_only.csv', header=True, ignore_errors=True)
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT REGEXP_MATCHES(abs_file_name, 'foo')
-#   FROM ( SELECT abs_file_name FROM read_csv('{DATA_DIR}/csv/header_only.csv', header=True, ignore_errors=True))
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT REGEXP_MATCHES(abs_file_name, 'foo')
-#   FROM ( SELECT abs_file_name FROM read_csv(['{DATA_DIR}/csv/header_only.csv','{DATA_DIR}/csv/header_only.csv'], header=True, ignore_errors=True))
-# ----
-
 statement error
 SELECT REGEXP_MATCHES(abs_file_name, 'foo')
   FROM ( SELECT abs_file_name FROM read_csv(['{DATA_DIR}/csv/header_only.csv','{DATA_DIR}/csv/bool.csv','{DATA_DIR}/csv/header_only.csv'], header=True, ignore_errors=True))
 
-# TODO: unsupported feature
-# query I
-# SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only.csv', types = ['INTEGER'])
-# ----
-# [{'name': abs_file_name, 'type': INTEGER}]
-
-# TODO: unsupported feature
-# query I
-# SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
-# ----
-# [{'name': abs_file_name, 'type': INTEGER}]
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only.csv',types = ['INTEGER'])
-
-# TODO: unsupported feature
-# query IIIIII
-# DESCRIBE T
-# ----
-# abs_file_name	INTEGER	YES	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only.csv', types = {'abs_file_name':'INTEGER'})
-
-# TODO: unsupported feature
-# query IIIIII
-# DESCRIBE T
-# ----
-# abs_file_name	INTEGER	YES	NULL	NULL	NULL
-
 # Now with two columns
-
-# TODO: unsupported feature
-# query I
-# SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only_2.csv', types = ['INTEGER'])
-# ----
-# [{'name': foo, 'type': INTEGER}, {'name': bar, 'type': VARCHAR}]
-
-# TODO: unsupported feature
-# query I
-# SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'foo':'INTEGER'})
-# ----
-# [{'name': foo, 'type': INTEGER}, {'name': bar, 'type': VARCHAR}]
 
 # This is clearly wrong
 
-# TODO: unsupported feature
-# query I
-# SELECT columns from sniff_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'bar':'INTEGER'})
-# ----
-# [{'name': foo, 'type': VARCHAR}, {'name': bar, 'type': INTEGER}]
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = ['INTEGER'])
-
-# TODO: unsupported feature
-# query IIIIII
-# DESCRIBE T
-# ----
-# foo	INTEGER	YES	NULL	NULL	NULL
-# bar	VARCHAR	YES	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'foo':'INTEGER'})
-
-# TODO: unsupported feature
-# query IIIIII
-# DESCRIBE T
-# ----
-# foo	INTEGER	YES	NULL	NULL	NULL
-# bar	VARCHAR	YES	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE T AS from read_csv('{DATA_DIR}/csv/header_only_2.csv', types = {'bar':'INTEGER'})
-
-# TODO: unsupported feature
-# query IIIIII
-# DESCRIBE T
-# ----
-# foo	VARCHAR	YES	NULL	NULL	NULL
-# bar	INTEGER	YES	NULL	NULL	NULL

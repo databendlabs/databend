@@ -7,74 +7,20 @@ CREATE TABLE test_first_last_any_ordered_integers(i INTEGER, grp INTEGER);
 statement ok
 INSERT INTO test_first_last_any_ordered_integers VALUES (1, NULL), (2, 3), (3, 2), (NULL, 1);
 
-# TODO: unsupported feature
-# query I
-# SELECT FIRST(i ORDER BY grp NULLS LAST) FROM test_first_last_any_ordered_integers
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query I
-# SELECT FIRST(i ORDER BY grp NULLS FIRST) FROM test_first_last_any_ordered_integers
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT ANY_VALUE(i ORDER BY grp NULLS FIRST) FROM test_first_last_any_ordered_integers
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT ANY_VALUE(i ORDER BY grp NULLS LAST) FROM test_first_last_any_ordered_integers
-# ----
-# 3
-
 query I
 SELECT ARG_MIN(i, grp) FROM test_first_last_any_ordered_integers
 ----
 3
 
-# TODO: unsupported feature
-# query I
-# SELECT FIRST(i ORDER BY grp DESC NULLS LAST) FROM test_first_last_any_ordered_integers
-# ----
-# 2
-
-# TODO: unsupported feature
-# query I
-# SELECT ANY_VALUE(i ORDER BY grp DESC NULLS FIRST) FROM test_first_last_any_ordered_integers
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT ANY_VALUE(i ORDER BY grp DESC NULLS LAST) FROM test_first_last_any_ordered_integers
-# ----
-# 2
-
 query I
 SELECT ARG_MAX(i, grp) FROM test_first_last_any_ordered_integers
 ----
 2
 
-# TODO: unsupported feature
-# query I
-# SELECT LAST(i ORDER BY grp NULLS FIRST) FROM test_first_last_any_ordered_integers
-# ----
-# 2
-
 query I
 SELECT ARG_MAX(i, grp) FROM test_first_last_any_ordered_integers
 ----
 2
-
-# TODO: unsupported feature
-# query I
-# SELECT LAST(i ORDER BY grp DESC NULLS FIRST) FROM test_first_last_any_ordered_integers
-# ----
-# NULL
 
 query I
 SELECT ARG_MIN(i, grp) FROM test_first_last_any_ordered_integers

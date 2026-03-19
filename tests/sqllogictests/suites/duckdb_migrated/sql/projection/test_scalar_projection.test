@@ -38,7 +38,7 @@ SELECT 1 AS a, a * 2
 ----
 1	2
 
-# query without selection list
+# test: empty SELECT (no selection list)
 
 statement error
 SELECT

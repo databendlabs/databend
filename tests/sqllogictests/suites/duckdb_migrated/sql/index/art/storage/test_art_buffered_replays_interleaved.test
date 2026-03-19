@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS tbl
 statement ok
 CREATE TABLE tbl (i INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_i ON tbl (i);
-
 statement ok
 INSERT INTO tbl SELECT r FROM range(0 * 10000, 0 * 10000 + 3000) t(r);
 
@@ -76,10 +72,6 @@ TableScan
 ├── pruning stats: [segments: <range pruning: 9 to 0 cost: 1 ms>]
 ├── push downs: [filters: [is_true(tbl.i (#0) = 5000)], limit: NONE]
 └── estimated rows: 1.11
-
-# TODO: result differs
-# statement error
-# INSERT INTO tbl VALUES (12501);
 
 query I
 SELECT i FROM tbl WHERE i = 12501;

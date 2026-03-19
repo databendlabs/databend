@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS t0
 statement ok
 CREATE TABLE t0(c0 BOOLEAN, c1 INT)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i0 ON t0(c1, c0)
-
 statement ok
 INSERT INTO t0(c1) VALUES (0)
 

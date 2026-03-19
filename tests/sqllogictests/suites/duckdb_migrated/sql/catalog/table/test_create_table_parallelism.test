@@ -7,26 +7,3 @@ DROP TABLE IF EXISTS test2
 statement ok
 DROP TABLE IF EXISTS test3
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test AS (SELECT string_agg(range::VARCHAR, '🦆 ') AS s, mod(range, 10000) xx FROM range(0, 50000) GROUP BY xx)
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test2 AS (SELECT unnest(string_split(s, ' ')) FROM test)
-
-# TODO: unsupported feature
-# query T
-# SELECT count(*) FROM test2
-# ----
-# 50000
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test3 AS (SELECT * FROM test ORDER BY xx)
-
-# TODO: unsupported feature
-# query T
-# SELECT count(*) FROM test3
-# ----
-# 10000

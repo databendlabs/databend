@@ -1,46 +1,18 @@
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE alias AS VARCHAR;
-
 #Enums with the same name shouldn't work
 
 statement error
 CREATE TYPE alias AS INTEGER;
-
-# TODO: unsupported feature
-# statement ok
-# DROP TYPE alias;
 
 #This won't work because alias was already deleted
 
 statement error
 DROP TYPE alias;
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE alias AS VARCHAR;
-
 #This will drop alias
-
-# TODO: unsupported feature
-# statement ok
-# DROP TYPE IF EXISTS alias;
 
 #Nothing to drop but won't break
 
-# TODO: unsupported feature
-# statement ok
-# DROP TYPE IF EXISTS alias;
-
 # We can create alias again
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE alias AS VARCHAR;
-
-# TODO: unsupported feature
-# statement ok
-# DROP TYPE IF EXISTS alias;
 
 # create a type with a non-existant type as source
 

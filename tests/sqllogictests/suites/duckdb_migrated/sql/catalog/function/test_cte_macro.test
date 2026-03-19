@@ -7,97 +7,10 @@ CREATE TABLE integers (a INT)
 statement ok
 INSERT INTO integers VALUES (1)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO parameterized_cte(a) AS (WITH cte AS (SELECT a AS answer) SELECT answer FROM cte)
-
-# TODO: unknown function
-# query T
-# SELECT parameterized_cte(42)
-# ----
-# 42
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO in_with_cte(i) AS i IN (WITH cte AS (SELECT a AS answer FROM integers) SELECT answer FROM cte)
-
-# TODO: unknown function
-# query T
-# SELECT in_with_cte(1)
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT in_with_cte(2)
-# ----
-# 0
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO plus42(a) AS (WITH cte AS (SELECT 42 AS answer) SELECT answer + a FROM cte)
-
-# TODO: unknown function
-# query T
-# SELECT plus42(42)
-# ----
-# 84
-
-# TODO: unknown function
-# query T
-# SELECT plus42(a) FROM integers
-# ----
-# 43
-
 # macro parameters should be contained within the function call (so 42 + 3 + 1)
-
-# TODO: unknown function
-# query T
-# SELECT plus42(3) + a FROM integers
-# ----
-# 46
 
 # we should not be able to query the CTE from outside the function call
 
 statement error
 SELECT plus42(42) + answer FROM cte;
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO plus1(a) AS (WITH tbl AS (SELECT 1 AS one) SELECT one + a FROM tbl)
-
-# TODO: unknown function
-# query T
-# SELECT plus1(3)
-# ----
-# 4
-
-# TODO: unknown function
-# query T
-# SELECT plus42(a) + plus1(a) FROM integers;
-# ----
-# 45
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO deep_cte(param) AS (
-#     WITH cte1 AS (
-#         WITH cte2 AS (
-#             WITH cte3 AS (
-#                 WITH cte4 AS (
-#                     SELECT param AS d
-#                 )
-#                 SELECT d AS c FROM cte4
-#             )
-#             SELECT c AS b FROM cte3
-#         )
-#         SELECT b AS a FROM cte2
-#     )
-#     SELECT a FROM cte1
-# )
-
-# TODO: unknown function
-# query T
-# SELECT deep_cte(42)
-# ----
-# 42

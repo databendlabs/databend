@@ -1,0 +1,46 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl1 (u UNION(num INT, str VARCHAR));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 VALUES (1), ('bar'), (2), ('foo'), (3), ('baz');
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl1 LIMIT 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl1 OFFSET 1;
+# ----
+# bar
+# 2
+# foo
+# 3
+# baz
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl1 OFFSET 1 LIMIT 1;
+# ----
+# bar
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl1 WHERE u.str IS NOT NULL OFFSET 1
+# ----
+# foo
+# baz
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl1 WHERE u.str IS NOT NULL LIMIT 1 OFFSET 1
+# ----
+# foo

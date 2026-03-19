@@ -26,10 +26,6 @@ COMMIT
 
 # no more pending updates: creating the index works now
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON integers using art(i)
-
 query I
 SELECT COUNT(*) FROM integers WHERE i=4
 ----

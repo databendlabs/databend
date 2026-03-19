@@ -4,12 +4,6 @@ DROP TABLE IF EXISTS aggr
 statement error
 select skewness()
 
-# TODO: type_error
-# query I
-# select skewness(NULL)
-# ----
-# NULL
-
 query R
 select skewness(1)
 ----
@@ -32,10 +26,6 @@ NULL
 
 # out of range
 
-# TODO: result differs
-# statement error
-# select skewness(i) from (values (-2e307), (0), (2e307)) tbl(i)
-
 statement ok
 create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
 
@@ -57,15 +47,6 @@ query RRR
 select skewness(k), skewness(v), skewness(v2) from aggr
 ----
 -3.316624790355393 -0.16344366935199225 0.3654008511025841
-
-# TODO: unsupported feature
-# query I
-# select skewness(v2) from aggr group by v ORDER BY ALL
-# ----
-# -0.423273
-# -0.330141
-# NULL
-# NULL
 
 # Window Function
 

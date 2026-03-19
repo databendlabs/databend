@@ -1,0 +1,75 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (
+# 	a short primary key,
+# 	b short
+# );
+
+# Populate the table
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(a, b) values(1, 2);
+
+# Start a transaction, local storage will be created if an INSERT happens
+
+# TODO: unsupported feature
+# statement ok
+# begin transaction;
+
+# Create a local storage, appending 0 tuples because of DO NOTHING
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(a, b) values(1, 2) on conflict do nothing;
+
+# Scan from the table, hitting the local storage
+
+# TODO: unsupported feature
+# query II
+# select * from tbl where a = 1;
+# ----
+# 1	2
+
+# Do it again to test proper cleanup of state
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(a, b) values(1, 2) on conflict do nothing;
+
+# Scan from the table, hitting the local storage
+
+# TODO: unsupported feature
+# statement ok
+# select * from tbl where a = 1;
+
+# TODO: unsupported feature
+# statement ok
+# commit;
+
+# TODO: unsupported feature
+# statement ok
+# begin transaction;
+
+# Now create a LocalStorage with tuples before doing an append with 0 tuples
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl (a, b) values (5,4);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(a, b) values(1, 2) on conflict do nothing;
+
+# Scan from the table, hitting the local storage
+
+# TODO: unsupported feature
+# query II
+# select * from tbl order by a;
+# ----
+# 1	2
+# 5	4

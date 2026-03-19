@@ -1,28 +1,5 @@
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl(t ROW(t INTEGER) CHECK(t.t=42));
-
-# TODO: unsupported feature
-# statement error
-# INSERT INTO tbl VALUES ({'t': 43})
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES ({'t': 42})
-
 # we can also do this while referencing the table name
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl(t ROW(t INTEGER) CHECK(tbl.t.t=42));
-
-# TODO: unsupported feature
-# statement error
-# INSERT INTO tbl VALUES ({'t': 43})
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES ({'t': 42})

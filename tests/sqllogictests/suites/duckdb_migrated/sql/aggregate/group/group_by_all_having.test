@@ -15,9 +15,3 @@ SELECT c0 FROM (SELECT 1, 1 UNION ALL SELECT 1, 2) t0(c0, c1) GROUP BY ALL ORDER
 
 # new column "c1" referenced in HAVING - it is added to the set of grouping columns
 
-# TODO: unsupported feature
-# query I
-# SELECT c0 FROM (SELECT 1, 1 UNION ALL SELECT 1, 2) t0(c0, c1) GROUP BY ALL HAVING c1>0 ORDER BY c0
-# ----
-# 1
-# 1

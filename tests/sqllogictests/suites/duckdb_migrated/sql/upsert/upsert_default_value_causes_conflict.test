@@ -1,0 +1,50 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table tbl (
+# 	a integer primary key default 5,
+# 	b integer
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(b) VALUES (10);
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# 5	10
+
+# The default expression is a constant, can't be inserted twice
+
+# TODO: unsupported feature
+# statement error
+# insert into tbl(b) VALUES (10);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(b) VALUES (10) ON CONFLICT (a) DO NOTHING;
+
+# The tuple is not inserted
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# 5	10
+
+# We can also change the value of 'b', but not of 'a' because it's indexed on
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(b) VALUES (10) ON CONFLICT (a) DO UPDATE SET b = excluded.b * 2;
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# 5	20

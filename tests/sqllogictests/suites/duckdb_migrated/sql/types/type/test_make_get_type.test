@@ -1,0 +1,33 @@
+# TODO: unknown function
+# query I
+# SELECT get_type(NULL);
+# ----
+# "NULL"
+
+# TODO: unknown function
+# query I
+# SELECT get_type(1);
+# ----
+# INTEGER
+
+# TODO: unknown function
+# query I
+# SELECT get_type('hello');
+# ----
+# VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT make_type('STRUCT', a := make_type('INTEGER'), b := make_type('VARCHAR'));
+# ----
+# STRUCT(a INTEGER, b VARCHAR)
+
+# TODO: unsupported feature
+# statement error
+# SELECT make_type('STRUCT', make_type('INTEGER'), b := make_type('VARCHAR'));
+
+# TODO: unsupported feature
+# query I
+# SELECT make_type('LIST', make_type('STRUCT', a := make_type('STRUCT', x := make_type('INTEGER')), b := make_type('VARCHAR')));
+# ----
+# STRUCT(a STRUCT(x INTEGER), b VARCHAR)[]

@@ -1,16 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(id int, attr MAP(VARCHAR, UNION(i INT, s VARCHAR)));
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (1, MAP{'key1': 'str'});
-
-# TODO: unsupported feature
-# query II
-# SELECT id, attr['key2'] FROM test;
-# ----
-# 1	NULL

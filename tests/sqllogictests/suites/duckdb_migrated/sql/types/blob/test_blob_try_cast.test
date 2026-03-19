@@ -38,30 +38,6 @@ SELECT TRY_CAST('\x12' AS BLOB)
 ----
 12
 
-# TODO: unsupported feature
-# statement error
-# SELECT '\\'::BLOB
-
-# TODO: unsupported feature
-# statement error
-# SELECT '\\x3'::BLOB
-
-# TODO: unsupported feature
-# statement error
-# SELECT '\\b12'::BLOB
-
-# TODO: unsupported feature
-# statement error
-# SELECT '\\xx2'::BLOB
-
-# TODO: unsupported feature
-# statement error
-# SELECT '\\x2x'::BLOB
-
-# TODO: unsupported feature
-# statement error
-# SELECT 'ü'::BLOB
-
 query I
 SELECT CAST('\x12' AS BLOB)
 ----

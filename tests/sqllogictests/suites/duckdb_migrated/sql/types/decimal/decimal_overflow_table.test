@@ -14,24 +14,13 @@ SELECT d+1 FROM decimals
 ----
 99000000000000001.0
 
-# TODO: unsupported feature
-# statement error
-# SELECT d+1000000000000000.0 FROM decimals
-
 query R
 SELECT -1-d FROM decimals
 ----
 -99000000000000001.0
-
-# TODO: unsupported feature
-# statement error
-# SELECT -1000000000000000.0-d FROM decimals
 
 query R
 SELECT 1*d FROM decimals
 ----
 99000000000000000.0
 
-# TODO: unsupported feature
-# statement error
-# SELECT 2*d FROM decimals

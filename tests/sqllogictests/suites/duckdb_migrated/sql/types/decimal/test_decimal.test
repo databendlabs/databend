@@ -139,13 +139,6 @@ SELECT '0.1'::DECIMAL('hello');
 statement error
 SELECT '0.1'::DECIMAL((-17));
 
-# TODO: unsupported feature
-# statement error
-# SELECT '0.1'::DECIMAL(40);
-
 statement error
 SELECT '0.1'::DECIMAL(1, 2, 3);
 
-# TODO: unsupported feature
-# statement error
-# SELECT '1'::INTEGER(1000);

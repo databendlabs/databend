@@ -14,10 +14,6 @@ BEGIN TRANSACTION
 
 # con alters a column to test
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER j TYPE VARCHAR
-
 # con2 cannot alter another column now!
 
 statement error
@@ -27,10 +23,6 @@ statement ok
 COMMIT
 
 # we can alter the column after the commit
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER i TYPE VARCHAR
 
 statement ok
 DROP TABLE test
@@ -48,50 +40,9 @@ BEGIN TRANSACTION
 
 # con removes a column from test
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER i TYPE VARCHAR
-
 # con2 cannot append now!
 
-# TODO: result differs
-# statement error
-# INSERT INTO test (i, j) VALUES (3, 3)
-
-# TODO: result differs
-# statement error
-# DELETE FROM test WHERE i=1
-
-# TODO: unsupported feature
-# query TI
-# SELECT * FROM test
-# ----
-# 1	1
-# 2	2
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM test
-# ----
-# 1	1
-# 2	2
-
 # we cannot update rows on tables that have been altered
-
-# TODO: result differs
-# statement error
-# UPDATE test SET i=1000
-
-# TODO: result differs
-# statement error
-# UPDATE test SET j=100
-
-# TODO: unsupported feature
-# query TI
-# SELECT * FROM test
-# ----
-# 1	1
-# 2	2
 
 statement ok
 COMMIT
@@ -121,15 +72,7 @@ INSERT INTO test VALUES (3, 3)
 
 # now con adds a column
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER i TYPE VARCHAR
-
 # cannot commit con2! conflict on append
-
-# TODO: result differs
-# statement error
-# COMMIT
 
 statement ok
 DROP TABLE test
@@ -145,10 +88,6 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER j TYPE VARCHAR
 
 # now con tries to add an index to that column: this should fail
 

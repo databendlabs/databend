@@ -6,45 +6,8 @@ BEGIN TRANSACTION
 
 # scalar macro
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO elaborate_macro(x, y := 7) AS x + y;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (x integer, y varchar);
-
 # Index that depends on the 'elaborate_macro' macro function
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX my_index on tbl (elaborate_macro(tbl.x));
-
-# TODO: unsupported feature
-# query I
-# select index_name from duckdb_indexes();
-# ----
-# my_index
 
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I
-# select index_name from duckdb_indexes();
-# ----
-# my_index
-
-# TODO: unsupported feature
-# query T
-# SELECT elaborate_macro(28, y := 5)
-# ----
-# 33
-
-# TODO: unsupported feature
-# statement ok
-# insert into tbl VALUES (10, 'hello');
-
-# TODO: unsupported feature
-# statement error
-# insert into tbl VALUES (10, 'world');

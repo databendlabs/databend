@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# query I
+# SELECT typeof(1::UBIGINT + 1::TINYINT)
+# ----
+# HUGEINT
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(1::UBIGINT + 1)
+# ----
+# UBIGINT
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(1::UBIGINT + 10000)
+# ----
+# UBIGINT

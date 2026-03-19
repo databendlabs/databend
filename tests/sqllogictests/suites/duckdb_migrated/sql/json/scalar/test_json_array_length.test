@@ -7,56 +7,5 @@ create table test (j varchar)
 statement ok
 insert into test values ('{}'), ('[]'), ('[1, 2, 3]')
 
-# TODO: unknown function
-# query T
-# select json_array_length(j) from test
-# ----
-# 0
-# 0
-# 3
-
-# TODO: unknown function
-# query T
-# select json_array_length(j, '$[1]') from test
-# ----
-# NULL
-# NULL
-# 0
-
 # some SQLite json_array_length tests
 
-# TODO: unknown function
-# query T
-# SELECT json_array_length('[1,2,3,4]');
-# ----
-# 4
-
-# TODO: unknown function
-# query T
-# SELECT json_array_length('[1,2,3,4]', '$');
-# ----
-# 4
-
-# TODO: unknown function
-# query T
-# SELECT json_array_length('[1,2,3,4]', '$[2]');
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT json_array_length('{"one":[1,2,3]}');
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT json_array_length('{"one":[1,2,3]}', '$.one');
-# ----
-# 3
-
-# TODO: unknown function
-# query T
-# SELECT json_array_length('{"one":[1,2,3]}', '$.two');
-# ----
-# NULL

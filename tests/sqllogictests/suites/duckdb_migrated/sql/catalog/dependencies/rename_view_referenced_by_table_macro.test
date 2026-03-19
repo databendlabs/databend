@@ -14,15 +14,7 @@ create view vw as select * from tbl;
 
 # Create a table macro that references the view
 
-# TODO: unsupported feature
-# statement ok
-# create macro static_table() as table select * from vw;
-
 # Rename the view (Postgres 16.0 does not block this ALTER)
-
-# TODO: unsupported feature
-# statement ok
-# alter view vw rename to vw2;
 
 # Our table macro now errors
 

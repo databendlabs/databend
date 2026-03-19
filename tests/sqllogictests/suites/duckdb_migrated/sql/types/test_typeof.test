@@ -1,0 +1,4 @@
+query T
+SELECT typeof(1)
+----
+TINYINT UNSIGNED

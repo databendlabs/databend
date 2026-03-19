@@ -4,13 +4,5 @@ DROP TABLE IF EXISTS table1
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE "group" AS ENUM ( 'one', 'two');
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE table1(col1 "group");
-
 statement ok
 ROLLBACK

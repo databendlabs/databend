@@ -1,18 +1,5 @@
 statement ok
 DROP TABLE IF EXISTS bigints
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE bigints(n HUGEINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO bigints (n) VALUES ('9007199254740992'::HUGEINT), (1::HUGEINT), (0::HUGEINT);
-
 # this would give the wrong result with 'double' precision
 
-# TODO: unsupported feature
-# query R
-# SELECT AVG(n)::DOUBLE - '3002399751580331'::DOUBLE FROM bigints;
-# ----
-# 0

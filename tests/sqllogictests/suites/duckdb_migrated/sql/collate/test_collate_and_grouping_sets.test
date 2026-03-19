@@ -20,49 +20,5 @@ INSERT INTO sales VALUES
   (2, 'South', 2020, 400.00),
   (2, 'South', 2021, 550.00);
 
-# TODO: result differs
-# query III nosort grouping_sets_collation_result
-# SELECT product_id, region, SUM(amount_sold) AS total_amount
-# FROM sales
-# GROUP BY GROUPING SETS ((product_id), (region), ())
-# ORDER BY product_id, region, total_amount;
-
-# TODO: result differs
-# query III nosort grouping_sets_collation_result
-# SELECT product_id, region, SUM(amount_sold) AS total_amount
-# FROM sales
-# GROUP BY GROUPING SETS ((product_id), (region), ())
-# ORDER BY product_id, region, total_amount;
-
-# TODO: unsupported feature
-# query III nosort union_groups_collation_result
-# select NULL product_id, region, sum(amount_sold) from sales group by region
-# UNION ALL
-# select NULL product_id, NULL region, sum(amount_sold) from sales
-# UNION ALL
-# select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;
-
-# TODO: unsupported feature
-# query III nosort union_groups_collation_result
-# select NULL product_id, region, sum(amount_sold) from sales group by region
-# UNION ALL
-# select NULL product_id, NULL region, sum(amount_sold) from sales
-# UNION ALL
-# select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;
-
 # also test that union all is the same as using grouping sets
 
-# TODO: result differs
-# query III nosort grouping_sets_collation
-# SELECT product_id, region, SUM(amount_sold) AS total_amount
-# FROM sales
-# GROUP BY GROUPING SETS ((product_id), (region), ())
-# ORDER BY product_id, region, total_amount;
-
-# TODO: unsupported feature
-# query III nosort grouping_sets_collation
-# select NULL product_id, region, sum(amount_sold) from sales group by region
-# UNION ALL
-# select NULL product_id, NULL region, sum(amount_sold) from sales
-# UNION ALL
-# select product_id, NULL region, sum(amount_sold) from sales group by product_id order by 1,2;

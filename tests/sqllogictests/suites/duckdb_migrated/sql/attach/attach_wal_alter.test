@@ -4,36 +4,3 @@ DROP TABLE IF EXISTS t2
 statement ok
 USE db1;
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t2(c1 INT);
-
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE t2 ALTER c1 SET DEFAULT 0;
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH DATABASE ':memory:' as db2;
-
-# TODO: unsupported feature
-# statement ok
-# USE db2;
-
-# TODO: unsupported feature
-# statement ok
-# detach db1;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO db1.t2 DEFAULT VALUES
-
-# TODO: result differs
-# query I
-# SELECT * FROM db1.t2
-# ----
-# 0

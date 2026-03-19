@@ -1,7 +1,3 @@
-# TODO: unsupported feature
-# statement error
-# select cast('9.99' as decimal(1,0));
-
 statement error
 select cast(9.99::float as decimal(1,0));
 

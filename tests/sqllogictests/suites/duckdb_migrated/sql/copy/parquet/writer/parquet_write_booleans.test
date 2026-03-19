@@ -7,9 +7,3 @@ CREATE TABLE bools(b BOOL)
 statement ok
 INSERT INTO bools SELECT CASE WHEN i%2=0 THEN NULL ELSE i%7=0 OR i%3=0 END b FROM range(0, 10000) tbl(i);
 
-# TODO: result differs
-# query IIIIII
-# SELECT COUNT(*), COUNT(b), BOOL_AND(b), BOOL_OR(b), SUM(CASE WHEN b THEN 1 ELSE 0 END) true_count, SUM(CASE WHEN b THEN 0 ELSE 1 END) false_count
-# FROM bools
-# ----
-# 10000	5000	False	True	2143	7857

@@ -13,12 +13,3 @@ DROP TABLE original_table
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# statement ok
-# delete from original_table where rowid % 2 = 0
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM original_table;
-# ----
-# 5

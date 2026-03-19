@@ -1,14 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER PRIMARY KEY)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (1), (2), (3)
-
 statement ok
 BEGIN TRANSACTION
 
@@ -23,16 +15,6 @@ ROLLBACK
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (4)
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 4
-
 statement error
 UPDATE integers SET i = 3 WHERE i = 4
 
@@ -44,39 +26,6 @@ ROLLBACK
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (4)
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM integers
-# ----
-# 4
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE integers SET i = 5 WHERE i = 4
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i = 5
-# ----
-# 5
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i = 4
-# ----
-
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers ORDER BY i
-# ----
-# 1
-# 2
-# 3
-# 5

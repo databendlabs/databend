@@ -12,21 +12,6 @@ SELECT * FROM range(0, 10, 1)
 8
 9
 
-# TODO: unsupported feature
-# query I
-# CALL range(0, 10)
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-# 5
-# 6
-# 7
-# 8
-# 9
-
 # generate_series is similar to range, but has inclusive bounds (for postgres compatibility)
 
 query I
@@ -84,16 +69,6 @@ SELECT * FROM range(0, -5, -1)
 
 statement error
 SELECT * FROM range(0, 10, 0)
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(0, 10, -1)
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM range(10, 0, 1)
-# ----
 
 # overloads
 # only one parameter defaults to start=0, interval=1
@@ -171,66 +146,8 @@ select * from generate_series(0, 10, 9223372036854775807);
 ----
 0
 
-# TODO: unsupported feature
-# query I
-# select * from generate_series(0, 9223372036854775807, 9223372036854775807);
-# ----
-# 0
-# 9223372036854775807
-
-# TODO: unsupported feature
-# query I
-# select * from generate_series(0, -9223372036854775807, -9223372036854775807);
-# ----
-# 0
-# -9223372036854775807
-
-# TODO: unsupported feature
-# query I
-# select * from generate_series(-9223372036854775808, 9223372036854775807, 9223372036854775807);
-# ----
-# -9223372036854775808
-# -1
-# 9223372036854775806
-
-# TODO: unsupported feature
-# query I
-# select * from generate_series(-9223372036854775807, -9223372036854775808, -1);
-# ----
-# -9223372036854775807
-# -9223372036854775808
-
-# TODO: unsupported feature
-# query I
-# select * from generate_series(-9223372036854775808, 9223372036854775807, 9223372036854775807);
-# ----
-# -9223372036854775808
-# -1
-# 9223372036854775806
-
-# TODO: unsupported feature
-# query I
-# select * from generate_series(0, -9223372036854775808, -9223372036854775808);
-# ----
-# 0
-# -9223372036854775808
-
-# TODO: unsupported feature
-# query I
-# select * from generate_series(0, 9223372036854775807, 9223372036854775807);
-# ----
-# 0
-# 9223372036854775807
-
 query I
 select * from generate_series(0, 10, 9223372036854775807);
 ----
 0
 
-# TODO: unsupported feature
-# query II rowsort
-# select * FROM generate_series(1, 3, 1) AS _(x), generate_series(x, 2, 1) AS __(y);
-# ----
-# 1	1
-# 1	2
-# 2	2

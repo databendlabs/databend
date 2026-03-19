@@ -10,6 +10,3 @@ CALL dbgen(sf=0);
 statement error
 CALL dbgen(sf=0, catalog='dbgentest');
 
-# TODO: unsupported feature
-# statement ok
-# CALL dbgen(sf=0);

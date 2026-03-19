@@ -77,8 +77,3 @@ INSERT INTO j2(id,json,src)
     }
     ]','https://adobe.github.io/Spry/samples/data_region/JSONDataSetSample.html');
 
-# TODO: unknown function
-# query I
-# SELECT len(json) FROM j2;
-# ----
-# 2115

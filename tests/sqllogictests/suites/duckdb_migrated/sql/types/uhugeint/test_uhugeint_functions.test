@@ -1,0 +1,47 @@
+# TODO: unsupported feature
+# query III
+# select abs(1::UHUGEINT), abs('1329227995784915872903807060280344576'::UHUGEINT), abs(0::UHUGEINT)
+# ----
+# 1	1329227995784915872903807060280344576	0
+
+# sign
+
+# TODO: unsupported feature
+# query II
+# select sign(1::UHUGEINT), sign(0::UHUGEINT)
+# ----
+# 1	0
+
+# round/floor/ceil
+
+# TODO: unsupported feature
+# query III
+# select round(1::UHUGEINT, 0), round('1329227995784915872903807060280344576'::UHUGEINT, 0), round(0::UHUGEINT, 0)
+# ----
+# 1	1329227995784915872903807060280344576	0
+
+# TODO: unsupported feature
+# query III
+# select floor(1::UHUGEINT), floor('1329227995784915872903807060280344576'::UHUGEINT), floor(0::UHUGEINT)
+# ----
+# 1	1329227995784915872903807060280344576	0
+
+# TODO: unsupported feature
+# query III
+# select ceil(1::UHUGEINT), ceil('1329227995784915872903807060280344576'::UHUGEINT), ceil(0::UHUGEINT)
+# ----
+# 1	1329227995784915872903807060280344576	0
+
+# least/greatest
+
+# TODO: unsupported feature
+# query I
+# select LEAST(1::UHUGEINT, '1329227995784915872903807060280344576'::UHUGEINT, 0::UHUGEINT)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# select GREATEST(1::UHUGEINT, '1329227995784915872903807060280344576'::UHUGEINT, 0::UHUGEINT)
+# ----
+# 1329227995784915872903807060280344576

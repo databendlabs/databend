@@ -6,13 +6,5 @@ DROP TABLE IF EXISTS t1
 statement ok
 CREATE TABLE t1 AS (SELECT 1 c1, 'a' c2);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i1 ON t1 (c1);
-
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT;
-
 statement ok
 INSERT INTO t1(c2) (SELECT DISTINCT 'b');

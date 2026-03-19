@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# query I
+# SELECT {'a': 42, 'b': 84}::STRUCT(b INT, a INT)
+# ----
+# {'b': 84, 'a': 42}
+
+# nested
+
+# TODO: unsupported feature
+# query I
+# SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, a INT[])
+# ----
+# {'b': 84, 'a': [1, 2, 3]}
+
+# case insensitivity
+
+# TODO: unsupported feature
+# query I
+# SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, A INT[])
+# ----
+# {'b': 84, 'A': [1, 2, 3]}
+
+# TODO: unsupported feature
+# query I
+# SELECT {'a': ['1', '2', '3'], 'b': 84}::STRUCT(b INT, c INT[])
+# ----
+# {'b': 84, 'c': NULL}
+
+# unnamed struct cast
+
+# TODO: unsupported feature
+# query I
+# SELECT ROW(42, 84)::STRUCT(a INT, b INT)
+# ----
+# {'a': 42, 'b': 84}

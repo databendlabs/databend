@@ -16,10 +16,6 @@ BEGIN
 statement ok
 DELETE FROM tbl WHERE i BETWEEN 200 AND 300
 
-# TODO: result differs
-# statement error
-# DELETE FROM tbl WHERE i <= 500
-
 statement ok
 COMMIT
 

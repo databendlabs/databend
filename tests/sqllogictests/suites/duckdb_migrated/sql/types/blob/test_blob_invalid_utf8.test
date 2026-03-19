@@ -7,6 +7,3 @@ CREATE TABLE b(b blob);
 statement ok
 INSERT INTO b VALUES (NULL);
 
-# TODO: unsupported feature
-# statement ok
-# UPDATE b SET b=blob'\x80abcdefghjijklmnopqrstuvwxyz';

@@ -6,10 +6,6 @@ CREATE TABLE integers(i INTEGER);
 
 # we can use strings as long as there is an AS clause
 
-# TODO: unsupported feature
-# statement ok
-# SELECT i AS 'hello world' FROM integers
-
 # without an AS clause this does not work
 
 statement error
@@ -22,10 +18,6 @@ statement ok
 SELECT i AS "hello world" FROM integers
 
 # also in table aliases we can use strings
-
-# TODO: unsupported feature
-# statement ok
-# SELECT "hello world".i FROM integers AS 'hello world'
 
 # but not without the AS clause
 

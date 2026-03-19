@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS index_tbl
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table index_tbl (
+# 	i integer,
+# 	j integer
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into index_tbl values (5, 3);
+
+# TODO: unsupported feature
+# statement ok
+# create unique index other_index on index_tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# insert into index_tbl values (5, 5);
+
+# TODO: unsupported feature
+# query II
+# select * from index_tbl;
+# ----
+# 5	3
+
+# TODO: unsupported feature
+# ON CONFLICT ON CONSTRAINT <constraint_name> syntax
+
+# TODO: unsupported feature
+# statement error
+# insert into index_tbl values (5, 10) on conflict on constraint other_index do update set j = excluded.j;

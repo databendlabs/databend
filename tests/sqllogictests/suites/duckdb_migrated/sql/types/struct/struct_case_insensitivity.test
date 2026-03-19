@@ -1,0 +1,47 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT ({'HELLO': 3}) col;
+
+# TODO: unsupported feature
+# query I
+# SELECT col['HELLO'] FROM tbl
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT col['hello'] FROM tbl
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT col.hello FROM tbl
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT "COL"."HELLO" FROM tbl
+# ----
+# 3
+
+# TODO: unsupported feature
+# statement error
+# SELECT ({'hello': 3, 'hello': 4}) col;
+
+# TODO: unsupported feature
+# statement error
+# SELECT ({'HELLO': 3, 'HELLO': 4}) col;
+
+# TODO: unsupported feature
+# statement error
+# SELECT ({'HELLO': 3, 'hello': 4}) col;
+
+# TODO: unsupported feature
+# statement error
+# SELECT col['HELL'] FROM tbl

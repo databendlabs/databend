@@ -138,9 +138,3 @@ SELECT CASE WHEN i IS NULL THEN NULL ELSE 0 END FROM dates
 0
 NULL
 
-# TODO: unsupported feature
-# query I
-# SELECT EXTRACT(microsecond FROM i) FROM dates
-# ----
-# 0
-# NULL

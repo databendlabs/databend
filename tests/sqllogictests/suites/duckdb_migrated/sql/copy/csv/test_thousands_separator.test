@@ -1,15 +1,7 @@
 statement ok
 DROP TABLE IF EXISTS T
 
-# TODO: unsupported feature
-# statement ok
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = NULL, delim = NULL)
-
 # Test Empty
-
-# TODO: unsupported feature
-# statement ok
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = '', delim = NULL)
 
 # Test more than one char
 
@@ -22,151 +14,16 @@ FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', 
 statement error
 FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = '.')
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) > 0 AS has_match
-# FROM sniff_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',')
-# WHERE prompt LIKE '%thousands='',''%';
-# ----
-# TRUE
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'double'}, header = False, auto_detect = false)
-# ----
-# 100000.0
-# 300000.2
-# 300000000.4
-# 50.0
-# 9999999999.2
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'float'}, header = False, auto_detect = false)
-# ----
-# 100000.0
-# 300000.2
-# 300000000.4
-# 50.0
-# 9999999999.2
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', columns = {'a':'decimal(32,3)'}, header = False, auto_detect = false)
-# ----
-# 100000.0
-# 300000.2
-# 300000000.4
-# 50.0
-# 9999999999.2
-
 # Now try with auto-detect
 
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False)
-# ----
-# 100000.0
-# 300000.2
-# 300000000.4
-# 50.0
-# 9999999999.2
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple_quoted.csv', thousands = ',', header = False)
-# ----
-# 100000.0
-# 300000.2
-# 300000000.4
-# 50.0
-# 9999999999.2
-
 # Check auto-detect doesn't reject this is foat or decimal
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False, columns = {'a':'float'})
-# ----
-# 100000.0
-# 300000.2
-# 300000000.4
-# 50.0
-# 9999999999.2
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = ',', delim = ';', header = False, columns = {'a':'decimal(32,3)'})
-# ----
-# 100000.0
-# 300000.2
-# 300000000.4
-# 50.0
-# 9999999999.2
-
-# TODO: unsupported feature
-# query III
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/multi_column.csv', thousands = ',')
-# ----
-# rick	100000.0	amsterdam
-# lorenzo	300000.2	amsterdam
-# lorry	300000000.4	amsterdam
-# helly	50.0	amsterdam
-# patrick	9999999999.2	amsterdam
-
-# TODO: unsupported feature
-# query III
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/multi_column_quote.csv', thousands = ',')
-# ----
-# rick	100000.0	amsterdam
-# lorenzo	300000.2	amsterdam
-# lorry	300000000.4	amsterdam
-# helly	50.0	amsterdam
-# patrick	9999999999.2	amsterdam
 
 # COPY statement
 
 statement ok
 CREATE TABLE T (name varchar, money double, city varchar);
 
-# TODO: unsupported feature
-# statement ok
-# COPY T FROM '{DATA_DIR}/csv/thousands_separator/multi_column_quote.csv' (THOUSANDS ',') ;
-
-# TODO: unsupported feature
-# query III
-# select * FROM T;
-# ----
-# rick	100000.0	amsterdam
-# lorenzo	300000.2	amsterdam
-# lorry	300000000.4	amsterdam
-# helly	50.0	amsterdam
-# patrick	9999999999.2	amsterdam
-
 # Test with non-sensical thousands separator - Pandas just removes them, so we do the same.
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/thousands_broken.csv', thousands = ',')
-# ----
-# 100000.0
-# 300000.2
-# 300000.4
-# 3000.406
 
 # Test an integer
 
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/thousands_separator/integers.csv', thousands = ',')
-# ----
-# 100000000000
-# 140000000000
-# 900000000000
-# 900
-
-# TODO: unsupported feature
-# query I
-# select columns from sniff_csv('{DATA_DIR}/csv/thousands_separator/integers.csv', thousands = ',')
-# ----
-# [{'name': bigvalues, 'type': BIGINT}]

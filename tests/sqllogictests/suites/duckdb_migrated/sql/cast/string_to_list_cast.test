@@ -28,444 +28,40 @@ DROP TABLE IF EXISTS struct_tbl2
 statement ok
 DROP TABLE IF EXISTS superNestedStrings
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tbl
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tripleNested
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS try_cast_tbl
-
-# TODO: unsupported feature
-# query I
-# SELECT '[12,13,14]'::INT[];
-# ----
-# [12, 13, 14]
-
-# TODO: unsupported feature
-# query I
-# SELECT '["hello", "world", "!"]'::VARCHAR[];
-# ----
-# [hello, world, !]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[Hello World!]' AS VARCHAR[]);
-# ----
-# [Hello World!]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[[Hello World!], hello, universe]' AS VARCHAR[]);
-# ----
-# ['[Hello World!]', hello, universe]
-
-# TODO: unsupported feature
-# query I
-# SELECT '[Cast like this]':: VARCHAR[];
-# ----
-# [Cast like this]
-
 # Issue 8797
-
-# TODO: result differs
-# query I
-# select UNNEST('[NULL, , NULL]'::varchar[]);
-# ----
-# NULL
-# (empty)
-# NULL
-
-# TODO: unsupported feature
-# query I
-# select UNNEST('[NULL,, NULL]'::varchar[]);
-# ----
-# NULL
-# (empty)
-# NULL
-
-# TODO: unsupported feature
-# query I
-# select UNNEST('[NULL,   , NULL]'::varchar[]);
-# ----
-# NULL
-# (empty)
-# NULL
-
-# TODO: unsupported feature
-# query I
-# SELECT UNNEST('[NULL, NULL , ]'::varchar[]);
-# ----
-# NULL
-# NULL
-# (empty)
-
-# TODO: unsupported feature
-# query I
-# SELECT UNNEST('[NULL, NULL ,]'::varchar[]);
-# ----
-# NULL
-# NULL
-# (empty)
-
-# TODO: unsupported feature
-# query I
-# SELECT UNNEST('[NULL, NULL,]'::varchar[]);
-# ----
-# NULL
-# NULL
-# (empty)
 
 #               Nested lists
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# query III
-# SELECT CAST('[ [12,13,14], [8, 9], [4], [2, 1, 0] ]' AS INT[][]) a, a::VARCHAR::INT[][] b, a = b;
-# ----
-# [[12, 13, 14], [8, 9], [4], [2, 1, 0]]	[[12, 13, 14], [8, 9], [4], [2, 1, 0]]	1
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[ [[12,13,14], [8, 9]], [[4]], [[2, 1, 0], [99]] ]' AS INT[][][]);
-# ----
-# [[[12, 13, 14], [8, 9]], [[4]], [[2, 1, 0], [99]]]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[ [12,13,14], [8, 9], [4], [2,  1,  0] ]' AS VARCHAR[]);
-# ----
-# ['[12,13,14]', '[8, 9]', '[4]', '[2,  1,  0]']
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[[ [🦆, 🦆, 🦆]], [[duck, db, 🦆], [🦆]], [[🦆, duck, db]]]' AS VARCHAR[][][]);
-# ----
-# [[[🦆, 🦆, 🦆]], [[duck, db, 🦆], [🦆]], [[🦆, duck, db]]]
-
-
 #               Cast from table
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE stringList (col1 VARCHAR)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO stringList VALUES ('["hello","world","!"]'), ('["Amazing","text"]'), ('[Hello World!]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::VARCHAR[] FROM stringList;
-# ----
-# [hello, world, !]
-# [Amazing, text]
-# [Hello World!]
+# ---------------------------------------------------
 
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE nestedStrings (col1 VARCHAR)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO nestedStrings VALUES ('[["hello"], ["world"],["!"]]'), ('[["Amazing"],["text"]]'), ('[[Hello World!]]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::VARCHAR[][] FROM nestedStrings;
-# ----
-# [[hello], [world], [!]]
-# [[Amazing], [text]]
-# [[Hello World!]]
+# ---------------------------------------------------
 
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE superNestedStrings (col1 VARCHAR)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO superNestedStrings VALUES ('[[[[["hello"]]], [[["world"],["!"]]]]]'), ('[[[[["Amazing"]],[["text"]]]]]'), ('[[[[[Hello World!]]]]]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::VARCHAR[][][][][] FROM superNestedStrings;
-# ----
-# [[[[[hello]]], [[[world], [!]]]]]
-# [[[[[Amazing]], [[text]]]]]
-# [[[[[Hello World!]]]]]
-
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (col1 VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES ('[1,2,2]'), ('[345,67865,44,4]'), ('[5,6,7]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::INT[] FROM tbl;
-# ----
-# [1, 2, 2]
-# [345, 67865, 44, 4]
-# [5, 6, 7]
-
-
 # ---------------------------------------------------
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE doubleNested (col1 VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO doubleNested VALUES ('[[1,2],[2]]'), ('[[345],[67865,44,4]]'), ('[[5],[6,7]]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::INT[][] FROM doubleNested;
-# ----
-# [[1, 2], [2]]
-# [[345], [67865, 44, 4]]
-# [[5], [6, 7]]
-
-
-# ---------------------------------------------------
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tripleNested (col1 VARCHAR)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tripleNested VALUES ('[[[1,2],[3]]]'), ('[[[4]]]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::INT[][][] FROM tripleNested;
-# ----
-# [[[1, 2], [3]]]
-# [[[4]]]
-
-# ---------------------------------------------------
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE crazyNested (col1 VARCHAR)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO crazyNested VALUES ('[[[[[[1]],[[3,4,9]]],[[[0,1]]]]]]'), ('[[[[[[4]]]]]]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::INT[][][][][][] FROM crazyNested;
-# ----
-# [[[[[[1]], [[3, 4, 9]]], [[[0, 1]]]]]]
-# [[[[[[4]]]]]]
 
 #               Quote handling
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$['hello','world', '!']$$ AS VARCHAR[]);
-# ----
-# [hello, world, !]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$[\'hello\',\'world\', \'!\']$$ AS VARCHAR[]);
-# ----
-# ['\'hello\'', '\'world\'', '\'!\'']
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$[[ ['🦆, 🦆, 🦆']], [[duck, db, '🦆'] ]]$$ AS VARCHAR[][][]);
-# ----
-# [[['🦆, 🦆, 🦆']], [[duck, db, 🦆]]]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$[can\'t, you\'re, i\'m]$$ AS VARCHAR[]);
-# ----
-# ['can\'t', 'you\'re', 'i\'m']
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$["]", "hello", "world"]$$ AS VARCHAR[]);
-# ----
-# [']', hello, world]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$[']', "hello", "world"]$$ AS VARCHAR[]);
-# ----
-# [']', hello, world]
-
-
 #               Test for whitespaces
 # ---------------------------------------------------
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[ [12,     13,14], [8, 9         ], [ 4    ], [    2, 1,     0] ]  ' AS INT[][]);
-# ----
-# [[12, 13, 14], [8, 9], [4], [2, 1, 0]]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[          [ [12,     13,14], [8, 9         ]  ],[[ 4    ]   ],        [[    2, 1,     0 ]         ] ]  ' AS INT[][][]);
-# ----
-# [[[12, 13, 14], [8, 9]], [[4]], [[2, 1, 0]]]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$["   hello","          \"'  world", "!         "]$$ AS VARCHAR[]);
-# ----
-# ['   hello', '          "\'  world', '!         ']
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);
-# ----
-# [hello, world, !]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST($$[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]$$ AS VARCHAR[][]);
-# ----
-# [['   hello'], ['            world'], ['!        ']]
-
 
 #               Empty list
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# query I
-# SELECT '[]'::VARCHAR[];
-# ----
-# []
-
-# TODO: unsupported feature
-# query I
-# SELECT '[]'::INT[];
-# ----
-# []
-
-# TODO: unsupported feature
-# query I
-# SELECT '[]'::INT[][][][];
-# ----
-# []
-
-# TODO: unsupported feature
-# query I
-# SELECT '[[1, 2, 3], [], [	], [  ]]'::INT[][];
-# ----
-# [[1, 2, 3], [], [], []]
-
-# TODO: unsupported feature
-# query I
-# SELECT '[[1, 2, 3], [], NULL, [NULL], [4, NULL]]'::INT[][];
-# ----
-# [[1, 2, 3], [], NULL, [NULL], [4, NULL]]
-
-
 #               NULL values
 # ------------------------------67---------------------
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE null_tbl(col1 VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO null_tbl VALUES(NULL), (NULL), ('[NULL]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col1::INT[] FROM null_tbl;
-# ----
-# NULL
-# NULL
-# [NULL]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST(NULL AS INT[]);
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[NULL]' AS INT[]);
-# ----
-# [NULL]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[NULL]' AS INT[][]);
-# ----
-# [NULL]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[[12,13,14], [8, 9], NULL, [2, 1]]' AS INT[][]);
-# ----
-# [[12, 13, 14], [8, 9], NULL, [2, 1]]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[[12,13,14], [8, 9], [2, NULL, 1]]' AS INT[][]);
-# ----
-# [[12, 13, 14], [8, 9], [2, NULL, 1]]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[ [[12,13,14], NULL], [[4]], NULL, [[2, NULL, 1, 0], [99]] ]' AS INT[][][]);
-# ----
-# [[[12, 13, 14], NULL], [[4]], NULL, [[2, NULL, 1, 0], [99]]]
-
-
 #               Try Cast
 # ---------------------------------------------------
-
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('Hello World' AS INT[]);
-# ----
-# NULL
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE try_cast_tbl (col1 VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO try_cast_tbl VALUES ('[1,2,X,2]'), ('[hello DuckDB]'), ('[345,oops,44,4.0]'), ('[12345678901]'), ('[5,6,7]'), ('[3 0, 1]');
-
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST(col1 AS INT[]) FROM try_cast_tbl;
-# ----
-# [1, 2, NULL, 2]
-# [NULL]
-# [345, NULL, 44, 4]
-# [NULL]
-# [5, 6, 7]
-# [NULL, 1]
 
 #               Syntax error checking
 # ---------------------------------------------------
@@ -491,113 +87,13 @@ SELECT CAST('[[3 1]]' AS INT[][]);
 statement error
 SELECT CAST('[[3,, 1]]' AS INT[][]);
 
-# TODO: unsupported feature
-# statement error
-# SELECT CAST('[[3], [[5], [4]]' AS INT[][]);
-
-# TODO: unsupported feature
-# statement error
-# SELECT CAST('][3]' AS INT[]);
-
-# TODO: unsupported feature
-# statement error
-# SELECT CAST('[[[[[]][3][[]][][[[][]]]]]' AS INT[][][][]);
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM tbl WHERE cast(col1 as int[]) = [1, 2, 2];
-# ----
-# [1,2,2]
-
-# TODO: unsupported feature
-# query I
-# SELECT col1 FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
-# ----
-# [1,2,2]
-# [5,6,7]
-
-# TODO: unsupported feature
-# query I
-# SELECT cast(col1 as int[]) FROM tbl WHERE LEN(cast(col1 as int[])) < 4;
-# ----
-# [1, 2, 2]
-# [5, 6, 7]
-
-
 #               Lists of structs:
 # ---------------------------------------------------
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE struct_tbl1(col VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO struct_tbl1 VALUES('[{a: "hii"}, {a: "hellooo"}]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col::STRUCT(a VARCHAR)[] FROM struct_tbl1;
-# ----
-# [{'a': hii}, {'a': hellooo}]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[ [{a:[12,13,14], b:"🦆"}], [{a:[12,13,14], b:"🦆", c:100}] ]' AS STRUCT(a INT[], b VARCHAR, c FLOAT)[][]);
-# ----
-# [[{'a': [12, 13, 14], 'b': 🦆, 'c': NULL}], [{'a': [12, 13, 14], 'b': 🦆, 'c': 100.0}]]
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST('[{a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}]' AS STRUCT(a INT[], b VARCHAR, c STRUCT(a VARCHAR[][], b INT[]))[]);
-# ----
-# [{'a': [12, 13, 14], 'b': 🦆, 'c': {'a': [[a], [b, c]], 'b': [123]}}]
-
-# TODO: unsupported feature
-# query I
-# SELECT '[{a: hii}, {a: "{" }]'::STRUCT(a VARCHAR)[] FROM struct_tbl1;
-# ----
-# [{'a': hii}, {'a': '{'}]
-
-
 # ---------------------------------------------------
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE struct_tbl2(col VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO struct_tbl2 VALUES('[{a: 7, b:"Duck"}, {a: 7000, b: "🦆🦆🦆🦆🦆🦆"}]');
-
-# TODO: unsupported feature
-# query I
-# SELECT col::STRUCT(a INT, b VARCHAR)[] FROM struct_tbl2;
-# ----
-# [{'a': 7, 'b': Duck}, {'a': 7000, 'b': 🦆🦆🦆🦆🦆🦆}]
 
 #               CSV reader
 # ---------------------------------------------------
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE int_list(col INT[]);
-
-# TODO: unsupported feature
-# query I
-# SELECT col FROM int_list;
-# ----
-# [1, 2, 3]
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);
-
-# TODO: unsupported feature
-# query III
-# SELECT * FROM assorted_lists;
-# ----
-# [8, 7, 6]	[hello, 'Duck\'DB']	[2022-12-02, 1929-01-25]
 
 #              Escape tests
 #---------------------------------------------------
@@ -605,42 +101,5 @@ SELECT CAST('[[3,, 1]]' AS INT[][]);
 # regular escape
 # FIXME: this is weird behavior
 
-# TODO: unsupported feature
-# query I
-# select '[{"bar":"\""}]'::VARCHAR[];
-# ----
-# ['{"bar":"\\""}']
-
-# TODO: unsupported feature
-# statement error
-# select '[{"bar":"\\""}]'::VARCHAR[];
-
-# TODO: unsupported feature
-# statement error
-# select '[{"bar":"\\""}]'::STRUCT(bar VARCHAR)[];
-
-# TODO: unsupported feature
-# query I
-# select '[{"bar":"\\\""}]'::STRUCT(bar VARCHAR)[];
-# ----
-# [{'bar': '\\"'}]
-
 # all are escaped except for the last one
 
-# TODO: unsupported feature
-# query III
-# select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[] a, CAST(a::VARCHAR AS STRUCT(bar VARCHAR)[]) b, a = b;
-# ----
-# [{'bar': '""\\"""\\'}]	[{'bar': '""\\"""\\'}]	1
-
-# TODO: unsupported feature
-# query III
-# select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
-# ----
-# [\  \\abc\\ \, def, ghi]	\  \\abc\\ \	12
-
-# TODO: unsupported feature
-# query III
-# select $$["\  \\abc\\ \ ", def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
-# ----
-# ['  \\abc\\  ', def, ghi]	  \abc\  	9

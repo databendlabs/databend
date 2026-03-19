@@ -1,0 +1,47 @@
+# This forces 64 bit trees when true
+# TODO: unsupported feature
+# statement ok
+# SELECT last_value(i ORDER BY i DESC) OVER w AS crash
+# FROM range(5_000) tbl(i)
+# WINDOW w AS (ORDER BY i ASC)
+
+# Rank
+
+# TODO: unsupported feature
+# statement ok
+# SELECT rank(ORDER BY i DESC) OVER w AS crash
+# FROM range(5_000) tbl(i)
+# WINDOW w AS (ORDER BY i ASC)
+
+# Peer End
+
+# TODO: unsupported feature
+# statement ok
+# SELECT cume_dist(ORDER BY i DESC) OVER w AS crash
+# FROM range(5_000) tbl(i)
+# WINDOW w AS (ORDER BY i ASC)
+
+
+# This forces 64 bit trees when true
+
+# TODO: unsupported feature
+# statement ok
+# SELECT last_value(i ORDER BY i DESC) OVER w AS crash
+# FROM range(5_000) tbl(i)
+# WINDOW w AS (ORDER BY i ASC)
+
+# Rank
+
+# TODO: unsupported feature
+# statement ok
+# SELECT rank(ORDER BY i DESC) OVER w AS crash
+# FROM range(5_000) tbl(i)
+# WINDOW w AS (ORDER BY i ASC)
+
+# Peer End
+
+# TODO: unsupported feature
+# statement ok
+# SELECT cume_dist(ORDER BY i DESC) OVER w AS crash
+# FROM range(5_000) tbl(i)
+# WINDOW w AS (ORDER BY i ASC)

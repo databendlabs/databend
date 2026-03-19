@@ -5,18 +5,6 @@ DROP TABLE IF EXISTS integers
 statement error
 select product()
 
-# TODO: unknown function
-# query I
-# select product(NULL)
-# ----
-# NULL
-
-# TODO: unknown function
-# query I
-# select product(1)
-# ----
-# 1
-
 statement error
 select product(*)
 
@@ -26,50 +14,9 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers VALUES (1), (2),(4), (NULL)
 
-# TODO: unknown function
-# query I
-# SELECT product(i)  FROM integers
-# ----
-# 8
-
-# TODO: unknown function
-# query I
-# SELECT PRODUCT(2) FROM range(0, 100);
-# ----
-# 1267650600228229401496703205376
-
-# TODO: unknown function
-# query I
-# SELECT PRODUCT(2) FROM range(0, 100) tbl(i) WHERE i % 2 != 0;
-# ----
-# 1125899906842624
-
 # Grouped Aggregation
-
-# TODO: unsupported feature
-# query I
-# select product(i) from integers group by i%2 order by all
-# ----
-# 1.000000
-# 8.000000
-# NULL
 
 # Empty Table
 
-# TODO: unknown function
-# query I
-# SELECT PRODUCT(i) FROM range(0, 100) tbl(i) WHERE 1=0;
-# ----
-# NULL
-
 # Window Function
 
-# TODO: unknown function
-# query I rowsort
-# select product(i) over (partition by i%2)
-#     from integers;
-# ----
-# 1
-# 8
-# 8
-# NULL

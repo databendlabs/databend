@@ -1,21 +1,3 @@
-# TODO: unsupported feature
-# query I
-# SELECT list_aggr(list(i), 'quantile', 0.5) FROM range(1, 11) tbl(i);
-# ----
-# 5
-
-# TODO: unsupported feature
-# query I
-# SELECT list_aggr(list(i), 'quantile', [0.25, 0.5, 0.75]) FROM range(1, 11) tbl(i);
-# ----
-# [3, 5, 8]
-
-# TODO: unsupported feature
-# query I
-# SELECT list_aggr(list(i)::varchar[], 'string_agg', '|') FROM range(1, 4) tbl(i);
-# ----
-# 1	2	3
-
 # non-constant argument (not supported right now)
 
 statement error

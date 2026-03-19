@@ -1,0 +1,106 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('test'), ('world')
+
+# test rollback of value -> NULL update
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=NULL WHERE a='world';
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# test
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# test rollback of NULL -> value update
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=NULL WHERE a='world';
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# test
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a='world' WHERE a IS NULL;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# test
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# test
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# test

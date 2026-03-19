@@ -1,7 +1,3 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS integers2
-
 statement ok
 DROP TABLE IF EXISTS integers
 

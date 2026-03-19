@@ -7,10 +7,3 @@ CREATE TABLE t14(c0 BIGINT);
 statement ok
 INSERT INTO t14(c0) VALUES ((1)), ((1)), ((1));
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i1 ON t14(c0 );
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM t14 WHERE t14.rowid;

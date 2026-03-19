@@ -13,8 +13,3 @@ insert into a values (1729)
 statement ok
 create view va as (with v as (select * from a) select * from v)
 
-# TODO: unsupported feature
-# query I
-# with a as (select * from va) select * from a
-# ----
-# 1729

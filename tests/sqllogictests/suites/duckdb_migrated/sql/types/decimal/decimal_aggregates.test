@@ -1,28 +1,8 @@
 statement ok
 DROP TABLE IF EXISTS decimals
 
-# TODO: unsupported feature
-# query I
-# SELECT typeof(FIRST('0.1'::DECIMAL(4,1)))
-# ----
-# DECIMAL(4,1)
-
 # scalar aggregates
 # first
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT FIRST(NULL::DECIMAL),
-#        FIRST('0.1'::DECIMAL(4,1))::VARCHAR,
-#        FIRST('4938245.1'::DECIMAL(9,1))::VARCHAR,
-#        FIRST('45672564564938245.1'::DECIMAL(18,1))::VARCHAR,
-#        FIRST('4567645908450368043562342564564938245.1'::DECIMAL(38,1))::VARCHAR
-# ----
-# NULL
-# 0.1
-# 4938245.1
-# 45672564564938245.1
-# 4567645908450368043562342564564938245.1
 
 # min
 

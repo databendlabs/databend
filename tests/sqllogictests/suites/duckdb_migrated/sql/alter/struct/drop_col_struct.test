@@ -1,26 +1,7 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(s STRUCT(i INTEGER, j INTEGER))
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (ROW(1, 1)), (ROW(2, 2))
-
 # drop a column from a struct
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test DROP COLUMN s.i
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM test
-# ----
-# {'j': 1}
-# {'j': 2}
 
 # we cannot drop the last column
 
@@ -29,10 +10,6 @@ ALTER TABLE test DROP COLUMN s.j
 
 statement error
 ALTER TABLE test DROP COLUMN s.v
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test DROP COLUMN IF EXISTS s.v
 
 # not a struct
 

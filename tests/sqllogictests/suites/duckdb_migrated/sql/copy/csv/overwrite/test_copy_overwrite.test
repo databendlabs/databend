@@ -19,23 +19,9 @@ SELECT * FROM test ORDER BY 1;
 statement ok
 DELETE FROM test;
 
-# TODO: unsupported feature
-# query IT
-# SELECT * FROM test ORDER BY 1;
-# ----
-# 1	hello
-# 2	world 
-
 # test query returning error does not export to file
 
 statement ok
 DELETE FROM test;
-
-# TODO: unsupported feature
-# query IT
-# SELECT * FROM test ORDER BY 1;
-# ----
-# 1	hello
-# 2	world 
 
 # Test USE_TMP_FILE flag

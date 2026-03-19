@@ -1,0 +1,106 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS insertconflicttest
+
+# TODO: unsupported feature
+# statement ok
+# create table insertconflicttest(
+# 	key int4,
+# 	fruit text,
+# 	unique (key)
+# );
+
+# Explain tests
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit;
+# Should display qual actually attributable to internal sequential scan:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit where insertconflicttest.fruit != 'Cawesh';
+# With EXCLUDED.* expression in scan node:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values(0, 'Crowberry') on conflict (key) do update set fruit = excluded.fruit where excluded.fruit != 'Elderberry';
+# Does the same, but JSON format shows "Conflict Arbiter Index" as JSON array:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit where insertconflicttest.fruit != 'Lime' returning *;
+
+# Fails (no unique index inference specification, required for do update variant):
+
+## -- We accept this because there is only 1 Index on the table -- ##
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (1, 'Apple') on conflict do update set fruit = excluded.fruit;
+
+# inference succeeds:
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruit;
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest values (2, 'Orange') on conflict (key, key, key) do update set fruit = excluded.fruit;
+
+# Succeed, since multi-assignment does not involve subquery:
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO insertconflicttest VALUES (1, 'Apple'), (2, 'Orange')
+# ON CONFLICT (key) DO UPDATE SET fruit = excluded.fruit, key = excluded.key;
+
+# Give good diagnostic message when EXCLUDED.* spuriously referenced from
+# RETURNING:
+
+## -- We don't support 'excluded' qualified columns in the RETURNING clause yet -- ##
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruit RETURNING excluded.fruit;
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest values (1, 'Apple') on conflict (keyy) do update set fruit = excluded.fruit;
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest values (1, 'Apple') on conflict (key) do update set fruit = excluded.fruitt;
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest values (3, 'Kiwi') on conflict (key, fruit) do update set fruit = excluded.fruit;
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest values (4, 'Mango') on conflict (fruit, key) do update set fruit = excluded.fruit;
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest values (5, 'Lemon') on conflict (fruit) do update set fruit = excluded.fruit;
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest values (6, 'Passionfruit') on conflict (fruit) do update set fruit = excluded.fruit;
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = excluded.fruit;
+# ok, no reference to target table
+
+# TODO: unsupported feature
+# statement ok
+# insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = ict.fruit;
+# ok, alias
+
+# error, references aliased away name
+
+# TODO: unsupported feature
+# statement error
+# insert into insertconflicttest AS ict values (6, 'Passionfruit') on conflict (key) do update set fruit = insertconflicttest.fruit;

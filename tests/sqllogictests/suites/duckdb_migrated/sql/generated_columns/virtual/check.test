@@ -7,13 +7,6 @@ DROP TABLE IF EXISTS tbl
 statement ok
 DROP TABLE IF EXISTS unit
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE unit (
-# 	price INTEGER,
-# 	amount_sold AS (price) CHECK (price > 5),
-# );
-
 # When it references a generated column, it fails
 
 statement error
@@ -28,19 +21,6 @@ CREATE TABLE tbl (
 	amount_sold AS (price),
 	CHECK (amount_sold > price)
 );
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE chk (
-# 	g1 AS (x),
-# 	g2 AS (x),
-# 	x INTEGER,
-# 	CHECK (x > 5)
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO chk VALUES (6);
 
 statement error
 INSERT INTO chk VALUES (3);

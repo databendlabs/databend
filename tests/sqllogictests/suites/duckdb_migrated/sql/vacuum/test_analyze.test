@@ -1,0 +1,97 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS testview
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# The distinct statistics sampling relies on the vector size.
+# Distinct statistics sampling is different for different vector sizes.
+# TODO: unsupported feature
+# statement ok
+# ANALYZE;
+
+# TODO: unsupported feature
+# statement ok
+# VACUUM;
+
+# TODO: unsupported feature
+# statement error
+# VACUUM test;
+
+# TODO: unsupported feature
+# statement error
+# ANALYZE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (i INT, j INT);
+
+# TODO: unsupported feature
+# statement ok
+# ANALYZE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW testview AS SELECT * FROM test;
+
+# TODO: unsupported feature
+# statement error
+# ANALYZE testview;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT range % 5000, range % 5000 FROM range(0, 10000);
+
+# The approximate unique count is inaccurate due to sampling.
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT s.min, s.max, s.has_null, s.has_no_null, s.approx_unique FROM (SELECT stats(i) s FROM test LIMIT 1);
+# ----
+# 0	4999	0	1	10000
+
+# TODO: unsupported feature
+# query TTTTT
+# SELECT s.min, s.max, s.has_null, s.has_no_null, s.approx_unique FROM (SELECT stats(j) s FROM test LIMIT 1);
+# ----
+# 0	4999	0	1	10000
+
+# TODO: unsupported feature
+# statement ok
+# ANALYZE test(i);
+
+# TODO: unsupported feature
+# statement ok
+# VACUUM test(i);
+
+# TODO: unsupported feature
+# query T
+# SELECT s.approx_unique FROM (SELECT stats(i) s FROM test LIMIT 1);
+# ----
+# 5661
+
+# TODO: unsupported feature
+# query T
+# SELECT s.approx_unique FROM (SELECT stats(j) s FROM test LIMIT 1);
+# ----
+# 10000
+
+# Now we analyze the entire table.
+
+# TODO: unsupported feature
+# statement ok
+# ANALYZE test;
+
+# TODO: unsupported feature
+# query T
+# SELECT s.approx_unique FROM (SELECT stats(i) s FROM test LIMIT 1);
+# ----
+# 5661
+
+# TODO: unsupported feature
+# query T
+# SELECT s.approx_unique FROM (SELECT stats(j) s FROM test LIMIT 1);
+# ----
+# 5661

@@ -1,0 +1,63 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS union_tbl
+
+# TODO: unsupported feature
+# statement ok
+# begin transaction;
+
+# TODO: unsupported feature
+# statement ok
+# create table union_tbl(
+# 	col UNION(
+# 		a JSON,
+# 		b INTEGER,
+# 		c TINYINT
+# 	)
+# )
+
+# Can insert a struct containing VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# insert into union_tbl VALUES (
+# 	{
+# 		tag: 0::UINT8,
+# 		a: '{"a": "hello", "b": true}',
+# 		b: null::INTEGER,
+# 		c: null::TINYINT
+# 	}
+# )
+
+# Can insert a struct containing JSON directly
+
+# TODO: unsupported feature
+# statement ok
+# insert into union_tbl VALUES (
+# 	{
+# 		tag: 0::UINT8,
+# 		a: '{"c": "world"}'::JSON,
+# 		b: null::INTEGER,
+# 		c: null::TINYINT
+# 	}
+# )
+
+# TODO: unsupported feature
+# query I
+# select * from union_tbl;
+# ----
+# {"a": "hello", "b": 1}
+# {"c": "world"}
+
+# TODO: unsupported feature
+# statement ok
+# rollback;
+
+# Ensure export/import roundtrip
+
+# TODO: unsupported feature
+# query I
+# select * from union_tbl;
+# ----
+# {"a": "hello", "b": 1}
+# {"c": "world"}

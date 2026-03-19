@@ -19,18 +19,10 @@ ALTER TABLE test DROP COLUMN j
 
 # con2 cannot add a new column now!
 
-# TODO: result differs
-# statement error
-# ALTER TABLE test ADD COLUMN k INTEGER
-
 statement ok
 COMMIT
 
 # we can add the column after the commit
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD COLUMN k INTEGER
 
 statement ok
 DROP TABLE test
@@ -73,10 +65,6 @@ SELECT * FROM test
 
 # we can't update on tables that have been altered
 
-# TODO: result differs
-# statement error
-# UPDATE test SET j=100
-
 query I
 SELECT * FROM test
 ----
@@ -118,10 +106,6 @@ statement ok
 ALTER TABLE test DROP COLUMN i
 
 # cannot commit con2! conflict on append
-
-# TODO: result differs
-# statement error
-# COMMIT
 
 statement ok
 DROP TABLE test

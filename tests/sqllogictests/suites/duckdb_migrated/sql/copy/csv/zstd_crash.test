@@ -24,23 +24,8 @@ COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION INFER);
 statement error
 COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION UNKNOWN);
 
-# TODO: unsupported feature
-# statement ok
-# COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD, HEADER);
-
-# TODO: unsupported feature
-# statement ok
-# COPY test_zst FROM '{DATA_DIR}/csv/broken/test.csv.zst' (COMPRESSION ZSTD, AUTO_DETECT 1);
-
 # what if we try to load a gzip file with zstd
 
 statement error
 COPY test_zst FROM '{DATA_DIR}/csv/lineitem1k.tbl.gz' (COMPRESSION ZSTD);
 
-# TODO: unsupported feature
-# statement ok
-# COPY test_zst TO '{TEMP_DIR}/noext.csv' (COMPRESSION ZSTD);
-
-# TODO: unsupported feature
-# statement ok
-# COPY test_zst FROM '{TEMP_DIR}/noext.csv' (COMPRESSION ZSTD);

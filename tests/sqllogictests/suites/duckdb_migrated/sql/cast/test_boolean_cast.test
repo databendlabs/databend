@@ -21,68 +21,20 @@ SELECT CAST('true' AS BOOLEAN)
 ----
 1
 
-# TODO: unsupported feature
-# query T
-# SELECT CAST('t' AS BOOLEAN)
-# ----
-# 1
-
 query B
 SELECT CAST('TRUE' AS BOOLEAN)
 ----
 1
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST('yes' AS BOOLEAN)
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST('YeS' AS BOOLEAN)
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST('y' AS BOOLEAN)
-# ----
-# 1
 
 query B
 SELECT CAST('false' AS BOOLEAN)
 ----
 0
 
-# TODO: unsupported feature
-# query T
-# SELECT CAST('f' AS BOOLEAN)
-# ----
-# 0
-
 query B
 SELECT CAST('FALSE' AS BOOLEAN)
 ----
 0
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST('no' AS BOOLEAN)
-# ----
-# 0
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST('nO' AS BOOLEAN)
-# ----
-# 0
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST('n' AS BOOLEAN)
-# ----
-# 0
 
 statement error
 SELECT CAST('12345' AS BOOLEAN)
@@ -208,26 +160,3 @@ SELECT CAST(CAST('0' AS double) AS BOOLEAN)
 ----
 0
 
-# TODO: unsupported feature
-# query T
-# SELECT CAST(CAST('1' AS HUGEINT) AS BOOLEAN)
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST(CAST('0' AS HUGEINT) AS BOOLEAN)
-# ----
-# 0
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST(CAST('1' AS UHUGEINT) AS BOOLEAN)
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT CAST(CAST('0' AS UHUGEINT) AS BOOLEAN)
-# ----
-# 0

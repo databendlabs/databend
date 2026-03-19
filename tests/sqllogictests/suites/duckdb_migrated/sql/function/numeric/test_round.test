@@ -52,12 +52,6 @@ select round(a, b) from roundme
 ----
 42.123
 
-# TODO: unsupported feature
-# query I
-# SELECT round(1.0, (-2147483648)::INT);
-# ----
-# 0
-
 query R
 SELECT round(1.0::DOUBLE, (-2147483648)::INT);
 ----

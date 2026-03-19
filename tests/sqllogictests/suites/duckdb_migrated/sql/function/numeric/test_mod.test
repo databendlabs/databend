@@ -14,12 +14,6 @@ select mod(a, 40) from modme
 
 # mod 0 results in NULL: SQLite behavior
 
-# TODO: unsupported feature
-# query I
-# select mod(42, 0)
-# ----
-# NULL
-
 query R
 select mod(a, 2) from modme
 ----

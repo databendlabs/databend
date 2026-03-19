@@ -1,0 +1,200 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS vt
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS docs
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS src
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS terms
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# create a table
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (3)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE  TABLE src (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO src VALUES (2)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM src
+# ----
+# 2
+
+# test simple update
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=test.a+s.a FROM src s
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 5
+
+# test self join via alias
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=test.a+t.a FROM test t
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 10
+
+# test multiple tables
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=t.a+s.a FROM test t, src s
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 12
+
+# test subquery
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=s.q FROM (SELECT a+1 as q FROM src) s
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 3
+
+# test view
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW vt AS (SELECT 17 as v)
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=v FROM vt
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 17
+
+# with a where clause on the from table
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=s.a FROM src s WHERE s.a = 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 2
+
+# with a where clause that involves both tables
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test t SET a=1 FROM src s WHERE s.a = t.a
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 1
+
+# with a where clause that evaluates to 0
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test t SET a=9 FROM src s WHERE s.a=t.a
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 1
+
+# test with multiple updates per row (which is undefined),
+# but in this case the last value in the table will win
+# FIXME:
+
+# test described in issue 1035
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE terms(docid INTEGER, term INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE docs(id INTEGER, len INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# insert into docs values (1, 0), (2, 0);
+
+# TODO: unsupported feature
+# statement ok
+# insert into terms values (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# insert into terms values (2, 1);
+
+# TODO: unsupported feature
+# statement ok
+# insert into terms values (2, 2);
+
+# TODO: unsupported feature
+# statement ok
+# insert into terms values (2, 3);
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE docs
+# FROM (
+#     SELECT docid AS id, count(term) AS len
+#     FROM terms
+#     GROUP BY docid
+#     ORDER BY docid
+# ) AS sq
+# WHERE docs.id = sq.id;
+
+# TODO: unsupported feature
+# query II
+# select * from docs;
+# ----
+# 1	1
+# 2	3

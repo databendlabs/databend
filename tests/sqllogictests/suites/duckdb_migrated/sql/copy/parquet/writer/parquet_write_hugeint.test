@@ -1,10 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS hugeints
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE hugeints(h HUGEINT)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO hugeints VALUES (-1180591620717411303424), (0), (NULL), (1180591620717411303424)

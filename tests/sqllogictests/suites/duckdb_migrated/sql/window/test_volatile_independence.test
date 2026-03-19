@@ -1,0 +1,11 @@
+# With chunk-level window parallelism, the order of evaluation changes with vector size
+# TODO: unsupported feature
+# query II
+# SELECT 
+# 	list(random()) OVER (ORDER BY id), 
+# 	max(random()) OVER (ORDER BY id) 
+# FROM range(0, 3) t(id);
+# ----
+# [0.5232026142836782]	0.985522684201432
+# [0.5232026142836782, 0.47754610640283557]	0.985522684201432
+# [0.5232026142836782, 0.47754610640283557, 0.6947716273694302]	0.985522684201432

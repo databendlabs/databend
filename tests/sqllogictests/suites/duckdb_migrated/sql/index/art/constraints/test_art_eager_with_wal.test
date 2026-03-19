@@ -1,24 +1,8 @@
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (id INT PRIMARY KEY);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (1);
-
 statement ok
 BEGIN;
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM tbl WHERE id = 1;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (1);
 
 statement ok
 COMMIT;

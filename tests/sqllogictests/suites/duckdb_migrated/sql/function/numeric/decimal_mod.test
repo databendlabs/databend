@@ -32,8 +32,3 @@ SELECT typeof(10.0 % 2.0), typeof(10.0 % 2.0 % 2.0 % 2.0)
 ----
 DOUBLE DOUBLE
 
-# TODO: unsupported feature
-# query I
-# SELECT 10.0 % 0.0
-# ----
-# NULL

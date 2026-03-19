@@ -5,30 +5,7 @@ statement ok
 DROP TABLE IF EXISTS test_bit_or_integers
 
 # test on scalar values
-# TODO: unsupported feature
-# query II
-# SELECT BIT_OR(3), BIT_OR(NULL)
-# ----
-# 3
-# NULL
-
 # test on a sequence
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq;
-
-# TODO: unsupported feature
-# query I
-# SELECT BIT_OR(nextval('seq'))
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT BIT_OR(nextval('seq'))
-# ----
-# 2
 
 # test on a set of integers
 
@@ -38,22 +15,7 @@ CREATE TABLE test_bit_or_integers(i INTEGER);
 statement ok
 INSERT INTO test_bit_or_integers VALUES (3), (7), (15), (31), (3), (15)
 
-# TODO: unsupported feature
-# query IIII
-# SELECT BIT_OR(i), BIT_OR(1), BIT_OR(DISTINCT i), BIT_OR(NULL) FROM test_bit_or_integers
-# ----
-# 31
-# 1
-# 31
-# NULL
-
 # # test on an empty set
-
-# TODO: unsupported feature
-# query I
-# SELECT BIT_OR(i) FROM test_bit_or_integers WHERE i > 100
-# ----
-# NULL
 
 # test incorrect usage
 
@@ -66,28 +28,3 @@ SELECT BIT_OR(1, 2, 3)
 statement error
 SELECT BIT_OR(BIT_AND(1))
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test_bit_or_bits(b BIT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test_bit_or_bits VALUES ('1010101001'), ('0011010101'), ('0001011101'), ('1011111101'), ('0000010001'), ('1000110001')
-
-# TODO: unsupported feature
-# query I
-# SELECT BIT_OR(b) FROM test_bit_or_bits
-# ----
-# 1011111101
-
-# TODO: unsupported feature
-# query I
-# SELECT BIT_OR(b) FROM test_bit_or_bits WHERE get_bit(b, 3) = 0;
-# ----
-# 1010111001
-
-# TODO: unsupported feature
-# query I
-# SELECT BIT_OR('111010'::BIT)
-# ----
-# 111010

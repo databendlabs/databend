@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS partsupp
+
+# TODO: unsupported feature
+# statement ok
+# create table partsupp as select uuid()::varchar as c5 from range(0, 8000);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT (ntile(5002) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) >= 0), c5 FROM partsupp;

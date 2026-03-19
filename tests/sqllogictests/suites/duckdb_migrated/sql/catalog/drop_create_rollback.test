@@ -22,6 +22,3 @@ SELECT C2 FROM T1;
 statement ok
 ROLLBACK;
 
-# TODO: result differs
-# statement error
-# SELECT C2 FROM T1;

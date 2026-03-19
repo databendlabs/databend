@@ -41,14 +41,6 @@ SELECT i FROM t2 ORDER BY i;
 2
 3
 
-# TODO: unsupported feature
-# query I
-# SELECT i FROM t1 ORDER BY i;
-# ----
-# 1
-# 2
-# 3
-
 query I
 SELECT i FROM t2 ORDER BY i;
 ----
@@ -75,10 +67,6 @@ BEGIN TRANSACTION
 statement ok
 ALTER TABLE t2 RENAME TO t3;
 
-# TODO: result differs
-# statement error
-# SELECT i FROM t3 ORDER BY i
-
 statement error
 SELECT i FROM t2 ORDER BY i
 
@@ -91,14 +79,6 @@ SELECT i FROM t3 ORDER BY i
 
 statement ok
 DROP TABLE t3;
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM t2 ORDER BY i;
-# ----
-# 1
-# 2
-# 3
 
 statement ok
 CREATE TABLE t2 (i integer)
@@ -157,10 +137,6 @@ BEGIN TRANSACTION
 
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE t2 RENAME TO t3
 
 statement error
 ALTER TABLE t2 RENAME TO t4

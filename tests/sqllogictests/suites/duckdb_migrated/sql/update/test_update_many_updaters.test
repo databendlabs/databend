@@ -1,0 +1,392 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2), (3)
+
+# now we start updating specific values and reading different versions
+# con1 sees the initial state
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok updater
+# UPDATE test SET a=4 WHERE a=1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok updater
+# UPDATE test SET a=5 WHERE a=2
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok updater
+# UPDATE test SET a=6 WHERE a=3
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# now read the different states
+# con sees {1, 2, 3}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# con2 sees {2, 3, 4}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 2
+# 3
+# 4
+
+# con3 sees {3, 4, 5}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# con4 sees {4, 5, 6}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 4
+# 5
+# 6
+
+# now verify that we get conflicts when we update values that have been updated AFTER we started
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=99 WHERE a=1
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=99 WHERE a=2
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=99 WHERE a=3
+
+# TODO: unsupported feature
+# statement ok updater
+# UPDATE test SET a=a-3
+
+# rollback all connections
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# we repeat the previous process of updates
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok updater
+# UPDATE test SET a=4 WHERE a=1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok updater
+# UPDATE test SET a=5 WHERE a=2
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok updater
+# UPDATE test SET a=6 WHERE a=3
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# now read the different states
+# con sees {1, 2, 3}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# con2 sees {2, 3, 4}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 2
+# 3
+# 4
+
+# con3 sees {3, 4, 5}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# con4 sees {4, 5, 6}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 4
+# 5
+# 6
+
+# we now verify that we CAN update values that were committed BEFORE we started
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=7 WHERE a=4
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=8 WHERE a=5
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=9 WHERE a=6
+
+# now read the different states again
+# con sees {1, 2, 3} still
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# con2 sees {2, 3, 7}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 2
+# 3
+# 7
+
+# con3 sees {3, 4, 8}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 8
+
+# con4 sees {4, 5, 9}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 4
+# 5
+# 9
+
+# updater still sees {4, 5, 6}
+
+# TODO: unsupported feature
+# query I updater
+# SELECT * FROM test ORDER BY a
+# ----
+# 4
+# 5
+# 6
+
+# now we commit in phases
+# first we commit con4
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# con, con2, con3 still see the same data, con4 sees the currently committed data
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 2
+# 3
+# 7
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 8
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 4
+# 5
+# 9
+
+# then we commit con2
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# con, con3 still see the same data, con2 and con4 see the committed data
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 5
+# 7
+# 9
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 8
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 5
+# 7
+# 9
+
+# then we commit con3
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# con still sees the same data, but the rest all see the committed data
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 7
+# 8
+# 9
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 7
+# 8
+# 9
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 7
+# 8
+# 9
+
+# now we commit con1, this should trigger a cleanup
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# now con1 also sees the committed data
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 7
+# 8
+# 9

@@ -2,22 +2,3 @@ statement ok
 DROP TABLE IF EXISTS encrypted.tbl
 
 # We need httpfs to do encrypted writes
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE encrypted.tbl AS SELECT * FROM range(0, 10) t(i);
-
-# TODO: unsupported feature
-# query I
-# SELECT SUM(i) FROM encrypted.tbl
-# ----
-# 45
-
-# TODO: unsupported feature
-# statement ok
-# DETACH encrypted
-
-# TODO: unsupported feature
-# query I
-# SELECT SUM(i) FROM encrypted.tbl
-# ----
-# 45

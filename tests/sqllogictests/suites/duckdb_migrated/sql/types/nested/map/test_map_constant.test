@@ -1,0 +1,50 @@
+# empty map
+# TODO: unsupported feature
+# query I
+# SELECT MAP {};
+# ----
+# {}
+
+# case sensitive key-value
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP { 'hello': 'world', 'HELLO': 'WORLD' };
+# ----
+# {hello=world, HELLO=WORLD}
+
+# integer keys
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP { 1: 'a', 2: 'b' };
+# ----
+# {1=a, 2=b}
+
+# non-constant keys
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP { i: 'a' || i } FROM range(0, 5) t(i);
+# ----
+# {0=a0}
+# {1=a1}
+# {2=a2}
+# {3=a3}
+# {4=a4}
+
+# lists
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP { [i]: [i + 1] } FROM range(0, 5) t(i);
+# ----
+# {[0]=[1]}
+# {[1]=[2]}
+# {[2]=[3]}
+# {[3]=[4]}
+# {[4]=[5]}
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP { NULL: 'a' || i } FROM range(0, 5) t(i);

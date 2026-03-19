@@ -25,16 +25,8 @@ UPDATE integers SET i=i, j=3
 statement error
 UPDATE integers SET i=i, i=10
 
-# TODO: result differs
-# statement error
-# UPDATE integers SET i=i, j=10
-
 statement ok
 UPDATE integers SET j=2
-
-# TODO: result differs
-# statement error
-# UPDATE integers SET j=10
 
 query III
 SELECT * FROM integers

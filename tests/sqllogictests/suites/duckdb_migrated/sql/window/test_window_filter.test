@@ -1,0 +1,247 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS testing
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE testing AS
+# 	SELECT
+# 		 x
+# 		,round(x * 0.333,0) % 3 AS y
+# 		,round(x * 0.333,0) % 3 AS z
+# 	FROM generate_series(0,10) tbl(x);
+
+# The x_filtered_window and z_filtered_window columns should return a different output than plain_window
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	,avg(x) OVER (PARTITION BY y) AS plain_window
+# 	,avg(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	,avg(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+# ----
+# 0	0.000000	0.000000	5.600000	1.000000	5.600000
+# 1	0.000000	0.000000	5.600000	1.000000	5.600000
+# 8	0.000000	0.000000	5.600000	1.000000	5.600000
+# 9	0.000000	0.000000	5.600000	1.000000	5.600000
+# 10	0.000000	0.000000	5.600000	1.000000	5.600000
+# 2	1.000000	1.000000	3.000000	NULL	NULL
+# 3	1.000000	1.000000	3.000000	NULL	NULL
+# 4	1.000000	1.000000	3.000000	NULL	NULL
+# 5	2.000000	2.000000	6.000000	NULL	NULL
+# 6	2.000000	2.000000	6.000000	NULL	NULL
+# 7	2.000000	2.000000	6.000000	NULL	NULL
+
+# COUNT(*) coverage
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	,count(*) OVER (PARTITION BY y) AS plain_window
+# 	,count(*) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	,count(*) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+# ----
+# 0	0.000000	0.000000	5	1	5
+# 1	0.000000	0.000000	5	1	5
+# 8	0.000000	0.000000	5	1	5
+# 9	0.000000	0.000000	5	1	5
+# 10	0.000000	0.000000	5	1	5
+# 2	1.000000	1.000000	3	0	0
+# 3	1.000000	1.000000	3	0	0
+# 4	1.000000	1.000000	3	0	0
+# 5	2.000000	2.000000	3	0	0
+# 6	2.000000	2.000000	3	0	0
+# 7	2.000000	2.000000	3	0	0
+
+# Holistic coverage
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	,median(x) OVER (PARTITION BY y) AS plain_window
+# 	,median(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	,median(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+# ----
+# 0	0.000000	0.000000	8.000000	1.000000	8.000000
+# 1	0.000000	0.000000	8.000000	1.000000	8.000000
+# 8	0.000000	0.000000	8.000000	1.000000	8.000000
+# 9	0.000000	0.000000	8.000000	1.000000	8.000000
+# 10	0.000000	0.000000	8.000000	1.000000	8.000000
+# 2	1.000000	1.000000	3.000000	NULL	NULL
+# 3	1.000000	1.000000	3.000000	NULL	NULL
+# 4	1.000000	1.000000	3.000000	NULL	NULL
+# 5	2.000000	2.000000	6.000000	NULL	NULL
+# 6	2.000000	2.000000	6.000000	NULL	NULL
+# 7	2.000000	2.000000	6.000000	NULL	NULL
+
+# Filters do not affect framing.
+
+# TODO: unsupported feature
+# query II
+# SELECT x, count(x) FILTER (WHERE x % 2 = 0) OVER (ORDER BY x ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING)
+# FROM generate_series(0,10) tbl(x);
+# ----
+# 0	2
+# 1	2
+# 2	3
+# 3	2
+# 4	3
+# 5	2
+# 6	3
+# 7	2
+# 8	3
+# 9	2
+# 10	2
+
+#
+# Errors
+#
+
+# Non-aggregates do not support filtering.
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, rank() OVER (PARTITION BY y) AS plain_window
+# 	, rank() FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, rank() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, dense_rank() OVER (PARTITION BY y) AS plain_window
+# 	, dense_rank() FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, dense_rank() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, row_number() OVER (PARTITION BY y) AS plain_window
+# 	, row_number() FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, row_number() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, percent_rank() OVER (PARTITION BY y) AS plain_window
+# 	, percent_rank() FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, percent_rank() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, cume_dist() OVER (PARTITION BY y) AS plain_window
+# 	, cume_dist() FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, cume_dist() FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, ntile(x) OVER (PARTITION BY y) AS plain_window
+# 	, ntile(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, ntile(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, first_value(x) OVER (PARTITION BY y) AS plain_window
+# 	, first_value(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, first_value(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, last_value(x) OVER (PARTITION BY y) AS plain_window
+# 	, last_value(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, last_value(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, lead(x) OVER (PARTITION BY y) AS plain_window
+# 	, lead(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, lead(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, lag(x) OVER (PARTITION BY y) AS plain_window
+# 	, lag(x) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, lag(x) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;
+
+# TODO: unsupported feature
+# statement error
+# SELECT
+# 	 x
+# 	,y
+# 	,z
+# 	, nth_value(x, 1) OVER (PARTITION BY y) AS plain_window
+# 	, nth_value(x, 1) FILTER (WHERE x = 1) OVER (PARTITION BY y) AS x_filtered_window
+# 	, nth_value(x, 1) FILTER (WHERE z = 0) OVER (PARTITION BY y) AS z_filtered_window
+# FROM testing
+# ORDER BY y, x;

@@ -33,14 +33,3 @@ SELECT * FROM test
 1 1 NULL
 2 2 NULL
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (3, 3)
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM test
-# ----
-# 1 1 NULL
-# 2 2 NULL
-# 3 3 NULL

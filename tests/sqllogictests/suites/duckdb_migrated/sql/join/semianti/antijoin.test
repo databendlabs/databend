@@ -117,7 +117,6 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a <> right_table.a
 ----
 42	1	1
 
-
 # range joins
 
 query III
@@ -152,28 +151,8 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a 
 
 # correlated subqueries
 
-# TODO: unsupported feature
-# query II
-# SELECT a as outer_a, (SELECT MAX(right_table.b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
-# ----
-# 43	42
-# 2000	42
-
 statement ok
 INSERT INTO right_table VALUES (1, 20);
 
 # correlated subqueries
 
-# TODO: unsupported feature
-# query II
-# SELECT a as outer_a, (SELECT MAX(b) FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
-# ----
-# 43	42
-# 2000	42
-
-# TODO: unsupported feature
-# query II
-# SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
-# ----
-# 43	20
-# 2000	20

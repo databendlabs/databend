@@ -10,18 +10,3 @@ CREATE TABLE tbl (
 	also_price VARCHAR AS (price) COLLATE NOCASE
 );
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE coll (
-# 	g1 AS (x),
-# 	g2 AS (x),
-# 	x VARCHAR COLLATE NOCASE
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO coll VALUES ('string'), ('STRING')
-
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM coll;

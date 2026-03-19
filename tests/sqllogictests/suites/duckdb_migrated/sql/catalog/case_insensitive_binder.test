@@ -19,40 +19,9 @@ SELECT * FROM MyTable;
 statement ok
 SELECT * FROM "MyTable";
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable ADD COLUMN j INTEGER;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable RENAME TO "MyOtherTable"
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE MyOtherTable;
-
 statement ok
 CREATE TABLE "ABC"(i integer);
-
-# TODO: result differs
-# statement error
-# CREATE TABLE "AbC"(i integer);
 
 statement ok
 SELECT * FROM "ABC";
 
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM abc; -- error: which table did I mean?
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE abc ADD COLUMN j INTEGER;
-
-# TODO: result differs
-# statement error
-# ALTER TABLE "ABC" ADD COLUMN "J" INTEGER;
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE abc

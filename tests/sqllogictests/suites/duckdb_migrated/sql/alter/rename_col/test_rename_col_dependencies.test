@@ -8,14 +8,6 @@ CREATE TABLE test(i INTEGER, j INTEGER)
 # one uses specific columns (i, j)
 # the other uses select *
 
-# TODO: unsupported feature
-# statement ok
-# PREPARE v1 AS SELECT i, j FROM test
-
-# TODO: unsupported feature
-# statement ok
-# PREPARE v2 AS SELECT * FROM test
-
 # now rename "i" to "k"
 
 statement ok
@@ -26,6 +18,3 @@ ALTER TABLE test RENAME COLUMN i TO k
 statement error
 EXECUTE v1
 
-# TODO: unsupported feature
-# statement ok
-# EXECUTE v2

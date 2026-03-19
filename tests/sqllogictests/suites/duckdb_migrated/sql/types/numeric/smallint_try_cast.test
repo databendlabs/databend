@@ -1,0 +1,262 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS smallints
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS strings
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE smallints AS SELECT i::SMALLINT i FROM (VALUES (-32768), (0), (32767)) tbl(i)
+
+# -> unsigned
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UTINYINT FROM smallints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::USMALLINT FROM smallints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UINTEGER FROM smallints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UBIGINT FROM smallints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UTINYINT FROM smallints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT i::USMALLINT FROM smallints WHERE i>=0 ORDER BY i
+# ----
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT i::UINTEGER FROM smallints WHERE i>=0 ORDER BY i
+# ----
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT i::UBIGINT FROM smallints WHERE i>=0 ORDER BY i
+# ----
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UTINYINT)::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS USMALLINT)::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UINTEGER)::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UBIGINT)::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# 32767
+
+# -> signed
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::TINYINT FROM smallints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS TINYINT)::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i::INTEGER::SMALLINT FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT i::BIGINT::SMALLINT FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT i::HUGEINT::SMALLINT FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# -> float
+
+# TODO: unsupported feature
+# query I
+# SELECT i::FLOAT FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DOUBLE FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# -> bool
+
+# TODO: unsupported feature
+# query I
+# SELECT i::BOOL FROM smallints ORDER BY i
+# ----
+# True
+# False
+# True
+
+# -> varchar
+
+# TODO: unsupported feature
+# query I
+# SELECT i::VARCHAR FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# from string casts
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-100000'), ('-32768'), ('0'), ('32767'), ('100000')) tbl(s)
+
+# TODO: unsupported feature
+# statement error
+# SELECT s::SMALLINT FROM strings
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(s AS SMALLINT) FROM strings
+# ----
+# NULL
+# NULL
+# NULL
+# -32768
+# 0
+# 32767
+# NULL
+
+# -> decimal casts
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DECIMAL(9,0)::SMALLINT FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DECIMAL(18,0)::SMALLINT FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DECIMAL(38,0)::SMALLINT FROM smallints ORDER BY i
+# ----
+# -32768
+# 0
+# 32767
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(9,5)::SMALLINT FROM smallints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(18,14)::SMALLINT FROM smallints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(38,34)::SMALLINT FROM smallints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(3,0))::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(9,5))::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(18,14))::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(38,34))::SMALLINT FROM smallints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL

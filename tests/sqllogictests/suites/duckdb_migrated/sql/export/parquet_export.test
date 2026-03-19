@@ -10,16 +10,8 @@ CREATE TABLE integers(i INTEGER NOT NULL, j INTEGER)
 statement ok
 INSERT INTO integers SELECT i, i+1 FROM range(0, 1000) tbl(i)
 
-# TODO: result differs
-# query II nosort sumresult
-# SELECT SUM(i), SUM(j) FROM integers
-
 statement ok
 ROLLBACK
-
-# TODO: result differs
-# query II nosort sumresult
-# SELECT SUM(i), SUM(j) FROM integers
 
 # verify that the not null constraint is still there
 
@@ -40,16 +32,8 @@ CREATE TABLE integers(i INTEGER NOT NULL, j INTEGER)
 statement ok
 INSERT INTO integers SELECT i, i+1 FROM range(0, 1000) tbl(i)
 
-# TODO: result differs
-# query II nosort sumresult
-# SELECT SUM(i), SUM(j) FROM integers
-
 statement ok
 ROLLBACK
-
-# TODO: result differs
-# query II nosort sumresult
-# SELECT SUM(i), SUM(j) FROM integers
 
 # verify that the not null constraint is still there
 
@@ -70,16 +54,8 @@ CREATE TABLE integers(i INTEGER NOT NULL, j INTEGER)
 statement ok
 INSERT INTO integers SELECT i, i+1 FROM range(0, 1000) tbl(i)
 
-# TODO: result differs
-# query II nosort sumresult
-# SELECT SUM(i), SUM(j) FROM integers
-
 statement ok
 ROLLBACK
-
-# TODO: result differs
-# query II nosort sumresult
-# SELECT SUM(i), SUM(j) FROM integers
 
 # verify that the not null constraint is still there
 

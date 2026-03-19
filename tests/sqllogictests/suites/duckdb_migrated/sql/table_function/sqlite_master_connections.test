@@ -4,23 +4,11 @@ BEGIN TRANSACTION
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM sqlite_master;
-
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM sqlite_master;
-
 statement ok
 ROLLBACK
 
 statement ok
 ROLLBACK
-
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM sqlite_master;
 
 statement error
 DROP VIEW sqlite_master

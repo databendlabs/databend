@@ -2,43 +2,6 @@ statement ok
 DROP TABLE IF EXISTS tbl
 
 # FIXME: we don't preserve OWNED BY on restarts
-# TODO: unsupported feature
-# statement ok
-# create sequence seq;
-
-# TODO: unsupported feature
-# statement ok
-# create sequence other_seq;
-
-# TODO: unsupported feature
-# statement ok
-# create table tbl (
-# 	a integer default nextval('other_seq')
-# );
-
-# TODO: unsupported feature
-# statement ok
-# alter sequence seq owned by tbl;
-
-# TODO: unsupported feature
-# statement ok
-# alter table tbl rename to tbl2;
-
-# TODO: result differs
-# statement error
-# drop sequence seq;
-
-# TODO: result differs
-# statement error
-# drop sequence other_seq;
-
-# TODO: unsupported feature
-# statement ok
-# drop table tbl2;
-
 statement error
 drop sequence seq;
 
-# TODO: unsupported feature
-# statement ok
-# drop sequence other_seq;

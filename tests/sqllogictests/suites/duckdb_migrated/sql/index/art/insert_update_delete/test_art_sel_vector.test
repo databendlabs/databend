@@ -13,10 +13,6 @@ INSERT INTO source VALUES (1), (2), (3), (4), (5), (6)
 statement ok
 CREATE TABLE integers(i INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON integers using art(i)
-
 # insert with selection vector
 
 statement ok

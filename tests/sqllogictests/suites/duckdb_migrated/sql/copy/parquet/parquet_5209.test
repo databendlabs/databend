@@ -1,6 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS test_5209
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test_5209 AS SELECT range FROM range(0, 10000);

@@ -10,6 +10,3 @@ CALL dsdgen(sf=0);
 statement error
 CALL dsdgen(sf=0, catalog='dsdgentest');
 
-# TODO: unsupported feature
-# statement ok
-# CALL dsdgen(sf=0);

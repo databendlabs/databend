@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# call dbgen(sf=0.01);
+
+# TODO: unsupported feature
+# query I nosort res
+# select lineitem::json from lineitem limit 2;
+# ----
+
+# TODO: unsupported feature
+# query I nosort res
+# select lineitem::json::variant::JSON from lineitem limit 2;
+# ----

@@ -15,12 +15,6 @@ SELECT stddev_samp(1)
 ----
 NULL
 
-# TODO: unsupported feature
-# query I
-# SELECT var_samp(1)
-# ----
-# NULL
-
 # stddev_samp
 
 query R
@@ -73,67 +67,7 @@ select grp, sum(val), round(stddev_pop(val), 1), min(val) from stddev_test where
 
 # var_samp
 
-# TODO: unsupported feature
-# query R
-# select round(var_samp(val), 1) from stddev_test
-# ----
-# 229281.600000
-
-# TODO: unknown function
-# query R
-# select round(variance(val), 1) from stddev_test
-# ----
-# 229281.600000
-
-# TODO: unsupported feature
-# query R
-# select round(var_samp(val), 1) from stddev_test  where val is not null
-# ----
-# 229281.600000
-
-# TODO: unsupported feature
-# query IRRI
-# select grp, sum(val), round(var_samp(val), 1), min(val) from stddev_test group by grp order by grp
-# ----
-# 1	85.000000	0.500000	42
-# 2	1042.000000	458882.000000	42
-# 3	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# query IRRI
-# select grp, sum(val), round(var_samp(val), 1), min(val) from stddev_test where val is not null group by grp order by grp
-# ----
-# 1	85.000000	0.500000	42
-# 2	1042.000000	458882.000000	42
-
 # var_pop
-
-# TODO: unsupported feature
-# query R
-# select round(var_pop(val), 1) from stddev_test
-# ----
-# 171961.200000
-
-# TODO: unsupported feature
-# query R
-# select round(var_pop(val), 1) from stddev_test  where val is not null
-# ----
-# 171961.200000
-
-# TODO: unsupported feature
-# query IRRI
-# select grp, sum(val), round(var_pop(val), 2), min(val) from stddev_test group by grp order by grp
-# ----
-# 1	85.000000	0.250000	42
-# 2	1042.000000	229441.000000	42
-# 3	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# query IRRI
-# select grp, sum(val), round(var_pop(val), 2), min(val) from stddev_test where val is not null group by grp order by grp
-# ----
-# 1	85.000000	0.250000	42
-# 2	1042.000000	229441.000000	42
 
 statement ok
 create table stddev_test_alias(val integer, grp integer)
@@ -152,10 +86,6 @@ query R
 select stddev(0) from range(0, 10)
 ----
 0.0
-
-# TODO: result differs
-# statement error
-# select stddev(a) from (values (1e301), (-1e301)) tbl(a)
 
 statement error
 select var_samp(a) from (values (1e301), (-1e301)) tbl(a)

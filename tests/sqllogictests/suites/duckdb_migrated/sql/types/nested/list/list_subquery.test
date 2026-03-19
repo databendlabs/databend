@@ -14,20 +14,3 @@ SELECT (SELECT [[1, 2], [3, 4]])
 ----
 [[1,2],[3,4]]
 
-# TODO: unsupported feature
-# query I
-# SELECT (SELECT {'a': [1, 2, 3], 'b': 7})
-# ----
-# {'a': [1, 2, 3], 'b': 7}
-
-# TODO: unsupported feature
-# query I
-# SELECT (SELECT LIST_VALUE())
-# ----
-# []
-
-# TODO: unsupported feature
-# query I
-# SELECT (SELECT CASE WHEN 1=0 THEN LIST_VALUE() ELSE NULL END)
-# ----
-# NULL

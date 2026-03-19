@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS users
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE users (
+# 	id BIGINT PRIMARY KEY,
+# 	username TEXT UNIQUE,
+# 	email TEXT
+# );
+
+# FIXME: not consistent

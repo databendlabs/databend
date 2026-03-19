@@ -43,12 +43,6 @@ SELECT * FROM test WHERE date >= '2023-08-05 00:00:00' AND date < '2023-08-06 00
 
 # literals prefer to be strings
 
-# TODO: unsupported feature
-# query I
-# SELECT '[hello]'[1];
-# ----
-# [
-
 query I
 SELECT list('hello world')
 ----
@@ -97,14 +91,6 @@ SELECT 1 IN (s) AS in_res FROM cte;
 1
 
 # but not >
-
-# TODO: result differs
-# statement error
-# select i>1 from (values ('01')) t(i);
-
-# TODO: result differs
-# statement error
-# select date '1992-01-01'>i from (values ('1991-01-01')) t(i);
 
 statement error
 select d[1] from (values (date '1992-01-01')) t(d);

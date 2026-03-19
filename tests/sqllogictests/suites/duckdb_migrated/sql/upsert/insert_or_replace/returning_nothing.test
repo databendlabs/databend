@@ -1,0 +1,38 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bug
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq START 1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bug (
+# 	id INTEGER PRIMARY KEY DEFAULT NEXTVAL('seq'),
+# 	name VARCHAR
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX idx ON bug (name);
+
+# TODO: unsupported feature
+# query I
+# INSERT OR IGNORE INTO bug VALUES
+# 	(DEFAULT, 'toto') RETURNING(id);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# INSERT OR IGNORE INTO bug VALUES
+# 	(DEFAULT, 'toto') RETURNING(id);
+# ----
+
+# TODO: unsupported feature
+# query I
+# INSERT OR IGNORE INTO bug VALUES
+# 	(DEFAULT, 'toto'), (DEFAULT, 'yoyo') RETURNING(id);
+# ----
+# 4

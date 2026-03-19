@@ -29,25 +29,3 @@ create or replace table test1 as (
     union all select 'report_3' as child, 'report_3' as parent
 );
 
-# TODO: unknown function
-# query III rowsort
-# select
-#     child,
-#     count(*) as cnt,
-#     list_sort(
-#         list(
-#             parent
-#         )
-#     )
-#     as source_parents
-# from test1
-# group by 1
-# having cnt > 1;
-# ----
-# dim_model_7	2	[int_model_4, int_model_5]
-# exposure_1	5	[dim_model_7, exposure_1, fct_model_6, int_model_4, int_model_5]
-# int_model_5	2	[int_model_4, int_model_5]
-# new_customers	4	[dim_model_7, int_model_4, int_model_5, new_customers]
-# report_1	2	[fct_model_6, report_1]
-# report_2	2	[fct_model_6, report_2]
-# report_3	2	[fct_model_6, report_3]

@@ -1,0 +1,321 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_structs
+
+# Always shred
+# TODO: unsupported feature
+# statement ok
+
+
+onlyif type=struct
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(id INT, s STRUCT(a integer, b bool));
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(id INT, s VARIANT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_structs VALUES
+# 	(
+# 		1,
+# 		{
+# 			'a': 42,
+# 			'b': true
+# 		}
+# 	),
+# 	(
+# 		2,
+# 		NULL
+# 	),
+# 	(
+# 		3,
+# 		{
+# 			'a': 84,
+# 			'b': NULL
+# 		}
+# 	),
+# 	(
+# 		4,
+# 		{
+# 			'a': NULL,
+# 			'b': false
+# 		}
+# 	);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT s.b FROM test_structs
+# ----
+# 1
+# NULL
+# NULL
+# 0
+
+# Add a cast on top of the struct extract
+
+# TODO: unsupported feature
+# query I
+# SELECT s.b::INTEGER FROM test_structs
+# ----
+# 1
+# NULL
+# NULL
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT s['b'] FROM test_structs
+# ----
+# 1
+# NULL
+# NULL
+# 0
+
+# TODO: unsupported feature
+# query II
+# SELECT s['b'], s FROM test_structs
+# ----
+# 1	{'a': 42, 'b': 1}
+# NULL	NULL
+# NULL	{'a': 84, 'b': NULL}
+# 0	{'a': NULL, 'b': 0}
+
+# Add a cast
+
+# TODO: unsupported feature
+# query II
+# SELECT s['b']::INTEGER, s FROM test_structs
+# ----
+# 1	{'a': 42, 'b': 1}
+# NULL	NULL
+# NULL	{'a': 84, 'b': NULL}
+# 0	{'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query II
+# SELECT s.b, s.a FROM test_structs
+# ----
+# 1	42
+# NULL	NULL
+# NULL	84
+# 0	NULL
+
+# Add a cast
+
+# TODO: unsupported feature
+# query II
+# SELECT s.b::INTEGER, s.a::BIGINT FROM test_structs
+# ----
+# 1	42
+# NULL	NULL
+# NULL	84
+# 0	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT s FROM test_structs WHERE s.b
+# ----
+# {'a': 42, 'b': 1}
+
+onlyif type=struct
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM (SELECT UNNEST(s) FROM test_structs) WHERE b
+# ----
+# 42
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM (SELECT UNNEST(s) FROM test_structs) WHERE b
+
+# TODO: unsupported feature
+# query I
+# SELECT a::BIGINT FROM (SELECT UNNEST(s) FROM test_structs) WHERE b::INTEGER
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT id FROM test_structs WHERE s.b
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test_structs SET s={'a': 84, 'b': false} WHERE id=2
+
+# TODO: unsupported feature
+# query II
+# SELECT s['b'], s.a FROM test_structs WHERE id=2
+# ----
+# 0	84
+
+
+onlyif type=struct
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(id INT, s STRUCT(a integer, b bool));
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(id INT, s VARIANT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_structs VALUES
+# 	(
+# 		1,
+# 		{
+# 			'a': 42,
+# 			'b': true
+# 		}
+# 	),
+# 	(
+# 		2,
+# 		NULL
+# 	),
+# 	(
+# 		3,
+# 		{
+# 			'a': 84,
+# 			'b': NULL
+# 		}
+# 	),
+# 	(
+# 		4,
+# 		{
+# 			'a': NULL,
+# 			'b': false
+# 		}
+# 	);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT s.b FROM test_structs
+# ----
+# 1
+# NULL
+# NULL
+# 0
+
+# Add a cast on top of the struct extract
+
+# TODO: unsupported feature
+# query I
+# SELECT s.b::INTEGER FROM test_structs
+# ----
+# 1
+# NULL
+# NULL
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT s['b'] FROM test_structs
+# ----
+# 1
+# NULL
+# NULL
+# 0
+
+# TODO: unsupported feature
+# query II
+# SELECT s['b'], s FROM test_structs
+# ----
+# 1	{'a': 42, 'b': 1}
+# NULL	NULL
+# NULL	{'a': 84, 'b': NULL}
+# 0	{'a': NULL, 'b': 0}
+
+# Add a cast
+
+# TODO: unsupported feature
+# query II
+# SELECT s['b']::INTEGER, s FROM test_structs
+# ----
+# 1	{'a': 42, 'b': 1}
+# NULL	NULL
+# NULL	{'a': 84, 'b': NULL}
+# 0	{'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query II
+# SELECT s.b, s.a FROM test_structs
+# ----
+# 1	42
+# NULL	NULL
+# NULL	84
+# 0	NULL
+
+# Add a cast
+
+# TODO: unsupported feature
+# query II
+# SELECT s.b::INTEGER, s.a::BIGINT FROM test_structs
+# ----
+# 1	42
+# NULL	NULL
+# NULL	84
+# 0	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT s FROM test_structs WHERE s.b
+# ----
+# {'a': 42, 'b': 1}
+
+onlyif type=struct
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM (SELECT UNNEST(s) FROM test_structs) WHERE b
+# ----
+# 42
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement error
+# SELECT a FROM (SELECT UNNEST(s) FROM test_structs) WHERE b
+
+# TODO: unsupported feature
+# query I
+# SELECT a::BIGINT FROM (SELECT UNNEST(s) FROM test_structs) WHERE b::INTEGER
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT id FROM test_structs WHERE s.b
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test_structs SET s={'a': 84, 'b': false} WHERE id=2
+
+# TODO: unsupported feature
+# query II
+# SELECT s['b'], s.a FROM test_structs WHERE id=2
+# ----
+# 0	84

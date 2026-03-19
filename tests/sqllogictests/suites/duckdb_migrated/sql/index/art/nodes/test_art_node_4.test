@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS integers
 statement ok
 CREATE TABLE integers(i integer)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON integers(i)
-
 # insert elements
 
 statement ok
@@ -21,8 +17,6 @@ INSERT INTO integers VALUES (2 + 1);
 
 statement ok
 INSERT INTO integers VALUES (3 + 1);
-
-
 
 # verify counts
 
@@ -45,7 +39,6 @@ query I
 SELECT COUNT(*) FROM integers WHERE i = 3 + 1
 ----
 1
-
 
 # verify sums
 
@@ -75,10 +68,6 @@ DELETE FROM integers WHERE i = 3 + 1
 
 statement ok
 DELETE FROM integers WHERE i = 0
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX i_index
 
 statement ok
 DROP TABLE integers

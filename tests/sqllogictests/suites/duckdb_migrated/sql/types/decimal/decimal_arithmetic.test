@@ -58,51 +58,11 @@ SELECT ('0.5'::DECIMAL(1,1) + 10000)::VARCHAR,
 statement error
 SELECT ('0.54321543215432154321543215432154321'::DECIMAL(35,35) + 10000)::VARCHAR
 
-# TODO: unsupported feature
-# query IIIII
-# SELECT '0.5'::DECIMAL(1,1) + 1::TINYINT,
-#        '0.5'::DECIMAL(1,1) + 1::SMALLINT,
-#        '0.5'::DECIMAL(1,1) + 1::INTEGER,
-#        '0.5'::DECIMAL(1,1) + 1::BIGINT,
-#        '0.5'::DECIMAL(1,1) + 1::HUGEINT
-# ----
-# 1.5	1.5	1.5	1.5	1.5
-
 # negative numbers
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT '0.5'::DECIMAL(1,1) + -1::TINYINT,
-#        '0.5'::DECIMAL(1,1) + -1::SMALLINT,
-#        '0.5'::DECIMAL(1,1) + -1::INTEGER,
-#        '0.5'::DECIMAL(1,1) + -1::BIGINT,
-#        '0.5'::DECIMAL(1,1) + -1::HUGEINT
-# ----
-# -0.5	-0.5	-0.5	-0.5	-0.5
 
 # subtract
 
-# TODO: unsupported feature
-# query IIIII
-# SELECT '0.5'::DECIMAL(1,1) - 1::TINYINT,
-#        '0.5'::DECIMAL(1,1) - 1::SMALLINT,
-#        '0.5'::DECIMAL(1,1) - 1::INTEGER,
-#        '0.5'::DECIMAL(1,1) - 1::BIGINT,
-#        '0.5'::DECIMAL(1,1) - 1::HUGEINT
-# ----
-# -0.5	-0.5	-0.5	-0.5	-0.5
-
 # negative numbers
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT '0.5'::DECIMAL(1,1) - -1::TINYINT,
-#        '0.5'::DECIMAL(1,1) - -1::SMALLINT,
-#        '0.5'::DECIMAL(1,1) - -1::INTEGER,
-#        '0.5'::DECIMAL(1,1) - -1::BIGINT,
-#        '0.5'::DECIMAL(1,1) - -1::HUGEINT
-# ----
-# 1.5	1.5	1.5	1.5	1.5
 
 # now with a table
 
@@ -171,25 +131,7 @@ SELECT ('18.25'::DECIMAL(4,2) * '17.25'::DECIMAL(4,2))::VARCHAR
 
 # different types
 
-# TODO: unsupported feature
-# query IIIII
-# SELECT '0.001'::DECIMAL * 100::TINYINT,
-#        '0.001'::DECIMAL * 10000::SMALLINT,
-#        '0.001'::DECIMAL * 1000000::INTEGER,
-#        '0.001'::DECIMAL * 100000000::BIGINT,
-#        '0.001'::DECIMAL * 10000000000::HUGEINT
-# ----
-# 0.100
-# 10.000
-# 1000.000
-# 100000.000
-# 10000000.000
-
 # multiplication could not be performed exactly: throw error
-
-# TODO: unsupported feature
-# statement error
-# SELECT '0.000000000000000000000000000001'::DECIMAL(38,30) * '0.000000000000000000000000000001'::DECIMAL(38,30)
 
 query RRRR
 SELECT 2.0 + 1.0,

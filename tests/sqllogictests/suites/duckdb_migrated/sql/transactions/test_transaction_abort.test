@@ -1,14 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER PRIMARY KEY)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (1), (2)
-
 # start a transaction
 
 statement ok
@@ -19,22 +11,10 @@ BEGIN TRANSACTION
 statement error
 SELEC 42
 
-# TODO: unsupported feature
-# query I
-# SELECT 42
-# ----
-# 42
-
 # neither do binder errors
 
 statement error
 SELECT * FROM nonexistanttable
-
-# TODO: unsupported feature
-# query I
-# SELECT 42
-# ----
-# 42
 
 # however primary key conflicts do invalidate it
 
@@ -47,9 +27,3 @@ SELECT 42
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM integers ORDER BY 1
-# ----
-# 1
-# 2

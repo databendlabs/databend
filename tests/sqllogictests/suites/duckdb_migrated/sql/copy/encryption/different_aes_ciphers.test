@@ -1,40 +1,8 @@
 statement ok
 DROP TABLE IF EXISTS encrypted.fuu
 
-# TODO: unknown function
-# query II
-# select encrypted, options from duckdb_databases() where database_name = 'encrypted_GCM' and cipher='GCM';
-# ----
-# 1	{}
-
-# TODO: unknown function
-# query II
-# select encrypted, options from duckdb_databases() where database_name = 'encrypted_CTR' and cipher='CTR';
-# ----
-# 1	{}
-
-
-
 # we can create a database with a specific cipher (CTR)
 
-# TODO: unsupported feature
-# statement ok
-# create table encrypted.fuu as select 42;
-
-# TODO: unsupported feature
-# statement ok
-# DETACH encrypted
-
 # we can open it again by specifying that same cipher again
-
-# TODO: unsupported feature
-# query I
-# select * FROM encrypted.fuu
-# ----
-# 42
-
-# TODO: unsupported feature
-# statement ok
-# DETACH encrypted
 
 # opening the database without cipher for CTR is not possible for security reasons

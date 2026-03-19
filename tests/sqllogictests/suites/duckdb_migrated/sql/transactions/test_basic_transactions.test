@@ -24,37 +24,17 @@ SELECT * FROM integers
 
 # connection two should not be able to
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM integers
-
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM integers
-
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM integers
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER)
 
 statement ok
 COMMIT
 
 # con two STILL should not see it because it was started before the
 # transaction committed
-
-# TODO: unsupported feature
-# statement error
-# SELECT * FROM integers
 
 statement ok
 ROLLBACK

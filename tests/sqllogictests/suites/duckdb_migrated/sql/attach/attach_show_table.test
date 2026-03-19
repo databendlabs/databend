@@ -1,171 +1,3 @@
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS db1.table_in_db1
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS db2.table_in_db2
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS db2.test_schema
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH DATABASE ':memory:' AS db1;
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH DATABASE ':memory:' AS db2;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE db1.table_in_db1(i int);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE db2.table_in_db2(i int);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA db2.test_schema;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE db2.test_schema.table_in_db2_test_schema(i int);
-
-# TODO: unsupported feature
-# query I
-# SHOW TABLES
-# ----
-# (SELECT 17 + 25)
-# ABC
-# MyOtherTable
-# MyTable
-# a1
-# aggr
-# alias
-# args
-# array_names
-# array_of_structs
-# bigints
-# booleans
-# c
-# cards_tbl
-# crazynested
-# cs_items
-# customers
-# d
-# data
-# dates
-# ddb
-# depdelay_minutes
-# documents
-# doublenested
-# doubles
-# duplicates
-# e
-# el_ids
-# emptyaggr
-# entry
-# entry2
-# entry3
-# entry4
-# exam
-# example
-# five
-# flights
-# floats
-# greek_tbl
-# groups
-# hello
-# hist_data
-# int
-# int_tbl
-# integer
-# integers2
-# integers3
-# interval_tbl
-# intervals
-# ints
-# issue3056
-# issue3105
-# issue5259
-# json_tbl
-# json_tbl2
-# kahan_context1
-# kahan_context2
-# lineitem
-# main
-# main_t1
-# main_table
-# manycolumns
-# my_functions
-# my_table
-# my_tbl
-# mytable
-# names
-# nestedstrings
-# null_table
-# null_tbl
-# nulls
-# nulls_compound
-# obs
-# power
-# qt
-# repro
-# response
-# reverse
-# scan
-# smallints
-# src
-# ss_items
-# stddev_test
-# stddev_test_alias
-# str_tbl
-# stringlist
-# strings
-# struct_tbl1
-# struct_tbl2
-# students
-# supernestedstrings
-# t0
-# t2
-# t4
-# table ".
-# tbl
-# tbl2
-# tbl2_varchar
-# tbl3
-# tbl4
-# tbl5
-# tbl_alter_column
-# tbl_empty
-# tbl_int
-# tbl_varchar
-# test1
-# test2_tbl
-# test_table2
-# test_table4
-# test_tbl
-# test_val
-# testjson
-# timeseries
-# timestamp
-# timestamps
-# tinyints
-# tmp
-# triplenested
-# try_cast
-# try_cast_tbl
-# ts_tbl
-# unit
-# user_causes
-# user_pq
-# v3
-# varchars
-# zipcodes
-
 statement ok
 USE DB1
 
@@ -194,9 +26,16 @@ table_in_db1
 tbl
 tbl2
 
-# TODO: unsupported feature
-# statement ok
-# USE db2
+query T
+SHOW TABLES
+----
+str_tbl
+str_tbl2
+t1
+t2
+table_in_db1
+tbl
+tbl2
 
 query T
 SHOW TABLES
@@ -209,10 +48,6 @@ table_in_db1
 tbl
 tbl2
 
-# TODO: unsupported feature
-# statement ok
-# USE db2.test_schema;
-
 query T
 SHOW TABLES
 ----
@@ -224,25 +59,3 @@ table_in_db1
 tbl
 tbl2
 
-# TODO: unsupported feature
-# statement ok
-# USE DB2.TEST_sChEmA;
-
-query T
-SHOW TABLES
-----
-str_tbl
-str_tbl2
-t1
-t2
-table_in_db1
-tbl
-tbl2
-
-# TODO: unsupported feature
-# statement ok
-# FROM table_in_db2
-
-# TODO: unsupported feature
-# statement ok
-# FROM table_in_db2_test_schema

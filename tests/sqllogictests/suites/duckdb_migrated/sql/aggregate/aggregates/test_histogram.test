@@ -7,12 +7,6 @@ DROP TABLE IF EXISTS test_histogram_hist_data
 statement ok
 DROP TABLE IF EXISTS test_histogram_names
 
-# TODO: type_error
-# query I
-# select histogram(NULL)
-# ----
-# NULL
-
 # Empty Table
 
 query T
@@ -81,36 +75,6 @@ select histogram(name) from test_histogram_names;
 
 # Variant time type binding (Issue #3290)
 
-# TODO: unsupported feature
-# query I
-# SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_S));
-# ----
-# {'2021-08-20 00:00:00'=1}
-
-# TODO: unsupported feature
-# query I
-# SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_MS));
-# ----
-# {'2021-08-20 00:00:00'=1}
-
-# TODO: unsupported feature
-# query I
-# SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_NS));
-# ----
-# {'2021-08-20 00:00:00'=1}
-
-# TODO: unsupported feature
-# query I
-# SELECT histogram(CAST('15:05:42' AS TIME));
-# ----
-# {'15:05:42'=1}
-
-# TODO: unsupported feature
-# query I
-# SELECT histogram(CAST('15:05:42+00' AS TIME WITH TIME ZONE));
-# ----
-# {'15:05:42+00'=1}
-
 query T
 SELECT histogram(CAST('2022-01-02' AS DATE));
 ----
@@ -136,20 +100,3 @@ select histogram()
 statement error
 select histogram(*)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE enums (e mood)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO enums VALUES ('happy'), ('ok')
-
-# TODO: unsupported feature
-# query I
-# SELECT histogram(e) FROM enums
-# ----
-# {ok=1, happy=1}

@@ -1,70 +1,9 @@
 statement ok
 DROP TABLE IF EXISTS a
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE POINT AS STRUCT(i INTEGER, j INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE a(b POINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a VALUES ({'i': 3, 'j': 4});
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM a;
-# ----
-# {'i': 3, 'j': 4}
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM a;
-# ----
-# {'i': 3, 'j': 4}
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a VALUES (NULL);
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM a;
-# ----
-# {'i': 3, 'j': 4}
-# NULL
-
 # unnamed struct
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a VALUES (ROW(2, 3));
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM a;
-# ----
-# {'i': 3, 'j': 4}
-# NULL
-# {'i': 2, 'j': 3}
-
 # null values in children
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a VALUES (ROW(3, NULL)), (ROW(NULL, 4));
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM a;
-# ----
-# {'i': 3, 'j': 4}
-# NULL
-# {'i': 2, 'j': 3}
-# {'i': 3, 'j': NULL}
-# {'i': NULL, 'j': 4}
 
 # incorrect number of struct entries
 

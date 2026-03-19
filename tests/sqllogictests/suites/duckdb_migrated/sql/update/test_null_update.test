@@ -1,0 +1,232 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2), (3), (NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# 1
+# 2
+# 3
+
+# test updating from a non-null value to a null value
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=NULL WHERE a=2
+
+# not seen yet by con2, only by con1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# 1
+# 2
+# 3
+
+# commit
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# now test a rollback
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=NULL WHERE a=3
+
+# not seen yet by con2, only by con1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# NULL
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# test updating from a null value to a non-null value
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=10 WHERE a IS NULL
+
+# not seen yet by con2, only by con1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 3
+# 10
+# 10
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# now rollback
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# values are back to original values
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# perform the same update, but this time commit
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=10 WHERE a IS NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 3
+# 10
+# 10
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 1
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 3
+# 10
+# 10
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 3
+# 10
+# 10

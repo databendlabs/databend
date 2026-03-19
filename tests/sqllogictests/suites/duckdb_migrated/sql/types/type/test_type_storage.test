@@ -1,0 +1,5 @@
+statement ok
+DROP TABLE IF EXISTS T
+
+statement error
+CREATE TABLE T  (v TYPE);

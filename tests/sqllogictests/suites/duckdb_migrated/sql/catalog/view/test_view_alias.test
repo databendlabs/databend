@@ -29,34 +29,3 @@ SELECT j, j2 FROM v1
 statement ok
 DROP VIEW v1
 
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v1 (j, "j2") AS SELECT i,i+1, i+2 FROM t1
-
-# TODO: unsupported feature
-# query II
-# SELECT j, j2 FROM v1
-# ----
-# 41	42
-# 42	43
-# 43	44
-
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW v1
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v1 (j, "j2") AS SELECT i,i+1, i+2 as x FROM t1
-
-# TODO: unsupported feature
-# query III
-# SELECT j, j2, x FROM v1
-# ----
-# 41	42	43
-# 42	43	44
-# 43	44	45
-
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW v1

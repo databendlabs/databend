@@ -8516,3 +8516,150 @@
 | `tpcds` | `unsupported feature` | 5 | sql/tpcds/tpcds_sf0.test | `statement ok<br>PRAGMA tpcds(${i})` |  |
 | `tpcds_queries` | `unsupported feature` | 1 | sql/tpcds/tpcds_sf0.test | `statement ok<br>SELECT * FROM tpcds_queries()` |  |
 | `tpch` | `unsupported feature` | 5 | sql/tpch/tpch_sf0.test | `statement ok<br>PRAGMA tpch(${i})` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T22:04:04.792421+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 562
+- Files with issues: 2646
+- Unknown function TODOs: 1226
+- Unsupported feature TODOs: 35182
+- Unknown function unique issues: 4
+- Unsupported feature unique issues: 120
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| `decade` | 1 | sql/types/timestamp/timestamp_limits.test |  |
+| `get_type` | 3 | sql/types/type/test_make_get_type.test |  |
+| `json_transform_strict` | 25 | sql/json/scalar/test_json_transform.test |  |
+| `monthname` | 1 | sql/types/timestamp/timestamp_limits.test |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `abbreviations` | `unsupported feature` | 1 | sql/types/timestamp/test_infinite_time.test | `statement ok<br>CREATE TABLE abbreviations (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);` |  |
+| `all_nulls` | `unsupported feature` | 1 | sql/window/test_value_orderby.test | `statement ok<br>CREATE TABLE all_nulls (order_col int,value_col float,partition_col int);` |  |
+| `animal_list` | `unsupported feature` | 1 | sql/variables/test_variables.test | `statement ok<br>CREATE TABLE animal_list(a VARCHAR);` |  |
+| `arbitrary` | `unsupported feature` | 3 | sql/types/timestamp/test_infinite_time.test | `query III<br>SELECT ARBITRARY(dt), FIRST(dt), LAST(dt)<br>FROM specials;<br>----<br>infinity	infinity	1970-01-01` |  |
+| `array_concat` | `unsupported feature` | 1 | sql/types/struct/struct_different_names.test | `query III<br>SELECT x, y, ARRAY_CONCAT(x, y) FROM T;<br>----<br>[{'a': A, 'b': B}]	[{'b': BB, 'a': AA}]	[{'a': A, 'b': B}, {'a': AA, 'b': BB}]` |  |
+| `array_sort` | `unsupported feature` | 2 | sql/types/nested/map/test_map_subscript_from_column.test<br>sql/types/nested/map/test_map_subscript_where.test | `query I<br>select v_map[array_sort(k, 'DESC', 'NULLS LAST')[1]] from t2 limit 10;<br>----<br>4.000<br>8.000<br>12.000<br>16.000<br>20.000<br>24.000<br>28.000<br>32.000<br>36.000<br>40.000` |  |
+| `bitstring_agg` | `unsupported feature` | 1 | sql/window/test_empty_frames.test | `query II<br>SELECT id, bitstring_agg(id, 1, 3) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING)<br>FROM t1<br>ORDER BY 1;<br>----<br>1	NULL<br>2	NULL<br>NULL	NULL` |  |
+| `bug` | `unsupported feature` | 2 | sql/upsert/insert_or_replace/returning_nothing.test | `statement ok<br>CREATE UNIQUE INDEX idx ON bug (name);` |  |
+| `capitals` | `unsupported feature` | 1 | sql/upsert/postgres/planner_preprocessing.test | `statement ok<br>create table capitals (<br>	name		text,<br>	population	float8,<br>	altitude	int,<br>	state		char(2),<br>	unique (name)<br>);` |  |
+| `cardinality` | `unsupported feature` | 8 | sql/types/nested/map/test_map_cardinality.test | `query I<br>select CARDINALITY(MAP())<br>----<br>0` |  |
+| `date_dim` | `unsupported feature` | 1 | sql/window/test_window_tpcds.test | `statement ok<br>CREATE TABLE date_dim(d_year INTEGER, d_moy INTEGER, d_date_sk INTEGER);` |  |
+| `db_city` | `unsupported feature` | 1 | sql/window/test_window_order_collate.test | `statement ok<br>CREATE TABLE db_city (name VARCHAR, city VARCHAR COLLATE NOCASE);` |  |
+| `dbplyr_052` | `unsupported feature` | 1 | sql/window/test_window_dbplyr.test | `statement ok<br>CREATE TABLE dbplyr_052 (x INTEGER, g DOUBLE, w int)` |  |
+| `dense_rank` | `unsupported feature` | 5 | sql/window/test_basic_window.test<br>sql/window/test_streaming_window.test<br>sql/window/test_window_filter.test<br>sql/window/test_window_wisconsin.test | `query TT<br>explain select dense_rank() over (), i, j from integers<br>----` |  |
+| `docs` | `unsupported feature` | 1 | sql/update/test_update_from.test | `statement ok<br>CREATE TABLE docs(id INTEGER, len INTEGER);` |  |
+| `dropcol` | `unsupported feature` | 6 | sql/upsert/postgres/planner_preprocessing.test | `statement ok<br>create table dropcol(key int primary key, drop1 int, keep1 text, drop2 numeric, keep2 float);` |  |
+| `duckdb_variables` | `unsupported feature` | 1 | sql/variables/test_variables.test | `query III<br>FROM duckdb_variables();<br>----<br>animal	bird	VARCHAR` |  |
+| `element_at` | `unsupported feature` | 2 | sql/types/nested/map/test_map_subscript.test | `query I<br>select element_at(m,3) from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as m) as T<br>----<br>[8]` |  |
+| `empsalary` | `unsupported feature` | 5 | sql/window/test_basic_window.test<br>sql/window/test_evil_window.test<br>sql/window/test_invalid_window.test<br>sql/window/test_naive_aggregation.test<br>sql/window/test_nthvalue.test | `statement ok<br>CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)` |  |
+| `empty_unsorted` | `unsupported feature` | 1 | sql/window/test_evil_window.test | `statement ok<br>CREATE TABLE empty_unsorted(c0 VARCHAR);` |  |
+| `excluded` | `unsupported feature` | 1 | sql/upsert/postgres/planner_preprocessing.test | `statement ok<br>create table excluded(key int primary key, data text);` |  |
+| `fill` | `unsupported feature` | 5 | sql/window/test_fill_orderby.test | `statement error<br>select fill(i::VARCHAR order by i) over (order by i) from range(0, 3) tbl(i);` |  |
+| `filtered` | `unsupported feature` | 2 | sql/types/nested/map/test_map_keys.test<br>sql/types/nested/map/test_map_values.test | `statement ok<br>create table filtered (<br>	col map(integer, integer),<br>	idx integer<br>);` |  |
+| `filtered_struct` | `unsupported feature` | 1 | sql/types/nested/struct/test_struct_keys.test | `statement ok<br>CREATE TABLE filtered_struct (<br>    col STRUCT(a INT, b VARCHAR),<br>    idx INTEGER<br>);` |  |
+| `filtered_struct_values` | `unsupported feature` | 1 | sql/types/nested/struct/test_struct_values.test | `statement ok<br>CREATE TABLE filtered_struct_values (<br>    col STRUCT(a INT, b VARCHAR),<br>    idx INTEGER<br>);` |  |
+| `index_tbl` | `unsupported feature` | 2 | sql/upsert/upsert_conflict_target_index.test | `statement ok<br>create unique index other_index on index_tbl(i);` |  |
+| `input` | `unsupported feature` | 2 | sql/types/nested/map/test_map_vector_types.test | `query II nosort expected<br>select true, true from input()<br>----` |  |
+| `insertconflicttest` | `unsupported feature` | 8 | sql/upsert/postgres/composite_key.test<br>sql/upsert/postgres/non_spurious_duplicate_violation.test<br>sql/upsert/postgres/single_key.test | `statement ok<br>create unique index expr_key_index on insertconflicttest(fruit);` |  |
+| `isfinite` | `unsupported feature` | 1 | sql/types/timestamp/test_infinite_time.test | `query III<br>SELECT isfinite(ts), isfinite(tstz), isfinite(dt)<br>FROM specials;<br>----<br>0	0	0<br>0	0	0<br>1	1	1` |  |
+| `isinf` | `unsupported feature` | 1 | sql/types/timestamp/test_infinite_time.test | `query III<br>SELECT isinf(ts), isinf(tstz), isinf(dt)<br>FROM specials;<br>----<br>1	1	1<br>1	1	1<br>0	0	0` |  |
+| `issue10855` | `unsupported feature` | 1 | sql/window/test_negative_range.test | `statement ok<br>CREATE OR REPLACE TABLE issue10855(i INTEGER, v FLOAT);` |  |
+| `issue11995` | `unsupported feature` | 1 | sql/types/timestamp/alternative_timestamp_casts.test | `statement ok<br>CREATE TABLE issue11995 (t TIMESTAMP);` |  |
+| `issue14398` | `unsupported feature` | 1 | sql/window/test_lead_lag.test | `statement ok<br>CREATE TABLE issue14398 (date DATE, "group" INT, count INT, status STRING);` |  |
+| `issue1472` | `unsupported feature` | 1 | sql/window/test_boundary_expr.test | `statement ok<br>create table issue1472 (permno real, date date, ret real);` |  |
+| `issue17266` | `unsupported feature` | 2 | sql/window/test_lead_lag.test<br>sql/window/test_leadlag_orderby.test | `statement ok<br>CREATE TABLE issue17266(c1 INT, c2 SMALLINT, c3 BITSTRING);` |  |
+| `issue17621` | `unsupported feature` | 1 | sql/window/test_streaming_window.test | `statement ok<br>CREATE TABLE issue17621(i INT, j INT, k INT);` |  |
+| `issue6635` | `unsupported feature` | 1 | sql/window/test_ignore_nulls.test | `statement ok<br>CREATE TABLE IF NOT EXISTS issue6635(index INTEGER, data INTEGER);` |  |
+| `issue7353` | `unsupported feature` | 2 | sql/window/test_window_constant_aggregate.test | `statement ok<br>CREATE TABLE issue7353 (<br>    Season VARCHAR,<br>    Medal VARCHAR,<br>    Sex VARCHAR,<br>    Ct INT,<br>    Depth INT<br>);` |  |
+| `issue9416` | `unsupported feature` | 1 | sql/window/test_dense_rank.test | `statement ok<br>CREATE TABLE issue9416(idx VARCHAR, source VARCHAR, project VARCHAR, specimen VARCHAR, sample_id VARCHAR);` |  |
+| `item` | `unsupported feature` | 2 | sql/window/test_window_tpcds.test | `statement ok<br>CREATE TABLE item(i_category VARCHAR, i_brand VARCHAR, i_price INTEGER)` |  |
+| `lag` | `unsupported feature` | 33 | sql/window/test_evil_window.test<br>sql/window/test_ignore_nulls.test<br>sql/window/test_invalid_window.test<br>sql/window/test_lead_lag.test<br>sql/window/test_leadlag_orderby.test<br>sql/window/test_streaming_lead_lag.test<br>sql/window/test_streaming_window.test<br>sql/window/test_window_binding_ctes.test<br>sql/window/test_window_filter.test<br>sql/window/test_window_wisconsin.test | `query TT<br>EXPLAIN<br>SELECT i, LAG(i, 1) OVER() AS i1<br>FROM range(0, 10) tbl(i);<br>----` |  |
+| `large_list` | `unsupported feature` | 2 | sql/types/struct/remap_struct_in_list.test | `statement ok<br>CREATE TABLE large_list(s STRUCT(i INTEGER)[]);` |  |
+| `last_value` | `unsupported feature` | 11 | sql/window/test_basic_window.test<br>sql/window/test_ignore_nulls.test<br>sql/window/test_streaming_window.test<br>sql/window/test_value_orderby.test<br>sql/window/test_wide_orderby.test<br>sql/window/test_window_filter.test | `query TT<br>explain select last_value(i) over (), first_value(i) over () from integers<br>----` |  |
+| `list_extract_test` | `unsupported feature` | 1 | sql/window/test_list_window.test | `statement ok<br>CREATE TABLE list_extract_test(i INTEGER, g INTEGER);` |  |
+| `make_type` | `unsupported feature` | 3 | sql/types/type/test_make_get_type.test | `statement error<br>SELECT make_type('STRUCT', make_type('INTEGER'), b := make_type('VARCHAR'));` |  |
+| `map_concat` | `unsupported feature` | 18 | sql/types/nested/map/test_map_concat.test | `statement error<br>select map_concat();` |  |
+| `map_contains` | `unsupported feature` | 3 | sql/types/nested/map/test_map_contains.test | `query I<br>SELECT map_contains(map([],[]), 1) AS res;<br>----<br>0` |  |
+| `map_contains_entry` | `unsupported feature` | 2 | sql/types/nested/map/test_map_contains.test | `query I<br>SELECT map_contains_entry(map([],[]), 1, 2) AS res;<br>----<br>0` |  |
+| `map_contains_value` | `unsupported feature` | 4 | sql/types/nested/map/test_map_contains.test | `query I<br>SELECT map_contains_value(map([],[]), 1) AS res;<br>----<br>0` |  |
+| `map_entries` | `unsupported feature` | 15 | sql/types/nested/map/test_map_entries.test | `query I<br>select map_entries(MAP())<br>----<br>[]` |  |
+| `map_extract` | `unsupported feature` | 9 | sql/types/nested/map/test_map_subscript.test<br>sql/types/nested/map/test_map_subscript_composite.test | `query I<br>select MAP_EXTRACT(NULL, NULL)<br>----<br>NULL` |  |
+| `map_extract_value` | `unsupported feature` | 5 | sql/types/nested/map/test_map_subscript.test | `query I<br>select MAP_EXTRACT_VALUE(NULL, NULL)<br>----<br>NULL` |  |
+| `map_keys` | `unsupported feature` | 14 | sql/types/nested/map/test_map_keys.test<br>sql/types/nested/map/test_map_vector_types.test | `query I<br>select map_keys(NULL)<br>----<br>NULL` |  |
+| `map_keys_macro` | `unsupported feature` | 2 | sql/types/nested/map/test_map_keys.test | `statement ok<br>CREATE MACRO map_keys_macro(x) AS (map_keys(x))` |  |
+| `map_values` | `unsupported feature` | 14 | sql/types/nested/map/test_map_values.test | `query I<br>select map_values(NULL)<br>----<br>NULL` |  |
+| `map_values_macro` | `unsupported feature` | 2 | sql/types/nested/map/test_map_values.test | `statement ok<br>CREATE MACRO map_values_macro(x) AS (map_values(x))` |  |
+| `mixed_types` | `unsupported feature` | 2 | sql/types/struct/struct_contains.test<br>sql/types/struct/struct_position.test | `statement ok<br>CREATE TABLE mixed_types(c0 INT, c1 BOOL, c2 DECIMAL(10, 2), val VARCHAR);` |  |
+| `mtcars` | `unsupported feature` | 1 | sql/window/window_mtcars.test | `statement ok<br>CREATE TABLE mtcars (mpg DECIMAL, cyl INTEGER, disp DECIMAL, hp INTEGER, drat DECIMAL, wt DECIMAL, qsec DECIMAL, vs INTEGER, am INTEGER, gear INTEGER, carb INTEGER);` |  |
+| `multiple_unique` | `unsupported feature` | 2 | sql/upsert/insert_or_replace/unique_constraint.test<br>sql/upsert/insert_or_replace/unique_constraint_and_non_unique_index.test | `statement ok<br>create table multiple_unique(<br>	a int unique,<br>	b int unique,<br>	c int<br>);` |  |
+| `nested_structs` | `unsupported feature` | 1 | sql/types/struct/struct_cast.test | `statement ok<br>CREATE TABLE nested_structs(s ROW(i INTEGER, j ROW(a INTEGER, b INTEGER)))` |  |
+| `new_values` | `unsupported feature` | 1 | sql/update/update_join_nulls.test | `statement ok<br>WITH new_values(tid, new_val) AS (<br>	VALUES (1, NULL)<br>)<br>UPDATE t<br>FROM new_values<br>WHERE table_id=tid<br>;` |  |
+| `nonexistingfunction` | `unsupported feature` | 1 | sql/window/test_scalar_window.test | `statement error<br>SELECT nonexistingfunction() OVER ()` |  |
+| `nth_value` | `unsupported feature` | 18 | sql/window/test_ignore_nulls.test<br>sql/window/test_nthvalue.test<br>sql/window/test_value_orderby.test<br>sql/window/test_window_filter.test<br>sql/window/test_window_rows.test | `query I<br>SELECT nth_value(value_col, 1 ORDER BY order_col IGNORE NULLS) over (PARTITION BY partition_col) <br>FROM all_nulls;<br>----<br>NULL<br>NULL` |  |
+| `ntile` | `unsupported feature` | 18 | sql/window/test_invalid_window.test<br>sql/window/test_ntile.test<br>sql/window/test_split_partition_heap.test<br>sql/window/test_window_filter.test<br>sql/window/test_window_wisconsin.test | `statement ok<br>SELECT (ntile(5002) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) >= 0), c5 FROM partsupp;` |  |
+| `null_list` | `unsupported feature` | 1 | sql/types/test_null_type.test | `statement ok<br>create table null_list (i "null"[])` |  |
+| `null_map` | `unsupported feature` | 1 | sql/types/test_null_type.test | `statement ok<br>create table null_map (i map("null", "null"))` |  |
+| `null_struct` | `unsupported feature` | 1 | sql/types/test_null_type.test | `statement ok<br>create table null_struct (i struct(n "null"))` |  |
+| `numeric` | `unsupported feature` | 1 | sql/types/numeric/test_empty_numeric.test | `query II<br>SELECT 1.25::FLOAT::NUMERIC, 1.25::FLOAT::NUMERIC()<br>----<br>1.250	1.250` |  |
+| `numerics` | `unsupported feature` | 1 | sql/types/numeric/test_empty_numeric.test | `statement ok<br>CREATE TABLE numerics(i NUMERIC(), j NUMERIC)` |  |
+| `over` | `unsupported feature` | 9 | sql/window/test_empty_frames.test | `query II<br>SELECT id, ${agg}(id, id) OVER (PARTITION BY ch ORDER BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING)<br>FROM t1<br>ORDER BY 1;<br>----<br>1	0<br>2	0<br>NULL	0<br><br>endloop` |  |
+| `percent_rank` | `unsupported feature` | 4 | sql/window/test_streaming_window.test<br>sql/window/test_window_filter.test<br>sql/window/test_window_wisconsin.test | `query TT<br>explain select percent_rank() over (), i, j from integers<br>----` |  |
+| `quantile` | `unsupported feature` | 3 | sql/window/test_quantile_window.test<br>sql/window/test_window_cse.test | `statement ok<br>CREATE VIEW noncse AS<br>SELECT<br>    quantile(x, 0.3) over() as q3,<br>    quantile(x, 0.7) over() as q7<br>FROM generate_series(1, 10) as tbl(x);` |  |
+| `read_json_objects` | `unsupported feature` | 17 | sql/json/issues/issue13725.test<br>sql/json/issues/read_json_memory_usage.test<br>sql/json/table/read_json_objects.test | `query I<br>select * from read_json_objects('{DATA_DIR}/json/empty.ndjson')<br>----` |  |
+| `read_ndjson` | `unsupported feature` | 11 | sql/json/table/read_json.test<br>sql/json/table/read_json_union.test | `query I<br>SELECT * FROM read_ndjson('{DATA_DIR}/json/example_n.ndjson', columns={id: 'INTEGER'})<br>----<br>1<br>2<br>3<br>4<br>5` |  |
+| `remap_struct` | `unsupported feature` | 29 | sql/types/struct/remap_struct.test<br>sql/types/struct/remap_struct_in_list.test<br>sql/types/struct/remap_struct_in_map.test | `statement error<br>SELECT remap_struct({'i': 1, 'j': 2}, NULL, {'v2': 'i'}, NULL);` |  |
+| `rides` | `unsupported feature` | 1 | sql/window/test_range_optimisation.test | `statement ok<br>CREATE TABLE rides (<br>	id INTEGER,<br>	requested_date DATE,<br>	city VARCHAR,<br>	wait_time INTEGER<br>);` |  |
+| `scoreboard` | `unsupported feature` | 1 | sql/window/test_ntile.test | `statement ok<br>CREATE TABLE Scoreboard(TeamName VARCHAR, Player VARCHAR, Score INTEGER);` |  |
+| `set` | `unsupported feature` | 9 | sql/types/struct/update_empty_row.test<br>sql/update/test_multiple_assignment.test | `statement error<br>UPDATE t0 SET (c0) = ROW();` |  |
+| `single` | `unsupported feature` | 2 | sql/types/time/test_time_tz_icu.test | `statement ok<br>INSERT INTO single(c0) VALUES ('12:34:56');` |  |
+| `single_constraint` | `unsupported feature` | 1 | sql/upsert/upsert_basic.test | `statement ok<br>create or replace table single_constraint (<br>	i integer PRIMARY KEY,<br>	j integer,<br>	k varchar,<br>);` |  |
+| `specials` | `unsupported feature` | 1 | sql/types/timestamp/test_infinite_time.test | `statement ok<br>CREATE TABLE specials (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);` |  |
+| `stddev_pop` | `unsupported feature` | 3 | sql/window/test_basic_window.test<br>sql/window/test_naive_aggregation.test<br>sql/window/test_streaming_window.test | `statement ok<br>SELECT <br>	k, <br>	STDDEV_POP(i), <br>	SUM(j), <br>	STDDEV_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf <br>FROM issue17621 <br>GROUP BY ROLLUP(k)` |  |
+| `stmt` | `unsupported feature` | 1 | sql/types/nested/struct/test_struct_values.test | `query I<br>EXECUTE stmt({x: 5, y: 'test'});<br>----<br>(5, test)` |  |
+| `store` | `unsupported feature` | 1 | sql/window/test_window_tpcds.test | `statement ok<br>CREATE TABLE store(s_store_name VARCHAR, s_company_name VARCHAR, s_store_sk INTEGER);` |  |
+| `store_sales` | `unsupported feature` | 1 | sql/window/test_window_tpcds.test | `statement ok<br>CREATE TABLE store_sales(ss_sales_price DECIMAL, ss_item_sk INTEGER, ss_sold_date_sk INTEGER, ss_store_sk INTEGER);` |  |
+| `str_split` | `unsupported feature` | 1 | sql/types/nested/map/test_map_and_lambdas.test | `statement ok<br>CREATE TABLE i AS SELECT str_split('my yay', ' ') AS l, range AS i FROM range(0, 3);` |  |
+| `struct_cast_tbl` | `unsupported feature` | 1 | sql/types/variant/implicit_cast_from_variant.test | `statement ok<br>create table struct_cast_tbl(a STRUCT(a VARCHAR));` |  |
+| `struct_cast_tbl2` | `unsupported feature` | 1 | sql/types/variant/implicit_cast_from_variant.test | `statement ok<br>create table struct_cast_tbl2(a STRUCT(a INTEGER[]));` |  |
+| `struct_cast_tbl3` | `unsupported feature` | 1 | sql/types/variant/implicit_cast_from_variant.test | `statement ok<br>create table struct_cast_tbl3(a STRUCT(a STRUCT(b VARCHAR, c BOOL, a DATE)[]));` |  |
+| `struct_concat` | `unsupported feature` | 12 | sql/types/struct/struct_concat.test | `statement error<br>SELECT struct_concat();` |  |
+| `struct_contains` | `unsupported feature` | 30 | sql/types/struct/struct_contains.test | `query I<br>SELECT struct_contains(NULL, 1);<br>----<br>NULL` |  |
+| `struct_keys` | `unsupported feature` | 9 | sql/types/nested/struct/test_struct_keys.test | `statement error<br>select struct_keys(42);` |  |
+| `struct_position` | `unsupported feature` | 34 | sql/types/struct/struct_position.test | `query I<br>SELECT struct_position(NULL, 1)<br>----<br>NULL` |  |
+| `struct_tbl` | `unsupported feature` | 1 | sql/types/union/struct_to_union.test | `statement ok<br>create table struct_tbl(<br>	col STRUCT(<br>		tag UINT8,<br>		A BOOL,<br>		B INTEGER,<br>		C TINYINT<br>	)<br>)` |  |
+| `struct_values` | `unsupported feature` | 14 | sql/types/nested/struct/test_struct_values.test | `statement error<br>select struct_values(42);` |  |
+| `student` | `unsupported feature` | 2 | sql/update/test_update_issue_3170.test | `statement ok<br>CREATE TABLE student(id INTEGER, name VARCHAR, PRIMARY KEY(id));` |  |
+| `subtract` | `unsupported feature` | 2 | sql/types/timestamp/test_infinite_time.test | `statement error<br>select<br>  subtract(<br>    cast('infinity' as timestamp), timestamp '1970-01-01')` |  |
+| `summarize` | `unsupported feature` | 1 | sql/show_select/test_summarize.test | `query IIIIIIIIIIII<br>SUMMARIZE (SELECT '1:02:03.000000+05:30'::TIMETZ AS ttz);<br>----<br>ttz	TIME WITH TIME ZONE	01:02:03+05:30	01:02:03+05:30	1	19:32:03+00	NULL	01:02:42+05:30:39	01:02:42+05:30:39	01:02:42+05:30:39	1	0.00` |  |
+| `sw1` | `unsupported feature` | 2 | sql/window/test_streaming_window.test | `query II<br>EXECUTE sw1(2);<br>----<br>10	1<br>11	2` |  |
+| `t86` | `unsupported feature` | 2 | sql/window/test_window_order_collate.test | `statement ok<br>INSERT INTO t86(c0) VALUES (''), ('cOB4');` |  |
+| `t_struct_constant` | `unsupported feature` | 1 | sql/types/nested/struct/test_struct_keys.test | `statement ok<br>CREATE TABLE t_struct_constant(x INTEGER);` |  |
+| `t_struct_flat` | `unsupported feature` | 1 | sql/types/nested/struct/test_struct_keys.test | `statement ok<br>CREATE TABLE t_struct_flat(col STRUCT(a INT, b VARCHAR), idx INTEGER);` |  |
+| `t_struct_values_flat` | `unsupported feature` | 1 | sql/types/nested/struct/test_struct_values.test | `statement ok<br>CREATE TABLE t_struct_values_flat(col STRUCT(a INT, b VARCHAR), idx INTEGER);` |  |
+| `tenk1d` | `unsupported feature` | 1 | sql/window/test_no_default_window_spec.test | `statement ok<br>create table tenk1d(ten int4, four int4)` |  |
+| `terms` | `unsupported feature` | 1 | sql/update/test_update_from.test | `statement ok<br>CREATE TABLE terms(docid INTEGER, term INTEGER);` |  |
+| `test_maps` | `unsupported feature` | 2 | sql/types/nested/map/test_map_contains.test | `statement ok<br>CREATE TABLE test_maps(m MAP(INT, INT), k INT, v INT, res_val BOOLEAN, res_key BOOLEAN);` |  |
+| `test_stress_update_issue_19688` | `unsupported feature` | 1 | sql/update/test_stress_update_issue_19688.test | `statement ok<br>CREATE TABLE test_stress_update_issue_19688 (<br>    id INTEGER,<br>    val INTEGER<br>)` |  |
+| `test_structs` | `unsupported feature` | 9 | sql/types/struct/nested_struct_projection_pushdown.test<br>sql/types/struct/struct_projection_pushdown.test<br>sql/types/struct/struct_projection_pushdown_in_storage.test | `statement ok<br>CREATE OR REPLACE TABLE test_structs(id INT, s VARIANT);` |  |
+| `test_structs_nested` | `unsupported feature` | 4 | sql/types/struct/nested_struct_projection_pushdown.test | `statement ok<br>CREATE OR REPLACE TABLE test_structs_nested(id INT, base VARIANT);` |  |
+| `test_table_raw` | `unsupported feature` | 1 | sql/upsert/upsert_distinct_bug.test | `statement ok<br>CREATE TABLE test_table_raw(id VARCHAR, name VARCHAR);` |  |
+| `timestamp_two` | `unsupported feature` | 1 | sql/types/timestamp/test_timestamp_types.test | `statement ok<br>CREATE TABLE IF NOT EXISTS timestamp_two (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );` |  |
+| `timetz_byte_comparable` | `unsupported feature` | 10 | sql/types/time/test_time_tz_collate.test | `query I<br>SELECT timetz_byte_comparable('09:00:00+00:00'::TIMETZ) >timetz_byte_comparable('09:01:00+01:00'::TIMETZ);<br>----<br>True` |  |
+| `tmp_edges` | `unsupported feature` | 1 | sql/upsert/upsert_duplicates_issue.test | `statement ok<br>CREATE TABLE tmp_edges(from_v VARCHAR, to_v VARCHAR, PRIMARY KEY(from_v, to_v));` |  |
+| `ts_precision` | `unsupported feature` | 4 | sql/types/timestamp/timestamp_precision.test | `statement error<br>CREATE TABLE ts_precision(sec TIMESTAMP(10));` |  |
+| `uhugeints2` | `unsupported feature` | 1 | sql/types/uhugeint/test_uhugeint_ops.test | `statement ok<br>CREATE TABLE uhugeints2(h UHUGEINT);<br>INSERT INTO uhugeints2 VALUES (42::UHUGEINT);` |  |
+| `union_extract` | `unsupported feature` | 10 | sql/types/union/union_extract.test | `statement error<br>SELECT union_extract(1, 'b');` |  |
+| `union_tbl` | `unsupported feature` | 2 | sql/types/union/struct_to_json_union.test<br>sql/types/union/struct_to_union.test | `statement ok<br>create table union_tbl(<br>	col UNION(<br>		a JSON,<br>		b INTEGER,<br>		c TINYINT<br>	)<br>)` |  |
+| `variant_normalize` | `unsupported feature` | 3 | sql/types/struct/nested_struct_projection_pushdown.test<br>sql/types/variant/tpch_test.test | `statement ok<br>create table foo.variant_lineitem as select variant_normalize(STRUCT_PACK(*COLUMNS(*))::VARIANT) from lineitem;` |  |
+| `win` | `unsupported feature` | 1 | sql/window/test_lead_lag.test | `statement ok<br>create table win(id int, v int, t int, f float, s varchar);` |  |
+| `wintest` | `unsupported feature` | 1 | sql/window/test_tpcds_q49.test | `statement ok<br>create table wintest( item integer, return_ratio numeric, currency_ratio numeric)` |  |

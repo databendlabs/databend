@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# query I
+# select timestamptz '2021-11-15 02:30:00';
+# ----
+# 2021-11-15 02:30:00+00
+
+# Cast from TIMESTAMP
+
+# TODO: unsupported feature
+# query I
+# select '2021-11-15 02:30:00'::TIMESTAMP::TIMESTAMPTZ;
+# ----
+# 2021-11-15 02:30:00+00
+
+# No casting to DATE or TIME
+
+# TODO: unsupported feature
+# statement error
+# SELECT '2021-04-29 10:50:09-05'::TIMESTAMPTZ::DATE
+
+# TODO: unsupported feature
+# statement error
+# SELECT '2021-04-29 10:50:09-05'::TIMESTAMPTZ::TIME
+
+# TODO: unsupported feature
+# query I
+# SELECT '1880-05-15T12:00:00+00:50:20'::TIMESTAMPTZ;
+# ----
+# 1880-05-15 11:09:40+00

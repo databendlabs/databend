@@ -4,29 +4,5 @@ DROP TABLE IF EXISTS m
 statement ok
 DROP TABLE IF EXISTS m_2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE mood_2 AS ENUM ('1', '2', '3');
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE m (
-#     m mood
-# );
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE m_2 (
-#     m mood_2
-# );
-
-# TODO: unsupported feature
-# statement ok
-# insert into m_2 values ('1')
-
 statement error
 insert into m SELECT * FROM m_2

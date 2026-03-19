@@ -1,22 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (
-# 	u_2 UNION("string" VARCHAR, "bool" BOOLEAN),
-# 	u_1 UNION("string" VARCHAR),
-# 	i INTEGER,
-# 	u_list UNION("int" INTEGER, "list" INTEGER[], "bool" BOOLEAN));
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES
-# 	('hello', 'world', 42, [1, 2, 3]),
-# 	(NULL, NULL, NULL, NULL),
-# 	(true, NULL, 44, 45),
-# 	(false, 'wazzup', false, [1]);
-
 # We cannot create an index on union types.
 
 statement error
@@ -25,153 +9,26 @@ CREATE INDEX idx_u_2 ON tbl (u_2);
 statement error
 CREATE INDEX idx_u_1 ON tbl (u_1);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx_i ON tbl (i);
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX idx_i;
-
 statement error
 CREATE INDEX idx_u_list ON tbl (u_list);
 
 statement error
 CREATE INDEX idx_u_list ON tbl (i, u_list);
 
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM tbl ORDER BY ALL;
-# ----
-# hello	world	42	[1, 2, 3]
-# 0	wazzup	0	[1]
-# 1	NULL	44	45
-# NULL	NULL	NULL	NULL
-
-
 # Unique indexes on a union member.
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_u_2_1 ON tbl ((u_2.string));
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_u_2_2 ON tbl ((u_2.bool));
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_u_1 ON tbl ((u_1.string));
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_list_1 ON tbl ((u_list.int));
 
 statement error
 CREATE UNIQUE INDEX idx_list_2 ON tbl ((u_list.list));
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_list_3 ON tbl ((u_list.bool));
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES ('helloo', 'worldd', 43, [1, 2, 3, 4]);
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM tbl ORDER BY ALL;
-# ----
-# hello	world	42	[1, 2, 3]
-# helloo	worldd	43	[1, 2, 3, 4]
-# 0	wazzup	0	[1]
-# 1	NULL	44	45
-# NULL	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# query I
-# SELECT u_1.string FROM tbl WHERE u_2 = 'helloo';
-# ----
-# worldd
-
 
 # Test triggering a constraint violation.
 
 statement error
 INSERT INTO tbl VALUES ('helloo', 'nop', 7, true);
 
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX idx_u_2_1;
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX idx_u_2_2;
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX idx_u_1;
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX idx_list_1;
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX idx_list_3;
-
-
 # Unique indexes on compound union members.
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_c_1 ON tbl ((u_2.string), (u_1.string));
 
 statement error
 CREATE INDEX idx_c_fail ON tbl ((u_2.string), u_list);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_c_2 ON tbl ((u_list.int), (u_1.string), (u_2.bool));
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES ('sunshine', 'love', 85, true);
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM tbl ORDER BY ALL;
-# ----
-# hello	world	42	[1, 2, 3]
-# helloo	worldd	43	[1, 2, 3, 4]
-# sunshine	love	85	1
-# 0	wazzup	0	[1]
-# 1	NULL	44	45
-# NULL	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# query I
-# SELECT u_list.bool FROM tbl WHERE u_1.string = 'love';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM tbl ORDER BY ALL;
-# ----
-# hello	world	42	[1, 2, 3]
-# helloo	worldd	43	[1, 2, 3, 4]
-# sunshine	love	85	1
-# 0	wazzup	0	[1]
-# 1	NULL	44	45
-# NULL	NULL	NULL	NULL
-
-# TODO: unsupported feature
-# query I
-# SELECT u_list.bool FROM tbl WHERE u_1.string = 'love';
-# ----
-# 1
-
 
 # Test triggering a constraint violation.
 

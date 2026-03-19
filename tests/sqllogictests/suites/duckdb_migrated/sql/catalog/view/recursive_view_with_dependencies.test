@@ -1,7 +1,3 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS foo
-
 statement ok
 DROP VIEW IF EXISTS foo2
 
@@ -19,16 +15,9 @@ INSERT INTO test(val) VALUES (1), (2), (3);
 statement ok
 CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
 
-# TODO: result differs
-# statement error
-# CREATE OR REPLACE VIEW foo AS (SELECT * FROM foo);
-
 statement ok
 CREATE OR REPLACE VIEW foo AS (SELECT * FROM test);
 
 statement ok
 CREATE OR REPLACE VIEW foo2 AS (SELECT * FROM foo);
 
-# TODO: result differs
-# statement error
-# CREATE OR REPLACE VIEW foo AS (SELECT (SELECT * FROM foo2));

@@ -77,13 +77,6 @@ FROM a ORDER BY 1
 statement ok
 insert into a values (42);
 
-# TODO: unsupported feature
-# query I
-# WITH t(x) AS MATERIALIZED (SELECT 1)
-# DELETE FROM a WHERE i IN (WITH s(x) AS MATERIALIZED (SELECT x + 41 FROM t) SELECT * FROM t);
-# ----
-# 1
-
 query I
 FROM a ORDER BY 1
 ----
@@ -92,13 +85,6 @@ FROM a ORDER BY 1
 2
 42
 99
-
-# TODO: unsupported feature
-# query I
-# WITH t(x) AS MATERIALIZED (SELECT 1)
-# DELETE FROM a WHERE i IN (WITH s(x) AS MATERIALIZED (SELECT x + 41 FROM t) SELECT * FROM s);
-# ----
-# 1
 
 query I
 FROM a ORDER BY 1

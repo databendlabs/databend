@@ -10,54 +10,6 @@ CREATE TABLE a(i INTEGER);
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
 
@@ -73,13 +25,8 @@ INSERT INTO a SELECT * FROM range(0, 1024, 1);
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
 statement ok
 INSERT INTO a SELECT * FROM range(0, 1024, 1);
-
 
 # verify the count
 

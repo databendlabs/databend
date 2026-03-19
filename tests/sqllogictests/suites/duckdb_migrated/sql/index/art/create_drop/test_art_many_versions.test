@@ -42,56 +42,9 @@ UPDATE integers SET i=i+1
 statement error
 CREATE INDEX i_index ON integers using art(i)
 
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers
-# ----
-# 200010000.000000
-
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers WHERE i > 0
-# ----
-# 200010000.000000
-
 # con3
-
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers
-# ----
-# 200030000.000000
-
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers WHERE i > 0
-# ----
-# 200030000.000000
 
 # con4
 
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers
-# ----
-# 200050000.000000
-
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers WHERE i > 0
-# ----
-# 200050000.000000
-
 # total sum
 
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers
-# ----
-# 200070000.000000
-
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers WHERE i > 0
-# ----
-# 200070000.000000

@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('340282366920938463463374607431768211456' AS UHUGEINT)
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('340282366920938463463374607431768211456'::DOUBLE AS UHUGEINT)
+
+# TODO: unsupported feature
+# statement error
+# SELECT CAST('-1' AS UHUGEINT)
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('340282366920938463463374607431768211456' AS UHUGEINT)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('340282366920938463463374607431768211456'::DOUBLE AS UHUGEINT)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST('-1' AS UHUGEINT)
+# ----
+# NULL

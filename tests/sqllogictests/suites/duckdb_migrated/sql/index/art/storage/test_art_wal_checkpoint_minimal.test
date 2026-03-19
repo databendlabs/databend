@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS minimal_tbl
 statement ok
 CREATE TABLE minimal_tbl(i INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_minimal ON minimal_tbl(i);
-
 statement ok
 INSERT INTO minimal_tbl VALUES (42);
 
@@ -20,17 +16,6 @@ INSERT INTO minimal_tbl VALUES (44);
 statement ok
 DELETE FROM minimal_tbl where i = 42
 
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT;
-
 statement ok
 INSERT INTO minimal_tbl VALUES (42);
 
-# TODO: result differs
-# statement error
-# INSERT INTO minimal_tbl VALUES (43);
-
-# TODO: result differs
-# statement error
-# INSERT INTO minimal_tbl VALUES (44);

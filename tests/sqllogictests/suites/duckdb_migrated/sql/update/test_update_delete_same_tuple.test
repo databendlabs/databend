@@ -1,0 +1,53 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# on a normal table, we can update and delete the same tuple concurrently without a conflict
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2), (3);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=a+1;
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

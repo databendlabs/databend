@@ -1,0 +1,48 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamps
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE timestamps(ts_SEC TIMESTAMP_S, ts_MS TIMESTAMP_MS, ts TIMESTAMP, ts_NS TIMESTAMP_NS)
+
+# FIXME - we don't actually support nanosecond precision in string parsing
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamps VALUES ('2000-01-01 01:12:23', '2000-01-01 01:12:23.123', '2000-01-01 01:12:23.123456', '2000-01-01 01:12:23.123457');
+
+# All of these timestamps are different
+
+# TODO: unsupported feature
+# query IIIIIIIIIIII
+# SELECT
+# 	ts_SEC=ts_MS,
+# 	ts_SEC=ts,
+# 	ts_SEC=ts_NS,
+# 	ts_MS=ts,
+# 	ts_MS=ts_NS,
+# 	ts=ts_NS,
+# 	ts_MS=ts_SEC,
+# 	ts=ts_SEC,
+# 	ts_SEC=ts_NS,
+# 	ts=ts_MS,
+# 	ts_NS=ts_MS,
+# 	ts_NS=ts,
+# FROM timestamps
+# ----
+# 0	0	0	0	0	0	0	0	0	0	0	0
+
+# we always prefer the timestamp with the highest precision when auto-casting
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof([TIMESTAMP '2000-01-01 01:12:23.123456', TIMESTAMP_NS '2000-01-01 01:12:23.123456'])
+# ----
+# TIMESTAMP_NS[]
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof([TIMESTAMP_NS '2000-01-01 01:12:23.123456', TIMESTAMP '2000-01-01 01:12:23.123456'])
+# ----
+# TIMESTAMP_NS[]

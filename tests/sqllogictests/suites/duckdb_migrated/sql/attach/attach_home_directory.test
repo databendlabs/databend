@@ -12,19 +12,8 @@ SELECT SUM(i) FROM s1.integers
 statement error
 ATTACH '~/home_dir.db' AS s2
 
-# TODO: unsupported feature
-# statement ok
-# DETACH s1
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH '~/home_dir.db' AS s1
-
 query I
 SELECT SUM(i) FROM s1.integers
 ----
 45
 
-# TODO: unsupported feature
-# statement ok
-# DETACH s1

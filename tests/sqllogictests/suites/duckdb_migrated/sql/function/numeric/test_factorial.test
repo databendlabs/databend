@@ -35,12 +35,6 @@ SELECT factorial(20);
 ----
 2432902008176640000
 
-# TODO: unsupported feature
-# query I
-# SELECT factorial(30);
-# ----
-# 265252859812191058636308480000000
-
 # overflow
 
 statement error

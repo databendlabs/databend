@@ -4,28 +4,8 @@ DROP TABLE IF EXISTS data
 statement ok
 CREATE TABLE data(id INTEGER, x INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE data ALTER COLUMN id DROP DEFAULT;
-
 statement ok
 INSERT INTO data VALUES (1, 0), (2, 1);
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE data ALTER COLUMN id DROP DEFAULT;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE data ALTER COLUMN id DROP DEFAULT;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE data ALTER COLUMN x DROP DEFAULT;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE data ALTER COLUMN x DROP DEFAULT;
 
 statement error
 ALTER TABLE data ALTER COLUMN j DROP DEFAULT;

@@ -1,24 +1,6 @@
-# TODO: unsupported feature
-# query I
-# select count(*) from parquet_scan(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet']);
-# ----
-# 2
-
 # glob inside a list
 
-# TODO: unsupported feature
-# query I
-# select count(*) from parquet_scan(['{DATA_DIR}/parquet-testing/glob/*.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet']);
-# ----
-# 3
-
 # read the same file multiple times
-
-# TODO: unsupported feature
-# query I
-# select count(*) from parquet_scan(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t1.parquet']);
-# ----
-# 5
 
 # file does not exist
 

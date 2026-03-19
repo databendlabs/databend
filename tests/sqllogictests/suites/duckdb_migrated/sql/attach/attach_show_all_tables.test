@@ -7,29 +7,6 @@ DROP TABLE IF EXISTS new_database.tbl
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH DATABASE ':memory:' AS new_database;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA new_database.s1;
-
 statement ok
 CREATE TABLE tbl(a INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE new_database.tbl(b INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE new_database.s1.tbl(c INTEGER);
-
-# TODO: unsupported feature
-# query IIIIII
-# SHOW ALL TABLES
-# ----
-# memory	main	tbl	[a]	[INTEGER]	0
-# new_database	main	tbl	[b]	[INTEGER]	0
-# new_database	s1	tbl	[c]	[INTEGER]	0

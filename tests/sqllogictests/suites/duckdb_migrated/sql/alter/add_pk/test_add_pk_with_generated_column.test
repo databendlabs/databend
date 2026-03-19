@@ -1,18 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test (
-# 	a INT NOT NULL,
-# 	b INT GENERATED ALWAYS AS (a) VIRTUAL,
-# 	c INT,
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (5, 4);
-
 # Cannot add a PK to generated columns.
 
 statement error
@@ -20,10 +8,6 @@ ALTER TABLE test ADD PRIMARY KEY (b);
 
 statement error
 ALTER TABLE test ADD PRIMARY KEY (b, c);
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD PRIMARY KEY (c);
 
 statement error
 INSERT INTO test VALUES (1, 4);

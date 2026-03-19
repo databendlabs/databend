@@ -1,29 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# COPY (SELECT * FROM range(0, 5) t(i)) TO (getvariable('copy_target')) WITH (HEADER)
-
 statement ok
 CREATE TABLE tbl(i INTEGER);
 
-# TODO: unsupported feature
-# query I
-# COPY tbl FROM (getvariable('copy_target'));
-# ----
-# 5
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM tbl
-# ----
-# 0
-# 1
-# 2
-# 3
-# 4
-
-# TODO: unsupported feature
-# statement ok
-# PREPARE v1 AS COPY (SELECT 'hello world' str) TO $1;

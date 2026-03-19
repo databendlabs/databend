@@ -1,27 +1,3 @@
-# TODO: unsupported feature
-# query I
-# SELECT MAP(['a', 'b', 'c'], [1, 2, NULL])::MAP(VARCHAR, VARCHAR)
-# ----
-# {a=1, b=2, c=NULL}
-
-# TODO: unsupported feature
-# query I
-# SELECT MAP(['a', 'b', 'c'], [1, 2, NULL])::MAP(VARCHAR, BIGINT)
-# ----
-# {a=1, b=2, c=NULL}
-
-# TODO: unsupported feature
-# query I
-# SELECT MAP([1, 2, 3], [1, 2, NULL])::MAP(VARCHAR, BIGINT)
-# ----
-# {1=1, 2=2, 3=NULL}
-
-# TODO: unsupported feature
-# query I
-# SELECT MAP([[1, 2, 3], [0], [123]], [1.0, 2.1, 4.9])::MAP(VARCHAR[], TINYINT)
-# ----
-# {[1, 2, 3]=1, [0]=2, [123]=5}
-
 statement error
 SELECT MAP([1, 2, 'hi'::VARCHAR], [1.0, 2.1, 4.9])::MAP(VARCHAR, TINYINT)
 

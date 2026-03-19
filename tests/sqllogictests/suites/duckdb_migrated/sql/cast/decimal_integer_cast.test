@@ -38,14 +38,3 @@ SELECT CAST(-0.55 AS BIGINT) as x;
 ----
 -1
 
-# TODO: unsupported feature
-# query I
-# SELECT CAST(0.55 AS HUGEINT) as x;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT CAST(-0.55 AS HUGEINT) as x;
-# ----
-# -1

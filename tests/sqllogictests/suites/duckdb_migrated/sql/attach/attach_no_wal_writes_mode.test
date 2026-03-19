@@ -3,56 +3,13 @@ DROP TABLE IF EXISTS no_wal_writes.tbl
 
 # If we enable alternative verification, then we disable checkpointing on shutdown.
 # Thus, we won't persist data on DETACH, as we no longer have a WAL.
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE no_wal_writes.tbl AS SELECT range AS id, 0 AS v FROM range(5_000);
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE no_wal_writes.tbl SET v = id;
-
 # We CHECKPOINT on DETACH.
 
-# TODO: unsupported feature
-# statement ok
-# DETACH no_wal_writes;
-
 # Verify no WAL creation.
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM no_wal_writes.tbl WHERE v = 0;
-# ----
-# 1
-
-# TODO: unsupported feature
-# statement ok
-# DETACH no_wal_writes;
 
 # Now test without persisting changes.
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE no_wal_writes.tbl AS SELECT range AS id, 0 AS v FROM range(5_000);
-
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT no_wal_writes;
-
 # Perform update that will NOT be persisted.
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE no_wal_writes.tbl SET v = id;
 
 # Verify no WAL creation.
 
-# TODO: unsupported feature
-# statement ok
-# DETACH no_wal_writes;
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM no_wal_writes.tbl WHERE v = 0;
-# ----
-# 5_000

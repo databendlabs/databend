@@ -16,10 +16,6 @@ CREATE TABLE test (i INTEGER, j INTEGER)
 statement ok
 INSERT INTO test VALUES (1, 1)
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD PRIMARY KEY (j)
-
 query II
 SELECT * FROM test
 ----
@@ -27,14 +23,6 @@ SELECT * FROM test
 
 statement ok
 INSERT INTO test VALUES (1, 2)
-
-# TODO: result differs
-# statement error
-# INSERT INTO test VALUES (2, 1)
-
-# TODO: result differs
-# statement error
-# INSERT INTO test VALUES (2, NULL)
 
 statement error
 ALTER TABLE test ADD PRIMARY KEY (i)
@@ -48,56 +36,13 @@ CREATE TABLE reverse (i INTEGER, j INTEGER)
 statement ok
 INSERT INTO reverse VALUES (1, 2)
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE reverse ADD PRIMARY KEY (j, i)
-
-# TODO: result differs
-# statement error
-# INSERT INTO reverse VALUES (1, 2)
-
-# TODO: result differs
-# statement error
-# INSERT INTO reverse (j, i) VALUES (2, 1)
-
 statement ok
 CREATE TABLE scan (i INTEGER, j INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO scan SELECT range, range + 1 FROM range(0, 30000);
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE scan ADD PRIMARY KEY (i)
-
-# TODO: result differs
-# query II
-# SELECT * FROM scan WHERE i = 2
-# ----
-# 2	3
 
 # test that ADD PRIMARY KEY preserves temporary flag
 
 statement ok
 CREATE TEMPORARY TABLE temp_pk_test(x INTEGER)
-
-# TODO: unsupported feature
-# query TTI
-# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_pk_test'
-# ----
-# temp_pk_test	temp	1
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE temp_pk_test ADD PRIMARY KEY (x)
-
-# TODO: unsupported feature
-# query TTI
-# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_pk_test'
-# ----
-# temp_pk_test	temp	1
-
 
 # Try to add a primary key to the view - should give clear error message
 

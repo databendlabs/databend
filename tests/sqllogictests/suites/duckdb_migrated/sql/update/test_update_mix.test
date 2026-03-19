@@ -1,0 +1,93 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2), (3);
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 6.000000
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# append from con2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (4), (5), (6);
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 6.000000
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 21.000000
+
+# delete from con2
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a < 4
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 6.000000
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 15.000000
+
+# update from con2
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=a-3
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 6.000000
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 6.000000
+
+# now commit
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 6.000000
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(a) FROM test
+# ----
+# 6.000000

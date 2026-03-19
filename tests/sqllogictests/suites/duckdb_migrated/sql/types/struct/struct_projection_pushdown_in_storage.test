@@ -1,0 +1,57 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_structs
+
+# TODO: unsupported feature
+#statement ok
+#pragma disable_optimizer;
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_structs(
+# 	col VARCHAR,
+# 	i STRUCT(a integer, b bool, c VARCHAR)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_structs VALUES
+# 	('test', {'a': 1, 'b': true, 'c': 'test'}),
+# 	('test', {'a': 2, 'b': false, 'c': 'hello'}),
+# 	('hello', NULL),
+# 	('test', {'a': 3, 'b': true, 'c': 'this is a long string'}),
+# 	('test', {'a': NULL, 'b': NULL, 'c': NULL});
+
+# TODO: unsupported feature
+# query I
+# SELECT i.a FROM test_structs;
+# ----
+# 1
+# 2
+# NULL
+# 3
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT i.a, i.c FROM test_structs
+# ----
+# 1	test
+# 2	hello
+# NULL	NULL
+# 3	this is a long string
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT i.a, i.c FROM test_structs where col = 'test'
+# ----
+# 1	test
+# 2	hello
+# 3	this is a long string
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN SELECT i.a FROM test_structs;
+# ----
+# logical_opt	<!REGEX>:.*struct_extract.*

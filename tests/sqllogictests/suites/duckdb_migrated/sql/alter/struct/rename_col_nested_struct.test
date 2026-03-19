@@ -1,40 +1,10 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(s STRUCT(s2 STRUCT(v1 INT, v2 INT)))
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (ROW(ROW(1, 1))), (ROW(ROW(2, 2)))
-
 # rename a column of a nested struct
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test RENAME s.s2.v1 TO i
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM test
-# ----
-# {'s2': {'i': 1, 'v2': 1}}
-# {'s2': {'i': 2, 'v2': 2}}
-
 
 # already exists
 
 statement error
 ALTER TABLE test RENAME COLUMN s.s2.v2 TO i
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test RENAME COLUMN s.s2 TO x
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM test
-# ----
-# {'x': {'i': 1, 'v2': 1}}
-# {'x': {'i': 2, 'v2': 2}}

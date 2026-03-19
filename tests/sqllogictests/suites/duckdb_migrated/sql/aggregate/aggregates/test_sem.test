@@ -4,18 +4,6 @@ DROP TABLE IF EXISTS aggr
 statement error
 select sem()
 
-# TODO: unknown function
-# query I
-# select sem(NULL)
-# ----
-# NULL
-
-# TODO: unknown function
-# query I
-# select sem(1)
-# ----
-# 0.000000
-
 statement error
 select sem(*)
 
@@ -25,29 +13,5 @@ create table aggr(k int, v decimal(10,2), v2 decimal(10, 2));
 statement ok
 insert into aggr values(1, 10, null),(2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
 
-# TODO: unsupported feature
-# query III
-# select k, sem(v),sem(v2)  from aggr group by k ORDER BY ALL;
-# ----
-# 1	0.000000	NULL
-# 2	3.697550	5.663398
-
-# TODO: unknown function
-# query II
-# select  sem(v),sem(v2) from aggr
-# ----
-# 3.577709	5.663398
-
 # Window Function
 
-# TODO: unsupported feature
-# query II
-# select k, sem(v) over (partition by k)
-# from aggr
-# order by all
-# ----
-# 1	0.0
-# 2	3.6975498644372604
-# 2	3.6975498644372604
-# 2	3.6975498644372604
-# 2	3.6975498644372604

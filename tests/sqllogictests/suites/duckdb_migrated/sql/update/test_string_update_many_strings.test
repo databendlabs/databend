@@ -1,0 +1,162 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('a'), ('b'), ('c'), (NULL)
+
+# insert the same strings many times
+# 16 -> 64
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# 64 -> 256
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# 256 -> 1024
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# 1024 -> 4096
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# 4096 -> 16384
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# 16384 -> 65536
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# 65536 -> 262144
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# 262144 -> 1048576
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM test
+
+# verify that the distinct values are correct
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# a
+# b
+# c
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# a
+# b
+# c
+
+# test update of string column in another transaction
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a='aa' WHERE a='a';
+
+# verify that the values were updated
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# aa
+# b
+# c
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# a
+# b
+# c
+
+# now roll it back
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# the values should be back to normal
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# a
+# b
+# c
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# a
+# b
+# c
+
+# this time do the same but commit it
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a='aa' WHERE a='a';
+
+# now both connections have the updated value
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# aa
+# b
+# c
+
+# TODO: unsupported feature
+# query T
+# SELECT DISTINCT a FROM test ORDER BY a
+# ----
+# NULL
+# aa
+# b
+# c

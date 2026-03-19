@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS tbl
 statement ok
 CREATE TABLE tbl(i INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_tbl_i ON tbl(i);
-
 # Range 1: partial first chunk [0, 250]
 
 statement ok

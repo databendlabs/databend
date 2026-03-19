@@ -17,12 +17,6 @@ SELECT SUM(i) FROM integers GROUP BY ALL
 ----
 6
 
-# TODO: unsupported feature
-# query I
-# SELECT SUM(i) FROM integers GROUP BY ALL ORDER BY ALL
-# ----
-# 6
-
 statement error
 SELECT SUM(i) FROM integers GROUP BY ALL ORDER BY g
 

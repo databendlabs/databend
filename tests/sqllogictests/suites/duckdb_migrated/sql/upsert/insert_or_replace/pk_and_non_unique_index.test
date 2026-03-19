@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# Single primary key on multiple columns (with non-unique INDEX)
+# TODO: unsupported feature
+# statement ok
+# create table tbl(
+# 	a int,
+# 	b int,
+# 	c int,
+# 	primary key(a,b,c)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# create index non_unique on tbl(b);
+
+# TODO: unsupported feature
+# statement ok
+# insert or replace into tbl values (1,2,3);
+
+# TODO: unsupported feature
+# statement ok
+# insert or replace into tbl values (1,2,3);
+
+# TODO: unsupported feature
+# query III
+# select * from tbl;
+# ----
+# 1	2	3

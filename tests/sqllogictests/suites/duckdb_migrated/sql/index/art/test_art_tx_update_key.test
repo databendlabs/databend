@@ -1,37 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS test_table
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test_table (id INTEGER PRIMARY KEY)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test_table VALUES (1)
-
 statement ok
 BEGIN
 
-# TODO: unsupported feature
-# statement ok
-# SELECT id FROM test_table LIMIT 1
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE test_table SET id = 1 WHERE id = 1
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE test_table SET id = 1 WHERE id = 1
-
-# TODO: unsupported feature
-# query I
-# SELECT rowid FROM test_table LIMIT 1
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# SELECT rowid FROM test_table LIMIT 1
-# ----
-# 2

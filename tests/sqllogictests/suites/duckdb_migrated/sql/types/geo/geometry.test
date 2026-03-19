@@ -43,37 +43,7 @@ select id, g::VARCHAR from t1 order by id;
 statement ok
 create table t2(id INT, g GEOMETRY);
 
-# TODO: unsupported feature
-# statement ok
-# insert into t2 values
-# 	(1, 'POINT EMPTY'),
-# 	(2, 'LINESTRING EMPTY'),
-# 	(3, 'POLYGON EMPTY'),
-# 	(4, 'MULTIPOINT EMPTY'),
-# 	(5, 'MULTILINESTRING EMPTY'),
-# 	(6, 'MULTIPOLYGON EMPTY'),
-# 	(7, 'GEOMETRYCOLLECTION EMPTY'),
-
-# TODO: unsupported feature
-# query II
-# select id, g::VARCHAR from t2 order by id;
-# ----
-# 1	POINT EMPTY
-# 2	LINESTRING EMPTY
-# 3	POLYGON EMPTY
-# 4	MULTIPOINT EMPTY
-# 5	MULTILINESTRING EMPTY
-# 6	MULTIPOLYGON EMPTY
-# 7	GEOMETRYCOLLECTION EMPTY
-
 # Special case
-
-# TODO: unsupported feature
-# query I
-# SELECT 'MULTIPOINT(EMPTY, 2 2, EMPTY)'::GEOMETRY::VARCHAR;
-# ----
-# MULTIPOINT (EMPTY, 2 2, EMPTY)
-
 
 # Z/M/ZM coordinates
 
@@ -129,6 +99,3 @@ select id, g::VARCHAR from t3 order by id;
 20 {"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [1,1]},{"type": "LineString", "coordinates": [[0,0],[1,1]]}]}
 21 {"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [1,1]},{"type": "LineString", "coordinates": [[0,0],[1,1]]}]}
 
-# TODO: unsupported feature
-# statement error
-# select 'GEOMETRYCOLLECTION Z (POINT Z (1 1 2), LINESTRING (0 0, 1 1))'::GEOMETRY;

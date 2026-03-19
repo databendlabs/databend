@@ -1,0 +1,99 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# query I
+# SELECT struct_concat({'a': 1}, {'b': NULL}, NULL::STRUCT(k INT), struct_pack( x := 'foobar'));;
+# ----
+# {'a': 1, 'b': NULL, 'k': NULL, 'x': foobar}
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 AS SELECT {'i': i, 'j': i + i % 2} as s FROM generate_series(1, 15) AS t(i);
+
+# Test mixed flat and constant arguments
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT struct_concat({'a': 2, 'b': NULL}, s) FROM t1;
+# ----
+# {'a': 2, 'b': NULL, 'i': 1, 'j': 2}
+# {'a': 2, 'b': NULL, 'i': 10, 'j': 10}
+# {'a': 2, 'b': NULL, 'i': 11, 'j': 12}
+# {'a': 2, 'b': NULL, 'i': 12, 'j': 12}
+# {'a': 2, 'b': NULL, 'i': 13, 'j': 14}
+# {'a': 2, 'b': NULL, 'i': 14, 'j': 14}
+# {'a': 2, 'b': NULL, 'i': 15, 'j': 16}
+# {'a': 2, 'b': NULL, 'i': 2, 'j': 2}
+# {'a': 2, 'b': NULL, 'i': 3, 'j': 4}
+# {'a': 2, 'b': NULL, 'i': 4, 'j': 4}
+# {'a': 2, 'b': NULL, 'i': 5, 'j': 6}
+# {'a': 2, 'b': NULL, 'i': 6, 'j': 6}
+# {'a': 2, 'b': NULL, 'i': 7, 'j': 8}
+# {'a': 2, 'b': NULL, 'i': 8, 'j': 8}
+# {'a': 2, 'b': NULL, 'i': 9, 'j': 10}
+
+# Test dictionary vector concatenation
+
+# TODO: unsupported feature
+# query I rowsort
+# SELECT struct_concat(s, {'a': 2, 'b': NULL}) FROM t1 WHERE s.i % 2 = 0;
+# ----
+# {'i': 10, 'j': 10, 'a': 2, 'b': NULL}
+# {'i': 12, 'j': 12, 'a': 2, 'b': NULL}
+# {'i': 14, 'j': 14, 'a': 2, 'b': NULL}
+# {'i': 2, 'j': 2, 'a': 2, 'b': NULL}
+# {'i': 4, 'j': 4, 'a': 2, 'b': NULL}
+# {'i': 6, 'j': 6, 'a': 2, 'b': NULL}
+# {'i': 8, 'j': 8, 'a': 2, 'b': NULL}
+
+# TODO: unsupported feature
+# statement error
+# SELECT struct_concat();
+
+# TODO: unsupported feature
+# statement error
+# SELECT struct_concat(NULL::STRUCT(k INT), 'not a struct');
+
+# TODO: unsupported feature
+# statement error
+# SELECT struct_concat({'a': 'first struct'}, {'a': 'second struct'});
+
+# TODO: unsupported feature
+# statement error
+# SELECT struct_concat({'a': 'first struct'}, {'A': 'second struct'});
+
+# TODO: unsupported feature
+# statement error
+# SELECT struct_concat({'a': 1}, NULL);
+
+# TODO: unsupported feature
+# statement error
+# SELECT struct_concat({'a': 'named struct'}, row(10));
+
+# TODO: unsupported feature
+# query I
+# SELECT struct_concat(row('a'), row('b'));
+# ----
+# (a, b)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT struct_concat({'a': 1}, ?);
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1({'b': 42});
+# ----
+# {'a': 1, 'b': 42}
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v2 AS SELECT struct_concat({'a': ?}, {'b': 42});
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2(1);
+# ----
+# {'a': 1, 'b': 42}

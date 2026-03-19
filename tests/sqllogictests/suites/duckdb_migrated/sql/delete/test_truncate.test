@@ -7,32 +7,12 @@ CREATE TABLE a(i INTEGER);
 statement ok
 INSERT INTO a VALUES (42);
 
-# TODO: result differs
-# query I
-# TRUNCATE TABLE a
-# ----
-# 1
-
 # delete everything
-
-# TODO: unsupported feature
-# statement ok
-# TRUNCATE TABLE a
 
 query I
 SELECT COUNT(*) FROM a;
 ----
 1
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO a VALUES (42);
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM a;
-# ----
-# 1
 
 # now test rollback of deletion
 

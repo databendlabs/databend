@@ -1,0 +1,52 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl1 (u UNION(num INT, str VARCHAR));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl1 VALUES (1), ('bar'), (3), ('foo'), (2), ('baz');
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(u), LAST(u) FROM tbl1;
+# ----
+# 1	baz
+
+# TODO: unsupported feature
+# query II
+# SELECT union_tag(u), max(u) FROM tbl1 GROUP BY union_tag(u);
+# ----
+# num	3
+# str	foo
+
+# TODO: unsupported feature
+# query II
+# SELECT union_tag(u), min(u) FROM tbl1 GROUP BY union_tag(u);
+# ----
+# num	1
+# str	bar
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(u.num) FROM tbl1;
+# ----
+# 6
+
+# TODO: unsupported feature
+# query I
+# SELECT LAST(u) FROM tbl1 GROUP BY union_tag(u) HAVING union_tag(u) = 'num';
+# ----
+# 2
+
+# unions are ordered by tag value first, then by value, in this case str > num 
+# since the union is defined as UNION(num INT<tag = 1>, str VARCHAR<tag = 2>)
+
+# TODO: unsupported feature
+# query II
+# SELECT max(u), min(u) FROM tbl1;
+# ----
+# foo	1

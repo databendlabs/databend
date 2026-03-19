@@ -1,0 +1,71 @@
+# TODO: unsupported feature
+# query I
+# SELECT '2025-01-01T08:00:00+08'::TIMESTAMP AS c;
+# ----
+# 2025-01-01 00:00:00.000000
+
+# TODO: unsupported feature
+# query I
+# SELECT '2025-01-01T08:00:00+08'::TIMESTAMPTZ AS c;
+# ----
+# 2025-01-01 00:00:00+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232';
+# ----
+# 2020-12-31 21:25:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232';
+# ----
+# 2020-12-31 21:25:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232+00';
+# ----
+# 2020-12-31 21:25:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232+0000';
+# ----
+# 2020-12-31 21:25:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232+02';
+# ----
+# 2020-12-31 19:25:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232-02';
+# ----
+# 2020-12-31 23:25:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232+0215';
+# ----
+# 2020-12-31 19:10:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232+02:15';
+# ----
+# 2020-12-31 19:10:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58.745232-0215';
+# ----
+# 2020-12-31 23:40:58.745232+00
+
+# TODO: unsupported feature
+# query I
+# select timestamptz '2020-12-31 21:25:58+02:15';
+# ----
+# 2020-12-31 19:10:58+00

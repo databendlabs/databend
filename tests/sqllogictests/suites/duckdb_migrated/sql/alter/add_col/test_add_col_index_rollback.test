@@ -13,16 +13,8 @@ BEGIN TRANSACTION
 statement ok
 ALTER TABLE test ADD COLUMN k INTEGER
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON test(k)
-
 statement ok
 ROLLBACK
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (3, 3)
 
 query III
 SELECT * FROM test

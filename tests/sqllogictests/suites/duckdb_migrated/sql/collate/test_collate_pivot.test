@@ -12,6 +12,3 @@ INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1005)
 statement ok
 INSERT INTO Cities VALUES ('US', 'Seattle', 2013, 564)
 
-# TODO: unsupported feature
-# statement ok
-# PIVOT Cities ON Year USING sum(Population)

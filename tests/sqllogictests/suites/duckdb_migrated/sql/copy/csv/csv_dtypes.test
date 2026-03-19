@@ -1,28 +1,4 @@
-# TODO: unsupported feature
-# query II
-# select typeof(Year), typeof(Quarter) from '{DATA_DIR}/csv/real/ontime_sample.csv' LIMIT 1;
-# ----
-# BIGINT	BIGINT
-
-# TODO: unsupported feature
-# query II
-# select typeof(Year), typeof(Quarter) from read_csv_auto('{DATA_DIR}/csv/real/ontime_sample.csv', dtypes={'Quarter': 'TINYINT'}) LIMIT 1
-# ----
-# BIGINT	TINYINT
-
 # case insensitivity for struct
-
-# TODO: unsupported feature
-# query II
-# select typeof(Year), typeof(Quarter) from read_csv_auto('{DATA_DIR}/csv/real/ontime_sample.csv', dtypes={'quArTeR': 'TINYINT'}) LIMIT 1
-# ----
-# BIGINT	TINYINT
-
-# TODO: unsupported feature
-# query II
-# select typeof(Year), typeof(Quarter) from read_csv_auto('{DATA_DIR}/csv/real/ontime_sample.csv', dtypes=['INT', 'TINYINT']) LIMIT 1
-# ----
-# INTEGER	TINYINT
 
 # mix of struct and list parameters
 

@@ -1,16 +1,8 @@
 statement ok
 DROP TABLE IF EXISTS keys
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE keys(i INTEGER PRIMARY KEY);
-
 statement ok
 BEGIN;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO keys VALUES (1);
 
 statement error
 INSERT INTO keys VALUES (1);
@@ -18,18 +10,8 @@ INSERT INTO keys VALUES (1);
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM keys
-# ----
-# 0
-
 statement ok
 BEGIN;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO keys VALUES (1);
 
 statement error
 INSERT INTO keys VALUES (1);

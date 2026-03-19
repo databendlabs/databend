@@ -1,20 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS t1
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE E1 AS ENUM ('v1', 'v2');
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t1 (v E1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t1 VALUES ('v1');
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(CASE WHEN 1 THEN v END) FROM t1;
-# ----
-# ENUM('v1', 'v2')

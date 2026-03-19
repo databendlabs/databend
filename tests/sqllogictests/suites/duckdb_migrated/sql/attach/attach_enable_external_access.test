@@ -5,20 +5,5 @@ statement ok
 DROP TABLE IF EXISTS a2.test
 
 # attach multiple different databases
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE a1.test (a INTEGER PRIMARY KEY, b INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT a1
-
 # however, we cannot attach new database files
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE a2.test (a INTEGER PRIMARY KEY, b INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT a2

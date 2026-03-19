@@ -10,62 +10,14 @@ DROP TABLE IF EXISTS test_arg_min_max_null_names
 statement error
 select arg_min_null()
 
-# TODO: unknown function
-# query I
-# select arg_min_null(NULL,NULL)
-# ----
-# NULL
-
-# TODO: unknown function
-# query I
-# select arg_min_null(1,1)
-# ----
-# 1
-
 statement error
 select arg_min_null(*)
-
-# TODO: unknown function
-# query I
-# select arg_min_null(i,i) from range(0, 100) tbl(i);
-# ----
-# 0
-
-# TODO: unknown function
-# query I
-# select arg_min_null(i,i) from range(0, 100) tbl(i) where 1 = 0;
-# ----
-# NULL
 
 statement error
 select arg_max_null()
 
-# TODO: unknown function
-# query I
-# select arg_max_null(NULL,NULL)
-# ----
-# NULL
-
-# TODO: unknown function
-# query I
-# select arg_max_null(1,1)
-# ----
-# 1
-
 statement error
 select arg_max_null(*)
-
-# TODO: unknown function
-# query I
-# select arg_max_null(i,i) from range(0, 100) tbl(i);
-# ----
-# 99
-
-# TODO: unknown function
-# query I
-# select arg_max_null(i,i) from range(0, 100) tbl(i) where 1 = 0;
-# ----
-# NULL
 
 statement ok
 create table test_arg_min_max_null_args (a integer, b integer)
@@ -73,79 +25,10 @@ create table test_arg_min_max_null_args (a integer, b integer)
 statement ok
 insert into test_arg_min_max_null_args values (1,1), (2,2), (8,8), (10,10)
 
-# TODO: unknown function
-# query II
-# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args;
-# ----
-# 1.000000	10.000000
-
-# TODO: unknown function
-# query II
-# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args group by a%2 ORDER BY arg_min_null(a,b);
-# ----
-# 1	1
-# 2	10
-
 statement ok
 insert into test_arg_min_max_null_args values (NULL, 0), (NULL, 12)
 
-# TODO: unknown function
-# query II
-# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args;
-# ----
-# NULL	NULL
-
-# TODO: unknown function
-# query II
-# select arg_min_null(a,b), arg_max_null(a,b) from test_arg_min_max_null_args group by a%2 ORDER BY arg_min_null(a,b);
-# ----
-# 1	1
-# 2	10
-# NULL	NULL
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE blobs (b BYTEA, a BIGINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO blobs VALUES('\xaa\xff\xaa',5), ('\xAA\xFF\xAA\xAA\xFF\xAA',30), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA',20)
-
-# TODO: unsupported feature
-# query II
-# select arg_min_null(b,a), arg_max_null(b,a)  from blobs ;
-# ----
-# \xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
-
-# TODO: unsupported feature
-# query II
-# select arg_min_null(a,b), arg_max_null(a,b)  from blobs;
-# ----
-# 5	20
-
 # Window Function
-
-# TODO: unknown function
-# query I rowsort
-# select arg_min_null(a,b) over ( partition by a%2) from test_arg_min_max_null_args;
-# ----
-# 1
-# 2
-# 2
-# 2
-# NULL
-# NULL
-
-# TODO: unknown function
-# query I rowsort
-# select arg_max_null(a,b) over ( partition by a%2) from test_arg_min_max_null_args;
-# ----
-# 1
-# 10
-# 10
-# 10
-# NULL
-# NULL
 
 statement ok
 create table test_arg_min_max_null_names (name string, salary integer)
@@ -153,14 +36,3 @@ create table test_arg_min_max_null_names (name string, salary integer)
 statement ok
 insert into test_arg_min_max_null_names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
 
-# TODO: unknown function
-# query II
-# select arg_min_null(name,salary),arg_max_null(name,salary)  from test_arg_min_max_null_names;
-# ----
-# Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
-
-# TODO: unknown function
-# query II
-# select arg_min_null(salary,name),arg_max_null(salary,name)  from test_arg_min_max_null_names;
-# ----
-# 20	10

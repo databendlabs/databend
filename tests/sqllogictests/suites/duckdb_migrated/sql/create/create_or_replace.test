@@ -1,7 +1,3 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS integers2
-
 statement ok
 DROP TABLE IF EXISTS integers
 
@@ -16,10 +12,6 @@ CREATE OR REPLACE TABLE integers(i INTEGER, j INTEGER)
 
 statement ok
 CREATE VIEW integers2 AS SELECT 42
-
-# TODO: result differs
-# statement error
-# CREATE OR REPLACE TABLE integers2(i INTEGER)
 
 statement ok
 CREATE TABLE IF NOT EXISTS integers(i INTEGER)

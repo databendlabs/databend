@@ -10,105 +10,27 @@ DROP TABLE IF EXISTS t12
 statement ok
 DROP TABLE IF EXISTS test5063
 
-# TODO: unknown function
-# query T
-# SELECT json_structure('{"duck":"goose"}'->'duck');
-# ----
-# "VARCHAR"
-
 # should go to our NULL
-
-# TODO: unknown function
-# query T
-# select json_extract('{"foo": null}', '$.foo')
-# ----
-# null
-
-# TODO: unknown function
-# query T
-# select json_extract('{"foo": null}', '$.foo.bar')
-# ----
-# NULL
-
-# TODO: unknown function
-# query T
-# select json_extract('null', '$')
-# ----
-# null
-
-# TODO: unknown function
-# query T
-# select json_extract('[null]', '$[0]')
-# ----
-# null
-
-# TODO: unknown function
-# query T
-# select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
-# ----
-# "duck"
-
-# TODO: unknown function
-# query T
-# select json_extract_path('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
-# ----
-# "duck"
 
 query T
 select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->'/my_field/my_nested_field/1'
 ----
 NULL
 
-# TODO: unknown function
-# query T
-# select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
-# ----
-# duck
-
-# TODO: unsupported feature
-# query T
-# select json_extract_path_text('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
-# ----
-# duck
-
 query T
 select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->>'/my_field/my_nested_field/1'
 ----
 NULL
-
-# TODO: unknown function
-# query T
-# select json_extract('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
-# ----
-# "duckduckduckduck"
 
 query T
 select '{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON->'/my_field/my_nested_field/1'
 ----
 NULL
 
-# TODO: unknown function
-# query T
-# select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
-# ----
-# duckduckduckduck
-
 query T
 select '{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON->>'/my_field/my_nested_field/1'
 ----
 NULL
-
-# TODO: unknown function
-# query T
-# select json_extract('[1, 2, 42]', 2)
-# ----
-# 42
-
-# TODO: unknown function
-# query T
-# select json_extract_string('[1, 2, 42]', 2)
-# ----
-# 42
 
 # chained
 
@@ -119,36 +41,6 @@ duck
 
 # some sqlite tests
 
-# TODO: unknown function
-# query T
-# SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$');
-# ----
-# {"a":2,"c":[4,5,{"f":7}]}
-
-# TODO: unknown function
-# query T
-# SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c');
-# ----
-# [4,5,{"f":7}]
-
-# TODO: unknown function
-# query T
-# SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2]');
-# ----
-# {"f":7}
-
-# TODO: unknown function
-# query T
-# SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2].f');
-# ----
-# 7
-
-# TODO: unknown function
-# query T
-# SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.x');
-# ----
-# NULL
-
 # list of paths must be constant
 
 statement error
@@ -157,108 +49,18 @@ with tbl as (
 )
 SELECT json_extract(j, p);
 
-# TODO: unknown function
-# query T
-# SELECT json_extract('{"a":2,"c":[4,5],"f":7}', ['$.c','$.a']);
-# ----
-# [[4,5], 2]
-
-# TODO: unknown function
-# query T
-# SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);
-# ----
-# [NULL, 2]
-
-# TODO: unknown function
-# query T
-# SELECT json_extract(NULL, ['$.x', '$.a']);
-# ----
-# NULL
-
 statement ok
 CREATE TABLE t1(j varchar);
 
 statement ok
 INSERT INTO t1(j) VALUES('{"a":1,"b":[1,[2,3],4],"c":99}');
 
-# TODO: unknown function
-# query T
-# SELECT json_extract(j, '$.b[#]') FROM t1;
-# ----
-# NULL
-
 # -0 is interpreted as just 0, just like in python
-
-# TODO: unknown function
-# query II
-# SELECT json_extract(j, '$.b[#-0]') a, a = json_extract(j, '$.b[-0]') FROM t1;
-# ----
-# 1	1
-
-# TODO: unknown function
-# query II
-# SELECT json_extract(j, '$.b[#-1]') a, a = json_extract(j, '$.b[-1]') FROM t1;
-# ----
-# 4	1
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, '$.b[#-2]') a, a = json_extract(j, '$.b[-2]') FROM t1;
-# ----
-# [2,3]	1
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, '$.b[#-02]') a, a = json_extract(j, '$.b[-02]') FROM t1;
-# ----
-# [2,3]	1
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, '$.b[#-3]') a, a = json_extract(j, '$.b[-3]') FROM t1;
-# ----
-# 1	1
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, '$.b[#-4]'), json_extract(j, '$.b[-4]') FROM t1;
-# ----
-# NULL	NULL
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, '$.b[#-2][#-1]') a, a = json_extract(j, '$.b[-2][-1]') FROM t1;
-# ----
-# 3	1
 
 query ?B
 SELECT j::JSON->'$.b[#-2][#-1]' a, a = (j::JSON->'$.b[-2][-1]') FROM t1;
 ----
 NULL NULL
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, ['$.b[0]', '$.b[#-1]']) a, a = json_extract(j, ['$.b[0]', '$.b[-1]']) FROM t1;
-# ----
-# [1, 4]	1
-
-# TODO: unsupported feature
-# query TT
-# SELECT j::JSON->['$.b[0]', '$.b[#-1]'] a, a = (j::JSON->['$.b[0]', '$.b[-1]']) FROM t1;
-# ----
-# [1, 4]	1
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, '$.a[#-1]'), json_extract(j, '$.a[-1]') FROM t1;
-# ----
-# NULL	NULL
-
-# TODO: unknown function
-# query TT
-# SELECT json_extract(j, '$.b[#-000001]') a, a = json_extract(j, '$.b[-000001]') FROM t1;
-# ----
-# 4	1
 
 query ?B
 SELECT j::JSON->'$.b[#-000001]' a, a = (j::JSON->'$.b[-000001]') FROM t1;
@@ -289,18 +91,6 @@ CREATE TABLE obj(x varchar);
 statement ok
 INSERT INTO obj VALUES('{"a":1,"b":2}');
 
-# TODO: unknown function
-# query T
-# SELECT json_extract(x, '$.b') FROM obj;
-# ----
-# 2
-
-# TODO: unknown function
-# query T
-# SELECT json_extract(x, '$."b"') FROM obj;
-# ----
-# 2
-
 statement ok
 CREATE TABLE t12(x varchar);
 
@@ -327,12 +117,6 @@ INSERT INTO t12(x) VALUES(
     }
  }');
 
-# TODO: unknown function
-# query T
-# SELECT json_extract(x, '$.settings.layer2."tris.legomenon"."summary.report"') FROM t12;
-# ----
-# 0
-
 query T
 SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
 ----
@@ -352,12 +136,6 @@ execute q1('a')
 1
 
 # test issue 11997
-
-# TODO: unknown function
-# query I
-# select json_extract_string(parse_json('{"j[so]n_\"key": 67}'), '$."j[so]n_\"key"');
-# ----
-# 67
 
 query I
 select '{"\"duck\"": 42}'->'$."\"duck\""';

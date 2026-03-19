@@ -1,51 +1,3 @@
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100::UTINYINT + 1) = 'UTINYINT';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100 + 1::UTINYINT) = 'UTINYINT';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100::USMALLINT + 1) = 'USMALLINT';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100 + 1::USMALLINT) = 'USMALLINT';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100::UINTEGER + 1) = 'UINTEGER';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100 + 1::UINTEGER) = 'UINTEGER';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100::UBIGINT + 1) = 'UBIGINT';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT typeof(100 + 1::UBIGINT) = 'UBIGINT';
-# ----
-# 1
-
 query B
 SELECT typeof(100::TINYINT + 1) = 'TINYINT';
 ----
@@ -85,7 +37,6 @@ query B
 SELECT typeof(100 + 1::BIGINT) = 'BIGINT';
 ----
 0
-
 
 # integer literals out of range for type
 

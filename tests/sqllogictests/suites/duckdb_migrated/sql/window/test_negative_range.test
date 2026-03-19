@@ -1,0 +1,53 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS issue10855
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE issue10855(i INTEGER, v FLOAT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO issue10855 VALUES (0, 1), (1, 2), (2, 3),;
+
+# Ascending
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN 1 PRECEDING AND -1 FOLLOWING) 
+# FROM issue10855
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN -1 FOLLOWING AND 1 FOLLOWING) 
+# FROM issue10855
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN -1 PRECEDING AND 1 FOLLOWING) 
+# FROM issue10855
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i RANGE BETWEEN 1 PRECEDING AND -1 PRECEDING) 
+# FROM issue10855
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN 1 PRECEDING AND -1 FOLLOWING) 
+# FROM issue10855
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN -1 FOLLOWING AND 1 FOLLOWING) 
+# FROM issue10855
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN -1 PRECEDING AND 1 FOLLOWING) 
+# FROM issue10855
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, v, sum(v) OVER (ORDER BY i DESC RANGE BETWEEN 1 PRECEDING AND -1 PRECEDING) 
+# FROM issue10855

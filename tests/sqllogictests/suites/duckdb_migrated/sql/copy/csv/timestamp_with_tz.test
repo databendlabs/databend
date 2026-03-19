@@ -12,33 +12,5 @@ CREATE TABLE tbl(id int, ts timestamp);
 statement error
 COPY tbl FROM '{DATA_DIR}/csv/timestamp_with_tz.csv' (HEADER)
 
-# TODO: unsupported feature
-# query I
-# SELECT TRY_CAST('2022/01/27 11:04:57 PM' AS TIMESTAMPTZ);
-# ----
-# NULL
-
 # we can load this into a timestamptz table
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl_tz(id int, ts timestamptz);
-
-# TODO: unsupported feature
-# statement ok
-# COPY tbl_tz FROM '{DATA_DIR}/csv/timestamp_with_tz.csv' (HEADER)
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM tbl_tz
-# ----
-# 1	2021-05-25 04:55:03.382494+00
-# 2	2021-05-25 09:55:03.382494+00
-
-# TODO: unknown function
-# query III
-# select * FROM read_csv('{DATA_DIR}/csv/17705.csv')
-# ----
-# Night	38615452	2022/01/27 11:04:57 PM
-# Night	38615452	2022/01/27 11:04:57 PM
-# Night	38615475	2022/01/27 11:09:20 PM

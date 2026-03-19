@@ -19,12 +19,6 @@ SELECT '0e1'::DECIMAL, '-0e1'::DECIMAL, '00000e1'::DECIMAL, '-00000e1'::DECIMAL
 
 # not enough precision: just truncated to 0
 
-# TODO: unsupported feature
-# query I
-# SELECT '1e-100'::DECIMAL
-# ----
-# 0
-
 # large negative exponent
 
 query R

@@ -1,12 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS test.tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test.tbl(i INTEGER PRIMARY KEY);
-
-# TODO: unsupported feature
-# query III
-# select constraint_catalog, table_catalog, table_name from information_schema.table_constraints limit 1
-# ----
-# test	test	tbl

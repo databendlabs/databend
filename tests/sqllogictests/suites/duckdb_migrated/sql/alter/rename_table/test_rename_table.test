@@ -34,23 +34,8 @@ SELECT * FROM tbl
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM tbl;
-# ----
-# 999
-# 100
-
-# TODO: result differs
-# statement error
-# SELECT * FROM tbl2
-
 statement ok
 BEGIN TRANSACTION;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl RENAME TO tbl2
 
 statement ok
 COMMIT
@@ -81,40 +66,13 @@ ALTER TABLE tbl2 RENAME TO tbl3
 statement ok
 ALTER TABLE tbl3 RENAME TO tbl4
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl4 RENAME TO tbl5
-
 statement ok
 ROLLBACK
 
 # everything was rolled back
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM tbl2
-# ----
-# 999
-# 100
-
-# TODO: result differs
-# statement error
-# SELECT * FROM tbl5
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl2 RENAME TO tbl3
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl3 RENAME TO tbl4
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl4 RENAME TO tbl5
 
 statement ok
 COMMIT
@@ -138,10 +96,6 @@ CREATE TABLE tbl2(i INTEGER);
 statement ok
 CREATE TABLE tbl3(i INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl4(i INTEGER);
-
 # test temporary table rename preserves temporary flag
 
 statement ok
@@ -152,28 +106,7 @@ INSERT INTO temp_tbl VALUES (42);
 
 # verify temporary flag before rename
 
-# TODO: unsupported feature
-# query TTI
-# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_tbl'
-# ----
-# temp_tbl	temp	1
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE temp.temp_tbl RENAME TO temp_tbl_renamed
-
 # verify data preserved
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM temp_tbl_renamed
-# ----
-# 42
 
 # verify temporary flag preserved after rename
 
-# TODO: unsupported feature
-# query TTI
-# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_tbl_renamed'
-# ----
-# temp_tbl_renamed	temp	1

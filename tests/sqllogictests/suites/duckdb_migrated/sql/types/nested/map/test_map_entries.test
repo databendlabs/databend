@@ -1,0 +1,126 @@
+# Empty
+# TODO: unsupported feature
+# query I
+# select map_entries(MAP())
+# ----
+# []
+
+# One element
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map_from_entries([('a', 5)]));
+# ----
+# [{'key': a, 'value': 5}]
+
+# Multiple elements
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map_from_entries([
+# 	('a', 5), ('b', 6), ('x', 21), ('abc', 0)
+# ]));
+# ----
+# [{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+# Value NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map([5], [NULL]))
+# ----
+# [{'key': 5, 'value': NULL}]
+
+# Mixed NULLs
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map_from_entries(
+# 	[
+# 		('a', 5),
+# 		('b', 6),
+# 		('x', 21),
+# 		('abc', 0)
+# 	]
+# ));
+# ----
+# [{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+# Empty
+
+# TODO: unsupported feature
+# query I
+# select map_entries(MAP())
+# ----
+# []
+
+# One element
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map_from_entries([('a', 5)]));
+# ----
+# [{'key': a, 'value': 5}]
+
+# Multiple elements
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map_from_entries([
+# 	('a', 5), ('b', 6), ('x', 21), ('abc', 0)
+# ]));
+# ----
+# [{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+# Value NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map([5], [NULL]))
+# ----
+# [{'key': 5, 'value': NULL}]
+
+# Mixed NULLs
+
+# TODO: unsupported feature
+# query I
+# SELECT map_entries(map_from_entries(
+# 	[
+# 		('a', 5),
+# 		('b', 6),
+# 		('x', 21),
+# 		('abc', 0)
+# 	]
+# ));
+# ----
+# [{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
+
+# TODO: unsupported feature
+# query I
+# select MAP_ENTRIES(MAP([],[]))
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# select MAP_ENTRIES(MAP(NULL, NULL))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select MAP_ENTRIES(NULL)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select MAP_ENTRIES(NULL::MAP("NULL", "NULL"))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select MAP_ENTRIES(NULL::MAP(INT, BIGINT))
+# ----
+# NULL

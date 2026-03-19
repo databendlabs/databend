@@ -16,49 +16,11 @@ CREATE VIEW vw AS SELECT * FROM tbl
 statement ok
 BEGIN TRANSACTION
 
-# TODO: result differs
-# statement ok
-# BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# ALTER VIEW vw RENAME TO vw2
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM vw2
-# ----
-# 999
-# 100
-
-# TODO: result differs
-# statement error
-# SELECT * FROM vw
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM vw
-# ----
-# 999
-# 100
-
-# TODO: result differs
-# statement error
-# SELECT * FROM vw2
-
 statement ok
 COMMIT
 
 statement ok
 COMMIT
-
-# TODO: result differs
-# statement error
-# SELECT * FROM vw
-
-# TODO: result differs
-# statement error
-# SELECT * FROM vw
 
 query I
 SELECT * FROM vw2

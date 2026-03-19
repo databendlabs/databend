@@ -4,50 +4,10 @@ DROP VIEW IF EXISTS v1
 statement ok
 DROP VIEW IF EXISTS v2
 
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS v3
-
 statement ok
 DROP VIEW IF EXISTS v4
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v1 AS
-# SELECT map([2], [{'key1': map([3,4],[1,2]), 'key2':2}]) AS x
-
-# TODO: unsupported feature
-# query I nosort mapres1
-# SELECT * FROM v1;
-# ----
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v2 AS
-# SELECT map([2], [{'key1': map([3,4],[1,2]), 'key2':2}]) AS x
-# UNION ALL
-# SELECT map([2], [{'key1': map([3,4],[1,2]), 'key2':2}])
-
-# TODO: unsupported feature
-# query I nosort mapres2
-# SELECT * FROM v2;
-# ----
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v3 AS
-# SELECT {'key': [2], 'val': [{'key1': {'key': [3,4], 'val': [1,2]}, 'key2':2}]} AS x
 
 query RI nosort structres1
 SELECT * FROM v3;
 ----
 
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v4 AS
-# SELECT {'key': [2], 'val': [{'key1': {'key': [3,4], 'val': [1,2]}, 'key2':[2]}]} AS x
-
-# TODO: unsupported feature
-# query I nosort structres2
-# SELECT * FROM v4;
-# ----

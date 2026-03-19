@@ -4,26 +4,14 @@ DROP TABLE IF EXISTS test.hello
 statement ok
 DROP TABLE IF EXISTS test_catalog.main
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA test;
-
 statement ok
 CREATE OR REPLACE SCHEMA test;
 
 statement ok
 CREATE TABLE test.hello(i INTEGER);
 
-# TODO: result differs
-# statement error
-# CREATE OR REPLACE SCHEMA test;
-
 statement ok
 BEGIN TRANSACTION;
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE test.hello;
 
 statement ok
 DROP SCHEMA test;
@@ -64,14 +52,6 @@ COMMIT;
 
 # con2 queries the schema (should still work)
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM test.hello
-# ----
-# 2
-# 3
-# 4
-
 # now con2 finishes the transaction and tries again
 
 statement ok
@@ -86,14 +66,6 @@ SELECT COUNT(*) FROM non_exist_schema.data
 statement error
 SELECT COUNT(*) FROM nonexistent_schema.some_table
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH ':memory:' AS test_catalog;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test_catalog.main.existing_table(i INTEGER);
-
 statement error
 SELECT COUNT(*) FROM test_catalog.nonexistent_schema.some_table
 
@@ -103,17 +75,6 @@ SELECT COUNT(*) FROM test_catalog.main.nonexistent_table
 statement error
 SELECT * FROM test_catalog.missing_schema.missing_table
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH ':memory:' AS another_catalog;
-
 statement error
 SELECT COUNT(*) FROM another_catalog.invalid_schema.table_name
 
-# TODO: unsupported feature
-# statement ok
-# DETACH test_catalog;
-
-# TODO: unsupported feature
-# statement ok
-# DETACH another_catalog;

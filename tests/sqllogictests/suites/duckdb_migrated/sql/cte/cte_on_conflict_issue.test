@@ -15,15 +15,3 @@ CREATE TABLE t2 (
     t2c1 BIGINT
 );
 
-# TODO: unsupported feature
-# statement error
-# WITH
-# cte1 AS (
-#     SELECT 42 AS cte1c1, [84] AS cte1c2
-# ),
-# cte2 AS (
-#     SELECT *
-#     FROM t2 s
-# )
-# INSERT OR REPLACE INTO t1
-# SELECT * FROM cte2;

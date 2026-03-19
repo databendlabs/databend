@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (data struct(str varchar)[]);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl (data) values ([struct_pack(str := 'value')]), (null), (null), (null);
+
+# TODO: unsupported feature
+# query I
+# select data[1].str as str from tbl where str is not null;
+# ----
+# value

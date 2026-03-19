@@ -1,15 +1,3 @@
-# TODO: unsupported feature
-# statement error
-# COMMIT
-
-# TODO: unsupported feature
-# statement error
-# ROLLBACK
-
-# TODO: unsupported feature
-# statement ok
-# START TRANSACTION
-
 # but we cannot start a transaction within a transaction!
 
 statement error

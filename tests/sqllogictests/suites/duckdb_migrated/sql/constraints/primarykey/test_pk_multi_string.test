@@ -1,36 +1,9 @@
 statement ok
 DROP TABLE IF EXISTS tst
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tst(a varchar, b varchar,PRIMARY KEY(a,b))
-
 # insert two conflicting pairs at the same time
-
-# TODO: unsupported feature
-# statement error
-# INSERT INTO tst VALUES ('hell', 'hello'), ('hell','hello')
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tst VALUES ('hell', 'hello'), ('hello','hell'), ('hel','hell'), ('hell','hel')
 
 # insert a duplicate value as part of a chain of values
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO tst VALUES ('hell', 'hello'),('hel', 'hello');
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tst VALUES ('hel', 'hello');
-
 # this should fail since it will cause a duplicate
 
-# TODO: unsupported feature
-# statement error
-# UPDATE tst SET b='hello' WHERE b='hel'
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE tst SET b='hell' WHERE b='hel'

@@ -44,10 +44,6 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 # HAVING with column references does not work
 # HAVING clause can only contain aggregates
 
-# TODO: result differs
-# statement error
-# SELECT a FROM test WHERE a=13 HAVING a > 11
-
 statement error
 SELECT a FROM test WHERE a=13 HAVING SUM(a) > 11
 

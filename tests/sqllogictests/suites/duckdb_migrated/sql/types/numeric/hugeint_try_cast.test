@@ -1,0 +1,237 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS hugeints
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS strings
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE hugeints AS SELECT i::HUGEINT i FROM (VALUES (-170141183460469231731687303715884105728), (0), (170141183460469231731687303715884105727)) tbl(i)
+
+# -> unsigned
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UTINYINT FROM hugeints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::USMALLINT FROM hugeints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UINTEGER FROM hugeints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UBIGINT FROM hugeints
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UTINYINT FROM hugeints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::USMALLINT FROM hugeints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UINTEGER FROM hugeints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::UBIGINT FROM hugeints WHERE i>=0 ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UTINYINT) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS USMALLINT) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UINTEGER) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS UBIGINT) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# -> signed
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::TINYINT FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS TINYINT) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::SMALLINT FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS SMALLINT) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::INTEGER FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS INTEGER) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::BIGINT FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS BIGINT) FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# -> float
+
+# TODO: unsupported feature
+# query I
+# SELECT i::FLOAT FROM hugeints ORDER BY i
+# ----
+# -170141183460469231731687303715884105728
+# 0
+# 170141183460469231731687303715884105727
+
+# TODO: unsupported feature
+# query I
+# SELECT i::DOUBLE FROM hugeints ORDER BY i
+# ----
+# -170141183460469231731687303715884105728
+# 0
+# 170141183460469231731687303715884105727
+
+# -> bool
+
+# TODO: unsupported feature
+# query I
+# SELECT i::BOOL FROM hugeints ORDER BY i
+# ----
+# True
+# False
+# True
+
+# -> varchar
+
+# TODO: unsupported feature
+# query I
+# SELECT i::VARCHAR FROM hugeints ORDER BY i
+# ----
+# -170141183460469231731687303715884105728
+# 0
+# 170141183460469231731687303715884105727
+
+# from string casts
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000000000000000000000000000000000000'), ('-170141183460469231731687303715884105728'), ('0'), ('170141183460469231731687303715884105727'), ('1000000000000000000000000000000000000000')) tbl(s)
+
+# TODO: unsupported feature
+# statement error
+# SELECT s::HUGEINT FROM strings
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(s AS HUGEINT) FROM strings
+# ----
+# NULL
+# NULL
+# NULL
+# -170141183460469231731687303715884105728
+# 0
+# 170141183460469231731687303715884105727
+# NULL
+
+# -> decimal casts
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(3,0)::HUGEINT FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(9,0)::HUGEINT FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(18,0)::HUGEINT FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# statement error
+# SELECT i::DECIMAL(38,0)::HUGEINT FROM hugeints ORDER BY i
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(3,0))::HUGEINT FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(9,0))::HUGEINT FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(18,0))::HUGEINT FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT TRY_CAST(i AS DECIMAL(38,0))::HUGEINT FROM hugeints ORDER BY i
+# ----
+# NULL
+# 0
+# NULL

@@ -1,0 +1,144 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# create a table
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('hello'), ('world')
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# perform an update within the transaction
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a='test' WHERE a='hello';
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# hello
+# world
+
+# now rollback the update
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# hello
+# world
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# hello
+# world
+
+# rollback of a value that is updated twice
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a='test' WHERE a='hello';
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a='test2' WHERE a='test';
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test2
+# world
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# test rollback of string update in different part
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a='test2' WHERE a='world';
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# test2
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# test
+# world

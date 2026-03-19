@@ -101,24 +101,6 @@ NULL
 
 # min date for timestamp micros is -290307
 
-# TODO: unsupported feature
-# query I
-# select try_cast('290308-01-01 (BC)'::date as timestamp)
-# ----
-# 290308-01-01 (BC) 00:00:00
-
-# TODO: unsupported feature
-# query I
-# select try_cast('290309-01-01 (BC)'::date as timestamp)
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query I
-# select try_cast('5877642-06-25 (BC)'::date as timestamp)
-# ----
-# NULL
-
 query I
 select try_cast('5881580-07-10' as date)
 ----
@@ -146,14 +128,3 @@ NULL
 
 # max date for timestamp micros is 294246
 
-# TODO: unsupported feature
-# query I
-# select try_cast('294246-12-31'::date as timestamp)
-# ----
-# 294246-12-31 00:00:00
-
-# TODO: unsupported feature
-# query I
-# select try_cast('294247-12-31'::date as timestamp)
-# ----
-# NULL

@@ -1,0 +1,41 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t(i int, j int);
+
+# Insert >= 1024 NULLs
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT ii, NULL FROM range(0, 1024) tbl(ii);
+
+# TODO: unsupported feature
+# query III
+# select COUNT(j), MIN(j), MAX(j) from t;
+# ----
+# 0	NULL	NULL
+
+# checkpoint to trigger the issue
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query III
+# select COUNT(j), MIN(j), MAX(j) from t;
+# ----
+# 0	NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE t SET j = 1;
+
+# TODO: unsupported feature
+# query III
+# select COUNT(j), MIN(j), MAX(j) from t;
+# ----
+# 1024	1	1

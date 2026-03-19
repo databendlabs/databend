@@ -1,44 +1,9 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE integers SET j=4 WHERE i=1
-
-# TODO: unsupported feature
-# query I
-# SELECT j FROM integers WHERE i=1
-# ----
-# 4
-
-# TODO: unsupported feature
-# query I
-# SELECT j FROM integers WHERE i=1
-# ----
-# 1
 
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I
-# SELECT j FROM integers WHERE i=1
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT j FROM integers WHERE i=1
-# ----
-# 1

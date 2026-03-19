@@ -14,12 +14,6 @@ SELECT SUM(1), SUM(NULL), SUM(33.3)
 ----
 1 NULL 33.3
 
-# TODO: type_error
-# query I
-# SELECT SUM(True)
-# ----
-# 1
-
 statement error
 SELECT SUM('hello')
 
@@ -40,12 +34,6 @@ SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN(DATE '1992-02-
 statement error
 SELECT MIN()
 
-# TODO: unsupported feature
-# query I
-# SELECT MIN(1, 2)
-# ----
-# [1]
-
 query I?RTB??
 SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01')
 ----
@@ -54,29 +42,11 @@ SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-
 statement error
 SELECT MAX()
 
-# TODO: unsupported feature
-# query I
-# SELECT MAX(1, 2)
-# ----
-# [1]
-
-# TODO: unsupported feature
-# query IIRTTTT
-# SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DATE '1992-02-02'), FIRST(TIMESTAMP '2008-01-01 00:00:01')
-# ----
-# 1	NULL	33.3	hello	1	1992-02-02	2008-01-01 00:00:01
-
 statement error
 SELECT FIRST()
 
 statement error
 SELECT FIRST(1, 2)
-
-# TODO: unsupported feature
-# query IIRTTTT
-# SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '1992-02-02'), LAST(TIMESTAMP '2008-01-01 00:00:01')
-# ----
-# 1	NULL	33.3	hello	1	1992-02-02	2008-01-01 00:00:01
 
 statement error
 SELECT LAST()
@@ -95,12 +65,6 @@ SELECT AVG(True)
 statement error
 SELECT AVG('hello')
 
-# TODO: type_error
-# query I
-# SELECT AVG(DATE '1992-02-02')
-# ----
-# 1992-02-02 00:00:00
-
 statement error
 SELECT AVG()
 
@@ -111,12 +75,6 @@ query T
 SELECT STRING_AGG('hello')
 ----
 hello
-
-# TODO: unsupported feature
-# query TTTTT
-# SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL), STRING_AGG('', '')
-# ----
-# hello	NULL	NULL	NULL	(empty)
 
 statement error
 SELECT STRING_AGG()
@@ -130,15 +88,3 @@ CREATE TABLE test_val(val INT)
 statement ok
 INSERT INTO test_val VALUES(1), (2), (3), (3), (2)
 
-# TODO: unsupported feature
-# query T
-# SELECT STRING_AGG(DISTINCT val::VARCHAR ORDER BY val::VARCHAR DESC) from test_val;
-# ----
-# 3,2,1
-
-# TODO: unsupported feature
-# query IT
-# SELECT COUNT(NULL), STRING_AGG(DISTINCT val::VARCHAR ORDER BY val::VARCHAR ASC) from test_val;
-# ----
-# 0
-# 1,2,3

@@ -8,14 +8,6 @@ DROP TABLE IF EXISTS test2.hello
 statement error
 DROP SCHEMA main CASCADE;
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA test;
-
-# TODO: unsupported feature
-# statement ok
-# DROP SCHEMA test;
-
 # create the schema again
 
 statement ok
@@ -36,18 +28,10 @@ CREATE TABLE test.hello(i INTEGER);
 
 # create table inside schema that does not exist should fail
 
-# TODO: result differs
-# statement error
-# CREATE TABLE test2.hello(i INTEGER);
-
 statement ok
 INSERT INTO test.hello VALUES (2), (3), (4)
 
 # select from table without schema specified should fail
-
-# TODO: result differs
-# statement error
-# SELECT * FROM hello
 
 query I
 SELECT * FROM test.hello
@@ -57,14 +41,6 @@ SELECT * FROM test.hello
 4
 
 # drop schema with dependencies should fail
-
-# TODO: result differs
-# statement error
-# DROP SCHEMA test;
-
-# TODO: unsupported feature
-# statement ok
-# DROP SCHEMA test CASCADE;
 
 # drop schema if exists should not fail if schema does not exist
 

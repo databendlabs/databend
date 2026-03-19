@@ -1,48 +1,14 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(s STRUCT(s2 STRUCT(v1 INT, v2 INT)))
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (ROW(ROW(1, 1))), (ROW(ROW(2, 2)))
-
 # add a column to a nested struct
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD COLUMN s.s2.k INTEGER
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM test
-# ----
-# {'s2': {'v1': 1, 'v2': 1, 'k': NULL}}
-# {'s2': {'v1': 2, 'v2': 2, 'k': NULL}}
 
 # already exists
 
 statement error
 ALTER TABLE test ADD COLUMN s.s2.v1 VARCHAR
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD COLUMN IF NOT EXISTS s.s2.v1 VARCHAR
-
 # we can add columns at all levels
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD COLUMN s.i INTEGER DEFAULT 100
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM test
-# ----
-# {'s2': {'v1': 1, 'v2': 1, 'k': NULL}, 'i': 100}
-# {'s2': {'v1': 2, 'v2': 2, 'k': NULL}, 'i': 100}
 
 statement error
 ALTER TABLE test ADD COLUMN s.s2.v1.x INTEGER

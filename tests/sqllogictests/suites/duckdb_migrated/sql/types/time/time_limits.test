@@ -1,0 +1,47 @@
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999'
+# ----
+# 23:59:59.999999
+
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999' + interval (1) microsecond
+# ----
+# 00:00:00
+
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999' + interval (1) second
+# ----
+# 00:00:00.999999
+
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999' + interval (1) minute
+# ----
+# 00:00:59.999999
+
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999' + interval (1) hour
+# ----
+# 00:59:59.999999
+
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999' + interval (1) day
+# ----
+# 23:59:59.999999
+
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999' + interval (1) month
+# ----
+# 23:59:59.999999
+
+# TODO: unsupported feature
+# query I
+# select time '23:59:59.999999' + interval (1) year
+# ----
+# 23:59:59.999999

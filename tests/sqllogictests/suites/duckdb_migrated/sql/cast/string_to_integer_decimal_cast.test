@@ -78,104 +78,6 @@ select '1.50004'::bigint;
 ----
 2
 
-# TODO: unsupported feature
-# query I
-# select '0.000005'::utinyint;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '1.100004'::utinyint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '0.5'::utinyint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1.50004'::utinyint;
-# ----
-# 2
-
-# TODO: unsupported feature
-# query I
-# select '0.000005'::usmallint;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '1.100004'::usmallint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '0.5'::usmallint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1.50004'::usmallint;
-# ----
-# 2
-
-# TODO: unsupported feature
-# query I
-# select '0.000005'::uinteger;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '1.100004'::uinteger;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '0.5'::uinteger;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1.50004'::uinteger;
-# ----
-# 2
-
-# TODO: unsupported feature
-# query I
-# select '0.000005'::ubigint;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '1.100004'::ubigint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '0.5'::ubigint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1.50004'::ubigint;
-# ----
-# 2
-
-
-
 # Negative numbers (excludes unsigned)
 
 query I
@@ -258,7 +160,6 @@ select '-1.50004'::bigint;
 ----
 -2
 
-
 # Check limits (signed)
 
 query II
@@ -281,43 +182,7 @@ select '9223372036854775807.1'::BIGINT, '-9223372036854775808.1'::BIGINT;
 ----
 9223372036854775807	-9223372036854775808
 
-# TODO: unsupported feature
-# query II
-# select '170141183460469231731687303715884105727.1'::HUGEINT, '-170141183460469231731687303715884105728.1'::HUGEINT;
-# ----
-# 170141183460469231731687303715884105727	-170141183460469231731687303715884105728
-
 # Check limits (unsigned)
-
-# TODO: unsupported feature
-# query I
-# select '255.1'::UTINYINT;
-# ----
-# 255
-
-# TODO: unsupported feature
-# query I
-# select '65535.1'::USMALLINT;
-# ----
-# 65535
-
-# TODO: unsupported feature
-# query I
-# select '4294967295.1'::UINTEGER;
-# ----
-# 4294967295
-
-# TODO: unsupported feature
-# query I
-# select '18446744073709551615.1'::UBIGINT;
-# ----
-# 18446744073709551615
-
-# TODO: unsupported feature
-# query I
-# select '340282366920938463463374607431768211455.1'::UHUGEINT;
-# ----
-# 340282366920938463463374607431768211455
 
 # going above the limit should error (signed)
 

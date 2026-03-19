@@ -1,30 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unknown function
-# query I
-# select json_extract('{"my_field": "duck"}', '')
-# ----
-# {"my_field":"duck"}
-
-# TODO: unknown function
-# query T
-# select json_extract('{"my_field": "duck"}', '$.my_field')
-# ----
-# "duck"
-
-# TODO: unknown function
-# query T
-# select json_extract('[0, 1, 2]', '$[1]')
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# select json_extract('[[1]]', '$[0][0]')
-# ----
-# 1
-
 statement ok
 create table test (j varchar, q varchar)
 
@@ -36,83 +12,11 @@ insert into test values ('{"my_field": {"my_nested_field": ["goose", "duck"]}}',
 statement error
 select json_extract(j, '$.my_field.my_nested_field[]') from test
 
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[0]') from test
-# ----
-# "goose"
-
 # SQLite's indexing from back of the list requires '#'
-
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[#-1]') from test
-# ----
-# "duck"
-
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[#-2]') from test
-# ----
-# "goose"
-
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[#-3]') from test
-# ----
-# NULL
-
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[#]') from test
-# ----
-# NULL
 
 # we can also do without '#'
 
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[-1]') from test
-# ----
-# "duck"
-
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[-2]') from test
-# ----
-# "goose"
-
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field[-3]') from test
-# ----
-# NULL
-
-# TODO: unknown function
-# query T
-# select json_extract(j, q) from test
-# ----
-# "goose"
-
-# TODO: unknown function
-# query T
-# select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[0].my_nested_field[0]')
-# ----
-# "duck"
-
-# TODO: unknown function
-# query T
-# select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[#-1].my_nested_field[#-1]')
-# ----
-# "goose"
-
 # some NULLs
-
-# TODO: unknown function
-# query T
-# select json_extract(j, '$.my_field.my_nested_field.3') from test
-# ----
-# NULL
 
 # invalid path error that happens during execution, not binding
 
@@ -146,18 +50,6 @@ select json_extract('{"a": {"b": "c"}}', '$[.');
 statement error
 select json_extract('{"a": {"b": "c"}}', '$]');
 
-# TODO: unknown function
-# query T
-# select json_extract('[{"duck":42},{"duck":43}]', '$[*].duck')
-# ----
-# [42, 43]
-
-# TODO: unknown function
-# query T
-# select json_extract('{"duck":42, "goose":43}', '$.*');
-# ----
-# [42, 43]
-
 # check for invalid syntax
 
 statement error
@@ -169,25 +61,7 @@ select json_extract('[{"duck":42},{"duck":43}]', '$*.duck')
 statement error
 select json_extract('{"duck":42, "goose":43}', '$.[*]');
 
-# TODO: unknown function
-# query T
-# select json_extract('[{"duck":42},{"duck":43}]', '$.*')
-# ----
-# []
-
-# TODO: unknown function
-# query T
-# select json_extract('{"duck":[42,43]}', '$.*[-1]')
-# ----
-# [43]
-
 # can have multiple wildcards
-
-# TODO: unknown function
-# query T
-# select json_extract('[{"duck":42},{"duck":43}]', '$[*].*')
-# ----
-# [42, 43]
 
 # wildcards do not work when path param is not foldable
 
@@ -200,77 +74,12 @@ select json_extract(j, p) from tbl
 statement error
 select json_extract('[{"duck":42},{"goose":43}]', ['$[*].duck', '$[*].goose'])
 
-# TODO: unknown function
-# query T
-# select sum((to_json({duck:range})->'$.*')[1]::int) = sum(range) from range(0, 10000)
-# ----
-# 1
-
 # test some nulls (JSON Path reference implementation returns NULLs in wildcards),
 # if the path is not there, it's not added to the LIST
 
-# TODO: unknown function
-# query T
-# select json_extract('[{"duck":null},{"duck":42},{"duck":null},{}]', '$[*].*')
-# ----
-# [null, 42, null]
-
 # test recursive wildcard path
-
-# TODO: unknown function
-# query T
-# select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..*')
-# ----
-# [{"b":1,"c":2}, ["g","h",[{"b":5},{"x":42}]], 1, 2, "g", "h", [{"b":5},{"x":42}], {"b":5}, {"x":42}, 5, 42]
 
 # alternative syntax
 
-# TODO: unknown function
-# query T
-# select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$.**')
-# ----
-# [{"b":1,"c":2}, ["g","h",[{"b":5},{"x":42}]], 1, 2, "g", "h", [{"b":5},{"x":42}], {"b":5}, {"x":42}, 5, 42]
-
 # recursive non-wildcard path
 
-# TODO: unknown function
-# query T
-# select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..b')
-# ----
-# [1, 5]
-
-# TODO: unknown function
-# query T
-# select json_extract('{"a":{"b":1,"c":2},"d":["g","h",[{"b":5},{"x":42}]]}', '$..[0]')
-# ----
-# ["g", {"b":5}]
-
-# TODO: unknown function
-# query I
-# with tbl as (
-#     select '[{"duck":42},{"duck":{"a":43,"b":null}}]' j
-# )
-# select json_extract(j, '$[*]..*') from tbl
-# ----
-# [42, {"a":43,"b":null}, 43, null]
-
-# TODO: unknown function
-# query T
-# with tbl as (
-#     select '{"duck":[{"goose":42},{"goose":43}],"goose":null}' j
-# )
-# select json_extract(j, '$.duck[*]..goose') from tbl
-# ----
-# [42, 43]
-
-# TODO: unknown function
-# query T
-# select json_extract(j,'$..[*]') from test
-# ----
-# ["goose", "duck"]
-
-# TODO: unknown function
-# query T
-# select json_extract('[[{"a":[1,2,3]}], [{"a":[4,5,6]}]]','$[*]..a[*]')
-# ----
-# [1, 2, 3, 4, 5, 6]

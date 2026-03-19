@@ -11,10 +11,6 @@ BEGIN TRANSACTION
 statement ok
 INSERT INTO integers VALUES (1), (2), (3)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON integers using art(i)
-
 query I
 SELECT COUNT(*) FROM integers WHERE i=1
 ----

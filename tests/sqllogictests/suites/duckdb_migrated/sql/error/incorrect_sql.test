@@ -55,46 +55,14 @@ SELECT 42;
 statement error
 SELECT 42; SELEC 42;
 
-# TODO: result differs
-# statement error
-# SELECT * FROM integers2;
-
 statement error
 SELECT * FROM bla.integers2;
-
-# TODO: result differs
-# statement error
-# CREATE VIEW v1 AS SELECT * FROM integers2;
 
 statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9;
 
 statement error
 with cte1 as (select 42 as j), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) SELECT * FROM integers9 where x=3 order by x+1+1+1+1+1+1+1+1+1+1+1;
-
-# TODO: result differs
-# statement error
-# SELECT
-#     l_returnflag,
-#     l_linestatus,
-#     sum(l_quantity) AS sum_qty,
-#     sum(l_extendedprice) AS sum_base_price,
-#     sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-#     sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-#     avg(l_quantity) AS avg_qty,
-#     avg(l_extendedprice) AS avg_price,
-#     avg(l_discount) AS avg_disc,
-#     count(*) AS count_order
-# FROM
-#     lineitem
-# WHERE
-#     l_shipdate <= CAST('1998-09-02' AS date)
-# GROUP BY
-#     l_returnflag,
-#     l_linestatus
-# ORDER BY
-#     l_returnflag,
-#     l_linestatus;
 
 statement error
 select 🦆🍞 from 🦆🍞;
@@ -131,14 +99,3 @@ SELECT chicken.feather FROM chickens
 statement error
 SELECT chicken.st FROM chickens, integers, strings;
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE 🦆🍞(🦆🦆🦆 INTEGER, 🍞🍞🍞 INTEGER);
-
-# TODO: unsupported feature
-# statement error
-# SELECT 🦆.🦆🦆🦆 FROM 🦆🍞
-
-# TODO: unsupported feature
-# statement error
-# SELECT 🦆🦆 FROM 🦆🍞, chickens

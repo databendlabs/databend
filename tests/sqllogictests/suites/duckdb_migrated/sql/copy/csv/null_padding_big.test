@@ -7,25 +7,7 @@ DROP TABLE IF EXISTS test2
 statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER, c INTEGER);
 
-# TODO: unsupported feature
-# query I
-# INSERT INTO test SELECT * FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', null_padding=True)
-# ----
-# 2501
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', null_padding=True)
-# ----
-# 2501
-
 # one line that requires null padding
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True)
-# ----
-# 2500
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv')
@@ -34,18 +16,6 @@ statement ok
 CREATE TABLE test2 (a VARCHAR, b INTEGER, c INTEGER, d INTEGER);
 
 # all nulls, several lines require NULL padding
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_commas.csv', null_padding=True)
-# ----
-# 2500
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM read_csv('{DATA_DIR}/csv/nullpadding_commas.csv', sep=',',  columns={'a': INT, 'b': INT, 'c': INT, 'd': INT}, ignore_errors=True, null_padding=False)
-# ----
-# 2492
 
 statement error
 SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', buffer_size=55)

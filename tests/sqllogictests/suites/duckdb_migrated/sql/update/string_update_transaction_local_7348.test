@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(a VARCHAR(256) PRIMARY KEY, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES('    4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 2 + 1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES('   34-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 18);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 SELECT b, b + 1 FROM t1 WHERE b < 5;
+
+# TODO: unsupported feature
+# query II
+# FROM t1
+# ----
+#     4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ	3
+#    34-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ	18
+# 3	4
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE t1 SET a = CONCAT(a, 'x') WHERE b % 2 = 0;
+
+# TODO: unsupported feature
+# query II
+# FROM t1
+# ----
+#     4-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ	3
+#    34-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZx	18
+# 3x	4

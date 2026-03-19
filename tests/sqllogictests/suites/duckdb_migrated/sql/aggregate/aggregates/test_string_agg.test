@@ -20,15 +20,6 @@ a
 
 # test string aggregation on scalar values
 
-# TODO: type_error
-# query TTTT
-# SELECT STRING_AGG('a',','), STRING_AGG(NULL,','), STRING_AGG('a', NULL), STRING_AGG(NULL,NULL)
-# ----
-# a
-# NULL
-# NULL
-# NULL
-
 # test string aggregation on a set of values
 
 statement ok
@@ -86,39 +77,7 @@ SELECT g, GROUP_CONCAT(x) FROM strings GROUP BY g ORDER BY g
 
 # Impervious to threading
 
-# TODO: unsupported feature
-# query TT
-# SELECT STRING_AGG(x ORDER BY x ASC), STRING_AGG(x, '|' ORDER BY x ASC) FROM strings
-# ----
-# a,b,i,j,p,x,y,z
-# a	b	i	j	p	x	y	z
-
-# TODO: unsupported feature
-# query TT
-# SELECT STRING_AGG(x ORDER BY x DESC), STRING_AGG(x,'|' ORDER BY x DESC) FROM strings
-# ----
-# z,y,x,p,j,i,b,a
-# z	y	x	p	j	i	b	a
-
 # Constant separator
-
-# TODO: unsupported feature
-# query III
-# SELECT g, STRING_AGG(x ORDER BY x ASC), STRING_AGG(x, '|' ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
-# ----
-# 1	a,b	a	b
-# 2	i,j	i	j
-# 3	p	p
-# 4	x,y,z	x	y	z
-
-# TODO: unsupported feature
-# query III
-# SELECT g, STRING_AGG(x ORDER BY x DESC), STRING_AGG(x, '|' ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
-# ----
-# 1	b,a	b	a
-# 2	j,i	j	i
-# 3	p	p
-# 4	z,y,x	z	y	x
 
 # Variable separator
 
@@ -128,40 +87,11 @@ SELECT g, STRING_AGG(x, y ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
 statement error
 SELECT g, STRING_AGG(x, y ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
 
-# TODO: unsupported feature
-# query I
-# SELECT STRING_AGG(g::VARCHAR, ',' ORDER BY CONCAT(x, y) ASC) FROM strings ORDER BY 1
-# ----
-# 2,1,1,2,2,3,4,4,4
-
 # Ordering by multiple columns
-
-# TODO: unsupported feature
-# query I
-# SELECT STRING_AGG(g::VARCHAR, ',' ORDER BY x, y) FROM strings ORDER BY 1
-# ----
-# 2,1,1,2,2,3,4,4,4
 
 # Two expressions with a different ORDER BY clause
 
-# TODO: unsupported feature
-# query II
-# SELECT STRING_AGG(x, ',' ORDER BY x DESC), STRING_AGG(x, ',' ORDER BY x ASC) FROM strings;
-# ----
-# z,y,x,p,j,i,b,a	a,b,i,j,p,x,y,z
-
 # ORDER + FILTER
-
-# TODO: unsupported feature
-# query II
-# SELECT y, STRING_AGG(x, ',' ORDER BY x DESC) FILTER (WHERE g < 3)
-# FROM strings
-# GROUP BY y
-# ORDER BY 1
-# ----
-# +	j
-# -	b
-# /	i,a
 
 # ORDER + FILTER + DISTINCT
 
@@ -177,31 +107,7 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers (VALUES (1), (2), (3), (NULL));
 
-# TODO: unsupported feature
-# query II
-# SELECT i1.i, (SELECT STRING_AGG(i::VARCHAR, ',' ORDER BY i1.i+i) FROM integers WHERE i<=i1.i) c1
-# FROM integers i1
-# ORDER BY 1 NULLS LAST
-# ----
-# 1	1
-# 2	1,2
-# 3	1,2,3
-# NULL	NULL
-
 # DISTINCT + ORDER BY on non-volatile functional dependencies
-
-# TODO: unsupported feature
-# query I
-# SELECT string_agg(DISTINCT CellType, '&' ORDER BY list_position(['L900','L1800','L2100','L2600'], CellType))
-# FROM (VALUES 
-# 	('L900'),
-# 	('L2600'),
-# 	('L2100'),
-# 	('L2100'),
-# 	('L1800')
-# 	) AS t(CellType);
-# ----
-# L900&L1800&L2100&L2600
 
 # DISTINCT + ORDER BY on volatile functional dependencies
 

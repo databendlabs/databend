@@ -1,0 +1,60 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_table
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_table_raw
+
+# Create raw data table
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_table_raw(id VARCHAR, name VARCHAR);
+
+# Insert raw data
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_table_raw VALUES
+# 	('abc001','foo'),
+# 	('abc002','bar'),
+# 	('abc001','foo2'),
+# 	('abc002','bar2');
+
+# Create aggregated data table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_table(id VARCHAR PRIMARY KEY, name VARCHAR);
+
+
+# Insert aggregated data
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test_table
+# SELECT
+#   DISTINCT(id) as id,
+#   name
+# FROM test_table_raw;
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test_table
+# SELECT
+#   DISTINCT(id) as id,
+#   name
+# FROM test_table_raw;
+
+# TODO: unsupported feature
+# statement maybe
+# INSERT OR IGNORE INTO test_table
+# SELECT
+#   DISTINCT(id) as id,
+#   name
+# FROM test_table_raw;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test_table_raw;

@@ -14,10 +14,6 @@ INSERT INTO numbers VALUES (CAST(0 AS REAL))
 statement ok
 INSERT INTO numbers VALUES (CAST(-0 AS REAL))
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON numbers(i)
-
 # +0
 
 query I

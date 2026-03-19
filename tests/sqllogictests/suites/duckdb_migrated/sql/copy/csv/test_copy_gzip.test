@@ -22,38 +22,10 @@ CREATE TABLE lineitem(l_orderkey INT NOT NULL,
                       l_shipmode VARCHAR(10) NOT NULL,
                       l_comment VARCHAR(44) NOT NULL);
 
-# TODO: unsupported feature
-# statement ok
-# COPY lineitem FROM '{DATA_DIR}/csv/lineitem1k.tbl.gz' DELIMITER '|';
-
 query I
 SELECT COUNT(*) FROM lineitem
 ----
 0
 
-# TODO: unsupported feature
-# query I
-# SELECT l_partkey FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber
-# ----
-# 155190
-# 67310
-# 63700
-# 2132
-# 24027
-# 15635
-
 # round trip
 
-# TODO: unsupported feature
-# statement ok
-# COPY lineitem TO '{TEMP_DIR}/lineitem1k.csv.gz' (DELIMITER '|', HEADER);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE lineitem_rt AS FROM '{TEMP_DIR}/lineitem1k.csv.gz';
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM (FROM lineitem EXCEPT FROM lineitem_rt)
-# ----
-# 0

@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement error
+# SELECT UNNEST ( ( '1,2,3,4,,6' , ( 1 ) ) ) , x x;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT UNNEST ( ( '1,2,3,4,,6' , ( case when random() < 10 then 0 else 1 end ) ) ), 42 x, x;
+# ----
+# 1,2,3,4,,6	0	42	42

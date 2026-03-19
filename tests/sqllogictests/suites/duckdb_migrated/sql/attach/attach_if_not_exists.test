@@ -1,10 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS db1.integers
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH IF NOT EXISTS ':memory:' AS db1
-
 statement ok
 CREATE TABLE db1.integers(i INTEGER);
 
@@ -13,10 +9,3 @@ CREATE TABLE db1.integers(i INTEGER);
 statement error
 ATTACH ':memory:' AS db1
 
-# TODO: unsupported feature
-# statement ok
-# DETACH db1
-
-# TODO: unsupported feature
-# statement ok
-# DETACH db1

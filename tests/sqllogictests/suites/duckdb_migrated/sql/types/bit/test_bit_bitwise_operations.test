@@ -1,172 +1,21 @@
 statement ok
 DROP TABLE IF EXISTS bits
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE bits (b bit);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO bits VALUES('101111011010'), ('110001100100'), ('101001000110')
-
 # **** bitwise & ****
-
-# TODO: unsupported feature
-# query I
-# SELECT '10101'::BIT & '10001'::BIT
-# ----
-# 10001
-
-# TODO: unsupported feature
-# query I
-# SELECT '1000001101011111'::BIT & '1100101101000011'::BIT
-# ----
-# 1000001101000011
-
-# TODO: unsupported feature
-# query I
-# SELECT '01011'::BIT & '11000'::BIT
-# ----
-# 01000
-
-# TODO: unsupported feature
-# query I
-# SELECT b & '011100011011'::BIT FROM bits
-# ----
-# 001100011010
-# 010000000000
-# 001000000010
 
 statement error
 SELECT '010110'::BIT & '11000'::BIT
 
-# TODO: unsupported feature
-# query I
-# SELECT '10001111'::BIT | '00011011'::BIT
-# ----
-# 10011111
-
-# TODO: unsupported feature
-# query I
-# SELECT '1011'::BIT | '0001'::BIT
-# ----
-# 1011
-
-# TODO: unsupported feature
-# query I
-# SELECT '10000010011101011111'::BIT | '11001011010011100011'::BIT
-# ----
-# 11001011011111111111
-
-# TODO: unsupported feature
-# query I
-# SELECT b | '011100011011'::BIT FROM bits
-# ----
-# 111111011011
-# 111101111111
-# 111101011111
-
 statement error
 SELECT '0110'::BIT | '11000'::BIT
-
-# TODO: unsupported feature
-# query I
-# SELECT xor('101'::BIT, '001'::BIT)
-# ----
-# 100
-
-# TODO: unsupported feature
-# query I
-# SELECT xor('10000010011101011111'::BIT, '11001011010111000011'::BIT)
-# ----
-# 01001001001010011100
-
-# TODO: unsupported feature
-# query I
-# SELECT xor(b, '011100011011'::BIT) FROM bits
-# ----
-# 110011000001
-# 101101111111
-# 110101011101
 
 statement error
 SELECT xor('011010110'::BIT, '11000'::BIT)
 
-# TODO: unsupported feature
-# query I
-# SELECT ~('101'::BIT)
-# ----
-# 010
-
-# TODO: unsupported feature
-# query I
-# SELECT ~('1001010101111111000111'::BIT)
-# ----
-# 0110101010000000111000
-
-# TODO: unsupported feature
-# query I
-# SELECT ~(b) FROM bits
-# ----
-# 010000100101
-# 001110011011
-# 010110111001
-
 # # **** left bitshifting ****
-
-# TODO: unsupported feature
-# query I
-# SELECT '1001010101111111000111'::BIT << 4
-# ----
-# 0101011111110001110000
-
-# TODO: unsupported feature
-# query I
-# SELECT '010101'::BIT << 50
-# ----
-# 000000
-
-# TODO: unsupported feature
-# query I
-# SELECT '101'::BIT << 0
-# ----
-# 101
 
 statement error
 SELECT '010101'::BIT << -2
 
-# TODO: unsupported feature
-# query I
-# SELECT b << 3 FROM bits
-# ----
-# 111011010000
-# 001100100000
-# 001000110000
-
 # # **** right bitshifting ****
 
-# TODO: unsupported feature
-# query I
-# SELECT '1001010101111111000111'::BIT >> 10
-# ----
-# 0000000000100101010111
-
-# TODO: unsupported feature
-# query I
-# SELECT '010101'::BIT >> 50
-# ----
-# 000000
-
-# TODO: unsupported feature
-# query I
-# SELECT '101'::BIT >> 0
-# ----
-# 101
-
-# TODO: unsupported feature
-# query I
-# SELECT b >> 5 FROM bits
-# ----
-# 000001011110
-# 000001100011
-# 000001010010

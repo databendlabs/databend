@@ -7,13 +7,6 @@ CREATE TABLE test (i INTEGER, j INTEGER);
 statement ok
 INSERT INTO test VALUES (1, 2), (3, 4);
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD PRIMARY KEY (j)
-
 statement error
 ALTER TABLE test ADD PRIMARY KEY (i)
 
-# TODO: result differs
-# statement error
-# INSERT INTO test VALUES (2, 2)

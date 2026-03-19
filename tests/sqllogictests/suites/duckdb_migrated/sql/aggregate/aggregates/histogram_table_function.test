@@ -13,14 +13,6 @@ insert into integers values (42);
 statement ok
 insert into integers values (84);
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM histogram_values(integers, i, bin_count := 2)
-# ----
-# 60	1
-# 80	0
-# 100	1
-
 # missing column
 
 statement error
@@ -29,62 +21,12 @@ SELECT * FROM histogram_values(integers, k)
 statement ok
 INSERT INTO integers FROM range(0, 127)
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM histogram_values(integers, i, bin_count => 10, technique => 'equi-width')
-# ----
-# 12	13
-# 25	13
-# 37	12
-# 50	14
-# 63	13
-# 75	12
-# 88	14
-# 100	12
-# 113	13
-# 126	13
-
-# TODO: unsupported feature
-# query II
-# SELECT bin, count FROM histogram(integers, i, bin_count := 10, technique := 'equi-width')
-# ----
-# x <= 12	13
-# 12 < x <= 25	13
-# 25 < x <= 37	12
-# 37 < x <= 50	14
-# 50 < x <= 63	13
-# 63 < x <= 75	12
-# 75 < x <= 88	14
-# 88 < x <= 100	12
-# 100 < x <= 113	13
-# 113 < x <= 126	13
-
 statement ok
 INSERT INTO integers VALUES (99999999)
 
-# TODO: unsupported feature
-# query II
-# SELECT COUNT(*), AVG(count) FROM histogram_values(integers, i, technique := 'equi-height')
-# ----
-# 10	13
-
 # sample integers
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM histogram_values(integers, i%2, technique := 'sample')
-# ----
-# 0	66
-# 1	64
-
 # varchar
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM histogram_values(integers, (i%2)::VARCHAR)
-# ----
-# 0	66
-# 1	64
 
 # FIXME: there are some minor rounding problems on ARM64 with the below tests
 # mode skip
@@ -94,19 +36,7 @@ INSERT INTO integers VALUES (99999999)
 statement error
 SELECT * FROM histogram_values(integers, (i%2)::VARCHAR, technique := 'equi-width')
 
-# TODO: unsupported feature
-# query II
-# SELECT COUNT(*), AVG(count)  FROM histogram_values(integers, i::VARCHAR, technique := 'equi-height')
-# ----
-# 10	13.0
-
 # histogram with ranges
-
-# TODO: unsupported feature
-# query II
-# SELECT COUNT(bin), AVG(count) FROM histogram(integers, i::VARCHAR, technique := 'equi-height')
-# ----
-# 10	13
 
 # booleans
 
@@ -116,9 +46,3 @@ create table booleans(b bool);
 statement ok
 insert into booleans select case when i%4=0 then true else false end from range(0, 100) t(i)
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM histogram_values(booleans, b::INTEGER)
-# ----
-# 0	75
-# 1	25

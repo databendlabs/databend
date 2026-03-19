@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS foo
+
+# TODO: unsupported feature
+# statement ok
+# create table foo(
+# 	bar text primary key,
+# 	baz bigint,
+# );
+
+# TODO: unsupported feature
+# query I
+# insert or replace into foo(bar, baz) values ('baz', 1) returning bar;
+# ----
+# baz
+
+# TODO: unsupported feature
+# query I
+# insert or replace into foo(bar, baz) values ('baz', 2) returning bar;
+# ----
+# baz
+
+# TODO: unsupported feature
+# query I
+# insert or replace into foo(bar, baz) values ('baz', 1), ('bar', 2) returning bar;
+# ----
+# baz
+# bar

@@ -1,0 +1,249 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select range%3::tinyint j, range::tinyint AS i from range(1, 7, 1)
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over () from a order by 1,2
+# ----
+# 0	3	21
+# 0	6	21
+# 1	1	21
+# 1	4	21
+# 2	2	21
+# 2	5	21
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j) from a order by 1,2
+# ----
+# 0	3	9
+# 0	6	9
+# 1	1	5
+# 1	4	5
+# 2	2	7
+# 2	5	7
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j order by i) from a order by 1,2
+# ----
+# 0	3	3
+# 0	6	9
+# 1	1	1
+# 1	4	5
+# 2	2	2
+# 2	5	7
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select range%3::smallint j, range::smallint AS i from range(1, 7, 1)
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over () from a order by 1,2
+# ----
+# 0	3	21
+# 0	6	21
+# 1	1	21
+# 1	4	21
+# 2	2	21
+# 2	5	21
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j) from a order by 1,2
+# ----
+# 0	3	9
+# 0	6	9
+# 1	1	5
+# 1	4	5
+# 2	2	7
+# 2	5	7
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j order by i) from a order by 1,2
+# ----
+# 0	3	3
+# 0	6	9
+# 1	1	1
+# 1	4	5
+# 2	2	2
+# 2	5	7
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select range%3::integer j, range::integer AS i from range(1, 7, 1)
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over () from a order by 1,2
+# ----
+# 0	3	21
+# 0	6	21
+# 1	1	21
+# 1	4	21
+# 2	2	21
+# 2	5	21
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j) from a order by 1,2
+# ----
+# 0	3	9
+# 0	6	9
+# 1	1	5
+# 1	4	5
+# 2	2	7
+# 2	5	7
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j order by i) from a order by 1,2
+# ----
+# 0	3	3
+# 0	6	9
+# 1	1	1
+# 1	4	5
+# 2	2	2
+# 2	5	7
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select range%3::bigint j, range::bigint AS i from range(1, 7, 1)
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over () from a order by 1,2
+# ----
+# 0	3	21
+# 0	6	21
+# 1	1	21
+# 1	4	21
+# 2	2	21
+# 2	5	21
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j) from a order by 1,2
+# ----
+# 0	3	9
+# 0	6	9
+# 1	1	5
+# 1	4	5
+# 2	2	7
+# 2	5	7
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j order by i) from a order by 1,2
+# ----
+# 0	3	3
+# 0	6	9
+# 1	1	1
+# 1	4	5
+# 2	2	2
+# 2	5	7
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select range%3::float j, range::float AS i from range(1, 7, 1)
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over () from a order by 1,2
+# ----
+# 0	3	21
+# 0	6	21
+# 1	1	21
+# 1	4	21
+# 2	2	21
+# 2	5	21
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j) from a order by 1,2
+# ----
+# 0	3	9
+# 0	6	9
+# 1	1	5
+# 1	4	5
+# 2	2	7
+# 2	5	7
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j order by i) from a order by 1,2
+# ----
+# 0	3	3
+# 0	6	9
+# 1	1	1
+# 1	4	5
+# 2	2	2
+# 2	5	7
+
+# TODO: unsupported feature
+# statement ok
+# drop table a
+
+# TODO: unsupported feature
+# statement ok
+# create table a as select range%3::double j, range::double AS i from range(1, 7, 1)
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over () from a order by 1,2
+# ----
+# 0	3	21
+# 0	6	21
+# 1	1	21
+# 1	4	21
+# 2	2	21
+# 2	5	21
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j) from a order by 1,2
+# ----
+# 0	3	9
+# 0	6	9
+# 1	1	5
+# 1	4	5
+# 2	2	7
+# 2	5	7
+
+# TODO: unsupported feature
+# query III
+# select j, i, sum(i) over (partition by j order by i) from a order by 1,2
+# ----
+# 0	3	3
+# 0	6	9
+# 1	1	1
+# 1	4	5
+# 2	2	2
+# 2	5	7
+
+# TODO: unsupported feature
+# statement ok
+# drop table a

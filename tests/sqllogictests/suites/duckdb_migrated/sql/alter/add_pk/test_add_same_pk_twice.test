@@ -10,10 +10,6 @@ CREATE TABLE test (i INTEGER, j INTEGER)
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD PRIMARY KEY (j)
-
 statement error
 ALTER TABLE test ADD PRIMARY KEY (i)
 
@@ -21,10 +17,6 @@ statement ok
 COMMIT
 
 # Without a transaction.
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE other (i INTEGER PRIMARY KEY, j INTEGER)
 
 statement error
 ALTER TABLE other ADD PRIMARY KEY (i, j)

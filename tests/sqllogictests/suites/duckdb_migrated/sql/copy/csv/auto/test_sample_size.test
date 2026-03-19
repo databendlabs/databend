@@ -1,101 +1,13 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/issue_811.csv', SAMPLE_SIZE=1);
-
-# TODO: unsupported feature
-# query IIII
-# SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
-# ----
-# BIGINT	VARCHAR	DATE	VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE test
-
 # CSV file with very sparse column
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/issue_811.csv', SAMPLE_SIZE=-1);
-
-# TODO: unsupported feature
-# query IIII
-# SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
-# ----
-# BIGINT	DOUBLE	DATE	VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE test
 
 # CSV file with very sparse column and sample size 500
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/issue_811.csv', SAMPLE_SIZE = -1);
-
-# TODO: unsupported feature
-# query IRTT
-# SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
-# ----
-# 5	1.1	2015-05-01	fdf
-
-# TODO: unsupported feature
-# query TTTT
-# SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
-# ----
-# BIGINT	DOUBLE	DATE	VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# drop table test;
-
 # CSV file with very sparse column and number of samples 50
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/issue_811.csv');
-
-# TODO: unsupported feature
-# query IRTT
-# SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
-# ----
-# 5	1.1	2015-05-01	fdf
-
-# TODO: unsupported feature
-# query TTTT
-# SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
-# ----
-# BIGINT	DOUBLE	DATE	VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# drop table test;
-
 # CSV file with very sparse column with sample size 200 and number of samples 20
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/issue_811.csv', SAMPLE_SIZE = -1);
-
-# TODO: unsupported feature
-# query IRTT
-# SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
-# ----
-# 5	1.1	2015-05-01	fdf
-
-# TODO: unsupported feature
-# query TTTT
-# SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
-# ----
-# BIGINT	DOUBLE	DATE	VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# drop table test;
 
 # CSV file with very sparse column using copy into
 
@@ -103,10 +15,6 @@ statement ok
 CREATE TABLE test (TestInteger integer, TestDouble double, TestDate varchar, TestText varchar);
 
 # CSV file with very sparse column, automatically aligns column types, small sample size
-
-# TODO: unsupported feature
-# statement ok
-# COPY test FROM '{DATA_DIR}/csv/auto/issue_811.csv' (AUTO_DETECT TRUE);
 
 statement ok
 drop table if exists test;
@@ -117,10 +25,6 @@ statement ok
 CREATE TABLE test (TestInteger integer, TestDouble double, TestDate varchar, TestText varchar);
 
 # CSV file with very sparse column, automatically aligns column types, small sample size
-
-# TODO: unsupported feature
-# statement ok
-# COPY test FROM '{DATA_DIR}/csv/auto/issue_811.csv' (SAMPLE_SIZE -1, AUTO_DETECT TRUE);
 
 statement ok
 drop table if exists test;

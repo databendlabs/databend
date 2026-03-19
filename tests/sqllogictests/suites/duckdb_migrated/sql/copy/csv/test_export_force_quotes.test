@@ -10,8 +10,3 @@ insert into integers values (42);
 statement ok
 drop table integers;
 
-# TODO: unsupported feature
-# query I
-# select * from integers;
-# ----
-# 42

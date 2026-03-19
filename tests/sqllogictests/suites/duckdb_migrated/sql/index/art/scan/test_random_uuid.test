@@ -6,10 +6,6 @@ create or replace table t as select uuid() as id, i as v from generate_series(1,
 
 # create a table with the values [0, 1, 0, 1, ..., 0, 1]
 
-# TODO: unsupported feature
-# statement ok
-# create unique index uid on t(id);
-
 statement ok
 begin;
 
@@ -49,10 +45,6 @@ select * from t where id = '019d0356-d989-71f3-9207-f99661ca9f8d';
 statement ok
 begin;
 
-# TODO: unsupported feature
-# statement ok
-# drop index uid;
-
 statement ok
 select * from t where id = '019d0356-d989-71f3-9207-f9683912109f';
 
@@ -70,10 +62,6 @@ rollback;
 
 statement ok
 begin;
-
-# TODO: unsupported feature
-# statement ok
-# drop index uid;
 
 statement ok
 select * from t where id = '019d0356-d989-71f3-9207-f9683912109f';

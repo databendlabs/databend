@@ -124,27 +124,9 @@ SELECT * FROM power QUALIFY rank() OVER (PARTITION BY plant ORDER BY date DESC) 
 Boston		2019-01-12	486134
 Worcester	2019-01-12	98963
 
-# TODO: unsupported feature
-# query TTR
-# SELECT * FROM (SELECT plant, date, avg(mwh) OVER (PARTITION BY plant ORDER BY date ASC RANGE BETWEEN INTERVAL 3 DAYS PRECEDING AND INTERVAL 3 DAYS FOLLOWING) AS avgmwh FROM power 
-# ORDER BY plant, avgmwh DESC) QUALIFY row_number() OVER (PARTITION BY plant ORDER BY avgmwh DESC) = 1 ORDER BY plant
-# ----
-# Boston		2019-01-11	532466.666667
-# Worcester	2019-01-11	104823.833333
-
 # QUALIFY with condition on ALIAS
 
-# TODO: unsupported feature
-# query II
-# SELECT b, SUM(a) AS sum FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) >= 1 AND sum < 20 ORDER BY b;
-# ----
-# 21	12
-
 # expression in qualify
-
-# TODO: unsupported feature
-# statement ok
-# SELECT b, SUM(a) AS sum FROM test GROUP BY b QUALIFY row_number() OVER (PARTITION BY b) > sum * 10;
 
 query ITI
 SELECT * FROM qt QUALIFY row_number() OVER (PARTITION BY b ORDER BY c) = (SELECT max(c) FROM qt) ORDER BY b;
@@ -152,47 +134,11 @@ SELECT * FROM qt QUALIFY row_number() OVER (PARTITION BY b ORDER BY c) = (SELECT
 2	A	2
 4	B	2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tenk1 (unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty int4, hundred int4, thousand int4, twothousand int4, fivethous int4, tenthous int4, odd int4, even int4, stringu1 varchar, stringu2 varchar, string4 varchar)
-
-# TODO: unsupported feature
-# statement ok
-# insert into tenk1 values (8800,0,0,0,0,0,0,800,800,3800,8800,0,1,'MAAAAA','AAAAAA','AAAAxx'), (1891,1,1,3,1,11,91,891,1891,1891,1891,182,183,'TUAAAA','BAAAAA','HHHHxx'), (3420,2,0,0,0,0,20,420,1420,3420,3420,40,41,'OBAAAA','CAAAAA','OOOOxx'), (9850,3,0,2,0,10,50,850,1850,4850,9850,100,101,'WOAAAA','DAAAAA','VVVVxx'), (7164,4,0,0,4,4,64,164,1164,2164,7164,128,129,'OPAAAA','EAAAAA','AAAAxx'), (8009,5,1,1,9,9,9,9,9,3009,8009,18,19,'BWAAAA','FAAAAA','HHHHxx'), (5057,6,1,1,7,17,57,57,1057,57,5057,114,115,'NMAAAA','GAAAAA','OOOOxx'), (6701,7,1,1,1,1,1,701,701,1701,6701,2,3,'TXAAAA','HAAAAA','VVVVxx'), (4321,8,1,1,1,1,21,321,321,4321,4321,42,43,'FKAAAA','IAAAAA','AAAAxx'), (3043,9,1,3,3,3,43,43,1043,3043,3043,86,87,'BNAAAA','JAAAAA','HHHHxx')
-
 # cume_dist
-
-# TODO: unsupported feature
-# query I
-# SELECT unique1 FROM tenk1 QUALIFY cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) = 5 order by four, ten
-# ----
-# 6701
-# 4321
-# 1891
 
 # first_value
 
-# TODO: unsupported feature
-# query I
-# SELECT unique1 FROM tenk1 QUALIFY first_value(ten) OVER (PARTITION BY four ORDER BY ten) = 1 order by four, ten
-# ----
-# 6701	
-# 4321	
-# 5057	
-# 8009	
-# 1891	
-# 3043	
-
 # lead
-
-# TODO: unsupported feature
-# query I
-# SELECT unique1 FROM tenk1 qualify lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) = -1 order by four, ten
-# ----
-# 7164	
-# 8009	
-# 9850	
-# 3043	
 
 # using in subquery
 

@@ -39,36 +39,20 @@ SELECT A2 FROM A WHERE A1=1
 ----
 1
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX A_index ON A (A1)
+query T
+SELECT A2 FROM A WHERE A1=1
+----
+1
 
 query T
 SELECT A2 FROM A WHERE A1=1
 ----
 1
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX B_index ON B (B1)
-
 query T
 SELECT A2 FROM A WHERE A1=1
 ----
 1
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX C_index ON C (C2)
-
-query T
-SELECT A2 FROM A WHERE A1=1
-----
-1
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX IF EXISTS A_index
 
 query T
 SELECT A2 FROM A WHERE A1=1

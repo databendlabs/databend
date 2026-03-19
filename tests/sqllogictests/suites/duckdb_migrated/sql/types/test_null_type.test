@@ -1,0 +1,445 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS null_list
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS null_map
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS null_struct
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS null_table
+
+# TODO: unsupported feature
+# query T
+# create table null_table (i "null")
+
+# TODO: unsupported feature
+# query I
+# select typeof(i) from null_table;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# insert into null_table values (null)
+
+
+# explicit cast
+
+# TODO: unsupported feature
+# statement error
+# select 42::tinyint::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::tinyint)
+
+# TODO: unsupported feature
+# statement error
+# select 42::smallint::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::smallint)
+
+# TODO: unsupported feature
+# statement error
+# select 42::integer::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::integer)
+
+# TODO: unsupported feature
+# statement error
+# select 42::bigint::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::bigint)
+
+# TODO: unsupported feature
+# statement error
+# select 42::utinyint::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::utinyint)
+
+# TODO: unsupported feature
+# statement error
+# select 42::usmallint::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::usmallint)
+
+# TODO: unsupported feature
+# statement error
+# select 42::uinteger::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::uinteger)
+
+# TODO: unsupported feature
+# statement error
+# select 42::ubigint::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::ubigint)
+
+# TODO: unsupported feature
+# statement error
+# select 42::float::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::float)
+
+# TODO: unsupported feature
+# statement error
+# select 42::double::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::double)
+
+# TODO: unsupported feature
+# statement error
+# select 42::varchar::"null"
+
+# TODO: unsupported feature
+# statement error
+# insert into null_table values (42::varchar)
+
+# TODO: unsupported feature
+# statement ok
+# create table null_list (i "null"[])
+
+# TODO: unsupported feature
+# statement ok
+# insert into null_list values (null), ([null])
+
+# TODO: unsupported feature
+# query T
+# select i from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# query T
+# select i::tinyint[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::tinyint])
+
+# TODO: unsupported feature
+# query T
+# select i::smallint[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::smallint])
+
+# TODO: unsupported feature
+# query T
+# select i::integer[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::integer])
+
+# TODO: unsupported feature
+# query T
+# select i::bigint[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::bigint])
+
+# TODO: unsupported feature
+# query T
+# select i::utinyint[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::utinyint])
+
+# TODO: unsupported feature
+# query T
+# select i::usmallint[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::usmallint])
+
+# TODO: unsupported feature
+# query T
+# select i::uinteger[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::uinteger])
+
+# TODO: unsupported feature
+# query T
+# select i::ubigint[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::ubigint])
+
+# TODO: unsupported feature
+# query T
+# select i::float[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::float])
+
+# TODO: unsupported feature
+# query T
+# select i::double[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::double])
+
+# TODO: unsupported feature
+# query T
+# select i::varchar[] from null_list
+# ----
+# NULL
+# [NULL]
+
+# TODO: unsupported feature
+# statement error
+# insert into null_list values ([42::varchar])
+
+# TODO: unsupported feature
+# statement ok
+# create table null_struct (i struct(n "null"))
+
+# TODO: unsupported feature
+# statement ok
+# insert into null_struct values (null), ({n:null})
+
+# TODO: unsupported feature
+# query T
+# select i from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n tinyint) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::tinyint})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n smallint) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::smallint})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n integer) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::integer})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n bigint) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::bigint})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n utinyint) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::utinyint})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n usmallint) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::usmallint})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n uinteger) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::uinteger})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n ubigint) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::ubigint})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n float) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::float})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n double) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::double})
+
+# TODO: unsupported feature
+# query T
+# select i::struct(n varchar) from null_struct
+# ----
+# NULL
+# {'n': NULL}
+
+# TODO: unsupported feature
+# statement error
+# insert into null_struct values ({n: 42::varchar})
+
+# TODO: unsupported feature
+# statement ok
+# create table null_map (i map("null", "null"))
+
+# Map keys cant be NULL
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (null), (map([null], [null]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::tinyint], [7::tinyint]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::smallint], [7::smallint]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::integer], [7::integer]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::bigint], [7::bigint]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::utinyint], [7::utinyint]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::usmallint], [7::usmallint]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::uinteger], [7::uinteger]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::ubigint], [7::ubigint]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::float], [7::float]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::double], [7::double]))
+
+# TODO: unsupported feature
+# statement error
+# insert into null_map values (map([42::varchar], [7::varchar]))

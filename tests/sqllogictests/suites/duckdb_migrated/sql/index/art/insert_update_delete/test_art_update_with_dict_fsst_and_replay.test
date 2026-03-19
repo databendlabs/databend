@@ -1,24 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS bar
 
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE bar (col1 VARCHAR, col2 VARCHAR UNIQUE)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO bar (col1, col2) VALUES (NULL, 'one');
-
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE bar AS original SET col1 = 'a'
-
-# TODO: unsupported feature
-# query I
-# SELECT col1 FROM bar WHERE col2 = 'one'
-# ----
-# a

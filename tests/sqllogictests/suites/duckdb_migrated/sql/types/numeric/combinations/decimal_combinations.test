@@ -1,0 +1,247 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bigint_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS hugeint_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integer_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS smallint_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tinyint_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ubigint_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS uinteger_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS usmallint_limits
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS utinyint_limits
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tinyint_limits AS SELECT (-128)::TINYINT min, 127::TINYINT max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE smallint_limits AS SELECT (-32768)::SMALLINT min, 32767::SMALLINT max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integer_limits AS SELECT (-2147483648)::INTEGER min, 2147483647::INTEGER max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bigint_limits AS SELECT (-9223372036854775808)::BIGINT min, 9223372036854775807::BIGINT max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE utinyint_limits AS SELECT (0)::UTINYINT min, 255::UTINYINT max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE usmallint_limits AS SELECT (0)::USMALLINT min, 65535::USMALLINT max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE uinteger_limits AS SELECT (0)::UINTEGER min, 4294967295::UINTEGER max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE ubigint_limits AS SELECT (0)::UBIGINT min, 18446744073709551615::UBIGINT max
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE hugeint_limits AS SELECT (-17014118346046923173168730371588410572)::HUGEINT min, 17014118346046923173168730371588410572::HUGEINT max
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from TINYINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from TINYINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from SMALLINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from SMALLINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from INTEGER_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from INTEGER_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from BIGINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from BIGINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from UTINYINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from UTINYINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from USMALLINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from USMALLINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from UINTEGER_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from UINTEGER_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT max from UBIGINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select (typeof([(SELECT min from UBIGINT_limits), 1.00005])::VARCHAR)[:7]
+# ----
+# DECIMAL
+
+# HUGEINT sets width to 38+scale, so it will never fit into DECIMAL
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT min from hugeint_limits), 1.00005]
+
+# TODO: unsupported feature
+# statement error
+# select [(SELECT max from hugeint_limits), 1.00005]

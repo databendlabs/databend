@@ -4,47 +4,6 @@ DROP TABLE IF EXISTS "MyTable"
 statement ok
 CREATE TABLE "MyTable"(i integer, "BigColumn" integer);
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable ALTER BIGCOLUMN SET DATA TYPE VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable DROP COLUMN BIGCOLUMN;
-
 statement error
 SELECT BIGCOLUMN FROM MyTable
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable ADD COLUMN "BIGCOLUMN" VARCHAR;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable ALTER COLUMN BIGCOLUMN SET DEFAULT 3
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO MyTable(BIGCOLUMN) VALUES (DEFAULT)
-
-# TODO: unsupported feature
-# query I
-# SELECT BIGCOLUMN FROM MyTable
-# ----
-# 3
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable ALTER COLUMN BIGCOLUMN DROP DEFAULT
-
-# TODO: unsupported feature
-# statement ok
-# SELECT BIGCOLUMN FROM MyTable
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE MyTable RENAME BIGCOLUMN TO "SmallColumn"
-
-# TODO: unsupported feature
-# statement ok
-# SELECT SmallColumn FROM MyTable

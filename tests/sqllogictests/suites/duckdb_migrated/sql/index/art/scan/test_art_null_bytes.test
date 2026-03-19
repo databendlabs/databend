@@ -4,92 +4,9 @@ DROP TABLE IF EXISTS blobs
 statement ok
 DROP TABLE IF EXISTS varchars
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE varchars(v VARCHAR PRIMARY KEY);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO varchars VALUES ('hello'), ('hello' || chr(0)), ('hello' || chr(0) || chr(0)), ('hello' || chr(0) || chr(0) || chr(0));
-
 statement error
 INSERT INTO varchars VALUES ('hello' || chr(0) || chr(0) || chr(0));
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM varchars WHERE v = 'hello'
-# ----
-# hello
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM varchars WHERE v = 'hello' || chr(0)
-# ----
-# hello\0
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM varchars WHERE v = 'hello' || chr(0) || chr(0)
-# ----
-# hello\0\0
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM varchars WHERE v = 'hello' || chr(0) || chr(0) || chr(0)
-# ----
-# hello\0\0\0
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE blobs(b BLOB PRIMARY KEY);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO blobs VALUES (''), ('\x00'), ('\x01'), ('\x00\x01'), ('\x01\x00'), ('\x01\x01'), ('\x00\x00');
 
 statement error
 INSERT INTO blobs VALUES ('\x00\x01');
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM blobs WHERE b = ''
-# ----
-# (empty)
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM blobs WHERE b = '\x00'
-# ----
-# \x00
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM blobs WHERE b = '\x00\x01'
-# ----
-# \x00\x01
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM blobs WHERE b >= '\x00' ORDER BY b::VARCHAR
-# ----
-# \x00
-# \x00\x00
-# \x00\x01
-# \x01
-# \x01\x00
-# \x01\x01
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM blobs WHERE b >= '\x01' ORDER BY b::VARCHAR
-# ----
-# \x01
-# \x01\x00
-# \x01\x01
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM blobs WHERE b >= '\x01\x00' ORDER BY b::VARCHAR
-# ----
-# \x01\x00
-# \x01\x01

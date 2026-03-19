@@ -33,32 +33,10 @@ DROP TABLE IF EXISTS test_nullable
 # 2. Inner nodes without children (num_children == 0, no type set)
 # 3. Leaf nodes (type set)
 # 4. Backwards compatibility with non-standard Parquet files
-# TODO: unsupported feature
-# query I
-# SELECT count(*) FROM parquet_schema('{DATA_DIR}/parquet-testing/empty-group/empty_group_test.parquet');
-# ----
-# 5
-
 # Test 2: Verify the empty group is correctly identified in the schema
-
-# TODO: unsupported feature
-# query III
-# SELECT name, type, num_children
-# FROM parquet_schema('{DATA_DIR}/parquet-testing/empty-group/empty_group_test.parquet')
-# WHERE name = 'inner';
-# ----
-# inner	NULL	0
 
 # Test 3: Read issue6990.parquet which has 412 columns
 # This file was failing before the fix due to the schema parsing issue
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/transform/querying-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# query I
-# SELECT count(*) FROM '{DATA_DIR}/parquet-testing/issue6990.parquet';
-# ----
-# 1
 
 # Test 4: Create our own nested structure and verify it round-trips
 
@@ -68,29 +46,7 @@ CREATE TABLE test_nested AS SELECT
     {'a': {'b': {'c': 123}}} as deep_nested,
     {'x': 1, 'y': 2} as simple_struct;
 
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/unload-data/
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# statement ok
-# COPY test_nested TO '{TEMP_DIR}/test_nested.parquet' (FORMAT PARQUET);
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/transform/querying-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# query III
-# SELECT * FROM '{TEMP_DIR}/test_nested.parquet';
-# ----
-# 1	{'a': {'b': {'c': 123}}}	{'x': 1, 'y': 2}
-
 # Test 5: Verify parquet_metadata works on files with complex schemas
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/transform/querying-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# query I
-# SELECT count(*) > 0 FROM parquet_metadata('{TEMP_DIR}/test_nested.parquet');
-# ----
-# 1
 
 # Test 6: Test with LIST types (which create groups in Parquet schema)
 
@@ -100,64 +56,7 @@ CREATE TABLE test_lists AS SELECT
     [{'x': 1}, {'x': 2}] as list_of_structs,
     [[1, 2], [3, 4]] as nested_list;
 
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/unload-data/
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# statement ok
-# COPY test_lists TO '{TEMP_DIR}/test_lists.parquet' (FORMAT PARQUET);
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/transform/querying-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# query III
-# SELECT * FROM '{TEMP_DIR}/test_lists.parquet';
-# ----
-# [1, 2, 3]	[{'x': 1}, {'x': 2}]	[[1, 2], [3, 4]]
-
 # Test 7: Verify MAP types work (maps are represented as groups with key-value pairs)
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/sql/sql-reference/data-types/map
-# ref: https://duckdb.org/docs/stable/sql/data_types/map
-# statement ok
-# CREATE TABLE test_maps AS SELECT
-#     MAP {'a': 1, 'b': 2} as simple_map,
-#     MAP {'nested': {'inner': 123}} as map_of_struct;
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/unload-data/
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# statement ok
-# COPY test_maps TO '{TEMP_DIR}/test_maps.parquet' (FORMAT PARQUET);
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/transform/querying-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# query II
-# SELECT * FROM '{TEMP_DIR}/test_maps.parquet';
-# ----
-# {a=1, b=2}	{nested={'inner': 123}}
 
 # Test 8: Ensure we handle optional/nullable groups correctly
 
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/sql/sql-reference/data-types/struct
-# ref: https://duckdb.org/docs/stable/sql/data_types/struct
-# statement ok
-# CREATE TABLE test_nullable AS SELECT
-#     {'a': NULL, 'b': 2} as partial_null,
-#     NULL::STRUCT(x INT, y INT) as full_null;
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/unload-data/
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# statement ok
-# COPY test_nullable TO '{TEMP_DIR}/test_nullable.parquet' (FORMAT PARQUET);
-
-# TODO: unsupported feature
-# ref: https://docs.databend.cn/guides/load-data/transform/querying-parquet
-# ref: https://duckdb.org/docs/stable/data/parquet/overview.html
-# query II
-# SELECT * FROM '{TEMP_DIR}/test_nullable.parquet';
-# ----
-# {'a': NULL, 'b': 2}	NULL

@@ -6,28 +6,5 @@ CREATE TABLE tbl AS SELECT * FROM range(0, 10) tbl(i)
 
 # can cast bigint -> bigint implicitly
 
-# TODO: unknown function
-# query I
-# SELECT can_cast_implicitly(i, NULL::BIGINT) FROM tbl LIMIT 1
-# ----
-# 1
-
-# TODO: unknown function
-# query I
-# SELECT can_cast_implicitly(i, NULL::HUGEINT) FROM tbl LIMIT 1
-# ----
-# 1
-
 # cannot cast bigint -> int implicitly
 
-# TODO: unknown function
-# query I
-# SELECT can_cast_implicitly(i, NULL::INTEGER) FROM tbl LIMIT 1
-# ----
-# 0
-
-# TODO: unknown function
-# query I
-# SELECT can_cast_implicitly(i, NULL::VARCHAR) FROM tbl LIMIT 1
-# ----
-# 0

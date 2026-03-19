@@ -7,32 +7,14 @@ CREATE TABLE t(i INTEGER, j INTEGER)
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE t ALTER COLUMN j SET NOT NULL
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: result differs
-# statement error
-# INSERT INTO t VALUES(7777, NULL)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES(7, 7)
 
 statement ok
 ROLLBACK
 
 statement ok
 COMMIT
-
-# TODO: result differs
-# query I
-# SELECT i FROM t
-# ----
-# 7
 
 # Scenario #2, tran1 set not null, tran2 failed to commit
 
@@ -48,26 +30,6 @@ BEGIN TRANSACTION
 statement ok
 BEGIN TRANSACTION
 
-# TODO: result differs
-# statement ok
-# INSERT INTO t VALUES(7777, NULL)
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE t ALTER COLUMN j SET NOT NULL
-
-# TODO: result differs
-# statement ok
-# COMMIT
-
-# TODO: result differs
-# statement error
-# COMMIT
-
-# TODO: result differs
-# statement error
-# INSERT INTO t VALUES(7777, NULL)
-
 query I
 SELECT COUNT(*) FROM  t
 ----
@@ -75,41 +37,11 @@ SELECT COUNT(*) FROM  t
 
 # Scenario #3, cannot insert if one connection alter column
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS t
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(i INTEGER, j INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE t ALTER COLUMN j SET NOT NULL
-
-# TODO: result differs
-# statement ok
-# BEGIN TRANSACTION
-
-# TODO: result differs
-# statement error
-# INSERT INTO t VALUES(1, 1)
-
 statement ok
 COMMIT
 
 statement ok
 ROLLBACK
-
-# TODO: unsupported feature
-# query I
-# SELECT count(*) from t
-# ----
-# 1
 
 # For following tests:
 # begin t1 and begin t2
@@ -125,37 +57,11 @@ ROLLBACK
 statement ok
 DROP TABLE IF EXISTS t
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(i INTEGER, j INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
-
-# TODO: result differs
-# statement ok
-# ALTER TABLE t ALTER COLUMN j SET NOT NULL
-
-# TODO: result differs
-# statement ok
-# COMMIT
-
 statement error
 INSERT INTO t VALUES(1, NULL)
 
 statement ok
 ROLLBACK
-
-# TODO: unsupported feature
-# query I
-# SELECT count(*) from t
-# ----
-# 1
 
 # Scenario #5, i2+a1+c1+c2
 # c2 failed with following error
@@ -167,35 +73,7 @@ DROP TABLE IF EXISTS t
 statement ok
 CREATE TABLE t(i INTEGER, j INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES(1, NULL)
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE t ALTER COLUMN j SET NOT NULL
-
-# TODO: result differs
-# statement ok
-# COMMIT
-
 #Failed to commit
-
-# TODO: result differs
-# statement error
-# COMMIT
-
-# TODO: unsupported feature
-# statement error
-# INSERT INTO t VALUES(2, NULL)
 
 query I
 SELECT count(*) from t
@@ -218,29 +96,9 @@ BEGIN TRANSACTION
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES(1, NULL)
-
-# TODO: result differs
-# statement ok
-# ALTER TABLE t ALTER COLUMN j SET NOT NULL
-
 # Failed to commit
 
-# TODO: result differs
-# statement error
-# COMMIT
-
-# TODO: result differs
-# statement ok
-# COMMIT
-
 # Failed to insert null
-
-# TODO: result differs
-# statement error
-# INSERT INTO t VALUES(2, NULL)
 
 query I
 SELECT count(*) from t

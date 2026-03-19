@@ -40,36 +40,6 @@ SELECT 1=false;
 
 # boolean <-> string
 
-# TODO: unsupported feature
-# query T
-# SELECT true='1';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT true='1'::VARCHAR;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT true='0';
-# ----
-# 0
-
-# TODO: unsupported feature
-# query T
-# SELECT false='0';
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT false='1';
-# ----
-# 0
-
 query B
 SELECT true='true';
 ----
@@ -89,30 +59,6 @@ query B
 SELECT false='true';
 ----
 0
-
-# TODO: unsupported feature
-# query T
-# SELECT '1'=true;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT '0'=true;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query T
-# SELECT '0'=false;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query T
-# SELECT '1'=false;
-# ----
-# 0
 
 query B
 SELECT true='true';

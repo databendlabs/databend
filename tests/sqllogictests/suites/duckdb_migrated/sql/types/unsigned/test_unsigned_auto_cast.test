@@ -1,0 +1,229 @@
+# TODO: unsupported feature
+# query I
+# SELECT 200::UTINYINT + 0.5
+# ----
+# 200.5
+
+# TODO: unsupported feature
+# query I
+# SELECT COS(100::UTINYINT)
+# ----
+# 0.862318872287684
+
+# test auto cast of UTINYINT -> VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT CONCAT('hello number ', 100::UTINYINT)
+# ----
+# hello number 100
+
+
+
+# test auto cast of integer types to USMALLINT
+
+# TODO: unsupported feature
+# query I
+# SELECT 100000000::INTEGER + 100::USMALLINT
+# ----
+# 100000100
+
+# test auto cast of USMALLINT -> DOUBLE
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::USMALLINT + 0.5
+# ----
+# 100.5
+
+# TODO: unsupported feature
+# query I
+# SELECT COS(100::USMALLINT)
+# ----
+# 0.862318872287684
+
+# test auto cast of USMALLINT -> VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT CONCAT('hello number ', 100::USMALLINT)
+# ----
+# hello number 100
+
+
+# test auto cast of  integer types to UINTEGER
+
+# TODO: unsupported feature
+# query I
+# SELECT 100000000::INTEGER + 100::UINTEGER
+# ----
+# 100000100
+
+# test auto cast of UINTEGER -> DOUBLE
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UINTEGER + 0.5
+# ----
+# 100.5
+
+# TODO: unsupported feature
+# query I
+# SELECT COS(100::UINTEGER)
+# ----
+# 0.862318872287684
+
+# test auto cast of UINTEGER -> VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT CONCAT('hello number ', 100::UINTEGER)
+# ----
+# hello number 100
+
+
+# test auto cast of  integer types to UBIGINT
+
+# TODO: unsupported feature
+# query I
+# SELECT 100000000::INTEGER + 100::UBIGINT
+# ----
+# 100000100
+
+# test auto cast of UBIGINT -> DOUBLE
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UBIGINT + 0.5
+# ----
+# 100.5
+
+# TODO: unsupported feature
+# query I
+# SELECT COS(100::UBIGINT)
+# ----
+# 0.862318872287684
+
+# test auto cast of UBIGINT -> VARCHAR
+
+# TODO: unsupported feature
+# query I
+# SELECT CONCAT('hello number ', 100::UBIGINT)
+# ----
+# hello number 100
+
+
+# Tests on string -> unsigned
+
+# TODO: unsupported feature
+# query I
+# SELECT '255'::UTINYINT;
+# ----
+# 255
+
+# TODO: unsupported feature
+# statement error
+# SELECT '256'::UTINYINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT '255'::USMALLINT;
+# ----
+# 255
+
+# TODO: unsupported feature
+# statement error
+# SELECT '65536'::USMALLINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT '65535'::UINTEGER;
+# ----
+# 65535
+
+# TODO: unsupported feature
+# statement error
+# SELECT '4294967296'::UINTEGER;
+
+# TODO: unsupported feature
+# query I
+# SELECT '4294967295'::UBIGINT;
+# ----
+# 4294967295
+
+# TODO: unsupported feature
+# statement error
+# SELECT '18446744073709551616'::UBIGINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT '18446744073709551615'::UBIGINT;
+# ----
+# 18446744073709551615
+
+
+# More tests with decimals
+
+# TODO: unsupported feature
+# query I
+# SELECT (100::UTINYINT)::DECIMAL(3,0);
+# ----
+# 100
+
+# TODO: unsupported feature
+# statement error
+# SELECT (100::UTINYINT)::DECIMAL(2,0);
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UTINYINT * 100::DECIMAL(3,0);
+# ----
+# 10000
+
+# TODO: unsupported feature
+# query I
+# SELECT (100::USMALLINT)::DECIMAL(3,0);
+# ----
+# 100
+
+# TODO: unsupported feature
+# statement error
+# SELECT (100::USMALLINT)::DECIMAL(2,0);
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::USMALLINT * 100::DECIMAL(3,0);
+# ----
+# 10000
+
+# TODO: unsupported feature
+# query I
+# SELECT (100::UINTEGER)::DECIMAL(3,0);
+# ----
+# 100
+
+# TODO: unsupported feature
+# statement error
+# SELECT (100::UINTEGER)::DECIMAL(2,0);
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UINTEGER * 100::DECIMAL(3,0);
+# ----
+# 10000
+
+# TODO: unsupported feature
+# query I
+# SELECT (100::UBIGINT)::DECIMAL(3,0);
+# ----
+# 100
+
+# TODO: unsupported feature
+# statement error
+# SELECT (100::UBIGINT)::DECIMAL(2,0);
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UBIGINT * 100::DECIMAL(3,0);
+# ----
+# 10000

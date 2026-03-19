@@ -1,0 +1,28 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (u UNION(a INT, b VARCHAR));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1), (NULL), (NULL::VARCHAR), (NULL::INT);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1), (NULL), (NULL::VARCHAR), (NULL::INT);
+
+# TODO: unsupported feature
+# query II rowsort
+# SELECT union_tag(u) as tag, u as val FROM tbl;
+# ----
+# NULL	NULL
+# a	1
+# a	NULL
+# b	NULL

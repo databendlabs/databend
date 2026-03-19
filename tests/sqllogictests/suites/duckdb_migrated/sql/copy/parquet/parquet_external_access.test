@@ -2,10 +2,6 @@ statement ok
 DROP TABLE IF EXISTS lineitem
 
 # we cannot read parquet files
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE lineitem AS SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
-
 statement error
 SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
 

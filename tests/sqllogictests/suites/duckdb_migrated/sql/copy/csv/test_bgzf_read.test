@@ -4,22 +4,3 @@ DROP TABLE IF EXISTS bgzf
 statement ok
 DROP TABLE IF EXISTS concat
 
-# TODO: unknown function
-# statement ok
-# CREATE TABLE bgzf AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/bgzf.gz');
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM bgzf;
-# ----
-# 7
-
-# TODO: unknown function
-# statement ok
-# CREATE TABLE concat AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/test/concat.gz');
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM concat;
-# ----
-# 14

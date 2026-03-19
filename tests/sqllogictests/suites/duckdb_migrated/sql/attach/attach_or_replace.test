@@ -4,41 +4,14 @@ DROP TABLE IF EXISTS db1.all_types
 statement ok
 DROP TABLE IF EXISTS db2.all_types_new
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE db1.all_types AS SELECT * FROM test_all_types();
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE db2.all_types_new AS SELECT * FROM test_all_types();
-
-# TODO: unsupported feature
-# statement ok
-# DETACH db2;
-
 # ATTACH OR REPLACE same path to same alias should work
 
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM db1.all_types;
-
 # ATTACHing the same path to a different alias is an error
-
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM db1.all_types;
 
 # ATTACHing a new path to an existing alias detaches the old path and attaches the new path in its place
 
 statement error
 SELECT * FROM db1.all_types;
 
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM db1.all_types_new;
-
 # ATTACHing the now-unattached previous path should now work
 
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM db2.all_types;

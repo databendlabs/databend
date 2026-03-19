@@ -1,0 +1,212 @@
+# TODO: unsupported feature
+# query II
+# SELECT ~(-50::UHUGEINT), -(-(50::UHUGEINT));
+# ----
+# 49	50
+
+# negate 0
+
+# TODO: unsupported feature
+# query I
+# SELECT -(0::UHUGEINT)
+# ----
+# 0
+
+# addition
+# simple addition: small values
+
+# TODO: unsupported feature
+# query I
+# SELECT 42::UHUGEINT + 42::UHUGEINT;
+# ----
+# 84
+
+# large values
+
+# TODO: unsupported feature
+# query I
+# SELECT '100000000000000000000'::UHUGEINT + '100000000000000000000'::UHUGEINT;
+# ----
+# 200000000000000000000
+
+# overflow in addition
+
+# TODO: unsupported feature
+# statement error
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT + '340282366920938463463374607431768211455'::UHUGEINT;
+
+# TODO: unsupported feature
+# statement error
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT + '10'::UHUGEINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT - 10::UHUGEINT + 10::UHUGEINT
+# ----
+# 340282366920938463463374607431768211455
+
+# overflowing
+
+# TODO: unsupported feature
+# statement error
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT - 10::UHUGEINT + 11::UHUGEINT
+
+# TODO: unsupported feature
+# query II
+# SELECT 100::UHUGEINT - 42::UHUGEINT, 3::UHUGEINT - 2::UHUGEINT;
+# ----
+# 58	1
+
+# underflow in subtraction
+
+# TODO: unsupported feature
+# statement error
+# SELECT '0'::UHUGEINT - '1'::UHUGEINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UHUGEINT * 50::UHUGEINT;
+# ----
+# 5000
+
+# multiplying large numbers
+
+# TODO: unsupported feature
+# query II
+# SELECT '1701411834604692317'::UHUGEINT * '2'::UHUGEINT, '100000000000000000000'::UHUGEINT * '1000000000000000000'::UHUGEINT
+# ----
+# 3402823669209384634	100000000000000000000000000000000000000
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT * 1::UHUGEINT
+# ----
+# 340282366920938463463374607431768211455
+
+# overflow in multiplication
+
+# TODO: unsupported feature
+# statement error
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT * 2::UHUGEINT
+
+# TODO: unsupported feature
+# statement error
+# SELECT '34028236692093846346'::UHUGEINT * '33746074317682114556'::UHUGEINT
+
+# TODO: unsupported feature
+# query II
+# SELECT 100::UHUGEINT // 20::UHUGEINT, 90::UHUGEINT // 20::UHUGEINT
+# ----
+# 5	4
+
+# division by zero
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UHUGEINT // 0::UHUGEINT
+# ----
+# NULL
+
+# large values
+
+# TODO: unsupported feature
+# query II
+# SELECT '100000000000000000000000000000000000000'::UHUGEINT // '10000000000000'::UHUGEINT, '100000000000000000000000000000000000000'::UHUGEINT // '2'::UHUGEINT
+# ----
+# 10000000000000000000000000	50000000000000000000000000000000000000
+
+# modulo
+
+# TODO: unsupported feature
+# query II
+# SELECT 100::UHUGEINT % 20::UHUGEINT, 90::UHUGEINT % 20::UHUGEINT
+# ----
+# 0	10
+
+# modulo by zero
+
+# TODO: unsupported feature
+# query I
+# SELECT 100::UHUGEINT % 0::UHUGEINT
+# ----
+# NULL
+
+# large values
+
+# TODO: unsupported feature
+# query II
+# SELECT '100000000000000000000000000000000000000'::UHUGEINT % '6587689457689375689735'::UHUGEINT, '100000000000000000000000000000000000000'::UHUGEINT % '3'::UHUGEINT
+# ----
+# 5396771390320972230850	1
+
+# abs
+
+# TODO: unsupported feature
+# query I
+# SELECT ABS('100'::UHUGEINT);
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211454'::UHUGEINT + 1;
+# ----
+# 340282366920938463463374607431768211455
+
+# the other way around (i.e. move away from the overflow direction)
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT - 1;
+# ----
+# 340282366920938463463374607431768211454
+
+# now the reverse: right side is big
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 + '340282366920938463463374607431768211454'::UHUGEINT;
+# ----
+# 340282366920938463463374607431768211455
+
+# TODO: unsupported feature
+# statement error
+# SELECT 1::UHUGEINT + '340282366920938463463374607431768211455'::UHUGEINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT 1 - 1::UHUGEINT;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement error
+# SELECT 0::UHUGEINT - 1::UHUGEINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT - 1;
+# ----
+# 340282366920938463463374607431768211454
+
+# division
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT // 1;
+# ----
+# 340282366920938463463374607431768211455
+
+# TODO: unsupported feature
+# query I
+# SELECT '340282366920938463463374607431768211455'::UHUGEINT // '340282366920938463463374607431768211455'::UHUGEINT;
+# ----
+# 1
+
+# comparisons
+
+# TODO: unsupported feature
+# query II
+# SELECT '5'::UHUGEINT <> '5'::UHUGEINT, '5'::UHUGEINT <> '18446744073709551621'::UHUGEINT
+# ----
+# 0	1

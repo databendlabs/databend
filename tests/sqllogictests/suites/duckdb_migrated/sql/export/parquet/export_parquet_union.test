@@ -7,39 +7,8 @@ DROP TABLE IF EXISTS tbl2
 statement ok
 begin transaction;
 
-# TODO: unsupported feature
-# statement ok
-# create table tbl as select "union" from test_all_types(), range(0, 3);
-
-# TODO: unsupported feature
-# statement ok
-# create table tbl2 (a UNION(a bit, b bool));
-
-# TODO: unsupported feature
-# statement ok
-# insert into tbl2 VALUES ('00101010'::BIT), (True::BOOL), (NULL::BIT);
-
-# TODO: unsupported feature
-# query I nosort result1
-# select * from tbl;
-# ----
-
-# TODO: unsupported feature
-# query I nosort result2
-# select * from tbl2;
-# ----
-
 # now export the db
 
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I nosort result1
-# select * from tbl;
-# ----
-
-# TODO: unsupported feature
-# query I nosort result2
-# select * from tbl2;
-# ----

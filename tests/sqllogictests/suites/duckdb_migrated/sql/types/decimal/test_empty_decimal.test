@@ -1,24 +1,5 @@
 statement ok
 DROP TABLE IF EXISTS decimals
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE decimals(i DECIMAL(), j DECIMAL)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO decimals VALUES (0176030871715840, 2.2)
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM decimals
-# ----
-# 176030871715840.000	2.200
-
 # Test cast
 
-# TODO: unsupported feature
-# query II
-# SELECT 1.25::FLOAT::DECIMAL, 1.25::FLOAT::DECIMAL()
-# ----
-# 1.250	1.250

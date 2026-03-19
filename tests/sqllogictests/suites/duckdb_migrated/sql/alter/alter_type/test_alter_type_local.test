@@ -13,18 +13,6 @@ BEGIN TRANSACTION
 statement ok
 INSERT INTO test VALUES (3, 3)
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER i SET DATA TYPE BIGINT
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM test
-# ----
-# 1	1
-# 2	2
-# 3	3
-
 statement ok
 COMMIT
 

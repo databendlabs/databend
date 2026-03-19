@@ -50,6 +50,3 @@ INSERT INTO unsigned SELECT * FROM values_UINTEGER
 statement ok
 CREATE OR REPLACE TABLE unsigned(d UInt64)
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO unsigned SELECT * FROM values_UBIGINT

@@ -1,0 +1,572 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_structs
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_structs_nested
+
+# Always shred
+# TODO: unsupported feature
+# statement ok
+
+
+# 2 layers of nesting
+
+onlyif type=struct
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(
+# 	id INT,
+# 	s STRUCT(
+# 		name STRUCT(
+# 			v VARCHAR,
+# 			id INT
+# 		),
+# 		nested_struct STRUCT(
+# 			a integer,
+# 			b bool
+# 		)
+# 	)
+# );
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(
+# 	id INT,
+# 	s VARIANT
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_structs
+# VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}),
+#        (2, NULL),
+#        (3, {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}),
+#        (4, {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}});
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct FROM test_structs
+# ----
+# {'a': 42, 'b': 1}
+# NULL
+# {'a': 84, 'b': NULL}
+# {'a': NULL, 'b': 0}
+
+# Add a cast to shuffle the fields
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct::STRUCT(b BOOL, a INTEGER) FROM test_structs
+# ----
+# {'b': 1, 'a': 42}
+# NULL
+# {'b': NULL, 'a': 84}
+# {'b': 0, 'a': NULL}
+
+# Add a cast to change the types of the shuffled fields
+
+# TODO: unsupported feature
+# query I
+# select s.nested_struct::STRUCT(b INTEGER, a BIGINT) from test_structs
+# ----
+# {'b': 1, 'a': 42}
+# NULL
+# {'b': NULL, 'a': 84}
+# {'b': 0, 'a': NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct.a FROM test_structs
+# ----
+# 42
+# NULL
+# 84
+# NULL
+
+# Add a cast
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct.a::BIGINT FROM test_structs
+# ----
+# 42
+# NULL
+# 84
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct.a, s.name.v FROM test_structs
+# ----
+# 42	Row 1
+# NULL	NULL
+# 84	Row 3
+# NULL	NULL
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct.a, s.nested_struct, id FROM test_structs
+# ----
+# 42	1	42	{'a': 42, 'b': 1}	1
+# NULL	NULL	NULL	NULL	2
+# 84	NULL	84	{'a': 84, 'b': NULL}	3
+# NULL	0	NULL	{'a': NULL, 'b': 0}	4
+
+# Add a cast on the fields
+
+# TODO: unsupported feature
+# query IIII
+# SELECT s.nested_struct.a::BIGINT, s.nested_struct.b, s.nested_struct.a::TINYINT, id FROM test_structs
+# ----
+# 42	1	42	1
+# NULL	NULL	NULL	2
+# 84	NULL	84	3
+# NULL	0	NULL	4
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct.a, s.nested_struct FROM test_structs
+# ----
+# 42	{'a': 42, 'b': 1}
+# NULL	NULL
+# 84	{'a': 84, 'b': NULL}
+# NULL	{'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct, s.nested_struct.a FROM test_structs
+# ----
+# {'a': 42, 'b': 1}	42
+# NULL	NULL
+# {'a': 84, 'b': NULL}	84
+# {'a': NULL, 'b': 0}	NULL
+
+# Add a cast
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct, s.nested_struct.a::VARCHAR FROM test_structs
+# ----
+# {'a': 42, 'b': 1}	42
+# NULL	NULL
+# {'a': 84, 'b': NULL}	84
+# {'a': NULL, 'b': 0}	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT s.name.id, s.nested_struct.b,  FROM test_structs
+# ----
+# 1	1
+# NULL	NULL
+# 3	NULL
+# NULL	0
+
+# TODO: unsupported feature
+# query I
+# SELECT s.name.v FROM test_structs WHERE s.nested_struct.b
+# ----
+# Row 1
+
+# source
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs_nested(id INT, base STRUCT(s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool))));
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs_nested(id INT, base VARIANT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_structs_nested
+# VALUES (1, {'s': {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}}),
+#        (2, NULL),
+#        (3, {'s': {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}}),
+#        (4, {'s': {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}});
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT base.s.nested_struct FROM test_structs_nested
+# ----
+# {'a': 42, 'b': 1}
+# NULL
+# {'a': 84, 'b': NULL}
+# {'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query I
+# SELECT base.s.nested_struct.a FROM test_structs_nested
+# ----
+# 42
+# NULL
+# 84
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, base.s.name.v FROM test_structs_nested
+# ----
+# 42	Row 1
+# NULL	NULL
+# 84	Row 3
+# NULL	NULL
+
+# TODO: unsupported feature
+# query III
+# SELECT base.s.nested_struct.a, base.s.nested_struct.b, base.s.nested_struct FROM test_structs_nested
+# ----
+# 42	1	{'a': 42, 'b': 1}
+# NULL	NULL	NULL
+# 84	NULL	{'a': 84, 'b': NULL}
+# NULL	0	{'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, base.s.nested_struct FROM test_structs_nested
+# ----
+# 42	{'a': 42, 'b': 1}
+# NULL	NULL
+# 84	{'a': 84, 'b': NULL}
+# NULL	{'a': NULL, 'b': 0}
+
+onlyif type=struct
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, base.s FROM test_structs_nested
+# ----
+# 42	{'name': {'v': Row 1, 'id': 1}, 'nested_struct': {'a': 42, 'b': 1}}
+# NULL	NULL
+# 84	{'name': {'v': Row 3, 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}
+# NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': 0}}
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, variant_normalize(base.s) FROM test_structs_nested
+# ----
+# 42	{'name': {'id': 1, 'v': Row 1}, 'nested_struct': {'a': 42, 'b': 1}}
+# NULL	NULL
+# 84	{'name': {'id': 3, 'v': Row 3}, 'nested_struct': {'a': 84, 'b': NULL}}
+# NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': 0}}
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct, base.s.nested_struct.a FROM test_structs_nested
+# ----
+# {'a': 42, 'b': 1}	42
+# NULL	NULL
+# {'a': 84, 'b': NULL}	84
+# {'a': NULL, 'b': 0}	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.name.id, base.s.nested_struct.b,  FROM test_structs_nested
+# ----
+# 1	1
+# NULL	NULL
+# 3	NULL
+# NULL	0
+
+# TODO: unsupported feature
+# query I
+# SELECT base.s.name.v FROM test_structs_nested WHERE base.s.nested_struct.b
+# ----
+# Row 1
+
+# source
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(
+# 	id INT,
+# 	s STRUCT(
+# 		name STRUCT(
+# 			v VARCHAR,
+# 			id INT
+# 		),
+# 		nested_struct STRUCT(
+# 			a integer,
+# 			b bool
+# 		)
+# 	)
+# );
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs(
+# 	id INT,
+# 	s VARIANT
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_structs
+# VALUES (1, {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}),
+#        (2, NULL),
+#        (3, {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}),
+#        (4, {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}});
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct FROM test_structs
+# ----
+# {'a': 42, 'b': 1}
+# NULL
+# {'a': 84, 'b': NULL}
+# {'a': NULL, 'b': 0}
+
+# Add a cast to shuffle the fields
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct::STRUCT(b BOOL, a INTEGER) FROM test_structs
+# ----
+# {'b': 1, 'a': 42}
+# NULL
+# {'b': NULL, 'a': 84}
+# {'b': 0, 'a': NULL}
+
+# Add a cast to change the types of the shuffled fields
+
+# TODO: unsupported feature
+# query I
+# select s.nested_struct::STRUCT(b INTEGER, a BIGINT) from test_structs
+# ----
+# {'b': 1, 'a': 42}
+# NULL
+# {'b': NULL, 'a': 84}
+# {'b': 0, 'a': NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct.a FROM test_structs
+# ----
+# 42
+# NULL
+# 84
+# NULL
+
+# Add a cast
+
+# TODO: unsupported feature
+# query I
+# SELECT s.nested_struct.a::BIGINT FROM test_structs
+# ----
+# 42
+# NULL
+# 84
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct.a, s.name.v FROM test_structs
+# ----
+# 42	Row 1
+# NULL	NULL
+# 84	Row 3
+# NULL	NULL
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT s.nested_struct.a, s.nested_struct.b, s.nested_struct.a, s.nested_struct, id FROM test_structs
+# ----
+# 42	1	42	{'a': 42, 'b': 1}	1
+# NULL	NULL	NULL	NULL	2
+# 84	NULL	84	{'a': 84, 'b': NULL}	3
+# NULL	0	NULL	{'a': NULL, 'b': 0}	4
+
+# Add a cast on the fields
+
+# TODO: unsupported feature
+# query IIII
+# SELECT s.nested_struct.a::BIGINT, s.nested_struct.b, s.nested_struct.a::TINYINT, id FROM test_structs
+# ----
+# 42	1	42	1
+# NULL	NULL	NULL	2
+# 84	NULL	84	3
+# NULL	0	NULL	4
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct.a, s.nested_struct FROM test_structs
+# ----
+# 42	{'a': 42, 'b': 1}
+# NULL	NULL
+# 84	{'a': 84, 'b': NULL}
+# NULL	{'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct, s.nested_struct.a FROM test_structs
+# ----
+# {'a': 42, 'b': 1}	42
+# NULL	NULL
+# {'a': 84, 'b': NULL}	84
+# {'a': NULL, 'b': 0}	NULL
+
+# Add a cast
+
+# TODO: unsupported feature
+# query II
+# SELECT s.nested_struct, s.nested_struct.a::VARCHAR FROM test_structs
+# ----
+# {'a': 42, 'b': 1}	42
+# NULL	NULL
+# {'a': 84, 'b': NULL}	84
+# {'a': NULL, 'b': 0}	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT s.name.id, s.nested_struct.b,  FROM test_structs
+# ----
+# 1	1
+# NULL	NULL
+# 3	NULL
+# NULL	0
+
+# TODO: unsupported feature
+# query I
+# SELECT s.name.v FROM test_structs WHERE s.nested_struct.b
+# ----
+# Row 1
+
+# source
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs_nested(id INT, base STRUCT(s STRUCT(name STRUCT(v VARCHAR, id INT), nested_struct STRUCT(a integer, b bool))));
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_structs_nested(id INT, base VARIANT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_structs_nested
+# VALUES (1, {'s': {'name': {'v': 'Row 1', 'id': 1}, 'nested_struct': {'a': 42, 'b': true}}}),
+#        (2, NULL),
+#        (3, {'s': {'name': {'v': 'Row 3', 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}}),
+#        (4, {'s': {'name': NULL, 'nested_struct': {'a': NULL, 'b': false}}});
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT base.s.nested_struct FROM test_structs_nested
+# ----
+# {'a': 42, 'b': 1}
+# NULL
+# {'a': 84, 'b': NULL}
+# {'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query I
+# SELECT base.s.nested_struct.a FROM test_structs_nested
+# ----
+# 42
+# NULL
+# 84
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, base.s.name.v FROM test_structs_nested
+# ----
+# 42	Row 1
+# NULL	NULL
+# 84	Row 3
+# NULL	NULL
+
+# TODO: unsupported feature
+# query III
+# SELECT base.s.nested_struct.a, base.s.nested_struct.b, base.s.nested_struct FROM test_structs_nested
+# ----
+# 42	1	{'a': 42, 'b': 1}
+# NULL	NULL	NULL
+# 84	NULL	{'a': 84, 'b': NULL}
+# NULL	0	{'a': NULL, 'b': 0}
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, base.s.nested_struct FROM test_structs_nested
+# ----
+# 42	{'a': 42, 'b': 1}
+# NULL	NULL
+# 84	{'a': 84, 'b': NULL}
+# NULL	{'a': NULL, 'b': 0}
+
+onlyif type=struct
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, base.s FROM test_structs_nested
+# ----
+# 42	{'name': {'v': Row 1, 'id': 1}, 'nested_struct': {'a': 42, 'b': 1}}
+# NULL	NULL
+# 84	{'name': {'v': Row 3, 'id': 3}, 'nested_struct': {'a': 84, 'b': NULL}}
+# NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': 0}}
+
+onlyif type=variant
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct.a, variant_normalize(base.s) FROM test_structs_nested
+# ----
+# 42	{'name': {'id': 1, 'v': Row 1}, 'nested_struct': {'a': 42, 'b': 1}}
+# NULL	NULL
+# 84	{'name': {'id': 3, 'v': Row 3}, 'nested_struct': {'a': 84, 'b': NULL}}
+# NULL	{'name': NULL, 'nested_struct': {'a': NULL, 'b': 0}}
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.nested_struct, base.s.nested_struct.a FROM test_structs_nested
+# ----
+# {'a': 42, 'b': 1}	42
+# NULL	NULL
+# {'a': 84, 'b': NULL}	84
+# {'a': NULL, 'b': 0}	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT base.s.name.id, base.s.nested_struct.b,  FROM test_structs_nested
+# ----
+# 1	1
+# NULL	NULL
+# 3	NULL
+# NULL	0
+
+# TODO: unsupported feature
+# query I
+# SELECT base.s.name.v FROM test_structs_nested WHERE base.s.nested_struct.b
+# ----
+# Row 1
+
+# source

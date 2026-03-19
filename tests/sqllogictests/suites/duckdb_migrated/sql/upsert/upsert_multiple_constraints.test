@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS tbl (id INTEGER PRIMARY KEY, uniq INTEGER, UNIQUE(uniq));
+
+# TODO: unsupported feature
+# query I
+# INSERT OR IGNORE INTO tbl VALUES (1, 1), (2, 1);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT uniq FROM tbl
+# ----
+# 1

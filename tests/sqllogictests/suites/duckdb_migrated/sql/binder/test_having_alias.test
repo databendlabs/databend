@@ -20,12 +20,6 @@ SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING k=1 ORDER BY i;
 statement error
 SELECT i, COUNT(*) AS k FROM integers GROUP BY i HAVING integers.k=1 ORDER BY i;
 
-# TODO: result differs
-# query II
-# SELECT 1 AS i, COUNT(*) FROM integers GROUP BY i HAVING i=2;
-# ----
-# 1	1
-
 # as if qualified
 
 query II
@@ -68,17 +62,8 @@ SELECT COUNT(i) AS j FROM integers HAVING j=j;
 
 # multiple alias in HAVING to expression with side-effects
 
-# TODO: unknown function
-# query I
-# SELECT COUNT(*) FROM (SELECT i, SUM(RANDOM()) AS k FROM integers GROUP BY i HAVING k=k) tbl(i, k);
-# ----
-# 5
-
 # if this is qualified we get an error
 
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING integers.i=5 ORDER BY i;
 
-# TODO: result differs
-# statement error
-# SELECT i + i AS i FROM integers HAVING i=5 ORDER BY i;

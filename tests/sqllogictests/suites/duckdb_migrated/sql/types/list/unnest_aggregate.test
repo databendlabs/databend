@@ -3,13 +3,3 @@ SELECT SUM(a) FROM UNNEST(RANGE(1, 11)) t(a);
 ----
 55
 
-# TODO: unsupported feature
-# statement ok
-# create or replace function rnv(a,b) as (select a + b * pi());
-
-# TODO: unsupported feature
-# query I
-# select rnv(0, 1) from unnest( range(0,2) );
-# ----
-# 3.141592653589793
-# 3.141592653589793

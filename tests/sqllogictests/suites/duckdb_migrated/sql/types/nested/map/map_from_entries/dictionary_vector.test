@@ -15,15 +15,3 @@ create table t2 as
 	select 0 id
 from range(0, 5);
 
-# TODO: unsupported feature
-# query II
-# select
-# 	t1.id,
-# 	map_from_entries(entry)
-# from t1 join t2 using (id);
-# ----
-# 0	{0=0}
-# 0	{0=0}
-# 0	{0=0}
-# 0	{0=0}
-# 0	{0=0}

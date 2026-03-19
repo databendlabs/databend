@@ -1,0 +1,56 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)
+
+# aggregations should ignore NULLs
+
+query III
+SELECT SUM(a), MIN(a), MAX(a) FROM test
+----
+24 11 13
+
+# count should ignore NULL
+# * returns full table count
+# counting "a" ignores null values
+
+query III
+SELECT COUNT(*), COUNT(a), COUNT(b) FROM test
+----
+3	2	3
+
+# with GROUP BY as well
+
+query IIIII
+SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
+----
+21 0 NULL NULL NULL
+22 2 24 11 13
+
+# GROUP BY null value
+
+statement ok
+INSERT INTO test VALUES (12, NULL), (16, NULL)
+
+query IIIII
+SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
+----
+21 0 NULL NULL NULL
+22 2 24 11 13
+NULL 2 28 12 16
+
+# NULL values should be ignored entirely in the aggregation
+
+statement ok
+INSERT INTO test VALUES (NULL, NULL), (NULL, 22)
+
+query IIIII
+SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
+----
+21 0 NULL NULL NULL
+22 2 24 11 13
+NULL 2 28 12 16

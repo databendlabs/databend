@@ -1,0 +1,38 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP_FROM_ENTRIES(ARRAY[NULL, (1, 'x'), NULL, (2, 'y')]);
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(NULL);
+# ----
+# NULL
+
+#keys cannot be NULL
+
+# TODO: unsupported feature
+# statement error
+# SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (NULL, 'z'), (2, 'y')]);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	input STRUCT(a INTEGER, b INTEGER)[]
+# );
+# INSERT INTO tbl VALUES(NULL);
+# INSERT INTO tbl VALUES([(5,3), (6,4), (7,3)]);
+# INSERT INTO tbl VALUES([(5,3), (6,4), (7,3)]);
+# INSERT INTO tbl VALUES([]);
+
+# TODO: unsupported feature
+# query I
+# SELECT MAP_FROM_ENTRIES(input) FROM tbl
+# ----
+# NULL
+# {5=3, 6=4, 7=3}
+# {5=3, 6=4, 7=3}
+# {}

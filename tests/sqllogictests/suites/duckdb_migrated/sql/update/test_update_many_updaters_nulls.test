@@ -1,0 +1,132 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2), (3)
+
+# now we start updating specific values and reading different versions
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# query I updater
+# UPDATE test SET a=NULL WHERE a=1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# query I updater
+# UPDATE test SET a=NULL WHERE a=2
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# query I updater
+# UPDATE test SET a=NULL WHERE a=3
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# query I updater
+# SELECT COUNT(*) FROM test WHERE a IS NULL
+# ----
+# 3
+
+# TODO: unsupported feature
+# query I updater
+# UPDATE test SET a=99 WHERE a IS NULL
+# ----
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# now read the different states
+# con sees {1, 2, 3}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# con2 sees {NULL, 2, 3}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# 2
+# 3
+
+# con3 sees {NULL, NULL, 3}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# 3
+
+# con4 sees {NULL, NULL, NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# NULL
+# NULL
+
+# con5 sees {99, 99, 99}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 99
+# 99
+# 99
+
+# now verify that we get conflicts when we update values that have been updated AFTER we started
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=99 WHERE a=1
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=99 WHERE a=2
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=99 WHERE a=3
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=99 WHERE a IS NULL

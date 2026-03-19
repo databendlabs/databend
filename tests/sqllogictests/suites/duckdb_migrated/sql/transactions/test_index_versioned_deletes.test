@@ -1,14 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER PRIMARY KEY)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (1), (2), (3)
-
 # local delete
 
 statement ok
@@ -16,55 +8,12 @@ BEGIN TRANSACTION
 
 # "1" exists for both transactions
 
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-# 1
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM integers WHERE i=1
-
 # "1" only exists for con2
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-# 1
 
 # rollback
 
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM integers WHERE i=1
-
 statement ok
 ROLLBACK
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-# 1
 
 # local update of primary key column
 
@@ -73,84 +22,10 @@ BEGIN TRANSACTION
 
 # 1 => 4
 
-# TODO: unsupported feature
-# statement ok
-# UPDATE integers SET i=4 WHERE i=1
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=4
-# ----
-# 4
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=4
-# ----
-
 # delete 4
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM integers WHERE i=4
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=4
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=4
-# ----
 
 # commit
 
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers WHERE i=1
-# ----
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers ORDER BY i
-# ----
-# 2
-# 3
-
-# TODO: unsupported feature
-# query I
-# SELECT i FROM integers ORDER BY i
-# ----
-# 2
-# 3

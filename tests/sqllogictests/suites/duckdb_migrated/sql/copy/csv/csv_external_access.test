@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS date_test
 statement ok
 CREATE TABLE date_test(d date);
 
-# TODO: unsupported feature
-# statement ok
-# COPY date_test FROM '{DATA_DIR}/csv/test/date.csv';
-
 statement error
 SELECT * FROM read_csv('{DATA_DIR}/csv/test/date.csv', columns = {'d': 'DATE'});
 

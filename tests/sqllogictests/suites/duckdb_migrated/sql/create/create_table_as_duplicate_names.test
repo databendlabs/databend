@@ -46,24 +46,6 @@ SELECT * FROM (SELECT i, i, i, i FROM range(0, 5) tbl(i)) tbl;
 3	3	3	3
 4	4	4	4
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t1 AS SELECT i, i FROM range(0, 5) tbl(i)
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM t1;
-# ----
-# 0	0
-# 1	1
-# 2	2
-# 3	3
-# 4	4
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t2 AS SELECT i, i, i, i FROM range(0, 5) tbl(i)
-
 query IIII
 SELECT * FROM (SELECT i, i, i, i FROM range(0, 5) tbl(i)) tbl;
 ----
@@ -82,30 +64,3 @@ SELECT * FROM (SELECT * FROM range(0, 5) tbl1(i) JOIN range(0, 5) tbl2(i) ON tbl
 3	3
 4	4
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t3 AS SELECT tbl1.i, tbl2.i FROM range(0, 5) tbl1(i) JOIN range(0, 5) tbl2(i) ON tbl1.i=tbl2.i;
-
-# TODO: unsupported feature
-# query II rowsort
-# SELECT * FROM t3
-# ----
-# 0	0
-# 1	1
-# 2	2
-# 3	3
-# 4	4
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t4 AS SELECT * FROM range(0, 5) tbl1(i) JOIN range(0, 5) tbl2(i) ON tbl1.i=tbl2.i;
-
-# TODO: unsupported feature
-# query II rowsort
-# SELECT * FROM t4
-# ----
-# 0	0
-# 1	1
-# 2	2
-# 3	3
-# 4	4

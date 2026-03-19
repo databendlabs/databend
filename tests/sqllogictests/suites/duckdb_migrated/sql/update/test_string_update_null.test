@@ -1,0 +1,46 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('hello'), ('world')
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# update a string to NULL
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=NULL where a='world';
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# hello
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# hello
+# world
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM test ORDER BY a
+# ----
+# NULL
+# hello

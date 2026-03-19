@@ -1,10 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS t
 
-# TODO: unknown function
-# statement ok
-# CREATE TABLE t AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/manycolumns.csv');
-
-# TODO: unsupported feature
-# statement ok
-# SHOW t

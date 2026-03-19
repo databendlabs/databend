@@ -13,38 +13,9 @@ INSERT INTO unit VALUES (5,4)
 statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (
-# 	price INTEGER,
-# 	amount_sold INTEGER,
-# 	total_profit AS (price * amount_sold),
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (5,4);
-
 #Select basic
-
-# TODO: unsupported feature
-# query I
-# SELECT total_profit FROM tbl
-# ----
-# 20
 
 #Select *
 
-# TODO: unsupported feature
-# query III
-# SELECT * FROM tbl
-# ----
-# 5	4	20
-
 #Select tbl.*
 
-# TODO: unsupported feature
-# query III
-# SELECT tbl.* FROM tbl
-# ----
-# 5	4	20

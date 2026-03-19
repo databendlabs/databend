@@ -9,6 +9,3 @@ select min(j), max(j) from test
 ----
 {"i":0}	{"i":9}
 
-# TODO: unsupported feature
-# statement ok
-# summarize test

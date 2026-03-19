@@ -1,0 +1,38 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_stress_update_issue_19688
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_stress_update_issue_19688
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_stress_update_issue_19688 (
+#     id INTEGER,
+#     val INTEGER
+# )
+
+# Insert 1000 initial rows
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_stress_update_issue_19688 SELECT range AS id, range * 1000 AS val FROM range(0, 1000)
+
+# Verify initial count
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test_stress_update_issue_19688
+# ----
+# 1000
+
+# Launch 8 concurrent workers to perform UPDATE/DELETE/INSERT operations on the same rows
+
+# Verify all IDs from 0-999 are present
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(DISTINCT id) FROM test_stress_update_issue_19688
+# ----
+# 1000

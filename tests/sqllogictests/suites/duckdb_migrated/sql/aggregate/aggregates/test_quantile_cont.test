@@ -4,210 +4,22 @@ DROP TABLE IF EXISTS bigints
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS quantile
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS smallints
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE IF EXISTS tinyints
-
-# TODO: unsupported feature
-# statement ok
-# create table quantile as select range r, random() from range(0,1000000,100) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
-
-# TODO: unsupported feature
-# statement error
-# SELECT quantile_cont(r, NULL) FROM quantile
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(r, 0.5) FROM quantile
-# ----
-# 499950
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(r::decimal(10,2), 0.5) FROM quantile
-# ----
-# 499950
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(r, 1.0) FROM quantile
-# ----
-# 999900
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(r, 0.0) FROM quantile
-# ----
-# 0
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(NULL, 0.5) FROM quantile
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(42, 0.5) FROM quantile
-# ----
-# 42
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(NULL, 0.5)
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(42, 0.5)
-# ----
-# 42
-
 # single GROUP
-
-# TODO: unsupported feature
-# query RRR
-# SELECT quantile_cont(r, 0.25), quantile_cont(r, 0.5), quantile_cont(r, 0.75) from quantile
-# ----
-# 249975
-# 499950
-# 749925
-
-# TODO: unsupported feature
-# query III
-# SELECT quantile_cont(d::decimal(4,1), 0.25), quantile_cont(d::decimal(4,1), 0.5), quantile_cont(d::decimal(4,1), 0.75)
-# FROM range(0,100) tbl(d)
-# ----
-# 24.7	49.5	74.2
-
-# TODO: unsupported feature
-# query III
-# SELECT quantile_cont(d::decimal(8,1), 0.25), quantile_cont(d::decimal(8,1), 0.5), quantile_cont(d::decimal(8,1), 0.75)
-# FROM range(0,100) tbl(d)
-# ----
-# 24.7	49.5	74.2
-
-# TODO: unsupported feature
-# query III
-# SELECT quantile_cont(d::decimal(12,1), 0.25), quantile_cont(d::decimal(12,1), 0.5), quantile_cont(d::decimal(12,1), 0.75)
-# FROM range(0,100) tbl(d)
-# ----
-# 24.7	49.5	74.2
-
-# TODO: unsupported feature
-# query III
-# SELECT quantile_cont(d::decimal(18,1), 0.25), quantile_cont(d::decimal(18,1), 0.5), quantile_cont(d::decimal(18,1), 0.75)
-# FROM range(0,100) tbl(d)
-# ----
-# 24.7	49.5	74.2
-
-# TODO: unsupported feature
-# query III
-# SELECT quantile_cont(d::decimal(24,1), 0.25), quantile_cont(d::decimal(24,1), 0.5), quantile_cont(d::decimal(24,1), 0.75)
-# FROM range(0,100) tbl(d)
-# ----
-# 24.7	49.5	74.2
-
 
 # multiple groups
 
-# TODO: unsupported feature
-# query RR
-# SELECT mod(r,1000) as g, quantile_cont(r, 0.25) FROM quantile GROUP BY 1 ORDER BY 1
-# ----
-# NULL	NULL
-# 0	249750
-# 100	249850
-# 200	249950
-# 300	250050
-# 400	250150
-# 500	250250
-# 600	250350
-# 700	250450
-# 800	250550
-# 900	250650
-
 # temporal types
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont('2021-01-01'::TIMESTAMP + interval (r) second, 0.5) FROM quantile
-# ----
-# 2021-01-06 18:52:30
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(('1990-01-01'::DATE + interval (r/100) day)::DATE, 0.5) FROM quantile
-# ----
-# 2003-09-09 12:00:00
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, 0.5) FROM quantile
-# ----
-# 01:23:19.5
-
-# TODO: unsupported feature
-# statement error
-# SELECT quantile_cont(interval (r/100) second, 0.5) FROM quantile
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(('2021-01-01'::TIMESTAMP + interval (r) second)::TIMESTAMPTZ, 0.5) FROM quantile
-# ----
-# 2021-01-06 18:52:30+00
 
 # constant input
 
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(1, 0.1) FROM quantile
-# ----
-# 1
-
 # Negative/Descending fractions
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(r, -0.1) FROM quantile
-# ----
-# 899910.0
 
 # ORDER BY ... DESC
 
-# TODO: unsupported feature
-# query II
-# SELECT 
-#     percentile_cont(0.8) WITHIN GROUP (ORDER BY x DESC),
-#     quantile_cont(x, 0.8 ORDER BY x DESC),
-# FROM 
-#     (VALUES (2), (1)) _(x);
-# ----
-# 1.2	1.2
-
 # empty input
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
-# ----
-# NULL
 
 statement error
 SELECT quantile_cont(r, -1.1) FROM quantile
-
-# TODO: unsupported feature
-# statement error
-# SELECT quantile_cont(r, 1.1) FROM quantile
 
 statement error
 SELECT quantile_cont(r, "string") FROM quantile
@@ -215,186 +27,22 @@ SELECT quantile_cont(r, "string") FROM quantile
 statement error
 SELECT quantile_cont(r, NULL) FROM quantile
 
-# TODO: unsupported feature
-# statement error
-# SELECT quantile_cont(r::string, 0.5) FROM quantile
-
-# TODO: unsupported feature
-# statement error
-# SELECT quantile_cont(r) FROM quantile
-
-# TODO: unsupported feature
-# statement error
-# SELECT quantile_cont(r, 0.1, 50) FROM quantile
-
-# TODO: unsupported feature
-# query RRR
-# SELECT quantile_cont(r, 0.25), quantile_cont(r, 0.5), quantile_cont(r, 0.75) from quantile
-# ----
-# 249975
-# 499950
-# 749925
-
 # multiple groups
-
-# TODO: unsupported feature
-# query RR
-# SELECT mod(r,1000) as g, quantile_cont(r, 0.25) FROM quantile GROUP BY 1 ORDER BY 1
-# ----
-# NULL	NULL
-# 0	249750
-# 100	249850
-# 200	249950
-# 300	250050
-# 400	250150
-# 500	250250
-# 600	250350
-# 700	250450
-# 800	250550
-# 900	250650
 
 # constant input
 
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(1, 0.1) FROM quantile
-# ----
-# 1
-
 # empty input
-
-# TODO: unsupported feature
-# query R
-# SELECT quantile_cont(r, 0.1) FROM quantile WHERE 1=0
-# ----
-# NULL
 
 # TINYINT extremes
 
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM (VALUES (120::TINYINT), (122::TINYINT)) tbl(t)
-# ----
-# 121
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tinyints(t TINYINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tinyints VALUES (-127), (-127);
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM tinyints;
-# ----
-# -127
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE tinyints SET t=-t;
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM tinyints;
-# ----
-# 127
-
 # SMALLINT extremes
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM (VALUES (32764::SMALLINT), (32766::SMALLINT)) tbl(t)
-# ----
-# 32765
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE smallints(t SMALLINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO smallints VALUES (-32767), (-32767);
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM smallints;
-# ----
-# -32767
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE smallints SET t=-t;
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM smallints;
-# ----
-# 32767
 
 # INTEGER extremes
 
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM (VALUES (2147483642::INTEGER), (2147483644::INTEGER)) tbl(t)
-# ----
-# 2147483643
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(t INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (-2147483647), (-2147483647);
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM integers;
-# ----
-# -2147483647
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE integers SET t=-t;
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM integers;
-# ----
-# 2147483647
-
 # BIGINT extremes
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM (VALUES (9223372036854775794::BIGINT), (9223372036854775796::BIGINT)) tbl(t)
-# ----
-# 9223372036854775795
 
 statement ok
 CREATE TABLE bigints(t BIGINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO bigints VALUES (-9223372036854775800), (-9223372036854775800);
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM bigints;
-# ----
-# -9223372036854775800
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE bigints SET t=-t;
-
-# TODO: unsupported feature
-# query I
-# SELECT quantile_cont(t, 0.5) FROM bigints;
-# ----
-# 9223372036854775800
 
 statement error
 SELECT quantile_cont(r, random()) FROM quantile

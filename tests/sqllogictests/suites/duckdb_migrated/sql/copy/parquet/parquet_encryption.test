@@ -6,31 +6,4 @@ DROP TABLE IF EXISTS test
 statement ok
 CREATE OR REPLACE TABLE test (i INTEGER)
 
-# TODO: result differs
-# query I
-# SELECT * FROM test
-# ----
-# 42
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE test (i INTEGER)
-
-# TODO: result differs
-# query I
-# SELECT * FROM test
-# ----
-# 42
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE test (i INTEGER)
-
-# TODO: result differs
-# query I
-# SELECT * FROM test
-# ----
-# 42
-
-
 # what happens if we don't try to decrypt even if the file is encrypted?

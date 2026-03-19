@@ -4,12 +4,3 @@ DROP TABLE IF EXISTS collate_join_table
 statement ok
 DROP TABLE IF EXISTS collate_test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT)
-
-# TODO: unsupported feature
-# query T
-# SELECT * FROM collate_test WHERE s='Muhleisen'
-# ----
-# Mühleisen

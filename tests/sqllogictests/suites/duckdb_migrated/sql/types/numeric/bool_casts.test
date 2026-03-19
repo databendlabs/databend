@@ -1,0 +1,244 @@
+statement ok
+DROP TABLE IF EXISTS booleans
+
+statement ok
+CREATE TABLE booleans AS SELECT b::BOOLEAN b FROM (VALUES (NULL), (0), (1)) tbl(b)
+
+query I
+SELECT b::tinyint FROM booleans
+----
+NULL
+0
+1
+
+# round-trip
+
+query B
+SELECT b::tinyint::bool FROM booleans
+----
+NULL
+0
+1
+
+query I
+SELECT b::smallint FROM booleans
+----
+NULL
+0
+1
+
+# round-trip
+
+query B
+SELECT b::smallint::bool FROM booleans
+----
+NULL
+0
+1
+
+query I
+SELECT b::integer FROM booleans
+----
+NULL
+0
+1
+
+# round-trip
+
+query B
+SELECT b::integer::bool FROM booleans
+----
+NULL
+0
+1
+
+query I
+SELECT b::bigint FROM booleans
+----
+NULL
+0
+1
+
+# round-trip
+
+query B
+SELECT b::bigint::bool FROM booleans
+----
+NULL
+0
+1
+
+query R
+SELECT b::float FROM booleans
+----
+NULL
+0.0
+1.0
+
+# round-trip
+
+query B
+SELECT b::float::bool FROM booleans
+----
+NULL
+0
+1
+
+query R
+SELECT b::double FROM booleans
+----
+NULL
+0.0
+1.0
+
+# round-trip
+
+query B
+SELECT b::double::bool FROM booleans
+----
+NULL
+0
+1
+
+query R
+SELECT b::DECIMAL(9,8) FROM booleans
+----
+NULL
+0.00000000
+1.00000000
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(9,8)::bool FROM booleans
+----
+NULL
+0
+1
+
+query R
+SELECT b::DECIMAL(18,7) FROM booleans
+----
+NULL
+0.0000000
+1.0000000
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(18,7)::bool FROM booleans
+----
+NULL
+0
+1
+
+query R
+SELECT b::DECIMAL(38,1) FROM booleans
+----
+NULL
+0.0
+1.0
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(38,1)::bool FROM booleans
+----
+NULL
+0
+1
+
+query R
+SELECT b::DECIMAL(38,5) FROM booleans
+----
+NULL
+0.00000
+1.00000
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(38,5)::bool FROM booleans
+----
+NULL
+0
+1
+
+query R
+SELECT b::DECIMAL(4,3) FROM booleans
+----
+NULL
+0.000
+1.000
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(4,3)::bool FROM booleans
+----
+NULL
+0
+1
+
+
+# decimal with scale = width
+
+statement ok
+SELECT b::DECIMAL(1,1)::VARCHAR FROM booleans
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(1,1)::bool FROM booleans
+----
+NULL
+0
+1
+
+statement ok
+SELECT b::DECIMAL(4,4)::VARCHAR FROM booleans
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(4,4)::bool FROM booleans
+----
+NULL
+0
+1
+
+statement ok
+SELECT b::DECIMAL(8,8)::VARCHAR FROM booleans
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(8,8)::bool FROM booleans
+----
+NULL
+0
+1
+
+statement ok
+SELECT b::DECIMAL(16,16)::VARCHAR FROM booleans
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(16,16)::bool FROM booleans
+----
+NULL
+0
+1
+
+statement ok
+SELECT b::DECIMAL(32,32)::VARCHAR FROM booleans
+
+# round-trip
+
+query B
+SELECT b::DECIMAL(32,32)::bool FROM booleans
+----
+NULL
+0
+1

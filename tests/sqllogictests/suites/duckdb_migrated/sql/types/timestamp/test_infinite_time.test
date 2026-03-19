@@ -1,0 +1,868 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS abbreviations
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS specials
+
+# TODO: unsupported feature
+# query II
+# SELECT 'infinity'::TIMESTAMP, '-infinity'::TIMESTAMP;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'Infinity'::TIMESTAMP, '-Infinity'::TIMESTAMP;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'INFINITY'::TIMESTAMP, '-INFINITY'::TIMESTAMP;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'inFinIty'::TIMESTAMP, '-inFinIty'::TIMESTAMP;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'inf'::TIMESTAMP, '-inf'::TIMESTAMP;
+# ----
+# infinity	-infinity
+
+
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'infinity'::TIMESTAMPTZ, '-infinity'::TIMESTAMPTZ;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'Infinity'::TIMESTAMPTZ, '-Infinity'::TIMESTAMPTZ;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'INFINITY'::TIMESTAMPTZ, '-INFINITY'::TIMESTAMPTZ;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'inFinIty'::TIMESTAMPTZ, '-inFinIty'::TIMESTAMPTZ;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'inf'::TIMESTAMPTZ, '-inf'::TIMESTAMPTZ;
+# ----
+# infinity	-infinity
+
+
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'infinity'::DATE, '-infinity'::DATE;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'Infinity'::DATE, '-Infinity'::DATE;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'INFINITY'::DATE, '-INFINITY'::DATE;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'inFinIty'::DATE, '-inFinIty'::DATE;
+# ----
+# infinity	-infinity
+
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+
+# TODO: unsupported feature
+# query II
+# SELECT 'inf'::DATE, '-inf'::DATE;
+# ----
+# infinity	-infinity
+
+
+
+# No trailing non-spaces!
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'infinity 00:00:00'::TIMESTAMP;
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-infinity 00:00:00'::TIMESTAMP;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'epoch 00:00:00'::TIMESTAMP;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'infinity 00:00:00'::TIMESTAMPTZ;
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-infinity 00:00:00'::TIMESTAMPTZ;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'epoch 00:00:00'::TIMESTAMPTZ;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'infinity 00:00:00'::DATE;
+
+# TODO: unsupported feature
+# statement error
+# SELECT '-infinity 00:00:00'::DATE;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'epoch 00:00:00'::DATE;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE specials (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO specials VALUES
+# 	('infinity'::TIMESTAMP, 'infinity'::TIMESTAMPTZ, 'infinity'::DATE),
+# 	('-infinity'::TIMESTAMP, '-infinity'::TIMESTAMPTZ, '-infinity'::DATE),
+# 	('epoch'::TIMESTAMP, 'epoch'::TIMESTAMPTZ, 'epoch'::DATE),
+# ;
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM specials;
+# ----
+# infinity	infinity	infinity
+# -infinity	-infinity	-infinity
+# 1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE abbreviations (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO abbreviations VALUES
+# 	('inf'::TIMESTAMP, 'inf'::TIMESTAMPTZ, 'inf'::DATE),
+# 	('-inf'::TIMESTAMP, '-inf'::TIMESTAMPTZ, '-inf'::DATE),
+# ;
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM abbreviations;
+# ----
+# infinity	infinity	infinity
+# -infinity	-infinity	-infinity
+
+#
+# Comparisons
+#
+
+# TIMESTAMP
+
+# TODO: unsupported feature
+# query IIIIIIII
+# SELECT lhs.ts, rhs.ts,
+# 	lhs.ts < rhs.ts, lhs.ts <= rhs.ts,
+# 	lhs.ts = rhs.ts, lhs.ts <> rhs.ts,
+# 	lhs.ts >= rhs.ts, lhs.ts > rhs.ts,
+# FROM specials lhs, specials rhs
+# ORDER BY 1, 2
+# ----
+# -infinity	-infinity	False	True	True	False	True	False
+# -infinity	1970-01-01 00:00:00	True	True	False	True	False	False
+# -infinity	infinity	True	True	False	True	False	False
+# 1970-01-01 00:00:00	-infinity	False	False	False	True	True	True
+# 1970-01-01 00:00:00	1970-01-01 00:00:00	False	True	True	False	True	False
+# 1970-01-01 00:00:00	infinity	True	True	False	True	False	False
+# infinity	-infinity	False	False	False	True	True	True
+# infinity	1970-01-01 00:00:00	False	False	False	True	True	True
+# infinity	infinity	False	True	True	False	True	False
+
+# TIMESTAMPTZ
+
+# TODO: unsupported feature
+# query IIIIIIII
+# SELECT lhs.tstz, rhs.tstz,
+# 	lhs.tstz < rhs.tstz, lhs.tstz <= rhs.tstz,
+# 	lhs.tstz = rhs.tstz, lhs.tstz <> rhs.tstz,
+# 	lhs.tstz >= rhs.tstz, lhs.tstz > rhs.tstz,
+# FROM specials lhs, specials rhs
+# ORDER BY 1, 2
+# ----
+# -infinity	-infinity	False	True	True	False	True	False
+# -infinity	1970-01-01 00:00:00+00	True	True	False	True	False	False
+# -infinity	infinity	True	True	False	True	False	False
+# 1970-01-01 00:00:00+00	-infinity	False	False	False	True	True	True
+# 1970-01-01 00:00:00+00	1970-01-01 00:00:00+00	False	True	True	False	True	False
+# 1970-01-01 00:00:00+00	infinity	True	True	False	True	False	False
+# infinity	-infinity	False	False	False	True	True	True
+# infinity	1970-01-01 00:00:00+00	False	False	False	True	True	True
+# infinity	infinity	False	True	True	False	True	False
+
+# DATE
+
+# TODO: unsupported feature
+# query IIIIIIII
+# SELECT lhs.dt, rhs.dt,
+# 	lhs.dt < rhs.dt, lhs.dt <= rhs.dt,
+# 	lhs.dt = rhs.dt, lhs.dt <> rhs.dt,
+# 	lhs.dt >= rhs.dt, lhs.dt > rhs.dt,
+# FROM specials lhs, specials rhs
+# ORDER BY 1, 2
+# ----
+# -infinity	-infinity	False	True	True	False	True	False
+# -infinity	1970-01-01	True	True	False	True	False	False
+# -infinity	infinity	True	True	False	True	False	False
+# 1970-01-01	-infinity	False	False	False	True	True	True
+# 1970-01-01	1970-01-01	False	True	True	False	True	False
+# 1970-01-01	infinity	True	True	False	True	False	False
+# infinity	-infinity	False	False	False	True	True	True
+# infinity	1970-01-01	False	False	False	True	True	True
+# infinity	infinity	False	True	True	False	True	False
+
+#
+# Aggregates
+#
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT MIN(ts), MAX(ts), MIN(tstz), MAX(tstz), MIN(dt), MAX(dt)
+# FROM specials;
+# ----
+# -infinity	infinity	-infinity	infinity	-infinity	infinity
+
+# TODO: unsupported feature
+# query III
+# SELECT MEDIAN(ts), MEDIAN(tstz), MEDIAN(dt)
+# FROM specials;
+# ----
+# 1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01 00:00:00
+
+# TODO: unsupported feature
+# query III
+# SELECT MODE(ts), MODE(tstz), MODE(dt)
+# FROM specials;
+# ----
+# infinity	infinity	infinity
+
+# TODO: unsupported feature
+# query III
+# SELECT APPROX_COUNT_DISTINCT(ts), APPROX_COUNT_DISTINCT(tstz), APPROX_COUNT_DISTINCT(dt)
+# FROM specials;
+# ----
+# 3	3	3
+
+# TODO: unsupported feature
+# query III
+# SELECT ARBITRARY(ts), FIRST(ts), LAST(ts)
+# FROM specials;
+# ----
+# infinity	infinity	1970-01-01 00:00:00
+
+# TODO: unsupported feature
+# query III
+# SELECT ARBITRARY(tstz), FIRST(tstz), LAST(tstz)
+# FROM specials;
+# ----
+# infinity	infinity	1970-01-01 00:00:00+00
+
+# TODO: unsupported feature
+# query III
+# SELECT ARBITRARY(dt), FIRST(dt), LAST(dt)
+# FROM specials;
+# ----
+# infinity	infinity	1970-01-01
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(ts, ts), ARG_MAX(ts, ts) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(ts, tstz), ARG_MAX(ts, tstz) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(ts, dt), ARG_MAX(ts, dt) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(tstz, ts), ARG_MAX(tstz, ts) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(tstz, tstz), ARG_MAX(tstz, tstz) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(tstz, dt), ARG_MAX(tstz, dt) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(dt, ts), ARG_MAX(dt, ts) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(dt, tstz), ARG_MAX(dt, tstz) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT ARG_MIN(dt, dt), ARG_MAX(dt, dt) FROM specials;
+# ----
+# -infinity	infinity
+
+# TODO: unsupported feature
+# query III
+# SELECT HISTOGRAM(ts), HISTOGRAM(tstz), HISTOGRAM(dt)
+# FROM specials;
+# ----
+# {-infinity=1, '1970-01-01 00:00:00'=1, infinity=1}	{-infinity=1, '1970-01-01 00:00:00+00'=1, infinity=1}	{-infinity=1, 1970-01-01=1, infinity=1}
+
+# TODO: unsupported feature
+# query III
+# SELECT QUANTILE_DISC(ts, 0.32), QUANTILE_DISC(tstz, 0.32), QUANTILE_DISC(dt, 0.32)
+# FROM specials;
+# ----
+# -infinity	-infinity	-infinity
+
+# TODO: unsupported feature
+# query III
+# SELECT QUANTILE_DISC(ts, [0.0, 0.5, 1.0]), QUANTILE_DISC(tstz, [0.0, 0.5, 1.0]), QUANTILE_DISC(dt, [0.0, 0.5, 1.0])
+# FROM specials;
+# ----
+# [-infinity, '1970-01-01 00:00:00', infinity]	[-infinity, '1970-01-01 00:00:00+00', infinity]	[-infinity, 1970-01-01, infinity]
+
+# TODO: unsupported feature
+# query III
+# SELECT QUANTILE_CONT(ts, 0.25), QUANTILE_CONT(tstz, 0.25), QUANTILE_CONT(dt, 0.25)
+# FROM specials;
+# ----
+# 144170-06-28 (BC) 09:59:32.612096	144170-06-28 (BC) 09:59:32.612096+00	144170-06-28 (BC) 09:59:32.612096
+
+# TODO: unsupported feature
+# query III
+# SELECT QUANTILE_CONT(ts, [0.25, 0.5, 0.75]), QUANTILE_CONT(tstz, [0.25, 0.5, 0.75]), QUANTILE_CONT(dt, [0.25, 0.5, 0.75])
+# FROM specials;
+# ----
+# ['144170-06-28 (BC) 09:59:32.612096', '1970-01-01 00:00:00', '148108-07-06 14:00:27.387904']	['144170-06-28 (BC) 09:59:32.612096+00', '1970-01-01 00:00:00+00', '148108-07-06 14:00:27.387904+00']	['144170-06-28 (BC) 09:59:32.612096', '1970-01-01 00:00:00', '148108-07-06 14:00:27.387904']
+
+# TODO: unsupported feature
+# query III
+# SELECT MAD(ts), MAD(tstz), MAD(dt)
+# FROM specials;
+# ----
+# 106751991 days 04:00:54.775807	106751991 days 04:00:54.775807	106751991 days 04:00:54.775807
+
+# Treated as physical type
+
+# TODO: unsupported feature
+# query III
+# SELECT ENTROPY(ts), ENTROPY(tstz), ENTROPY(dt) FROM specials;
+# ----
+# 1.584963	1.584963	1.584963
+
+#
+# Arithmetic
+#
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP + INTERVAL (1) microsecond;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP + INTERVAL (1) microsecond;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP - INTERVAL (1) microsecond;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP - INTERVAL (1) microsecond;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP + INTERVAL (1) second;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP + INTERVAL (1) second;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP - INTERVAL (1) second;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP - INTERVAL (1) second;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP + INTERVAL (1) minute;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP + INTERVAL (1) minute;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP - INTERVAL (1) minute;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP - INTERVAL (1) minute;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP + INTERVAL (1) hour;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP + INTERVAL (1) hour;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP - INTERVAL (1) hour;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP - INTERVAL (1) hour;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP + INTERVAL (1) day;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP + INTERVAL (1) day;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP - INTERVAL (1) day;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP - INTERVAL (1) day;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP + INTERVAL (1) month;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP + INTERVAL (1) month;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP - INTERVAL (1) month;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP - INTERVAL (1) month;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP + INTERVAL (1) year;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP + INTERVAL (1) year;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::TIMESTAMP - INTERVAL (1) year;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::TIMESTAMP - INTERVAL (1) year;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE + INTERVAL (1) microsecond;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE + INTERVAL (1) microsecond;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE - INTERVAL (1) microsecond;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE - INTERVAL (1) microsecond;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE + INTERVAL (1) second;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE + INTERVAL (1) second;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE - INTERVAL (1) second;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE - INTERVAL (1) second;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE + INTERVAL (1) minute;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE + INTERVAL (1) minute;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE - INTERVAL (1) minute;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE - INTERVAL (1) minute;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE + INTERVAL (1) hour;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE + INTERVAL (1) hour;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE - INTERVAL (1) hour;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE - INTERVAL (1) hour;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE + INTERVAL (1) day;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE + INTERVAL (1) day;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE - INTERVAL (1) day;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE - INTERVAL (1) day;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE + INTERVAL (1) month;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE + INTERVAL (1) month;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE - INTERVAL (1) month;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE - INTERVAL (1) month;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE + INTERVAL (1) year;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE + INTERVAL (1) year;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT 'infinity'::DATE - INTERVAL (1) year;
+# ----
+# infinity
+
+# TODO: unsupported feature
+# query I
+# SELECT '-infinity'::DATE - INTERVAL (1) year;
+# ----
+# -infinity
+
+# TODO: unsupported feature
+# query II
+# SELECT dt + 1, dt - 1 FROM specials
+# ----
+# infinity	infinity
+# -infinity	-infinity
+# 1970-01-02	1969-12-31
+
+# TODO: unsupported feature
+# query I
+# SELECT dt + '12:34:56'::TIME FROM specials
+# ----
+# infinity
+# -infinity
+# 1970-01-01 12:34:56
+
+# Is(Infinite)
+
+# TODO: unsupported feature
+# query III
+# SELECT isfinite(ts), isfinite(tstz), isfinite(dt)
+# FROM specials;
+# ----
+# 0	0	0
+# 0	0	0
+# 1	1	1
+
+# TODO: unsupported feature
+# query III
+# SELECT isinf(ts), isinf(tstz), isinf(dt)
+# FROM specials;
+# ----
+# 1	1	1
+# 1	1	1
+# 0	0	0
+
+# Casts
+
+# TODO: unsupported feature
+# query III
+# select ts::VARCHAR, tstz::VARCHAR, dt::VARCHAR FROM specials
+# ----
+# infinity	infinity	infinity
+# -infinity	-infinity	-infinity
+# 1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01
+
+# TODO: unsupported feature
+# statement error
+# select ts::TIME, tstz::TIME, dt::TIME FROM specials
+
+# TODO: unsupported feature
+# statement error
+# select 'infinity'::TIME;
+
+# TODO: unsupported feature
+# statement error
+# select
+#   subtract(
+#     cast('infinity' as timestamp), timestamp '1970-01-01')
+
+# TODO: unsupported feature
+# statement error
+# select
+#   subtract(
+#     timestamp '1970-01-01',
+#     cast('-infinity' as timestamp))
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'e'::TIMESTAMP
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'e'::DATE
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'i'::TIMESTAMP
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'i'::DATE

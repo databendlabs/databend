@@ -1,0 +1,10 @@
+# TODO: unsupported feature
+# statement error
+# select row(42, 'hello') union all select '{'': 42,'': hello}';
+
+# TODO: unsupported feature
+# query I
+# select row(42, 'hello') union all select '(84, world)';
+# ----
+# (42, hello)
+# (84, world)

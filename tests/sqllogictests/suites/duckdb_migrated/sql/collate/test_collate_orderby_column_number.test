@@ -7,11 +7,3 @@ CREATE TABLE collate_test(s VARCHAR)
 statement ok
 INSERT INTO collate_test VALUES ('ã'), ('B'), ('a'), ('A')
 
-# TODO: unsupported feature
-# query I
-# SELECT s FROM collate_test ORDER BY 1 COLLATE NOCASE
-# ----
-# a
-# A
-# B
-# ã

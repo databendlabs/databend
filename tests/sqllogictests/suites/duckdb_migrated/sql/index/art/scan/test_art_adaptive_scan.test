@@ -4,48 +4,6 @@ DROP TABLE IF EXISTS integers
 statement ok
 CREATE TABLE integers AS SELECT 42 AS i FROM range(0, 2050);
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT 42 + 1 + range FROM range(0, 5000);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON integers USING ART(i);
-
-# TODO: unsupported feature
-# query II
-# EXPLAIN ANALYZE SELECT COUNT(i) FROM integers WHERE i = 42;
-# ----
-# AggregateFinal
-# ├── output columns: [COUNT(i) (#1)]
-# ├── group by: []
-# ├── aggregate functions: [count(i)]
-# ├── estimated rows: 1.00
-# └── AggregatePartial
-#     ├── cpu time: 300.61µs
-#     ├── output rows: 1
-#     ├── output bytes: 8.00 B
-#     ├── group by: []
-#     ├── aggregate functions: [count(i)]
-#     ├── estimated rows: 1.00
-#     └── TableScan
-#         ├── cpu time: 1.827217ms
-#         ├── wait time: 3.492943ms
-#         ├── output rows: 2.05 thousand
-#         ├── output bytes: 2.25 KiB
-#         ├── bytes scanned: 2.25 KiB
-#         ├── read from remote: 271.00 B
-#         ├── table: default.default.integers
-#         ├── scan id: 0
-#         ├── output columns: [i (#0)]
-#         ├── read rows: 2050
-#         ├── read size: < 1 KiB
-#         ├── partitions total: 1
-#         ├── partitions scanned: 1
-#         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
-#         ├── push downs: [filters: [is_true(integers.i (#0) = 42)], limit: NONE]
-#         └── estimated rows: 2050.00
-
 query I
 SELECT COUNT(i) FROM integers WHERE i = 42;
 ----

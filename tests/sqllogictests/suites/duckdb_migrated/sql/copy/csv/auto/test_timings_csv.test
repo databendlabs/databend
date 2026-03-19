@@ -4,8 +4,3 @@ DROP TABLE IF EXISTS timings
 statement ok
 CREATE OR REPLACE TABLE timings(tool string, sf float, day string, batch_type string, q string, parameters string, time float);
 
-# TODO: unsupported feature
-# query I
-# COPY timings FROM '{DATA_DIR}/csv/timings.csv' (HEADER, DELIMITER '|')
-# ----
-# 1095

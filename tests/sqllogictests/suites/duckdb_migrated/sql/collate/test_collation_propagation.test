@@ -7,16 +7,3 @@ CREATE TABLE tbl (a VARCHAR, b VARCHAR)
 statement ok
 INSERT INTO tbl VALUES ('ö', '>>>>>ö<<<<<'), ('o', '>>>>>o<<<<<'), ('p', '>>>>>p<<<<<')
 
-# TODO: unsupported feature
-# query I
-# SELECT concat(a COLLATE NOACCENT, a) FROM tbl ORDER BY ALL
-# ----
-# öö
-# oo
-# pp
-
-# TODO: unsupported feature
-# query I
-# SELECT a FROM tbl WHERE contains(b COLLATE NOCASE, 'O') ORDER BY ALL
-# ----
-# o

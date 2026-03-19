@@ -23,12 +23,6 @@ SELECT '0030-01-01'::DATE::VARCHAR = '0030-01-01'
 ----
 1
 
-# TODO: unsupported feature
-# query I
-# SELECT '30000-01-01'::DATE::VARCHAR = '30000-01-01'
-# ----
-# 1
-
 query B
 SELECT '1969-01-01'::DATE::VARCHAR = '1969-01-01'
 ----
@@ -54,31 +48,7 @@ SELECT '2371-01-01'::DATE::VARCHAR = '2371-01-01'
 ----
 1
 
-# TODO: unsupported feature
-# query I
-# SELECT '-1000-01-01'::DATE::VARCHAR = '1001-01-01 (BC)'
-# ----
-# 1
-
 # we accept a few different separators when parsing dates
-
-# TODO: unsupported feature
-# query I
-# SELECT '1992/09/20'::DATE::VARCHAR = '1992-09-20'
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT '1992 09 20'::DATE::VARCHAR = '1992-09-20'
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT '1992\09\20'::DATE::VARCHAR = '1992-09-20'
-# ----
-# 1
 
 # verify bounds of each month
 # January - 31 days
@@ -250,19 +220,7 @@ SELECT '2000-02-29'::DATE::VARCHAR = '2000-02-29'
 
 # year 0 is fine, results in 1 BC (iso-8601)
 
-# TODO: unsupported feature
-# statement ok
-# SELECT '0-01-01'::DATE::VARCHAR
-
 # year 1 and -1 are fine
-
-# TODO: unsupported feature
-# statement ok
-# SELECT '1-01-01'::DATE::VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# SELECT '-1-01-01'::DATE::VARCHAR
 
 # various invalid formats
 
@@ -301,10 +259,6 @@ SELECT '-/10/10'::DATE::VARCHAR
 
 statement error
 SELECT '-291000-01-01'::DATE:VARCHAR;
-
-# TODO: unsupported feature
-# statement ok
-# SELECT '291000-01-01'::DATE::VARCHAR;
 
 statement error
 SELECT '291000-01-01 (BC)'::DATE:VARCHAR;

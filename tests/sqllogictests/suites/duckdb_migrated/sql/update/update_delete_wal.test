@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# create table test (id bigint primary key, c1 text);
+
+# TODO: unsupported feature
+# statement ok
+# insert into test (id, c1) values (1, 'foo');
+
+# TODO: unsupported feature
+# statement ok
+# insert into test (id, c1) values (2, 'bar');
+
+# TODO: unsupported feature
+# statement ok
+# begin transaction;
+
+# TODO: unsupported feature
+# statement ok
+# delete from test where id = 1;
+
+# TODO: unsupported feature
+# statement ok
+# update test set c1='baz' where id=2;
+
+# TODO: unsupported feature
+# statement ok
+# commit;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY id
+# ----
+# 2	baz
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY id
+# ----
+# 2	baz

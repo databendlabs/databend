@@ -10,10 +10,6 @@ DROP TABLE IF EXISTS n48_tbl
 statement ok
 CREATE TABLE integers(i integer)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON integers(i)
-
 # insert elements
 
 statement ok
@@ -75,8 +71,6 @@ INSERT INTO integers VALUES (18 + 1);
 
 statement ok
 INSERT INTO integers VALUES (19 + 1);
-
-
 
 # verify counts
 
@@ -180,7 +174,6 @@ SELECT COUNT(*) FROM integers WHERE i = 19 + 1
 ----
 1
 
-
 # verify sums
 
 query I
@@ -276,10 +269,6 @@ DELETE FROM integers WHERE i = 19 + 1
 statement ok
 DELETE FROM integers WHERE i = 0
 
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX i_index
-
 statement ok
 DROP TABLE integers
 
@@ -294,10 +283,6 @@ INSERT INTO n48_tbl SELECT 'b', generate_series FROM generate_series(0, 24);
 
 statement ok
 INSERT INTO n48_tbl SELECT 'c', generate_series FROM generate_series(0, 24);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX n48_tbl_idx ON n48_tbl(i, k);
 
 # test freeing all the children of a Node48
 
@@ -367,6 +352,3 @@ INSERT INTO n48_free VALUES (18 + 107);
 statement ok
 INSERT INTO n48_free VALUES (19 + 107);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx_n48_free ON n48_free(id);

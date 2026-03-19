@@ -7,46 +7,16 @@ from read_csv('{DATA_DIR}/csv/header_bug.csv', names=['']) LIMIT 1;
 statement error
 from read_csv('{DATA_DIR}/csv/header_bug.csv', names=[' ', '  '], header = 0);
 
-# TODO: unsupported feature
-# query IIII
-# select column00, column01, column02, column03 from '{DATA_DIR}/csv/real/lineitem_sample.csv' LIMIT 1;
-# ----
-# 1	15519	785	1
-
 # override the names partially
-
-# TODO: unsupported feature
-# query IIII
-# select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey']) LIMIT 1;
-# ----
-# 1	15519	785	1
 
 # empty list
 
-# TODO: unsupported feature
-# query IIII
-# select column00, column01, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=[]) LIMIT 1;
-# ----
-# 1	15519	785	1
-
 # specify all names
-
-# TODO: unsupported feature
-# query IIII
-# select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', column_names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment']) LIMIT 1;
-# ----
-# 1	15519	1996-02-12	egular courts above the
 
 # specify too many names
 
 statement error
 select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment', 'xx']) LIMIT 1;
-
-# TODO: unsupported feature
-# query II
-# select yr, Quarter from read_csv_auto('{DATA_DIR}/csv/real/ontime_sample.csv', names=['yr']) LIMIT 1;
-# ----
-# 1988	1
 
 # NULL
 
@@ -65,64 +35,6 @@ select column00 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', de
 statement error
 select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=['l_orderkey', 'l_orderkey']) LIMIT 1;
 
-# TODO: unsupported feature
-# query I
-# select Columns FROM sniff_csv('{DATA_DIR}/csv/header.csv', names = ['a'])
-# ----
-# [{'name': a, 'type': VARCHAR}]
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/header.csv', names = ['a'])
-# ----
-# line2
-# line3
-
-# TODO: unsupported feature
-# query I
-# select Columns FROM sniff_csv('{DATA_DIR}/csv/header.csv', names = ['a'], header = false)
-# ----
-# [{'name': a, 'type': VARCHAR}]
-
-# TODO: unsupported feature
-# query I
-# select * FROM read_csv('{DATA_DIR}/csv/header.csv', names = ['a'], header = false)
-# ----
-# line1
-# line2
-# line3
-
-# TODO: unsupported feature
-# query I
-# select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a'])
-# ----
-# [{'name': a, 'type': VARCHAR}, {'name': line1_2, 'type': VARCHAR}, {'name': line1_3, 'type': VARCHAR}]
-
-# TODO: unsupported feature
-# query III
-# select * FROM read_csv('{DATA_DIR}/csv/header_2.csv', names = ['a'])
-# ----
-# line2	line2_2	line2_3
-# line3	line3_2	line3_3
-
-# TODO: unsupported feature
-# query I
-# select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a'], header=False)
-# ----
-# [{'name': a, 'type': VARCHAR}, {'name': column1, 'type': VARCHAR}, {'name': column2, 'type': VARCHAR}]
-
 statement error
 select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a','b','c','d'])
 
-# TODO: unsupported feature
-# query I
-# select Columns FROM sniff_csv('{DATA_DIR}/csv/header_2.csv', names = ['a','b','c','d'], null_padding = True)
-# ----
-# [{'name': a, 'type': VARCHAR}, {'name': b, 'type': VARCHAR}, {'name': c, 'type': VARCHAR}, {'name': d, 'type': VARCHAR}]
-
-# TODO: unsupported feature
-# query IIII
-# select * FROM read_csv('{DATA_DIR}/csv/header_2.csv', names = ['a','b','c','d'], null_padding = True)
-# ----
-# line2	line2_2	line2_3	NULL
-# line3	line3_2	line3_3	NULL

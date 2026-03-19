@@ -2,33 +2,9 @@ statement ok
 DROP TABLE IF EXISTS students
 
 # scalar weighted average with NULLs
-# TODO: unknown function
-# query RRRR
-# SELECT weighted_avg(3, 3), weighted_avg(3, NULL), weighted_avg(NULL, 3), weighted_avg(NULL, NULL)
-# ----
-# 3
-# NULL
-# NULL
-# NULL
-
 # scalar weighted with zero weight will result in nan
 
-# TODO: unknown function
-# query RRRR
-# SELECT weighted_avg(3, 0), weighted_avg(3, 0.0), weighted_avg(0, 3), weighted_avg(0.0, 3)
-# ----
-# nan
-# nan
-# 0.0
-# 0.0
-
 # test alias 'wavg'
-
-# TODO: unknown function
-# query R
-# SELECT wavg(3, 3)
-# ----
-# 3
 
 # test weighted average on real world example
 
@@ -41,47 +17,12 @@ INSERT INTO students VALUES ('Alice', 8, 6), ('Alice', 6, 2), ('Bob', 6, 3), ('B
 # Alice: (8*6 + 6*2) / (6 + 2) = 60 / 8 = 7.5
 # Bob: (6*3 + 8*3 + 6*6) / (3 + 3 + 6) = (18 + 24 + 36) / 12 = 78 / 12 = 6.5
 
-# TODO: unknown function
-# query II
-# SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
-# ----
-# Alice	7.5
-# Bob		6.5
-
 # adding a entry with weight 0 should not change the result
 
 statement ok
 INSERT INTO students VALUES ('Alice', 42, 0);
 
-# TODO: unknown function
-# query II
-# SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
-# ----
-# Alice	7.5
-# Bob		6.5
-
 # weighted_avg skips rows were the weight is NULL, so adding a row with NULL weight should not change the result
-
-# TODO: unknown function
-# statement ok
-# INSERT INTO students VALUES ('Alice', 42, NULL);
-
-# TODO: unknown function
-# query II
-# SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
-# ----
-# Alice	7.5
-# Bob		6.5
 
 # weighted_avg skips rows were the value is NULL, so adding a row with NULL value should not change the result
 
-# TODO: unknown function
-# statement ok
-# INSERT INTO students VALUES ('Alice', NULL, 42);
-
-# TODO: unknown function
-# query II
-# SELECT name, weighted_avg(grade, etcs) FROM students GROUP BY name ORDER BY name
-# ----
-# Alice	7.5
-# Bob		6.5

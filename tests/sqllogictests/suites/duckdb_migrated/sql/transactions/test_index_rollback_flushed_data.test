@@ -1,29 +1,13 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER UNIQUE);
-
 statement ok
 BEGIN TRANSACTION;
 
 statement ok
 BEGIN TRANSACTION;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (-10);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT range FROM range(2, 4097, 1);
 
 # constraint violation
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (-10);
 
 # con1 commits first
 
@@ -32,16 +16,3 @@ COMMIT;
 
 # con2 fails to commit because of the conflict
 
-# TODO: unsupported feature
-# statement error
-# COMMIT;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT i FROM range(2, 4097, 1) t1(i)
-
-# TODO: unsupported feature
-# query I
-# SELECT MAX(i) FROM integers
-# ----
-# 4096

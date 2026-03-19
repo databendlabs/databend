@@ -1,0 +1,223 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1), (2), (3)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# update entire table
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=a+1
+
+# not seen yet by con2, only by con1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test WHERE a=4
+# ----
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 1
+# 2
+# 3
+
+# update the entire table again
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=a+1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 1
+# 2
+# 3
+
+# now commit
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# now perform updates one by one
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test
+# ----
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test WHERE a=5
+# ----
+# 5
+
+# 5 => 9
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=9 WHERE a=5
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 9
+
+# test concurrent update in con2, it should fail now
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=a+1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# 3 => 7
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=7 WHERE a=3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 4
+# 7
+# 9
+
+# test concurrent update in con2, it should fail now
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=a+1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# 4 => 8
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=8 WHERE a=4
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 7
+# 8
+# 9
+
+# test concurrent update in con2, it should fail now
+
+# TODO: unsupported feature
+# statement error
+# UPDATE test SET a=a+1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 3
+# 4
+# 5
+
+# commit
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 7
+# 8
+# 9
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 7
+# 8
+# 9

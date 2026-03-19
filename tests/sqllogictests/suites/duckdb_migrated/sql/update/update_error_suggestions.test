@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(mycol INTEGER)
+
+# TODO: unsupported feature
+# statement error
+# UPDATE tbl SET myco=42
+
+# TODO: unsupported feature
+# statement error
+# UPDATE tbl SET tbl.mycol=42

@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS multiple_unique
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# Single UNIQUE CONSTRAINT
+# TODO: unsupported feature
+# statement ok
+# create table tbl(
+# 	a int unique,
+# 	b int
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert or replace into tbl values(1, 2);
+
+# TODO: unsupported feature
+# statement ok
+# insert or replace into tbl values(1, 2);
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# 1	2
+
+# Multiple UNIQUE CONSTRAINTs
+
+# TODO: unsupported feature
+# statement ok
+# create table multiple_unique(
+# 	a int unique,
+# 	b int unique,
+# 	c int
+# );
+
+# TODO: unsupported feature
+# statement error
+# insert or replace into multiple_unique values(1, 2, 3);

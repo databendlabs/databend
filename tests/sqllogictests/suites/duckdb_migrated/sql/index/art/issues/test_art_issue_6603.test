@@ -14,38 +14,9 @@ CREATE TABLE path (
     x1  TEXT NOT NULL
 );
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE edge (
-#   id  INTEGER DEFAULT nextval('seq'),
-#   it  INTEGER DEFAULT 0,
-#   x0  TEXT,
-#   x1  TEXT
-# );
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX edge1_idx ON edge (x1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO edge (x0, x1) VALUES ('n2880','n3966');
-
 statement ok
 COMMIT;
 
 statement ok
 BEGIN;
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO path SELECT 1, y0, y1 FROM (SELECT DISTINCT edge0.x0 AS y0, edge0.x1 AS y1 FROM edge AS edge0 WHERE edge0.it = 0 AND true AND NOT EXISTS (SELECT * from path AS pre WHERE pre.x0 = edge0.x0 AND pre.x1 = edge0.x1));
-
-# TODO: unsupported feature
-# query III
-# SELECT 1, y0, y1 FROM (SELECT DISTINCT edge0.x0 AS y0, path1.x1 AS y1 FROM edge AS edge0,path AS path1 WHERE edge0.it = 0 AND edge0.x1 = path1.x0 AND NOT EXISTS (SELECT * from path AS pre WHERE pre.x0 = edge0.x0 AND pre.x1 = path1.x1));
-# ----

@@ -12,10 +12,6 @@ CREATE TABLE tbl (i INTEGER);
 statement ok
 INSERT INTO tbl VALUES (1);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX PRIMARY_tbl_i ON tbl(i);
-
 statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
 
@@ -27,10 +23,6 @@ CREATE TABLE test (i INTEGER)
 
 statement ok
 INSERT INTO test VALUES (1);
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD PRIMARY KEY (i);
 
 statement error
 CREATE INDEX PRIMARY_test_i ON test(i);

@@ -6,14 +6,3 @@ DROP TABLE IF EXISTS t1
 statement ok
 create table t1 as select * FROM (VALUES ('1-2', '3-4', 'a-z', NULL)) as r(v);
 
-# TODO: unknown function
-# query I
-# SELECT list_extract(string_split(v, '-'), 1) FROM t1;
-# ----
-# 1
-
-# TODO: unknown function
-# query I
-# SELECT list_extract(string_split(v, '-'), 1) FROM t1;
-# ----
-# 1

@@ -15,17 +15,3 @@ SELECT * FROM strings WHERE 'Goethe' > s ORDER BY 1
 ----
 Gabel
 
-# TODO: unsupported feature
-# query T
-# SELECT * FROM strings ORDER BY s COLLATE de
-# ----
-# Gabel
-# Göbel
-# Goethe
-# Goldmann
-# Göthe
-# Götz
-
-# TODO: unsupported feature
-# statement ok
-# SELECT icu_sort_key('Ş', 'ro')

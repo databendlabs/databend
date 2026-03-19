@@ -1,0 +1,21 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t(table_id BIGINT, val BOOLEAN);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t VALUES (1, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# WITH new_values(tid, new_val) AS (
+# 	VALUES (1, NULL)
+# )
+# UPDATE t
+# FROM new_values
+# WHERE table_id=tid
+# ;

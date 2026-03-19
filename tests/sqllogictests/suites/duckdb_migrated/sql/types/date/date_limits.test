@@ -8,12 +8,6 @@ select '2370-01-01'::date
 ----
 2370-01-01
 
-# TODO: unsupported feature
-# query I
-# select '5877642-06-25 (BC)'::date
-# ----
-# 5877642-06-25 (BC)
-
 statement error
 select '5877642-06-24 (BC)'::date
 
@@ -23,39 +17,17 @@ select '5877680-06-23 (BC)'::date
 statement error
 select '99999999-06-23 (BC)'::date
 
-# TODO: unsupported feature
-# query I
-# select '290308-01-01 (BC)'::date::timestamp
-# ----
-# 290308-01-01 (BC) 00:00:00
-
 statement error
 select '290309-01-01 (BC)'::date::timestamp
 
 statement error
 select '5877642-06-23 (BC)'::date::timestamp
 
-# TODO: unsupported feature
-# query I
-# select '5877642-06-25 (BC)'::date + 1
-# ----
-# 5877642-06-26 (BC)
-
 statement error
 select '5877642-06-24 (BC)'::date - 1
 
 statement error
 select '5877642-06-24 (BC)'::date - 365
-
-# TODO: unsupported feature
-# statement error
-# select '5877642-06-24 (BC)'::date - 2147483647
-
-# TODO: unsupported feature
-# query I
-# select '290309-12-22 (BC)'::date + interval (1) day
-# ----
-# 290309-12-23 (BC) 00:00:00
 
 statement error
 select '290309-12-22 (BC)'::date - interval (1) day
@@ -81,23 +53,11 @@ select '290309-12-22 (BC)'::date - interval '2147483647 days 9223372036854775807
 statement error
 select '290309-12-22 (BC)'::date - interval '2007483647 days 9223372036854775807 microseconds'
 
-# TODO: unsupported feature
-# query I
-# select '290309-12-22 (BC)'::date + interval (1) month
-# ----
-# 290308-01-22 (BC) 00:00:00
-
 statement error
 select '5877642-06-23 (BC)'::date - interval (1) month
 
 statement error
 select '5877642-06-23 (BC)'::date - interval (2147483647) month
-
-# TODO: unsupported feature
-# query I
-# select '5881580-07-10'::date
-# ----
-# 5881580-07-10
 
 statement error
 select '5881580-07-11'::date
@@ -108,20 +68,8 @@ select '5881580-08-11'::date
 statement error
 select '99999999-01-01'::date
 
-# TODO: unsupported feature
-# query I
-# select '294247-01-10'::date::timestamp
-# ----
-# 294247-01-10 00:00:00
-
 statement error
 select '294247-01-11'::date::timestamp
-
-# TODO: unsupported feature
-# query I
-# select '5881580-07-10'::date - 1
-# ----
-# 5881580-07-09
 
 statement error
 select '5881580-07-10'::date + 1
@@ -129,18 +77,8 @@ select '5881580-07-10'::date + 1
 statement error
 select '5881580-07-10'::date + 365
 
-# TODO: result differs
-# statement error
-# select '5881580-07-10'::date + 2147483647
-
 statement error
 SELECT '5877642-06-25 (BC)'::DATE - 1;
-
-# TODO: unsupported feature
-# query I
-# select '294247-01-10'::date - interval (1) day
-# ----
-# 294247-01-09 00:00:00
 
 statement error
 select '294247-01-10'::date + interval (1) day
@@ -169,14 +107,3 @@ select '294247-01-10'::date + interval '2007483647 days 9223372036854775807 micr
 statement error
 select '294247-01-10'::date + interval (1) month
 
-# TODO: unsupported feature
-# query I
-# select '294247-01-10'::date - interval (1) month
-# ----
-# 294246-12-10 00:00:00
-
-# TODO: unsupported feature
-# query I
-# select '5881580-07-10'::date - '5877642-06-25 (BC)'::date
-# ----
-# 4294967292

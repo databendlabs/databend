@@ -21,19 +21,8 @@ SELECT CAST('1e1' AS INTEGER);
 ----
 10
 
-# TODO: unsupported feature
-# query I
-# SELECT CAST('  1e1' AS INTEGER);
-# ----
-# 10
-
 query R
 SELECT CAST('1e1' AS DOUBLE);
 ----
 10.0
 
-# TODO: unsupported feature
-# query I
-# SELECT CAST('   1e1' AS DOUBLE);
-# ----
-# 10.0

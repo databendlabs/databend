@@ -35,24 +35,7 @@ insert into trades values ('2020-01-01 00:00:03', 1);
 
 # Compare NLJ optimisation to operator
 
-# TODO: unsupported feature
-# query III
-# SELECT t.*, p.price
-# FROM trades t ASOF JOIN prices p 
-#   ON t.symbol = p.symbol AND t.when >= p.when;
-# ----
-# 2020-01-01 00:00:03	1	42
-
 # NLJ does not support IS NOT DISTINCT FROM
-
-# TODO: unsupported feature
-# query II
-# EXPLAIN
-# SELECT t.*, p.price
-# FROM trades t ASOF JOIN prices p 
-#   ON t.symbol IS NOT DISTINCT FROM p.symbol AND t.when >= p.when;
-# ----
-# physical_plan	<!REGEX>:.*NESTED_LOOP_JOIN.*
 
 # Ignore non-join conditions 
 
@@ -72,45 +55,7 @@ ORDER BY p.ts ASC
 8	3
 9	3
 
-# TODO: unsupported feature
-# query II
-# WITH samples AS (
-# 	SELECT col0 AS starts, col1 AS ends
-# 	FROM (VALUES
-# 		(5, 9),
-# 		(10, 13),
-# 		(14, 20),
-# 		(21, 23)
-# 	)
-# )
-# SELECT
-#       s1.starts as s1_starts,
-#       s2.starts as s2_starts,
-# FROM samples AS s1 ASOF JOIN samples as s2 ON s2.ends >= (s1.ends - 5)
-# WHERE s1_starts <> s2_starts
-# ORDER BY ALL
-# ----
-# 10	5
-# 21 	14
-
-# TODO: unsupported feature
-# query III
-# SELECT t.*, p.price
-# FROM trades t ASOF JOIN prices p 
-#   ON t.symbol = p.symbol AND t.when >= p.when;
-# ----
-# 2020-01-01 00:00:03	1	42
-
 # NLJ does not support IS NOT DISTINCT FROM
-
-# TODO: unsupported feature
-# query II
-# EXPLAIN
-# SELECT t.*, p.price
-# FROM trades t ASOF JOIN prices p 
-#   ON t.symbol IS NOT DISTINCT FROM p.symbol AND t.when >= p.when;
-# ----
-# physical_plan	<!REGEX>:.*NESTED_LOOP_JOIN.*
 
 # Ignore non-join conditions 
 
@@ -129,28 +74,6 @@ ORDER BY p.ts ASC
 7	2
 8	3
 9	3
-
-# TODO: unsupported feature
-# query II
-# WITH samples AS (
-# 	SELECT col0 AS starts, col1 AS ends
-# 	FROM (VALUES
-# 		(5, 9),
-# 		(10, 13),
-# 		(14, 20),
-# 		(21, 23)
-# 	)
-# )
-# SELECT
-#       s1.starts as s1_starts,
-#       s2.starts as s2_starts,
-# FROM samples AS s1 ASOF JOIN samples as s2 ON s2.ends >= (s1.ends - 5)
-# WHERE s1_starts <> s2_starts
-# ORDER BY ALL
-# ----
-# 10	5
-# 21 	14
-
 
 #
 #  Errors

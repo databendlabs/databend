@@ -14,55 +14,18 @@ create or replace table test as (
 
 # test simple permutation of initial table projection
 
-# TODO: unsupported feature
-# statement ok
-# create index test_x on test(x);
-
 statement ok
 create view test_view as (select z, y, x from test);
-
-# TODO: unsupported feature
-# query II
-# explain analyze select * from test_view where x = '525';
-# ----
-# TableScan
-# ├── table: default.default.test
-# ├── scan id: 0
-# ├── output columns: [x (#0), y (#1), z (#2)]
-# ├── read rows: 1000
-# ├── read size: 12.37 KiB
-# ├── partitions total: 1
-# ├── partitions scanned: 1
-# ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 4 ms>]
-# ├── push downs: [filters: [is_true(test.x (#0) = '525')], limit: NONE]
-# └── estimated rows: 1.00
 
 query TTT
 select z, y, x from test_view where x = '525';
 ----
 3525	2525	525
 
-# TODO: unsupported feature
-# statement ok
-# drop index test_x;
-
 # test columnref as a child of function
-
-# TODO: unsupported feature
-# statement ok
-# create index test_upper_x on test(upper(x));
-
-# TODO: unsupported feature
-# query II
-# explain analyze select * from test_view where upper(x) = '526';
-# ----
-# special result marker
 
 query TTT
 select z, y, x from test_view where upper(x) = '526';
 ----
 3526	2526	526
 
-# TODO: unsupported feature
-# statement ok
-# drop index test_upper_x;

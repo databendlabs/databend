@@ -2,12 +2,5 @@
 statement error
 ATTACH 'data/attach_test/encrypted_ctr_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde');
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH 'data/attach_test/encrypted_ctr_key=abcde.db' as enc1 (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'CTR');
-
 # For GCM this is no problem
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc2 (ENCRYPTION_KEY 'abcde');

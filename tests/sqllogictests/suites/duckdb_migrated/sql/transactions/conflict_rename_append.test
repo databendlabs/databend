@@ -49,6 +49,3 @@ drop table backup_table
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# statement error
-# COMMIT

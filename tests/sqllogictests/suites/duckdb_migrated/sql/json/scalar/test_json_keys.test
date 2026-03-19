@@ -4,36 +4,6 @@ DROP TABLE IF EXISTS t1
 statement ok
 DROP TABLE IF EXISTS t2
 
-# TODO: unknown function
-# query T
-# select json_keys('{"duck": 42}');
-# ----
-# [duck]
-
-# TODO: unknown function
-# query T
-# select json_keys('{"duck": 42, "goose": 43}');
-# ----
-# [duck, goose]
-
-# TODO: unknown function
-# query T
-# select json_keys('["duck", "goose"]');
-# ----
-# []
-
-# TODO: unknown function
-# query T
-# select json_keys(NULL)
-# ----
-# NULL
-
-# TODO: unknown function
-# query T
-# select json_keys('{"duck": {"key1": 42}, "goose": {"key1": 42, "key2": 43}}', ['duck', 'goose'])
-# ----
-# [[key1], [key1, key2]]
-
 statement ok
 create table t1 as
 select range, case when range % 2 = 0 then '{"duck": 42}' else '{"duck": 42, "goose": 43}' end j
@@ -53,9 +23,3 @@ create table t2 as
 select range, '{"duck": {"key1": 42}, "goose": {"key1": 42, "key2": 43}}' j
 from generate_series(0, 9999)
 
-# TODO: unsupported feature
-# query T
-# select sum(list_sum([length(l) for l in json_keys(j, ['duck', 'goose'])])) s
-# from t2
-# ----
-# 30000

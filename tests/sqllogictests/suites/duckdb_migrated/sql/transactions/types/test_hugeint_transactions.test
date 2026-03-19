@@ -1,54 +1,14 @@
 statement ok
 DROP TABLE IF EXISTS hugeints
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE hugeints (h HUGEINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO hugeints VALUES (100::HUGEINT), (1023819078293589341789412412), (42);
-
 # update
 
 statement ok
 BEGIN TRANSACTION;
 
-# TODO: unsupported feature
-# statement ok
-# UPDATE hugeints SET h=100 WHERE h=42;
-
 # now we only have two distinct values in con
 
-# TODO: unsupported feature
-# query T
-# SELECT * FROM hugeints ORDER BY 1
-# ----
-# 100
-# 100
-# 1023819078293589341789412412
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(DISTINCT h) FROM hugeints
-# ----
-# 2
-
 # in con2 we still have 3
-
-# TODO: unsupported feature
-# query T
-# SELECT * FROM hugeints ORDER BY 1
-# ----
-# 42
-# 100
-# 1023819078293589341789412412
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(DISTINCT h) FROM hugeints
-# ----
-# 3
 
 # rollback
 
@@ -57,51 +17,7 @@ ROLLBACK
 
 # after the rollback we are back to 3
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(DISTINCT h) FROM hugeints
-# ----
-# 3
-
 # now commit it
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE hugeints SET h=100 WHERE h=42;
-
-# TODO: unsupported feature
-# query TI
-# SELECT h, COUNT(*) FROM hugeints GROUP BY h ORDER BY 2 DESC
-# ----
-# 100	2
-# 1023819078293589341789412412	1
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(DISTINCT h) FROM hugeints
-# ----
-# 2
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(DISTINCT h) FROM hugeints
-# ----
-# 2
 
 # increment 100 by 1
 
-# TODO: unsupported feature
-# statement ok
-# UPDATE hugeints SET h=h+1 WHERE h=100;
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(DISTINCT h) FROM hugeints
-# ----
-# 2
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(DISTINCT h) FROM hugeints
-# ----
-# 2

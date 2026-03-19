@@ -8,31 +8,5 @@ statement ok
 DROP TABLE IF EXISTS c
 
 # issue 7119
-# statement ok
-# create table a (a int not null, constraint pk_a primary key (A));
-
-# TODO: unsupported feature
-# statement ok
-# create table b (a int references a (a));
-
-# TODO: unsupported feature
-# statement ok
-# drop table b;
-
-# TODO: unsupported feature
-# statement ok
-# drop table a;
-
 # issue 7120
 
-# TODO: unsupported feature
-# statement ok
-# create table a (i int primary key);
-
-# TODO: unsupported feature
-# statement ok
-# create table b (i int references A (i));
-
-# TODO: unsupported feature
-# statement ok
-# create table c (i int primary key, j int references C (i));

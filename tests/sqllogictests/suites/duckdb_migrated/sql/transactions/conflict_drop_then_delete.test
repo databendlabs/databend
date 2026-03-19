@@ -24,14 +24,6 @@ drop table original_table
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# statement ok
-# delete from original_table where rowid % 2 = 0
-
-# TODO: unsupported feature
-# statement error
-# COMMIT
-
 statement ok
 create or replace table original_table as from range(0, 10) select 1 as col
 
@@ -43,22 +35,9 @@ BEGIN
 statement ok
 BEGIN
 
-# TODO: unsupported feature
-# statement ok
-# delete from original_table where rowid % 2 = 0
-
-# TODO: unsupported feature
-# statement ok
-# create table new_incremental as
-#   from range(0, 10000)
-#   select 42 as col
-
 statement ok
 drop table original_table
 
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# statement error
-# COMMIT

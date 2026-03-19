@@ -42,50 +42,9 @@ SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(s, ' ') FROM test_aggre
 
 # complex agg with distinct and order by and conversion from int to string
 
-# TODO: unsupported feature
-# query IIITTT
-# SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(DISTINCT g::VARCHAR ORDER BY g::VARCHAR DESC) FROM strings GROUP BY g ORDER BY g;
-# ----
-# 0
-# 2
-# 1
-# hello
-# hello
-# 0
-# 1
-# 2
-# 2
-# r
-# world
-# 1
-
 # complex agg with with distinct and order by with NULL
 
-# TODO: unsupported feature
-# query IIITTT
-# SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(DISTINCT s ORDER BY s ASC) FROM strings GROUP BY g ORDER BY g;
-# ----
-# 0
-# 2
-# 1
-# hello
-# hello
-# hello
-# 1
-# 2
-# 2
-# r
-# world
-# r,world
-
 # empty group
-
-# TODO: unsupported feature
-# query IIITTT
-# SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(s, ' ') FROM strings WHERE s IS NULL OR s <> 'hello' GROUP BY g ORDER BY g
-# ----
-# 0 1 0 NULL NULL NULL
-# 1 2 2 r world world r
 
 # unsupported aggregates
 
@@ -122,13 +81,6 @@ SELECT g, COUNT(*), COUNT(b), MIN(b), MAX(b) FROM test_aggregate_types_booleans 
 ----
 0 1 0 NULL NULL
 1 1 1 1 1
-
-# TODO: type_error
-# query I
-# SELECT SUM(b) FROM booleans GROUP BY g ORDER BY g
-# ----
-# 0
-# 1
 
 statement error
 SELECT AVG(b) FROM test_aggregate_types_booleans GROUP BY g ORDER BY g

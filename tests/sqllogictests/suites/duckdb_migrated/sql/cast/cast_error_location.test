@@ -31,10 +31,6 @@ SELECT [1000]::utinyint[]
 statement error
 SELECT {'x': 1000}::row(x tinyint)
 
-# TODO: result differs
-# statement error
-# select 1e308::float
-
 statement error
 select 1e308::hugeint
 
@@ -58,14 +54,6 @@ SELECT [1,2,3]::INT[2]
 
 statement error
 SELECT '\x'::BYTEA
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE cast_table(i INTEGER, s VARCHAR, d DECIMAL(5,1), l INT[], int_struct ROW(i INTEGER), dbl DOUBLE, hge HUGEINT, invalid_blob_str VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO cast_table VALUES (1000, 'hello', 1000.0, [1000], {'i': 1000}, 1e308, 1000000000000000000000000000000, '\x')
 
 # out of range integer cast
 
@@ -110,18 +98,6 @@ CREATE TABLE str_tbl AS SELECT 'hello' my_str
 
 statement ok
 CREATE TABLE ts_tbl(ts TIMESTAMP)
-
-# TODO: result differs
-# statement error
-# INSERT INTO ts_tbl SELECT my_integer FROM int_tbl
-
-# TODO: result differs
-# statement error
-# INSERT INTO ts_tbl SELECT my_integer * 2 FROM int_tbl
-
-# TODO: result differs
-# statement error
-# INSERT INTO ts_tbl FROM int_tbl
 
 statement error
 INSERT INTO ts_tbl FROM str_tbl

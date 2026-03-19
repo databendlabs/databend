@@ -12,16 +12,6 @@ CREATE TABLE floats(f FLOAT)
 statement ok
 INSERT INTO floats VALUES (3), ('nan'), ('inf'), ('-inf'), (NULL)
 
-# TODO: unknown function
-# query IIII
-# SELECT f, isnan(f), isinf(f), isfinite(f) FROM floats ORDER BY f
-# ----
-# NULL	NULL	NULL	NULL
-# -inf	False	True	False
-# 3	False	False	True
-# inf	False	True	False
-# nan	True	False	False
-
 statement ok
 DROP TABLE floats
 
@@ -35,16 +25,6 @@ CREATE TABLE floats(f DOUBLE)
 
 statement ok
 INSERT INTO floats VALUES (3), ('nan'), ('inf'), ('-inf'), (NULL)
-
-# TODO: unknown function
-# query IIII
-# SELECT f, isnan(f), isinf(f), isfinite(f) FROM floats ORDER BY f
-# ----
-# NULL	NULL	NULL	NULL
-# -inf	False	True	False
-# 3	False	False	True
-# inf	False	True	False
-# nan	True	False	False
 
 statement ok
 DROP TABLE floats

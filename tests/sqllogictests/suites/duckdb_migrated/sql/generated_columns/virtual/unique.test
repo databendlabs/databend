@@ -17,18 +17,6 @@ CREATE TABLE unit (
 	UNIQUE (amount_sold),
 );
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (
-# 	gen1 AS (price),
-# 	gen2 AS (price),
-# 	price INTEGER UNIQUE
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (5);
-
 # Violates unique constraint
 
 statement error

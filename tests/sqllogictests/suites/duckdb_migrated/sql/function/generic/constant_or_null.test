@@ -21,10 +21,3 @@ NULL
 NULL
 NULL
 
-# TODO: unknown function
-# statement error
-# SELECT constant_or_null(1);
-
-# TODO: unknown function
-# statement error
-# SELECT constant_or_null();

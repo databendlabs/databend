@@ -4,60 +4,9 @@ DROP TABLE IF EXISTS my_schema.table_in_schema
 statement ok
 DROP TABLE IF EXISTS my_table
 
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DRO') LIMIT 1;
-# ----
-# DROP 	0
-
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TA') LIMIT 1;
-# ----
-# TABLE 	5
-
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP VI') LIMIT 1;
-# ----
-# VIEW 	5
-
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE IF EX') LIMIT 1;
-# ----
-# EXISTS 	14
-
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE tbl CAS') LIMIT 1;
-# ----
-# CASCADE 	15
-
 statement ok
 CREATE TABLE my_table(my_column INTEGER);
-
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE my_') LIMIT 1;
-# ----
-# my_table	11
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA my_schema;
 
 statement ok
 CREATE TABLE my_schema.table_in_schema(my_column INTEGER)
 
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE my_s') LIMIT 1;
-# ----
-# my_schema.	11
-
-# TODO: unsupported feature
-# query II
-# SELECT suggestion, suggestion_start FROM sql_auto_complete('DROP TABLE my_schema.t') LIMIT 1;
-# ----
-# table_in_schema	21

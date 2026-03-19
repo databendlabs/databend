@@ -21,14 +21,5 @@ SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), C
 
 # ordered aggregates are not supported
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(1 ORDER BY 1)
-# ----
-# 1
-
 # cannot do DISTINCT *
 
-# TODO: unsupported feature
-# statement error
-# SELECT COUNT(DISTINCT *) FROM test_count_integers

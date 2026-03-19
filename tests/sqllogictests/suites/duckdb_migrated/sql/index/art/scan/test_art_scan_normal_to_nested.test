@@ -7,10 +7,6 @@ DROP TABLE IF EXISTS t0
 statement ok
 CREATE TABLE integers (i BIGINT);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx_integers ON integers (i);
-
 statement ok
 INSERT INTO integers (i) VALUES ('1'), ('-1'), ('1');
 
@@ -28,10 +24,6 @@ CREATE TABLE t0(c1 TIMESTAMP);
 
 statement ok
 INSERT INTO t0(c1) VALUES ('2020-02-29 12:00:00'), ('1969-12-09 09:26:38'), ('2020-02-29 12:00:00');
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i0 ON t0(c1);
 
 query I
 SELECT c1 FROM t0 WHERE c1 <= '2007-07-07 07:07:07';

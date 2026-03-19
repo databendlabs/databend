@@ -1,118 +1,8 @@
-# TODO: unsupported feature
-# query III
-# SHOW SCHEMAS
-# ----
-# "
-# a
-# a;a
-# b
-# db
-# db1
-# default
-# fts_main_documents
-# information_schema
-# macros
-# my_schema
-# out_of_path
-# prd
-# public
-# s1
-# s2
-# s3
-# schema1
-# system
-# tai
-# temp
-# test
-# test2
-# test3
-# test4
-# test5
-# test_schema
-
 # add extra db
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH DATABASE ':memory:' AS new_database;
-
-# TODO: unsupported feature
-# query III
-# SHOW SCHEMAS
-# ----
-# "
-# a
-# a;a
-# b
-# db
-# db1
-# default
-# fts_main_documents
-# information_schema
-# macros
-# my_schema
-# out_of_path
-# prd
-# public
-# s1
-# s2
-# s3
-# schema1
-# system
-# tai
-# temp
-# test
-# test2
-# test3
-# test4
-# test5
-# test_schema
 
 # check correctness after USE
 
-# TODO: unsupported feature
-# statement ok
-# USE new_database;
-
-# TODO: unsupported feature
-# query III
-# SHOW SCHEMAS
-# ----
-# "
-# a
-# a;a
-# b
-# db
-# db1
-# default
-# fts_main_documents
-# information_schema
-# macros
-# my_schema
-# out_of_path
-# prd
-# public
-# s1
-# s2
-# s3
-# schema1
-# system
-# tai
-# temp
-# test
-# test2
-# test3
-# test4
-# test5
-# test_schema
-
 # check multiple dbs with multiple schemas
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA new_s1;
-# CREATE SCHEMA new_s2;
-# CREATE SCHEMA memory.mem_s1;
 
 query T
 SHOW SCHEMAS
@@ -147,10 +37,6 @@ test_schema
 
 # USE non-default schema
 
-# TODO: unsupported feature
-# statement ok
-# USE new_database.new_s2;
-
 query T
 SHOW SCHEMAS
 ----
@@ -183,10 +69,6 @@ test5
 test_schema
 
 # drop active schema
-
-# TODO: unsupported feature
-# statement ok
-# DROP SCHEMA new_database.new_s2;
 
 query T
 SHOW SCHEMAS
@@ -221,10 +103,6 @@ test_schema
 
 # detach default db
 
-# TODO: unsupported feature
-# statement ok
-# DETACH memory;
-
 query T
 SHOW SCHEMAS
 ----
@@ -258,9 +136,3 @@ test_schema
 
 # DESCRIBE is alias for SHOW
 
-# TODO: unsupported feature
-# query III
-# DESCRIBE SCHEMAS
-# ----
-# new_database	main	1
-# new_database	new_s1	0

@@ -1,0 +1,24 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table tbl (a integer primary key, b integer);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl VALUES (1,3), (2,2), (3,10), (4,3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl VALUES (3,8), (2,2) ON CONFLICT (a) DO UPDATE SET b = b*2 WHERE b = excluded.b;
+
+# TODO: unsupported feature
+# query II
+# select * from tbl;
+# ----
+# 1	3
+# 2	4
+# 3	10
+# 4	3

@@ -1,0 +1,36 @@
+# Original issue: https://github.com/duckdb/duckdb/issues/18040
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA app;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE app.item AS STRUCT (
+#     id uuid,
+#     code UINTEGER
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE app.product as STRUCT (
+#   id uuid,
+#   items app.item[]
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA app2;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE app2.item AS STRUCT (
+#     id uuid,
+#     code UINTEGER
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE app2.product as STRUCT (
+#   id uuid,
+#   items item[]
+# );

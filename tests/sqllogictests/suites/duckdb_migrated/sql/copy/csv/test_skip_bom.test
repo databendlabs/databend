@@ -4,31 +4,5 @@ DROP TABLE IF EXISTS people
 statement ok
 DROP TABLE IF EXISTS people2
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE people AS SELECT * FROM read_csv('{DATA_DIR}/csv/people.csv', columns=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR'), sep=',', auto_detect='false');
-
-# TODO: unsupported feature
-# query TT
-# SELECT * FROM people
-# ----
-# Person	Region
-# Anna Andreadi	West
-# Chuck Magee	East
-# Kelly Williams	Central
-# Cassandra Brandow	South
-
 # read csv auto with UTF-8 BOM
 
-# TODO: unknown function
-# statement ok
-# CREATE TABLE people2 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/people.csv');
-
-# TODO: unsupported feature
-# query TT
-# SELECT * FROM people2
-# ----
-# Anna Andreadi	West
-# Chuck Magee	East
-# Kelly Williams	Central
-# Cassandra Brandow	South

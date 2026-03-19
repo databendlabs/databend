@@ -10,92 +10,18 @@ DROP TABLE IF EXISTS test2
 statement ok
 CREATE TABLE test ("HeLlO" INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (1)
-
 # lowercase names are aliased
-
-# TODO: unsupported feature
-# statement ok
-# SELECT HeLlO FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT hello FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT "HeLlO" FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT "HELLO" FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT "HELLo" FROM test
 
 # verify that the column name of the original column is returned
 
-# TODO: unknown function
-# query I
-# SELECT alias(HeLlO) FROM test
-# ----
-# HeLlO
-
-# TODO: unknown function
-# query I
-# SELECT alias(hello) FROM test
-# ----
-# HeLlO
-
 # verify that an alias here still works
 
-# TODO: unsupported feature
-# query I
-# SELECT alias(x) FROM (SELECT HeLlO as x FROM test) tbl;
-# ----
-# x
-
 # verify that it also works when we specify the table-name explicitly
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test.HeLlO FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test.hello FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test."HeLlO" FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test."HELLO" FROM test
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test."HELLo" FROM test
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE test SET hello=3
-
-# TODO: result differs
-# statement ok
-# UPDATE test SET HeLlO=3
 
 statement ok
 DROP TABLE test
 
 # this counts as a duplicate column error
-
-# TODO: result differs
-# statement error
-# CREATE TABLE test("HeLlO" INTEGER, "HELLO" INTEGER)
 
 statement ok
 CREATE TABLE test1("HeLlO" INTEGER)
@@ -103,72 +29,3 @@ CREATE TABLE test1("HeLlO" INTEGER)
 statement ok
 CREATE TABLE test2("HELLO" INTEGER)
 
-# TODO: result differs
-# statement error
-# SELECT HeLlO FROM test1, test2
-
-# TODO: result differs
-# statement error
-# SELECT hello FROM test1, test2
-
-# TODO: result differs
-# statement error
-# SELECT "HeLlO" FROM test1, test2
-
-# TODO: unsupported feature
-# statement error
-# SELECT "HELLO" FROM test1, test2
-
-# TODO: unsupported feature
-# statement error
-# SELECT "HELLo" FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test1.HeLlO FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test1.hello FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test1."HeLlO" FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test1."HELLO" FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test1."HELLo" FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test2.HeLlO FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test2.hello FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test2."HeLlO" FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test2."HELLO" FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT test2."HELLo" FROM test1, test2
-
-# TODO: unsupported feature
-# statement ok
-# SELECT * FROM test1 JOIN test2 USING (hello)
-
-# TODO: unsupported feature
-# query I
-# SELECT hello FROM (SELECT 42) tbl("HeLlO")
-# ----
-# 42

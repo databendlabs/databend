@@ -52,16 +52,6 @@ WITH t(x) AS MATERIALIZED (SELECT x FROM generate_series(1,10) AS _(x) limit 4) 
 4
 3
 
-# TODO: unsupported feature
-# query I
-# WITH t(x) AS MATERIALIZED (
-#   WITH u(x) AS MATERIALIZED (
-#     SELECT 42
-#   ) SELECT * FROM u
-# ) SELECT * FROM t;
-# ----
-# 42
-
 query I
 WITH t(x) AS MATERIALIZED (SELECT 1),
      u(x) AS MATERIALIZED (SELECT x+1 FROM t)

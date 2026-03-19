@@ -4,24 +4,3 @@ DROP TABLE IF EXISTS main.tbl
 statement ok
 DROP TABLE IF EXISTS my_schema.tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA my_schema;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE my_schema.my_type AS STRUCT (
-# 	a int, b int
-# );
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE my_schema.tbl (
-# 	c0 my_schema.my_type
-# );
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE main.tbl (
-# 	c0 my_schema.my_type
-# );

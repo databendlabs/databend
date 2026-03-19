@@ -82,67 +82,11 @@ DROP TABLE test
 
 # default from sequence
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test (b) VALUES (2), (4), (6), (2), (4);
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM test ORDER BY 1
-# ----
-# 1	2
-# 2	4
-# 3	6
-# 4	2
-# 5	4
-
 # cannot drop sequence now
-
-# TODO: result differs
-# statement error
-# DROP SEQUENCE seq
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE test
 
 # after dropping table we can drop seq
 
-# TODO: unsupported feature
-# statement ok
-# DROP SEQUENCE seq
-
 # test default with update
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test (b) VALUES (1);
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE test SET a=DEFAULT
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM test ORDER BY 1
-# ----
-# 2	1
 
 # cannot use subquery in DEFAULT expression
 
@@ -158,24 +102,3 @@ CREATE TABLE test (a INTEGER DEFAULT row_number() OVER (), b INTEGER);
 statement error
 CREATE TABLE test (a INTEGER DEFAULT b+1, b INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE test
-
-# TODO: unknown function
-# statement ok
-# CREATE TABLE test (a DOUBLE DEFAULT random(), b INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test (b) VALUES (1);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test (b) VALUES (2);
-
-# TODO: unsupported feature
-# query R
-# SELECT COUNT(DISTINCT a) FROM test;
-# ----
-# 2

@@ -7,10 +7,6 @@ CREATE TABLE test(i INTEGER, j INTEGER)
 statement ok
 INSERT INTO test VALUES (1, 1), (2, 2)
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER i TYPE INTEGER USING 2*(i+j)
-
 query II
 SELECT * FROM test
 ----

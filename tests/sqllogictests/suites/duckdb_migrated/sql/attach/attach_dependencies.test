@@ -8,14 +8,6 @@ statement ok
 DROP TABLE IF EXISTS tbl_alter_column
 
 # foreign key
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE pk_tbl (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE fk_tbl (id INTEGER REFERENCES pk_tbl(id));
-
 # alter columns
 
 statement ok
@@ -24,30 +16,10 @@ CREATE TABLE tbl_alter_column (id INT, other INT, nn_col INT NOT NULL, rm INT, r
 statement ok
 ALTER TABLE tbl_alter_column ADD COLUMN k INTEGER;
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl_alter_column ALTER other SET DATA TYPE VARCHAR USING concat(other, '_', 'yay');
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl_alter_column ALTER COLUMN nn_col DROP NOT NULL;
-
 statement ok
 ALTER TABLE tbl_alter_column DROP rm;
 
 statement ok
 ALTER TABLE tbl_alter_column RENAME rename_c TO my_new_col;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl_alter_column ALTER COLUMN my_def SET DEFAULT 10;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl_alter_column ALTER COLUMN drop_def DROP DEFAULT;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE tbl_alter_column ALTER COLUMN new_null_col SET NOT NULL;
 
 # now attach all databases

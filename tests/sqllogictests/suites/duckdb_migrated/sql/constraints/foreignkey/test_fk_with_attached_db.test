@@ -4,34 +4,3 @@ DROP TABLE IF EXISTS t1
 statement ok
 DROP TABLE IF EXISTS t2
 
-# TODO: unsupported feature
-# statement ok
-# USE db1;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE IF NOT EXISTS t1 (
-#   cache_key VARCHAR PRIMARY KEY,
-#   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-# );
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE IF NOT EXISTS t2 (
-#   cache_key VARCHAR NOT NULL,
-#   dose DOUBLE NOT NULL,
-#   PRIMARY KEY (cache_key, dose),
-#   FOREIGN KEY (cache_key) REFERENCES t1 (cache_key)
-# );
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH ':memory:' AS other;
-
-# TODO: unsupported feature
-# statement ok
-# USE other;
-
-# TODO: unsupported feature
-# statement ok
-# DETACH db1;

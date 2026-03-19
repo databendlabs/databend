@@ -1,28 +1,8 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(i INTEGER UNIQUE, j INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (1, 1), (2, 2)
-
 # we disallow ALTER TYPE on a column with a CHECK constraint
 
 statement error
 ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER j SET DATA TYPE VARCHAR
-
-# TODO: unsupported feature
-# query IT
-# SELECT * FROM test
-# ----
-# 1
-# 1
-# 2
-# 2

@@ -1,0 +1,8 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA IF NOT EXISTS schema__test
+
+
+# run INSERT OR REPLACE concurrently on different tables
+
+# run INSERT OR REPLACE concurrently on one table, while other threads read the others

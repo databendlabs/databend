@@ -1,0 +1,14 @@
+query I
+SELECT (SELECT {'a': 3})
+----
+{"a":3}
+
+query I
+SELECT (SELECT {'a': 3})['a']
+----
+3
+
+query I
+SELECT (SELECT CASE WHEN 1=0 THEN {'a': 3} ELSE NULL END)
+----
+NULL

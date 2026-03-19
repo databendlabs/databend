@@ -37,7 +37,6 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_times
 2001 [30] 30
 NULL [1] 1
 
-
 # we run these tests with and without compressed materialization to make sure we cover all types
 
 statement ok
@@ -64,14 +63,7 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_times
 2001 [30] 30
 NULL [1] 1
 
-
-
-
 # we run these tests with and without compressed materialization to make sure we cover all types
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE timeseries(year UINTEGER, val UINTEGER);
 
 statement ok
 INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
@@ -94,12 +86,7 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_times
 2001 [30,30] 30,30
 NULL [1,1] 1,1
 
-
 # we run these tests with and without compressed materialization to make sure we cover all types
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE timeseries(year UINTEGER, val UINTEGER);
 
 statement ok
 INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
@@ -121,9 +108,6 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY y
 1997 [12,12,12] 12,12,12
 2001 [30,30,30] 30,30,30
 NULL [1,1,1] 1,1,1
-
-
-
 
 # we run these tests with and without compressed materialization to make sure we cover all types
 
@@ -151,7 +135,6 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_times
 2001 [30] 30
 NULL [1] 1
 
-
 # we run these tests with and without compressed materialization to make sure we cover all types
 
 statement ok
@@ -178,14 +161,7 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_times
 2001 [30] 30
 NULL [1] 1
 
-
-
-
 # we run these tests with and without compressed materialization to make sure we cover all types
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE timeseries(year UBIGINT, val UBIGINT);
 
 statement ok
 INSERT INTO test_perfect_ht_timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
@@ -208,12 +184,7 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM test_perfect_ht_times
 2001 [30,30] 30,30
 NULL [1,1] 1,1
 
-
 # we run these tests with and without compressed materialization to make sure we cover all types
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE timeseries(year UBIGINT, val UBIGINT);
 
 statement ok
 INSERT INTO timeseries VALUES (1996, 10), (1997, 12), (1996, 20), (2001, 30), (NULL, 1), (1996, NULL);
@@ -235,8 +206,6 @@ SELECT year, LIST(val), STRING_AGG(val::VARCHAR, ',') FROM timeseries GROUP BY y
 1997 [12,12,12] 12,12,12
 2001 [30,30,30] 30,30,30
 NULL [1,1,1] 1,1,1
-
-
 
 # many small columns each having only the values 0 and 1
 # total possible combinations is 2^10, but there are only 2 groups
@@ -277,107 +246,3 @@ SELECT COUNT(DISTINCT i), MIN(i), MAX(i), SUM(i) / COUNT(i) FROM (SELECT t::SMAL
 statement ok
 create table dates as select date '1992-01-01' + concat(i, ' months')::interval as d from range(0, 100) tbl(i);
 
-# TODO: unsupported feature
-# query II
-# select extract(year from d), extract(month from d) from dates group by 1, 2 ORDER BY ALL;
-# ----
-# 1992	1
-# 1992	2
-# 1992	3
-# 1992	4
-# 1992	5
-# 1992	6
-# 1992	7
-# 1992	8
-# 1992	9
-# 1992	10
-# 1992	11
-# 1992	12
-# 1993	1
-# 1993	2
-# 1993	3
-# 1993	4
-# 1993	5
-# 1993	6
-# 1993	7
-# 1993	8
-# 1993	9
-# 1993	10
-# 1993	11
-# 1993	12
-# 1994	1
-# 1994	2
-# 1994	3
-# 1994	4
-# 1994	5
-# 1994	6
-# 1994	7
-# 1994	8
-# 1994	9
-# 1994	10
-# 1994	11
-# 1994	12
-# 1995	1
-# 1995	2
-# 1995	3
-# 1995	4
-# 1995	5
-# 1995	6
-# 1995	7
-# 1995	8
-# 1995	9
-# 1995	10
-# 1995	11
-# 1995	12
-# 1996	1
-# 1996	2
-# 1996	3
-# 1996	4
-# 1996	5
-# 1996	6
-# 1996	7
-# 1996	8
-# 1996	9
-# 1996	10
-# 1996	11
-# 1996	12
-# 1997	1
-# 1997	2
-# 1997	3
-# 1997	4
-# 1997	5
-# 1997	6
-# 1997	7
-# 1997	8
-# 1997	9
-# 1997	10
-# 1997	11
-# 1997	12
-# 1998	1
-# 1998	2
-# 1998	3
-# 1998	4
-# 1998	5
-# 1998	6
-# 1998	7
-# 1998	8
-# 1998	9
-# 1998	10
-# 1998	11
-# 1998	12
-# 1999	1
-# 1999	2
-# 1999	3
-# 1999	4
-# 1999	5
-# 1999	6
-# 1999	7
-# 1999	8
-# 1999	9
-# 1999	10
-# 1999	11
-# 1999	12
-# 2000	1
-# 2000	2
-# 2000	3
-# 2000	4

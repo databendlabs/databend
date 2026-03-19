@@ -24,21 +24,3 @@ ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total
 statement error
 SELECT also_total_profit FROM unit
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE unit2(
-# 	price INTEGER,
-# 	amount_sold INTEGER,
-# 	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL,
-# 	also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO unit2 VALUES (100, 0)
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM unit2
-# ----
-# 100	0	0	0

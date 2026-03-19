@@ -4,32 +4,9 @@ DROP TABLE IF EXISTS test
 statement ok
 CREATE TABLE test (i INTEGER, j INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD PRIMARY KEY (j)
-
 statement ok
 INSERT INTO test VALUES (1, 1)
-
-# TODO: unsupported feature
-# statement ok
-# ATTACH ':memory:' as memory
-
-# TODO: unsupported feature
-# statement ok
-# USE memory
-
-# TODO: unsupported feature
-# statement ok
-# DETACH test_add_pk_attach
-
-# TODO: unsupported feature
-# statement ok
-# USE test_add_pk_attach
 
 statement error
 ALTER TABLE test ADD PRIMARY KEY (i)
 
-# TODO: result differs
-# statement error
-# INSERT INTO test VALUES (2, 1)

@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS strings
 statement ok
 CREATE TABLE strings(i varchar);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON strings(i);
-
 statement ok
 INSERT INTO strings VALUES ('test'), ('test1'), ('vest1'), ('somesuperbigstring'), ('somesuperbigstring1'),
 	('somesuperbigstring2'), ('somesuperbigstring'), ('maybesomesuperbigstring'),
@@ -43,10 +39,6 @@ query I
 SELECT COUNT(i) FROM strings WHERE i = 'somesuperthisdoesnotexist';
 ----
 0
-
-# TODO: unsupported feature
-# statement ok
-# DROP INDEX i_index;
 
 statement ok
 DROP TABLE strings;

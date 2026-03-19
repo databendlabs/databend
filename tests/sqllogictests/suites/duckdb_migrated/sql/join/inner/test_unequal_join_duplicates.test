@@ -10,18 +10,3 @@ CREATE TABLE test (b INTEGER);
 statement ok
 INSERT INTO test VALUES (1), (2)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test2 AS SELECT * FROM repeat(1, 10*1024) t1(b);
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM test2;
-# ----
-# 10240
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM test INNER JOIN test2 ON test.b<>test2.b
-# ----
-# 10240

@@ -1,0 +1,272 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::tinyint} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::smallint} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::integer} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::bigint} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::utinyint} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::usmallint} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::uinteger} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::ubigint} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 10}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::float} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s)['i'], MAX(s)['i'] FROM structs
+# ----
+# 0	10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::double} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s)['i'], MAX(s)['i'] FROM structs
+# ----
+# 0	10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+
+# booleans
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i%2} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0}	{'i': 1}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# intervals
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': interval (i+1) year} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 1 year}	{'i': 11 years}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# varchars
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': i::varchar || 'thisisalongsuffix'} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 0thisisalongsuffix}	{'i': 9thisisalongsuffix}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# ties only
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': 1} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': 1}	{'i': 1}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# nulls only
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': NULL} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': NULL}	{'i': NULL}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# null structs
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT NULL::ROW(i INTEGER) AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# null structs within a struct
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT {'i': NULL::ROW(i INTEGER)} AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# {'i': NULL}	{'i': NULL}
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs
+
+# null structs within a list
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE structs AS SELECT [NULL::ROW(i INTEGER)] AS s FROM range(0, 11) tbl(i)
+
+# TODO: unsupported feature
+# query II
+# SELECT MIN(s), MAX(s) FROM structs
+# ----
+# [NULL]	[NULL]
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE structs

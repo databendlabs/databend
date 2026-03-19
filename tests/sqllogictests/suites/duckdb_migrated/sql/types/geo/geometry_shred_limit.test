@@ -16,40 +16,12 @@ INSERT INTO t1 VALUES ('POINT(1 1)'::GEOMETRY);
 
 # Check segments
 
-# TODO: unsupported feature
-# query I rowsort
-# select distinct segment_type from pragma_storage_info('t1') order by all;
-# ----
-# GEOMETRY
-# VALIDITY
-
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT
-
 # Check segments - should be unshredded as below threshold
-
-# TODO: unsupported feature
-# query I rowsort
-# select distinct segment_type from pragma_storage_info('t1') order by all;
-# ----
-# GEOMETRY
-# VALIDITY
 
 # Now insert third point to exceed threshold
 
 statement ok
 INSERT INTO t1 VALUES ('POINT(2 2)'::GEOMETRY);
 
-# TODO: unsupported feature
-# statement ok
-# CHECKPOINT
-
 # Now it should be shredded
 
-# TODO: unsupported feature
-# query I rowsort
-# select distinct segment_type from pragma_storage_info('t1') order by all;
-# ----
-# DOUBLE
-# VALIDITY

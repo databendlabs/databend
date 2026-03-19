@@ -1,36 +1,6 @@
 statement ok
 DROP VIEW IF EXISTS vparents
 
-# TODO: unsupported feature
-# query III
-# with RECURSIVE parents_tab (id , value , parent )
-# as (values (1, 1, 2), (2, 2, 4), (3, 1, 4), (4, 2, -1), (5, 1, 2), (6, 2, 7), (7, 1, -1)
-# ),
-# parents_tab2(id , value , parent )
-# as (values (1, 1, 2), (2, 2, 4), (3, 1, 4), (4, 2, -1), (5, 1, 2), (6, 2, 7), (7, 1, -1)
-# ),
-# parents as (
-#     select * from parents_tab
-#     union all
-#     select id, value+2, parent from parents_tab2
-# )
-# select * from parents order by id, value, parent;
-# ----
-# 1	1	2
-# 1	3	2
-# 2	2	4
-# 2	4	4
-# 3	1	4
-# 3	3	4
-# 4	2	-1
-# 4	4	-1
-# 5	1	2
-# 5	3	2
-# 6	2	7
-# 6	4	7
-# 7	1	-1
-# 7	3	-1
-
 query III
 with RECURSIVE parents_tab (id , value , parent )
 as (values (1, 1, 2), (2, 2, 4), (3, 1, 4), (4, 2, -1), (5, 1, 2), (6, 2, 7), (7, 1, -1)

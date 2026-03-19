@@ -13,19 +13,7 @@ BEGIN TRANSACTION
 statement ok
 INSERT INTO test VALUES (1, 1);
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ADD PRIMARY KEY (j);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES (2, 1);
-
 # Throw a constraint violation on the transaction-local storage.
-
-# TODO: result differs
-# statement error
-# COMMIT
 
 statement ok
 INSERT INTO test VALUES (1, 1), (2, 1), (2, NULL);
@@ -40,14 +28,6 @@ BEGIN TRANSACTION
 
 statement ok
 INSERT INTO other VALUES (1, 1), (2, 1);
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE other ADD PRIMARY KEY (j);
-
-# TODO: result differs
-# statement error
-# COMMIT
 
 statement ok
 INSERT INTO test VALUES (1, 1), (2, 1), (2, NULL);

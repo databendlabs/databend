@@ -7,15 +7,10 @@ DROP TABLE IF EXISTS tbl_varchar
 statement ok
 CREATE TABLE tbl (id INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx ON tbl(id);
-
 # insert two children into a Node4
 
 statement ok
 INSERT INTO tbl VALUES (1), (2);
-
 
 # delete one child, the other child will still be serialized
 
@@ -27,17 +22,12 @@ DELETE FROM tbl WHERE id = 1;
 statement ok
 CREATE TABLE tbl_varchar (id VARCHAR);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx_varchar ON tbl_varchar(id);
-
 # insert two children into a Node4
 
 statement ok
 INSERT INTO tbl_varchar VALUES
 	('hello I am a prefix, and it is a beautiful sommer evening, and the plants are blossoming - 1'),
 	('hello I am a prefix, and it is a beautiful sommer evening, and the plants are blossoming - 2');
-
 
 # delete one child, the other child will still be serialized
 

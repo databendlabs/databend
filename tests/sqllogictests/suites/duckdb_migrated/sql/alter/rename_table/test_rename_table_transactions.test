@@ -28,17 +28,6 @@ SELECT * FROM tbl2
 statement error
 SELECT * FROM tbl
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM tbl
-# ----
-# 999
-# 100
-
-# TODO: result differs
-# statement error
-# SELECT * FROM tbl2
-
 statement ok
 COMMIT
 

@@ -1,7 +1,3 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS ddb
-
 statement ok
 DROP TABLE IF EXISTS ddb
 
@@ -11,33 +7,11 @@ DROP TABLE IF EXISTS ddb.my_table
 statement error
 FROM ddb
 
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE TABLE ddb.my_table AS (SELECT 1337 as value);
-
 # We can query the table by the catalog name
-
-# TODO: unsupported feature
-# query I
-# from ddb
-# ----
-# 1337
 
 # We can query the table using the catalog name plus the table name
 
-# TODO: unsupported feature
-# query I
-# from ddb.my_table
-# ----
-# 1337
-
 # We can query the table using the catalog name, default schema name and table name
-
-# TODO: unsupported feature
-# query I
-# from ddb.main.my_table
-# ----
-# 1337
 
 # Now we create a different table that is actually called my_table in the default catalog
 
@@ -46,35 +20,7 @@ create table ddb as select 42 as value
 
 # This creates ambiguity: however we can provide the solution to the user in the error message
 
-# TODO: result differs
-# statement error
-# from ddb
-
-# TODO: unsupported feature
-# query I
-# from memory.main.ddb
-# ----
-# 42
-
 # Join the two tables
-
-# TODO: unsupported feature
-# query II
-# SELECT
-#     t1.value,
-#     t2.value
-# FROM
-#     memory.main.ddb as t1
-# JOIN
-#     ddb.main.my_table as t2
-# ON
-#     t1.value != t2.value
-# ----
-# 42	1337
-
-# TODO: unsupported feature
-# statement ok
-# use ddb
 
 # We can still query the delta catalog default table by its name
 
@@ -92,30 +38,5 @@ from my_table
 
 # Or by specifying the default schema
 
-# TODO: unsupported feature
-# query I
-# from main.my_table
-# ----
-# 1337
-
 # Swith back to main catalog
 
-# TODO: unsupported feature
-# statement ok
-# use memory
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE memory.main.ddb
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW ddb as SELECT 1
-
-# TODO: result differs
-# statement error
-# FROM ddb
-
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW ddb;

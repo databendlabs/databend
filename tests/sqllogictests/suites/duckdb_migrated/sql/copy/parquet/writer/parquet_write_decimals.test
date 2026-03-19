@@ -30,9 +30,5 @@ INSERT INTO decimals VALUES (
   	999999999999999999999999999999999.9999
 );
 
-# TODO: result differs
-# query IIII nosort decimal_scan
-# SELECT * FROM decimals;
-
 statement ok
 DELETE FROM decimals WHERE dec4<-42 OR dec4>42

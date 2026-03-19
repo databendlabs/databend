@@ -1,22 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS t
 
-# TODO: unsupported feature
-# statement ok
-# create table t(i int, j as (2), k int, m as (3), n int);
-
-# TODO: unsupported feature
-# statement ok
-# alter table t drop column n;
-
-# TODO: unsupported feature
-# statement ok
-# alter table t drop column m;
-
-# TODO: unsupported feature
-# statement ok
-# alter table t drop column k;
-
-# TODO: unsupported feature
-# statement ok
-# alter table t drop column j;

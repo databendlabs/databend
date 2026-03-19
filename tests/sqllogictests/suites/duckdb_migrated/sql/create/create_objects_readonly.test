@@ -11,19 +11,10 @@ DROP TABLE IF EXISTS test
 statement ok
 create table t1 as select 'c1' as c1
 
-
 # cannot create a schema - database is opened in read-only mode
 
 statement error
 CREATE schema s2;
-
-# TODO: result differs
-# statement error
-# CREATE TABLE test AS SELECT * FROM range(0, 10) t(i);
-
-# TODO: result differs
-# statement error
-# CREATE view v1 AS SELECT * FROM range(0, 10) t(i);
 
 statement error
 CREATE macro add(a, b) AS a + b;
@@ -31,6 +22,3 @@ CREATE macro add(a, b) AS a + b;
 statement error
 CREATE TYPE mood AS ENUM ('happy', 'sad', 'curious');
 
-# TODO: result differs
-# statement error
-# CREATE SEQUENCE serial START 101;

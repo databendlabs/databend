@@ -1,48 +1,9 @@
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl(i INT PRIMARY KEY, v VARCHAR);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (1, 'row 1'), (2, 'row 2'), (3, 'row 3');
-
 statement ok
 BEGIN
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM tbl WHERE i=2;
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM tbl WHERE i=2
-# ----
-# 2	row 2
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (2, 'new row');
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM tbl WHERE i=2
-# ----
-# 2	row 2
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM tbl WHERE i=2
-# ----
-# 2	new row
 
 statement ok
 COMMIT
 
-# TODO: unsupported feature
-# query II
-# SELECT * FROM tbl WHERE i=2
-# ----
-# 2	new row

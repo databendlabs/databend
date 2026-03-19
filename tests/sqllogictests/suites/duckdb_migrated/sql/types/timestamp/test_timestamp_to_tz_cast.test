@@ -1,0 +1,667 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_MS_tbl_1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_MS_tbl_2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_MS_tbl_3
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_MS_tbl_mininf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_MS_tbl_null
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_MS_tbl_posinf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_NS_tbl_1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_NS_tbl_mininf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_NS_tbl_null
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_NS_tbl_posinf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_S_tbl_1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_S_tbl_2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_S_tbl_3
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_S_tbl_mininf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_S_tbl_null
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_S_tbl_posinf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_tbl_1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_tbl_2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_tbl_3
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_tbl_mininf
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_tbl_null
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ts_TIMESTAMP_tbl_posinf
+
+# TODO: result differs
+# statement ok
+# create table ts_TIMESTAMP_tbl_1 as FROM (VALUES
+# 	('1990/12/21'::TIMESTAMP))
+# as t(ts);
+
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_tbl_null as FROM (VALUES
+# 	(NULL::TIMESTAMP))
+# as t(ts);
+
+# Positive infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_tbl_posinf as FROM (VALUES
+# 	('infinity'::TIMESTAMP))
+# as t(ts);
+
+# Negative infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_tbl_mininf as FROM (VALUES
+# 	('-infinity'::TIMESTAMP))
+# as t(ts);
+
+
+# Basic value
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_NS_tbl_1 as FROM (VALUES
+# 	('1990/12/21'::TIMESTAMP_NS))
+# as t(ts);
+
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_NS_tbl_null as FROM (VALUES
+# 	(NULL::TIMESTAMP_NS))
+# as t(ts);
+
+# Positive infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_NS_tbl_posinf as FROM (VALUES
+# 	('infinity'::TIMESTAMP_NS))
+# as t(ts);
+
+# Negative infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_NS_tbl_mininf as FROM (VALUES
+# 	('-infinity'::TIMESTAMP_NS))
+# as t(ts);
+
+
+# Basic value
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_MS_tbl_1 as FROM (VALUES
+# 	('1990/12/21'::TIMESTAMP_MS))
+# as t(ts);
+
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_MS_tbl_null as FROM (VALUES
+# 	(NULL::TIMESTAMP_MS))
+# as t(ts);
+
+# Positive infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_MS_tbl_posinf as FROM (VALUES
+# 	('infinity'::TIMESTAMP_MS))
+# as t(ts);
+
+# Negative infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_MS_tbl_mininf as FROM (VALUES
+# 	('-infinity'::TIMESTAMP_MS))
+# as t(ts);
+
+
+# Basic value
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_S_tbl_1 as FROM (VALUES
+# 	('1990/12/21'::TIMESTAMP_S))
+# as t(ts);
+
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_S_tbl_null as FROM (VALUES
+# 	(NULL::TIMESTAMP_S))
+# as t(ts);
+
+# Positive infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_S_tbl_posinf as FROM (VALUES
+# 	('infinity'::TIMESTAMP_S))
+# as t(ts);
+
+# Negative infinity
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_S_tbl_mininf as FROM (VALUES
+# 	('-infinity'::TIMESTAMP_S))
+# as t(ts);
+
+
+
+# Extreme positive
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_tbl_2 as FROM (VALUES
+# 	('294247-01-10'::TIMESTAMP))
+# as t(ts);
+
+# Extreme negative
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_tbl_3 as FROM (VALUES
+# 	('29720-04-05 (BC) 22:13:20'::TIMESTAMP))
+# as t(ts);
+
+
+# Extreme positive
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_MS_tbl_2 as FROM (VALUES
+# 	('294247-01-10'::TIMESTAMP_MS))
+# as t(ts);
+
+# Extreme negative
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_MS_tbl_3 as FROM (VALUES
+# 	('29720-04-05 (BC) 22:13:20'::TIMESTAMP_MS))
+# as t(ts);
+
+
+# Extreme positive
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_S_tbl_2 as FROM (VALUES
+# 	('294247-01-10'::TIMESTAMP_S))
+# as t(ts);
+
+# Extreme negative
+
+# TODO: unsupported feature
+# statement ok
+# create table ts_TIMESTAMP_S_tbl_3 as FROM (VALUES
+# 	('29720-04-05 (BC) 22:13:20'::TIMESTAMP_S))
+# as t(ts);
+
+# TODO: unsupported feature
+# query II nosort result_utc_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_1;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_1;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_1;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_1;
+# ----
+
+
+# Table 2 	 UTC +0
+
+# TODO: unsupported feature
+# query II nosort result_utc_2
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_2;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_2
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_2;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_2
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_2;
+# ----
+
+
+# Table 3 	 UTC +0
+
+# TODO: unsupported feature
+# query II nosort result_utc_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_3;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_3;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_3;
+# ----
+
+
+# Table +inf 	 UTC +0
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_posinf;
+# ----
+# infinity	infinity
+
+
+# Table -inf 	 UTC +0
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+
+# Table NULL 	 UTC +0
+
+# TODO: unsupported feature
+# query II nosort result_utc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_utc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_null;
+# ----
+
+
+# ---------------- America / Los Angeles ----------------
+
+# TODO: unsupported feature
+# query II nosort result_america_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_1;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_america_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_1;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_america_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_1;
+# ----
+
+
+# Table 2 	 America -7/8
+
+# This timestamp is near the end of the valid range, this timezone would overflow the value
+
+# TODO: unsupported feature
+# statement error
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_2;
+
+# TODO: unsupported feature
+# statement error
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_2;
+
+# TODO: unsupported feature
+# statement error
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_2;
+
+# TODO: unsupported feature
+# query II nosort result_america_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_3;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_america_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_3;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_america_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_3;
+# ----
+
+
+# Table +inf 	 America -7/8
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_posinf;
+# ----
+# infinity	infinity
+
+
+# Table -inf 	 America -7/8
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+
+# Table NULL 	 America -7/8
+
+# TODO: unsupported feature
+# query II nosort result_america_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_america_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_america_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_america_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_null;
+# ----
+
+
+# ---------------- ETC ----------------
+
+# TODO: unsupported feature
+# query II nosort result_etc_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_1;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_etc_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_1;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_etc_1
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_1;
+# ----
+
+
+# Table 2 	 ETC +6
+
+# TODO: unsupported feature
+# query II nosort result_etc_2
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_2;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_etc_2
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_2;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_etc_2
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_2;
+# ----
+
+
+# Table 3 	 ETC +6
+
+# FIXME: I would expect this to overflow???
+
+# TODO: unsupported feature
+# query II nosort result_etc_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_3;
+# ----
+
+
+# FIXME: I would expect this to overflow???
+
+# TODO: unsupported feature
+# query II nosort result_etc_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_3;
+# ----
+
+
+# FIXME: I would expect this to overflow???
+
+# TODO: unsupported feature
+# query II nosort result_etc_3
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_3;
+# ----
+
+
+# Table +inf 	 ETC +6
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_posinf;
+# ----
+# infinity	infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_posinf;
+# ----
+# infinity	infinity
+
+
+# Table -inf 	 ETC +6
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+# TODO: unsupported feature
+# query II
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_mininf;
+# ----
+# -infinity	-infinity
+
+
+# Table NULL 	 ETC +6
+
+# TODO: unsupported feature
+# query II nosort result_etc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_etc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_NS_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_etc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_MS_tbl_null;
+# ----
+
+# TODO: unsupported feature
+# query II nosort result_etc_null
+# select ts as base, base::TIMESTAMPTZ as tstz from ts_TIMESTAMP_S_tbl_null;
+# ----

@@ -1,0 +1,135 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS student
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE student(id INTEGER, name VARCHAR, PRIMARY KEY(id));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO student SELECT i, 'creator' FROM range(0, 260001) tbl(i)
+
+# read
+# rowgroup 0
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 122879
+# ----
+# creator
+
+# rowgroup 1
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 122881
+# ----
+# creator
+
+# rowgroup 2
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 245780
+# ----
+# creator
+
+# rowgroup 1 vector > 0
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 150881
+# ----
+# creator
+
+# Update
+# rowgroup 0
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE student SET name = 'updator0' WHERE id = 122879
+
+# rowgroup 1
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE student SET name = 'updator1' WHERE id = 122881
+
+# rowgroup 2 
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE student SET name = 'updator2' WHERE id = 245780
+
+# rowgroup 1 vector > 0
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE student SET name = 'updator3' WHERE id = 150881
+
+
+# read again
+# rowgroup 0
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 122879
+# ----
+# updator0
+
+# rowgroup 1
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 122881
+# ----
+# updator1
+
+# rowgroup 2
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 245780
+# ----
+# updator2
+
+# rowgroup 1 vector > 0
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM student WHERE id = 150881
+# ----
+# updator3
+
+# Original issue.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE student(id INTEGER, name VARCHAR, PRIMARY KEY(id));
+
+# TODO: unsupported feature
+# statement ok
+# insert into student select i, 'creator' from range(0, 130001) tbl(i);
+
+# TODO: unsupported feature
+# query II
+# select id, name from student where id=122881;
+# ----
+# 122881	creator
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE student SET name = 'updator' WHERE id = 122881;
+
+# TODO: unsupported feature
+# query II
+# SELECT id, name FROM student WHERE id = 122881;
+# ----
+# 122881	updator
+
+# TODO: unsupported feature
+# query II
+# SELECT id, name FROM student WHERE id = 122881;
+# ----
+# 122881	updator

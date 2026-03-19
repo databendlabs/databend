@@ -16,30 +16,6 @@ insert into students
 		('CS', NULL),
 		('Math', NULL);
 
-# TODO: unsupported feature
-# query III
-# SELECT GROUPING(course), course, COUNT(*) FROM students GROUP BY course ORDER BY 1, 2, 3;
-# ----
-# 0	CS	5
-# 0	Math	2
-
-# TODO: unknown function
-# query III
-# SELECT GROUPING_ID(course), course, COUNT(*) FROM students GROUP BY course ORDER BY 1, 2, 3;
-# ----
-# 0	CS	5
-# 0	Math	2
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT GROUPING(course), GROUPING(type), course, type, COUNT(*) FROM students GROUP BY course, type ORDER BY 1, 2, 3, 4, 5;
-# ----
-# 0	0	CS	NULL	2
-# 0	0	CS	Bachelor	2
-# 0	0	CS	PhD	1
-# 0	0	Math	NULL	1
-# 0	0	Math	Masters	1
-
 query IITTI
 SELECT GROUPING(course), GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4, 5;
 ----

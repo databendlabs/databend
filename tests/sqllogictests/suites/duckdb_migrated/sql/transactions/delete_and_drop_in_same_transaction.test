@@ -19,6 +19,3 @@ DELETE FROM sampletable;
 statement ok
 DROP TABLE SampleTable;
 
-# TODO: unsupported feature
-# statement ok
-# COMMIT TRANSACTION;

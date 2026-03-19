@@ -1,40 +1,8 @@
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE MACRO my_agg(x) AS SUM(CASE WHEN x THEN 1 END);
-
-# TODO: unsupported feature
-# statement ok
-# select my_agg(range) 
-# from range(0, 2);
-
-# TODO: unsupported feature
-# statement ok
-# select my_agg(range) OVER () 
-# from range(0, 2);
-
 # Windowed non-aggregate function macro
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE MACRO my_func(x) AS mod(x, 2);
-
-# TODO: unsupported feature
-# statement ok
-# select my_func(range) 
-# from range(0, 2);
 
 statement error
 select my_func(range) OVER () 
 from range(0, 2);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE OR REPLACE MACRO my_case(x) AS (CASE WHEN x THEN 1 END);
-
-# TODO: unsupported feature
-# statement ok
-# select my_case(range) 
-# from range(0, 2);
 
 statement error
 select my_case(range) OVER () 

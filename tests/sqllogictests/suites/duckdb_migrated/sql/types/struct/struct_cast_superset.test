@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 (s1 STRUCT(a INT, b INT));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ({a: 42, b: 43});
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2 (s1 STRUCT(a INT, c INT));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t2 VALUES ({a: 100, c: 101});
+
+# TODO: unsupported feature
+# query I
+# SELECT {'a': {'e1': 42, 'e2': 42}} AS c
+# UNION ALL BY NAME SELECT {'a': {'e2': 'hello', 'e3': 'world'}, 'b': '100'} AS c;
+# ----
+# {'a': {'e1': 42, 'e2': 42, 'e3': NULL}, 'b': NULL}
+# {'a': {'e1': NULL, 'e2': hello, 'e3': world}, 'b': 100}

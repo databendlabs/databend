@@ -1,0 +1,32 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS single
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE single(c0 TIME WITH TIME ZONE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO single(c0) VALUES ('12:34:56');
+
+# TODO: unsupported feature
+# query III
+# SELECT 
+# 	c0, 
+# 	c0::TIME AS t,
+# 	c0::TIME::TIMETZ AS tz,
+# FROM single;
+# ----
+# 12:34:56+08	12:34:56	12:34:56+00
+
+# TODO: unsupported feature
+# query IIII
+# SELECT 
+# 	(c0::TIME = '12:34:56') AS e,
+# 	(c0::TIME <> '12:34:56') AS u,
+# 	(c0::TIME IN ('12:34:56')) AS i,
+# 	(c0::TIME NOT IN ('12:34:56')) AS n,
+# FROM single;
+# ----
+# 1	0	1	0

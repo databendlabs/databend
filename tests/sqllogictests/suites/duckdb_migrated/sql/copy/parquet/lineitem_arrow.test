@@ -1,18 +1,3 @@
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS lineitem
-
 statement ok
 DROP TABLE IF EXISTS lineitem
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE lineitem AS SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE lineitem
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW lineitem AS SELECT * FROM '{DATA_DIR}/parquet-testing/arrow/lineitem-arrow.parquet'

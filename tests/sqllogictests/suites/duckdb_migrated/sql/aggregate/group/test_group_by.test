@@ -121,20 +121,6 @@ SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i
 statement error
 SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i
 
-# TODO: unsupported feature
-# query IRI
-# SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i
-# ----
-# 2	4.000000	4
-# 3	8.000000	4
-
-# TODO: unsupported feature
-# query IRI
-# SELECT i, SUM(j), LAST(j) FROM integers GROUP BY i ORDER BY i
-# ----
-# 2	4.000000	4
-# 3	8.000000	4
-
 # group by constant alias
 
 query II

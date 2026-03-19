@@ -1,18 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS j1
 
-# TODO: unknown function
-# query T
-# select json_valid('{"bla": inf}')
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# select json_valid('{"bla": infinity}')
-# ----
-# 1
-
 # some SQLite JSON valid tests
 
 statement ok
@@ -24,77 +12,6 @@ INSERT INTO j1(x)
          ('""'),('"\""'),('"\\"'),('"abcdefghijlmnopqrstuvwxyz"'),
          ('[]'),('{}'),('[true,false,null,123,-234,34.5e+6,{},[]]'),
          ('{"a":true,"b":{"c":false}}');
-
-# TODO: unknown function
-# query T
-# SELECT * FROM j1 WHERE NOT json_valid(x);
-# ----
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('{"a":55,"b":72,}');
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('{"a":55,"b":72}');
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('["a",55,"b",72,]');
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('["a",55,"b",72]');
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('" \  "');
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('" \! "');
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('" \" "');
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('" \# "');
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('" \$ "');
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('" \% "');
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT json_valid('" \& "');
-# ----
-# 0
 
 query T
 SELECT CASE WHEN check_json('" \'' "') IS NULL THEN 1 ELSE 0 END;

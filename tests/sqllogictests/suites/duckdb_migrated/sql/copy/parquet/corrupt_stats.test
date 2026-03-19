@@ -1,8 +1,3 @@
 statement error
 SELECT a FROM '{DATA_DIR}/parquet-testing/corrupt_stats.parquet' GROUP BY a;
 
-# TODO: unsupported feature
-# query I
-# SELECT a FROM '{DATA_DIR}/parquet-testing/corrupt_stats.parquet' GROUP BY a;
-# ----
-# 2021-01-01 12:00:00

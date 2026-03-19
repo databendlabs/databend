@@ -15,12 +15,6 @@ INSERT INTO test_kahan_avg_doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::
 
 # this would give the wrong result with a simple sum-and-divide
 
-# TODO: unknown function
-# query R
-# SELECT FAVG(n) - '2251799813685248.5'::DOUBLE FROM test_kahan_avg_doubles;
-# ----
-# 0
-
 # Test that Kahan avg preserves precision in exported states combine operations, should fail if we miss the `err` value in the state export
 
 statement ok
@@ -31,15 +25,3 @@ statement ok
 CREATE TABLE test_kahan_avg_context2 AS
 SELECT unnest([9007199254740990.0, 2.0, 2.0, 2.0, 2.0]) as val;
 
-# TODO: unknown function
-# query R
-#   SELECT
-#       finalize(combine(
-#           (SELECT favg(val) EXPORT_STATE FROM test_kahan_avg_context1),
-#           (SELECT favg(val) EXPORT_STATE FROM test_kahan_avg_context2)
-#       )) -
-#       (SELECT favg(val) FROM (
-#           SELECT val FROM test_kahan_avg_context1 UNION ALL SELECT val FROM test_kahan_avg_context2
-#       ));
-# ----
-# 0

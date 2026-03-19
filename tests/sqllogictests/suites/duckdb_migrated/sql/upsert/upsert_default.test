@@ -1,0 +1,59 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (
+# 	a integer DEFAULT 5,
+# 	b integer unique,
+# 	c integer DEFAULT 10
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(b) VALUES (3), (5), (6);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl(b) VALUES (7), (3), (4) ON CONFLICT do update set c = 5, a = 10;
+
+# TODO: unsupported feature
+# query III rowsort
+# select * from tbl;
+# ----
+# 10	3	5
+# 5	4	10
+# 5	5	10
+# 5	6	10
+# 5	7	10
+
+# TODO: unsupported feature
+# statement ok
+# create table t (i int primary key, j int);
+
+# TODO: unsupported feature
+# query I
+# insert into t values (1, 1) on conflict do nothing;
+# ----
+# 1
+
+# 0 updates/insertions were performed
+
+# TODO: unsupported feature
+# query I
+# insert into t values (1, 1) on conflict do nothing
+# ----
+# 0
+
+# 0 insertions, but one tuple is updated
+
+# TODO: unsupported feature
+# query I
+# insert into t values (1, 1) on conflict (i) do update set j = excluded.i;
+# ----
+# 1

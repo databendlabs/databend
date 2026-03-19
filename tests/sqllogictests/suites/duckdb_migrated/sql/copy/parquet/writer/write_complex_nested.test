@@ -17,17 +17,6 @@ statement ok
 DROP TABLE IF EXISTS struct_of_lists
 
 # struct of lists
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE struct_of_lists AS SELECT * FROM (VALUES
-# 	({'a': [1, 2, 3], 'b': ['hello', 'world']}),
-# 	({'a': [4, NULL, 5], 'b': ['duckduck', 'goose']}),
-# 	({'a': NULL, 'b': ['longlonglonglonglonglong', NULL, NULL]}),
-# 	(NULL),
-#     ({'a': [], 'b': []}),
-#     ({'a': [1, 2, 3], 'b': NULL})
-# ) tbl(i);
-
 statement ok
 CREATE TABLE list_of_structs AS SELECT * FROM (VALUES
 	([{'a': 1, 'b': 100}, NULL, {'a': 2, 'b': 101}]),

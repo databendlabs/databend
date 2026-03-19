@@ -44,6 +44,3 @@ ROLLBACK
 
 # now the schema should still exist, so we can drop it again
 
-# TODO: unsupported feature
-# statement ok
-# DROP SCHEMA test;

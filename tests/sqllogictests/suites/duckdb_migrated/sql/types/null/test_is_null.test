@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (NULL, 2), (13, 3)
+
+# IS NULL/IS NOT NULL
+

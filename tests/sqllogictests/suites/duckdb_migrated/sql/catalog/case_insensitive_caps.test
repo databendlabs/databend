@@ -7,24 +7,5 @@ CREATE TABLE mytable(mycolumn INTEGER, myothercolumn INTEGER);
 
 # we can query the column using quoted text
 
-# TODO: unsupported feature
-# statement ok
-# SELECT "MYCOLUMN" FROM "MYTABLE";
-
 # we can also alter in this manner
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE "MYTABLE" DROP COLUMN "MYCOLUMN";
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE "MYTABLE" ADD COLUMN mycolumn INTEGER;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE "MYTABLE" ALTER COLUMN "MYCOLUMN" SET DEFAULT 3
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE "MYTABLE"

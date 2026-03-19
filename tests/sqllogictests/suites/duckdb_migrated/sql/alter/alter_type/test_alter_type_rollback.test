@@ -10,23 +10,6 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
-
-# TODO: unsupported feature
-# statement ok
-# UPDATE test SET i='hello'
-
-# TODO: unsupported feature
-# query TI
-# SELECT * FROM test
-# ----
-# hello
-# 1
-# hello
-# 2
-
 statement ok
 ROLLBACK
 

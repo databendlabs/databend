@@ -186,220 +186,28 @@ select '1214.235e-2'::bigint;
 statement error
 select '10e40'::bigint;
 
-# TODO: unsupported feature
-# query I
-# select '1e2'::utinyint;
-# ----
-# 100
-
-# TODO: unsupported feature
-# query I
-# select '1.23e2'::utinyint;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.234e2'::utinyint;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.235e2'::utinyint;
-# ----
-# 124
-
 # Positive Number - Negative Exponent
-
-# TODO: unsupported feature
-# query I
-# select '1e-2'::utinyint;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '123.456e-2'::utinyint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1584.92e-2'::utinyint;
-# ----
-# 16
-
-# TODO: unsupported feature
-# query I
-# select '1214.235e-2'::utinyint;
-# ----
-# 12
 
 # Out of range
 
 statement error
 select '10e40'::utinyint;
 
-# TODO: unsupported feature
-# query I
-# select '1e2'::usmallint;
-# ----
-# 100
-
-# TODO: unsupported feature
-# query I
-# select '1.23e2'::usmallint;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.234e2'::usmallint;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.235e2'::usmallint;
-# ----
-# 124
-
 # Positive Number - Negative Exponent
-
-# TODO: unsupported feature
-# query I
-# select '1e-2'::usmallint;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '123.456e-2'::usmallint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1584.92e-2'::usmallint;
-# ----
-# 16
-
-# TODO: unsupported feature
-# query I
-# select '1214.235e-2'::usmallint;
-# ----
-# 12
 
 # Out of range
 
 statement error
 select '10e40'::usmallint;
 
-# TODO: unsupported feature
-# query I
-# select '1e2'::uinteger;
-# ----
-# 100
-
-# TODO: unsupported feature
-# query I
-# select '1.23e2'::uinteger;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.234e2'::uinteger;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.235e2'::uinteger;
-# ----
-# 124
-
 # Positive Number - Negative Exponent
-
-# TODO: unsupported feature
-# query I
-# select '1e-2'::uinteger;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '123.456e-2'::uinteger;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1584.92e-2'::uinteger;
-# ----
-# 16
-
-# TODO: unsupported feature
-# query I
-# select '1214.235e-2'::uinteger;
-# ----
-# 12
 
 # Out of range
 
 statement error
 select '10e40'::uinteger;
 
-# TODO: unsupported feature
-# query I
-# select '1e2'::ubigint;
-# ----
-# 100
-
-# TODO: unsupported feature
-# query I
-# select '1.23e2'::ubigint;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.234e2'::ubigint;
-# ----
-# 123
-
-# TODO: unsupported feature
-# query I
-# select '1.235e2'::ubigint;
-# ----
-# 124
-
 # Positive Number - Negative Exponent
-
-# TODO: unsupported feature
-# query I
-# select '1e-2'::ubigint;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '123.456e-2'::ubigint;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select '1584.92e-2'::ubigint;
-# ----
-# 16
-
-# TODO: unsupported feature
-# query I
-# select '1214.235e-2'::ubigint;
-# ----
-# 12
 
 # Out of range
 
@@ -646,43 +454,7 @@ select '922337203685477580.7e1'::BIGINT, '-922337203685477580.8e1'::BIGINT;
 ----
 9223372036854775807	-9223372036854775808
 
-# TODO: unsupported feature
-# query II
-# select '17014118346046923173168730371588410572.7e1'::HUGEINT, '-17014118346046923173168730371588410572.8e1'::HUGEINT;
-# ----
-# 170141183460469231731687303715884105727	-170141183460469231731687303715884105728
-
 # Check limits (unsigned)
-
-# TODO: unsupported feature
-# query I
-# select '25.5e1'::UTINYINT;
-# ----
-# 255
-
-# TODO: unsupported feature
-# query I
-# select '6553.5e1'::USMALLINT;
-# ----
-# 65535
-
-# TODO: unsupported feature
-# query I
-# select '429496729.5e1'::UINTEGER;
-# ----
-# 4294967295
-
-# TODO: unsupported feature
-# query I
-# select '1844674407370955161.5e1'::UBIGINT;
-# ----
-# 18446744073709551615
-
-# TODO: unsupported feature
-# query I
-# select '34028236692093846346337460743176821145.5e1'::UHUGEINT;
-# ----
-# 340282366920938463463374607431768211455
 
 # going over limit should error (signed)
 
@@ -734,38 +506,3 @@ select '1e100000'::int;
 statement error
 select '1e-100000'::int;
 
-# TODO: unsupported feature
-# query I
-# select '0.00000000000000000000000000000009223372036854775807e50'::BIGINT;
-# ----
-# 9223372036854775807
-
-# TODO: unsupported feature
-# query I
-# select '-0.00000000000000000000000000000009223372036854775807e50'::BIGINT;
-# ----
-# -9223372036854775807
-
-# TODO: unsupported feature
-# query I
-# select '0.00000000000170141183460469231731687303715884105727e50'::HUGEINT;
-# ----
-# 170141183460469231731687303715884105727
-
-# TODO: unsupported feature
-# query I
-# select '-0.00000000000170141183460469231731687303715884105727e50'::HUGEINT;
-# ----
-# -170141183460469231731687303715884105727
-
-# TODO: unsupported feature
-# query I
-# select '15123456789e-32768'::int;
-# ----
-# 0
-
-# TODO: unsupported feature
-# query I
-# select '0e32767'::int;
-# ----
-# 0

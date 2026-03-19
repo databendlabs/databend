@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement error
+# SELECT (SELECT UNNEST(a).a) FROM (VALUES ({'a': 42, 'b': 88})) t(a);
+
+# TODO: unsupported feature
+# query II
+# SELECT UNNEST(a) FROM (VALUES ({'a': 42, 'b': 88})) t(a);
+# ----
+# 42	88
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT t.x FROM (SELECT UNNEST(a)) t(x)) FROM (VALUES ({'a': 42, 'b': 88})) t(a);
+# ----
+# 42

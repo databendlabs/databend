@@ -5,36 +5,3 @@ statement ok
 DROP TABLE IF EXISTS timeseries
 
 # requires notwindows for embedded spaces in the path
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE raw_data (
-#   ts TIMESTAMP_S NOT NULL,
-#   hits INTEGER NOT NULL
-# );
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO raw_data
-# SELECT *, (random() * 500)::INTEGER
-# FROM RANGE(TIMESTAMP '2023-11-01', TIMESTAMP '2023-11-06', INTERVAL 1 MINUTE);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE timeseries AS (
-#   SELECT DATE_TRUNC('hour', ts) AS bucket, SUM(hits)::BIGINT AS total
-#   FROM raw_data
-#   GROUP BY bucket
-# );
-
-# TODO: unsupported feature
-# query II
-# SELECT * 
-# FROM timeseries
-# ORDER BY ALL
-# LIMIT 5
-# ----
-# 2023-11-01 00:00:00	15127
-# 2023-11-01 01:00:00	16634
-# 2023-11-01 02:00:00	14676
-# 2023-11-01 03:00:00	14493
-# 2023-11-01 04:00:00	13288

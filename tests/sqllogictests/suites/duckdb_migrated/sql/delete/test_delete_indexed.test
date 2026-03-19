@@ -7,10 +7,6 @@ DROP TABLE IF EXISTS t
 statement ok
 CREATE TABLE t (id INT, s TEXT, j BIGINT);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx ON t(j);
-
 statement ok
 INSERT INTO t VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30);
 

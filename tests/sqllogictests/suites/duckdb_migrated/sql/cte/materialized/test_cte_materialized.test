@@ -73,35 +73,9 @@ with cte1(x, y) as MATERIALIZED (select 42 a, 84 b) select zzz, y from cte1 t1(z
 
 # use a CTE in a view definition
 
-# TODO: unsupported feature
-# statement ok
-# create view va AS (with cte as MATERIALIZED (Select i as j from a) select * from cte);
-
-# TODO: unsupported feature
-# query I
-# select * from va
-# ----
-# 42
-
 # nested CTE views that re-use CTE aliases
 
-# TODO: unsupported feature
-# query I
-# with cte AS MATERIALIZED (SELECT * FROM va) SELECT * FROM cte;
-# ----
-# 42
-
 # multiple ctes in a view definition
-
-# TODO: unsupported feature
-# statement ok
-# create view vb AS (with cte1 as MATERIALIZED (Select i as j from a), cte2 as MATERIALIZED (select ref.j+1 as k from cte1 as ref) select * from cte2);
-
-# TODO: unsupported feature
-# query I
-# select * from vb
-# ----
-# 43
 
 # cte in set operation node
 
@@ -112,21 +86,6 @@ SELECT 1 UNION ALL (WITH cte AS MATERIALIZED (SELECT 42) SELECT * FROM cte);
 42
 
 # cte in recursive cte
-
-# TODO: unsupported feature
-# query I
-# WITH RECURSIVE cte(d) AS MATERIALIZED (
-# 		SELECT 1
-# 	UNION ALL
-# 		(WITH c(d) AS (SELECT * FROM cte)
-# 			SELECT d + 1
-# 			FROM c
-# 			WHERE FALSE
-# 		)
-# )
-# SELECT max(d) FROM cte;
-# ----
-# 1
 
 # test CTE with nested aliases in where clause
 
@@ -144,27 +103,3 @@ where alias2 > 0;
 
 # test materialized CTE in recursive CTE
 
-# TODO: unsupported feature
-# query II
-# WITH RECURSIVE t(x,v) AS (
-#   SELECT 1, ARRAY[] :: int[]
-#     UNION ALL
-#   (WITH u(x) AS MATERIALIZED (SELECT 1)
-#     SELECT f.x, (SELECT array_agg(x) FROM u)
-#     FROM   t, LATERAL (SELECT t.x + 1) AS f(x)
-#     WHERE  t.x < 5
-#   )
-# ) SELECT * FROM t ORDER BY x;
-# ----
-# 1	[]
-# 2	[1]
-# 3	[1]
-# 4	[1]
-# 5	[1]
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM (WITH t(x) AS MATERIALIZED (SELECT * FROM generate_series(1,10) LIMIT 75%) SELECT * FROM t LIMIT 80%) AS _(x) ORDER BY x LIMIT 50%;
-# ----
-# 1
-# 2

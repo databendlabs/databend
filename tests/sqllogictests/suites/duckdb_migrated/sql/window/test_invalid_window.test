@@ -1,0 +1,236 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS empsalary
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO empsalary VALUES ('develop', 10, 5200, '2007-08-01'), ('sales', 1, 5000, '2006-10-01'), ('personnel', 5, 3500, '2007-12-10'), ('sales', 4, 4800, '2007-08-08'), ('personnel', 2, 3900, '2006-12-23'), ('develop', 7, 4200, '2008-01-01'), ('develop', 9, 4500, '2008-01-01'), ('sales', 3, 4800, '2007-08-01'), ('develop', 8, 6000, '2006-10-01'), ('develop', 11, 5200, '2007-08-15')
+
+# GROUP BY window function is not allowed
+
+# TODO: unsupported feature
+# statement error
+# SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1 FROM empsalary GROUP BY m1 ORDER BY depname, empno
+
+# TODO: unsupported feature
+# statement error
+# select row_number() over (range between unbounded following and unbounded preceding);
+
+# TODO: unsupported feature
+# statement error
+# select row_number() over (range between unbounded preceding and unbounded preceding);
+
+# TODO: unsupported feature
+# query I
+# select LIST(salary ORDER BY enroll_date, salary) OVER (PARTITION BY depname) FROM empsalary
+# ORDER BY ALL DESC
+# ----
+# [6000, 5200, 5200, 4200, 4500]
+# [6000, 5200, 5200, 4200, 4500]
+# [6000, 5200, 5200, 4200, 4500]
+# [6000, 5200, 5200, 4200, 4500]
+# [6000, 5200, 5200, 4200, 4500]
+# [5000, 4800, 4800]
+# [5000, 4800, 4800]
+# [5000, 4800, 4800]
+# [3900, 3500]
+# [3900, 3500]
+
+# GROUPS frame spec is now implemented for window functions!
+
+# TODO: unsupported feature
+# query I
+# SELECT sum(i) OVER (ORDER BY i GROUPS 1 PRECEDING) 
+# FROM generate_series(1,10) AS _(i)
+# ORDER BY i
+# ----
+# 1
+# 3
+# 5
+# 7
+# 9
+# 11
+# 13
+# 15
+# 17
+# 19
+
+# Invalid window names
+
+# TODO: unsupported feature
+# statement error
+# SELECT array_agg(i) OVER (PARTITION ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+# FROM generate_series(1,5) AS _(i)
+# WINDOW PARTITION AS (ORDER BY i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT array_agg(i) OVER (RANGE ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+# FROM generate_series(1,5) AS _(i)
+# WINDOW RANGE AS (ORDER BY i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT array_agg(i) OVER (ROWS ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+# FROM generate_series(1,5) AS _(i)
+# WINDOW ROWS AS (ORDER BY i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT array_agg(i) OVER (GROUPS ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+# FROM generate_series(1,5) AS _(i)
+# WINDOW GROUPS AS (ORDER BY i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	lead(i ORDER BY i // 2, i) OVER (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	) AS f,
+# FROM range(0, 10) tbl(i)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	lead(i ORDER BY i // 2, i) OVER w AS f,
+# FROM range(0, 10) tbl(i)
+# WINDOW w AS (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	lag(i ORDER BY i // 2, i) OVER (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	) AS f,
+# FROM range(0, 10) tbl(i)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	lead(i ORDER BY i // 2, i) OVER w AS f,
+# FROM range(0, 10) tbl(i)
+# WINDOW w AS (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	ntile(i ORDER BY i // 2, i) OVER (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	) AS f,
+# FROM range(0, 10) tbl(i)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	lead(i ORDER BY i // 2, i) OVER w AS f,
+# FROM range(0, 10) tbl(i)
+# WINDOW w AS (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	row_number(ORDER BY i // 2, i) OVER (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	) AS f,
+# FROM range(0, 10) tbl(i)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	row_number(ORDER BY i // 2, i) OVER w AS f,
+# FROM range(0, 10) tbl(i)
+# WINDOW w AS (
+# 	ORDER BY i // 2
+# 	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 	EXCLUDE TIES
+# )
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	rank(ORDER BY i // 2, i) OVER (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	) AS f,
+# FROM range(0, 10) tbl(i)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	rank(ORDER BY i // 2, i) OVER w AS f,
+# FROM range(0, 10) tbl(i)
+# WINDOW w AS (
+# 	ORDER BY i // 2
+# 	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 	EXCLUDE TIES
+# )
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	cume_dist(ORDER BY i // 2, i) OVER (
+# 		ORDER BY i // 2
+# 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 		EXCLUDE TIES
+# 	) AS f,
+# FROM range(0, 10) tbl(i)
+# ORDER BY i;
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+# 	i,
+# 	cume_dist(ORDER BY i // 2, i) OVER w AS f,
+# FROM range(0, 10) tbl(i)
+# WINDOW w AS (
+# 	ORDER BY i // 2
+# 	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+# 	EXCLUDE TIES
+# )
+# ORDER BY i;

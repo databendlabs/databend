@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE tbl (a INT, b INT, c INT, PRIMARY KEY (a, b));
+
+# a and b combined are not unique.
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl VALUES (1, 2, 3), (1, 2, 3);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1, 2, 3), (1, 4, 5);
+
+# Conflict target does not match any index on the table, only valid conflict target would be: (a,b)
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (a) DO UPDATE SET c = 5;
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (b) DO UPDATE SET c = 5;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (a,b) DO UPDATE SET c = 5;
+
+# TODO: unsupported feature
+# query III
+# SELECT a, b, c FROM tbl ORDER BY ALL;
+# ----
+# 1	2	3
+# 1	4	5
+# 1	8	4

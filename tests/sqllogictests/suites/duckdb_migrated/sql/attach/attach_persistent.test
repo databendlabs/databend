@@ -1,31 +1,8 @@
 statement ok
 DROP TABLE IF EXISTS persistent_attach.integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE persistent_attach.integers(i INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO persistent_attach.integers VALUES (42)
-
-# TODO: unsupported feature
-# query I
-# SELECT SUM(i) FROM persistent_attach.integers
-# ----
-# 42
-
 # detach and re-attach
-
-# TODO: unsupported feature
-# statement ok
-# DETACH persistent_attach
 
 statement error
 SELECT SUM(i) FROM persistent_attach.integers
 
-# TODO: unsupported feature
-# query I
-# SELECT SUM(i) FROM persistent_attach.integers
-# ----
-# 42

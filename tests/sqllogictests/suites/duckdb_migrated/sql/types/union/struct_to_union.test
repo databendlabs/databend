@@ -1,0 +1,108 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS struct_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS union_tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table union_tbl(
+# 	col UNION(
+# 		a BOOL,
+# 		b INTEGER,
+# 		c TINYINT
+# 	)
+# )
+
+# tag can not be VARCHAR
+
+# TODO: unsupported feature
+# statement error
+# insert into union_tbl VALUES
+# 	({tag: '0', a: true, b: null, c: null})
+
+# TODO: unsupported feature
+# statement error
+# insert into union_tbl VALUES
+# 	({tag: 0::UINT8, a: true, b: null::INTEGER, d: null::TINYINT})
+
+# TODO: unsupported feature
+# statement error
+# insert into union_tbl VALUES
+# 	({tag: 0::UINT8, a: 1, b: null::INTEGER, c: null::TINYINT})
+
+# TODO: unsupported feature
+# statement error
+# insert into union_tbl VALUES
+# 	({tag: 4::UINT8, a: true, b: null::INTEGER, c: null::TINYINT})
+
+# TODO: unsupported feature
+# statement ok
+# create table struct_tbl(
+# 	col STRUCT(
+# 		tag UINT8,
+# 		A BOOL,
+# 		B INTEGER,
+# 		C TINYINT
+# 	)
+# )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO struct_tbl VALUES
+# 	(ROW(0, True, NULL, NULL)),
+# 	(ROW(1, NULL, 23423, NULL)),
+#     (ROW(0, True, NULL, NULL))
+
+# Verify case-insensitive
+
+# TODO: unsupported feature
+# statement ok
+# insert into union_tbl select * from struct_tbl;
+
+# TODO: unsupported feature
+# statement ok
+# delete from struct_tbl;
+
+# The tags have to be in line with the result set
+# The tag field of the last inserted row is invalid, should be '0' instead
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO struct_tbl VALUES
+# 	(ROW(0, True, NULL, NULL)),
+# 	(ROW(1, NULL, 23423, NULL)),
+# 	(ROW(2, True, NULL, NULL))
+
+# TODO: unsupported feature
+# statement error
+# insert into union_tbl select * from struct_tbl;
+
+# TODO: unsupported feature
+# statement ok
+# insert into union_tbl VALUES(
+# 	{tag: 0::UINT8, a: False, b: NULL::INTEGER, c: NULL::TINYINT}
+# )
+
+# TODO: unsupported feature
+# statement error
+# insert into union_tbl VALUES(
+# 	{tag: 1::UINT8, a: NULL::BOOLEAN, b: 32412, c: 123::TINYINT}
+# )
+
+# TODO: unsupported feature
+# statement ok
+# delete from struct_tbl;
+
+# TODO: unsupported feature
+# statement ok
+# insert into struct_tbl VALUES
+# 	(ROW(1::UINT8, NULL, 1, NULL)),
+# 	(ROW(1::UINT8, NULL, 2, NULL)),
+# 	(ROW(1::UINT8, NULL, 3, 0))
+
+# TODO: unsupported feature
+# statement error
+# insert into union_tbl select * from struct_tbl;

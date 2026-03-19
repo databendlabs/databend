@@ -1,0 +1,211 @@
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP::TIMESTAMPTZ = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP::TIMESTAMP = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP_MS::TIMESTAMPTZ = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP_MS::TIMESTAMP = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP_NS::TIMESTAMPTZ = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP_NS::TIMESTAMP = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP_S::TIMESTAMPTZ = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMP_S::TIMESTAMP = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMPTZ::TIMESTAMPTZ = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select 'infinity'::TIMESTAMPTZ::TIMESTAMP = 'infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# infinity_string
+
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP::TIMESTAMPTZ = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP::TIMESTAMP = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP_MS::TIMESTAMPTZ = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP_MS::TIMESTAMP = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP_NS::TIMESTAMPTZ = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP_NS::TIMESTAMP = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP_S::TIMESTAMPTZ = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMP_S::TIMESTAMP = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# FIXME: this should be expanded with the other base types
+# Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIMESTAMP_S)
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMPTZ::TIMESTAMPTZ = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# TODO: unsupported feature
+# query I
+# select '-infinity'::TIMESTAMPTZ::TIMESTAMP = '-infinity'
+# ----
+# 1
+
+# target_type
+
+# base_type
+
+# infinity_string

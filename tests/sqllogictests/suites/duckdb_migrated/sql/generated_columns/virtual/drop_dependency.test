@@ -18,13 +18,6 @@ ALTER TABLE unit DROP COLUMN price;
 
 # CREATE
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (
-# 	price INTEGER,
-# 	total_profit AS (price)
-# );
-
 # total_profit depends on this
 
 statement error

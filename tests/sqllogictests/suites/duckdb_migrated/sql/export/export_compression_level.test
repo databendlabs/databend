@@ -18,10 +18,3 @@ INSERT INTO test_table VALUES
 statement ok
 DROP TABLE test_table;
 
-# TODO: unsupported feature
-# query IIII
-# FROM test_table;
-# ----
-# 1	Alice	123.45	2024-01-01 10:00:00
-# 2	Bob	67.89	2024-01-02 11:30:00
-# 3	Charlie	234.56	2024-01-03 14:15:00

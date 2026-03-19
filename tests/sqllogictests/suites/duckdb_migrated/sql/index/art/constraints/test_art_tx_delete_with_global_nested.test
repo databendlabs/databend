@@ -1,32 +1,12 @@
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR[]);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (1, ['first payload']);
-
 # Keep one connection open to ensure we still have the old value in the ART.
-
-# TODO: unsupported feature
-# statement ok old
-# BEGIN;
 
 # Now update the ART via DELETE + INSERT.
 
 statement ok
 BEGIN;
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM tbl WHERE id = 1;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (1, ['con1 payload']);
 
 statement ok
 COMMIT;
@@ -36,35 +16,6 @@ COMMIT;
 statement ok
 BEGIN
 
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM tbl WHERE id = 1;
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl VALUES (1, ['con2 payload']);
-
 statement ok
 COMMIT;
 
-# TODO: unsupported feature
-# query III old
-# SELECT id, payload, rowid FROM tbl WHERE id = 1;
-# ----
-# 1	[first payload]	0
-
-# TODO: unsupported feature
-# query III
-# SELECT id, payload, rowid FROM tbl WHERE id = 1;
-# ----
-# 1	[con2 payload]	2
-
-# TODO: unsupported feature
-# statement ok old
-# COMMIT;
-
-# TODO: unsupported feature
-# query III old
-# SELECT id, payload, rowid FROM tbl WHERE id = 1;
-# ----
-# 1	[con2 payload]	2

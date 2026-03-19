@@ -3,48 +3,9 @@ DROP TABLE IF EXISTS tbl
 
 # this test does not work with vsize = 2 because a low vector size changes the WAL threshold
 # test auto checkpointing after CREATE INDEX
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl AS SELECT range AS i FROM range(0, 40000);
-
-# TODO: unsupported feature
-# query I
-# SELECT used_blocks FROM pragma_database_size();
-# ----
-# 0
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX idx ON tbl(i);
-
 # ensure that we automatically checkpointed
-
-# TODO: unsupported feature
-# query I
-# SELECT used_blocks > 0 FROM pragma_database_size();
-# ----
-# 1
 
 # test auto checkpointing after INSERT
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl (i INTEGER PRIMARY KEY);
-
-# TODO: unsupported feature
-# query I
-# SELECT used_blocks FROM pragma_database_size();
-# ----
-# 0
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO tbl SELECT range FROM range(0, 40000);
-
 # ensure that we automatically checkpointed
 
-# TODO: unsupported feature
-# query I
-# SELECT used_blocks > 0 FROM pragma_database_size();
-# ----
-# 1

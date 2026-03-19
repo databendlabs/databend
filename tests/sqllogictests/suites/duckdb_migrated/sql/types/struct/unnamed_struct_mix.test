@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query I
+# select [{ t:'abc', len:5 }, ('abc', 2)]
+# ----
+# [{'t': abc, 'len': 5}, {'t': abc, 'len': 2}]
+
+# TODO: unsupported feature
+# query I
+# select [('abc', 2), { t:'abc', len:5 }]
+# ----
+# [{'t': abc, 'len': 2}, {'t': abc, 'len': 5}]

@@ -4,40 +4,8 @@ DROP TABLE IF EXISTS a
 statement ok
 BEGIN TRANSACTION
 
-# TODO: unsupported feature
-# statement ok
-# create table a (
-# 	u UNION(
-# 		"member name 1" VARCHAR,
-# 		"member name 2" BOOL
-# 	)
-# );
-
-# TODO: unsupported feature
-# statement ok
-# insert into a values (
-# 	union_value("member name 1" := 'hello')
-# );
-
-# TODO: unsupported feature
-# query I
-# select * from a
-# ----
-# hello
-
 # now export the db
 
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I
-# select * from a
-# ----
-# hello
-
-# TODO: unsupported feature
-# query I
-# select union_tag(COLUMNS(*)) from a;
-# ----
-# member name 1

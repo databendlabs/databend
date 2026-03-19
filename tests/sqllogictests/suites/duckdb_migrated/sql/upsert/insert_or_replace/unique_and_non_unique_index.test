@@ -1,0 +1,34 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# Single UNIQUE INDEX + non-unique INDEX
+# TODO: unsupported feature
+# statement ok
+# create table tbl(
+# 	a int,
+# 	b int,
+# 	c int
+# );
+
+# TODO: unsupported feature
+# statement ok
+# create UNIQUE index "unique" on tbl(a, b);
+
+# TODO: unsupported feature
+# statement ok
+# create index non_unique on tbl(a, b);
+
+# TODO: unsupported feature
+# statement ok
+# insert or replace into tbl values (1,2,3);
+
+# TODO: unsupported feature
+# statement ok
+# insert or replace into tbl values (1,2,3);
+
+# TODO: unsupported feature
+# query III
+# select * from tbl;
+# ----
+# 1	2	3

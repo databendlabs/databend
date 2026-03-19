@@ -1,111 +1,11 @@
 statement ok
 DROP TABLE IF EXISTS duckdb_migration_placeholder
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TEMPORARY TABLE integers(i INTEGER, j INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX uidx ON integers (i)
-
 # insert unique values
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (3, 4), (2, 5)
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM integers
-# ----
-# 3	4
-# 2	5
 
 # insert a duplicate value as part of a chain of values, this should fail
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (6, 6), (3, 4);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
 # but if we try to replace them like this it's going to fail
-
-# TODO: unsupported feature
-# statement error
-# UPDATE integers SET i=77 WHERE i IS NULL
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM integers ORDER BY i, j
-# ----
-# NULL	6
-# NULL	7
-# 2	5
-# 3	4
 
 # we can replace them like this though
 
-# TODO: unsupported feature
-# statement ok
-# UPDATE integers SET i=77 WHERE i IS NULL AND j=6
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM integers ORDER BY i, j
-# ----
-# NULL	7
-# 2	5
-# 3	4
-# 77	6
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (NULL, 6), (NULL, 7)
-
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (NULL, 6), (3, 7)
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE integers

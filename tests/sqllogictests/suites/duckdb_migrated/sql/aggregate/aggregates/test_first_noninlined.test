@@ -9,58 +9,7 @@ INSERT INTO test_first_noninlined_tbl VALUES (1, NULL), (2, 'thisisalongstring')
 
 # non-grouped aggregate
 
-# TODO: unsupported feature
-# query T
-# SELECT FIRST(b) FROM test_first_noninlined_tbl WHERE a=2
-# ----
-# thisisalongstring
-
 # Check if arbitraty alias works like FIRST
-
-# TODO: unknown function
-# query T
-# SELECT ARBITRARY(b) FROM test_first_noninlined_tbl WHERE a=2
-# ----
-# thisisalongstring
-
-# TODO: unsupported feature
-# query T
-# SELECT FIRST(b) FROM test_first_noninlined_tbl WHERE a=1
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query T
-# SELECT FIRST(b) FROM test_first_noninlined_tbl WHERE a=1 GROUP BY a
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query T
-# SELECT FIRST(b) FROM test_first_noninlined_tbl WHERE a=0
-# ----
-# NULL
-
-# TODO: unsupported feature
-# query T
-# SELECT FIRST(b) FROM test_first_noninlined_tbl WHERE a=0 GROUP BY b
-# ----
 
 # grouped aggregate
 
-# TODO: unsupported feature
-# query IT
-# SELECT a, FIRST(b) FROM test_first_noninlined_tbl GROUP BY a ORDER BY a
-# ----
-# 1
-# NULL
-# 2
-# thisisalongstring
-# 3
-# thisisalsoalongstring
-
-# TODO: unsupported feature
-# query I
-# SELECT FIRST(i) FROM (VALUES (NULL::INT32)) tbl(i)
-# ----
-# NULL

@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table tbl (a integer default 3);
+
+# TODO: unsupported feature
+# statement error
+# insert into tbl VALUES ((3+DEFAULT));

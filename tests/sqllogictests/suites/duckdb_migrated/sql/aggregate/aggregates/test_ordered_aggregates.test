@@ -23,96 +23,11 @@ CREATE TABLE flights(
 	"minute" DOUBLE,
 	time_hour TIMESTAMP);
 
-# TODO: unsupported feature
-# statement ok
-# SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
-# FROM "flights"
-# GROUP BY "dest"
-
-# TODO: unknown function
-# statement ok
-# SELECT "dest", percentile_cont(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
-# FROM "flights"
-# GROUP BY "dest"
-
-# TODO: unknown function
-# statement ok
-# SELECT "dest", percentile_cont([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_delay") AS "iqr_delay"
-# FROM "flights"
-# GROUP BY "dest"
-
-# TODO: unknown function
-# statement ok
-# SELECT "dest", percentile_disc(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
-# FROM "flights"
-# GROUP BY "dest"
-
-# TODO: unknown function
-# statement ok
-# SELECT "dest", percentile_disc([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_delay") AS "iqr_delay"
-# FROM "flights"
-# GROUP BY "dest"
-
 # ORDER BY DESC
-
-# TODO: unknown function
-# query I
-# select percentile_disc(0.25) within group(order by i desc) from generate_series(0,100) tbl(i);
-# ----
-# 75
-
-# TODO: unknown function
-# query I
-# select percentile_disc([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
-# ----
-# [75, 50, 25]
-
-# TODO: unknown function
-# query I
-# select percentile_cont(0.25) within group(order by i desc) from generate_series(0,100) tbl(i);
-# ----
-# 75.000000
-
-# TODO: unknown function
-# query I
-# select percentile_cont([0.25, 0.5, 0.75]) within group(order by i desc) from generate_series(0,100) tbl(i);
-# ----
-# [75.0, 50.0, 25.0]
 
 # DESC boundary condition
 
-# TODO: unknown function
-# query I
-# SELECT percentile_disc(.5) WITHIN GROUP (order by col desc) 
-# FROM (VALUES (11000), (3100), (2900), (2800), (2600), (2500)) AS tab(col);
-# ----
-# 2900
-
-# TODO: unknown function
-# query I
-# SELECT percentile_disc([.25, .5, .75]) WITHIN GROUP (order by col desc) 
-# FROM (VALUES (11000), (3100), (2900), (2800), (2600), (2500)) AS tab(col);
-# ----
-# [3100, 2900, 2600]
-
 # MODE is order-sensitive
-
-# TODO: unsupported feature
-# query I
-# SELECT MODE() WITHIN GROUP (ORDER BY order_occurrences DESC) FROM (
-# VALUES
-# 	(500, 1),
-# 	(1000, 2),
-# 	(800, 3),
-# 	(1000, 4),
-# 	(500, 5),
-# 	(550, 6),
-# 	(400, 7),
-# 	(200, 8),
-# 	(10, 9)
-# ) items_per_order(order_occurrences, item_count);
-# ----
-# 1000
 
 #
 # Error checking

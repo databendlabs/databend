@@ -1,0 +1,2 @@
+statement error
+SELECT a + b FROM test_vector_types(NULL::INT, NULL::INT) t(a, b)

@@ -78,18 +78,6 @@ SELECT LEAST(DATE '1992-01-01', DATE '1994-02-02', DATE '1991-01-01', NULL)
 ----
 NULL
 
-# TODO: unsupported feature
-# query T
-# SELECT LEAST(DATE '1992-01-01', DATE '1994-02-02', DATE '1991-01-01', DATE 'infinity', DATE '-infinity')
-# ----
-# -infinity
-
-# TODO: unsupported feature
-# query T
-# SELECT GREATEST(DATE '1992-01-01', DATE '1994-02-02', DATE '1991-01-01', DATE 'infinity', DATE '-infinity')
-# ----
-# infinity
-
 # timestamps
 
 query T
@@ -101,18 +89,6 @@ query T
 SELECT LEAST(TIMESTAMP '1992-01-01 13:45:21.890123', TIMESTAMP '1994-02-02 05:43:21', TIMESTAMP '1991-01-01 01:23:45', NULL)
 ----
 NULL
-
-# TODO: unsupported feature
-# query T
-# SELECT LEAST(TIMESTAMP '1992-01-01 13:45:21.890123', TIMESTAMP '1994-02-02 05:43:21', TIMESTAMP '1991-01-01 01:23:45', TIMESTAMP 'infinity', TIMESTAMP '-infinity')
-# ----
-# -infinity
-
-# TODO: unsupported feature
-# query T
-# SELECT GREATEST(TIMESTAMP '1992-01-01 13:45:21.890123', TIMESTAMP '1994-02-02 05:43:21', TIMESTAMP '1991-01-01 01:23:45', TIMESTAMP 'infinity', TIMESTAMP '-infinity')
-# ----
-# infinity
 
 # test mix of types
 
@@ -162,13 +138,6 @@ SELECT LEAST(i, j), GREATEST(i, j) FROM t1 WHERE j IS NOT NULL ORDER BY i;
 3	7
 
 # row ids
-
-# TODO: unsupported feature
-# query II
-# SELECT LEAST(rowid + 10, i, j), GREATEST(i, rowid + 4, j) FROM t1 WHERE j IS NOT NULL ORDER BY i;
-# ----
-# 1	5
-# 3	7
 
 # generated strings
 

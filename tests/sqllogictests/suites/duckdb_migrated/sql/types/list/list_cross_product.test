@@ -4,10 +4,6 @@ DROP VIEW IF EXISTS v1
 statement ok
 DROP VIEW IF EXISTS v2
 
-# TODO: unsupported feature
-# statement ok
-# DROP VIEW IF EXISTS v3
-
 statement ok
 CREATE VIEW v1 AS SELECT * FROM (VALUES (1, [1, 2, 3]), (2, NULL), (3, [NULL, 3, 4])) tbl (a, b);
 
@@ -108,53 +104,3 @@ SELECT * FROM v2 v, v2 w WHERE v.a <> w.a OR v.a > w.a ORDER BY v.a, w.a;
 
 # lists of lists
 
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW v3 AS SELECT * FROM (VALUES (1, [[1, 2], [3]]), (2, NULL), (3, [[NULL, 3], [4]])) tbl (a, b);
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM v3 v, v3 w ORDER BY v.a, w.a;
-# ----
-# 1	[[1, 2], [3]]	1	[[1, 2], [3]]
-# 1	[[1, 2], [3]]	2	NULL
-# 1	[[1, 2], [3]]	3	[[NULL, 3], [4]]
-# 2	NULL	1	[[1, 2], [3]]
-# 2	NULL	2	NULL
-# 2	NULL	3	[[NULL, 3], [4]]
-# 3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
-# 3	[[NULL, 3], [4]]	2	NULL
-# 3	[[NULL, 3], [4]]	3	[[NULL, 3], [4]]
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM v3 v, v3 w WHERE v.a >= w.a ORDER BY v.a, w.a;
-# ----
-# 1	[[1, 2], [3]]	1	[[1, 2], [3]]
-# 2	NULL	1	[[1, 2], [3]]
-# 2	NULL	2	NULL
-# 3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
-# 3	[[NULL, 3], [4]]	2	NULL
-# 3	[[NULL, 3], [4]]	3	[[NULL, 3], [4]]
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM v3 v, v3 w WHERE v.a <> w.a ORDER BY v.a, w.a;
-# ----
-# 1	[[1, 2], [3]]	2	NULL
-# 1	[[1, 2], [3]]	3	[[NULL, 3], [4]]
-# 2	NULL	1	[[1, 2], [3]]
-# 2	NULL	3	[[NULL, 3], [4]]
-# 3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
-# 3	[[NULL, 3], [4]]	2	NULL
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM v3 v, v3 w WHERE v.a <> w.a OR v.a > w.a ORDER BY v.a, w.a;
-# ----
-# 1	[[1, 2], [3]]	2	NULL
-# 1	[[1, 2], [3]]	3	[[NULL, 3], [4]]
-# 2	NULL	1	[[1, 2], [3]]
-# 2	NULL	3	[[NULL, 3], [4]]
-# 3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
-# 3	[[NULL, 3], [4]]	2	NULL

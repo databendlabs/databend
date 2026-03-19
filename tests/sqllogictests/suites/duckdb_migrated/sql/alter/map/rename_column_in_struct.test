@@ -1,27 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(
-# 	s MAP(
-# 		STRUCT(
-# 			n INTEGER,
-# 			m INTEGER
-# 		),
-# 		STRUCT(
-# 			i INTEGER,
-# 			j INTEGER
-# 		)
-# 	)
-# )
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES
-# 	(MAP {ROW(3,3): ROW(1, 1)}),
-# 	(MAP {ROW(4,4): ROW(2, 2)})
-
 # attempt to rename 'key'
 
 statement error
@@ -30,79 +9,9 @@ ALTER TABLE test RENAME COLUMN s.key to anything
 statement error
 ALTER TABLE test RENAME COLUMN s.value to anything
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test RENAME COLUMN s.value.j TO abc
-
-# TODO: unsupported feature
-# query I
-# select * from test;
-# ----
-# {{'n': 3, 'm': 3}={'i': 1, 'abc': 1}}
-# {{'n': 4, 'm': 4}={'i': 2, 'abc': 2}}
-
 # rename a column from the struct inside the 'key'
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test RENAME COLUMN s.key.n TO def
-
-# TODO: unsupported feature
-# query I
-# select * from test;
-# ----
-# {{'def': 3, 'm': 3}={'i': 1, 'abc': 1}}
-# {{'def': 4, 'm': 4}={'i': 2, 'abc': 2}}
-
-# TODO: unsupported feature
-# statement ok
-# drop table test;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test(
-# 	s STRUCT(
-# 		a MAP(
-# 			STRUCT(
-# 				n INTEGER,
-# 				m INTEGER
-# 			),
-# 			STRUCT(
-# 				i INTEGER,
-# 				j INTEGER
-# 			)
-# 		)
-# 	)
-# )
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test VALUES
-# 	(ROW(MAP {ROW(3,3): ROW(1, 1)})),
-# 	(ROW(MAP {ROW(4,4): ROW(2, 2)}))
 
 # rename a column from the struct in the 'key'
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test RENAME COLUMN s.a.key.m TO abc
-
-# TODO: unsupported feature
-# query I
-# select * from test;
-# ----
-# {'a': {{'n': 3, 'abc': 3}={'i': 1, 'j': 1}}}
-# {'a': {{'n': 4, 'abc': 4}={'i': 2, 'j': 2}}}
-
 # rename a column from the struct in the 'value'
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test RENAME COLUMN s.a.value.j TO def
-
-# TODO: unsupported feature
-# query I
-# select * from test;
-# ----
-# {'a': {{'n': 3, 'abc': 3}={'i': 1, 'def': 1}}}
-# {'a': {{'n': 4, 'abc': 4}={'i': 2, 'def': 2}}}

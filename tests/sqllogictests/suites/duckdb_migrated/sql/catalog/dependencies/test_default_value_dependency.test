@@ -2,77 +2,19 @@ statement ok
 DROP TABLE IF EXISTS integers
 
 # dependency on a sequence in a default value
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER DEFAULT nextval('seq'), j INTEGER)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers (j) VALUES (1), (1), (1), (1), (1)
-
-# TODO: unsupported feature
-# query R
-# SELECT SUM(i) FROM integers
-# ----
-# 15.000000
-
 # we can't drop the sequence: the table depends on it
-
-# TODO: result differs
-# statement error
-# DROP SEQUENCE seq
-
-# TODO: unsupported feature
-# statement ok
-# DROP SEQUENCE seq CASCADE
 
 # but it also drops the table
 
 statement error
 SELECT * FROM integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq1
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq2
-
 statement error
 CREATE TABLE integers(i INTEGER DEFAULT nextval('seq' || CAST(nextval('seq') AS VARCHAR)), j INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER DEFAULT nextval('seq1') + nextval('seq2'), j INTEGER)
-
 # seq1 exists, so the result of the first default value is 1
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers (j) VALUES (1)
-
 # we canot drop seq1 and seq2: the dependency is fixed
-
-# TODO: result differs
-# statement error
-# DROP SEQUENCE seq1
-
-# TODO: result differs
-# statement error
-# DROP SEQUENCE seq2
-
-# TODO: unsupported feature
-# statement ok
-# DROP SEQUENCE seq1 CASCADE
 
 # now the table is gone
 

@@ -1,0 +1,126 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(b ROW(i INTEGER, j INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES ({'i': 1, 'j': 2});
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY (b).i;
+# ----
+# {'i': 1, 'j': 2}
+
+# standard update
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE a SET b={'i': 3, 'j': 4}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY (b).i;
+# ----
+# {'i': 3, 'j': 4}
+
+# NULL update
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE a SET b=NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY (b).i;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE a SET b={'i': NULL, 'j': 4}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY (b).i;
+# ----
+# {'i': NULL, 'j': 4}
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE a SET b={'i': 3, 'j': NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY (b).i;
+# ----
+# {'i': 3, 'j': NULL}
+
+# rollbacks
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE a SET b={'i': 3, 'j': 4}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY (b).i;
+# ----
+# {'i': 3, 'j': 4}
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY (b).i;
+# ----
+# {'i': 3, 'j': NULL}
+
+# updates with a filter
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES ({'i': 2, 'j': 3});
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'i': 3, 'j': NULL}
+# {'i': 2, 'j': 3}
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES ({'i': 3, 'j': 4});
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'i': 3, 'j': NULL}
+# {'i': 2, 'j': 3}
+# {'i': 3, 'j': 4}
+
+# TODO: unsupported feature
+# query I
+# UPDATE a SET b={'i': NULL, 'j': NULL} WHERE (b).j>=3
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'i': 3, 'j': NULL}
+# {'i': NULL, 'j': NULL}
+# {'i': NULL, 'j': NULL}

@@ -10,18 +10,3 @@ create table mytable (C1 VARCHAR(10));
 statement ok
 insert into mytable values ('a');
 
-# TODO: unsupported feature
-# statement ok
-# create table TOMERGE.mytable (C1 VARCHAR(10));
-
-# TODO: unsupported feature
-# query I
-# insert into TOMERGE.mytable SELECT * FROM mytable;
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# select * from TOMERGE.mytable;
-# ----
-# a

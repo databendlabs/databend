@@ -4,67 +4,13 @@ DROP TABLE IF EXISTS obj
 statement ok
 DROP TABLE IF EXISTS t12
 
-# TODO: unknown function
-# query T
-# SELECT json_structure(json('{"duck":"goose"}').duck);
-# ----
-# "VARCHAR"
-
 # should go to our NULL
-
-# TODO: unknown function
-# query T
-# select json('{"foo": null}').foo
-# ----
-# null
-
-# TODO: unknown function
-# query T
-# select json('{"foo": null}').foo.bar
-# ----
-# NULL
 
 # also supports this syntax
 
-# TODO: unknown function
-# query T
-# select json('{"foo": null}')['foo']
-# ----
-# null
-
-# TODO: unknown function
-# query T
-# select json('{"foo": null}')['foo']['bar']
-# ----
-# NULL
-
-# TODO: unknown function
-# query T
-# select json('null')
-# ----
-# null
-
-# TODO: unknown function
-# query T
-# select json('[null]')."0"
-# ----
-# NULL
-
 # this doesn't work, we can't extract array elements using dots
 
-# TODO: unknown function
-# query T
-# select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field."1"
-# ----
-# NULL
-
 # but we can using array extract syntax
-
-# TODO: unknown function
-# query T
-# select json('{"my_field": {"my_nested_field": ["goose", "duck"]}}').my_field.my_nested_field[1]
-# ----
-# "duck"
 
 # again, this won't work
 
@@ -81,12 +27,6 @@ select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.m
 "duck"
 
 # can also access from back
-
-# TODO: unsupported feature
-# query T
-# select ('{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON).my_field.my_nested_field[-1]
-# ----
-# "duck"
 
 # array slicing doesn't work (yet) for json extract
 # this looks a bit weird, but this actually does a string slice

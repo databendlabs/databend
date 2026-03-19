@@ -6,9 +6,5 @@ CREATE TABLE db1.tbl AS FROM range(0, 10000) t(i)
 
 # we can upgrade to a higher row group size
 
-# TODO: unsupported feature
-# statement ok
-# DETACH db1
-
 statement ok
 INSERT INTO db1.tbl FROM range(0, 10000)

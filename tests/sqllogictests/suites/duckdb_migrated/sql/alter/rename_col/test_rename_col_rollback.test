@@ -5,10 +5,6 @@ DROP TABLE IF EXISTS test
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 
-# TODO: unsupported feature
-# statement ok
-# START TRANSACTION
-
 # rename the column in the first transaction
 
 statement ok
@@ -29,10 +25,3 @@ ROLLBACK
 
 # now we should see the old name again
 
-# TODO: unsupported feature
-# statement ok
-# SELECT i FROM test
-
-# TODO: result differs
-# statement error
-# SELECT k FROM test

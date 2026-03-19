@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS tbl
 statement ok
 CREATE TABLE tbl(i INTEGER);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX idx_tbl_i ON tbl(i);
-
 statement ok
 INSERT INTO tbl SELECT r FROM range(0 * 10000, 0 * 10000 + 2001) t(r);
 
@@ -178,66 +174,33 @@ query I
 SELECT i FROM tbl WHERE i = 3 * 10000 + 1000;
 ----
 
-# TODO: unsupported feature
-# query II
-# EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 3000;
-# ----
-
 query I
 SELECT i FROM tbl WHERE i = 3000;
 ----
 3000
-
-# TODO: unsupported feature
-# query II
-# EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 13000;
-# ----
 
 query I
 SELECT i FROM tbl WHERE i = 13000;
 ----
 13000
 
-# TODO: unsupported feature
-# query II
-# EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 23000;
-# ----
-
 query I
 SELECT i FROM tbl WHERE i = 23000;
 ----
 23000
-
-# TODO: unsupported feature
-# query II
-# EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 4500;
-# ----
 
 query I
 SELECT i FROM tbl WHERE i = 4500;
 ----
 4500
 
-# TODO: unsupported feature
-# query II
-# EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 14500;
-# ----
-
 query I
 SELECT i FROM tbl WHERE i = 14500;
 ----
 14500
-
-# TODO: unsupported feature
-# query II
-# EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = 24500;
-# ----
 
 query I
 SELECT i FROM tbl WHERE i = 24500;
 ----
 24500
 
-# TODO: result differs
-# statement error
-# INSERT INTO tbl VALUES (60000);

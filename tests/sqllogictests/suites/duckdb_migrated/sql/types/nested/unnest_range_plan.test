@@ -1,0 +1,10 @@
+# Fix issue #19645
+# TODO: unsupported feature
+# query I rowsort
+# SELECT *
+# FROM UNNEST(ARRAY[6]) AS x
+# UNION ALL
+# SELECT 2 FROM generate_series(1, 1);
+# ----
+# 2
+# 6

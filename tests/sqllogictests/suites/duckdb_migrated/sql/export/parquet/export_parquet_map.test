@@ -7,45 +7,8 @@ DROP TABLE IF EXISTS unsupported_value
 statement ok
 begin transaction;
 
-# TODO: unsupported feature
-# statement ok
-# create table unsupported_key as select val from (
-# 	select MAP {
-# 		'hello': '01010101000'::BIT,
-# 		'HELLO': NULL::BIT
-# 	} val
-# ), range(0, 3);
-
-# TODO: unsupported feature
-# statement ok
-# create table unsupported_value as select val from (
-# 	select MAP {
-# 		'01010101000'::BIT: 'hello',
-# 		'11110111101'::BIT: 'world'
-# 	} val
-# ), range(0, 3);
-
-# TODO: unsupported feature
-# query I nosort key
-# select * from unsupported_key;
-# ----
-
-# TODO: unsupported feature
-# query I nosort value
-# select * from unsupported_value;
-# ----
-
 # now export the db
 
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I nosort key
-# select * from unsupported_key;
-# ----
-
-# TODO: unsupported feature
-# query I nosort value
-# select * from unsupported_value;
-# ----

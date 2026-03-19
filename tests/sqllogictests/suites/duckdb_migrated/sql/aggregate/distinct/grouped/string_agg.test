@@ -22,31 +22,7 @@ INSERT INTO strings VALUES
 
 # ORDER + FILTER + DISTINCT
 
-# TODO: unsupported feature
-# query II
-# SELECT g, STRING_AGG(DISTINCT y, ',' ORDER BY y DESC) FILTER (WHERE g < 4)
-# FROM strings
-# GROUP BY g
-# ORDER BY 1
-# ----
-# 1	/,-
-# 2	/,-,+
-# 3	/
-# 4	NULL
-
 # ORDER + FILTER + DISTINCT
-
-# TODO: unsupported feature
-# query IIII
-# SELECT g, count(y), STRING_AGG(DISTINCT y, ',' ORDER BY y DESC) FILTER (WHERE g < 4), sum(1)
-# FROM strings
-# GROUP BY g
-# ORDER BY 1
-# ----
-# 1	2	/,-	2
-# 2	3	/,-,+	3
-# 3	1	/	1
-# 4	3	NULL	3
 
 statement error
 SELECT g, STRING_AGG(DISTINCT y ORDER BY y, '_' ) FILTER (WHERE g < 4)
@@ -54,14 +30,3 @@ FROM strings
 GROUP BY g
 ORDER BY 1
 
-# TODO: unsupported feature
-# query II
-# SELECT g, STRING_AGG(DISTINCT y ORDER BY y, '_' ) FILTER (WHERE g < 4)
-# FROM strings
-# GROUP BY g
-# ORDER BY 1
-# ----
-# 1	-,/
-# 2	+,-,/
-# 3	/
-# 4	NULL

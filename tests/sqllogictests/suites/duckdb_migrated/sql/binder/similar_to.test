@@ -31,10 +31,6 @@ SELECT * FROM lineitem_long
 statement error
 select jaro_winkler_('x', 'y');
 
-# TODO: unsupported feature
-# statement ok
-# create schema s1;
-
 statement ok
 create table s1.my_lineitem(i int);
 

@@ -7,34 +7,18 @@ DROP TABLE IF EXISTS integers
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH DATABASE ':memory:' AS db1;
-
 statement ok
 CREATE TABLE test(a INTEGER);
 
 # indexes always go in the same schema/catalog as the table
-
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX index ON test(a)
 
 # we cannot specify a database or schema when creating an index
 
 statement error
 CREATE INDEX db1.index ON test(a)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TYPE db1.mood AS ENUM('ok', 'sad', 'happy');
-
 # but we can only use types from our own catalog
 # cross-catalog dependencies are not allowed
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE db1.integers(i mood)
 
 statement error
 CREATE TABLE integers(i mood)
@@ -45,8 +29,3 @@ SELECT 'happy'::mood
 statement ok
 USE db1
 
-# TODO: unsupported feature
-# query I
-# SELECT 'happy'::mood
-# ----
-# happy

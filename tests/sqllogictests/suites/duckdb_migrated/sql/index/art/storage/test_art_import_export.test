@@ -13,10 +13,3 @@ CREATE TABLE raw(
 statement ok
 INSERT INTO raw VALUES (1, 1, 1, 1);
 
-# TODO: unsupported feature
-# statement ok
-# CREATE UNIQUE INDEX customer_year_month_idx ON raw (customer_ID, year, month);
-
-# TODO: result differs
-# statement error
-# INSERT INTO raw VALUES (1, 1, 1, 1);

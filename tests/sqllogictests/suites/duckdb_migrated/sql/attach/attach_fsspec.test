@@ -5,15 +5,3 @@ DROP TABLE IF EXISTS dummy.tbl
 statement error
 ATTACH 'dummy_extension:/hello.world';
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE dummy.tbl(i INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# DETACH dummy
-
-# TODO: unsupported feature
-# query I
-# FROM dummy.tbl
-# ----

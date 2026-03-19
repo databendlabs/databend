@@ -16,65 +16,9 @@ DROP TABLE IF EXISTS E
 statement ok
 create table A as select 1 as "X", 2 as "Y";
 
-# TODO: unsupported feature
-# statement ok
-# create table B as select 1 as "X", 3 as "Z";
-
-# TODO: unsupported feature
-# query III
-# select * from A join B using(X);
-# ----
-# 1	2	3
-
-# TODO: unsupported feature
-# query III
-# select * from A join B using("X");
-# ----
-# 1	2	3
-
 # case mismatch in using clause
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE "A"
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE "B"
-
-# TODO: unsupported feature
-# statement ok
-# create table A as select 1 as "X", 2 as "Y";
-
-# TODO: unsupported feature
-# statement ok
-# create table B as select 1 as X, 3 as "Z";
-
-# TODO: unsupported feature
-# query III
-# select * from A join B using(X);
-# ----
-# 1	2	3
-
-# TODO: unsupported feature
-# query III
-# select * from A join B using(X);
-# ----
-# 1	2	3
-
 # using clause with many different case variations on the same name
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE "A"
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE "B"
-
-# TODO: unsupported feature
-# statement ok
-# create table A as select 1 as "hello", 2 as x;
 
 statement ok
 create table B as select 1 as "HELLO", 3 as x2;
@@ -82,80 +26,10 @@ create table B as select 1 as "HELLO", 3 as x2;
 statement ok
 create table C as select 1 as "hEllO", 4 as x3;
 
-# TODO: unsupported feature
-# statement ok
-# create table D as select 1 as "HElLo", 5 as x4;
-
 statement ok
 create table E as select 1 as "heLLo", 6 as x5;
 
-# TODO: unsupported feature
-# query III
-# SELECT * FROM a JOIN b USING (hello)
-# ----
-# 1	2	3
-
-# TODO: unsupported feature
-# query III
-# SELECT * FROM a JOIN b USING (hello, "HELLO");
-# ----
-# 1	2	3
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM a JOIN b USING (hello) JOIN c USING (hello)
-# ----
-# 1	2	3	4
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM a JOIN b USING (hello) JOIN c USING ("HELLO")
-# ----
-# 1	2	3	4
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT * FROM a JOIN b USING (hello) JOIN c USING (hello) JOIN d USING (hello)
-# ----
-# 1	2	3	4	5
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT * FROM a JOIN b USING ("HELLO") JOIN c USING ("HeLLo") JOIN d USING (hello)
-# ----
-# 1	2	3	4	5
-
 # full outer join
-
-# TODO: unsupported feature
-# query IIIIII
-# SELECT * FROM a JOIN b USING (hello) JOIN c USING (hello) JOIN d USING (hello) JOIN e USING (hello)
-# ----
-# 1	2	3	4	5	6
-
-# TODO: unsupported feature
-# query III
-# SELECT * FROM a FULL OUTER JOIN b USING (hello)
-# ----
-# 1	2	3
-
-# TODO: unsupported feature
-# query IIII
-# SELECT * FROM a FULL OUTER JOIN b USING (hello) FULL OUTER JOIN c USING (hello)
-# ----
-# 1	2	3	4
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT * FROM a FULL OUTER JOIN b USING (hello) FULL OUTER JOIN c USING (hello) FULL OUTER JOIN d USING (hello)
-# ----
-# 1	2	3	4	5
-
-# TODO: unsupported feature
-# query IIIIII
-# SELECT * FROM a FULL OUTER JOIN b USING (hello) FULL OUTER JOIN c USING (hello) FULL OUTER JOIN d USING (hello) FULL OUTER JOIN e USING (hello)
-# ----
-# 1	2	3	4	5	6
 
 # natural join
 
@@ -169,24 +43,6 @@ SELECT * FROM a NATURAL JOIN b NATURAL JOIN c
 ----
 1 2 1 3 1 4
 
-# TODO: unsupported feature
-# query IIIII
-# SELECT * FROM a NATURAL JOIN b NATURAL JOIN c NATURAL JOIN d
-# ----
-# 1 2 3 1 4 1 5
-
-# TODO: unsupported feature
-# query IIIIII
-# SELECT * FROM a NATURAL JOIN b NATURAL JOIN c NATURAL JOIN d NATURAL JOIN e
-# ----
-# 1 2 3 1 4 1 5 1 6
-
-# TODO: unsupported feature
-# query IIIIII
-# SELECT * FROM (a NATURAL JOIN b NATURAL JOIN c) NATURAL JOIN (d NATURAL JOIN e)
-# ----
-# 1	2	3	4	5	6
-
 # natural full outer join
 
 query IIII
@@ -198,24 +54,6 @@ query IIIIII
 SELECT * FROM a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c
 ----
 1 2 1 3 1 4
-
-# TODO: unsupported feature
-# query IIIII
-# SELECT * FROM a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c NATURAL FULL OUTER JOIN d
-# ----
-# 1 2 3 1 4 1 5
-
-# TODO: unsupported feature
-# query IIIIII
-# SELECT * FROM a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c NATURAL FULL OUTER JOIN d NATURAL FULL OUTER JOIN e
-# ----
-# 1 2 3 1 4 1 5 1 6
-
-# TODO: unsupported feature
-# query IIIIII
-# SELECT * FROM (a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c) NATURAL FULL OUTER JOIN (d NATURAL FULL OUTER JOIN e)
-# ----
-# 1	2	3	4	5	6
 
 # natural join with ambiguity
 

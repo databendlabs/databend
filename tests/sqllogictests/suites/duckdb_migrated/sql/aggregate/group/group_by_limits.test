@@ -58,138 +58,17 @@ CREATE TABLE t(t_k0 BIGINT);
 statement ok
 INSERT INTO t VALUES (-9223372036854775808), (9223372036854775807);
 
-# TODO: unsupported feature
-# query II
-# SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-# ----
-# -9223372036854775808	 1
-# 9223372036854775807	1
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE t;
-
 # HUGEINT limits
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(t_k0 HUGEINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES (-170141183460469231731687303715884105728), (170141183460469231731687303715884105727);
-
-# TODO: unsupported feature
-# query II
-# SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-# ----
-# -170141183460469231731687303715884105728	 1
-# 170141183460469231731687303715884105727	1
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE t;
 
 # UTINYINT limits
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(t_k0 UTINYINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES (0), (255);
-
-# TODO: unsupported feature
-# query II
-# SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-# ----
-# 0	 1
-# 255	1
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE t;
-
 # USMALLINT limits
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(t_k0 USMALLINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES (0), (65535);
-
-# TODO: unsupported feature
-# query II
-# SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-# ----
-# 0	 1
-# 65535	1
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE t;
 
 # UINTEGER limits
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(t_k0 UINTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES (0), (4294967295);
-
-# TODO: unsupported feature
-# query II
-# SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-# ----
-# 0	 1
-# 4294967295	1
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE t;
-
 # UBIGINT limits
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(t_k0 UBIGINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES (0), (18446744073709551615);
-
-# TODO: unsupported feature
-# query II
-# SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-# ----
-# 0	 1
-# 18446744073709551615	1
-
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE t;
-
 # UHUGEINT limits
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE t(t_k0 UHUGEINT);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO t VALUES (0), ('340282366920938463463374607431768211455'::UHUGEINT);
-
-# TODO: unsupported feature
-# query II
-# SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-# ----
-# 0	 1
-# 340282366920938463463374607431768211455	1
 
 statement ok
 DROP TABLE t;

@@ -4,30 +4,3 @@ DROP TABLE IF EXISTS primary_table
 statement ok
 DROP TABLE IF EXISTS secondary_table
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE primary_table (id INT PRIMARY KEY)
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE secondary_table (primary_id INT, FOREIGN KEY (primary_id) REFERENCES primary_table(id))
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO primary_table VALUES (42)
-
-# TODO: unsupported feature
-# statement ok
-# BEGIN
-
-# TODO: unsupported feature
-# statement ok
-# SELECT id FROM primary_table LIMIT 1
-
-# TODO: unsupported feature
-# statement ok
-# DELETE FROM primary_table WHERE id = 42
-
-# TODO: unsupported feature
-# statement error
-# INSERT INTO secondary_table VALUES (42)

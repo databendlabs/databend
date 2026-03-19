@@ -64,44 +64,6 @@ INSERT INTO test_approximate_distinct_count_names VALUES ('Pedro'), (NULL), ('Pe
 
 # test counts on a set of values
 
-# TODO: unsupported feature
-# statement ok
-# create  table t as select range a, mod(range,10) b from range(0, 2000);
-
-# TODO: unsupported feature
-# query III
-# SELECT COUNT( a),approx_count_distinct(a),approx_count_distinct(b) from t
-# ----
-# 2000	2034	10
-
-# TODO: unsupported feature
-# query I
-# SELECT approx_count_distinct(a) from t group by a %2 order by all;
-# ----
-# 975
-# 1033
-
-# TODO: unsupported feature
-# query I
-# SELECT count(*) from t where a < 10;
-# ----
-# 10
-
-# TODO: unsupported feature
-# query I
-# SELECT approx_count_distinct(a) over (partition by a%2) from t where a < 10;
-# ----
-# 5
-# 5
-# 5
-# 5
-# 5
-# 5
-# 5
-# 5
-# 5
-# 5
-
 query II
 SELECT COUNT( t),approx_count_distinct(t) from test_approximate_distinct_count_timestamp
 ----
@@ -136,6 +98,3 @@ create table issue5259(c0 int);
 statement ok
 insert into issue5259 values (1),(2),(3);
 
-# TODO: unsupported feature
-# statement ok
-# SELECT approx_count_distinct(c0 ORDER BY (c0, 1)) FROM issue5259;

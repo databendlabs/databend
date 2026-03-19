@@ -10,183 +10,23 @@ CREATE TABLE integers (a INT)
 statement ok
 INSERT INTO integers VALUES (1)
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO one() AS (SELECT 1);
-
-# TODO: unknown function
-# query T
-# SELECT one()
-# ----
-# 1
-
 statement error
 SELECT one(1)
 
-# TODO: unsupported feature
-# statement error
-# SELECT one(NULL)
-
-# TODO: unsupported feature
-# statement ok
-# DROP MACRO one;
-
 # HAVING in a macro
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO having_macro(x) AS (SELECT * FROM integers GROUP BY a HAVING a = x)
-
-# TODO: unknown function
-# query T
-# SELECT having_macro(1)
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT having_macro(6)
-# ----
-# NULL
 
 # UNION in a macro
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO union_macro(x, y, z) AS (SELECT x IN (SELECT y UNION ALL SELECT z))
-
-# TODO: unknown function
-# query T
-# SELECT union_macro(1, 2, 3)
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT union_macro(1, 2, 1)
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT union_macro(1, 1, 2)
-# ----
-# 1
-
 # expression list
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO in_expression_list(x, y, z) AS (SELECT x IN (VALUES (y), (z)))
-
-# TODO: unknown function
-# query T
-# SELECT in_expression_list(1, 2, 3)
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT in_expression_list(1, 2, 1)
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT in_expression_list(1, 1, 2)
-# ----
-# 1
-
 # FUNCTION alias
-
-# TODO: unsupported feature
-# statement ok
-# CREATE FUNCTION two() AS (SELECT 2);
-
-# TODO: unknown function
-# query T
-# SELECT two()
-# ----
-# 2
-
-# TODO: unsupported feature
-# statement ok
-# DROP FUNCTION two;
 
 # b cannot be found
 
 statement error
 CREATE MACRO add_macro(a) AS a + b
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO add_macro(a, b) AS a + b
-
-# TODO: unknown function
-# query T
-# SELECT add_macro(a,a) FROM integers
-# ----
-# 2
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE floats (b FLOAT)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO floats VALUES (0.5)
-
-# TODO: unknown function
-# query T
-# SELECT add_macro(a,2) + add_macro(3,b) FROM integers, floats
-# ----
-# 6.5
-
 # can create function with same name as a ScalarFunction
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO string_split(a,b) AS a + b
-
-# TODO: unknown function
-# query I
-# SELECT string_split(1, 2)
-# ----
-# 3
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO IFELSE(a,b,c) AS CASE WHEN a THEN b ELSE c END
-
-# TODO: unknown function
-# query T
-# SELECT IFELSE(1,'true','false')
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT ifelse(1,'true','false')
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT IFELSE(0,'true','false')
-# ----
-# 0
-
-# TODO: unknown function
-# query T
-# SELECT IFELSE(a = 1, 'true', 'false') FROM integers
-# ----
-# 1
-
-# TODO: unknown function
-# query T
-# SELECT IFELSE(a = 0, 'true', 'false') FROM integers
-# ----
-# 0
 
 # incorrect number of arguments
 
@@ -196,72 +36,12 @@ SELECT IFELSE();
 statement error
 SELECT IFELSE(1);
 
-# TODO: unsupported feature
-# statement error
-# SELECT IFELSE(1, 2);
-
-# TODO: unsupported feature
-# statement error
-# SELECT IFELSE(1, 2, 3, 4);
-
-# TODO: unsupported feature
-# statement error
-# CREATE MACRO IFELSE(a,b) AS a+b
-
-# TODO: unknown function
-# statement error
-# CREATE MACRO ifelse(a,b) AS a+b
-
-# TODO: unknown function
-# query T
-# SELECT IFELSE('1', 'random', RANDOM()::VARCHAR)
-# ----
-# random
-
 # macro in a different schema
-
-# TODO: unsupported feature
-# statement ok
-# CREATE SCHEMA macros
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO macros.add_macro(a, b) AS a + b
-
-# TODO: unknown function
-# query T
-# SELECT macros.add_macro(40,2)
-# ----
-# 42
 
 # conflicting parameter names in macro definition
 
 statement error
 CREATE MACRO conflict(i, i) AS i + 1
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO myavg(x) AS SUM(x) / COUNT(x)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (21), (41);
-
-# TODO: unknown function
-# query T
-# SELECT myavg(a) FROM integers
-# ----
-# 21
-
-# TODO: unknown function
-# statement ok
-# CREATE MACRO weird_avg(x) AS (MIN(x) + MAX(x)) / COUNT(x)
-
-# TODO: unsupported feature
-# query T
-# SELECT weird_avg(a) FROM integers
-# ----
-# 14
 
 statement error
 CREATE MACRO star() AS *
@@ -269,103 +49,25 @@ CREATE MACRO star() AS *
 statement error
 CREATE MACRO conflict(a, a := 1) AS a + a
 
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO add_default5(a, b := 5) AS a + b
-
-# TODO: unknown function
-# query I
-# SELECT add_default5(3, 6)
-# ----
-# 9
-
-# TODO: unsupported feature
-# query T
-# SELECT add_default5(3)
-# ----
-# 8
-
-# TODO: unknown function
-# query T
-# SELECT add_default5(3, b := 6)
-# ----
-# 9
-
 statement error
 SELECT add_default5(b := 6, 3)
 
 statement error
 CREATE MACRO wrong_order(a, b := 3, c) AS a + b + c
 
-# TODO: unsupported feature
-# statement error
-# CREATE MACRO wrong_order(a := 3, b) AS a + b
-
-# TODO: unknown function
-# statement error
-# CREATE MACRO select_plus_floats(a, f := b) AS (SELECT a + f FROM floats)
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO wrong_type(s := 'not a float') AS (SELECT b + s FROM floats)
-
 # this should fail
 
 statement error
 select wrong_type()
 
-# TODO: unsupported feature
-# query I
-# select wrong_type(42)
-# ----
-# 42.5
-
 statement error
 CREATE MACRO two_default_params(a := 4, a := 2) AS a + a
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO two_default_params(a := 4, b := 2) AS a + b
-
-# TODO: unknown function
-# query T
-# SELECT two_default_params()
-# ----
-# 6
-
-# TODO: unsupported feature
-# query T
-# SELECT two_default_params(a := 5)
-# ----
-# 7
-
-# TODO: unsupported feature
-# query T
-# SELECT two_default_params(b := 3)
-# ----
-# 7
 
 statement error
 SELECT two_default_params(a := 5, a := 3)
 
-# TODO: unsupported feature
-# statement error
-# SELECT two_default_params(b := 5, b := 3)
-
-# TODO: unsupported feature
-# statement error
-# CREATE MACRO macros.add_macro(a, b) AS a + b
-
-# TODO: unknown function
-# statement error
-# CREATE MACRO my_macro(a.b) AS 42;
-
 statement error
 CREATE MACRO my_macro(a.b.c) AS 42;
-
-# TODO: unsupported feature
-# statement ok
-# CREATE MACRO my_macro(a) AS 42;
 
 statement error
 SELECT my_macro(x := 42);
@@ -373,26 +75,5 @@ SELECT my_macro(x := 42);
 statement error
 SELECT my_macro(a := 42, a := 42);
 
-# TODO: unsupported feature
-# statement ok
-# create macro zz1(x) as (select 10+x);
-
-# TODO: unsupported feature
-# statement ok
-# create macro zz2(x) as 20+x;
-
-# TODO: unknown function
-# query II
-# select zz1(1),zz2(2);
-# ----
-# 11	22
-
 # should not return any results (because we shouldn't display "macro_parameters"
 
-# TODO: unsupported feature
-# query III
-# select function_name, parameters, macro_definition
-# from duckdb_functions()
-# where function_name like 'zz%'
-# and macro_definition like '%macro_parameters%';
-# ----

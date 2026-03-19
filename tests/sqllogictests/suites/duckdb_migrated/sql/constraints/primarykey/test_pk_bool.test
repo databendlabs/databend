@@ -1,29 +1,5 @@
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER, j BOOLEAN, PRIMARY KEY(i, j))
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (1, false), (1, true), (2, false)
-
 # duplicate value!
 
-# TODO: unsupported feature
-# statement error
-# INSERT INTO integers VALUES (1, false)
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers VALUES (2, true)
-
-# TODO: unsupported feature
-# query IT
-# SELECT * FROM integers ORDER BY 1, 2
-# ----
-# 1	0
-# 1	1
-# 2	0
-# 2	1

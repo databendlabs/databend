@@ -6,29 +6,9 @@ CREATE TABLE tbl1 (
 	id INT
 );
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq;
-
-# TODO: unsupported feature
-# statement ok
-# START TRANSACTION;
-
 # Drop 'tbl1' in a transaction
 
-# TODO: unsupported feature
-# statement ok
-# DROP TABLE tbl1 CASCADE;
-
-# TODO: unsupported feature
-# statement ok
-# START TRANSACTION;
-
 # Change ownership of 'seq' to 'tbl1' in a transaction
-
-# TODO: unsupported feature
-# statement ok
-# ALTER SEQUENCE seq OWNED BY tbl1;
 
 # Commit the drop
 
@@ -37,14 +17,6 @@ COMMIT;
 
 # This should no longer be able to commit
 # The sequence and the table were already dropped
-
-# TODO: unsupported feature
-# statement error
-# COMMIT;
-
-# TODO: unsupported feature
-# statement error
-# drop table tbl1
 
 statement ok
 drop sequence seq

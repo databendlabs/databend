@@ -10,10 +10,6 @@ CREATE TABLE test(i INTEGER, j INTEGER)
 statement ok
 INSERT INTO test VALUES (1, 1), (2, 2)
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER j SET DEFAULT 3
-
 statement ok
 INSERT INTO test (i) VALUES (3)
 
@@ -24,14 +20,6 @@ SELECT * FROM test
 1 1
 2 2
 
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER COLUMN j DROP DEFAULT
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test (i) VALUES (4)
-
 query II
 SELECT * FROM test
 ----
@@ -39,75 +27,7 @@ SELECT * FROM test
 2 2
 3 NULL
 
-# TODO: unsupported feature
-# statement ok
-# CREATE SEQUENCE seq
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE test ALTER j SET DEFAULT nextval('seq')
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test (i) VALUES (5), (6)
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM test
-# ----
-# 4 NULL
-# 1 1
-# 2 2
-# 3 NULL
-# 5 NULL
-# 6 NULL
-
 # set default on a table with constraints
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE constrainty(i INTEGER PRIMARY KEY, j INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE constrainty ALTER j SET DEFAULT 3
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO constrainty (i) VALUES (2)
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM constrainty
-# ----
-# 2	3
 
 # fail when column does not exist
 
-# TODO: unsupported feature
-# statement error
-# ALTER TABLE test ALTER blabla SET DEFAULT 3
-
-# TODO: unsupported feature
-# statement error
-# ALTER TABLE test ALTER blabla DROP DEFAULT
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TEMPORARY TABLE temp_default_test(x INTEGER DEFAULT 1)
-
-# TODO: unsupported feature
-# query TTI
-# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_default_test'
-# ----
-# temp_default_test	temp	1
-
-# TODO: unsupported feature
-# statement ok
-# ALTER TABLE temp_default_test ALTER x SET DEFAULT 5
-
-# TODO: unsupported feature
-# query TTI
-# SELECT table_name, database_name, temporary FROM duckdb_tables() WHERE table_name='temp_default_test'
-# ----
-# temp_default_test	temp	1

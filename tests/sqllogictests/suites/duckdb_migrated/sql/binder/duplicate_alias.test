@@ -9,25 +9,7 @@ INSERT INTO t VALUES (42);
 
 # this works - since no column is referenced there is no ambiguity
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM t, t
-# ----
-# 1
-
 # this works - all columns can be uniquely identified - no ambiguity
-
-# TODO: unsupported feature
-# query II
-# SELECT * FROM (SELECT 42 x) t, (SELECT 84 y) t
-# ----
-# 42	84
-
-# TODO: unsupported feature
-# query II
-# SELECT t.x, t.y FROM (SELECT 42 x) t, (SELECT 84 y) t
-# ----
-# 42	84
 
 statement error
 SELECT t.z FROM (SELECT 42 x) t, (SELECT 84 y) t

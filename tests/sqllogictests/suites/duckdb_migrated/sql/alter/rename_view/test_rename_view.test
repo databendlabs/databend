@@ -4,25 +4,8 @@ DROP VIEW IF EXISTS vw
 statement ok
 DROP TABLE IF EXISTS tbl
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE tbl(i INTEGER);
-# INSERT INTO tbl VALUES (999), (100);
-# CREATE VIEW vw AS SELECT * FROM tbl;
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# ALTER VIEW vw RENAME TO vw2
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM vw2
-# ----
-# 999
-# 100
 
 statement error
 SELECT * FROM vw
@@ -30,23 +13,8 @@ SELECT * FROM vw
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# query I
-# SELECT * FROM vw;
-# ----
-# 999
-# 100
-
-# TODO: result differs
-# statement error
-# SELECT * FROM vw2
-
 statement ok
 BEGIN TRANSACTION;
-
-# TODO: unsupported feature
-# statement ok
-# ALTER VIEW vw RENAME TO vw2
 
 statement ok
 COMMIT
@@ -58,17 +26,6 @@ SELECT * FROM vw2
 
 statement error
 SELECT * FROM vw
-
-# TODO: unsupported feature
-# statement ok
-# CREATE VIEW vw AS SELECT i+1 AS i FROM tbl
-
-# TODO: unsupported feature
-# query I
-# SELECT * FROM vw
-# ----
-# 1000
-# 101
 
 # cannot rename a system view
 

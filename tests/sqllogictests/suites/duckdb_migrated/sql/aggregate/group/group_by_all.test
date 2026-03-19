@@ -21,27 +21,6 @@ SELECT SUM(i), g FROM integers GROUP BY ALL ORDER BY 2
 
 # we can also use the star syntax
 
-# TODO: unsupported feature
-# query II
-# SELECT g, SUM(i) FROM integers GROUP BY * ORDER BY 1
-# ----
-# 0	3
-# 1	3
-
-# TODO: unsupported feature
-# query II
-# SELECT g, SUM(i) FROM integers GROUP BY 1 ORDER BY ALL
-# ----
-# 0	3
-# 1	3
-
-# TODO: unsupported feature
-# query II
-# SELECT g, SUM(i) FROM integers GROUP BY 1 ORDER BY *
-# ----
-# 0	3
-# 1	3
-
 # multiple aggregates
 
 query IIIII

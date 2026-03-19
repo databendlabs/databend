@@ -1,0 +1,105 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(c ROW(i ROW(a INTEGER), j INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES ({
+# 	'i': {
+# 		'a': 3
+# 	},
+# 	'j': 4
+# })
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'i': {'a': 3}, 'j': 4}
+
+# TODO: unsupported feature
+# query I
+# SELECT ((c).i).a FROM a
+# ----
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'i': {'a': 3}, 'j': 4}
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT ((c).i).a FROM a
+# ----
+# 3
+# NULL
+
+# nulls at different levels
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (ROW(ROW(NULL), 1))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (ROW(ROW(1), NULL))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (ROW(NULL, 1))
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'i': {'a': 3}, 'j': 4}
+# NULL
+# {'i': {'a': NULL}, 'j': 1}
+# {'i': {'a': 1}, 'j': NULL}
+# {'i': NULL, 'j': 1}
+
+# create table as
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b AS SELECT {
+# 	'a': {
+# 		'a': 1,
+# 		'b': 'hello'
+# 	}
+# } c;
+
+# TODO: unsupported feature
+# query I
+# SELECT (c).a FROM b
+# ----
+# {'a': 1, 'b': hello}
+
+# nested struct mismatch on insertion
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a VALUES (1)
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a VALUES (ROW(1, 2))
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a VALUES (ROW(ROW(1, 2, 3), 1))

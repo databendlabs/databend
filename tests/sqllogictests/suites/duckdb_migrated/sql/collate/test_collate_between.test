@@ -12,26 +12,3 @@ SELECT COUNT(*) FROM collate_test WHERE 'mórritz' BETWEEN s AND t
 ----
 0
 
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM collate_test WHERE 'mórritz' COLLATE NOACCENT BETWEEN s AND t
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM collate_test WHERE 'mórritz' BETWEEN (s COLLATE NOACCENT) AND t
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM collate_test WHERE 'mórritz' BETWEEN s AND (t COLLATE NOACCENT)
-# ----
-# 1
-
-# TODO: unsupported feature
-# query I
-# SELECT COUNT(*) FROM collate_test WHERE 'mórritz' BETWEEN s AND t
-# ----
-# 1

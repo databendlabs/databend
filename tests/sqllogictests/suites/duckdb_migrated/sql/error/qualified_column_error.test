@@ -4,10 +4,6 @@ DROP TABLE IF EXISTS "dbt_temp"."foo_2"
 statement ok
 DROP TABLE IF EXISTS cat.schema
 
-# TODO: unsupported feature
-# statement ok
-# create schema "dbt_temp"
-
 statement ok
 create or replace table "dbt_temp"."foo_2" as (select 42 as num_2);
 
@@ -17,30 +13,3 @@ select "dbt_temp"."foo_2".num_3 FROM  "dbt_temp"."foo_2"
 statement error
 select "dbt_temp"."foo_1".num_2 FROM  "dbt_temp"."foo_2"
 
-# TODO: unsupported feature
-# statement ok
-# attach ':memory:' as cat
-
-# TODO: unsupported feature
-# statement ok
-# create schema cat.schema
-
-# TODO: unsupported feature
-# statement ok
-# create table cat.schema.tbl(col struct(v1 int));
-
-# TODO: unsupported feature
-# statement error
-# select cat.schema.tbl.col.v2 from cat.schema.tbl
-
-# TODO: unsupported feature
-# statement error
-# select cat.schema.tbl.cxl.v1 from cat.schema.tbl
-
-# TODO: unsupported feature
-# statement error
-# select cat.schema.txl.col.v1 from cat.schema.tbl
-
-# TODO: unsupported feature
-# statement error
-# select cat.schxma.tbl.col.v1 from cat.schema.tbl

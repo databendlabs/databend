@@ -7,22 +7,7 @@ DROP TABLE IF EXISTS test
 statement ok
 DROP TABLE IF EXISTS unit
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test (
-#     foo INTEGER,
-#     bar GENERATED ALWAYS AS (foo+1),
-#     foobar INTEGER DEFAULT 5
-# );
-
 # Can not use implicit types without GENERATED ALWAYS AS
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE unit (
-#     foo INTEGER,
-#     bar AS (foo+1),
-# )
 
 # Attempting to use implicit type on a standard column
 
@@ -32,22 +17,3 @@ CREATE TABLE tbl (
     bar GENERATED ALWAYS AS (foo+1)
 );
 
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO test(foo) VALUES (1);
-
-# TODO: unsupported feature
-# query I
-# SELECT bar FROM test
-# ----
-# 2
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO unit VALUES(5)
-
-# TODO: unsupported feature
-# query I
-# SELECT bar FROM unit
-# ----
-# 6

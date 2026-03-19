@@ -1,0 +1,20 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table tbl (
+# 	a integer primary key DEFAULT 5,
+# 	b integer
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl DEFAULT VALUES;
+
+# TODO: unsupported feature
+# query II
+# FROM tbl
+# ----
+# 5	NULL

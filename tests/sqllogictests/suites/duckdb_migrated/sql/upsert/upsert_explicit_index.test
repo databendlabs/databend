@@ -1,0 +1,59 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (i INT, j INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5, 3), (3, 2);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX my_index ON tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5, 2) ON CONFLICT (i) DO UPDATE SET j = 10;
+
+# TODO: unsupported feature
+# query II
+# SELECT i, j FROM tbl ORDER BY ALL DESC;
+# ----
+# 5	10
+# 3	2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl CASCADE;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (i INT PRIMARY KEY, j INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (42, 21), (21, 42);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX my_index ON tbl(j);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (42, 20) ON CONFLICT DO UPDATE SET j = 30;
+
+# TODO: unsupported feature
+# query III
+# SELECT i, j, rowid FROM tbl WHERE j = 30;
+# ----
+# 42	30	2
+
+# TODO: unsupported feature
+# query III
+# SELECT i, j, rowid FROM tbl ORDER BY ALL;
+# ----
+# 21	42	1
+# 42	30	2

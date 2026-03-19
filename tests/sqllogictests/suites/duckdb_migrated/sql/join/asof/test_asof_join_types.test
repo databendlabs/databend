@@ -39,15 +39,6 @@ ASOF ANTI JOIN right_table r
 	AND l.ts >= r.ts 
 	AND l.price + r.bid > 300;
 
-# TODO: result differs
-# statement error
-# SELECT * 
-# FROM left_table l 
-# ASOF RIGHT JOIN right_table r 
-# 	 ON l.symbol = r.symbol 
-# 	AND l.ts >= r.ts 
-# 	AND l.price + r.bid > 300
-
 statement error
 SELECT * 
 FROM left_table l 

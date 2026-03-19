@@ -18,10 +18,6 @@ DELETE FROM integers WHERE i=1
 
 # we can create an index with pending deletes
 
-# TODO: unsupported feature
-# statement ok
-# CREATE INDEX i_index ON integers using art(i)
-
 # now we commit
 
 statement ok

@@ -9,8 +9,4 @@ CREATE TABLE db1.tbl(i INTEGER);
 
 # con2 can detach db1, but it will not actually be detached
 
-# TODO: unsupported feature
-# statement ok
-# DETACH db1
-
 # upon attaching we should fail

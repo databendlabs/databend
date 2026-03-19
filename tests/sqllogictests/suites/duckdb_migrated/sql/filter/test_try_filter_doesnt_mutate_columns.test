@@ -28,16 +28,6 @@ INSERT INTO t0(c0) VALUES (517438920);
 
 # Filter using TRY in the WHERE clause, WHERE must not mutate c1
 
-# TODO: unknown function
-# query II
-# SELECT t0.c1, t0.c0
-# FROM t0
-# WHERE TRY(t0.c1 - t0.c0) IS NULL
-# ORDER BY t0.c0;
-# ----
-# NULL	517438920
-# -2039202523	1819832341
-
 # Additional test cases for multiple rows and non-NULL TRY
 
 statement ok
@@ -57,27 +47,7 @@ INSERT INTO t1 VALUES (30, 1000000000);
 
 # Rows where TRY(c1 - c0) IS NULL (due to NULLs)
 
-# TODO: unknown function
-# query II
-# SELECT c0, c1
-# FROM t1
-# WHERE TRY(c1 - c0) IS NULL
-# ORDER BY c0 NULLS LAST;
-# ----
-# 20	NULL
-# NULL	3
-
 # Rows where TRY(c1 - c0) IS NOT NULL, values must remain unchanged
-
-# TODO: unknown function
-# query III
-# SELECT c0, c1, TRY(c1 - c0)
-# FROM t1
-# WHERE TRY(c1 - c0) IS NOT NULL
-# ORDER BY c0;
-# ----
-# 10	5	-5
-# 30	1000000000	999999970
 
 # BIGINT and overflow behavior
 
@@ -97,16 +67,6 @@ INSERT INTO t_big VALUES (10, NULL);
 
 # Filter with TRY; rows with NULL inputs yield NULL predicate, but values stay unchanged
 
-# TODO: unknown function
-# query II
-# SELECT c0, c1
-# FROM t_big
-# WHERE TRY(c1 - c0) IS NULL
-# ORDER BY c0 NULLS LAST;
-# ----
-# 10	NULL
-# NULL	5
-
 # DOUBLE values
 
 statement ok
@@ -122,16 +82,6 @@ statement ok
 INSERT INTO t_double VALUES (4.0, NULL);
 
 # Filter where TRY(c1 - c0) IS NULL
-
-# TODO: unknown function
-# query II
-# SELECT c0, c1
-# FROM t_double
-# WHERE TRY(c1 - c0) IS NULL
-# ORDER BY c0 NULLS LAST;
-# ----
-# 4.0	NULL
-# NULL	3.0
 
 # DECIMAL and division by zero
 
@@ -149,15 +99,6 @@ INSERT INTO t_decimal VALUES (NULL, 7.00);
 
 # Filter where TRY(c1 / c0) IS NULL (errors or NULL inputs)
 
-# TODO: unknown function
-# query II
-# SELECT c0, c1
-# FROM t_decimal
-# WHERE TRY(c1 / c0) IS NULL
-# ORDER BY c0 NULLS LAST;
-# ----
-# NULL	7.00
-
 # VARCHAR with failing cast
 
 statement ok
@@ -174,12 +115,3 @@ INSERT INTO t_varchar VALUES (NULL, '7');
 
 # Filter where TRY(c1::INTEGER - c0::INTEGER) IS NULL
 
-# TODO: unknown function
-# query II
-# SELECT c0, c1
-# FROM t_varchar
-# WHERE TRY(c1::INTEGER - c0::INTEGER) IS NULL
-# ORDER BY c0 NULLS LAST;
-# ----
-# abc	3
-# NULL	7

@@ -42,21 +42,3 @@ INSERT INTO string_map VALUES
 
 # Databend supports MAP(INT, INT) and MAP(VARCHAR, VARCHAR), but ARRAY-typed MAP keys are rejected.
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE list_map(m MAP(INT[],INT[]));
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO list_map VALUES 
-# 	(MAP([[1, 2, 3], [], [4, 5]], [[6, 7, 8], NULL, [NULL]])),
-# 	(MAP([], [])),
-# 	(MAP([[1]], [NULL])),
-# 	(MAP([[10, 12, 14, 16, 18, 20], []], [[1], [2]]))
-# ;
-
-# TODO: unsupported feature
-# statement error
-# INSERT INTO list_map VALUES
-# 	(MAP([NULL], [NULL]))
-# ;

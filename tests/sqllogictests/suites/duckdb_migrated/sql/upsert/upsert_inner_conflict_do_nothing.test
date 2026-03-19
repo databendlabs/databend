@@ -1,0 +1,26 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(
+# 	i int primary key
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl values (1);
+
+# The inserted data has a conflict within the to-be-inserted-data (inner conflict)
+# As well as a conflict with the existing data
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select 1 from range(0, 2) on conflict do nothing;
+
+# TODO: unsupported feature
+# query I
+# select * from tbl;
+# ----
+# 1

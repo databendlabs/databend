@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS times
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamp
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE times(i TIME)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE timestamp(i TIMESTAMP)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO times VALUES ('00:00:01')
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('1993-08-14 00:00:01')
+
+# TODO: unsupported feature
+# query I
+# select count(*) from times inner join timestamp on (timestamp.i::TIME = times.i)
+# ----
+# 1

@@ -1,0 +1,33 @@
+# TODO: unsupported feature
+# query I
+# SELECT row_number() OVER ()
+# ----
+# 1
+
+# TODO: unsupported feature
+# query R
+# SELECT avg(42) OVER ()
+# ----
+# 42.000000
+
+# window on non-aggregate function
+
+# TODO: unsupported feature
+# statement error
+# SELECT concat() OVER ()
+
+# TODO: unsupported feature
+# statement error
+# SELECT nonexistingfunction() OVER ()
+
+# TODO: unsupported feature
+# statement error
+# SELECT avg(row_number() over ()) over ()
+
+# TODO: unsupported feature
+# statement error
+# SELECT avg(42) over (partition by row_number() over ())
+
+# TODO: unsupported feature
+# statement error
+# SELECT avg(42) over (order by row_number() over ())

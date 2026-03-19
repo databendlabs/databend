@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# query I
+# select []::uint16[]
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# select []::uint32[]
+# ----
+# []
+
+# TODO: unsupported feature
+# query I
+# select []::uint64[]
+# ----
+# []

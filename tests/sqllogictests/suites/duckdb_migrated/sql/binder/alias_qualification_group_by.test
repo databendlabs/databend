@@ -2,28 +2,7 @@ statement ok
 DROP TABLE IF EXISTS alias
 
 # grouping by a projection alias
-# TODO: unsupported feature
-# query II
-# SELECT a % 2 AS x, COUNT(*) AS cnt
-# FROM (VALUES (1),(2),(3),(4)) t(a)
-# GROUP BY alias.x
-# ORDER BY x;
-# ----
-# 0	2
-# 1	2
-
 # quoted alias in GROUP BY
-
-# TODO: unsupported feature
-# query II
-# SELECT (a/2)::INT AS "Half", COUNT(*) AS c
-# FROM (VALUES (1),(2),(3),(4)) t(a)
-# GROUP BY alias."Half"
-# ORDER BY "Half";
-# ----
-# 0	1
-# 1	1
-# 2	2
 
 # Table actually named `alias` should keep working and be prioritized over alias references
 

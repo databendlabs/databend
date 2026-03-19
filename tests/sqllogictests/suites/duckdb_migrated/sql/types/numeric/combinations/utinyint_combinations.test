@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# query I
+# select typeof([100::UTINYINT, 10000::SMALLINT]);
+# ----
+# SMALLINT[]
+
+#TINYINT -> SMALLINT
+
+# TODO: unsupported feature
+# query I
+# select typeof([100::UTINYINT, 127::TINYINT]);
+# ----
+# SMALLINT[]
+
+#UTINYINT -> UTINYINT
+
+# TODO: unsupported feature
+# query I
+# select typeof([100::UTINYINT, 127::UTINYINT]);
+# ----
+# UTINYINT[]
+
+#USMALLINT -> USMALLINT
+
+# TODO: unsupported feature
+# query I
+# select typeof([100::UTINYINT, 127::USMALLINT]);
+# ----
+# USMALLINT[]
+
+#DECIMAL -> DECIMAL
+
+# TODO: unsupported feature
+# query I
+# select typeof([100::UTINYINT, 10.5::DECIMAL]);
+# ----
+# DECIMAL(18,3)[]

@@ -1,22 +1,3 @@
 statement ok
 DROP TABLE IF EXISTS db1.all_types
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE db1.all_types AS SELECT * FROM test_all_types();
-
-# TODO: unsupported feature
-# query II nosort all_types
-# SELECT * FROM test_all_types()
-
-# TODO: unsupported feature
-# query II nosort all_types
-# SELECT * FROM db1.all_types
-
-# TODO: unsupported feature
-# statement ok
-# DETACH db1
-
-# TODO: unsupported feature
-# query II nosort all_types
-# SELECT * FROM db1.all_types

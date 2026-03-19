@@ -4,42 +4,14 @@ DROP TABLE IF EXISTS database.integers
 statement ok
 DROP TABLE IF EXISTS integers
 
-# TODO: unsupported feature
-# statement ok
-# ATTACH DATABASE ':memory:' AS database;
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE database.integers(i INTEGER);
-
-# TODO: result differs
-# statement error
-# CREATE TABLE integers(i INTEGER);
 
 statement ok
 ROLLBACK
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE database.integers(i INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE integers(i INTEGER);
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO database.integers SELECT * FROM range(0, 10);
-
 statement ok
 BEGIN TRANSACTION
-
-# TODO: unsupported feature
-# statement ok
-# INSERT INTO integers SELECT * FROM range(0, 10);
 
 statement error
 INSERT INTO database.integers SELECT * FROM range(0, 10);

@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# SELECT NULL::BIGINT::VARCHAR::INT[]::ROW(i INTEGER, k INTEGER)::DECIMAL(4,0)
+# ----
+# NULL

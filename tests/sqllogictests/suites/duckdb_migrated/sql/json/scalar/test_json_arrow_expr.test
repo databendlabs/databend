@@ -10,13 +10,6 @@ FROM testjson;
 ----
 "value"
 
-# TODO: unknown function
-# query I
-# SELECT (SELECT json_extract(example, k) AS v FROM (SELECT 'key' AS k) keys)
-# FROM testjson;
-# ----
-# "value"
-
 query I
 SELECT (SELECT ('{ "key" : "value" }'::JSON)->k AS v FROM (SELECT 'key' AS k) keys);
 ----

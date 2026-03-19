@@ -1,0 +1,89 @@
+# TODO: unsupported feature
+# query I
+# select try_cast('hello world'::variant as int) + 1;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select try_cast('hello world'::variant as STRUCT(a varchar, b boolean));
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select try_cast({'a': true, 'b': 'foo'}::variant as STRUCT(a varchar, b boolean));
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select try_cast({'c': true, 'd': 'foo'}::variant as STRUCT(a varchar, b boolean));
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# select try_cast('hello world'::variant as INTEGER[]);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# with cte as (
+# 	from ( values
+# 		('test'::VARIANT),
+# 		(null::VARIANT),
+# 		(42::VARIANT)
+# 	) t(a)
+# )
+# select try_cast(a as INT) from cte;
+# ----
+# NULL
+# NULL
+# 42
+
+# TODO: unsupported feature
+# query I
+# with cte as (
+# 	from ( values
+# 		('test'::VARIANT),
+# 		(null::VARIANT),
+# 		(42::VARIANT)
+# 	) t(a)
+# )
+# select try_cast(a as STRUCT(a varchar, b boolean)) from cte;
+# ----
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# with cte as (
+# 	from ( values
+# 		('test'::VARIANT),
+# 		(null::VARIANT),
+# 		(42::VARIANT)
+# 	) t(a)
+# )
+# select try_cast(a as BOOLEAN[]) from cte;
+# ----
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# with cte as (
+# 	from ( values
+# 		('test'::VARIANT),
+# 		(null::VARIANT),
+# 		(42::VARIANT)
+# 	) t(a)
+# )
+# select try_cast(a as UNION(a integer, b decimal)) from cte;
+# ----
+# NULL
+# NULL
+# NULL

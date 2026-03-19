@@ -1,10 +1,6 @@
 statement ok
 DROP TABLE IF EXISTS test
 
-# TODO: unsupported feature
-# statement ok
-# CREATE TABLE test (a INTEGER[], b INTEGER)
-
 statement error
 ALTER TABLE test ADD PRIMARY KEY (a)
 
