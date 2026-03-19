@@ -37,5 +37,8 @@ pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 /// The number of bytes read at the end of the file on first read
 pub const DEFAULT_FOOTER_READ_SIZE: u64 = 64 * 1024;
 
+// The max size of the I/O read/write block buffer
+pub const MAX_BLOCK_BUFFER_SIZE: usize = 300 * 1024 * 1024;
+
 // The min values of table option data_retention_period_in_hours
 pub const DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS: u64 = 0;

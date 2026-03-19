@@ -23,6 +23,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_io::constants::MAX_BLOCK_BUFFER_SIZE;
 use databend_common_settings::Settings;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
@@ -176,6 +177,22 @@ pub fn is_valid_row_per_block(
         let error_str = "invalid row_per_block option, can't be over 1000000";
 
         if row_per_block > DEFAULT_BLOCK_ROW_COUNT as u64 {
+            error!("{}", error_str);
+            return Err(ErrorCode::TableOptionInvalid(error_str));
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_block_size_threshold(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    // check block_size_threshold can not be over 300M.
+    if let Some(value) = options.get(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD) {
+        let block_size_threshold = value.parse::<u64>()?;
+        let error_str = "invalid block_size_threshold option, can't be over 314572800";
+
+        if block_size_threshold > MAX_BLOCK_BUFFER_SIZE as u64 {
             error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }

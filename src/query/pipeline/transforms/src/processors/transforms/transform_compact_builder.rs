@@ -25,8 +25,8 @@ use crate::processors::TransformPipelineHelper;
 pub fn build_compact_block_pipeline(
     pipeline: &mut Pipeline,
     thresholds: BlockThresholds,
+    output_len: usize,
 ) -> Result<()> {
-    let output_len = pipeline.output_len();
     pipeline.try_resize(1)?;
     pipeline.add_accumulating_transformer(|| BlockCompactBuilder::new(thresholds));
     pipeline.try_resize(output_len)?;
@@ -65,7 +65,7 @@ impl AccumulatingTransform for BlockCompactBuilder {
         let num_rows = data.num_rows();
         let num_bytes = data.estimate_block_size();
 
-        if !self.thresholds.check_for_compact(num_rows, num_bytes) {
+        if self.thresholds.check_too_large(num_rows, num_bytes) {
             // holding slices of blocks to merge later may lead to oom, so
             // 1. we expect blocks from file formats are not slice.
             // 2. if block is split here, cut evenly and emit them at once.

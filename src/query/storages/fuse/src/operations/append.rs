@@ -69,7 +69,8 @@ impl FuseTable {
             });
         } else {
             let block_thresholds = self.get_block_thresholds();
-            build_compact_block_pipeline(pipeline, block_thresholds)?;
+            let output_len = pipeline.output_len();
+            build_compact_block_pipeline(pipeline, block_thresholds, output_len)?;
 
             let schema = DataSchema::from(self.schema()).into();
             let cluster_stats_gen =

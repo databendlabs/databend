@@ -158,7 +158,8 @@ impl IPhysicalPlan for ReplaceDeduplicate {
         )?;
 
         let block_thresholds = table.get_block_thresholds();
-        build_compact_block_pipeline(&mut builder.main_pipeline, block_thresholds)?;
+        let output_len = builder.main_pipeline.output_len();
+        build_compact_block_pipeline(&mut builder.main_pipeline, block_thresholds, output_len)?;
 
         let _ = table.cluster_gen_for_append(
             builder.ctx.clone(),
