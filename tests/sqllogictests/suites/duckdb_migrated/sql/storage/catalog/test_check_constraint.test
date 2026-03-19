@@ -1,0 +1,30 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# create a table with a check constraint
+statement ok
+CREATE TABLE test(a INTEGER CHECK (a<10), b INTEGER CHECK(CASE WHEN b < 10 THEN a < b ELSE a + b < 100 END));
+
+# reload the database
+
+# matching tuple
+
+statement ok
+INSERT INTO test VALUES (3, 7);
+
+# check constraint on a violated (a < 10)
+
+statement error
+INSERT INTO test VALUES (12, 13);
+
+statement error
+INSERT INTO test VALUES (5, 3);
+
+statement ok
+INSERT INTO test VALUES (9, 90);
+
+# check constraint on b violated !(b < 10) => (a + b < 100)
+
+statement error
+INSERT INTO test VALUES (9, 99);

@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS toy_table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE toy_table AS
+#   SELECT *
+#   FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/bp_bug.parquet' ;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;

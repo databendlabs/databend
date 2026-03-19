@@ -1,0 +1,78 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS a(id INT PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a(id) VALUES (1);
+
+# add column
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE a ADD COLUMN c REAL;
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE a ALTER COLUMN c SET DEFAULT 10;
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE a RENAME c TO d;
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE a RENAME TO b;
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO b(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO b(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE b DROP d;
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO b(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO b(id) VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO b(id) VALUES (2);

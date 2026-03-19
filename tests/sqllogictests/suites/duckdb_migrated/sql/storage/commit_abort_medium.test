@@ -1,0 +1,105 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22, 'hello'), (13, 22, 'world'), (12, 21, 'test'), (10, NULL, NULL);
+
+# start a transaction for con and con2
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# insert the value 14 in con1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (14, 10, 'con')
+
+# insert a bunch of unique values in con2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i, NULL, NULL FROM range(15, 10000) tbl(i);
+
+# now insert value 14
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (14, 10, 'con2')
+
+# commit both
+# con2 will fail
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# statement error
+# COMMIT
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+# 14	10	con
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (15, NULL, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (16, 24, 'blabla')
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+# 14	10	con
+# 15	NULL	NULL
+# 16	24	blabla
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+# 14	10	con
+# 15	NULL	NULL
+# 16	24	blabla
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+# 14	10	con
+# 15	NULL	NULL
+# 16	24	blabla

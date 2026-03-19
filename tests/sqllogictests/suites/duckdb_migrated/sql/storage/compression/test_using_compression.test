@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS foo
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# Can't use CHIMP because it's deprecated
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE TABLE t(
+# 	x VARCHAR USING COMPRESSION chimp
+# );
+
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE TABLE t(
+# 	x BIGINT USING COMPRESSION Dictionary
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE t(
+# 	x VARCHAR USING COMPRESSION Dictionary
+# );
+
+# TODO: unsupported feature
+# statement error
+# create table foo (str VARCHAR USING COMPRESSION 'dict_fsst');

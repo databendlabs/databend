@@ -1,0 +1,85 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM test ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test RENAME TO new_name
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM new_name ORDER BY 1
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# restart the database
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# verify that the table is still there in the original form
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM test ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# now repeat the process, but this time commit
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test RENAME TO new_name
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM new_name ORDER BY 1
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+
+# after a restart, the renamed table is still here
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM new_name ORDER BY 1
+# ----
+# 11
+# 12
+# 13

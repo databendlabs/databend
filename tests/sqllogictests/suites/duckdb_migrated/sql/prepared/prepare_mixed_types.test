@@ -1,0 +1,103 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT $1::INT, $1::BIGINT
+
+# TODO: unsupported feature
+# query II
+# EXECUTE v1(42)
+# ----
+# 42	42
+
+# second type up-casts to second type
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v2 AS SELECT $1::BIGINT, $1::INT
+
+# TODO: unsupported feature
+# query II
+# EXECUTE v2(42)
+# ----
+# 42	42
+
+# no conversion possible between types
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v3 AS SELECT $1::BIGINT, $1::UBIGINT
+
+# TODO: unsupported feature
+# query II
+# EXECUTE v3(42)
+# ----
+# 42	42
+
+# TODO: unsupported feature
+# statement error
+# EXECUTE v3(-1)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v4 AS SELECT $1::VARCHAR, $1::DATE
+
+# TODO: unsupported feature
+# query II
+# EXECUTE v4('1992-01-01')
+# ----
+# 1992-01-01	1992-01-01
+
+# multiple scattered upcasts
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v5 AS SELECT $1::INT, $1::BIGINT, $1::TINYINT, $1::HUGEINT, $1::SMALLINT
+
+# TODO: unsupported feature
+# query IIIII
+# EXECUTE v5(42)
+# ----
+# 42	42	42	42	42
+
+# multiple scattered up-casts plus no up-cast possible in the end
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v6 AS SELECT $1::INT, $1::BIGINT, $1::TINYINT, $1::UBIGINT, $1::SMALLINT, $1::UHUGEINT
+
+# TODO: unsupported feature
+# query IIIIII
+# EXECUTE v6(42)
+# ----
+# 42	42	42	42	42	42
+
+# concat
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v7 AS SELECT CONCAT($1::TINYINT, $1)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v7(42)
+# ----
+# 4242
+
+# complex prepare with mixed types
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v8 AS SELECT * FROM (values ('body')) t(field) WHERE CASE WHEN $1 IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split($1, ','))) AS fsq) END
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v8('body')
+
+# mixed types with unnest
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v9 AS SELECT UNNEST($1) UNION ALL SELECT * FROM range(0, 1) WHERE $1::INT[]=[1]
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE v9([1])

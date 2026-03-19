@@ -1,0 +1,34 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# first create a persistent table and insert data
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# now reload
+
+# add the column
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER DEFAULT 2
+
+query I
+SELECT k FROM test ORDER BY k
+----
+2
+2
+2
+
+# reload again
+
+# the column is still there
+
+query I
+SELECT k FROM test ORDER BY k
+----
+2
+2
+2

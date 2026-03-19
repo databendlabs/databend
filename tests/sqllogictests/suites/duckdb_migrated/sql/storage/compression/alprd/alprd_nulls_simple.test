@@ -1,0 +1,235 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl1_alprd
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl1_uncompressed
+
+# load the DB from disk
+# Set the compression algorithm
+# TODO: unsupported feature
+# statement ok
+# create table tbl1_uncompressed(
+# 	a INTEGER DEFAULT 5,
+# 	b VARCHAR DEFAULT 'test',
+# 	c BOOL DEFAULT false,
+# 	d DOUBLE,
+# 	e TEXT default 'null',
+# 	f FLOAT
+# );
+
+# Populate tables
+
+# Mixed NULLs
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl1_uncompressed(d,f) VALUES
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, NULL);
+
+# Force a checkpoint
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+
+# Set the compression algorithm
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl1_alprd(
+# 	a INTEGER DEFAULT 5,
+# 	b VARCHAR DEFAULT 'test',
+# 	c BOOL DEFAULT false,
+# 	d DOUBLE,
+# 	e TEXT default 'null',
+# 	f FLOAT
+# );
+
+# Populate tables
+
+# Mixed NULLs
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl1_alprd(d,f) VALUES
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, 1.2314234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (324213.23123, NULL),
+# (NULL, NULL),
+# (21312.23412, 12.123234),
+# (NULL, NULL);
+
+# Force a checkpoint
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+
+# Assert that the scanned results are the same
+
+#tbl1
+
+# TODO: unsupported feature
+# query II nosort r1
+# select d, f from tbl1_uncompressed;
+# ----
+
+# TODO: unsupported feature
+# query II nosort r1
+# select d, f from tbl1_alprd;
+# ----

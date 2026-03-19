@@ -1,0 +1,16 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS read_duckdb_index.my_tbl
+
+# FIXME: bug in WAL replay with read-only mode attach
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE read_duckdb_index.my_tbl(i INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO read_duckdb_index.my_tbl SELECT i + 1 FROM range(0, 1000000) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH read_duckdb_index

@@ -1,0 +1,36 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS someview
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS sometable
+
+# TODO: unsupported feature
+# statement ok
+# create table sometable (
+# 	column1 varchar
+# );
+
+# TODO: unsupported feature
+# statement ok
+# insert into sometable values
+# 	('abc');
+
+# TODO: unsupported feature
+# statement ok
+# create view someview as select
+# 	rowid as table_rowid,
+# 	*
+# from sometable;
+
+# TODO: unsupported feature
+# statement ok
+# select * from someview;
+
+# TODO: unsupported feature
+# query II
+# select column_name, column_type from (describe someview);
+# ----
+# table_rowid	BIGINT
+# column1	VARCHAR

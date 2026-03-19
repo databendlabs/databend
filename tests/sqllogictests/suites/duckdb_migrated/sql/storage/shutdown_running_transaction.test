@@ -1,0 +1,32 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# create a database and insert values
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22);
+
+# we start a transaction, but shutdown the DB before committing
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (22, 23);
+
+# reload the database from disk
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22

@@ -1,0 +1,152 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET i=i+1;
+
+# TODO: unsupported feature
+# statement error
+# CHECKPOINT
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM range(0, 1000000);
+
+# now do the same, but with a whole mess of transactions that all depend on each other
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET i=i+1 WHERE i < 1000
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET i=i+1 WHERE i > 1000 AND i < 2000
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET i=i+1 WHERE i > 2000 AND i < 3000
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET i=i+1 WHERE i > 3000 AND i < 4000
+
+# TODO: unsupported feature
+# statement error
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+# ----
+# 0	999999	1000000

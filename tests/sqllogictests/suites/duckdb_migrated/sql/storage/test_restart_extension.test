@@ -1,0 +1,40 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# this is a test of the test suite
+# we require an extension to be loaded, then verify that the extension is correctly loaded on restart
+# we can load a parquet file
+# TODO: unsupported feature
+# query ITIIIIRRTTT nosort parquet_scan_result
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
+# ----
+
+# now load a DB from disk
+
+# we can still load the parquet file
+
+# TODO: unsupported feature
+# query ITIIIIRRTTT nosort parquet_scan_result
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
+# ----
+
+# store it in the db
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 AS SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
+
+# now restart the DB
+
+# we can still load the parquet file
+
+# TODO: unsupported feature
+# query ITIIIIRRTTT nosort parquet_scan_result
+# SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/arrow/alltypes_plain.parquet')
+
+# the file also exists in the database now
+
+# TODO: unsupported feature
+# query ITIIIIRRTTT nosort parquet_scan_result
+# SELECT * FROM t1

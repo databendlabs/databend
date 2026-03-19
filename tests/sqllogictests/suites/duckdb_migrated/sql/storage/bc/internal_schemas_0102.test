@@ -1,0 +1,6 @@
+# The database is written with a vector size of 2048.
+# TODO: unsupported feature
+# query II
+# SELECT database_name, schema_name FROM duckdb_schemas WHERE NOT internal
+# ----
+# bc_0102	s1

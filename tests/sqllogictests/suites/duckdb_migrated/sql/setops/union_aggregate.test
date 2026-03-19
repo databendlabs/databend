@@ -1,0 +1,83 @@
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM range(0, 1)
+# UNION ALL SELECT COUNT(*) FROM range(0, 1)
+# ----
+# 1
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM range(0, 1)
+# UNION ALL SELECT COUNT(*) FROM range(0, 1)
+# UNION ALL SELECT COUNT(*) FROM range(0, 1)
+# UNION ALL SELECT COUNT(*) FROM range(0, 1)
+# UNION ALL SELECT COUNT(*) FROM range(0, 1)
+# ----
+# 1
+# 1
+# 1
+# 1
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM range(0, 1) UNION SELECT COUNT(*) FROM range(0, 1)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM range(0, 1)
+# UNION SELECT COUNT(*) FROM range(0, 2)
+# ORDER BY 1
+# ----
+# 1
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM range(0, 1)
+# UNION SELECT COUNT(*) FROM range(0, 2)
+# UNION SELECT COUNT(*) FROM range(0, 3)
+# UNION SELECT COUNT(*) FROM range(0, 4)
+# UNION SELECT COUNT(*) FROM range(0, 5)
+# ORDER BY 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM (
+# 	SELECT 1
+# 	UNION ALL
+# 	SELECT 1
+# ) tbl(i)
+# ----
+# 1
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM (
+# 	SELECT 1
+# 	UNION
+# 	SELECT 2
+# 	UNION
+# 	SELECT 3
+# 	UNION
+# 	SELECT 4
+# 	UNION
+# 	SELECT 5
+# ) tbl(i)
+# ORDER BY 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5

@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "s1"".tbl"
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "s1"".tbl"(i INT);
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, column_type FROM (DESCRIBE "s1"".tbl")
+# ----
+# i	INTEGER

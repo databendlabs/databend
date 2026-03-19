@@ -1,0 +1,101 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# Implicitly relies on the assumption that the block allocation size is 256KB.
+# The default temp_directory for a persistent database is <db_name>.tmp.
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('temp_directory').split('/')[-1];
+# ----
+# max_swap_space.db.tmp
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_temp_directory_size');
+# ----
+# 90% of available disk space
+
+# Set the maximum size.
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_temp_directory_size') a WHERE a = '0 bytes';
+# ----
+
+# Back to zero after resetting.
+
+# TODO: unsupported feature
+# statement ok
+# RESET max_temp_directory_size;
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_temp_directory_size');
+# ----
+# 90% of available disk space
+
+# The maximum size is by default set to the available disk space, if the temp_directory exists.
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_temp_directory_size');
+# ----
+# 90% of available disk space
+
+# If we set 'max_temp_directory_size', it cannot be overwritten.
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_temp_directory_size') a WHERE a = '0 bytes';
+# ----
+
+# TODO: unsupported feature
+# query I nosort unchanged
+# SELECT current_setting('max_temp_directory_size');
+# ----
+
+# Change the temp_directory to a path that does not exist, which does not affect the setting.
+
+# TODO: unsupported feature
+# query I nosort unchanged
+# SELECT current_setting('max_temp_directory_size');
+# ----
+
+# TODO: unsupported feature
+# query I nosort unchanged
+# SELECT current_setting('max_temp_directory_size');
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# RESET temp_directory;
+
+# TODO: unsupported feature
+# query I nosort unchanged
+# SELECT current_setting('max_temp_directory_size');
+# ----
+
+# Set the maximum size to the available disk space,
+# if we create the previously non-existant 'temp_directory'.
+
+# TODO: unsupported feature
+# statement ok
+# RESET max_temp_directory_size;
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_temp_directory_size');
+# ----
+# 90% of available disk space
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2 AS SELECT * FROM range(0, 1000000);
+
+# The reported size should not be zero, as the directory was created.
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_temp_directory_size') a where a = '0 bytes';
+# ----

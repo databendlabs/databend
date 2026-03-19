@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, min FROM (SUMMARIZE SELECT 42 AS a);
+# ----
+# a	42
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT 42 AS a
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, min FROM (SUMMARIZE tbl);
+# ----
+# a	42

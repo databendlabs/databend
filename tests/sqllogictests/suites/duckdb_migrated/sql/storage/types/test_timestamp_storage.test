@@ -1,0 +1,67 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS timestamp
+
+# load the DB from disk
+# create a table with hugeints
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE timestamp (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES (NULL,NULL,NULL,NULL )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01.594','2008-01-01 00:00:01.88926','2008-01-01 00:00:01.889268321' )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:51','2008-01-01 00:00:01.894','2008-01-01 00:00:01.99926','2008-01-01 00:00:01.999268321' )
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO timestamp VALUES ('2008-01-01 00:00:11','2008-01-01 00:00:01.794','2008-01-01 00:00:01.98926','2008-01-01 00:00:01.899268321' )
+
+# reload the database from disk a few times
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT * FROM timestamp ORDER BY sec
+# ----
+# 2008-01-01 00:00:01	2008-01-01 00:00:01.594	2008-01-01 00:00:01.88926	2008-01-01 00:00:01.889268321
+# 2008-01-01 00:00:11	2008-01-01 00:00:01.794	2008-01-01 00:00:01.98926	2008-01-01 00:00:01.899268321
+# 2008-01-01 00:00:51	2008-01-01 00:00:01.894	2008-01-01 00:00:01.99926	2008-01-01 00:00:01.999268321
+# NULL	NULL	NULL	NULL
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT * FROM timestamp WHERE micro=TIMESTAMP '2008-01-01 00:00:01.88926' ORDER BY micro
+# ----
+# 2008-01-01 00:00:01	2008-01-01 00:00:01.594	2008-01-01 00:00:01.88926	2008-01-01 00:00:01.889268321
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT * FROM timestamp WHERE micro=TIMESTAMP '2020-01-01 00:00:01.88926' ORDER BY micro
+# ----
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT * FROM timestamp ORDER BY sec
+# ----
+# 2008-01-01 00:00:01	2008-01-01 00:00:01.594	2008-01-01 00:00:01.88926	2008-01-01 00:00:01.889268321
+# 2008-01-01 00:00:11	2008-01-01 00:00:01.794	2008-01-01 00:00:01.98926	2008-01-01 00:00:01.899268321
+# 2008-01-01 00:00:51	2008-01-01 00:00:01.894	2008-01-01 00:00:01.99926	2008-01-01 00:00:01.999268321
+# NULL	NULL	NULL	NULL
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT * FROM timestamp WHERE micro=TIMESTAMP '2008-01-01 00:00:01.88926' ORDER BY micro
+# ----
+# 2008-01-01 00:00:01	2008-01-01 00:00:01.594	2008-01-01 00:00:01.88926	2008-01-01 00:00:01.889268321
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT * FROM timestamp WHERE micro=TIMESTAMP '2020-01-01 00:00:01.88926' ORDER BY micro
+# ----

@@ -1,0 +1,64 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS s1.v3
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS v2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY VIEW v1 AS SELECT 42 AS a
+
+# TODO: unsupported feature
+# query I
+# SHOW TABLES
+# ----
+# v1
+
+# TODO: unsupported feature
+# query IIIIII
+# SHOW ALL TABLES
+# ----
+# temp	main	v1	[a]	[INTEGER]	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW v2 AS SELECT 42 AS b
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW s1.v3 AS SELECT 42 AS c
+
+# TODO: unsupported feature
+# query I
+# SHOW TABLES
+# ----
+# v1
+# v2
+
+# TODO: unsupported feature
+# query IIIIII
+# SHOW ALL TABLES
+# ----
+# memory	main	v2	[b]	[INTEGER]	0
+# memory	s1	v3	[c]	[INTEGER]	0
+# temp	main	v1	[a]	[INTEGER]	1
+
+# TODO: unsupported feature
+# query I
+# FROM v2
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SHOW TABLES
+# ----
+# v1
+# v2
+# v3

@@ -1,0 +1,64 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test.test
+
+# load the DB from disk
+# create a schema and table and insert values
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test.test VALUES (11, 22), (13, 22);
+
+# drop the schema/table
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.test
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA test
+
+# now create then again
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test.test VALUES (11, 22), (13, 22);
+
+# restart the database
+
+# after reload the table and schema are there: we can drop them again
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.test
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA test
+
+
+# after another reload they are still gone: create them again
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.test (a INTEGER, b INTEGER);

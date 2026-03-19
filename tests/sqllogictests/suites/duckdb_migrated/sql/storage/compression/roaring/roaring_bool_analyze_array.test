@@ -1,0 +1,55 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_roaring
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_uncompressed
+
+# TODO: unsupported feature
+# statement ok
+# CALL enable_logging(level='trace')
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_uncompressed AS SELECT
+# 	case
+# 		when i%25=0
+# 			then true
+# 		else false
+# 	end
+# 	FROM range(getvariable('dataset_size')) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
+# where
+# 	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
+# 	message.contains('test_uncompressed') and
+# 	message.contains('BOOLEAN') and
+# 	message.contains('BITPACKING');
+# ----
+# 15900
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_roaring AS select * from test_uncompressed;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT message.split(': ')[2]::INTEGER FROM duckdb_logs
+# where
+# 	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
+# 	message.contains('test_roaring') and
+# 	message.contains('BOOLEAN') and
+# 	message.contains('ROARING');
+# ----
+# 10944

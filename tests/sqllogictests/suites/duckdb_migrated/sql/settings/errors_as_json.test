@@ -1,0 +1,11 @@
+statement error
+SELECT * FROM nonexistent_table
+
+statement error
+SELECT cbl FROM (VALUES (42)) t(col)
+
+statement error
+SECT cbl FROM (VALUES (42)) t(col)
+
+statement error
+select corr('hello', 'world')

@@ -1,0 +1,154 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers AS SELECT * FROM generate_series(0,599999) t(i);
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM integers WHERE i%2=0
+# ----
+# 300000
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 300000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (42);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 300001
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 300001
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM integers WHERE i%3=0
+# ----
+# 100001
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 200000
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 200000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 0 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 0 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 1 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 1 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 2 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 2 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 3 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 3 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (84)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 4 FROM integers
+# ----
+# 200001
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) - 4 FROM integers
+# ----
+# 200001

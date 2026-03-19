@@ -1,0 +1,34 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_default
+
+# Use in DEFAULT expression of a table
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_default (a BOOL DEFAULT nextval('seq') is not distinct from nextval('seq'), b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_default (b) VALUES (2), (4), (6);
+
+# TODO: unsupported feature
+# query II
+# select * from test_default;
+# ----
+# False	2
+# False	4
+# False	6
+
+# Use in DEFAULT expression of a table and store that table on disk (storage test)
+
+# TODO: unsupported feature
+# query II
+# select * from test_default;
+# ----
+# False	2
+# False	4
+# False	6

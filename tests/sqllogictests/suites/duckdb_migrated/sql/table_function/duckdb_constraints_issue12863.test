@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS s1.a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS s1.b
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a (ID int PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b (id int REFERENCES A);
+
+# TODO: unsupported feature
+# query II
+# SELECT constraint_name, unique_constraint_name FROM information_schema.referential_constraints;
+# ----
+# b_id_id_fkey	a_id_pkey
+
+# test multiple schemas with the same table names/references
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE s1.a (ID int PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE s1.b (id int REFERENCES s1.A);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM information_schema.referential_constraints;
+# ----
+# 2

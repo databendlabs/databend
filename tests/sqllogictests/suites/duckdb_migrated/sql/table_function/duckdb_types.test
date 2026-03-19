@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement ok nosort duckdb_col
+# SELECT * FROM duckdb_types();
+
+# TODO: unsupported feature
+# statement ok nosort duckdb_col
+# SELECT * FROM duckdb_types;

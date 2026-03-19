@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT CASE ? WHEN ? THEN ? WHEN ? THEN ? ELSE ? END AS x
+
+# TODO: unsupported feature
+# query I
+# EXECUTE V1(1, 2, 3, 4, 5, 6);
+# ----
+# 6

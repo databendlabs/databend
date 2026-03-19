@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT ?::VARCHAR::INT
+
+# TODO: unsupported feature
+# statement error
+# EXECUTE v1('hello')
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1('3')
+# ----
+# 3

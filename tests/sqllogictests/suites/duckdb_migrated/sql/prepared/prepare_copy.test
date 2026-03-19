@@ -1,0 +1,12 @@
+# TODO: unsupported feature
+# statement ok
+# execute q1 (42);
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE q2 AS
+# 	COPY (
+# 		select 42 as 'col'
+# 	) to $1 (
+# 		FORMAT csv
+# 	);

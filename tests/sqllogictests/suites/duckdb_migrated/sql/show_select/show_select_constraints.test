@@ -1,0 +1,165 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS my_view
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS base_table
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(c1 INTEGER PRIMARY KEY, c2 INT NOT NULL, c3 INT DEFAULT 42, c4 INT UNIQUE, c5 INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (42, 42, 42, 42, 42)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (84, 84, 84, 84, 84)
+
+# show on the table directly vs show is identical
+
+# TODO: unsupported feature
+# query IIIIII nosort describe_result
+# DESCRIBE SELECT * FROM integers
+# ----
+
+# TODO: unsupported feature
+# query IIIIII nosort describe_result
+# DESCRIBE integers
+# ----
+
+# projection
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4, c1 FROM integers)
+# ----
+# c4	UNI
+# c1	PRI
+
+# filter
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4 FROM integers WHERE c1=42)
+# ----
+# c4	UNI
+
+# limit
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4 FROM integers LIMIT 5)
+# ----
+# c4	UNI
+
+# top n
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4 FROM integers ORDER BY c1 LIMIT 5)
+# ----
+# c4	UNI
+
+# sample
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4 FROM integers USING SAMPLE 5)
+# ----
+# c4	UNI
+
+# cross product
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4 FROM integers, (SELECT 84))
+# ----
+# c4	UNI
+
+# join
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT t.c1, integers.c1 FROM integers JOIN (SELECT 84 c1) t USING (c1))
+# ----
+# c1	NULL
+# c1	PRI
+
+# views
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW my_view AS SELECT * FROM integers
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4, c1 FROM my_view)
+# ----
+# c4	UNI
+# c1	PRI
+
+# constraint information does not persist through expressions
+
+# TODO: unsupported feature
+# query II
+# SELECT column_name, key FROM (DESCRIBE SELECT c4 + 1 AS expr FROM integers LIMIT 5)
+# ----
+# expr	NULL
+
+# Alias and Actual column name
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE base_table(base_name int);
+
+# base without alias
+# column_name | column_type | null | key | default | extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE base_table
+# ----
+# base_name	INTEGER	YES	NULL	NULL	NULL
+
+# With Alias
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE SELECT base_name AS alias_name FROM base_table
+# ----
+# alias_name	INTEGER	YES	NULL	NULL	NULL
+
+# With Alias 2 Deep
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE SELECT alias_name as alias_alias_name FROM (SELECT base_name AS alias_name FROM base_table)
+# ----
+# alias_alias_name	INTEGER	YES	NULL	NULL	NULL
+
+# Alias inline
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE SELECT base_name AS alias_name FROM (VALUES (1)) AS base_table(base_name)
+# ----
+# alias_name	INTEGER	YES	NULL	NULL	NULL
+
+# Alias CTE
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE WITH cte_rel AS (SELECT 1 as base_name) SELECT base_name as alias_name FROM cte_rel;
+# ----
+# alias_name	INTEGER	YES	NULL	NULL	NULL

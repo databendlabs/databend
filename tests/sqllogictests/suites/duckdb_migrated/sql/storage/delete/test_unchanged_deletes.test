@@ -1,0 +1,130 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers2
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers AS FROM range(0, 4) t(i)
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM integers WHERE i%2=0
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers2(i int);
+
+# repeatedly add elements and checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (0);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (1);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (2);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (3);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (4);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (5);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (6);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (7);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (8);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM integers
+# ----
+# 2
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers2 VALUES (9);

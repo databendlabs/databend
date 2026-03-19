@@ -1,0 +1,44 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (
+# 	a INTEGER,
+# 	b VARCHAR
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (a, b)
+# SELECT
+# 	x AS a,
+# 	CASE x % 5
+# 		WHEN 0 THEN 'aaaa'
+# 		WHEN 1 THEN 'bbbb'
+# 		WHEN 2 THEN 'cccc'
+# 		WHEN 3 THEN 'dddd'
+# 		WHEN 4 THEN NULL
+# 	END AS b
+# FROM range(10_000) t(x);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# Dictionary
+
+# TODO: unsupported feature
+# query I
+# select distinct b from test order by a % 5;
+# ----
+# aaaa
+# bbbb
+# cccc
+# dddd
+# NULL

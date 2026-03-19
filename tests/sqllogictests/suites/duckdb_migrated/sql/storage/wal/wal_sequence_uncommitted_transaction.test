@@ -1,0 +1,36 @@
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq
+
+# start a transaction in con2
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN transaction
+
+# select the nextval
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq')
+# ----
+# 1
+
+# TODO: unsupported feature
+# query the sequence in con as well
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq')
+# ----
+# 2
+
+# restart the database
+
+# the sequence is now at position 3
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq')
+# ----
+# 3

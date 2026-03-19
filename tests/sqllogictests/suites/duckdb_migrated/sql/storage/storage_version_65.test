@@ -1,0 +1,24 @@
+# The database is written with a vector size of 2048.
+# TODO: unsupported feature
+# query I
+# SELECT tags FROM duckdb_databases() WHERE database_name = 'storage_versions65';
+# ----
+# {storage_version=v1.2.0+}
+
+# TODO: unsupported feature
+# query I
+# SELECT tags FROM duckdb_databases() WHERE database_name = 'regular_file';
+# ----
+# {storage_version=v1.0.0+}
+
+# TODO: unsupported feature
+# query I
+# SELECT tags FROM duckdb_databases() WHERE database_name = 'storage_version64';
+# ----
+# {storage_version=v1.0.0+}
+
+# TODO: unsupported feature
+# query I
+# SELECT tags FROM duckdb_databases() WHERE database_name = 'storage_versions66';
+# ----
+# {storage_version=v1.3.0+}

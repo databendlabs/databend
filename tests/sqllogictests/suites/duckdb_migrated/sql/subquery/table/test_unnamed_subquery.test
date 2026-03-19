@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# query I
+# SELECT a FROM (SELECT 42 a)
+# ----
+# 42
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (SELECT 42 a), (SELECT 43 b)
+# ----
+# 42	43
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (VALUES (42, 43))
+# ----
+# 42	43
+
+# longer chains
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM (SELECT 42 a), (SELECT 43 b), (SELECT 44 c), (SELECT 45 d)
+# ----
+# 42	43	44	45
+
+# nested
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM (FROM (SELECT 42 a), (SELECT 43 b)) JOIN (SELECT 44 c) ON (true) JOIN (SELECT 45 d) ON (true)
+# ----
+# 42	43	44	45
+
+# names are predictable
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (SELECT unnamed_subquery.a FROM (SELECT 42 a)), (SELECT unnamed_subquery.b FROM (SELECT 43 b))
+# ----
+# 42	43
+
+# names are predictable
+
+# TODO: unsupported feature
+# query II
+# SELECT unnamed_subquery.a, unnamed_subquery2.b FROM (SELECT 42 a), (SELECT 43 b)
+# ----
+# 42	43

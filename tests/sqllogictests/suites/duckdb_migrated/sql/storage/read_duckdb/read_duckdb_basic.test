@@ -1,0 +1,54 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS read_duckdb_test.my_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS read_duckdb_test.my_tbl2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS read_duckdb_test2.other_tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE read_duckdb_test.my_tbl AS SELECT 42 i
+
+# we cannot read a database that is already attached
+
+# TODO: unsupported feature
+# statement ok
+# DETACH read_duckdb_test
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM duckdb_databases
+# ----
+# 1
+
+# globbing
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE read_duckdb_test2.other_tbl AS SELECT 100 i
+
+# TODO: unsupported feature
+# statement ok
+# DETACH read_duckdb_test2
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1
+# ----
+# 42
+# 100
+
+# multi-table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE read_duckdb_test.my_tbl2 AS SELECT 84 j
+
+# TODO: unsupported feature
+# statement ok
+# DETACH read_duckdb_test

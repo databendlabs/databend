@@ -1,0 +1,144 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_t2
+
+# TODO: unsupported feature
+# query I
+# SELECT COLUMNS(* REPLACE a AS a) FROM range(0, 1) t1(a) NATURAL JOIN range(0, 1) t2(a)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM range(0, 1) t1(a) NATURAL JOIN range(0, 1) t2(a)
+# ----
+# 0
+
+# Test with JOIN USING
+
+# TODO: unsupported feature
+# query I
+# SELECT COLUMNS(* REPLACE a AS a) FROM range(0, 1) t1(a) JOIN range(0, 1) t2(a) USING (a)
+# ----
+# 0
+
+# Test with an actual replacement expression
+
+# TODO: unsupported feature
+# query I
+# SELECT COLUMNS(* REPLACE (a + 1 AS a)) FROM range(0, 1) t1(a) NATURAL JOIN range(0, 1) t2(a)
+# ----
+# 1
+
+# Test with multiple rows
+
+# TODO: unsupported feature
+# query I
+# SELECT COLUMNS(* REPLACE (a * 2 AS a)) FROM range(0, 3) t1(a) NATURAL JOIN range(0, 3) t2(a)
+# ----
+# 0
+# 2
+# 4
+
+# Test with multiple columns where one is a USING column
+
+# TODO: unsupported feature
+# query III
+# SELECT COLUMNS(* REPLACE (a + 100 AS a)) FROM (SELECT 1 as a, 2 as b) t1 NATURAL JOIN (SELECT 1 as a, 3 as c) t2
+# ----
+# 101	2	3
+
+# Test replacing a non-USING column
+
+# TODO: unsupported feature
+# query III
+# SELECT COLUMNS(* REPLACE (b + 10 AS b)) FROM (SELECT 1 as a, 2 as b) t1 NATURAL JOIN (SELECT 1 as a, 3 as c) t2
+# ----
+# 1	12	3
+
+# Test with three-way NATURAL JOIN
+
+# TODO: unsupported feature
+# query I
+# SELECT COLUMNS(* REPLACE (a AS a)) FROM range(0, 1) t1(a) NATURAL JOIN range(0, 1) t2(a) NATURAL JOIN range(0, 1) t3(a)
+# ----
+# 0
+
+# Test with three-way NATURAL JOIN with complex expression
+
+# TODO: unsupported feature
+# query I
+# SELECT COLUMNS(* REPLACE (a + 1 AS a)) FROM range(0, 2) t1(a) NATURAL JOIN range(0, 2) t2(a) NATURAL JOIN range(0, 2) t3(a)
+# ----
+# 1
+# 2
+
+# Test COLUMNS(* RENAME) still works correctly with NATURAL JOIN
+
+# TODO: unsupported feature
+# query I
+# SELECT COLUMNS(* RENAME a AS b) FROM range(0, 1) t1(a) NATURAL JOIN range(0, 1) t2(a)
+# ----
+# 0
+
+# Test multiple replacements with NATURAL JOIN
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_t1 AS SELECT 1 as a, 2 as b, 3 as c
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_t2 AS SELECT 1 as a, 4 as d, 5 as e
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT COLUMNS(* REPLACE (a + 10 AS a, b + 20 AS b)) FROM test_t1 NATURAL JOIN test_t2
+# ----
+# 11	22	3	4	5
+
+# Test REPLACE with complex expression on USING column
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT COLUMNS(* REPLACE (concat(a::VARCHAR, '_joined') AS a)) FROM test_t1 NATURAL JOIN test_t2
+# ----
+# 1_joined	2	3	4	5
+
+# Test that EXCLUDE with qualified names still works correctly
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 2, 3)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * EXCLUDE (i1.i, i2.i) FROM integers i1 JOIN integers i2 USING (i)
+# ----
+# 2	3	2	3
+
+# Clean up
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_t2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers

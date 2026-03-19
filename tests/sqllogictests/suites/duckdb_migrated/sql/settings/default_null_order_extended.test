@@ -1,0 +1,126 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i integer);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# NULLS FIRST
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY i;
+# ----
+# 1
+# 2
+# 3
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY i DESC;
+# ----
+# 3
+# 2
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(i ORDER BY i), LAST(i ORDER BY i) FROM integers
+# ----
+# NULL	3
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(i ORDER BY i DESC), LAST(i ORDER BY i DESC) FROM integers
+# ----
+# NULL	1
+
+# TODO: unsupported feature
+# query II
+# SELECT list_sort(LIST(i)), list_reverse_sort(LIST(i)) FROM integers
+# ----
+# [NULL, 1, 2, 3]	[NULL, 3, 2, 1]
+
+# SQLite-style null order
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY i;
+# ----
+# NULL
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY i DESC;
+# ----
+# 3
+# 2
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(i ORDER BY i), LAST(i ORDER BY i) FROM integers
+# ----
+# NULL	3
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(i ORDER BY i DESC), LAST(i ORDER BY i DESC) FROM integers
+# ----
+# 3	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT list_sort(LIST(i)), list_reverse_sort(LIST(i)) FROM integers
+# ----
+# [NULL, 1, 2, 3]	[3, 2, 1, NULL]
+
+
+# Postgres-style NULL order
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY i;
+# ----
+# 1
+# 2
+# 3
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers ORDER BY i DESC;
+# ----
+# NULL
+# 3
+# 2
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(i ORDER BY i), LAST(i ORDER BY i) FROM integers
+# ----
+# 1	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT FIRST(i ORDER BY i DESC), LAST(i ORDER BY i DESC) FROM integers
+# ----
+# NULL	1
+
+# TODO: unsupported feature
+# query II
+# SELECT list_sort(LIST(i)), list_reverse_sort(LIST(i)) FROM integers
+# ----
+# [1, 2, 3, NULL]	[NULL, 3, 2, 1]

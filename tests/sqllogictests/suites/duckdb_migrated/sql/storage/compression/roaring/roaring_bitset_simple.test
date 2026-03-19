@@ -1,0 +1,36 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BIGINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT CASE WHEN i % 3 = 0 THEN 1337 ELSE NULL END FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' AND compression != 'Roaring';
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test WHERE a IS NOT NULL;
+# ----
+# 3334
+
+# TODO: unsupported feature
+# query III
+# SELECT SUM(a), MIN(a), MAX(a) FROM test;
+# ----
+# 4457558	1337	1337
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

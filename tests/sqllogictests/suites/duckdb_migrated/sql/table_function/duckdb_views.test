@@ -1,0 +1,65 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS myschema.v2
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS v1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM duckdb_views;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW v1 AS SELECT 42;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY VIEW v2 AS SELECT 42;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA myschema;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW myschema.v2 AS SELECT 42;
+
+# TODO: unsupported feature
+# query III
+# SELECT schema_name, view_name, temporary
+# FROM duckdb_views() WHERE NOT internal ORDER BY ALL;
+# ----
+# main	v1	False
+# main	v2	True
+# myschema	v2	False
+
+# TODO: unsupported feature
+# query I
+# SELECT database_name = current_database() OR database_name = 'temp'
+# FROM duckdb_views() WHERE NOT internal ORDER BY view_name;
+# ----
+# True
+# True
+# True
+
+# TODO: unsupported feature
+# query III
+# SELECT schema_name, view_name, temporary
+# FROM duckdb_views ORDER BY ALL;
+# ----
+# main	v1	False
+# main	v2	True
+# myschema	v2	False
+
+# TODO: unsupported feature
+# query I
+# SELECT database_name = current_database() OR database_name = 'temp'
+# FROM duckdb_views ORDER BY view_name;
+# ----
+# True
+# True
+# True

@@ -1,0 +1,42 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS v1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS different_types
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested_lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1), (2, NULL), (3, 3), (4, 5)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW v1 AS SELECT 42
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE different_types(i INTEGER, j VARCHAR, k STRUCT(k INTEGER, l VARCHAR))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO different_types VALUES (1, 'hello', {'k': 3, 'l': 'hello'}), (2, 'world', {'k': 3, 'l': 'thisisaverylongstring'})
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested_lists AS SELECT
+# 	[1, 2, 3] i,
+# 	[['hello', 'world'], [NULL]] j,
+# 	[{'a': 3}, {'a': 4}] k;

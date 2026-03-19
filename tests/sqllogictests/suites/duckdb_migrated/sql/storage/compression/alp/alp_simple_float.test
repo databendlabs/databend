@@ -1,0 +1,48 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS random_alp_float
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS random_float
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# create table random_float as select round(random(), 6)::FLOAT as data from range(0, 1024) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('random_float') WHERE segment_type = 'float' AND compression != 'Uncompressed';
+# ----
+
+# Now create a duplicate of this table, compressed with ALP instead
+
+# TODO: unsupported feature
+# statement ok
+# create table random_alp_float as select * from random_float;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('random_alp_float') WHERE segment_type = 'float' AND compression != 'ALP';
+# ----
+
+# Assert that the data was not corrupted by compressing to ALP
+
+# TODO: unsupported feature
+# query I sort r1
+# select * from random_float;
+# ----
+
+# TODO: unsupported feature
+# query I sort r1
+# select * from random_alp_float;
+# ----

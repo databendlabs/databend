@@ -1,0 +1,100 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_bp
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_constant
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_dict
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_rle
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_rle (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_rle SELECT 2147480000 FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_rle SELECT 2147480001 FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test_rle') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+# ----
+# RLE
+
+# Constant
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_constant (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_constant SELECT 1 FROM range(0, 2000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test_constant') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+# ----
+# Constant
+
+# Dictionary
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_dict (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_dict SELECT concat('foobar-', (i%2)::VARCHAR) FROM range(0, 2000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# Dictionary
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+
+# Bitpacking
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_bp (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_bp SELECT i FROM range(0, 2000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test_bp') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+# ----
+# BitPacking

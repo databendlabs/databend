@@ -1,0 +1,115 @@
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO plus1(a) AS a+1
+
+# use the macro
+
+# TODO: unsupported feature
+# query T
+# SELECT plus1(2)
+# ----
+# 3
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO plus1
+
+
+# restart the system
+
+# TODO: unsupported feature
+# statement error
+# SELECT plus1(2)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO plus1(a) AS a+1
+
+# TODO: unsupported feature
+# query T
+# SELECT plus1(2)
+# ----
+# 3
+
+# drop the macro again
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO plus1
+
+
+# restart the system
+
+# TODO: unsupported feature
+# statement error
+# SELECT plus1(2)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO plus1(a) AS a+1
+
+# TODO: unsupported feature
+# query T
+# SELECT plus1(2)
+# ----
+# 3
+
+# drop the macro again
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO plus1
+
+
+# create a macro without deleting it this time
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO plus2(a, b := 2) AS a + b
+
+# TODO: unsupported feature
+# query T
+# SELECT plus2(3)
+# ----
+# 5
+
+# TODO: unsupported feature
+# query T
+# SELECT plus2(4)
+# ----
+# 6
+
+# TODO: unsupported feature
+# query T
+# SELECT plus2(3)
+# ----
+# 5
+
+# TODO: unsupported feature
+# query T
+# SELECT plus2(4)
+# ----
+# 6
+
+
+# macro overloads
+# create a macro
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO addition(a) AS a, (a,b) AS a + b
+
+# use the macro
+
+# TODO: unsupported feature
+# query II
+# SELECT addition(2), addition(1, 2)
+# ----
+# 2	3
+
+# TODO: unsupported feature
+# query II
+# SELECT addition(2), addition(1, 2)
+# ----
+# 2	3

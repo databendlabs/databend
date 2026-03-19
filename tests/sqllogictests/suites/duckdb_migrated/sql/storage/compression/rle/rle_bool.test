@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# load the DB from disk
+statement ok
+CREATE TABLE test (a BOOLEAN);
+
+statement ok
+INSERT INTO test select false from range(0, 2048);
+
+statement ok
+INSERT INTO test select true from range(0, 2048);
+
+query I
+SELECT COUNT(*) FROM test WHERE a=false
+----
+2048
+
+query I
+SELECT COUNT(*) FROM test WHERE a=false
+----
+2048

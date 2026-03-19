@@ -1,0 +1,473 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS all_types
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE all_types AS SELECT DOUBLE FROM test_all_types();
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT DOUBLE FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'DOUBLE' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE all_types;
+
+#type
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE all_types AS SELECT FLOAT FROM test_all_types();
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO all_types SELECT FLOAT FROM all_types;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('all_types') WHERE segment_type = 'FLOAT' AND compression != 'ALPRD';
+# ----
+
+# i
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE all_types;
+
+#type

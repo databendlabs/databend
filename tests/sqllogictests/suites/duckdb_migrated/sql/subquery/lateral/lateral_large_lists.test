@@ -1,0 +1,13 @@
+# TODO: unsupported feature
+# query I
+# SELECT total_seats
+# FROM (
+# SELECT list(distinct {'key': gen_random_uuid(), 'val': 1 }) as l FROM range(0, 1600)
+# ) as m, (
+#   select sum(a.val) as value
+#   FROM (
+# 	SELECT UNNEST(l) a
+#   ) x
+# ) as l(total_seats)
+# ----
+# 1600

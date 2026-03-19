@@ -1,0 +1,51 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS z
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table z(id integer);
+
+# TODO: unsupported feature
+# statement ok
+# insert into z from range(200_000);
+
+# TODO: unsupported feature
+# statement ok
+# begin
+
+# TODO: unsupported feature
+# statement ok
+# insert into z from range(200_000, 400_000)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query II
+# select min(id), max(id) from z;
+# ----
+# 0	399999
+
+# TODO: unsupported feature
+# query II
+# select min(id), max(id) from z;
+# ----
+# 0	199999
+
+# TODO: unsupported feature
+# statement ok
+# commit
+
+# TODO: unsupported feature
+# query II
+# select min(id), max(id) from z;
+# ----
+# 0	399999
+
+# TODO: unsupported feature
+# query II
+# select min(id), max(id) from z;
+# ----
+# 0	399999

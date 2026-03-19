@@ -1,0 +1,20 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS rd.tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.tbl (
+# 	price INTEGER,
+# 	amount_sold INTEGER,
+# 	total_profit AS (price * amount_sold),
+# 	non_generated INTEGER
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO rd.tbl VALUES (5,4, 100);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd

@@ -1,0 +1,26 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	price INTEGER,
+# 	gcol AS (price)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5);
+
+# TODO: unsupported feature
+# query I
+# SELECT gcol FROM tbl;
+# ----
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT gcol FROM tbl;
+# ----
+# 5

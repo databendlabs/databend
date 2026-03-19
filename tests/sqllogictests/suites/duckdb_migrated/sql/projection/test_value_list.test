@@ -1,0 +1,168 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS varchars
+
+# TODO: unsupported feature
+# query II
+# (VALUES (1, 3), (2, 4));
+# ----
+# 1	3
+# 2	4
+
+# nulls first and then integers
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (VALUES (NULL, NULL), (3, 4), (3, 7)) v1;
+# ----
+# NULL	NULL
+# 3	4
+# 3	7
+
+# standard value list
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (VALUES (1, 2, 3), (1, 2, 3)) v1;
+# ----
+# 1	2	3
+# 1	2	3
+
+# value list with expressions
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (VALUES (1 + 1, 2, 3), (1 + 3, 2, 3)) v1;
+# ----
+# 2	2	3
+# 4	2	3
+
+# value list with subqueries
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (VALUES ((SELECT 42), 2, 3), (1 + 3,2,3)) v1;
+# ----
+# 42	2	3
+# 4	2	3
+
+# value list in insert
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1, 2), (3, 4);
+
+# value list with more complicated subqueries
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM (VALUES ((SELECT MIN(a) FROM test), 2, 3), ((SELECT MAX(b) FROM test), 2, 3)) v1;
+# ----
+# 1	2	3
+# 4	2	3
+
+# value list with different types
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM (VALUES ('hello', 2), (1 + 3, '5'), (DATE '1992-09-20', 3)) v1;
+
+# TODO: unsupported feature
+# query TI
+# SELECT * FROM (VALUES (DATE '1992-09-20', 3), (NULL, NULL)) v1;
+# ----
+# 1992-09-20	3
+# NULL	NULL
+
+# only NULLs
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (VALUES (NULL, NULL)) v1;
+# ----
+# NULL	NULL
+
+# nulls first and then integers
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (VALUES (NULL, NULL), (3, 4)) v1;
+# ----
+# NULL	NULL
+# 3	4
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM (VALUES (3), ('42')) v1;
+# ----
+# 3
+# 42
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM (VALUES (3), ('hello')) v1;
+
+# TODO: unsupported feature
+# query I
+# SELECT typeof(x) FROM (VALUES (DATE '1992-01-01'), ('1992-01-01')) v1(x) LIMIT 1;
+# ----
+# DATE
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM (VALUES (NULL), ('hello')) v1;
+# ----
+# NULL
+# hello
+
+# unbalanced value list is not allowed
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM (VALUES (1, 2, 3), (1,2)) v1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM (VALUES (DEFAULT, 2, 3), (1,2)) v1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE varchars(v VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO varchars VALUES (1), ('hello'), (DEFAULT);
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM varchars ORDER BY 1
+# ----
+# NULL
+# 1
+# hello
+
+# too many columns provided
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO varchars VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO varchars (v) VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO varchars (v) VALUES (1, 2), ('hello'), (DEFAULT, DEFAULT);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO varchars (v) VALUES (DEFAULT IS NULL);

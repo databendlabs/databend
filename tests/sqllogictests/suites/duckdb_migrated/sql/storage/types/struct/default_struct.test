@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(i ROW(a INT, b INT) DEFAULT ({'a': 7, 'b': 2}))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (DEFAULT)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'a': 7, 'b': 2}
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (DEFAULT)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'a': 7, 'b': 2}
+# {'a': 7, 'b': 2}

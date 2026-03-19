@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# create table test as select range % 10 i, range % 30 j from range(0, 100)
+
+# TODO: unsupported feature
+# query II nosort q0
+# select stats(i), stats(j) from test limit 1
+# ----
+
+# TODO: unsupported feature
+# query II nosort q0
+# select stats(i), stats(j) from test limit 1
+# ----

@@ -1,0 +1,20 @@
+statement ok
+DROP TABLE IF EXISTS test_table
+
+statement ok
+CREATE TABLE test_table(i INTEGER, j VARCHAR)
+
+statement ok
+INSERT INTO test_table VALUES (1, 'hello'), (2, 'world')
+
+# Test multiple pragma functions with injection attempts
+# These should all fail gracefully without executing injected SQL
+
+
+# Ensure we correctly sanitize the input
+
+query IT
+SELECT * FROM test_table ORDER BY i
+----
+1	hello
+2	world

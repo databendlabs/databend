@@ -1,0 +1,167 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(col1 INTEGER, col2 INTEGER, k INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 2, 3)
+
+# TODO: unsupported feature
+# query II
+# SELECT COLUMNS(lambda x: x LIKE 'col%') FROM integers
+# ----
+# 1	2
+
+# TODO: unsupported feature
+# query II
+# SELECT * LIKE 'col%' FROM integers
+# ----
+# 1	2
+
+# not like
+
+# TODO: unsupported feature
+# query I
+# SELECT * NOT LIKE 'col%' FROM integers
+# ----
+# 3
+
+# ilike
+
+# TODO: unsupported feature
+# query II
+# SELECT * ILIKE 'COL%' FROM integers
+# ----
+# 1	2
+
+# regex
+
+# TODO: unsupported feature
+# query II
+# SELECT * SIMILAR TO '.*col.*' FROM integers
+# ----
+# 1	2
+
+# exclude
+
+# TODO: unsupported feature
+# query I
+# SELECT * EXCLUDE (col1) SIMILAR TO '.*col.*' FROM integers
+# ----
+# 2
+
+# SIMILAR TO alias can use regex groups
+
+# TODO: unsupported feature
+# query II
+# SELECT c2, c1 FROM (
+# SELECT * SIMILAR TO 'number(\d+)' AS 'c\1' FROM (SELECT 1 AS number1, 2 AS number2, 3 AS end)
+# )
+# ----
+# 2	1
+
+# LIKE
+
+# TODO: unsupported feature
+# query I
+# SELECT val FROM (
+# SELECT * NOT LIKE '%number%' AS val FROM (SELECT 1 AS number1, 2 AS number2, 3 AS end)
+# )
+# ----
+# 3
+
+# ESCAPE
+
+# TODO: unsupported feature
+# query I
+# SELECT * LIKE '\_%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * NOT LIKE '\_%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * ILIKE '\_NUM%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * NOT ILIKE '\_NUM%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+# ----
+# 1
+
+# non-constant pattern
+
+# TODO: unsupported feature
+# statement error
+# SELECT * SIMILAR TO pattern FROM integers, (SELECT '.*col.*') t(pattern)
+
+# TODO: unsupported feature
+# statement error
+# SELECT * + 42 FROM integers
+
+# TODO: unsupported feature
+# statement error
+# SELECT * REPLACE (col1 + 42 AS col1) SIMILAR TO '.*col.*' FROM integers
+
+# TODO: unsupported feature
+# statement error
+# SELECT * RENAME (col1 AS other_) SIMILAR TO '.*col.*' FROM integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(id INTEGER, col1 INTEGER, col2 INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (1, 10, 20)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2(name VARCHAR, category VARCHAR, col2 INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t2 VALUES ('foo', 'bar', 30)
+
+# t1.* LIKE should only select from t1 table
+
+# TODO: unsupported feature
+# query II
+# SELECT t1.* LIKE 'col%' FROM t1, t2
+# ----
+# 10	20
+
+# t2.* LIKE should only select from t2 table
+
+# TODO: unsupported feature
+# query I
+# SELECT t2.* LIKE 'col%' FROM t1, t2
+# ----
+# 30
+
+# Combining both tables - each should only select from its own table
+
+# TODO: unsupported feature
+# query III
+# SELECT t1.* LIKE 'col%', t2.* LIKE 'col%' FROM t1, t2
+# ----
+# 10	20	30

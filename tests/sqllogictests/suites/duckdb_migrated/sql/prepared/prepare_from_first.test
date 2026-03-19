@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# prepare fromFirst as from (select ? fromV) select ? selectV,*;
+
+# TODO: unsupported feature
+# query II
+# execute fromFirst('from', 'sel');
+# ----
+# sel	from
+
+# TODO: unsupported feature
+# query II
+# from (select 'from' fromV) select 'sel' selectV,*;
+# ----
+# sel	from

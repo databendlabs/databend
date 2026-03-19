@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM duckdb_extensions();
+
+# TODO: unsupported feature
+# query I
+# SELECT aliases FROM duckdb_extensions() WHERE extension_name='postgres_scanner';
+# ----
+# [postgres]
+
+# TODO: unsupported feature
+# query I
+# SELECT extension_name FROM duckdb_extensions() WHERE loaded AND extension_name='tpch';
+# ----
+# tpch

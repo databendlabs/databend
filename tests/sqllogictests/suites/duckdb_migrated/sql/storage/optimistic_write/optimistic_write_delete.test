@@ -1,0 +1,57 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM range(0, 1000000)
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=0
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(a) FROM test
+# ----
+# 499999500000
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(a) FROM test
+# ----
+# 499999500000
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM range(0, 1000000)
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=1
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(a) FROM test
+# ----
+# 499999500000

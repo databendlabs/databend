@@ -1,0 +1,12 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS fail_detach.integers
+
+# Alternative verification disables checkpointing on shutdown.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE fail_detach.integers AS SELECT * FROM range(0, 100) tbl(i);
+
+# TODO: unsupported feature
+# statement error
+# DETACH fail_detach;

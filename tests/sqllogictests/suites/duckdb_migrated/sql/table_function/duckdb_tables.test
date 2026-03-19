@@ -1,0 +1,69 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS v1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS myschema.mytable
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS pk
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM duckdb_tables();
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE pk(i INTEGER PRIMARY KEY, j VARCHAR, CHECK(i<100))
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA myschema;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE myschema.mytable(k DOUBLE)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE mytemp(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW v1 AS SELECT 42
+
+# TODO: unsupported feature
+# query IIIIIIII
+# SELECT schema_name, table_name, temporary, has_primary_key, estimated_size, column_count, index_count, check_constraint_count
+# FROM duckdb_tables() ORDER BY table_name;
+# ----
+# main	integers	False	False	0	1	0	0
+# myschema	mytable	False	False	0	1	0	0
+# main	mytemp	True	False	0	1	0	0
+# main	pk	False	True	0	2	1	1
+
+# TODO: unsupported feature
+# query I
+# SELECT database_name = current_database() OR database_name = 'temp'
+# FROM duckdb_tables();
+# ----
+# True
+# True
+# True
+# True
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM temp.duckdb_tables

@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# query T
+# SELECT 1 = ANY(SELECT 1)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 = ANY(SELECT NULL)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 = ANY(SELECT 2)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL = ANY(SELECT 2)
+# ----
+# NULL
+
+# scalar ALL
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 = ALL(SELECT 1)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 = ALL(SELECT NULL)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 = ALL(SELECT 2)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL = ALL(SELECT 2)
+# ----
+# NULL

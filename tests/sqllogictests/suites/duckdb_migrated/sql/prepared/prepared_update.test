@@ -1,0 +1,53 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 'hello')
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS UPDATE integers SET i=?, j=?;
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s1(2, 'world')
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers
+# ----
+# 2	world
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s2 AS UPDATE integers SET j=? WHERE i=?;
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s2('test', 2)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers
+# ----
+# 2	test
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s3 AS UPDATE integers SET j=? WHERE i=? AND j=?;
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s3('test2', 2, 'test')
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM integers
+# ----
+# 2	test2

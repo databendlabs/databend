@@ -8141,3 +8141,221 @@
 | Feature Signature | Reason | Count | Files | SQL (sample) | Doc |
 | --- | --- | ---: | --- | --- | --- |
 | `j` | `unsupported feature` | 1 | sql/optimizer/expression/test_equal_or_null_optimization.test | `query T nosort distinctrewrite1<br>EXPLAIN SELECT i IS NOT DISTINCT FROM j FROM test;<br>----<br>EvalScalar<br>├── output columns: [i IS NOT DISTINCT FROM j (#3)]<br>├── expressions: [assume_not_null(if(CAST((NOT is_not_null(test.i (#0)) AND NOT is_not_null(test.j (#1))) AS Boolean NULL), true, CAST((NOT is_not_null(test.i (#0)) OR NOT is_not_null(test.j (#1))) AS Boolean NULL), false, test.i (#0) = test.j (#1)))]<br>├── estimated rows: 3.00<br>└── TableScan<br>    ├── table: default.default.test<br>    ├── scan id: 0<br>    ├── output columns: [i (#0), j (#1)]<br>    ├── read rows: 3<br>    ├── read size: < 1 KiB<br>    ├── partitions total: 1<br>    ├── partitions scanned: 1<br>    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]<br>    ├── push downs: [filters: [], limit: NONE]<br>    └── estimated rows: 3.00` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T08:08:27.742467+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 315
+- Files with issues: 1825
+- Unknown function TODOs: 1211
+- Unsupported feature TODOs: 21905
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 113
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `abc` | `unsupported feature` | 4 | sql/show_select/test_describe_quoted.test<br>sql/show_select/test_summarize_quoted.test | `statement ok<br>create table defg.abc (x int);` |  |
+| `addition` | `unsupported feature` | 3 | sql/storage/catalog/test_macro_storage.test | `query II<br>SELECT addition(2), addition(1, 2)<br>----<br>2	3` |  |
+| `all_types` | `unsupported feature` | 1 | sql/returning/returning_delete_list.test | `statement ok<br>CREATE TABLE all_types("varchar" VARCHAR, nested_int_array INTEGER[][]);;` |  |
+| `array_agg` | `unsupported feature` | 2 | sql/setops/union_limit.test | `query I<br>SELECT ARRAY_AGG(1)<br>UNION ALL<br>(<br>	SELECT ARRAY_AGG(i) FROM generate_series(10, 12, 1) tbl(i)<br>	UNION ALL<br>	(<br>		SELECT ARRAY_AGG(i) FROM generate_series(100, 103, 1) tbl(i)<br>	)<br>	UNION ALL<br>	SELECT ARRAY_AGG(i) FROM generate_series(1000, 1002, 1) tbl(i)<br>)<br>UNION ALL<br>SELECT ARRAY_AGG(i) FROM generate_series(10000, 10002, 1) tbl(i)<br>UNION ALL<br>(<br>	SELECT ARRAY_AGG(i) FROM generate_series(100000, 100002, 1) tbl(i)<br>	UNION ALL<br>	SELECT ARRAY_AGG(i) FROM generate_series(1000000, 1000003, 1) tbl(i)<br>);<br>----<br>[1]<br>[10, 11, 12]<br>[100, 101, 102, 103]<br>[1000, 1001, 1002]<br>[10000, 10001, 10002]<br>[100000, 100001, 100002]<br>[1000000, 1000001, 1000002, 1000003]` |  |
+| `base` | `unsupported feature` | 1 | sql/storage/catalog/generated_columns/virtual/constraints.test | `statement ok<br>CREATE TABLE base (<br>	price INTEGER PRIMARY KEY<br>);` |  |
+| `base_table` | `unsupported feature` | 2 | sql/show_select/show_select_constraints.test | `statement ok<br>CREATE TABLE base_table(base_name int);` |  |
+| `big_string` | `unsupported feature` | 3 | sql/storage/compression/string/big_strings.test | `statement ok<br>CREATE TABLE big_string (a VARCHAR);` |  |
+| `blob` | `unsupported feature` | 2 | sql/show_select/test_summarize.test | `query IIIIIIIIIIII<br>SUMMARIZE types;<br>----<br>i	INTEGER	1	3	3	2.0	1.0	1	2	3	3	0.0<br>j	VARCHAR	hello	world	2	NULL	NULL	NULL	NULL	NULL	3	33.33<br>k	HUGEINT	-12	12	2	0.0	16.97056274847714	-12	0	12	3	33.33<br>d	DOUBLE	-0.5	0.5	2	0.0	0.7071067811865476	-0.5	0.0	0.5	3	33.33<br>e	BLOB	(empty)	a\x00b\x00c	2	NULL	NULL	NULL	NULL	NULL	3	33.33` |  |
+| `char_tbl` | `unsupported feature` | 2 | sql/setops/test_pg_union.test | `statement ok<br>CREATE TABLE CHAR_TBL(f1 char(4));` |  |
+| `db` | `unsupported feature` | 1 | sql/storage/compression/dict_fsst/test_dict_fsst_with_smaller_block_size.test | `statement ok<br>ATTACH '{TEMP_DIR}/partial_manager.db' AS db (BLOCK_SIZE 16384);` |  |
+| `db1_schema_table1` | `unsupported feature` | 1 | sql/pragma/test_show_tables_from.test | `statement ok<br>CREATE TABLE db1.db1_schema.db1_schema_table1(n INTEGER)` |  |
+| `db1_table1` | `unsupported feature` | 1 | sql/pragma/test_show_tables_from.test | `statement ok<br>CREATE TABLE db1.db1_table1(m INTEGER)` |  |
+| `describe` | `unsupported feature` | 1 | sql/show_select/describe_subquery.test | `query I<br>SELECT column_name FROM (DESCRIBE ( DESCRIBE SELECT * FROM (SELECT 32 as a)));<br>----<br>column_name<br>column_type<br>null<br>key<br>default<br>extra` |  |
+| `different_types` | `unsupported feature` | 1 | sql/pragma/test_storage_info.test | `statement ok<br>CREATE TABLE different_types(i INTEGER, j VARCHAR, k STRUCT(k INTEGER, l VARCHAR))` |  |
+| `duckdb_secrets` | `unsupported feature` | 2 | sql/secrets/create_secret_expression.test<br>sql/secrets/secret_compatibility_http.test | `query I<br>select scope from duckdb_secrets() where name='scope_as_struct'<br>----<br>[hi, hello]` |  |
+| `except` | `unsupported feature` | 1 | sql/setops/test_pg_union.test | `query I<br>SELECT q1 FROM int8_tbl EXCEPT (((SELECT q2 FROM int8_tbl ORDER BY q2 LIMIT 1))) ORDER BY 1;<br>----<br>123<br>4567890123456789` |  |
+| `float8_tbl` | `unsupported feature` | 2 | sql/setops/test_pg_union.test | `statement ok<br>CREATE TABLE FLOAT8_TBL(f1 float8);` |  |
+| `fromfirst` | `unsupported feature` | 1 | sql/prepared/prepare_from_first.test | `query II<br>execute fromFirst('from', 'sel');<br>----<br>sel	from` |  |
+| `http` | `unsupported feature` | 1 | sql/secrets/create_secret_expression.test | `statement ok<br>CREATE SECRET http (TYPE HTTP, BEARER_TOKEN getvariable('my_bearer_token'));` |  |
+| `iii` | `unsupported feature` | 5 | sql/setops/test_pg_union.test<br>sql/setops/test_union_by_name.test | `query III<br>(SELECT 1,2,3 UNION SELECT 4,5,6) EXCEPT SELECT 4,5,6;<br>----<br>1	2	3` |  |
+| `iiii` | `unsupported feature` | 1 | sql/setops/test_union_by_name.test | `query IIII<br>(SELECT 1 UNION BY NAME SELECT x, y FROM t1) UNION BY NAME SELECT y, z FROM t2 ORDER BY ALL;<br>----<br>NULL	NULL	2	2<br>NULL	NULL	4	4<br>NULL	1	1	NULL<br>NULL	3	3	NULL<br>1	NULL	NULL	NULL` |  |
+| `indexed_returning` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>CREATE INDEX idx_amount ON indexed_returning(amount);` |  |
+| `int4_tbl` | `unsupported feature` | 2 | sql/setops/test_pg_union.test | `statement ok<br>CREATE TABLE INT4_TBL(f1 int4);` |  |
+| `int8_tbl` | `unsupported feature` | 1 | sql/setops/test_pg_union.test | `statement ok<br>CREATE TABLE INT8_TBL(q1 int8, q2 int8);` |  |
+| `intersect` | `unsupported feature` | 1 | sql/setops/test_pg_union.test | `query I<br>SELECT q1 FROM int8_tbl INTERSECT (((SELECT q2 FROM int8_tbl UNION ALL SELECT q2 FROM int8_tbl))) ORDER BY 1;<br>----<br>123<br>4567890123456789` |  |
+| `main_table1` | `unsupported feature` | 1 | sql/pragma/test_show_tables_from.test | `statement ok<br>CREATE TABLE main_table1(i INTEGER)` |  |
+| `merge_delete_source` | `unsupported feature` | 1 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE merge_delete_source(id INT);` |  |
+| `merge_gen_target` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE merge_gen_target(id INT, x INT, gen AS (x * 2));` |  |
+| `merge_multi_gen` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO merge_multi_gen(id, a, b) VALUES (1, 2, 3), (2, 4, 5), (3, 6, 7);` |  |
+| `merge_rowid_source` | `unsupported feature` | 1 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE merge_rowid_source (id INT);` |  |
+| `merge_rowid_target` | `unsupported feature` | 1 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE merge_rowid_target (id INT, val INT);` |  |
+| `merge_source` | `unsupported feature` | 1 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE merge_source(id INT);` |  |
+| `my_secret` | `unsupported feature` | 8 | sql/secrets/create_secret_expression.test | `statement ok<br>CREATE OR REPLACE SECRET my_secret (TYPE HTTP, VERIFY_SSL 0);` |  |
+| `my_seq` | `unsupported feature` | 4 | sql/storage/catalog/test_table_macro_storage.test | `statement error<br>SELECT * FROM my_seq(0,3,2);` |  |
+| `normal_string` | `unsupported feature` | 3 | sql/storage/compression/string/big_strings.test | `statement ok<br>CREATE TABLE normal_string (a VARCHAR);` |  |
+| `number` | `unsupported feature` | 1 | sql/projection/select_star_like.test | `query II<br>SELECT c2, c1 FROM (<br>SELECT * SIMILAR TO 'number(\d+)' AS 'c\1' FROM (SELECT 1 AS number1, 2 AS number2, 3 AS end)<br>)<br>----<br>2	1` |  |
+| `ok` | `unsupported feature` | 2 | sql/show_select/describe_subquery.test | `statement ok<br>(DESCRIBE SELECT 42 AS a)` |  |
+| `p1` | `unsupported feature` | 4 | sql/storage/catalog/test_prepared_storage.test | `statement ok<br>EXECUTE p1(42)` |  |
+| `persistent` | `unsupported feature` | 1 | sql/storage/catalog/test_store_temporary.test | `statement ok<br>CREATE TABLE persistent (i INTEGER)` |  |
+| `plus2` | `unsupported feature` | 5 | sql/storage/catalog/test_macro_storage.test | `query T<br>SELECT plus2(3)<br>----<br>5` |  |
+| `pragma_metadata_info` | `unsupported feature` | 3 | sql/pragma/test_metadata_info.test | `statement ok<br>FROM pragma_metadata_info();` |  |
+| `pragma_platform` | `unsupported feature` | 2 | sql/pragma/test_pragma_version.test | `statement ok<br>select * from pragma_platform();` |  |
+| `pragma_table_info` | `unsupported feature` | 5 | sql/pragma/test_table_info.test<br>sql/select/test_projection_names.test | `query I<br>SELECT name FROM pragma_table_info('tbl') ORDER BY name<br>----<br>COL1<br>COL2` |  |
+| `pragma_version` | `unsupported feature` | 2 | sql/pragma/test_pragma_version.test | `statement ok<br>select * from pragma_version();` |  |
+| `prepare_query` | `unsupported feature` | 1 | sql/prepared/parameter_order_subquery.test | `query I<br>EXECUTE prepare_query(-675986880, 1);<br>----<br>1` |  |
+| `psbigint` | `unsupported feature` | 1 | sql/prepared/test_issue_21077.test | `query I<br>EXECUTE psbigint(-9223372036854775808);<br>----<br>9223372036854775808` |  |
+| `psinteger` | `unsupported feature` | 1 | sql/prepared/test_issue_21077.test | `query I<br>EXECUTE psinteger(-2147483648);<br>----<br>2147483648` |  |
+| `pssmallint` | `unsupported feature` | 1 | sql/prepared/test_issue_21077.test | `query I<br>EXECUTE pssmallint(-32768);<br>----<br>32768` |  |
+| `q` | `unsupported feature` | 1 | sql/prepared/prepare_offset_first.test | `query I<br>EXECUTE q(3, 5);<br>----<br>4<br>5<br>6<br>7<br>8` |  |
+| `q01` | `unsupported feature` | 2 | sql/prepared/prepared_named_param.test | `statement error<br>execute q01(4, 2, 0)` |  |
+| `q123` | `unsupported feature` | 2 | sql/prepared/prepared_named_param.test | `statement error<br>execute q123(param := 5, 3)` |  |
+| `q5` | `unsupported feature` | 1 | sql/prepared/parameter_order_subquery.test | `query I<br>EXECUTE q5(2, 2, 4);<br>----<br>1` |  |
+| `q7` | `unsupported feature` | 1 | sql/prepared/parameter_order_subquery.test | `query I<br>EXECUTE q7(1, 1);<br>----<br>1` |  |
+| `q8` | `unsupported feature` | 1 | sql/prepared/parameter_order_subquery.test | `query III<br>EXECUTE q8(1, 10, 3);<br>----<br>1	10	3` |  |
+| `rename` | `unsupported feature` | 8 | sql/projection/select_star_like.test<br>sql/projection/select_star_rename.test | `statement error<br>SELECT * RENAME (col1 AS other_) SIMILAR TO '.*col.*' FROM integers` |  |
+| `res` | `unsupported feature` | 1 | sql/setops/test_union_binding.test | `query I<br>SELECT col1 FROM (SELECT * FROM test2 UNION SELECT * FROM test) res(col1) ORDER BY 1;<br>----<br>NULL<br>1<br>2<br>3<br>4` |  |
+| `s1` | `unsupported feature` | 22 | sql/prepared/parameter_variants.test<br>sql/prepared/prepared_select.test<br>sql/prepared/prepared_update.test<br>sql/prepared/test_basic_prepare.test<br>sql/prepared/test_prepare_delete.test<br>sql/prepared/test_prepare_delete_update.test<br>sql/prepared/test_prepare_issue_8500.test<br>sql/prepared/test_prepare_null.test<br>sql/prepared/test_prepare_select.test<br>sql/prepared/test_prepare_types.test<br>sql/secrets/create_secret_persistence_no_client_context.test<br>sql/setops/ambiguous_order_by.test | `statement ok<br>EXECUTE s1(3)` |  |
+| `s2` | `unsupported feature` | 4 | sql/prepared/prepared_select.test<br>sql/prepared/prepared_update.test<br>sql/prepared/test_prepare_null.test | `statement ok<br>EXECUTE s2 (NULL)` |  |
+| `s2965` | `unsupported feature` | 1 | sql/prepared/test_prepare_unused_cte.test | `statement ok<br>EXECUTE s2965('val1', 'val2')` |  |
+| `s3` | `unsupported feature` | 6 | sql/prepared/prepared_select.test<br>sql/prepared/prepared_update.test<br>sql/prepared/test_prepare_null.test<br>sql/prepared/test_prepare_select.test | `statement ok<br>EXECUTE s3(42)` |  |
+| `s4` | `unsupported feature` | 1 | sql/prepared/prepared_select.test | `query I<br>EXECUTE s4(1, 2, 3, 1)<br>----<br>1` |  |
+| `s5` | `unsupported feature` | 1 | sql/prepared/prepared_select.test | `query I<br>EXECUTE s5(1, 2, 3, 1)<br>----<br>1` |  |
+| `scope_as_struct` | `unsupported feature` | 1 | sql/secrets/create_secret_expression.test | `statement ok<br>CREATE SECRET scope_as_struct (TYPE HTTP, BEARER_TOKEN some_field, scope ('hi', 'hello'));` |  |
+| `sometable` | `unsupported feature` | 1 | sql/show_select/describe_rowid.test | `statement ok<br>create table sometable (<br>	column1 varchar<br>);` |  |
+| `sort` | `unsupported feature` | 1 | sql/setops/test_union_all_by_name.test | `query III sort<br>(SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2) EXCEPT SELECT NULL, 2, 2 FROM t1;<br>----<br>1	1	NULL<br>3	3	NULL<br>NULL	4	4` |  |
+| `table3` | `unsupported feature` | 8 | sql/returning/returning_delete.test<br>sql/returning/returning_insert.test<br>sql/returning/returning_update.test | `statement ok<br>INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;` |  |
+| `table4` | `unsupported feature` | 4 | sql/returning/returning_delete.test<br>sql/returning/returning_update.test | `statement ok<br>CREATE INDEX b_index ON table4(b);` |  |
+| `table5` | `unsupported feature` | 2 | sql/returning/returning_delete.test<br>sql/returning/returning_update.test | `statement ok<br>CREATE TABLE table5 (a5 INTEGER, b5 INTEGER, c5 INTEGER);` |  |
+| `tbl1_alp` | `unsupported feature` | 6 | sql/storage/compression/alp/alp_inf_null_nan.test<br>sql/storage/compression/alp/alp_nulls.test<br>sql/storage/compression/alp/alp_nulls_simple.test | `statement ok<br>create table tbl1_alp(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl1_alprd` | `unsupported feature` | 6 | sql/storage/compression/alprd/alprd_inf_null_nan.test<br>sql/storage/compression/alprd/alprd_nulls.test<br>sql/storage/compression/alprd/alprd_nulls_simple.test | `statement ok<br>create table tbl1_alprd(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl1_uncompressed` | `unsupported feature` | 12 | sql/storage/compression/alp/alp_inf_null_nan.test<br>sql/storage/compression/alp/alp_nulls.test<br>sql/storage/compression/alp/alp_nulls_simple.test<br>sql/storage/compression/alprd/alprd_inf_null_nan.test<br>sql/storage/compression/alprd/alprd_nulls.test<br>sql/storage/compression/alprd/alprd_nulls_simple.test | `statement ok<br>create table tbl1_uncompressed(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl2_alp` | `unsupported feature` | 4 | sql/storage/compression/alp/alp_inf_null_nan.test<br>sql/storage/compression/alp/alp_nulls.test | `statement ok<br>create table tbl2_alp(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl2_alprd` | `unsupported feature` | 4 | sql/storage/compression/alprd/alprd_inf_null_nan.test<br>sql/storage/compression/alprd/alprd_nulls.test | `statement ok<br>create table tbl2_alprd(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl2_uncompressed` | `unsupported feature` | 8 | sql/storage/compression/alp/alp_inf_null_nan.test<br>sql/storage/compression/alp/alp_nulls.test<br>sql/storage/compression/alprd/alprd_inf_null_nan.test<br>sql/storage/compression/alprd/alprd_nulls.test | `statement ok<br>create table tbl2_uncompressed(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl3_alp` | `unsupported feature` | 4 | sql/storage/compression/alp/alp_inf_null_nan.test<br>sql/storage/compression/alp/alp_nulls.test | `statement ok<br>create table tbl3_alp(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl3_alprd` | `unsupported feature` | 4 | sql/storage/compression/alprd/alprd_inf_null_nan.test<br>sql/storage/compression/alprd/alprd_nulls.test | `statement ok<br>create table tbl3_alprd(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tbl3_uncompressed` | `unsupported feature` | 8 | sql/storage/compression/alp/alp_inf_null_nan.test<br>sql/storage/compression/alp/alp_nulls.test<br>sql/storage/compression/alprd/alprd_inf_null_nan.test<br>sql/storage/compression/alprd/alprd_nulls.test | `statement ok<br>create table tbl3_uncompressed(<br>	a INTEGER DEFAULT 5,<br>	b VARCHAR DEFAULT 'test',<br>	c BOOL DEFAULT false,<br>	d DOUBLE,<br>	e TEXT default 'null',<br>	f FLOAT<br>);` |  |
+| `tconstraint1` | `unsupported feature` | 1 | sql/pragma/test_table_info.test | `statement ok<br>create table tconstraint1(i integer primary key default(3), j blob not null);` |  |
+| `tconstraint2` | `unsupported feature` | 1 | sql/pragma/test_table_info.test | `statement ok<br>create table tconstraint2(i integer, j integer, k integer, l integer unique, primary key(i, j, k));` |  |
+| `test_bp` | `unsupported feature` | 5 | sql/storage/compression/bitpacking/bitpacking_storage_info.test<br>sql/storage/compression/bitpacking/force_bitpacking.test<br>sql/storage/compression/compression_selection.test<br>sql/storage/compression/compression_selection_dict_fsst.test | `statement ok<br>CREATE TABLE test_bp (a INTEGER)` |  |
+| `test_constant` | `unsupported feature` | 2 | sql/storage/compression/compression_selection.test<br>sql/storage/compression/compression_selection_dict_fsst.test | `statement ok<br>CREATE TABLE test_constant (a INTEGER);` |  |
+| `test_default` | `unsupported feature` | 2 | sql/storage/catalog/test_not_distinct_from_default.test | `statement ok<br>INSERT INTO test_default (b) VALUES (2), (4), (6);` |  |
+| `test_dict` | `unsupported feature` | 4 | sql/storage/compression/compression_selection.test<br>sql/storage/compression/compression_selection_dict_fsst.test<br>sql/storage/compression/dict_fsst/force_dictionary.test<br>sql/storage/compression/dictionary/force_dictionary.test | `statement ok<br>CREATE TABLE test_dict (a VARCHAR);` |  |
+| `test_generated_middle` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO test_generated_middle (a, c) VALUES (1, 100), (2, 200), (3, 300);` |  |
+| `test_generated_varchar` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO test_generated_varchar (id, name) VALUES (1, 'Alice'), (2, 'Bob');` |  |
+| `test_generated_virtual` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO test_generated_virtual (id, base_value) VALUES (1, 10), (2, 20), (3, 30);` |  |
+| `test_multi_generated` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO test_multi_generated (x, y) VALUES (2, 3), (4, 5), (6, 7);` |  |
+| `test_optimized` | `unsupported feature` | 1 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE test_optimized (id INTEGER, name VARCHAR, value DOUBLE);` |  |
+| `test_rle` | `unsupported feature` | 3 | sql/storage/compression/compression_selection.test<br>sql/storage/compression/compression_selection_dict_fsst.test<br>sql/storage/compression/rle/force_rle.test | `statement ok<br>CREATE TABLE test_rle (a INTEGER);` |  |
+| `test_rowid_gen_middle` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO test_rowid_gen_middle (a, c) VALUES (1, 100), (2, 200);` |  |
+| `test_rowid_generated` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO test_rowid_generated (id, val) VALUES (1, 10), (2, 20), (3, 30);` |  |
+| `test_rowid_multi_gen` | `unsupported feature` | 2 | sql/returning/returning_delete.test | `statement ok<br>INSERT INTO test_rowid_multi_gen (id, a, b) VALUES (1, 2, 3), (2, 4, 5);` |  |
+| `test_rowid_supported` | `unsupported feature` | 1 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE test_rowid_supported (id INTEGER, name VARCHAR);` |  |
+| `test_schema_table1` | `unsupported feature` | 1 | sql/pragma/test_show_tables_from.test | `statement ok<br>CREATE TABLE test_schema.test_schema_table1(k INTEGER)` |  |
+| `test_star` | `unsupported feature` | 1 | sql/projection/select_star_replace.test | `statement ok<br>CREATE TABLE test_star(id INTEGER, col1 VARCHAR, col2 VARCHAR, col3 INTEGER);` |  |
+| `test_tbl` | `unsupported feature` | 1 | sql/storage/catalog/test_table_macro_storage.test | `statement ok<br>CREATE TABLE test_tbl (id INT, name string, height double);` |  |
+| `test_where_returning` | `unsupported feature` | 1 | sql/returning/returning_delete.test | `statement ok<br>CREATE TABLE test_where_returning (id INTEGER, amount DOUBLE, customer VARCHAR);` |  |
+| `to_years` | `unsupported feature` | 1 | sql/prepared/test_prepare_select.test | `statement ok<br>PREPARE s1 AS SELECT to_years($1), CAST(list_value($1) AS BIGINT[]);` |  |
+| `types` | `unsupported feature` | 1 | sql/show_select/test_summarize.test | `statement ok<br>CREATE TABLE types(i INTEGER, j VARCHAR, k HUGEINT, d DOUBLE, e BLOB);` |  |
+| `v10` | `unsupported feature` | 5 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v10(27)<br>----<br>{'x': 27}` |  |
+| `v11` | `unsupported feature` | 4 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v11(27)<br>----<br>{'x': 27, 'y': NULL}` |  |
+| `v12` | `unsupported feature` | 5 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v12(NULL)<br>----<br>1` |  |
+| `v13` | `unsupported feature` | 5 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v13(3::int)<br>----<br>3` |  |
+| `v14` | `unsupported feature` | 4 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v14(2)<br>----<br>200` |  |
+| `v15` | `unsupported feature` | 3 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v15(1)<br>----<br>NULL` |  |
+| `v16` | `unsupported feature` | 2 | sql/prepared/prepare_default_varchar.test | `query I<br>EXECUTE v16(1, 2, 3, NULL)<br>----<br>1.5` |  |
+| `v17` | `unsupported feature` | 3 | sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v17([], 1)<br>----<br>0` |  |
+| `v18` | `unsupported feature` | 3 | sql/prepared/test_prepare_ambiguous_type.test | `query I<br>EXECUTE v18(1)<br>----<br>1` |  |
+| `v19` | `unsupported feature` | 2 | sql/prepared/test_prepare_ambiguous_type.test | `statement error<br>EXECUTE v19(0)` |  |
+| `v8` | `unsupported feature` | 7 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/prepare_mixed_types.test<br>sql/prepared/test_prepare_ambiguous_type.test | `statement ok<br>EXECUTE v8('body')` |  |
+| `v9` | `unsupported feature` | 7 | sql/prepared/prepare_default_varchar.test<br>sql/prepared/prepare_mixed_types.test<br>sql/prepared/test_prepare_ambiguous_type.test | `statement ok<br>EXECUTE v9([1])` |  |
+| `varchar_tbl` | `unsupported feature` | 2 | sql/setops/test_pg_union.test | `statement ok<br>CREATE TABLE VARCHAR_TBL(f1 varchar(4));` |  |
+| `z` | `unsupported feature` | 1 | sql/storage/checkpoint/checkpoint_with_outstanding_insertions.test | `statement ok<br>create or replace table z(id integer);` |  |
+
+---
+
+# DuckDB Migration Issues
+
+- Generated at (UTC): 2026-03-19T08:32:52.839093+00:00
+- Scan root: `tests/sqllogictests/suites/duckdb_migrated`
+- Tracked issues: 150
+- Files with issues: 2105
+- Unknown function TODOs: 1211
+- Unsupported feature TODOs: 25812
+- Unknown function unique issues: 0
+- Unsupported feature unique issues: 57
+
+## Unknown Functions
+
+| Function | Count | Files | Refs |
+| --- | ---: | --- | --- |
+| _none_ |  |  |  |
+
+## Unsupported Features
+
+| Feature Signature | Reason | Count | Files | SQL (sample) | Refs |
+| --- | --- | ---: | --- | --- | --- |
+| `aliens` | `unsupported feature` | 1 | sql/storage/wal/wal_storage_types.test | `statement error<br>CREATE TABLE aliens (<br>    name text,<br>    current_mood mood<br>);` |  |
+| `another_t` | `unsupported feature` | 1 | sql/subquery/scalar/test_grouped_correlated_subquery.test | `statement ok<br>CREATE TABLE another_T (col1 INT, col2 INT, col3 INT, col4 INT, col5 INT, col6 INT, col7 INT, col8 INT);` |  |
+| `array` | `unsupported feature` | 23 | sql/subquery/scalar/array_order_subquery.test<br>sql/subquery/scalar/array_subquery.test<br>sql/subquery/scalar/order_by_correlated.test | `statement error<br>select array(select 1,2)` |  |
+| `array_rv` | `unsupported feature` | 2 | sql/subquery/scalar/test_issue_7079.test | `query I<br>SELECT array_rv(arr) FROM t ORDER BY arr;<br>----<br>[]<br>[3, 2, 1]<br>[5, 4]` |  |
+| `array_rv_coal` | `unsupported feature` | 2 | sql/subquery/scalar/test_issue_7079.test | `query I<br>SELECT array_rv_coal(arr) FROM t ORDER BY arr;<br>----<br>[]<br>[3, 2, 1]<br>[5, 4]` |  |
+| `bigtbl` | `unsupported feature` | 2 | sql/storage/metadata/full_table_metadata_reuse.test<br>sql/storage/metadata/partial_table_metadata_reuse.test | `statement ok<br>CREATE TABLE bigtbl(i INT);` |  |
+| `blob_empty` | `unsupported feature` | 3 | sql/storage/compression/string/blob.test | `statement ok<br>CREATE TABLE blob_empty (b BYTEA);` |  |
+| `check` | `unsupported feature` | 1 | sql/table_function/information_schema.test | `query III<br>SELECT constraint_schema, constraint_name, check_clause<br>FROM information_schema.check_constraints<br>WHERE constraint_schema = 'scheme' AND check_clause LIKE 'CHECK%'<br>----<br>scheme	emp_salary_check	CHECK((salary > 0))` |  |
+| `db2` | `unsupported feature` | 1 | sql/storage/memory/in_memory_disabled_zstd.test | `statement ok<br>attach ':memory:' as db2 (compress);` |  |
+| `delete_tbl` | `unsupported feature` | 2 | sql/storage/wal/wal_autocheckpoint_entries.test | `statement ok<br>CREATE TABLE entry_count_db.delete_tbl(x INTEGER);` |  |
+| `dept` | `unsupported feature` | 1 | sql/table_function/information_schema.test | `statement ok<br>CREATE TABLE scheme.dept (dept_id INT PRIMARY KEY, dept_name VARCHAR(100) NOT NULL)` |  |
+| `duckdb_dependencies` | `unsupported feature` | 2 | sql/table_function/duckdb_dependencies.test | `statement ok<br>SELECT * FROM duckdb_dependencies();` |  |
+| `duckdb_extensions` | `unsupported feature` | 3 | sql/table_function/duckdb_extensions.test | `statement ok<br>SELECT * FROM duckdb_extensions();` |  |
+| `duckdb_keywords` | `unsupported feature` | 1 | sql/table_function/duckdb_keywords.test | `statement ok<br>SELECT * FROM duckdb_keywords();` |  |
+| `duckdb_optimizers` | `unsupported feature` | 2 | sql/table_function/duckdb_optimizers.test | `statement ok<br>SELECT * FROM duckdb_optimizers();` |  |
+| `duckdb_prepared_statements` | `unsupported feature` | 1 | sql/table_function/duckdb_prepared_statements.test | `query IIII<br>select * from duckdb_prepared_statements() order by name;<br>----<br>p1	SELECT 42	NULL	[INTEGER]<br>p2	INSERT INTO tbl (VALUES ('test'))	NULL	[BIGINT]<br>p3	SELECT 21, $1, $2	[UNKNOWN, UNKNOWN]	NULL<br>p4	SELECT $name, $other_name	[UNKNOWN, UNKNOWN]	NULL` |  |
+| `duckdb_temporary_files` | `unsupported feature` | 2 | sql/storage/temp_directory/max_swap_space_error.test | `query I<br>select "size" from duckdb_temporary_files()<br>----` |  |
+| `ducklake_column` | `unsupported feature` | 1 | sql/storage/metadata/multi_table_metadata_reuse.test | `statement ok<br>CREATE TABLE ducklake_column(end_snapshot BIGINT);` |  |
+| `ducklake_table` | `unsupported feature` | 1 | sql/storage/metadata/multi_table_metadata_reuse.test | `statement ok<br>CREATE TABLE ducklake_table(end_snapshot BIGINT);` |  |
+| `eviction_invariants_ok` | `unsupported feature` | 10 | sql/table_function/duckdb_eviction_queues.test<br>sql/table_function/duckdb_eviction_queues_transactions.test | `query I<br>SELECT eviction_invariants_ok();<br>----<br>1` |  |
+| `exams` | `unsupported feature` | 1 | sql/subquery/lateral/test_lateral_join.test | `statement ok<br>CREATE TABLE exams(sid INTEGER, course VARCHAR, curriculum VARCHAR, grade INTEGER, year INTEGER)` |  |
+| `fk_integers_2` | `unsupported feature` | 1 | sql/table_function/duckdb_constraints.test | `statement ok<br>create table fk_integers_2(k int, foreign key (k) references integers(i));` |  |
+| `fudge` | `unsupported feature` | 2 | sql/table_function/duckdb_eviction_queues.test<br>sql/table_function/duckdb_eviction_queues_transactions.test | `statement ok<br>CREATE MACRO fudge() AS (20);` |  |
+| `int2_tbl` | `unsupported feature` | 2 | sql/subquery/lateral/pg_lateral.test | `statement ok<br>CREATE TABLE INT2_TBL(f1 int2);` |  |
+| `lateral` | `unsupported feature` | 39 | sql/subquery/complex/complex_correlated_subquery_issue.test<br>sql/subquery/lateral/lateral_arrays.test<br>sql/subquery/lateral/lateral_fuzzer_1463.test<br>sql/subquery/lateral/lateral_join_aggregate.test<br>sql/subquery/lateral/lateral_join_chain.test<br>sql/subquery/lateral/lateral_left_join.test<br>sql/subquery/lateral/lateral_values.test<br>sql/subquery/lateral/pg_lateral.test<br>sql/subquery/lateral/test_lateral_join.test | `statement error<br>SELECT * FROM integers, LATERAL (SELECT SUM(i)) t(sum);` |  |
+| `little_tbl` | `unsupported feature` | 1 | sql/storage/metadata/full_table_metadata_reuse.test | `statement ok<br>CREATE TABLE little_tbl(i INT);` |  |
+| `my_logs` | `unsupported feature` | 1 | sql/subquery/complex/correlated_internal_issue_5975.test | `statement ok<br>CREATE TABLE my_logs (<br>    featherEventId UUID,<br>    "duckInfo.gooseEmail" VARCHAR,<br>    "duckInfo.gooseSubject" VARCHAR<br>);` |  |
+| `mytemp` | `unsupported feature` | 1 | sql/table_function/duckdb_tables.test | `statement ok<br>CREATE TEMPORARY TABLE mytemp(i INTEGER)` |  |
+| `nested_lists` | `unsupported feature` | 1 | sql/subquery/complex/nested_unnest_subquery.test | `statement ok<br>CREATE TABLE nested_lists(l INTEGER[][]);` |  |
+| `nested_shredded_values` | `unsupported feature` | 1 | sql/storage/types/variant/variant_null_missing.test | `statement ok<br>create table nested_shredded_values (col VARIANT)` |  |
+| `null_byte` | `unsupported feature` | 4 | sql/storage/null_byte_storage.test | `statement ok<br>CREATE INDEX i_index ON null_byte(v)` |  |
+| `pk` | `unsupported feature` | 1 | sql/table_function/duckdb_tables.test | `statement ok<br>CREATE TABLE pk(i INTEGER PRIMARY KEY, j VARCHAR, CHECK(i<100))` |  |
+| `rank` | `unsupported feature` | 1 | sql/subquery/scalar/test_grouped_correlated_subquery.test | `statement error<br>SELECT EXISTS (SELECT RANK() OVER (PARTITION BY SUM(DISTINCT col5))) FROM another_T t1;` |  |
+| `read_duckdb` | `unsupported feature` | 2 | sql/storage/read_duckdb/read_duckdb_suggested.test | `statement error<br>SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_suggested.db', table_name='ffg')<br>----<br>fff` |  |
+| `reals` | `unsupported feature` | 1 | sql/table_function/information_schema.test | `statement ok<br>CREATE TEMPORARY TABLE reals (f FLOAT PRIMARY KEY, dec DECIMAL(16, 4), h HUGEINT, b BIGINT, t TINYINT, d DOUBLE NOT NULL)` |  |
+| `shredded_array` | `unsupported feature` | 1 | sql/storage/types/variant/variant_null_missing.test | `statement ok<br>create table shredded_array (col VARIANT)` |  |
+| `shredded_integer` | `unsupported feature` | 1 | sql/storage/types/variant/variant_shredding_omit_untyped.test | `statement ok<br>create table shredded_integer (col VARIANT)` |  |
+| `shredded_values` | `unsupported feature` | 1 | sql/storage/types/variant/variant_null_missing.test | `statement ok<br>create table shredded_values (col VARIANT)` |  |
+| `source_tbl` | `unsupported feature` | 1 | sql/table_function/information_schema_fkey_constraint_names.test | `statement ok<br>create table source_tbl(source_col int references target_tbl(target_col));` |  |
+| `students` | `unsupported feature` | 1 | sql/subquery/lateral/test_lateral_join.test | `statement ok<br>CREATE TABLE students(id INTEGER, name VARCHAR, major VARCHAR, year INTEGER)` |  |
+| `swan_email_info` | `unsupported feature` | 1 | sql/subquery/complex/correlated_internal_issue_5975.test | `statement ok<br>CREATE OR REPLACE MACRO swan_email_info (duckEmail) AS (<br>    SELECT<br>        CASE<br>            WHEN ENDS_WITH(duckEmail, 'duckdblabs.com') THEN STRUCT_PACK(<br>                subject := 'serviceAccount:' \|\| duckEmail,<br>                type := swan_MY_ENUM (duckEmail)<br>            )<br>            WHEN duckEmail = 'my@duckdblabs.com'<br>            OR duckEmail = 'EnumField8' THEN STRUCT_PACK(<br>                subject := 'EnumField8',<br>                type := 'EnumField8'::MY_ENUM<br>            )<br>            WHEN REGEXP_MATCHES(duckEmail, '[\w-.+]+@(([\w-]+).)+[\w-]{2,4}') THEN STRUCT_PACK(<br>                subject := 'user:' \|\| duckEmail,<br>                type := 'EnumField1'::MY_ENUM<br>            )<br>        END AS duckInfo<br>);` |  |
+| `swan_my_enum` | `unsupported feature` | 1 | sql/subquery/complex/correlated_internal_issue_5975.test | `statement ok<br>CREATE OR REPLACE MACRO swan_MY_ENUM (sa) AS (<br>    WITH sa_parts AS (<br>        SELECT STRING_SPLIT(sa, '@') AS emailParts<br>    )<br>    SELECT 'EnumField2'::MY_ENUM<br>    FROM sa_parts<br>);` |  |
+| `swan_subject_info` | `unsupported feature` | 1 | sql/subquery/complex/correlated_internal_issue_5975.test | `statement ok<br>CREATE OR REPLACE MACRO swan_subject_info (duckSubject) AS (<br>    WITH<br>        subjectComponents AS (<br>            SELECT<br>                duckSubject AS subject,<br>                STRING_SPLIT(duckSubject, ':') AS parts<br>        )<br>    SELECT<br>        CASE<br>            WHEN parts[1] = 'EnumField2' THEN STRUCT_PACK(<br>                subject := subject,<br>                type := swan_MY_ENUM (parts[2])<br>            )<br>            WHEN parts[1] = 'EnumField1' THEN STRUCT_PACK(subject := subject, type := 'EnumField1'::MY_ENUM)<br>            WHEN REGEXP_MATCHES(<br>                subject,<br>                'duckdb.org'<br>            ) THEN STRUCT_PACK(<br>                subject := subject,<br>                type := 'EnumField6'::MY_ENUM<br>            )<br>            WHEN NOT REGEXP_FULL_MATCH(subject, '.+@.+\..+') THEN STRUCT_PACK(<br>                subject := subject,<br>                type := 'EnumField7'::MY_ENUM<br>            )<br>        END AS duckInfo<br>    FROM<br>        subjectComponents<br>);` |  |
+| `target_tbl` | `unsupported feature` | 1 | sql/table_function/information_schema_fkey_constraint_names.test | `statement ok<br>create table target_tbl (target_col int primary key);` |  |
+| `tbl_productsales` | `unsupported feature` | 1 | sql/subquery/scalar/test_grouped_correlated_subquery.test | `statement ok<br>CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int);` |  |
+| `test_data` | `unsupported feature` | 1 | sql/subquery/any_all/test_row_comparison_any_all.test | `statement ok<br>CREATE TABLE test_data(a INTEGER, b INTEGER);` |  |
+| `test_empty` | `unsupported feature` | 3 | sql/storage/compression/string/empty.test | `statement ok<br>CREATE TABLE test_empty (a VARCHAR);` |  |
+| `test_list_2` | `unsupported feature` | 1 | sql/storage/nested/struct_of_lists_unaligned.test | `statement ok<br>CREATE TABLE test_list_2 (a integer, b STRUCT(c VARCHAR[], d VARCHAR[], e INTEGER[]));` |  |
+| `text_tbl` | `unsupported feature` | 1 | sql/subquery/lateral/pg_lateral.test | `statement ok<br>CREATE TABLE TEXT_TBL (f1 text);` |  |
+| `tf_1` | `unsupported feature` | 1 | sql/table_function/duckdb_constraints_fk.test | `statement ok<br>CREATE TABLE tf_1 (<br>  a integer, "b c" integer, "d e" integer,<br>  PRIMARY KEY (a),<br>  UNIQUE ("b c"),<br>  UNIQUE ("d e")<br>);` |  |
+| `tf_3` | `unsupported feature` | 1 | sql/table_function/duckdb_constraints_fk.test | `statement ok<br>CREATE TABLE tf_3 (<br>  g integer, h integer,<br>  PRIMARY KEY (g),<br>  UNIQUE (h)<br>);` |  |
+| `tf_4` | `unsupported feature` | 1 | sql/table_function/duckdb_constraints_fk.test | `statement ok<br>CREATE TABLE tf_4 (<br>  h integer,<br>  FOREIGN KEY (h) REFERENCES tf_3 (h),<br>);` |  |
+| `unique_index_test` | `unsupported feature` | 1 | sql/storage/test_unique_index_checkpoint.test | `statement ok<br>CREATE UNIQUE INDEX unique_index_test_ordernumber_idx_unique ON unique_index_test (ordernumber);` |  |
+| `unsigned` | `unsupported feature` | 1 | sql/storage/types/test_unsigned_storage.test | `statement ok<br>CREATE TABLE unsigned (a utinyint, b usmallint, c uinteger, d ubigint);` |  |
+| `variant_list` | `unsupported feature` | 1 | sql/storage/types/variant/struct_of_variant.test | `statement ok<br>CREATE TABLE variant_list(<br>	col STRUCT(<br>		f1 INTEGER,<br>		f2 VARIANT,<br>		f3 VARCHAR,<br>		f4 BOOL<br>	)<br>);` |  |
+| `xaa` | `unsupported feature` | 6 | sql/storage/encryption/wal/encrypted_wal_blob_storage.test<br>sql/storage/types/test_blob_storage.test<br>sql/storage/wal/wal_blob_storage.test | `query I<br>SELECT * FROM blobs<br>----<br>a<br>\xAA<br>\xAA\xFF\xAA<br>(empty)<br>NULL<br>U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01<br>U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01` |  |
+| `zstd` | `unsupported feature` | 1 | sql/storage/compression/zstd/zstd_big_badly_compressed_list.test | `statement ok<br>CREATE TABLE zstd(big_list VARCHAR[]);` |  |

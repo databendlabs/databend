@@ -1,0 +1,47 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS variant_list
+
+# Always shred
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE variant_list(
+# 	col STRUCT(
+# 		f1 INTEGER,
+# 		f2 VARIANT,
+# 		f3 VARCHAR,
+# 		f4 BOOL
+# 	)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO variant_list SELECT {
+# 	'f1': i,
+# 	'f2': {'a': i::INTEGER, 'b': 'val' || i},
+# 	'f3': 'test',
+# 	'f4': i % 2 = 0
+# } from range(0, 1000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+# TODO: unsupported feature
+# query III
+# select
+# 	col.f2.a::INTEGER,
+# 	col.f2.b::VARCHAR,
+# 	col.f4
+# from variant_list limit 10
+# ----
+# 0	val0	1
+# 1	val1	0
+# 2	val2	1
+# 3	val3	0
+# 4	val4	1
+# 5	val5	0
+# 6	val6	1
+# 7	val7	0
+# 8	val8	1
+# 9	val9	0

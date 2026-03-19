@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# prepare v1 as select cast(111 as short) * $1;
+
+# literals adapt to the type
+
+# TODO: unsupported feature
+# statement error
+# execute v1(1665);
+
+# TODO: unsupported feature
+# statement error
+# execute v1('1665');
+
+# TODO: unsupported feature
+# statement error
+# execute v1('1665'::VARCHAR);
+
+# TODO: unsupported feature
+# query I
+# execute v1(1665::BIGINT);
+# ----
+# 184815
+
+# TODO: unsupported feature
+# statement error
+# execute v1(1665::SHORT);

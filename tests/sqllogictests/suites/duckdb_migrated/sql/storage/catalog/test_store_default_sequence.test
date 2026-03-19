@@ -1,0 +1,72 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# create a table with a reference to a sequence as default value
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+# use the sequence so that currval can return a value
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq')
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER DEFAULT nextval('seq'), b INTEGER, c INTEGER DEFAULT currval('seq'));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (b) VALUES (11)
+
+# restart the database
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY b
+# ----
+# 2
+# 11
+# 2
+
+# verify that the sequence was used during the append
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (b) VALUES (12);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (b) VALUES (13);
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY b
+# ----
+# 2	11	2
+# 3	12	3
+# 4	13	4
+
+# restart and insert one more time
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (b) VALUES (14)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test (b) VALUES (15)
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY b
+# ----
+# 2	11	2
+# 3	12	3
+# 4	13	4
+# 5	14	5
+# 6	15	6

@@ -1,0 +1,28 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t0
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t0 (c0 TIME,c1 DOUBLE PRECISION);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 (c0 INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES (1),(10),(7),(9),(NULL),(1),(7),(7),(0),(8),(0),(9),(NULL),(5),(3),(8),(0);
+
+# TODO: unsupported feature
+# statement error
+# SELECT (FALSE) IN (TRUE, (SELECT TIME '13:35:07' FROM t1) BETWEEN t0.c0 AND t0.c0) FROM t0;
+
+# TODO: unsupported feature
+# query I
+# SELECT (FALSE) IN (TRUE, (SELECT TIME '13:35:07' FROM t1) BETWEEN t0.c0 AND t0.c0) FROM t0;
+# ----

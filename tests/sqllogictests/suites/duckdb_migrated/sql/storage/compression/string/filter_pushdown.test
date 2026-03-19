@@ -1,0 +1,147 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id INT, col VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::INT id, concat('BLEEPBLOOP-', (i%10)::VARCHAR) col FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# filter on the dictionary column
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 'BLEEPBLOOP-5'
+# ----
+# BLEEPBLOOP-5	BLEEPBLOOP-9	5000
+
+# filter on non-dictionary column
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT MIN(id), MAX(id), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
+# ----
+# 5000	5000	BLEEPBLOOP-0	BLEEPBLOOP-0	1
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id INT, col VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::INT id, concat('BLEEPBLOOP-', (i%10)::VARCHAR) col FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# filter on the dictionary column
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 'BLEEPBLOOP-5'
+# ----
+# BLEEPBLOOP-5	BLEEPBLOOP-9	5000
+
+# filter on non-dictionary column
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT MIN(id), MAX(id), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
+# ----
+# 5000	5000	BLEEPBLOOP-0	BLEEPBLOOP-0	1
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dictionary' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id INT, col VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::INT id, concat('BLEEPBLOOP-', (i%10)::VARCHAR) col FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# filter on the dictionary column
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 'BLEEPBLOOP-5'
+# ----
+# BLEEPBLOOP-5	BLEEPBLOOP-9	5000
+
+# filter on non-dictionary column
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT MIN(id), MAX(id), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
+# ----
+# 5000	5000	BLEEPBLOOP-0	BLEEPBLOOP-0	1
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

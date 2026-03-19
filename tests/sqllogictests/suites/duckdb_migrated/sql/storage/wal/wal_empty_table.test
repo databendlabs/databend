@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b VARCHAR)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 0
+
+
+# verify that the table is still there after restart
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 0

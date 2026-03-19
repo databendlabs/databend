@@ -1,0 +1,109 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS test.v
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS test.v2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test.t
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test;
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+# CREATE VIEW test.v AS SELECT * FROM test.t;
+
+# read the info from the view
+
+# TODO: unsupported feature
+# statement error
+# drop table test.t;
+
+# TODO: unsupported feature
+# statement ok
+# drop table test.t cascade;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v2 AS SELECT 42
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW test.v2
+
+
+# restart the system, causing the database to restore from the WAL
+
+# the view no longer exists
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.t
+
+# We created the table, but the view still doesn't exist
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v AS SELECT * FROM test.t;
+
+# TODO: unsupported feature
+# statement error
+# drop table test.t;
+
+# TODO: unsupported feature
+# statement ok
+# drop table test.t cascade;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v2
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.t
+
+# We created the table, but the view still doesn't exist
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v AS SELECT * FROM test.t;
+
+# TODO: unsupported feature
+# statement error
+# drop table test.t;
+
+# TODO: unsupported feature
+# statement ok
+# drop table test.t cascade;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v2

@@ -1,0 +1,96 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# statement ok
+# create table a(i integer);
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values (42), (44);
+
+# we can query row ids
+
+# TODO: unsupported feature
+# query II
+# SELECT rowid, * FROM a
+# ----
+# 0	42
+# 1	44
+
+# TODO: unsupported feature
+# query I
+# SELECT rowid+1 FROM a WHERE CASE WHEN i=42 THEN rowid=0 ELSE rowid=1 END;
+# ----
+# 1
+# 2
+
+# rowid isn't expanded in *
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# 42
+# 44
+
+# we can't update rowids
+
+# TODO: unsupported feature
+# statement error
+# UPDATE a SET rowid=5
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO a (rowid, i)  VALUES (5, 6)
+
+# TODO: unsupported feature
+# statement ok
+# create table b(rowid integer);
+
+# TODO: unsupported feature
+# statement ok
+# insert into b values (42), (22);
+
+# this rowid is expanded
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM b ORDER BY 1
+# ----
+# 22
+# 42
+
+# selecting rowid just selects the column
+
+# TODO: unsupported feature
+# query I
+# SELECT rowid FROM b ORDER BY 1
+# ----
+# 22
+# 42
+
+# now we can update
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE b SET rowid=5
+
+# and insert
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO b (rowid) VALUES (5)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM b
+# ----
+# 5
+# 5
+# 5

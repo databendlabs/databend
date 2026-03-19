@@ -1,0 +1,247 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test AS SELECT UNNEST(range(0, 100000)) as x;
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+# ----
+# 24952	12
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+# ----
+# 24903	6

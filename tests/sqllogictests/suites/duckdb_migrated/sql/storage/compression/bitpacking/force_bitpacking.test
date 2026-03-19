@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_bp
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_bp (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_bp SELECT 1 FROM range(0, 1000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_bp SELECT 2 FROM range(0, 1000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test_bp') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+# ----
+# BitPacking

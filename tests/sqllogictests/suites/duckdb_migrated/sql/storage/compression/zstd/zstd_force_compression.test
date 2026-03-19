@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS zstd_data
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE zstd_data AS SELECT concat('thisisalongstring', i) str FROM range(0, 1000) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+# TODO: unsupported feature
+# query I
+# select count(*) from pragma_storage_info('zstd_data') where compression='ZSTD';
+# ----
+# 1

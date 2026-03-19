@@ -1,0 +1,14 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# Set the temporary directory to an empty directory.
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE t2 AS SELECT * FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2 AS SELECT * FROM range(0, 1000000);
+
+# after the temp directory is created, we can't change the temp directory again

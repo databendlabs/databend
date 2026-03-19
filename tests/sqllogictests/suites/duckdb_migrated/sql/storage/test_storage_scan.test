@@ -1,0 +1,86 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11), (12), (13), (14), (15), (NULL)
+
+# perform read-only scans a few times
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 11
+# 12
+# 13
+# 14
+# 15
+# NULL
+
+# now perform a deletion
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 11
+# 12
+# 13
+# 14
+# 15
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=12
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 11
+# 13
+# 14
+# 15
+# NULL
+
+# reload and perform another deletion
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 11
+# 13
+# 14
+# 15
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=13
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 11
+# 14
+# 15
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY a
+# ----
+# 11
+# 14
+# 15
+# NULL

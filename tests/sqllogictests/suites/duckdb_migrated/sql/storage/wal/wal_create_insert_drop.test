@@ -1,0 +1,94 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bla
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# begin
+
+# TODO: unsupported feature
+# statement ok
+# create table bla as select 42;
+
+# TODO: unsupported feature
+# statement ok
+# drop table bla;
+
+# TODO: unsupported feature
+# statement ok
+# create table bla as select 84;
+
+# TODO: unsupported feature
+# statement ok
+# commit;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM bla
+# ----
+# 84
+
+# TODO: unsupported feature
+# statement ok
+# drop table bla
+
+# TODO: unsupported feature
+# statement ok
+# begin
+
+# TODO: unsupported feature
+# statement ok
+# create table bla as select 42;
+
+# TODO: unsupported feature
+# statement ok
+# drop table bla;
+
+# TODO: unsupported feature
+# statement ok
+# commit;
+
+# TODO: unsupported feature
+# statement ok
+# begin
+
+# TODO: unsupported feature
+# statement ok
+# create table bla as select 84;
+
+# TODO: unsupported feature
+# statement ok
+# alter table bla rename to bla2
+
+# TODO: unsupported feature
+# statement ok
+# commit
+
+# TODO: unsupported feature
+# query I
+# from bla2
+# ----
+# 84
+
+# TODO: unsupported feature
+# statement ok
+# begin
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table bla as select 84;
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table bla as select 42;
+
+# TODO: unsupported feature
+# statement ok
+# commit
+
+# TODO: unsupported feature
+# query I
+# from bla
+# ----
+# 42

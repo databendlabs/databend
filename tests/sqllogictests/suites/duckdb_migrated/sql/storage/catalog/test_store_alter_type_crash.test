@@ -1,0 +1,46 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# create a table and add a column to it
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ALTER b TYPE VARCHAR
+
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM test ORDER BY 1
+# ----
+# 11	22
+# 12	21
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (10, 'hello')
+
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM test ORDER BY 1
+# ----
+# 10	hello
+# 11	22
+# 12	21
+# 13	22
+
+# TODO: unsupported feature
+# query IT
+# SELECT * FROM test ORDER BY 1
+# ----
+# 10	hello
+# 11	22
+# 12	21
+# 13	22

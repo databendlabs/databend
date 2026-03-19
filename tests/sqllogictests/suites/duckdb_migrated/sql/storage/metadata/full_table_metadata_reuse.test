@@ -1,0 +1,171 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bigtbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS little_tbl
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bigtbl(i INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl FROM range(0, 1000000)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE little_tbl(i INT);
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=1 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=2 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=3 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=4 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=5 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=6 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=7 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=8 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO little_tbl VALUES (1)
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i)=9 FROM little_tbl
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*), SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000

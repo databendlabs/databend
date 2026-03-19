@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# create a persistent table
+# this first allocates memory with the tag 'IN_MEMORY_TABLE'
+# the memory is converted to persistent data after the query is done
+# so all of the memory should be 'BASE_TABLE', no longer 'IN_MEMORY_TABLE'
+# TODO: unsupported feature
+# statement ok
+# create table test as select range i from range(1_000_000);
+
+# this is
+
+# TODO: unsupported feature
+# query I
+# select memory_usage_bytes from duckdb_memory() where tag = 'IN_MEMORY_TABLE'
+# ----
+# 0

@@ -1,0 +1,67 @@
+# standard sequence
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq
+
+# more complex sequence
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq_cycle INCREMENT 1 MAXVALUE 3 START 2 CYCLE;
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq')
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq_cycle')
+# ----
+# 2
+
+# restart and check that sequence still works
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq')
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq_cycle')
+# ----
+# 3
+
+# again
+
+# TODO: unsupported feature
+# query II
+# SELECT nextval('seq'), nextval('seq')
+# ----
+# 3	4
+
+# TODO: unsupported feature
+# query I
+# SELECT nextval('seq_cycle')
+# ----
+# 1
+
+# drop sequence
+
+# TODO: unsupported feature
+# statement ok
+# DROP SEQUENCE seq;
+
+
+# verify that sequence is gone
+
+# TODO: unsupported feature
+# statement error
+# SELECT nextval('seq')
+
+# TODO: unsupported feature
+# statement ok
+# SELECT nextval('seq_cycle')

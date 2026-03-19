@@ -1,0 +1,168 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON test using art(a)
+
+# perform some inserts and deletions
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 24)
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a=11 ORDER BY b
+# ----
+# 11	22
+# 11	24
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a>11 ORDER BY b
+# ----
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=11 AND b=24
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 24)
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a=11 ORDER BY b
+# ----
+# 11	22
+# 11	24
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a>11 ORDER BY b
+# ----
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=11 AND b=24
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+
+# now with updates
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 24)
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a=11 ORDER BY b
+# ----
+# 11	22
+# 11	24
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a>11 ORDER BY b
+# ----
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=11 AND b=22
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET b=22 WHERE a=11
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 24)
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a=11 ORDER BY b
+# ----
+# 11	22
+# 11	24
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a>11 ORDER BY b
+# ----
+# 13	22
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=11 AND b=22
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET b=22 WHERE a=11
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22

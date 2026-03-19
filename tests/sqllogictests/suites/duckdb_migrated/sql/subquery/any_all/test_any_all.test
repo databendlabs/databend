@@ -1,0 +1,91 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+# ANY is like EXISTS without NULL values
+
+query B
+SELECT 2 > ANY(SELECT * FROM integers)
+----
+1
+
+query B
+SELECT 1 > ANY(SELECT * FROM integers)
+----
+0
+
+query B
+SELECT 4 > ALL(SELECT * FROM integers)
+----
+1
+
+query B
+SELECT 1 > ALL(SELECT * FROM integers)
+----
+0
+
+# NULL input always results in NULL output
+
+query B
+SELECT NULL > ANY(SELECT * FROM integers)
+----
+0
+
+query B
+SELECT NULL > ALL(SELECT * FROM integers)
+----
+1
+
+# now with a NULL value in the input
+
+statement ok
+INSERT INTO integers VALUES (NULL)
+
+# ANY returns either true or NULL
+
+query B
+SELECT 2 > ANY(SELECT * FROM integers)
+----
+1
+
+query B
+SELECT 1 > ANY(SELECT * FROM integers)
+----
+NULL
+
+# ALL returns either NULL or 0
+
+query B
+SELECT 4 > ALL(SELECT * FROM integers)
+----
+NULL
+
+query B
+SELECT 1 > ALL(SELECT * FROM integers)
+----
+0
+
+# NULL input always results in NULL
+
+query B
+SELECT NULL > ANY(SELECT * FROM integers)
+----
+NULL
+
+query B
+SELECT NULL > ALL(SELECT * FROM integers)
+----
+NULL
+
+# unsupported comparisons
+
+statement error
+SELECT 2 ^ ANY(SELECT * FROM integers)
+
+statement error
+SELECT 2 ^ ANY([1, 2, 3])

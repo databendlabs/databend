@@ -1,0 +1,187 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a1.integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# enable_external_access = false disables extension loading
+# we can set allowed_directories as much as we want
+# TODO: unsupported feature
+# statement ok
+# RESET allowed_directories
+
+# TODO: unsupported feature
+# statement error
+# RESET allowed_directories
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM '{DATA_DIR}/csv/glob/f_1.csv'
+# ----
+# 1	alice	alice@email.com
+# 2	eve	eve@email.com
+# 3r	bob	NULL
+
+# also within contained directories
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM '{DATA_DIR}/csv/glob/a1/a1.csv'
+# ----
+# 2019-06-05
+# 2019-06-15
+# 2019-06-25
+
+# we can also use "..", as long as we remain inside our directory
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM '{DATA_DIR}/csv/glob/a1/../f_1.csv'
+# ----
+# 1	alice	alice@email.com
+# 2	eve	eve@email.com
+# 3r	bob	NULL
+
+# and we can use ./
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM '{DATA_DIR}/csv/glob/./f_1.csv'
+# ----
+# 1	alice	alice@email.com
+# 2	eve	eve@email.com
+# 3r	bob	NULL
+
+# we should be able to go up and down as long as we end up in the allowed directory
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM '{DATA_DIR}/csv/glob/../../csv/glob/f_1.csv'
+# ----
+# 1	alice	alice@email.com
+# 2	eve	eve@email.com
+# 3r	bob	NULL
+
+# dot does not change anything
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM '{DATA_DIR}/csv/glob/./../bool.csv'
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM '{DATA_DIR}/csv/all_quotes.csv'
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM '{DATA_DIR}/csv/glob/../all_quotes.csv'
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM '{DATA_DIR}/csv/glob//../all_quotes.csv'
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM '{DATA_DIR}/csv/glob/a1/../../all_quotes.csv'
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM sniff_csv('{DATA_DIR}/csv/glob/f_1.csv')
+
+# but not outside of allowed directories
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM sniff_csv('{DATA_DIR}/csv/all_quotes.csv')
+
+# TODO: unsupported feature
+# query I
+# SELECT parse_filename(fname) as fname FROM glob('{DATA_DIR}/csv/glob/*.csv') t(fname)
+# ----
+# f_1.csv
+# f_2.csv
+# f_3.csv
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM glob('{DATA_DIR}/csv/**.csv')
+
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42 i) TO '{TEMP_DIR}/permission_test.csv' (FORMAT csv)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INT);
+
+# TODO: unsupported feature
+# statement ok
+# COPY integers FROM '{TEMP_DIR}/permission_test.csv'
+
+# TODO: unsupported feature
+# query I
+# FROM integers
+# ----
+# 42
+
+# but not to other directories
+
+# TODO: unsupported feature
+# statement error
+# COPY (SELECT 42 i) TO 'permission_test.csv' (FORMAT csv)
+
+# TODO: unsupported feature
+# statement error
+# COPY integers FROM 'permission_test.csv'
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH '{TEMP_DIR}/attached_dir.db' AS a1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a1.integers(i INTEGER);
+
+# but not in other directories
+
+# TODO: unsupported feature
+# statement error
+# ATTACH 'test.db'
+
+# TODO: unsupported feature
+# statement error
+# INSTALL my_ext
+
+# TODO: unsupported feature
+# statement ok
+# EXPORT DATABASE a1 TO '{TEMP_DIR}/export_test'
+
+# TODO: unsupported feature
+# statement error
+# EXPORT DATABASE a1 TO 'export_test'
+
+# TODO: unsupported feature
+# statement error
+# IMPORT DATABASE '{TEMP_DIR}/export_test'
+
+# TODO: unsupported feature
+# statement error
+# IMPORT DATABASE 'export_test'
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet'
+# ----
+# 1	a
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM '{DATA_DIR}/parquet-testing/aws2.parquet'
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet'
+# ----
+# 1	a

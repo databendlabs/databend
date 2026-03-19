@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (x INT, y INT)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+query I
+SELECT (SELECT y FROM test t2 WHERE t1.x = 5) FROM test t1
+----
+NULL
+NULL
+
+query B
+SELECT (SELECT y FROM test t2 WHERE t1.x = 5) IS NULL FROM test t1
+----
+1
+1
+
+query B
+SELECT (SELECT y FROM test t2 WHERE t1.x = 5) IS NOT NULL FROM test t1
+----
+0
+0

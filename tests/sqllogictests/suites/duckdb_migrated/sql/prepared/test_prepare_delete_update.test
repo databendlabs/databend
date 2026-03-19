@@ -1,0 +1,85 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# DELETE
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b (i TINYINT)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO b VALUES (1), (2), (3), (4), (5)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS DELETE FROM b WHERE i=$1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM b ORDER BY 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s1(3)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM b ORDER BY 1
+# ----
+# 1
+# 2
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE b CASCADE
+
+# UPDATE
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b (i TINYINT)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO b VALUES (1), (2), (3), (4), (5)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS UPDATE b SET i=$1 WHERE i=$2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM b ORDER BY 1
+# ----
+# 1
+# 2
+# 3
+# 4
+# 5
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s1(6, 3)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM b ORDER BY 1
+# ----
+# 1
+# 2
+# 4
+# 5
+# 6
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE b CASCADE

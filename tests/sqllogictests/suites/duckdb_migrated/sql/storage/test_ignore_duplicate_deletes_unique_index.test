@@ -1,0 +1,44 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS TBL
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE TBL (id INT NOT NULL, age INT NOT NULL, PRIMARY KEY ( id ))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO TBL VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM TBL WHERE id = 1;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO TBL VALUES (1, 1);
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM TBL
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM TBL WHERE id=1
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM TBL
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM TBL WHERE id=1
+# ----
+# 1	1

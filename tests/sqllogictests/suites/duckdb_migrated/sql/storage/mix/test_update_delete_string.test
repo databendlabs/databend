@@ -1,0 +1,149 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# create a database and insert values
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b STRING);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	hello
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	hello
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test WHERE a IS NULL
+# ----
+# NULL	hello
+
+# TODO: unsupported feature
+# query I
+# UPDATE test SET b=NULL WHERE a IS NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test WHERE a IS NULL
+# ----
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=12
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (12, NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET b='test123' WHERE a=12
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	test123
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	test123
+# 13	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=a+1
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 13	test123
+# 14	abcdefgh
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 13	test123
+# 14	abcdefgh
+# NULL	NULL

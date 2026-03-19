@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS aux
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tt
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+# TODO: unsupported feature
+# statement ok
+# create table aux as select range::INT x from range(-2_000_000_000, 2_000_000_000, 2_000_000);
+
+# TODO: unsupported feature
+# statement ok
+# create table tt as select (x + if (random() > 0.5, 1, -1)) x from aux;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query I
+# select compression from pragma_storage_info('tt') where segment_type != 'VALIDITY';
+# ----
+# BitPacking

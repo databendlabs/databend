@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('force_bitpacking_mode')
+# ----
+# AUTO
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('force_bitpacking_mode')='auto'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('force_bitpacking_mode')='constant'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('force_bitpacking_mode')='constant_delta'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('force_bitpacking_mode')='delta_for'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('force_bitpacking_mode')='for'
+# ----
+# 1

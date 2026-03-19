@@ -1,0 +1,229 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl(col VARIANT);
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select
+# 	['hello', 'world']
+# from range(0, 5) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# ------------------------------ Extract the child from the list ------------------------------
+
+# TODO: unsupported feature
+# query I
+# select s.fully_shredded.stats from (select stats(col[1]) s from tbl limit 1);
+# ----
+# {'min': hello, 'max': world, 'has_unicode': 0, 'max_string_length': 5, 'has_null': 0, 'has_no_null': 1}
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select 42::INTEGER from range(0, 5) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select s.fully_shredded from (select stats(col) s from tbl limit 1);
+# ----
+# NULL
+
+# ------------------------------ Extracting the child from the list is not possible for some rows ------------------------------
+
+# Result is inconsistent, data isn't fully shredded
+
+# TODO: unsupported feature
+# query I
+# select stats(col[1]).shredding_state from tbl offset 5 limit 1;
+# ----
+# INCONSISTENT
+
+# TODO: unsupported feature
+# statement ok
+# delete from tbl where not variant_typeof(col).starts_with('ARRAY')
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select
+# 	[42, 21, 1337]
+# from range(0, 5)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# ------------------------------ Child of the list is no longer fully shredded, types differ ------------------------------
+
+# TODO: unsupported feature
+# query I
+# select stats(col[1]).shredding_state from tbl offset 5 limit 1;
+# ----
+# INCONSISTENT
+
+# TODO: unsupported feature
+# statement ok
+# delete from tbl;
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select {'a': 42, 'b': false} from range(0, 5)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# We're shredded on VARCHAR[], so we can't propagate any stats for a field extract
+
+# TODO: unsupported feature
+# query I
+# select stats(col.a).shredding_state from tbl limit 1;
+# ----
+# INCONSISTENT
+
+# TODO: unsupported feature
+# statement ok
+# delete from tbl;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+
+# ------------------------------ Tests with OBJECT and the OBJECT's fields ------------------------------
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select {'a': 'test', 'b': false}
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+
+# Field 'a' is fully shredded
+
+# TODO: unsupported feature
+# query I
+# select s.fully_shredded.stats from (select stats(col.a) s from tbl limit 1);
+# ----
+# {'min': test, 'max': test, 'has_unicode': 0, 'max_string_length': 4, 'has_null': 0, 'has_no_null': 1}
+
+# Field 'b' is not shredded
+
+# TODO: unsupported feature
+# query I
+# select stats(col.b).shredding_state from tbl limit 1;
+# ----
+# INCONSISTENT
+
+# OBJECT is fully shredded
+
+# TODO: unsupported feature
+# query I
+# select s.fully_shredded.a.stats from (select stats(col) s from tbl limit 1);
+# ----
+# {'min': test, 'max': test, 'has_unicode': 0, 'max_string_length': 4, 'has_null': 0, 'has_no_null': 1}
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select {'a': 42::INTEGER, 'b': false}
+
+# OBJECT is fully shredded, but we've inserted unshredded data so its INCONSISTENT
+
+# TODO: unsupported feature
+# query I
+# select stats(col).shredding_state from tbl limit 1;
+# ----
+# INCONSISTENT
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# We inserted a field a that's not a VARCHAR, but it's still an object, so the root remains fully shredded
+
+# TODO: unsupported feature
+# query I
+# select stats(col).shredding_state from tbl limit 1;
+# ----
+# SHREDDED
+
+# But field a isn't fully shredded anymore:
+
+# TODO: unsupported feature
+# query I
+# select stats(col.a).shredding_state from tbl limit 1;
+# ----
+# INCONSISTENT
+
+# Insert an object with additional field(s)
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select {'a': 'test', 'c': [42], 'b': false}
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# Root is still fully shredded, even with an additional field it's always an OBJECT
+
+# TODO: unsupported feature
+# query I
+# select stats(col).shredding_state from tbl limit 1;
+# ----
+# SHREDDED
+
+# Insert an object that's missing shredded field(s)
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select {'b': 1337::INTEGER}
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# Root is still shredded
+
+# TODO: unsupported feature
+# query I
+# select stats(col).shredding_state from tbl limit 1;
+# ----
+# SHREDDED
+
+# Now insert something that's NOT an OBJECT
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select 42::INTEGER
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+# Now the root is no longer fully shredded
+
+# TODO: unsupported feature
+# query I
+# select s.fully_shredded from (select stats(col) s from tbl limit 1);
+# ----
+# NULL
+
+# Data is not fully shredded on the extracted field, result is inconsistent
+
+# TODO: unsupported feature
+# query I
+# select stats(col.c).shredding_state from tbl order by rowid offset 2 limit 1;
+# ----
+# INCONSISTENT

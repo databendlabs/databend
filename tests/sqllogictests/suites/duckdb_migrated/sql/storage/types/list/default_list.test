@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(i INT[] DEFAULT ([1, 2, 3]))
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (DEFAULT)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# [1, 2, 3]
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (DEFAULT)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# [1, 2, 3]
+# [1, 2, 3]

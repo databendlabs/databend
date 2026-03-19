@@ -1,0 +1,160 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS show_tables_view
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS v1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "select"
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS s1.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE "select"(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW v1 AS SELECT DATE '1992-01-01' AS k
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2 (id INTEGER PRIMARY KEY, j VARCHAR UNIQUE)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE s1.tbl(i INTEGER UNIQUE);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX my_index ON s1.tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(i INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX not_a_table ON tbl(i);
+
+# We test that right table is described (from s1 schema)
+# column_name | column_type | null | key | default | extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE s1.tbl;
+# ----
+# i	INTEGER	YES	UNI	NULL	NULL
+
+# We test that the index can't be described
+
+# TODO: unsupported feature
+# statement error
+# DESCRIBE my_index;
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE tbl;
+# ----
+# i	INTEGER	NO	PRI	NULL	NULL
+
+# Validate PRI and UNI constrains
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE t2
+# ----
+# id	INTEGER	NO	PRI	NULL	NULL
+# j	VARCHAR	YES	UNI	NULL	NULL
+
+# equivalent to DESCRIBE t2
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query T
+# SHOW TABLES
+# ----
+# integers
+# select
+# t2
+# tbl
+# v1
+
+# TODO: unsupported feature
+# query T
+# DESCRIBE TABLES
+# ----
+# integers
+# select
+# t2
+# tbl
+# v1
+
+# internally they are equivalent to PRAGMA SHOW_TABLES();
+
+# TODO: unsupported feature
+# query TTTITI
+# SHOW integers
+# ----
+# i	INTEGER	YES	NULL	NULL	NULL
+# j	INTEGER	YES	NULL	NULL	NULL
+
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query TTTITI
+# SHOW "select";
+# ----
+# i	INTEGER	YES	NULL	NULL	NULL
+
+# equivalent to PRAGMA SHOW('integers')
+# column_name 	 column_type 	 null 	 key 	 default 	 extra
+
+# TODO: unsupported feature
+# query TTTITI
+# DESCRIBE v1
+# ----
+# k	DATE	YES	NULL	NULL	NULL
+
+# view over show tables
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW show_tables_view AS ( SHOW TABLES );
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM show_tables_view ORDER BY ALL
+# ----
+# integers
+# select
+# show_tables_view
+# t2
+# tbl
+# v1

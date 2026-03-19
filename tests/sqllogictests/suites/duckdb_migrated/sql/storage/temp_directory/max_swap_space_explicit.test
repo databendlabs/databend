@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# query I nosort explicitly_set
+# select current_setting('max_temp_directory_size')
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2 AS SELECT * FROM range(0, 1000000);
+
+# The 'temp_directory' was created, but the value of 'max_temp_directory_size' was set explicitly, so it was unaltered
+
+# TODO: unsupported feature
+# query I nosort explicitly_set
+# select current_setting('max_temp_directory_size')
+# ----

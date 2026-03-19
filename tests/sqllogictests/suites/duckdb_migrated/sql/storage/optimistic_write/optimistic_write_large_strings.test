@@ -1,0 +1,59 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(val VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT strlen(val) FROM test
+# ----
+# NULL
+# 903
+# 4932
+# 903
+# 4932
+
+# TODO: unsupported feature
+# query I
+# SELECT strlen(val) FROM test
+# ----
+# NULL
+# 903
+# 4932
+# 903
+# 4932
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(val VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (NULL);
+
+# TODO: unsupported feature
+# query I
+# SELECT strlen(val) FROM test
+# ----
+# NULL
+# 903
+# 4932
+# 903
+# 4932
+
+# TODO: unsupported feature
+# query I
+# SELECT strlen(val) FROM test
+# ----
+# NULL
+# 903
+# 4932
+# 903
+# 4932

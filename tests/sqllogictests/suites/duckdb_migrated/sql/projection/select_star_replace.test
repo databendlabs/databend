@@ -1,0 +1,89 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_star
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 2, 3)
+
+# TODO: unsupported feature
+# query III
+# SELECT * REPLACE i+100 AS i FROM integers
+# ----
+# 101	2	3
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * EXCLUDE (j, k) REPLACE (i+100 AS i), * EXCLUDE (j) REPLACE (i+100 AS i), * EXCLUDE (j, k) REPLACE (i+101 AS i) FROM integers
+# ----
+# 101	101	3	102
+
+# TODO: unsupported feature
+# query III
+# SELECT * REPLACE (i+100 AS i, j+200 AS "J") FROM integers
+# ----
+# 101	202	3
+
+# TODO: unsupported feature
+# query III
+# SELECT integers.* REPLACE (i+100 AS i) FROM integers
+# ----
+# 101	2	3
+
+# duplicate entry in replace list
+
+# TODO: unsupported feature
+# statement error
+# SELECT * REPLACE (i+100 AS i, i+200 AS i) FROM integers
+
+# TODO: unsupported feature
+# statement error
+# SELECT * REPLACE (i+100 AS blabla) FROM integers
+
+# TODO: unsupported feature
+# statement error
+# SELECT integers.* REPLACE (i+100 AS blabla) FROM integers
+
+# TODO: unsupported feature
+# statement error
+# SELECT * EXCLUDE (i) REPLACE (i+100 AS i) FROM integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_star(id INTEGER, col1 VARCHAR, col2 VARCHAR, col3 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_star VALUES (1, 'val1', 'val2', 42);
+
+# Test: REPLACE with quoted string and arithmetic expression (binding verification)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT test_star.* REPLACE ('computed: ' || (id * 2)::VARCHAR AS col1) FROM test_star;
+# ----
+# 1	computed: 2	val2	42
+
+# Test: Full combo EXCLUDE + REPLACE (arithmetic) + RENAME (unified HandleRename, qualified)
+
+# TODO: unsupported feature
+# query III
+# SELECT test_star.* EXCLUDE (col2) REPLACE (id * 2 AS col1) RENAME (col3 AS final3) FROM test_star;
+# ----
+# 1	2	42
+
+# Test: Combo with quoted REPLACE, EXCLUDE, and qualified RENAME (parser + binder integration)
+
+# TODO: unsupported feature
+# query III
+# SELECT test_star.* EXCLUDE (col2) REPLACE ('replaced: ' || col3::VARCHAR AS col1) RENAME (id AS renamed_id, col3 AS final3) FROM test_star;
+# ----
+# 1	replaced: 42	42

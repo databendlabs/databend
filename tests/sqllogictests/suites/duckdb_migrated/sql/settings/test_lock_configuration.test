@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('lock_configuration')
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# RESET lock_configuration;
+
+# nop
+
+# TODO: unsupported feature
+# statement error
+# RESET memory_limit;
+
+# TODO: unsupported feature
+# statement error
+# RESET lock_configuration;
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('lock_configuration')
+# ----
+# 1

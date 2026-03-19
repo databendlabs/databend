@@ -1,0 +1,103 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# load the DB from disk
+# insert values in a database using prepared statements
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t (a INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE p1 AS INSERT INTO t VALUES ($1)
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE p1(42)
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE p1(43)
+
+# TODO: unsupported feature
+# statement ok
+# DEALLOCATE p1
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM t
+# ----
+# 42
+# 43
+
+
+# now restart and verify that the data is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM t
+# ----
+# 42
+# 43
+
+# unhelpfully use the same statement name again, it should be available, but do nothing with it
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE p1 AS DELETE FROM t WHERE a=$1
+
+
+# do the same with delete
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE p1 AS DELETE FROM t WHERE a=$1
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE p1(43)
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM t
+# ----
+# 42
+
+# restart again
+
+# data is still gone
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM t
+# ----
+# 42
+
+# now with update
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM t
+# ----
+# 42
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE p1 AS UPDATE t SET a = $1
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE p1(43)
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM t
+# ----
+# 43
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM t
+# ----
+# 43

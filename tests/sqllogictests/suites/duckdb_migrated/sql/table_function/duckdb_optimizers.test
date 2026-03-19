@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM duckdb_optimizers();
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM duckdb_optimizers() WHERE name='join_order';
+# ----
+# join_order

@@ -1,0 +1,34 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(i INTEGER PRIMARY KEY, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT r, r FROM range(0, 2000) t(r);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT r, r FROM range(2000,200000) t(r)
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET j=j+1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT r, r FROM range(200000,400000) t(r)
+
+# TODO: unsupported feature
+# query I
+# select count(*) FROM test
+# ----
+# 400000

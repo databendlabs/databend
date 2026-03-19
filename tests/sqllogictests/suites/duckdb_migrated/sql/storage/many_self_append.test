@@ -1,0 +1,88 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS vals
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE vals(i TINYINT)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals SELECT (CASE WHEN i % 2 = 0 THEN NULL ELSE i % 100 END)::TINYINT i FROM range(0, 10) tbl(i)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+# ----
+# 1	9	5	10
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals SELECT * FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+# ----
+# 1	9	10	20
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals SELECT * FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+# ----
+# 1	9	20	40
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals SELECT * FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+# ----
+# 1	9	40	80
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals SELECT * FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+# ----
+# 1	9	80	160
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals SELECT * FROM vals;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+# ----
+# 1	9	160	320

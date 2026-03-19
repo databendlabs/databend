@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BIGINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%25=0 then 1337 else null end FROM range(0,1025) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select count(*) from test WHERE a IS NOT NULL;
+# ----
+# 41
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%25=0 then 1337 else null end FROM range(0,1025) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+# TODO: unsupported feature
+# query I
+# select count(*) from test WHERE a IS NOT NULL;
+# ----
+# 82
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

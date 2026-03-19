@@ -1,0 +1,199 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS T
+
+# This test defaults to another compression function for larger block sizes,
+# because the bitpacking groups fit the blocks.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE T (a INTEGER USING COMPRESSION RLE)
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE T
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE T (a INTEGER USING COMPRESSION 'bla')
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE T (a INTEGER USING COMPRESSION )
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION )
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE T (a INTEGER USING COMPRESSION bla)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE T (a INTEGER NOT NULL USING COMPRESSION RLE)
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE T
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b VARCHAR )
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE T
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE T (a INTEGER USING COMPRESSION RLE, b INTEGER USING COMPRESSION BITPACKING, C INTEGER USING COMPRESSION UNCOMPRESSED)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO T VALUES (1,1,1), (1,1,1), (1,1,1), (2,2,2), (2,2,2), (3,3,3)
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM T
+# ----
+# 1	1	1
+# 1	1	1
+# 1	1	1
+# 2	2	2
+# 2	2	2
+# 3	3	3
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM T
+# ----
+# 1	1	1
+# 1	1	1
+# 1	1	1
+# 2	2	2
+# 2	2	2
+# 3	3	3
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# we default to RLE instead of bitpacking
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) > 0 FROM pragma_storage_info('T')
+# WHERE segment_type ILIKE 'INTEGER' AND compression = 'RLE';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE T RENAME COLUMN a TO a_1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE T RENAME COLUMN b TO b_1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE T RENAME COLUMN c TO c_1
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM T
+# ----
+# 1	1	1
+# 1	1	1
+# 1	1	1
+# 2	2	2
+# 2	2	2
+# 3	3	3
+
+# we default to RLE instead of bitpacking
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) > 0 FROM pragma_storage_info('T')
+# WHERE segment_type ILIKE 'INTEGER' AND compression = 'RLE';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE T RENAME TO T_1
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM T_1
+# ----
+# 1	1	1
+# 1	1	1
+# 1	1	1
+# 2	2	2
+# 2	2	2
+# 3	3	3
+
+# we default to RLE instead of bitpacking
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) > 0 FROM pragma_storage_info('T_1')
+# WHERE segment_type ILIKE 'INTEGER' AND compression = 'RLE';
+# ----
+# 1
+
+# Test Drop Column
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE T_1 DROP COLUMN c_1
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE T_1 DROP COLUMN b_1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM T_1
+# ----
+# 1
+# 1
+# 1
+# 2
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
+# ----
+# RLE
+
+# Test Add Column
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE T_1 ADD COLUMN b INTEGER DEFAULT 2
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM T_1
+# ----
+# 1	2
+# 1	2
+# 1	2
+# 2	2
+# 2	2
+# 3	2
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 3
+# ----
+# RLE
+# Constant

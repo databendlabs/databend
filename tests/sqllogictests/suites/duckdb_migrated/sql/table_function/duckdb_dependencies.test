@@ -1,0 +1,22 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# test the base dependencies
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM duckdb_dependencies();
+
+# add some new dependencies
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers(i)
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM duckdb_dependencies();

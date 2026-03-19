@@ -1,0 +1,135 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# create table t (i int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t values (1),(2),(3),(4),(4);
+
+# TODO: unsupported feature
+# query III
+# select
+#   array(select distinct i from t order by i desc) as a,
+#   array(select distinct i from t order by i desc) as b,
+#   array(select distinct i from t order by i desc) as c;
+# ----
+# [4, 3, 2, 1]	[4, 3, 2, 1]	[4, 3, 2, 1]
+
+# correlated
+
+# TODO: unsupported feature
+# query I
+# select array(select unnest(l) AS i order by i desc nulls last) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l);
+# ----
+# [4, 3, 2, 1, NULL]
+# [8, 7, 6, 5, NULL]
+# []
+# [12, 11, 10]
+
+# TODO: unsupported feature
+# query I
+# select array(select unnest(l) AS i order by i desc nulls first) as a from (values ([NULL, 1, 2, 3, 4]), ([5, 6, NULL, 7, 8]), ([]), ([10, 11, 12])) t(l);
+# ----
+# [NULL, 4, 3, 2, 1]
+# [NULL, 8, 7, 6, 5]
+# []
+# [12, 11, 10]
+
+# row id
+
+# TODO: unsupported feature
+# query I
+# SELECT ARRAY(SELECT i FROM t ORDER BY rowid DESC)
+# ----
+# [4, 4, 3, 2, 1]
+
+# qualified name
+
+# TODO: unsupported feature
+# query I
+# SELECT ARRAY(SELECT i FROM t ORDER BY t.rowid)
+# ----
+# [1, 2, 3, 4, 4]
+
+# use integer literals
+
+# TODO: unsupported feature
+# query I
+# SELECT ARRAY
+#   (SELECT 1 UNION ALL
+#    SELECT 2 UNION ALL
+#    SELECT 3
+#    ORDER by 1) AS new_array;
+# ----
+# [1, 2, 3]
+
+# qualified names
+
+# TODO: unsupported feature
+# query I
+# select
+#   array(select distinct i from t order by t.i desc) as a
+# ----
+# [4, 3, 2, 1]
+
+# TODO: unsupported feature
+# query I
+# select
+#   array(select distinct i from t union all select distinct i from t order by t.i desc) as a
+# ----
+# [4, 4, 3, 3, 2, 2, 1, 1]
+
+# TODO: unsupported feature
+# statement error
+# select
+#   array(select distinct i from t order by x.i desc) as a
+
+# TODO: unsupported feature
+# query I
+# SELECT ARRAY
+#   (SELECT 1 UNION ALL
+#    SELECT 2 UNION ALL
+#    SELECT 3
+#    ORDER by 1 DESC) AS new_array;
+# ----
+# [3, 2, 1]
+
+# TODO: unsupported feature
+# query I
+# select array(select * from unnest(['a', 'b']) as _t(u) order by if(u='a',100, 1)) as out;
+# ----
+# [b, a]
+
+# TODO: unsupported feature
+# query I
+# select array(select * from unnest(['a', 'b']) as _t(u) order by if(u='a',100, 1) desc) as out;
+# ----
+# [a, b]
+
+# TODO: unsupported feature
+# statement error
+# SELECT ARRAY
+#   (SELECT 1 UNION ALL
+#    SELECT 2 UNION ALL
+#    SELECT 3
+#    ORDER by -1) AS new_array;
+
+# TODO: unsupported feature
+# statement error
+# SELECT ARRAY
+#   (SELECT 1 UNION ALL
+#    SELECT 2 UNION ALL
+#    SELECT 3
+#    ORDER by 2) AS new_array;
+
+# TODO: unsupported feature
+# statement error
+# SELECT ARRAY
+#   (SELECT 1 UNION ALL
+#    SELECT 2 UNION ALL
+#    SELECT 3
+#    ORDER by 'hello world') AS new_array;

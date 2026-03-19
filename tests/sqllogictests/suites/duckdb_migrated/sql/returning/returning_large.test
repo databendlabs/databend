@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into table1(a) select * from range (0, 4000, 1) t1(a);
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM table1;
+# ----
+# 4000
+
+# the following two tests test that all inserts get streamed back to the returning statement
+
+# TODO: unsupported feature
+# query I
+# INSERT INTO table1(a, b, c) SELECT a, b, c FROM table1  RETURNING a;
+# ----
+# note: hash result

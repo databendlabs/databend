@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	x INTEGER,
+# 	gen_x AS (x + 5)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1), (2), (3), (NULL);
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl, (SELECT gen_x + 10) ORDER BY x NULLS LAST
+# ----
+# 1	6	16
+# 2	7	17
+# 3	8	18
+# NULL	NULL	NULL

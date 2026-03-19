@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE tbl(col VARIANT UNIQUE, b INTEGER)

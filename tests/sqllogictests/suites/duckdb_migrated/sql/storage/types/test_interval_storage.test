@@ -1,0 +1,67 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS interval
+
+# load the DB from disk
+# create a table with hugeints
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE interval (t INTERVAL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO interval VALUES (INTERVAL '1' DAY), (NULL), (INTERVAL '3 months 2 days 5 seconds')
+
+# reload the database from disk a few times, and check that the data is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM interval
+# ----
+# 1 day
+# NULL
+# 3 months 2 days 00:00:05
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM interval WHERE t = INTERVAL '1' DAY;
+# ----
+# 1 day
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM interval WHERE t >= INTERVAL '1' DAY ORDER BY 1;
+# ----
+# 1 day
+# 3 months 2 days 00:00:05
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM interval WHERE t > INTERVAL '10' YEAR ORDER BY 1;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM interval
+# ----
+# 1 day
+# NULL
+# 3 months 2 days 00:00:05
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM interval WHERE t = INTERVAL '1' DAY;
+# ----
+# 1 day
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM interval WHERE t >= INTERVAL '1' DAY ORDER BY 1;
+# ----
+# 1 day
+# 3 months 2 days 00:00:05
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM interval WHERE t > INTERVAL '10' YEAR ORDER BY 1;
+# ----

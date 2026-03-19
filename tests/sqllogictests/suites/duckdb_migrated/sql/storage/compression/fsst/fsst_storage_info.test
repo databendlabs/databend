@@ -1,0 +1,22 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR, b VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('11', '22'), ('11', '22'), ('12', '21'), (NULL, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# FSST

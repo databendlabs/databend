@@ -1,0 +1,125 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# query I
+# SELECT j : 42;
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# select column_name from (describe SELECT j : 42)
+# ----
+# j
+
+# TODO: unsupported feature
+# query I
+# SELECT "j" : 42;
+# ----
+# 42
+
+# TODO: unsupported feature
+# statement error
+# SELECT 'j': 42
+
+# TODO: unsupported feature
+# query I
+# SELECT "hel lo" : 42;
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# select column_name from (describe SELECT "hel lo" : 42)
+# ----
+# hel lo
+
+# TODO: unsupported feature
+# query III
+# SELECT j1 : 42, 42 AS j2, 42 j3;
+# ----
+# 42	42	42
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a (i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (42);
+
+# TODO: unsupported feature
+# query I
+# SELECT j : i FROM a
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT "j" : "i" FROM a
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM b : a
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM "b" : a
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM b : a
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT b.i FROM b : a
+# ----
+# 42
+
+# TODO: unsupported feature
+# statement error
+# SELECT a.i FROM b : a
+
+# TODO: unsupported feature
+# statement error
+# SELECT a : 42 AS b
+
+# TODO: unsupported feature
+# query I
+# from my_wonderful_values : (values(42))
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# from 'my_wonderful_values' : (values(42))
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# from "my_wonderful_values" : (values(42))
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# from r : range(0, 1)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# from "r" : range(0, 1)
+# ----
+# 0

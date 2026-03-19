@@ -1,0 +1,5 @@
+query I
+select * from (select 42) sq1 union all select * from (select 43) sq2;
+----
+42
+43

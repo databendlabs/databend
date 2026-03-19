@@ -1,0 +1,152 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS unsigned
+
+# load the DB from disk
+# create a table with all unsigned types
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE unsigned (a utinyint, b usmallint, c uinteger, d ubigint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO unsigned VALUES (1,1,1,1), (42,42,42,42), (NULL,NULL,NULL,NULL), (255,65535,4294967295,18446744073709551615);
+
+# reload the database from disk a few times, and check that the data is still there
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned
+# ----
+# 1	1	1	1
+# 42	42	42	42
+# NULL	NULL	NULL	NULL
+# 255	65535	4294967295	18446744073709551615
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE a = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM unsigned WHERE a < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE b = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT b FROM unsigned WHERE b < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE c = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT c FROM unsigned WHERE c < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE d = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT d FROM unsigned WHERE d < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned
+# ----
+# 1	1	1	1
+# 42	42	42	42
+# NULL	NULL	NULL	NULL
+# 255	65535	4294967295	18446744073709551615
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE a = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT a FROM unsigned WHERE a < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE b = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT b FROM unsigned WHERE b < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE c = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT c FROM unsigned WHERE c < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned WHERE d = 42
+# ----
+# 42	42	42	42
+
+# TODO: unsupported feature
+# query I
+# SELECT d FROM unsigned WHERE d < 10 ORDER BY 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE unsigned
+# WHERE a = 1;
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned
+# ----
+# 10	9	8	7
+# 42	42	42	42
+# NULL	NULL	NULL	NULL
+# 255	65535	4294967295	18446744073709551615
+
+# TODO: unsupported feature
+# query IIII
+# SELECT * FROM unsigned
+# ----
+# 10	9	8	7
+# 42	42	42	42
+# NULL	NULL	NULL	NULL
+# 255	65535	4294967295	18446744073709551615

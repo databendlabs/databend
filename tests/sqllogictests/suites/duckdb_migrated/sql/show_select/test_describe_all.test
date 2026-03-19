@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER, a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# DESCRIBE;
+
+# TODO: unsupported feature
+# query TTTTTT
+# DESCRIBE
+# ----
+# memory	main	integers	[i, j, a]	[INTEGER, INTEGER, INTEGER]	0
+
+# Issue 6393
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t(plant TEXT, dt DATE, mwh BIGINT);
+
+# TODO: unsupported feature
+# query TTTTTT
+# DESCRIBE;
+# ----
+# memory	main	t	[plant, dt, mwh]	[VARCHAR, DATE, BIGINT]	0

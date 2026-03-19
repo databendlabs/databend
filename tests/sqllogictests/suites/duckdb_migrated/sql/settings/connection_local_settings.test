@@ -1,0 +1,31 @@
+statement ok
+DROP TABLE IF EXISTS tbl
+
+statement ok
+CREATE TABLE tbl AS FROM (VALUES (1), (2), (3), (NULL)) t(i)
+
+# global settings: ASC NULLS FIRST
+
+query I
+SELECT * FROM tbl ORDER BY i
+----
+1
+2
+3
+NULL
+
+query I
+SELECT * FROM tbl ORDER BY i
+----
+1
+2
+3
+NULL
+
+query I
+SELECT * FROM tbl ORDER BY i
+----
+1
+2
+3
+NULL

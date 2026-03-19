@@ -1,0 +1,48 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# TODO: unsupported feature
+# query I
+# UPDATE test SET b=b+1 WHERE a=11
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 11	23
+# 12	21
+# 13	22
+
+# TODO: unsupported feature
+# query I
+# UPDATE test SET b=b+1 WHERE a=11
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 11	24
+# 12	21
+# 13	22
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 11	24
+# 12	21
+# 13	22

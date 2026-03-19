@@ -1,0 +1,55 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS hugeints
+
+# load the DB from disk
+# create a table with hugeints
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE hugeints (h HUGEINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO hugeints VALUES (1043178439874412422424), (42), (NULL), (47289478944894789472897441242);
+
+# reload the database from disk a few times, and check that the data is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM hugeints
+# ----
+# 1043178439874412422424
+# 42
+# NULL
+# 47289478944894789472897441242
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM hugeints WHERE h = 42
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT h FROM hugeints WHERE h < 10 ORDER BY 1;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM hugeints
+# ----
+# 1043178439874412422424
+# 42
+# NULL
+# 47289478944894789472897441242
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM hugeints WHERE h = 42
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT h FROM hugeints WHERE h < 10 ORDER BY 1;
+# ----

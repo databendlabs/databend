@@ -1,0 +1,176 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3);
+
+# Test single indexed column.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX i_index ON integers(i);
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT i, j FROM integers WHERE i = 1;
+# ----
+
+# TODO: unsupported feature
+# query II
+# SELECT i, j FROM integers WHERE i = 1;
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT i, j FROM integers WHERE i = 1;
+# ----
+
+# TODO: unsupported feature
+# query II
+# SELECT i, j FROM integers WHERE i = 1;
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX i_index ON integers USING art((i + j));
+
+# TODO: unsupported feature
+# query II
+# SELECT i, j FROM integers WHERE i + j = 2;
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# query II
+# SELECT i, j FROM integers WHERE i + j = 2;
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3);
+
+# Change the column order in the multi-column index expression.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX i_index ON integers USING art((j + i));
+
+# TODO: unsupported feature
+# query II
+# SELECT i, j FROM integers WHERE j + i = 2;
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# query II
+# SELECT i, j FROM integers WHERE j + i = 2;
+# ----
+# 1	1
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE integers;
+
+
+# Test compound keys.
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE UNIQUE INDEX i_index ON integers USING art((j + i), j, i);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO integers VALUES (1, 1);
+
+# TODO: unsupported feature
+# statement ok
+# DROP INDEX i_index;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1, 1);

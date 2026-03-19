@@ -1,0 +1,77 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (41), (42), (43)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO b VALUES (40), (43), (43)
+
+# TODO: unsupported feature
+# query I
+# select * from a except select * from b order by 1
+# ----
+# 41
+# 42
+
+# TODO: unsupported feature
+# query I
+# select * from a intersect select * from b
+# ----
+# 43
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1(a VARCHAR COLLATE NOCASE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 VALUES ('ABC'), ('def'), ('GHI');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t2(a VARCHAR COLLATE NOCASE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t2 VALUES ('abc'), ('DEF');
+
+# Test EXCEPT with NOCASE
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t1 EXCEPT SELECT * FROM t2 ORDER BY a;
+# ----
+# GHI
+
+# Test INTERSECT with NOCASE
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t1 INTERSECT SELECT * FROM t2 ORDER BY a;
+# ----
+# ABC
+# def

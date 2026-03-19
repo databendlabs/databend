@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db1.integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# statement ok
+# FROM pragma_metadata_info();
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.integers(i INTEGER, j INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT db1
+
+# TODO: unsupported feature
+# statement ok
+# FROM pragma_metadata_info('db1');
+
+# TODO: unsupported feature
+# statement error
+# FROM pragma_metadata_info(NULL)

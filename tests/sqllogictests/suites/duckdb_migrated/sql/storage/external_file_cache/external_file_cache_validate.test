@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# query I
+# select current_setting('validate_external_file_cache');
+# ----
+# VALIDATE_ALL
+
+# Test 2: check validation option VALIDATE_REMOTE, which doesn't affect local tests.
+
+# TODO: unsupported feature
+# query I
+# select current_setting('validate_external_file_cache');
+# ----
+# VALIDATE_REMOTE
+
+# TODO: unsupported feature
+# query I
+# select current_setting('validate_external_file_cache');
+# ----
+# NO_VALIDATION

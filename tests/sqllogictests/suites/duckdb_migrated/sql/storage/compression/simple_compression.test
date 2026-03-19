@@ -1,0 +1,22 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# load the DB from disk
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (11, 22), (12, 21), (NULL, NULL)
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+34	65
+
+query II
+SELECT SUM(a), SUM(b) FROM test
+----
+34	65
+
+statement ok
+DROP TABLE test

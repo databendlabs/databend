@@ -1,0 +1,70 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(a INTEGER, b VARCHAR, c DOUBLE, d TIMESTAMP);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_ab ON tbl(a, b);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_a ON tbl(a);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl SELECT range, 'value_' || range, range * 1.5, '2023-01-01 10:00:00'::TIMESTAMP + INTERVAL (range) DAY FROM range(0, 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a % 5 = 0;
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 1;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 1;
+# ----
+
+# TODO: unsupported feature
+# query IIII
+# SELECT a, b, c, d FROM tbl WHERE (a) = 1;
+# ----
+# 1	value_1	1.5	2023-01-02 10:00:00
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 5;
+# ----
+
+# TODO: unsupported feature
+# query IIII
+# SELECT a, b, c, d FROM tbl WHERE (a) = 5;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5, 'value_5', 7.5, '2023-01-06 10:00:00');
+
+# TODO: unsupported feature
+# query IIII
+# SELECT a, b, c, d FROM tbl WHERE (a) = 5;
+# ----
+# 5	value_5	7.5	2023-01-06 10:00:00
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT a, b, c, d FROM tbl WHERE (a) = 2;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM tbl where (a) = 2;
+# ----
+# 1

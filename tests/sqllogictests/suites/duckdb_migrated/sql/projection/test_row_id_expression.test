@@ -1,0 +1,225 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# create table a(i integer);
+
+# TODO: unsupported feature
+# statement ok
+# insert into a values (42);
+
+# arithmetic
+
+# TODO: unsupported feature
+# query IIII
+# SELECT rowid + 1, rowid - 1, rowid + rowid, i + rowid FROM a
+# ----
+# 1	-1	0	42
+
+# unary ops
+
+# TODO: unsupported feature
+# query III
+# SELECT -rowid, +rowid, abs(rowid) FROM a
+# ----
+# 0	0	0
+
+# ternary ops
+
+# TODO: unsupported feature
+# query TTT
+# SELECT rowid BETWEEN -1 AND 1, 0 BETWEEN rowid AND 1, 1 BETWEEN -3 AND rowid FROM a
+# ----
+# 1	1	0
+
+# comparisons
+
+# TODO: unsupported feature
+# query TTTT
+# SELECT rowid < i, rowid = NULL, rowid = i, rowid <> 0 FROM a
+# ----
+# 1	NULL	0	0
+
+# simple (ungrouped) aggregates
+
+# TODO: unsupported feature
+# query RIIII
+# SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid) FROM a
+# ----
+# 0.000000	0	0	1	0
+
+# TODO: unsupported feature
+# query RIIII
+# SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), LAST(rowid) FROM a
+# ----
+# 0.000000	0	0	1	0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM a
+# ----
+# 1
+
+# grouped aggregates
+
+# TODO: unsupported feature
+# query RIIIII
+# SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid), LAST(rowid) FROM a GROUP BY i
+# ----
+# 0.000000	0	0	1	0	0
+
+# group by rowid
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM a GROUP BY rowid
+# ----
+# 42.000000
+
+# joins
+# equality
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM a, a a2 WHERE a.rowid=a2.rowid
+# ----
+# 42	42
+
+# inequality
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM a, a a2 WHERE a.rowid<>a2.rowid
+# ----
+
+# range
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM a, a a2 WHERE a.rowid>=a2.rowid
+# ----
+# 42	42
+
+# order by
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY rowid
+# ----
+# 42
+
+# insert into table
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a SELECT rowid FROM a
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY 1
+# ----
+# 0
+# 42
+
+# update value
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE a SET i=rowid
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a ORDER BY 1
+# ----
+# 0
+# 1
+
+# use rowid in filter
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a WHERE rowid=0
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a WHERE rowid BETWEEN -100 AND 100 ORDER BY 1
+# ----
+# 0
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a WHERE rowid=0 OR rowid=1
+# ----
+# 0
+# 1
+
+# window expressions
+
+# TODO: unsupported feature
+# query I
+# SELECT row_number() OVER (PARTITION BY rowid) FROM a ORDER BY rowid
+# ----
+# 1
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT row_number() OVER (ORDER BY rowid) FROM a ORDER BY rowid
+# ----
+# 1
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT row_number() OVER (ORDER BY rowid DESC) FROM a ORDER BY rowid
+# ----
+# 2
+# 1
+
+# uncorrelated subqueries
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT rowid FROM a LIMIT 1)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT 0 IN (SELECT rowid FROM a)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT EXISTS(SELECT rowid FROM a)
+# ----
+# 1
+
+# correlated subqueries
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT a2.rowid FROM a a2 WHERE a.rowid=a2.rowid) FROM a
+# ----
+# 0
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT a.rowid IN (SELECT a2.rowid FROM a a2 WHERE a.rowid>=a2.rowid) FROM a
+# ----
+# 1
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT EXISTS(SELECT a2.rowid FROM a a2 WHERE a.rowid>=a2.rowid) FROM a
+# ----
+# 1
+# 1

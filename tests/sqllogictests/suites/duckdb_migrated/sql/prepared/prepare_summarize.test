@@ -1,0 +1,51 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS accounts
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE accounts AS SELECT 1 id, 'Mark' AS name
+
+# prepare summarize
+
+# TODO: unsupported feature
+# query I nosort summarize
+# SUMMARIZE SELECT * FROM accounts WHERE id = 1;
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE query AS SUMMARIZE SELECT * FROM accounts WHERE id = $1;
+
+# TODO: unsupported feature
+# query I nosort summarize
+# EXECUTE query(1);
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE query AS (SUMMARIZE SELECT * FROM accounts WHERE id = $1);
+
+# TODO: unsupported feature
+# query I nosort summarize
+# EXECUTE query(1);
+
+# prepare describe
+
+# TODO: unsupported feature
+# query I nosort describe
+# DESCRIBE SELECT * FROM accounts WHERE id = 1;
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE query AS DESCRIBE SELECT * FROM accounts WHERE id = $1;
+
+# TODO: unsupported feature
+# query I nosort describe
+# EXECUTE query(1);
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE query AS (DESCRIBE SELECT * FROM accounts WHERE id = $1);
+
+# TODO: unsupported feature
+# query I nosort describe
+# EXECUTE query(1);

@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_list_2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_list_2 (a integer, b STRUCT(c VARCHAR[], d VARCHAR[], e INTEGER[]));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_list_2 SELECT 1, row(['a', 'b', 'c', 'd', 'e', 'f'], ['A', 'B'], [1, 5, 9]) FROM range(0, 10);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;

@@ -1,0 +1,33 @@
+# enable_external_access = false disables extension loading
+# we can set allowed_directories as much as we want
+# TODO: unsupported feature
+# statement ok
+# RESET allowed_paths
+
+# TODO: unsupported feature
+# statement error
+# RESET allowed_paths
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM '{DATA_DIR}/csv/glob/f_1.csv'
+# ----
+# 1	alice	alice@email.com
+# 2	eve	eve@email.com
+# 3r	bob	NULL
+
+# but not files that are not allowed
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM '{DATA_DIR}/csv/glob/a1/a1.csv'
+
+# TODO: unsupported feature
+# statement ok
+# COPY (SELECT 42 i) TO '{TEMP_DIR}/allowed_file.csv'
+
+# but not to not-allowed files
+
+# TODO: unsupported feature
+# statement error
+# COPY (SELECT 42 i) TO '{TEMP_DIR}/not_allowed_file.csv'

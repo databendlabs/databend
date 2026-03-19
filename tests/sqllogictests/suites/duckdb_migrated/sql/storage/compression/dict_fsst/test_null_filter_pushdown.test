@@ -1,0 +1,13 @@
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE OR REPLACE TABLE t1(type VARCHAR, id VARCHAR, problem VARCHAR);
+
+statement ok
+INSERT INTO t1(type,id,problem) select 'events', 'test', NULL from range(0, 40)
+
+query I
+SELECT COUNT(*) FROM t1 WHERE problem IS NULL;
+----
+40

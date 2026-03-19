@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS attach_no_wal.integers
+
+# If we enable alternative verification, then we disable checkpointing on shutdown.
+# Thus, we'll keep the WAL alive when detaching the database.
+# We need httpfs to do encrypted writes
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE attach_no_wal.integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO attach_no_wal.integers FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH attach_no_wal;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM attach_no_wal.integers;
+# ----
+# 10000
+
+
+
+
+
+
+# We need httpfs to do encrypted writes
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE attach_no_wal.integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO attach_no_wal.integers FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH attach_no_wal;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM attach_no_wal.integers;
+# ----
+# 10000

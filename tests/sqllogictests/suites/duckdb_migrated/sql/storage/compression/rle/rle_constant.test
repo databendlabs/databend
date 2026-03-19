@@ -1,0 +1,80 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# we check vector types explicitly in this test
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# Produces two full vectors from one run
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 0 from range(0, 4096);
+
+# Produces one full vector from one run
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 1 from range(0, 2048);
+
+# Dito
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 2 from range(0, 2048);
+
+# These do not fully fill the Vector, so they don't produce ConstantVectors
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 3 from range(0, 1024)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 4 from range(0, 1024)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 5 from range(0, 512)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 6 from range(0, 512)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 7 from range(0, 512)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test select 8 from range(0, 512)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+
+# Some of them produce constant vectors, but not all
+
+# TODO: unsupported feature
+# query I
+# select distinct on (types) vector_type(a) as types from test order by all;
+# ----
+# CONSTANT_VECTOR
+# FLAT_VECTOR
+
+# TODO: unsupported feature
+# query I
+# select distinct on (types) types from (select vector_type(a) from test limit 8192) tbl(types)
+# ----
+# CONSTANT_VECTOR
+
+# The other vectors are not constant
+
+# TODO: unsupported feature
+# query I
+# select distinct on (types) types from (select vector_type(a) from test offset 8192) tbl(types)
+# ----
+# FLAT_VECTOR

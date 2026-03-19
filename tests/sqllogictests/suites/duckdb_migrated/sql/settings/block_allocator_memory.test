@@ -1,0 +1,17 @@
+# defaults to 0, resetting to 0 is ok
+# TODO: unsupported feature
+# statement ok
+# RESET block_allocator_memory;
+
+# TODO: unsupported feature
+# query I
+# SELECT value FROM duckdb_settings() WHERE name = 'block_allocator_memory';
+# ----
+# 150.0 MiB
+
+
+# cannot be reduced
+
+# TODO: unsupported feature
+# statement error
+# RESET block_allocator_memory;

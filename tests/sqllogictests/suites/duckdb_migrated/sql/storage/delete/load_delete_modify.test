@@ -1,0 +1,52 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers AS SELECT * FROM generate_series(0,599999) t(i);
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM integers WHERE i%2=0
+# ----
+# 300000
+
+# LOAD -> ALTER
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE integers ADD COLUMN k INTEGER
+
+# TODO: unsupported feature
+# query III
+# SELECT COUNT(*), COUNT(i), COUNT(k) FROM integers
+# ----
+# 300000	300000	0
+
+# LOAD -> UPDATE
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE integers SET k=i+1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT COUNT(*), COUNT(i), COUNT(k), SUM(k) - SUM(i) FROM integers
+# ----
+# 300000	300000	300000	300000
+
+# LOAD -> DELETE MORE
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM integers WHERE i%3=0
+# ----
+# 100000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT COUNT(*), COUNT(i), COUNT(k), SUM(k) - SUM(i) FROM integers
+# ----
+# 200000	200000	200000	200000

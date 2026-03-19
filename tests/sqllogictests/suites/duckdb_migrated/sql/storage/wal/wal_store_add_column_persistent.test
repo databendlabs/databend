@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# now reload
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test ADD COLUMN k INTEGER DEFAULT 2
+
+# TODO: unsupported feature
+# query I
+# SELECT k FROM test ORDER BY k
+# ----
+# 2
+# 2
+# 2
+
+# reload again
+
+# the column is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT k FROM test ORDER BY k
+# ----
+# 2
+# 2
+# 2

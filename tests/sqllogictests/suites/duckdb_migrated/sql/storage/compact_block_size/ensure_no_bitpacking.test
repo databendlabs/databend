@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS has_bitpacking.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS no_bitpacking.tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE no_bitpacking.tbl AS SELECT range AS i FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE has_bitpacking.tbl AS SELECT range AS i FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT has_bitpacking;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT no_bitpacking;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM pragma_storage_info('no_bitpacking.tbl') WHERE compression = 'BitPacking';
+# ----
+# 0

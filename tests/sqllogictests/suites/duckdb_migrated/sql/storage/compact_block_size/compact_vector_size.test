@@ -1,0 +1,14 @@
+# The vector size of this file is 2048.
+# TODO: unsupported feature
+# statement error
+# ATTACH '{DATA_DIR}/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH '{DATA_DIR}/storage/vector_size_512.db' (TYPE DUCKDB, READONLY);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM vector_size_512.tbl;
+# ----
+# 42

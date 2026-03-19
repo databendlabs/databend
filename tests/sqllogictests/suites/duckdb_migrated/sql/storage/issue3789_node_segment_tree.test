@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table1 (column1 integer, column2 integer)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table1(column1, column2) values(1, 1)
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table1(column1, column2) values(1, 2)
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE table1 SET column2 = 3 FROM table1 s WHERE s.column1 = 1
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT

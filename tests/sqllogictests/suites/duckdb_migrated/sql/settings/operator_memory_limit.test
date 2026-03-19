@@ -1,0 +1,132 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# verify default is NULL (unset)
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('operator_memory_limit')
+# ----
+# NULL
+
+# set and verify
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('operator_memory_limit')
+# ----
+# 244.1 MiB
+
+# reset and verify
+
+# TODO: unsupported feature
+# statement ok
+# RESET operator_memory_limit
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('operator_memory_limit')
+# ----
+# NULL
+
+# NULL assignment resets
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('operator_memory_limit')
+# ----
+# NULL
+
+# appears in duckdb_settings()
+
+# TODO: unsupported feature
+# query III
+# SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'operator_memory_limit'
+# ----
+# operator_memory_limit	NULL	VARCHAR
+
+# test that operator_memory_limit causes OOM for operators that check GetOperatorMemoryLimit()
+# while memory_limit (hard cap) is set high enough to not interfere
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM range(0, 10000000) ORDER BY random();
+
+# TODO: unsupported feature
+# statement error
+# SELECT i % 1000000 as g, COUNT(*) FROM range(0, 10000000) t(i) GROUP BY 1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT DISTINCT i FROM range(0, 10000000) t(i);
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, SUM(i) OVER (PARTITION BY i % 100000 ORDER BY i) FROM range(0, 5000000) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 AS SELECT * FROM range(0, 1000000)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM t1
+# ----
+# 1000000
+
+# simple aggregation without GROUP BY - just accumulator variables
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(i) FROM range(0, 1000000) t(i)
+# ----
+# 499999500000
+
+# small GROUP BY - hash table fits in budget
+
+# TODO: unsupported feature
+# query II
+# SELECT i % 10 as g, COUNT(*) FROM range(0, 1000000) t(i) GROUP BY 1 ORDER BY 1
+# ----
+# 0	100000
+# 1	100000
+# 2	100000
+# 3	100000
+# 4	100000
+# 5	100000
+# 6	100000
+# 7	100000
+# 8	100000
+# 9	100000
+
+# small ORDER BY - fits in budget
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM (SELECT * FROM range(0, 1000) ORDER BY random())
+# ----
+# 1000
+
+# string_agg bypasses operator_memory_limit - accumulates without budget check
+
+# TODO: unsupported feature
+# query I
+# SELECT LENGTH(string_agg(i::VARCHAR, ',')) > 0 FROM range(0, 100000) t(i)
+# ----
+# 1
+
+# list() bypasses operator_memory_limit
+
+# TODO: unsupported feature
+# query I
+# SELECT LENGTH(list(i)::VARCHAR) > 0 FROM range(0, 50000) t(i)
+# ----
+# 1
+
+# cross join bypasses operator_memory_limit - uses ColumnDataCollection
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM range(0, 100) a, range(0, 100) b
+# ----
+# 10000

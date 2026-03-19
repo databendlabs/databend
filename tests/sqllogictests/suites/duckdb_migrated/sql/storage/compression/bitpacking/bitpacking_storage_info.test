@@ -1,0 +1,81 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_bp
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (11, 22), (12, 21), (NULL, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+# ----
+# BitPacking
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_bp (a INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_bp SELECT 1 FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_bp SELECT 2 FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	segment_info
+# FROM
+# 	pragma_storage_info('test_bp')
+# WHERE segment_type NOT IN ('VALIDITY')
+# ----
+# CONSTANT: 9, DELTA_FOR: 1
+
+# TODO: unsupported feature
+# statement error
+# RESET SESSION force_bitpacking_mode
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE test_bp (a INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_bp SELECT 3*(i // 1000) + (i%10) FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# Should have all 5 blocks for 10K integers (1 block per 2048 tuples) forced to DELTA_FOR
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	segment_info
+# FROM
+# 	pragma_storage_info('test_bp')
+# WHERE segment_type NOT IN ('VALIDITY')
+# ----
+# DELTA_FOR: 5

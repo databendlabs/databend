@@ -1,0 +1,63 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS big_string
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE big_string (
+# 	a VARCHAR,
+# 	id INT
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO big_string values (repeat('a', 8000), 1);
+# INSERT INTO big_string values (repeat('b', 10), 2);
+# INSERT INTO big_string values (repeat('c', 8000), 3);
+# INSERT INTO big_string values (repeat('d', 10), 4);
+# INSERT INTO big_string values (repeat('a', 8000), 1);
+# INSERT INTO big_string values (repeat('b', 10), 2);
+# INSERT INTO big_string values (repeat('c', 8000), 3);
+# INSERT INTO big_string values (repeat('d', 10), 4);
+# INSERT INTO big_string values (repeat('a', 8000), 1);
+# INSERT INTO big_string values (repeat('b', 10), 2);
+# INSERT INTO big_string values (repeat('c', 8000), 3);
+# INSERT INTO big_string values (repeat('d', 10), 4);
+
+# Test with a string that is larger than a block size after compression
+# uncompressed size: 3888890 compressed size: 1068813
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO big_string values (concat(range(0,500000)::VARCHAR), 5);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO big_string values (repeat('f', 1), 6);
+# INSERT INTO big_string values (repeat('g', 8000), 7);
+# INSERT INTO big_string values (repeat('h', 10000), 8);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query II
+# SELECT a[1], strlen(a) from big_string;
+# ----
+# a	8000
+# b	10
+# c	8000
+# d	10
+# a	8000
+# b	10
+# c	8000
+# d	10
+# a	8000
+# b	10
+# c	8000
+# d	10
+# [	3888890
+# f	1
+# g	8000
+# h	10000

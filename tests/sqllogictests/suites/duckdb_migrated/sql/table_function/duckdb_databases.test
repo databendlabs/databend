@@ -1,0 +1,52 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM duckdb_databases();
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT database_name, internal, readonly, path, type FROM duckdb_databases() ORDER BY database_name;
+# ----
+# memory	0	0	NULL	duckdb
+# system	1	0	NULL	duckdb
+# temp	1	0	NULL	duckdb
+
+# TODO: unsupported feature
+# query IIII
+# SELECT database_name, internal, split(replace(path, '\', '/'), '/')[-1], type FROM duckdb_databases() WHERE path IS NOT NULL;
+# ----
+# new_duckdb_database	0	duckdb_databases.db	duckdb
+
+# TODO: unsupported feature
+# query I
+# SELECT readonly FROM duckdb_databases WHERE database_name='new_duckdb_database';
+# ----
+# 0
+
+# TODO: unsupported feature
+# query II nosort show_db
+# SELECT database_name FROM duckdb_databases ORDER BY database_name
+# ----
+
+# TODO: unsupported feature
+# query II nosort show_db
+# SHOW databases
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT datname FROM pg_catalog.pg_database ORDER BY 1
+# ----
+# memory
+# new_duckdb_database
+# system
+# temp
+
+# TODO: unsupported feature
+# statement ok
+# DETACH new_duckdb_database;
+
+# TODO: unsupported feature
+# query I
+# SELECT readonly FROM duckdb_databases WHERE database_name='readonly_duckdb_database';
+# ----
+# 1

@@ -1,0 +1,54 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS shredded_integer
+
+# Always shred
+# TODO: unsupported feature
+# statement ok
+# create table shredded_integer (col VARIANT)
+
+# Insert values 0-99
+
+# TODO: unsupported feature
+# statement ok
+# insert into shredded_integer select (i % 100)::INTEGER from range(0, 100) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# verify the untyped_value column is not present
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM pragma_storage_info('shredded_integer') WHERE column_path = '[0, 2, 2]'
+# ----
+# 0
+
+# TODO: unsupported feature
+# query II
+# SELECT SUM(TRY_CAST(col AS INT)), COUNT(*) FROM shredded_integer
+# ----
+# 4950	100
+
+# TODO: unsupported feature
+# statement ok
+# insert into shredded_integer values ('hello world');
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# verify the untyped_value column is not present
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM pragma_storage_info('shredded_integer') WHERE column_path = '[0, 2, 2]'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT SUM(TRY_CAST(col AS INT)), COUNT(*) FROM shredded_integer
+# ----
+# 4950	101

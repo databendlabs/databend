@@ -1,0 +1,110 @@
+# 'db2' is an in-memory database, which no longer exists after restarting
+# So we have to exclude this test from Force Restart runs
+# TODO: unsupported feature
+# statement ok
+# create schema my_schema;
+
+# Verify that 'main' is the default
+
+# TODO: unsupported feature
+# query I
+# select current_schema();
+# ----
+# main
+
+# Set it as the default schema
+
+# TODO: unsupported feature
+# query I
+# select current_schema();
+# ----
+# my_schema
+
+# Then drop it
+
+# TODO: unsupported feature
+# statement ok
+# drop schema my_schema;
+
+# The 'current_schema' setting should be reset to the default ('main')
+
+# TODO: unsupported feature
+# query I
+# select current_schema();
+# ----
+# main
+
+# Create two new schemas
+
+# TODO: unsupported feature
+# statement ok
+# create schema schema1;
+
+# TODO: unsupported feature
+# statement ok
+# create schema schema2;
+
+# Set the current schema to 'schema1'
+
+# TODO: unsupported feature
+# query I
+# select current_schema();
+# ----
+# schema1
+
+# Then drop 'schema2'
+
+# TODO: unsupported feature
+# statement ok
+# drop schema schema2;
+
+# The current schema should be unaffected
+
+# TODO: unsupported feature
+# query I
+# select current_schema();
+# ----
+# schema1
+
+# Create a new in memory db
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH ':memory:' as db2;
+
+# Create an identically named schema
+
+# TODO: unsupported feature
+# statement ok
+# create schema db2.schema1;
+
+# USE would change the current_schema, so we can't use that
+# TODO: unsupported feature
+#statement ok
+#USE db2;
+
+# Drop this schema
+
+# TODO: unsupported feature
+# statement ok
+# drop schema db2.schema1;
+
+# The current schema should again be unaltered
+
+# TODO: unsupported feature
+# query I
+# select current_schema();
+# ----
+# schema1
+
+# Only when we drop the other 'schema1' should it be altered again
+
+# TODO: unsupported feature
+# statement ok
+# drop schema schema1;
+
+# TODO: unsupported feature
+# query I
+# select current_schema();
+# ----
+# main

@@ -1,0 +1,78 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS vals
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS vunion
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW vals AS SELECT * FROM (VALUES (1, 10), (2, 5), (3, 4)) tbl(i, j);
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM vals
+# ----
+# 1	10
+# 2	5
+# 3	4
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW vunion AS
+# SELECT * FROM vals
+# UNION ALL
+# SELECT * FROM vals;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM vunion ORDER BY i
+# ----
+# 1	10
+# 1	10
+# 2	5
+# 2	5
+# 3	4
+# 3	4
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM vunion ORDER BY i LIMIT 1
+# ----
+# 1	10
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (SELECT * FROM vunion ORDER BY i LIMIT 4) tbl ORDER BY j LIMIT 2
+# ----
+# 2	5
+# 2	5
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM vunion WHERE i=1
+# ----
+# 1	10
+# 1	10
+
+# TODO: unsupported feature
+# query II
+# SELECT DISTINCT * FROM (SELECT * FROM vunion UNION ALL SELECT * FROM vunion) tbl ORDER BY 1
+# ----
+# 1	10
+# 2	5
+# 3	4
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (SELECT * FROM vunion INTERSECT SELECT * FROM vunion) tbl ORDER BY 1;
+# ----
+# 1	10
+# 2	5
+# 3	4
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM (SELECT * FROM vunion EXCEPT SELECT * FROM vunion) tbl
+# ----

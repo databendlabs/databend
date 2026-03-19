@@ -1,0 +1,123 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# fudge factor for approximate_size drift
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO fudge() AS (20);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO eviction_invariants_ok() AS (
+#   SELECT COUNT(*) = 0 FROM duckdb_eviction_queues()
+#   WHERE dead_nodes < 0
+#     OR dead_nodes > approximate_size + fudge()
+#     OR dead_nodes > total_insertions
+#     OR total_insertions < approximate_size - fudge()
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t AS SELECT range AS i, range::VARCHAR AS s
+# FROM range(0, 2000000);
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(length(s)) FROM t;
+# ----
+# 12888890
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1

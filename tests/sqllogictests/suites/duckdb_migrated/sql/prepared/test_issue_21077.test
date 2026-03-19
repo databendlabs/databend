@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE pssmallint AS SELECT - ?
+
+# TODO: unsupported feature
+# query I
+# EXECUTE pssmallint(-32768);
+# ----
+# 32768
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE psinteger AS SELECT - ?
+
+# TODO: unsupported feature
+# query I
+# EXECUTE psinteger(-2147483648);
+# ----
+# 2147483648
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE psbigint AS SELECT - ?
+
+# TODO: unsupported feature
+# query I
+# EXECUTE psbigint(-9223372036854775808);
+# ----
+# 9223372036854775808

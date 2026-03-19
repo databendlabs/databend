@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (col STRUCT(a VARCHAR[]))
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl SELECT {'a': []} from range(0, 122881)

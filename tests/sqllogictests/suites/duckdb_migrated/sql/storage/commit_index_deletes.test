@@ -1,0 +1,67 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22, 'hello'), (13, 22, 'world'), (12, 21, 'test'), (10, NULL, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (14, 10, 'con')
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+# 14	10	con
+
+# delete the value again
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=14
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+
+# now add the value back in, slightly differently
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (14, 11, 'bla')
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+# 14	11	bla
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM test ORDER BY a, b, c
+# ----
+# 10	NULL	NULL
+# 11	22	hello
+# 12	21	test
+# 13	22	world
+# 14	11	bla

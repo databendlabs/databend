@@ -1,0 +1,78 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test2 (a INTEGER, c INTEGER, str2 VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test2 VALUES (11, 1, 'a'), (12, 1, 'b'), (13, 4, 'b')
+
+# TODO: unsupported feature
+# query IRR
+# SELECT a, SUM(a), (SELECT SUM(a)+SUM(t1.b) FROM test) FROM test t1 GROUP BY a ORDER BY a;
+# ----
+# 11	11.000000	37.000000
+# 12	12.000000	38.000000
+# 13	13.000000	39.000000
+
+# scalar query with multiple correlated columns
+
+# TODO: unsupported feature
+# query R
+# SELECT (SELECT test.a+test.b+SUM(test2.a) FROM test2 WHERE str=str2) FROM test ORDER BY 1;
+# ----
+# NULL
+# 23.000000
+# 39.000000
+
+# exists with multiple correlated columns
+
+# TODO: unsupported feature
+# query IIT
+# SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c) order by b;
+# ----
+# 12	2	b
+# 13	3	c
+
+# ANY with multiple correlated columns
+
+# TODO: unsupported feature
+# query IT
+# SELECT a, a>=ANY(SELECT test2.a+c-b FROM test2 WHERE c>=b AND str=str2) FROM test ORDER BY 1;
+# ----
+# 11	1
+# 12	0
+# 13	0
+
+# string comparison
+
+# TODO: unsupported feature
+# query TT
+# SELECT str, str=ANY(SELECT str2 FROM test2) FROM test
+# ----
+# a	1
+# b	1
+# c	0
+
+# TODO: unsupported feature
+# query TT
+# SELECT str, str=ANY(SELECT str2 FROM test2 WHERE test.a<>test2.a) FROM test
+# ----
+# a	0
+# b	1
+# c	0

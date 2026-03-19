@@ -1,0 +1,29 @@
+query R
+SELECT 1/2
+----
+0.5
+
+query I
+SELECT 1//2
+----
+0
+
+query R
+SELECT 1/2
+----
+0.5
+
+query I
+SELECT 1//2
+----
+0
+
+query R
+SELECT 1/2
+----
+0.5
+
+query I
+SELECT 1//2
+----
+0

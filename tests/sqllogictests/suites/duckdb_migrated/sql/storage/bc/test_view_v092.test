@@ -1,0 +1,29 @@
+# The database is written with a vector size of 2048.
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v1
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v2
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v3
+# ----
+
+# run metadata functions
+
+# TODO: unsupported feature
+# statement ok
+# SHOW TABLES
+
+# TODO: unsupported feature
+# statement ok
+# FROM duckdb_views()
+
+# TODO: unsupported feature
+# statement ok
+# FROM duckdb_columns()

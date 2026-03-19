@@ -1,0 +1,169 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BIGINT);
+
+# Constant compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else 1337 end FROM range(0,10000) tbl(i);
+
+# Constant delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i end FROM range(0,10000) tbl(i);
+
+# FOR/FOR-delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i//2 end FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BIGINT' and compression != 'BitPacking';
+# ----
+
+# TODO: unsupported feature
+# query III
+# select sum(a), min(a), max(a) from test;
+# ----
+# 70694000	0	9999
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BIGINT);
+
+# Constant compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else 1337 end FROM range(0,10000) tbl(i);
+
+# Constant delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i end FROM range(0,10000) tbl(i);
+
+# FOR/FOR-delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i//2 end FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BIGINT' and compression != 'BitPacking';
+# ----
+
+# TODO: unsupported feature
+# query III
+# select sum(a), min(a), max(a) from test;
+# ----
+# 70694000	0	9999
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BIGINT);
+
+# Constant compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else 1337 end FROM range(0,10000) tbl(i);
+
+# Constant delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i end FROM range(0,10000) tbl(i);
+
+# FOR/FOR-delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i//2 end FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BIGINT' and compression != 'BitPacking';
+# ----
+
+# TODO: unsupported feature
+# query III
+# select sum(a), min(a), max(a) from test;
+# ----
+# 70694000	0	9999
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BIGINT);
+
+# Constant compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else 1337 end FROM range(0,10000) tbl(i);
+
+# Constant delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i end FROM range(0,10000) tbl(i);
+
+# FOR/FOR-delta compressible range
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT case when i%5=0 then null else i//2 end FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BIGINT' and compression != 'BitPacking';
+# ----
+
+# TODO: unsupported feature
+# query III
+# select sum(a), min(a), max(a) from test;
+# ----
+# 70694000	0	9999
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

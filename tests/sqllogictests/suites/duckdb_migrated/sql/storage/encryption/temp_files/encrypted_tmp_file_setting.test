@@ -1,0 +1,13 @@
+# httpfs require to write encrypted data
+# TODO: unsupported feature
+# statement error
+# RESET temp_directory
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE tbl AS FROM range(10_000_000)
+
+# note; you should be very careful using this
+# If some tmp files are encrypted and others not
+# this will lead to corrupt files
+# therefore, this is disabled

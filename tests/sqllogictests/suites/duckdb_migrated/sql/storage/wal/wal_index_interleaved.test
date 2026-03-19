@@ -1,0 +1,302 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_a ON tbl(a);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (0 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 0 * 10 AND (0 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 1 * 10 AND (1 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (2 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 2 * 10 AND (2 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (3 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 3 * 10 AND (3 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (4 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 4 * 10 AND (4 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 5 * 10 AND (5 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (6 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 6 * 10 AND (6 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (7 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 7 * 10 AND (7 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (8 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 8 * 10 AND (8 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (9 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 9 * 10 AND (9 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (10 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 10 * 10 AND (10 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (11 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 11 * 10 AND (11 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (12 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 12 * 10 AND (12 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (13 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 13 * 10 AND (13 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (14 * 10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a = 14 * 10 AND (14 * 10) % 30 = 0;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM tbl;
+# ----
+# 10
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 0;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 0;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM tbl;
+# ----
+# 10
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 0 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 1 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 2 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 3 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 4 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 5 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 6 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 7 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 8 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 9 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 10 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 11 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 12 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 13 * 10;
+# ----
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 14 * 10;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 10;
+# ----
+# 10
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 70;
+# ----
+# 70
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 140;
+# ----
+# 140
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 0;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 30;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 90;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (150);
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 150;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 150;
+# ----
+# 150
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (0);
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 0;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 0;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM tbl;
+# ----
+# 12

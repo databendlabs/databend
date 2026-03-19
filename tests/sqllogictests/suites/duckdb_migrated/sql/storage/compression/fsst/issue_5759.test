@@ -1,0 +1,7 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS trigger5759
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE trigger5759 AS SELECT CASE WHEN RANDOM() > 0.95 THEN repeat('ab', 1500) ELSE 'c' END FROM range(0,1000);

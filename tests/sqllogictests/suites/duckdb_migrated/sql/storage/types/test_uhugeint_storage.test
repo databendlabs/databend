@@ -1,0 +1,57 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS uhugeints
+
+# load the DB from disk
+# create a table with uhugeints
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE uhugeints (h UHUGEINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO uhugeints VALUES (0), (42), (NULL), ('340282366920938463463374607431768211455'::UHUGEINT);
+
+# reload the database from disk a few times, and check that the data is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uhugeints
+# ----
+# 0
+# 42
+# NULL
+# 340282366920938463463374607431768211455
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uhugeints WHERE h = 42
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT h FROM uhugeints WHERE h < 10 ORDER BY 1;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uhugeints
+# ----
+# 0
+# 42
+# NULL
+# 340282366920938463463374607431768211455
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uhugeints WHERE h = 42
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT h FROM uhugeints WHERE h < 10 ORDER BY 1;
+# ----
+# 0

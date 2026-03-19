@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS blobs
+
+# load the DB from disk
+# create a table with hugeints
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE blobs (b BLOB);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO blobs VALUES('a'), ('\xAA'), ('\xAA\xFF\xAA'),  (''), (NULL), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01'), ('\x55\xAA\xFF\x55\xAA\xFF\x55\xAA\xFF\x01')
+
+# reload the database from disk a few times, and check that the data is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM blobs
+# ----
+# a
+# \xAA
+# \xAA\xFF\xAA
+# (empty)
+# NULL
+# U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
+# U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM blobs
+# ----
+# a
+# \xAA
+# \xAA\xFF\xAA
+# (empty)
+# NULL
+# U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01
+# U\xAA\xFFU\xAA\xFFU\xAA\xFF\x01

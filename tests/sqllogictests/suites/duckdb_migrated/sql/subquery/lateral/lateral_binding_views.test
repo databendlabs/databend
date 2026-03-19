@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query I
+# from v1
+# ----
+# 2000-01-01
+
+# TODO: unsupported feature
+# query II
+# select * from (select date '1992-01-01' as date), v1;
+# ----
+# 1992-01-01	2000-01-01

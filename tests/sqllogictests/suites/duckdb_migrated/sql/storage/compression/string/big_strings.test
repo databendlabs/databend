@@ -1,0 +1,241 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS big_string
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS normal_string
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE normal_string (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO normal_string values (repeat('a', 3900));
+# INSERT INTO normal_string values (repeat('b', 3900));
+# INSERT INTO normal_string values (repeat('a', 3900));
+# INSERT INTO normal_string values (repeat('b', 3900));
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query III
+# SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from normal_string
+# ----
+# a	a	3900
+# b	b	3900
+# a	a	3900
+# b	b	3900
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='fsst' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE big_string (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO big_string values (repeat('a', 8000));
+# INSERT INTO big_string values (repeat('b', 8000));
+# INSERT INTO big_string values (repeat('a', 8000));
+# INSERT INTO big_string values (repeat('b', 8000));
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query III
+# SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from big_string
+# ----
+# a	a	8000
+# b	b	8000
+# a	a	8000
+# b	b	8000
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression) FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# uncompressed
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE big_string;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE normal_string;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE normal_string (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO normal_string values (repeat('a', 3900));
+# INSERT INTO normal_string values (repeat('b', 3900));
+# INSERT INTO normal_string values (repeat('a', 3900));
+# INSERT INTO normal_string values (repeat('b', 3900));
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query III
+# SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from normal_string
+# ----
+# a	a	3900
+# b	b	3900
+# a	a	3900
+# b	b	3900
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dictionary' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE big_string (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO big_string values (repeat('a', 8000));
+# INSERT INTO big_string values (repeat('b', 8000));
+# INSERT INTO big_string values (repeat('a', 8000));
+# INSERT INTO big_string values (repeat('b', 8000));
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query III
+# SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from big_string
+# ----
+# a	a	8000
+# b	b	8000
+# a	a	8000
+# b	b	8000
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression) FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# uncompressed
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE big_string;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE normal_string;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE normal_string (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO normal_string values (repeat('a', 3900));
+# INSERT INTO normal_string values (repeat('b', 3900));
+# INSERT INTO normal_string values (repeat('a', 3900));
+# INSERT INTO normal_string values (repeat('b', 3900));
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query III
+# SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from normal_string
+# ----
+# a	a	3900
+# b	b	3900
+# a	a	3900
+# b	b	3900
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE big_string (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO big_string values (repeat('a', 8000));
+# INSERT INTO big_string values (repeat('b', 8000));
+# INSERT INTO big_string values (repeat('a', 8000));
+# INSERT INTO big_string values (repeat('b', 8000));
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query III
+# SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from big_string
+# ----
+# a	a	8000
+# b	b	8000
+# a	a	8000
+# b	b	8000
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression) FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# uncompressed
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE big_string;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE normal_string;

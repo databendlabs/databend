@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS anno
+
+# load the DB from disk
+# TODO: unsupported feature
+# query I
+# show tables
+# ----
+
+# TODO: unsupported feature
+# query I
+# select current_user
+# ----
+# duckdb
+
+# TODO: unsupported feature
+# statement ok
+# create table anno as select 42
+
+# TODO: unsupported feature
+# query I
+# show tables
+# ----
+# anno
+
+# TODO: unsupported feature
+# statement ok
+# drop table if exists anno
+
+# TODO: unsupported feature
+# query I
+# show tables
+# ----
+
+# TODO: unsupported feature
+# query I
+# show tables
+# ----

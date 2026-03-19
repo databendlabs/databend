@@ -1,0 +1,228 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS scheme.emp_dept_view
+
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS scheme.vintegers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS scheme.dept
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS scheme.emp
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS scheme.integers
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM INFORMATION_SCHEMA.SCHEMATA;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM information_schema.schemata;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA scheme;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='scheme'
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE scheme.integers (i INTEGER);
+
+# TODO: unsupported feature
+# query T
+# SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='integers' AND table_catalog IS NOT NULL
+# ----
+# BASE TABLE
+
+# TODO: unsupported feature
+# query ITT
+# SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_name='integers'
+# ----
+# 1	i	INTEGER
+
+# TODO: unsupported feature
+# query ITT
+# SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_name='integers'
+# ----
+# 1	i	INTEGER
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE reals (f FLOAT PRIMARY KEY, dec DECIMAL(16, 4), h HUGEINT, b BIGINT, t TINYINT, d DOUBLE NOT NULL)
+
+# TODO: unsupported feature
+# query T
+# SELECT table_type FROM information_schema.tables WHERE table_catalog='temp' AND table_name='reals'
+# ----
+# LOCAL TEMPORARY
+
+# TODO: unsupported feature
+# query IIT
+# SELECT numeric_precision, numeric_scale, is_nullable FROM information_schema.columns WHERE table_name='reals' ORDER BY ordinal_position
+# ----
+# 24	0	NO
+# 16	4	YES
+# 128	0	YES
+# 64	0	YES
+# 8	0	YES
+# 53	0	NO
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW scheme.vintegers AS SELECT * FROM scheme.integers;
+
+# TODO: unsupported feature
+# query T
+# SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='vintegers'
+# ----
+# VIEW
+
+# TODO: unsupported feature
+# query T
+# SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='vintegers'
+# ----
+# VIEW
+
+# TODO: unsupported feature
+# query ITT
+# SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_schema='scheme' AND table_name='vintegers' AND table_catalog IS NOT NULL
+# ----
+# 1	i	INTEGER
+
+# TODO: unsupported feature
+# query IIII
+# SELECT character_set_name, character_repertoire, form_of_use, default_collate_name FROM information_schema.character_sets
+# ----
+# UTF8	UCS	UTF8	ucs_basic
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM information_schema.referential_constraints
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM information_schema.key_column_usage
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM information_schema.table_constraints
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE scheme.dept (dept_id INT PRIMARY KEY, dept_name VARCHAR(100) NOT NULL)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE scheme.emp (emp_id INT PRIMARY KEY, first_name VARCHAR(100) NOT NULL, last_name VARCHAR(100) NOT NULL, ssn INT NOT NULL UNIQUE, salary DECIMAL(10, 2) NOT NULL CHECK (salary > 0), dept_id INT REFERENCES scheme.dept(dept_id))
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT table_schema, table_name, column_name, constraint_schema, constraint_name
+# FROM information_schema.constraint_column_usage
+# WHERE table_schema = 'scheme' AND table_name = 'emp'
+# ORDER BY column_name ASC;
+# ----
+# scheme	emp	dept_id	scheme	emp_dept_id_dept_id_fkey
+# scheme	emp	emp_id	scheme	emp_emp_id_pkey
+# scheme	emp	salary	scheme	emp_salary_check
+# scheme	emp	ssn	scheme	emp_ssn_key
+
+# TODO: unsupported feature
+# query I
+# SELECT DISTINCT(table_catalog) = current_database()
+# FROM information_schema.constraint_column_usage
+# WHERE table_schema = 'scheme' AND table_name = 'emp'
+# ORDER BY column_name ASC;
+# ----
+# True
+
+# TODO: unsupported feature
+# query I
+# SELECT DISTINCT(constraint_catalog) = current_database()
+# FROM information_schema.constraint_column_usage
+# WHERE table_schema = 'scheme' AND table_name = 'emp'
+# ORDER BY column_name ASC;
+# ----
+# True
+
+# TODO: unsupported feature
+# query IIII
+# SELECT table_schema, table_name, constraint_schema, constraint_name
+# FROM information_schema.constraint_table_usage
+# WHERE table_schema = 'scheme' AND table_name = 'emp'
+# ORDER BY constraint_name ASC
+# ----
+# scheme	emp	scheme	emp_dept_id_dept_id_fkey
+# scheme	emp	scheme	emp_emp_id_pkey
+# scheme	emp	scheme	emp_salary_check
+# scheme	emp	scheme	emp_ssn_key
+
+# TODO: unsupported feature
+# query III
+# SELECT constraint_schema, constraint_name, check_clause
+# FROM information_schema.check_constraints
+# WHERE constraint_schema = 'scheme' AND check_clause LIKE 'CHECK%'
+# ----
+# scheme	emp_salary_check	CHECK((salary > 0))
+
+# TODO: unsupported feature
+# query I
+# SELECT DISTINCT(constraint_catalog) = current_database()
+# FROM information_schema.check_constraints
+# WHERE constraint_schema = 'scheme' AND check_clause LIKE 'CHECK%'
+# ----
+# True
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE VIEW scheme.emp_dept_view AS SELECT emp.*, dept.dept_name FROM scheme.emp JOIN scheme.dept ON emp.dept_id = dept.dept_id;
+
+# TODO: unsupported feature
+# query IIIIIIIII
+# SELECT table_schema, table_name, SUBSTR (view_definition, 1, 32) AS view_definition_substr, check_option, is_updatable, is_insertable_into, is_trigger_updatable, is_trigger_deletable, is_trigger_insertable_into
+# FROM information_schema.views
+# WHERE table_schema = 'scheme' AND table_name = 'emp_dept_view';
+# ----
+# scheme	emp_dept_view	CREATE VIEW scheme.emp_dept_view	NONE	NO	NO	NO	NO	NO
+
+# TODO: unsupported feature
+# query I
+# SELECT DISTINCT(table_catalog) = current_database()
+# FROM information_schema.views
+# WHERE table_schema = 'scheme' AND table_name = 'emp_dept_view';
+# ----
+# True
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA scheme CASCADE;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='scheme'
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='scheme'
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='scheme'
+# ----
+# 0

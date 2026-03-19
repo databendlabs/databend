@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE t(
+# 	compressed VARCHAR USING COMPRESSION 'DICT_FSST'
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t VALUES
+# 	('Error3');
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE t SET compressed = NULL;
+
+# Only the validity is changed, no data changes occurred
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM t AS e WHERE e.compressed IS NULL;
+# ----
+# NULL

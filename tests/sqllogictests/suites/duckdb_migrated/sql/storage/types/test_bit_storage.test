@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bits
+
+# load the DB from disk
+# create a table with bts
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bits (b BIT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bits VALUES('1'), ('010111'), ('111110010011'), (NULL), ('000000000000000000'), ('00100110010100100101001010010101010011110101000000000111100100110')
+
+# reload the database from disk a few times, and check that the data is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM bits
+# ----
+# 1
+# 010111
+# 111110010011
+# NULL
+# 000000000000000000
+# 00100110010100100101001010010101010011110101000000000111100100110
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM bits
+# ----
+# 1
+# 010111
+# 111110010011
+# NULL
+# 000000000000000000
+# 00100110010100100101001010010101010011110101000000000111100100110

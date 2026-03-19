@@ -1,0 +1,22 @@
+# ambiguous window function usage
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT SUM(?) OVER ()
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(2)
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(2::HUGEINT)
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(0.5)
+# ----
+# 0.5

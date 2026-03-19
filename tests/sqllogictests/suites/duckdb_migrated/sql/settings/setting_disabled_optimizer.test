@@ -1,0 +1,3 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT current_setting('disabled_optimizers');

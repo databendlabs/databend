@@ -1,0 +1,61 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS u
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS v
+
+# TODO: unsupported feature
+# statement ok
+# create table t (i int primary key);
+
+# TODO: unsupported feature
+# query I
+# select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+# ----
+# PRIMARY KEY(i)
+
+# TODO: unsupported feature
+# statement ok
+# create table u (i int references t);
+
+# TODO: unsupported feature
+# query I
+# select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+# ----
+# PRIMARY KEY(i)
+
+# TODO: unsupported feature
+# statement ok
+# create table v (i int references t);
+
+# TODO: unsupported feature
+# query I
+# select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+# ----
+# PRIMARY KEY(i)
+
+# TODO: unsupported feature
+# statement ok
+# drop table v;
+
+# TODO: unsupported feature
+# query I
+# select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+# ----
+# PRIMARY KEY(i)
+
+# TODO: unsupported feature
+# statement ok
+# drop table u;
+
+# TODO: unsupported feature
+# query I
+# select constraint_text from duckdb_constraints() where constraint_type = 'PRIMARY KEY';
+# ----
+# PRIMARY KEY(i)

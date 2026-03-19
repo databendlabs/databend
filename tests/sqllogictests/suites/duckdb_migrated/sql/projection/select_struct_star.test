@@ -1,0 +1,61 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(a STRUCT(i INT, j INT));
+
+# insertion: 1 affected row
+
+# TODO: unsupported feature
+# query I
+# INSERT INTO test VALUES ({i: 1, j: 2});
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT a.* FROM test;
+# ----
+# 1	2
+
+# TODO: unsupported feature
+# query I
+# SELECT a.* EXCLUDE(j) FROM test;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT a.* EXCLUDE(i) FROM test;
+# ----
+# 2
+
+# TODO: unsupported feature
+# query II
+# SELECT a.* REPLACE(a.i + 3 AS i) FROM test;
+# ----
+# 4	2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(i row(t int));
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b(i row(t int));
+
+# Binder Error: Ambiguous reference to column name "i" (use: "b.i" or "a.i")
+
+# TODO: unsupported feature
+# statement error
+# SELECT i.* FROM a, b;

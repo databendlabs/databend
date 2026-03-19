@@ -1,0 +1,26 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# create a table and add a column to it
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+ALTER TABLE test DROP COLUMN b
+
+query I
+SELECT * FROM test ORDER BY 1
+----
+11
+12
+13
+
+query I
+SELECT * FROM test ORDER BY 1
+----
+11
+12
+13

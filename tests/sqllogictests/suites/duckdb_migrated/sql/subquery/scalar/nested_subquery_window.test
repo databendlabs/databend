@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT max((SELECT subq_0.c0 AS c1))) FROM (SELECT NULL AS c0) AS subq_0;
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT max(42) OVER (PARTITION BY (SELECT subq_0.c0 AS c1)) AS c6) FROM (SELECT NULL AS c0) AS subq_0;
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT max((SELECT subq_0.c0 AS c1)) OVER () AS c6) FROM (SELECT NULL AS c0) AS subq_0;
+# ----
+# NULL

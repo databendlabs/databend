@@ -1,0 +1,64 @@
+# list_aggregate
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT list_aggregate(?, 'min')
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1([1, 2, 3])
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(['hello', 'world'])
+# ----
+# hello
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(NULL::INT[])
+# ----
+# NULL
+
+# array_slice
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v2 AS SELECT array_slice(?, 1, 2);
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2([1, 2, 3]);
+# ----
+# [1, 2]
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2('123');
+# ----
+# 12
+
+# flatten
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v3 AS SELECT flatten(?)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v3([[1,2,3],[4,5]]);
+# ----
+# [1, 2, 3, 4, 5]
+
+# list_extract
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v4 AS SELECT list_extract(?, 2)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v4([1, 2, 3]);
+# ----
+# 2

@@ -1,0 +1,159 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT CONCAT('A-',(i%5)::VARCHAR) FROM range(0,1025) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select * from test limit 5;
+# ----
+# A-0
+# A-1
+# A-2
+# A-3
+# A-4
+
+# TODO: unsupported feature
+# query I
+# select a[3] from test limit 5;
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT CONCAT('A-',(i%5)::VARCHAR) FROM range(0,1025) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select * from test limit 5;
+# ----
+# A-0
+# A-1
+# A-2
+# A-3
+# A-4
+
+# TODO: unsupported feature
+# query I
+# select a[3] from test limit 5;
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dictionary' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT CONCAT('A-',(i%5)::VARCHAR) FROM range(0,1025) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select * from test limit 5;
+# ----
+# A-0
+# A-1
+# A-2
+# A-3
+# A-4
+
+# TODO: unsupported feature
+# query I
+# select a[3] from test limit 5;
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

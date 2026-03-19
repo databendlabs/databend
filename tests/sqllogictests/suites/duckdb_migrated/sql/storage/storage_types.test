@@ -1,0 +1,258 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_bigint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_bool
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_double
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_float
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_integer
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_interval
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_smallint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_tinyint
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_tinyint AS SELECT range::tinyint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_smallint AS SELECT range::smallint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_integer AS SELECT range::integer i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_bigint AS SELECT range::bigint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_float AS SELECT range::float i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_float
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_float WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_double AS SELECT range::double i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_double
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_double WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_interval AS SELECT interval (range) year i FROM range(1,1001)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
+# ----
+# 1 year	1000 years	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i = interval 1 year
+# ----
+# 1 year	1 year	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_bool AS SELECT range % 2 = 0 AS i FROM range(0, 1000)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool
+# ----
+# 0	1	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE NOT i
+# ----
+# 0	0	500	500
+
+
+# Restart and check all types.
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_float
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_float WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_double
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_double WHERE i = 1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
+# ----
+# 1 year	1000 years	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i = interval 1 year
+# ----
+# 1 year	1 year	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool
+# ----
+# 0	1	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE NOT i
+# ----
+# 0	0	500	500

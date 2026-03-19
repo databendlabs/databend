@@ -1,0 +1,21 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_rle
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_rle (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_rle SELECT i FROM range(0, 2000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test_rle') WHERE segment_type ILIKE 'INTEGER'
+# ----
+# RLE

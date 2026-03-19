@@ -1,0 +1,48 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers AS SELECT 42 i
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT total_blocks < 10 FROM pragma_database_size();
+# ----
+# 1
+
+# ensure temporary tables are not actually written to the main storage
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM range(0, 1000000)
+
+# TODO: unsupported feature
+# query I
+# SELECT total_blocks < 10 FROM pragma_database_size();
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY TABLE test2 (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test2 SELECT * FROM range(0, 1000000)
+
+# TODO: unsupported feature
+# query I
+# SELECT total_blocks < 10 FROM pragma_database_size();
+# ----
+# 1

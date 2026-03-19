@@ -1,0 +1,89 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE lists(l INTEGER[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO lists VALUES (ARRAY[1]), (ARRAY[2]), (ARRAY[3]), (NULL);
+
+# correlated expressions in inner/left/right joins
+
+# TODO: unsupported feature
+# query II
+# SELECT l, l IN (SELECT i1.l FROM (SELECT * FROM lists i1 WHERE i1.l=lists.l) i1 JOIN generate_series(1, 2, 1) tbl(s) ON i1.l=ARRAY[tbl.s]) FROM lists ORDER BY l NULLS LAST;
+# ----
+# [1]	True
+# [2]	True
+# [3]	False
+# NULL	False
+
+# TODO: unsupported feature
+# query I
+# SELECT l IN (SELECT i1.l FROM (SELECT * FROM lists i1 WHERE i1.l=lists.l) i1 LEFT JOIN generate_series(1, 2, 1) tbl(s) ON i1.l=ARRAY[tbl.s]) FROM lists ORDER BY l NULLS LAST;
+# ----
+# 1
+# 1
+# 1
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT l IN (SELECT i1.l FROM (SELECT * FROM lists i1 WHERE i1.l=lists.l) i1 RIGHT JOIN generate_series(1, 2, 1) tbl(s) ON i1.l=ARRAY[tbl.s]) FROM lists ORDER BY l NULLS LAST;
+# ----
+# 1
+# 1
+# NULL
+# NULL
+
+# other way around
+
+# TODO: unsupported feature
+# query I
+# SELECT l IN (SELECT i1.l FROM generate_series(1, 2, 1) tbl(s) LEFT JOIN (SELECT * FROM lists i1 WHERE i1.l=lists.l) i1 ON i1.l=ARRAY[tbl.s]) FROM lists ORDER BY l NULLS LAST;
+# ----
+# 1
+# 1
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT l IN (SELECT i1.l FROM generate_series(1, 2, 1) tbl(s) RIGHT JOIN (SELECT * FROM lists i1 WHERE i1.l=lists.l) i1 ON i1.l=ARRAY[tbl.s]) FROM lists ORDER BY l NULLS LAST;
+# ----
+# 1
+# 1
+# 1
+# 0
+
+# complex join condition
+
+# TODO: unsupported feature
+# query I
+# SELECT l IN (SELECT i1.l FROM (SELECT * FROM lists i1 WHERE i1.l IS NOT DISTINCT FROM lists.l) i1 JOIN generate_series(1, 2, 1) tbl(s) ON i1.l=ARRAY[tbl.s] OR (i1.l IS NULL AND tbl.s IS NULL)) FROM lists ORDER BY l NULLS LAST;
+# ----
+# 1
+# 1
+# 0
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT l IN (SELECT i1.l FROM (SELECT * FROM lists i1 WHERE i1.l IS NOT DISTINCT FROM lists.l) i1 LEFT JOIN generate_series(1, 2, 1) tbl(s) ON i1.l=ARRAY[tbl.s] OR (i1.l IS NULL AND tbl.s IS NULL)) FROM lists ORDER BY l NULLS LAST;
+# ----
+# 1
+# 1
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT l IN (SELECT i1.l FROM (SELECT * FROM lists i1 WHERE i1.l IS NOT DISTINCT FROM lists.l) i1 RIGHT JOIN generate_series(1, 2, 1) tbl(s) ON i1.l=ARRAY[tbl.s] OR (i1.l IS NULL AND tbl.s IS NULL)) FROM lists ORDER BY l NULLS LAST;
+# ----
+# 1
+# 1
+# NULL
+# NULL

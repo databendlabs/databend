@@ -1,0 +1,68 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT (-i)::VARCHAR a, (-i)::VARCHAR b FROM range(0, 100000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('11', '22'), (NULL, '22'), ('12', '21')
+
+# TODO: unsupported feature
+# query I
+# UPDATE test SET b=(b::INT+1)::VARCHAR WHERE a='11'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a::INTEGER>0 OR a IS NULL ORDER BY a
+# ----
+# 11	23
+# 12	21
+# NULL	22
+
+# TODO: unsupported feature
+# query I
+# UPDATE test SET b=(b::INT+1)::VARCHAR WHERE a='11'
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a::INTEGER>0 OR a IS NULL ORDER BY a
+# ----
+# 11	24
+# 12	21
+# NULL	22
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET b=NULL WHERE a='11'
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a::INTEGER>0 OR a IS NULL ORDER BY a
+# ----
+# 11	NULL
+# 12	21
+# NULL	22
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a::INTEGER>0 OR a IS NULL ORDER BY a
+# ----
+# 11	NULL
+# 12	21
+# NULL	22
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test WHERE a::INTEGER>0 OR a IS NULL ORDER BY a
+# ----
+# 11	NULL
+# 12	21
+# NULL	22

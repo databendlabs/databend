@@ -1,0 +1,80 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT a FROM range(0, 1000) tbl1(a), repeat(0, 100) tbl2(b)
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE test SET a=2000 WHERE a=1
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE a=2 OR a=17
+
+# TODO: unsupported feature
+# query II
+# SELECT SUM(a), COUNT(a) FROM test
+# ----
+# 50148000	99800
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=0
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=1
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=2
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=17
+# ----
+# 0
+
+# TODO: unsupported feature
+# query II
+# SELECT SUM(a), COUNT(a) FROM test
+# ----
+# 50148000	99800
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=0
+# ----
+# 100
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=1
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=2
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(a) FROM test WHERE a=17
+# ----
+# 0

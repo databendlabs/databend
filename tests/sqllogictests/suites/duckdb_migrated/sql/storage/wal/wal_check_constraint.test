@@ -1,0 +1,36 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(a INTEGER CHECK (a<10), b INTEGER CHECK(CASE WHEN b < 10 THEN a < b ELSE a + b < 100 END));
+
+# reload the database
+
+# matching tuple
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (3, 7);
+
+# check constraint on a violated (a < 10)
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (12, 13);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (5, 3);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (9, 90);
+
+# check constraint on b violated !(b < 10) => (a + b < 100)
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (9, 99);

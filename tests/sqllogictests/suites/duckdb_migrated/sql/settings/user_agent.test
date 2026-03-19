@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement error
+# RESET custom_user_agent
+
+# TODO: unsupported feature
+# query T
+# SELECT current_setting('custom_user_agent')
+# ----
+# (empty)
+
+# TODO: unsupported feature
+# query T
+# SELECT regexp_matches(user_agent, '^duckdb/.*(.*)') FROM pragma_user_agent()
+# ----
+# 1

@@ -1,0 +1,46 @@
+# question mark as parameter
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS SELECT CAST(? AS INTEGER), CAST(? AS STRING)
+
+# TODO: unsupported feature
+# query II
+# EXECUTE s1(42, 'dpfkg')
+# ----
+# 42	dpfkg
+
+# TODO: unsupported feature
+# statement ok
+# DEALLOCATE s1
+
+# question mark with indicator
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS SELECT CAST(?1 AS INTEGER), CAST(?2 AS STRING)
+
+# TODO: unsupported feature
+# query II
+# EXECUTE s1(42, 'dpfkg')
+# ----
+# 42	dpfkg
+
+# TODO: unsupported feature
+# statement ok
+# DEALLOCATE s1
+
+# question mark with indicator reversed
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS SELECT CAST(?2 AS INTEGER), CAST(?1 AS STRING)
+
+# TODO: unsupported feature
+# query II
+# EXECUTE s1('dpfkg', 42)
+# ----
+# 42	dpfkg
+
+# TODO: unsupported feature
+# statement ok
+# DEALLOCATE s1

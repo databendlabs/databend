@@ -1,0 +1,197 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+# insert multiple ranges so that each method can be used on at least on the the ranges bit-width > 96
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, -i::HUGEINT + -1234567891011121314151617180000::HUGEINT FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5;
+# ----
+# -1234567891011121314151617180000
+# -1234567891011121314151617180001
+# -1234567891011121314151617180002
+# -1234567891011121314151617180003
+# -1234567891011121314151617180004
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5 offset 12000;
+# ----
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+# ----
+# BitPacking
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+# insert multiple ranges so that each method can be used on at least on the the ranges bit-width > 96
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, -i::HUGEINT + -1234567891011121314151617180000::HUGEINT FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5;
+# ----
+# -1234567891011121314151617180000
+# -1234567891011121314151617180001
+# -1234567891011121314151617180002
+# -1234567891011121314151617180003
+# -1234567891011121314151617180004
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5 offset 12000;
+# ----
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+# ----
+# BitPacking
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+# insert multiple ranges so that each method can be used on at least on the the ranges bit-width > 96
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, -i::HUGEINT + -1234567891011121314151617180000::HUGEINT FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5;
+# ----
+# -1234567891011121314151617180000
+# -1234567891011121314151617180001
+# -1234567891011121314151617180002
+# -1234567891011121314151617180003
+# -1234567891011121314151617180004
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5 offset 12000;
+# ----
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+# ----
+# BitPacking
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+# insert multiple ranges so that each method can be used on at least on the the ranges bit-width > 96
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, -i::HUGEINT + -1234567891011121314151617180000::HUGEINT FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5;
+# ----
+# -1234567891011121314151617180000
+# -1234567891011121314151617180001
+# -1234567891011121314151617180002
+# -1234567891011121314151617180003
+# -1234567891011121314151617180004
+
+# TODO: unsupported feature
+# query I
+# select a from test limit 5 offset 12000;
+# ----
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+# 13371337
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+# ----
+# BitPacking
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

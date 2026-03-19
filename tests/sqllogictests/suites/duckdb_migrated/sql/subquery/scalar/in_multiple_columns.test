@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table1(x INTEGER, y INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table1 VALUES (NULL, 2), (1, NULL);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table2(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table2 VALUES (1), (2), (3);
+
+# TODO: unsupported feature
+# query I
+# SELECT (x, y) IN (SELECT i, i + 1 FROM table2) from table1;
+# ----
+# NULL
+# NULL

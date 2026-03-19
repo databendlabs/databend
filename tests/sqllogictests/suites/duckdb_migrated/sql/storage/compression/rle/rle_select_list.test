@@ -1,0 +1,36 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl as SELECT * FROM (
+#     VALUES
+#         (['first name', 'last name', 'username'], 60),
+#         (['first name'], 0),
+#         (['username'], 0),
+#         (['first name', 'last name', 'username'], 0),
+#         (['first name', 'last name', 'username'], 0),
+#         (['username'], 0),
+#         (['username'], 0)
+# ) AS t(attributes, minutes_duration);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT
+#    "minutes_duration"
+# FROM
+#    tbl
+# WHERE NOT list_sort(['first name']) = tbl."attributes"
+# ORDER BY ALL
+# ----
+# 0
+# 0
+# 0
+# 0
+# 0
+# 60

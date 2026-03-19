@@ -1,0 +1,55 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_table (
+#     id INTEGER,
+#     emb FLOAT[],
+#     emb_arr FLOAT[3]
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_table (id) VALUES (42);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query III
+# FROM test_table
+# ----
+# 42	NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_table
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_table (
+#     id INTEGER,
+#     emb FLOAT[],
+#     emb_arr FLOAT[3]
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_table (id) VALUES (42);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query III
+# FROM test_table
+# ----
+# 42	NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_table

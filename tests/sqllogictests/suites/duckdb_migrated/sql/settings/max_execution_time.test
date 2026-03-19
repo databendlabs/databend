@@ -1,0 +1,125 @@
+# verify default is 0 (no limit)
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_execution_time')
+# ----
+# 0
+
+# set and verify
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_execution_time')
+# ----
+# 5000
+
+# reset and verify
+
+# TODO: unsupported feature
+# statement ok
+# RESET max_execution_time
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_execution_time')
+# ----
+# 0
+
+# test that setting appears in duckdb_settings()
+
+# TODO: unsupported feature
+# query III
+# SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'max_execution_time'
+# ----
+# max_execution_time	0	BIGINT
+
+# set small value and verify it shows
+
+# TODO: unsupported feature
+# query III
+# SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'max_execution_time'
+# ----
+# max_execution_time	100	BIGINT
+
+# test timeout triggers (50ms timeout on slow cross-product query)
+
+# TODO: unsupported feature
+# statement error
+# SELECT COUNT(*) FROM range(0, 100000000) t1, range(0, 1000) t2
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_execution_time')
+# ----
+# 5000
+
+# now reset should work fine
+
+# TODO: unsupported feature
+# statement ok
+# RESET max_execution_time
+
+# verify reset worked
+
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('max_execution_time')
+# ----
+# 0
+
+# simple query succeeds with no timeout
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 1
+
+# Recursive CTE (tight loop in ExecuteRecursivePipelines)
+
+# TODO: unsupported feature
+# statement error
+# WITH RECURSIVE cte AS (
+#     SELECT 1 as n
+#     UNION ALL
+#     SELECT n+1 FROM cte WHERE n < 10000000
+# )
+# SELECT COUNT(*) FROM cte
+
+# TODO: unsupported feature
+# statement error
+# SELECT i % 10000000 as g, COUNT(*) FROM range(0, 100000000) t(i) GROUP BY 1
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM range(0, 50000000) ORDER BY random()
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, SUM(i) OVER (PARTITION BY i % 1000000 ORDER BY i) FROM range(0, 10000000) t(i)
+
+# TODO: unsupported feature
+# statement error
+# SELECT 
+#     CASE WHEN i % 2 = 0 THEN
+#         CASE WHEN i % 3 = 0 THEN
+#             CASE WHEN i % 5 = 0 THEN 'FizzBuzz'
+#             ELSE 'Fizz' END
+#         ELSE CASE WHEN i % 5 = 0 THEN 'Buzz'
+#         ELSE i::VARCHAR END END
+#     ELSE i::VARCHAR END as result,
+#     COUNT(*) 
+# FROM range(0, 100000000) t(i) 
+# GROUP BY 1
+
+# TODO: unsupported feature
+# statement error
+# SELECT DISTINCT i FROM range(0, 50000000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# RESET max_execution_time
+
+# Verify everything works without timeout
+
+# TODO: unsupported feature
+# statement ok
+# SELECT COUNT(*) FROM range(0, 1000)

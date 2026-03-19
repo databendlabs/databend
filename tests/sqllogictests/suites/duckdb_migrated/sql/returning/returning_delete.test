@@ -1,0 +1,1015 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS indexed_returning
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS merge_delete_source
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS merge_gen_target
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS merge_multi_gen
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS merge_rowid_source
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS merge_rowid_target
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS merge_source
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table3
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table4
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_generated_middle
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_generated_varchar
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_generated_virtual
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_multi_generated
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_optimized
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_rowid_gen_middle
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_rowid_generated
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_rowid_multi_gen
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_rowid_supported
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_where_returning
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into table1(a) select * from range (0, 4000, 1) t1(a);
+
+# basic update
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM table1
+# WHERE a < 5 RETURNING a, b, c;
+# ----
+# 0	-2	-3
+# 1	-2	-3
+# 2	-2	-3
+# 3	-2	-3
+# 4	-2	-3
+
+
+# returning 1 named column
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table1
+# WHERE a = 6 RETURNING a;
+# ----
+# 6
+
+# returning all columns with *
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM table1
+# WHERE a = 7 RETURNING *;
+# ----
+# 7	-2	-3
+
+# returning * expression with more named columns
+
+# TODO: unsupported feature
+# query IIIIII
+# DELETE FROM table1
+# WHERE a=8 AND b=-2 AND c=-3 RETURNING *, c, b, a;
+# ----
+# 8	-2	-3	-3	-2	8
+
+
+# returning column names out of order
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM table1
+# WHERE a=9 RETURNING c, b, a;
+# ----
+# -3	-2	9
+
+
+
+# returning column names out of order with alias's
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM table1
+# WHERE a>=10 AND a <=13  RETURNING c as aliasc, a as aliasa, b as aliasb;
+# ----
+# -3	10	-2
+# -3	11	-2
+# -3	12	-2
+# -3	13	-2
+
+
+# returning expression with aggregate function at top level is not allowed
+
+# TODO: unsupported feature
+# statement error
+# DELETE FROM table1 WHERE a >= 13 AND a <= 15 RETURNING SUM(a);
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table1
+# WHERE a=14
+# RETURNING a + b + c;
+# ----
+# 9
+
+# returning a literal where no row matches
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table1
+# WHERE a=10
+# RETURNING 'duckdb';
+# ----
+
+
+# returning a literal where a row matches
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table1
+# WHERE a=15
+# RETURNING 'duckdb';
+# ----
+# duckdb
+
+
+# Set up tables for Joins
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table2 (a2 INTEGER, b2 INTEGER, c2 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table3 (a3 INTEGER, b3 INTEGER, c3 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table2 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (100, 100, 100), (200, 200, 200);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table3 VALUES (1, 4, 4), (2, 6, 7), (8, 8, 8);
+
+# cannot sort a returning statement so this can fail.
+# if it happens again just comment out the test
+# update using other table (automatic join should happen here)
+
+# TODO: unsupported feature
+# query III rowsort
+# DELETE FROM table3
+# WHERE a3 IN (
+# 	SELECT a2 from table2
+# ) RETURNING *;
+# ----
+# 1	4	4
+# 2	6	7
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table4 (a4 INTEGER, b4 INTEGER, c4 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table5 (a5 INTEGER, b5 INTEGER, c5 INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table4 VALUES (1, 0, 2), (2, 0, 1), (3, 0, 0);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table5 VALUES (1, 0, 0), (2, 0, 0), (3, 0, 1), (4, 0, 1), (5, 0, 2), (6, 0, 2);
+
+
+# another join with SUM and GROUP by
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM table4
+# WHERE a4 IN (SELECT sum(a5) FROM table5 GROUP BY c5)
+# RETURNING *;
+# ----
+# 3	0	0
+
+
+# update using a window function
+# TODO: unsupported feature
+#query III
+#DELETE FROM table4
+#FROM (SELECT row_number() OVER (ORDER BY a4) as row_num, c4 from table4) as temp_table
+#WHERE table4.a4=temp_table.row_num
+#RETURNING *;
+#----
+#1	1	2
+#2	2	1
+#3	3	0
+
+
+# subquery not allowed in returning statement
+
+# TODO: unsupported feature
+# statement error
+# DELETE FROM table1 WHERE a = 14 RETURNING a IN (SELECT a FROM table1);
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table4 WHERE a4 = 1 RETURNING CASE WHEN b4=0 THEN a4 ELSE b4 END;
+# ----
+# 1
+
+# using case statement
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table4 WHERE a4 = 2 RETURNING CASE WHEN b4=1 THEN a4 ELSE b4 END;
+# ----
+# 0
+
+
+# drop temporary tables
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE table2;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE table3;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE table4;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE table5;
+
+# create table with varchars
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table2 (a VARCHAR DEFAULT 'hello world', b INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table2 VALUES ('duckdb', 1), ('postgres', 2), ('sqlite', 3), ('mysql', 4), ('mongo', 5);
+
+# update varchar
+
+# TODO: unsupported feature
+# query II
+# DELETE FROM table2
+# WHERE b = 1
+# RETURNING a, b;
+# ----
+# duckdb	1
+
+# cast int as varchar
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table2
+# WHERE b = 2
+# RETURNING b::VARCHAR;
+# ----
+# 2
+
+# return a struct
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table2
+# WHERE b=3
+# RETURNING {'a': a, 'b': b};
+# ----
+# {'a': sqlite, 'b': 3}
+
+# returning a list
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM table2
+# WHERE b=4
+# RETURNING [a, b::VARCHAR];
+# ----
+# [mysql, 4]
+
+# Sequence
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table3 (a INTEGER DEFAULT nextval('seq'), b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO table3(b) VALUES (4), (5) RETURNING a, b;
+
+# TODO: unsupported feature
+# query II
+# DELETE FROM table3
+# WHERE b = 4
+# RETURNING *;
+# ----
+# 1	4
+
+
+# recreate table1 for test maintainability.
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE table1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+
+# TODO: unsupported feature
+# statement ok
+# insert into table1(a) select * from range (0, 4000, 1) t1(a);
+
+# TODO: unsupported feature
+# query I
+# SELECT count(*) FROM table1;
+# ----
+# 4000
+
+
+# the following two tests test that all inserts get streamed back to the returning statement
+# the order of the changed rows does not always reflect the order they were updated in. Therefore
+# returing column b (all -2)
+
+# TODO: unsupported feature
+# query I rowsort
+# DELETE FROM table1 RETURNING a;
+# ----
+# note: hash result
+
+# ============================================================
+# Tests for DELETE RETURNING optimization (scan pass-through)
+# ============================================================
+
+# Test DELETE RETURNING without generated columns (optimized path)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_optimized (id INTEGER, name VARCHAR, value DOUBLE);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_optimized VALUES (1, 'one', 1.0), (2, 'two', 2.0), (3, 'three', 3.0), (4, 'four', 4.0), (5, 'five', 5.0);
+
+# Return specific columns
+
+# TODO: unsupported feature
+# query II
+# DELETE FROM test_optimized WHERE id <= 2 RETURNING id, name;
+# ----
+# 1	one
+# 2	two
+
+# Return all columns with *
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_optimized WHERE id = 3 RETURNING *;
+# ----
+# 3	three	3.0
+
+# Return columns in different order than table definition
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_optimized WHERE id = 4 RETURNING value, name, id;
+# ----
+# 4.0	four	4
+
+# Return expression
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM test_optimized WHERE id = 5 RETURNING id * 10 + value;
+# ----
+# 55.0
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_optimized;
+
+# Test DELETE RETURNING with column used in both WHERE and RETURNING
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_where_returning (id INTEGER, amount DOUBLE, customer VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_where_returning VALUES (1, 100.0, 'Alice'), (2, 200.0, 'Bob'), (3, 300.0, 'Charlie');
+
+# Same column in WHERE and RETURNING (should not duplicate in scan)
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_where_returning WHERE id < 3 RETURNING id, amount, customer;
+# ----
+# 1	100.0	Alice
+# 2	200.0	Bob
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_where_returning;
+
+# ============================================================
+# Virtual columns like rowid ARE supported in RETURNING
+# ============================================================
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_rowid_supported (id INTEGER, name VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_rowid_supported VALUES (1, 'one'), (2, 'two'), (3, 'three');
+
+# rowid can be returned in DELETE RETURNING
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM test_rowid_supported WHERE id = 1 RETURNING rowid;
+# ----
+# 0
+
+# rowid with other columns
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_rowid_supported WHERE id = 2 RETURNING id, name, rowid;
+# ----
+# 2	two	1
+
+# rowid with star (rowid is not included in *, must be explicit)
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_rowid_supported WHERE id = 3 RETURNING *, rowid;
+# ----
+# 3	three	2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_rowid_supported;
+
+# ============================================================
+# Tests for DELETE RETURNING rowid with generated columns
+# This tests the virtual_column_offset mechanism
+# ============================================================
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_rowid_generated (
+#     id INTEGER,
+#     val INTEGER,
+#     computed INTEGER GENERATED ALWAYS AS (val * 2) VIRTUAL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_rowid_generated (id, val) VALUES (1, 10), (2, 20), (3, 30);
+
+# Return rowid with generated column table
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM test_rowid_generated WHERE id = 1 RETURNING rowid;
+# ----
+# 0
+
+# Return all columns plus rowid (rowid should be at correct position)
+
+# TODO: unsupported feature
+# query IIII
+# DELETE FROM test_rowid_generated WHERE id = 2 RETURNING *, rowid;
+# ----
+# 2	20	40	1
+
+# Return specific columns including generated and rowid
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_rowid_generated WHERE id = 3 RETURNING computed, id, rowid;
+# ----
+# 60	3	2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_rowid_generated;
+
+# Test rowid with multiple generated columns
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_rowid_multi_gen (
+#     id INTEGER,
+#     a INTEGER,
+#     b INTEGER,
+#     sum_ab INTEGER GENERATED ALWAYS AS (a + b) VIRTUAL,
+#     prod_ab INTEGER GENERATED ALWAYS AS (a * b) VIRTUAL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_rowid_multi_gen (id, a, b) VALUES (1, 2, 3), (2, 4, 5);
+
+# TODO: unsupported feature
+# query IIIIII
+# DELETE FROM test_rowid_multi_gen WHERE id = 1 RETURNING *, rowid;
+# ----
+# 1	2	3	5	6	0
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_rowid_multi_gen WHERE id = 2 RETURNING rowid, sum_ab, prod_ab;
+# ----
+# 1	9	20
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_rowid_multi_gen;
+
+# Test rowid with generated column in middle of table definition
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_rowid_gen_middle (
+#     a INTEGER,
+#     gen INTEGER GENERATED ALWAYS AS (a + c) VIRTUAL,
+#     c INTEGER
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_rowid_gen_middle (a, c) VALUES (1, 100), (2, 200);
+
+# TODO: unsupported feature
+# query IIII
+# DELETE FROM test_rowid_gen_middle WHERE a = 1 RETURNING *, rowid;
+# ----
+# 1	101	100	0
+
+# TODO: unsupported feature
+# query II
+# DELETE FROM test_rowid_gen_middle WHERE a = 2 RETURNING rowid, gen;
+# ----
+# 1	202
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_rowid_gen_middle;
+
+# ============================================================
+# Tests for DELETE RETURNING with generated columns
+# Generated columns are computed at execution time from physical columns
+# ============================================================
+
+# Test DELETE RETURNING with VIRTUAL generated column
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_generated_virtual (
+#     id INTEGER,
+#     base_value INTEGER,
+#     computed_value INTEGER GENERATED ALWAYS AS (base_value * 2) VIRTUAL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_generated_virtual (id, base_value) VALUES (1, 10), (2, 20), (3, 30);
+
+# Return non-generated columns only
+
+# TODO: unsupported feature
+# query II
+# DELETE FROM test_generated_virtual WHERE id = 1 RETURNING id, base_value;
+# ----
+# 1	10
+
+# Return all columns including generated
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_generated_virtual WHERE id = 2 RETURNING *;
+# ----
+# 2	20	40
+
+# Return only the generated column
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM test_generated_virtual WHERE id = 3 RETURNING computed_value;
+# ----
+# 60
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_generated_virtual;
+
+# Test DELETE RETURNING with generated column in middle of table definition
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_generated_middle (
+#     a INTEGER,
+#     gen INTEGER GENERATED ALWAYS AS (a + c) VIRTUAL,
+#     c INTEGER
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_generated_middle (a, c) VALUES (1, 100), (2, 200), (3, 300);
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_generated_middle WHERE a <= 2 RETURNING *;
+# ----
+# 1	101	100
+# 2	202	200
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM test_generated_middle WHERE a = 3 RETURNING gen;
+# ----
+# 303
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_generated_middle;
+
+# Test DELETE RETURNING with multiple generated columns
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_multi_generated (
+#     x INTEGER,
+#     y INTEGER,
+#     sum_xy INTEGER GENERATED ALWAYS AS (x + y) VIRTUAL,
+#     prod_xy INTEGER GENERATED ALWAYS AS (x * y) VIRTUAL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_multi_generated (x, y) VALUES (2, 3), (4, 5), (6, 7);
+
+# TODO: unsupported feature
+# query IIII
+# DELETE FROM test_multi_generated WHERE x = 2 RETURNING *;
+# ----
+# 2	3	5	6
+
+# TODO: unsupported feature
+# query II
+# DELETE FROM test_multi_generated WHERE x = 4 RETURNING sum_xy, prod_xy;
+# ----
+# 9	20
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_multi_generated;
+
+# Test DELETE RETURNING with generated column referencing VARCHAR
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_generated_varchar (
+#     id INTEGER,
+#     name VARCHAR,
+#     greeting VARCHAR GENERATED ALWAYS AS ('Hello, ' || name || '!') VIRTUAL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_generated_varchar (id, name) VALUES (1, 'Alice'), (2, 'Bob');
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM test_generated_varchar WHERE id = 1 RETURNING *;
+# ----
+# 1	Alice	Hello, Alice!
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM test_generated_varchar WHERE id = 2 RETURNING greeting;
+# ----
+# Hello, Bob!
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_generated_varchar;
+
+# ============================================================
+# Tests for MERGE INTO DELETE RETURNING with generated columns
+# ============================================================
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE merge_gen_target(id INT, x INT, gen AS (x * 2));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_gen_target(id, x) VALUES (1, 10), (2, 20), (3, 30);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE merge_source(id INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_source VALUES (1), (2);
+
+# MERGE INTO DELETE RETURNING with generated column
+
+# TODO: unsupported feature
+# query IIII
+# MERGE INTO merge_gen_target USING merge_source ON merge_gen_target.id = merge_source.id
+# WHEN MATCHED THEN DELETE
+# RETURNING *, merge_action;
+# ----
+# 1	10	20	DELETE
+# 2	20	40	DELETE
+
+# Verify remaining row
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM merge_gen_target;
+# ----
+# 3	30	60
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE merge_gen_target;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE merge_source;
+
+# MERGE INTO DELETE RETURNING with multiple generated columns
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE merge_multi_gen(
+#     id INT,
+#     a INT,
+#     b INT,
+#     sum_ab INT GENERATED ALWAYS AS (a + b) VIRTUAL,
+#     prod_ab INT GENERATED ALWAYS AS (a * b) VIRTUAL
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_multi_gen(id, a, b) VALUES (1, 2, 3), (2, 4, 5), (3, 6, 7);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE merge_delete_source(id INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_delete_source VALUES (1), (3);
+
+# TODO: unsupported feature
+# query IIIIII
+# MERGE INTO merge_multi_gen t USING merge_delete_source s ON t.id = s.id
+# WHEN MATCHED THEN DELETE
+# RETURNING t.id, t.a, t.b, t.sum_ab, t.prod_ab, merge_action;
+# ----
+# 1	2	3	5	6	DELETE
+# 3	6	7	13	42	DELETE
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE merge_multi_gen;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE merge_delete_source;
+
+# ============================================================
+# Virtual columns like rowid are not supported in MERGE INTO RETURNING
+# ============================================================
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE merge_rowid_target (id INT, val INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_rowid_target VALUES (1, 10), (2, 20);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE merge_rowid_source (id INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO merge_rowid_source VALUES (1);
+
+# rowid is not supported in MERGE INTO DELETE RETURNING
+
+# TODO: unsupported feature
+# statement error
+# MERGE INTO merge_rowid_target t USING merge_rowid_source s ON t.id = s.id
+# WHEN MATCHED THEN DELETE
+# RETURNING t.rowid, t.id, t.val;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE merge_rowid_target;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE merge_rowid_source;
+
+# ============================================================
+# DELETE RETURNING with indexed table - verify index is updated
+# ============================================================
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE indexed_returning (id INT PRIMARY KEY, val VARCHAR, amount INT);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_amount ON indexed_returning(amount);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO indexed_returning VALUES (1, 'a', 100), (2, 'b', 200), (3, 'c', 300);
+
+# DELETE with RETURNING should update the index
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM indexed_returning WHERE amount >= 200 RETURNING val;
+# ----
+# b
+# c
+
+# Verify only row 1 remains
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM indexed_returning ORDER BY id;
+# ----
+# 1	a	100
+
+# Verify index lookup works
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM indexed_returning WHERE amount = 100;
+# ----
+# 1	a	100
+
+# Verify deleted keys are no longer in index
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM indexed_returning WHERE amount = 200;
+# ----
+# 0
+
+# Insert new rows with previously deleted primary keys
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO indexed_returning VALUES (2, 'new_b', 250), (3, 'new_c', 350);
+
+# Verify index lookup for new values
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM indexed_returning WHERE amount = 250;
+# ----
+# 2	new_b	250
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM indexed_returning WHERE amount = 350;
+# ----
+# 3	new_c	350
+
+# DELETE RETURNING with primary key index in same transaction
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# query III
+# DELETE FROM indexed_returning WHERE id = 2 RETURNING *;
+# ----
+# 2	new_b	250
+
+# Can insert with same primary key within transaction
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO indexed_returning VALUES (2, 'tx_b', 225);
+
+# Verify index lookup during transaction
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM indexed_returning WHERE amount = 225;
+# ----
+# 2	tx_b	225
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# Verify after commit
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM indexed_returning WHERE amount = 225;
+# ----
+# 2	tx_b	225
+
+# Verify primary key lookup
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM indexed_returning WHERE id = 2;
+# ----
+# 2	tx_b	225
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE indexed_returning;

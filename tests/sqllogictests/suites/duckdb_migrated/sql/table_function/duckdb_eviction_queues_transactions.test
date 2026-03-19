@@ -1,0 +1,63 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO fudge() AS (20);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO eviction_invariants_ok() AS (
+#   SELECT COUNT(*) = 0 FROM duckdb_eviction_queues()
+#   WHERE dead_nodes < 0
+#     OR dead_nodes > approximate_size + fudge()
+#     OR dead_nodes > total_insertions
+#     OR total_insertions < approximate_size - fudge()
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t(i BIGINT, s VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT range AS i, range::VARCHAR AS s FROM range(0, 200000);
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# ROLLBACK;
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t SELECT range AS i, range::VARCHAR AS s FROM range(0, 200000);
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT eviction_invariants_ok();
+# ----
+# 1

@@ -1,0 +1,183 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# drop type if exists test_result
+
+# TODO: unsupported feature
+# statement ok
+# create type test_result as UNION(
+#     ok BOOL,
+#     err STRUCT(
+#         expected VARCHAR,
+#         actual VARCHAR
+#     )
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(id INTEGER PRIMARY KEY, col VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i id, i::VARCHAR b FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT MIN(id), MAX(id), SUM(col::INT), MIN(col::INT), MAX(col::INT), COUNT(*) FROM test WHERE id=5000
+# ----
+# 5000	5000	5000	5000	5000	1
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN lower(compression)='fsst'
+# 		THEN true::test_result
+# 	ELSE {
+# 		'expected': 'fsst',
+# 		'actual': lower(compression)
+# 	}::test_result
+# 	END
+# FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# drop type if exists test_result
+
+# TODO: unsupported feature
+# statement ok
+# create type test_result as UNION(
+#     ok BOOL,
+#     err STRUCT(
+#         expected VARCHAR,
+#         actual VARCHAR
+#     )
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(id INTEGER PRIMARY KEY, col VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i id, i::VARCHAR b FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT MIN(id), MAX(id), SUM(col::INT), MIN(col::INT), MAX(col::INT), COUNT(*) FROM test WHERE id=5000
+# ----
+# 5000	5000	5000	5000	5000	1
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN lower(compression)='dictionary'
+# 		THEN true::test_result
+# 	ELSE {
+# 		'expected': 'dictionary',
+# 		'actual': lower(compression)
+# 	}::test_result
+# 	END
+# FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# drop type if exists test_result
+
+# TODO: unsupported feature
+# statement ok
+# create type test_result as UNION(
+#     ok BOOL,
+#     err STRUCT(
+#         expected VARCHAR,
+#         actual VARCHAR
+#     )
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(id INTEGER PRIMARY KEY, col VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i id, i::VARCHAR b FROM range(0, 10000) tbl(i)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query IIIIII
+# SELECT MIN(id), MAX(id), SUM(col::INT), MIN(col::INT), MAX(col::INT), COUNT(*) FROM test WHERE id=5000
+# ----
+# 5000	5000	5000	5000	5000	1
+
+# TODO: unsupported feature
+# query I
+# SELECT
+# 	CASE WHEN lower(compression)='dict_fsst'
+# 		THEN true::test_result
+# 	ELSE {
+# 		'expected': 'dict_fsst',
+# 		'actual': lower(compression)
+# 	}::test_result
+# 	END
+# FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

@@ -1,0 +1,21 @@
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM duckdb_schemas;
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA scheme;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM duckdb_schemas() WHERE schema_name='scheme';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM duckdb_schemas WHERE schema_name='scheme';
+# ----
+# 1

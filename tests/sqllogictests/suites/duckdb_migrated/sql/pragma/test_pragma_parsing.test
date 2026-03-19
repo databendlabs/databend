@@ -1,0 +1,11 @@
+statement ok
+DROP TABLE IF EXISTS integers
+
+# Almost pragma but not quite
+statement error
+PRAG
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+# Now it should work

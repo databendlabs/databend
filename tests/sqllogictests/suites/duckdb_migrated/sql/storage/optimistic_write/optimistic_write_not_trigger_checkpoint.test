@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t1
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size = '0 bytes' FROM pragma_database_size();
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t1 (id INTEGER, c0 DOUBLE)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t1 SELECT *, random() FROM range(0, 200000)
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size();
+# ----
+# 1

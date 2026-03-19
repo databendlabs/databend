@@ -1,0 +1,134 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# uncorrelated EXISTS
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE EXISTS(SELECT 1) ORDER BY i
+# ----
+# 1
+# 2
+# 3
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE EXISTS(SELECT * FROM integers) ORDER BY i
+# ----
+# 1
+# 2
+# 3
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE NOT EXISTS(SELECT * FROM integers) ORDER BY i
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE EXISTS(SELECT NULL) ORDER BY i
+# ----
+# 1
+# 2
+
+# exists in SELECT clause
+
+# TODO: unsupported feature
+# query T
+# SELECT EXISTS(SELECT * FROM integers)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT EXISTS(SELECT * FROM integers WHERE i>10)
+# ----
+# 0
+
+# multiple exists
+
+# TODO: unsupported feature
+# query TT
+# SELECT EXISTS(SELECT * FROM integers), EXISTS(SELECT * FROM integers)
+# ----
+# 1	1
+
+# exists used in operations
+
+# TODO: unsupported feature
+# query T
+# SELECT EXISTS(SELECT * FROM integers) AND EXISTS(SELECT * FROM integers)
+# ----
+# 1
+
+# nested EXISTS
+
+# TODO: unsupported feature
+# query T
+# SELECT EXISTS(SELECT EXISTS(SELECT * FROM integers))
+# ----
+# 1
+
+# uncorrelated IN
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE 1 IN (SELECT 1) ORDER BY i
+# ----
+# NULL
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE 1 IN (SELECT * FROM integers) ORDER BY i
+# ----
+# NULL
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE 1 IN (SELECT NULL::INTEGER) ORDER BY i
+# ----
+
+# scalar NULL results
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 IN (SELECT NULL::INTEGER) FROM integers
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IN (SELECT * FROM integers) FROM integers
+# ----
+# NULL
+# NULL
+# NULL
+# NULL
+
+# add aggregations after the subquery
+
+# TODO: unsupported feature
+# query R
+# SELECT SUM(i) FROM integers WHERE 1 IN (SELECT * FROM integers)
+# ----
+# 6.000000

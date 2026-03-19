@@ -1,0 +1,61 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t2
+
+# This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
+# The temporary directory usage changes with the vector size.
+# Set a temp_directory to offload data
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# query I
+# select "size" from duckdb_temporary_files()
+# ----
+# 0
+
+# Max. one block for the default block allocation size
+
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# query I
+# select "size" from duckdb_temporary_files()
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(0, 200000);
+
+# When we increase the size to 2400000 bytes of DOUBLE data (9.1 blocks) this errors
+
+# TODO: unsupported feature
+# statement error
+# CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# query I
+# SELECT CASE WHEN sum("size") > 1000000 THEN true ELSE CONCAT('Expected size 1000000, but got ', sum("size"))::UNION(msg VARCHAR, b BOOLEAN) END FROM duckdb_temporary_files();
+# ----
+# 1
+
+# Cannot lower the limit
+
+# TODO: unsupported feature
+# query I
+# select current_setting('max_temp_directory_size')
+# ----
+# 3.8 MiB
+
+# TODO: unsupported feature
+# query I
+# select current_setting('max_temp_directory_size')
+# ----
+# 2.4 MiB

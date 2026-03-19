@@ -1,0 +1,5 @@
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT c0 OFFSET 1) FROM (VALUES(1)) c0;
+# ----
+# NULL

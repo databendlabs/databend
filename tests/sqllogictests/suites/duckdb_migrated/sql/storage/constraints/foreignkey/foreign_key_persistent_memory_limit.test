@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS fk_integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS pk_integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE pk_integers (i INTEGER PRIMARY KEY);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO pk_integers VALUES (1), (2), (3);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE fk_integers (j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO fk_integers VALUES (1), (2);
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO fk_integers VALUES (3);

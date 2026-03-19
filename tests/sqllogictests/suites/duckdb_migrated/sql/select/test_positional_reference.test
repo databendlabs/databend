@@ -1,0 +1,43 @@
+# TODO: unsupported feature
+# query I
+# SELECT #1 FROM range(0, 1)
+# ----
+# 0
+
+# multiple tables
+
+# TODO: unsupported feature
+# query I
+# SELECT #1+#2 FROM range(0, 1) tbl, range(0, 1) tbl2
+# ----
+# 0
+
+# subqueries
+
+# TODO: unsupported feature
+# query I
+# SELECT #1 FROM (SELECT * FROM range(0, 1)) tbl
+# ----
+# 0
+
+# positional references only consider the inner-most table
+
+# TODO: unsupported feature
+# statement error
+# select (select #1) from range(0, 1);
+
+# TODO: unsupported feature
+# statement error
+# SELECT #2 FROM range(0, 1)
+
+# TODO: unsupported feature
+# statement error
+# SELECT #1
+
+# TODO: unsupported feature
+# statement error
+# SELECT #0 FROM range(0, 1)
+
+# TODO: unsupported feature
+# statement error
+# SELECT #-1 FROM range(0, 1)

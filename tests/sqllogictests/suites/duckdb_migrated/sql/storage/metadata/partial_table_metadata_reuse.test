@@ -1,0 +1,109 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS bigtbl
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE bigtbl(i INT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl FROM range(0, 1000000)
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 1, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 2, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 3, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 4, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 5, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 6, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 7, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 8, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO bigtbl VALUES (NULL)
+
+# TODO: unsupported feature
+# query II
+# SELECT COUNT(*) - 9, SUM(i) FROM bigtbl
+# ----
+# 1000000	499999500000

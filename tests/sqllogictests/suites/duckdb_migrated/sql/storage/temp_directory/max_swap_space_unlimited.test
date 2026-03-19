@@ -1,0 +1,6 @@
+# Set a temp_directory to offload data
+# TODO: unsupported feature
+# query I
+# select current_setting('max_temp_directory_size')
+# ----
+# 16383.9 PiB

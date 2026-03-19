@@ -1,0 +1,1725 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# This test defaults to another compression function for smaller block sizes,
+# because the bitpacking groups no longer fit the blocks.
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c hugeint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::hugeint FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(4,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(4,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(8,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(8,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(12,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(12,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(18,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(18,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c INT64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i from range(0,130000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT avg(c) FROM test;
+# ----
+# 64999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c hugeint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::hugeint FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(4,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(4,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(8,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(8,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(12,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(12,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(18,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(18,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c INT64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i from range(0,130000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT avg(c) FROM test;
+# ----
+# 64999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c hugeint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::hugeint FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(4,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(4,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(8,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(8,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(12,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(12,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(18,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(18,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c INT64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i from range(0,130000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT avg(c) FROM test;
+# ----
+# 64999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c int64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::int64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint8);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint8 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint16);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint16 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint32);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint32 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c uint64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::uint64 FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c hugeint);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::hugeint FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(4,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(4,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(8,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(8,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(12,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(12,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c decimal(18,1));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT 2+i*2::decimal(18,1) FROM range(0,5) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 2
+# 4
+# 6
+# 8
+# 10
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (c INT64);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT i from range(0,130000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') where segment_type != 'VALIDITY' and compression != 'BitPacking'
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT avg(c) FROM test;
+# ----
+# 64999.5
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test

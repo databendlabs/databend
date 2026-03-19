@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query IIIII
+# SELECT name, value, description, input_type, scope FROM duckdb_settings() WHERE name = 'TimeZone';
+# ----
+# TimeZone	Pacific/Honolulu	The current time zone	VARCHAR	LOCAL
+
+# TODO: unsupported feature
+# query IIIII
+# SELECT name, value, description, input_type, scope FROM duckdb_settings() WHERE name = 'Calendar';
+# ----
+# Calendar	coptic	The current calendar	VARCHAR	LOCAL

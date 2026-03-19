@@ -1,0 +1,21 @@
+statement ok
+DROP TABLE IF EXISTS s1.tbl
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TABLE s1.tbl(i INTEGER)
+
+# standard schema reference
+
+statement ok
+SELECT s1.tbl.i FROM s1.tbl;
+
+# schema mismatch
+
+statement error
+SELECT s2.tbl.i FROM s1.tbl;
+
+statement error
+SELECT a.tbl.i FROM range(0, 10) tbl(i)

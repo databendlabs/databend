@@ -1,0 +1,88 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# correlated expressions in inner/left/right joins
+
+# TODO: unsupported feature
+# query B
+# SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# 0
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 LEFT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 RIGHT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# NULL
+# NULL
+
+# other way around
+
+# TODO: unsupported feature
+# query I
+# SELECT i IN (SELECT i1.i FROM generate_series(1, 2, 1) tbl(i) LEFT JOIN (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# NULL
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i IN (SELECT i1.i FROM generate_series(1, 2, 1) tbl(i) RIGHT JOIN (SELECT * FROM integers i1 WHERE i1.i=integers.i) i1 ON i1.i=tbl.i) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# 1
+# 0
+
+# complex join condition
+
+# TODO: unsupported feature
+# query I
+# SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i IS NOT DISTINCT FROM integers.i) i1 JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i OR (i1.i IS NULL AND tbl.i IS NULL)) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# 0
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i IS NOT DISTINCT FROM integers.i) i1 LEFT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i OR (i1.i IS NULL AND tbl.i IS NULL)) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# 1
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT i IN (SELECT i1.i FROM (SELECT * FROM integers i1 WHERE i1.i IS NOT DISTINCT FROM integers.i) i1 RIGHT JOIN generate_series(1, 2, 1) tbl(i) ON i1.i=tbl.i OR (i1.i IS NULL AND tbl.i IS NULL)) FROM integers ORDER BY i NULLS LAST;
+# ----
+# 1
+# 1
+# NULL
+# NULL

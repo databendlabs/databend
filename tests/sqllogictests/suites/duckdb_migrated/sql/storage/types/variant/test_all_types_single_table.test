@@ -1,0 +1,88 @@
+# name: test/sql/storage/types/variant/test_all_types_single_table.test
+# group: [variant]
+
+# load __TEST_DIR__/variant_test_all_types_single_table.db
+
+# Always shred
+# TODO: unsupported feature
+# statement ok
+# SET variant_minimum_shredding_size = 0;
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (col VARIANT)
+
+# foreach col <all_types_columns>
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl select "${col}"::VARIANT from test_all_types()
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# endloop
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# restart
+
+# TODO: unsupported feature
+# query I nosort expected_res
+# select * from tbl
+# ----
+
+# loop i 0 40
+
+# TODO: unsupported feature
+# statement ok
+# set variable my_type = (
+# 	select column_type from (
+# 		describe from test_all_types()
+# 	)
+# 	where
+# 		column_type NOT ILIKE '%union%' AND
+# 		column_type NOT ILIKE '%enum%' AND
+# 		column_type NOT ILIKE '%map%'
+# 	limit 1 offset ${i}
+# );
+
+# TODO: unsupported feature
+# statement ok
+# SET force_variant_shredding = getvariable('my_type');
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table "tbl2" as select * from tbl;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I nosort expected_res
+# select * from "tbl2";
+# ----
+
+# endloop
+
+# Never shred
+# TODO: unsupported feature
+# statement ok
+# SET variant_minimum_shredding_size = -1;
+
+# TODO: unsupported feature
+# statement ok
+# create or replace table "tbl2" as select * from tbl;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I nosort expected_res
+# select * from "tbl2";
+# ----

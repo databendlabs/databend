@@ -1,0 +1,72 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_a ON tbl(a);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl SELECT range FROM range(0, 100);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a % 5 = 0;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl SELECT range + 100 FROM range(0, 50);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM tbl;
+# ----
+# 130
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM tbl;
+# ----
+# 130
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 1;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 1;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 5;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 5;
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (5);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 5;
+# ----
+# 5
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM tbl;
+# ----
+# 131

@@ -1,0 +1,19 @@
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t (t TEXT);
+
+# unsupported
+
+statement error
+SELECT * FROM t FOR UPDATE;
+
+statement error
+SELECT * FROM t FOR NO KEY UPDATE;
+
+statement error
+SELECT * FROM t FOR SHARE;
+
+statement error
+SELECT * FROM t KEY SHARE;

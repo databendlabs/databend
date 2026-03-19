@@ -1,0 +1,178 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_2
+
+# TODO: unsupported feature
+# statement ok
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT (i%500)::VARCHAR FROM range(0,150000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_2 AS SELECT a FROM test;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select sum(a::INT) from test;
+# ----
+# 37425000
+
+# TODO: unsupported feature
+# query I
+# select sum(a::INT) from test_2;
+# ----
+# 37425000
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='fsst' FROM pragma_storage_info('test_2') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_2;
+
+# TODO: unsupported feature
+# statement ok
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT (i%500)::VARCHAR FROM range(0,150000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_2 AS SELECT a FROM test;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select sum(a::INT) from test;
+# ----
+# 37425000
+
+# TODO: unsupported feature
+# query I
+# select sum(a::INT) from test_2;
+# ----
+# 37425000
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dictionary' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dictionary' FROM pragma_storage_info('test_2') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_2;
+
+# TODO: unsupported feature
+# statement ok
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT (i%500)::VARCHAR FROM range(0,150000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_2 AS SELECT a FROM test;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select sum(a::INT) from test;
+# ----
+# 37425000
+
+# TODO: unsupported feature
+# query I
+# select sum(a::INT) from test_2;
+# ----
+# 37425000
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test_2') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_2;

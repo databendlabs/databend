@@ -1,0 +1,56 @@
+statement ok
+DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# create a table with a default value
+statement ok
+CREATE TABLE test (a INTEGER DEFAULT 1, b INTEGER);
+
+statement ok
+INSERT INTO test (b) VALUES (11)
+
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+
+# reload the database
+
+# verify that the table contains the correct contents
+
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+
+# append more entries
+
+statement ok
+INSERT INTO test (b) VALUES (12), (13)
+
+# check that the default value was used in the INSERT
+
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+1	12
+1	13
+
+# reload and append one more time
+
+# append more entries
+
+statement ok
+INSERT INTO test (b) VALUES (14), (15)
+
+# check that the default value was used in the INSERT
+
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+1	12
+1	13
+1	14
+1	15

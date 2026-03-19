@@ -1,0 +1,12 @@
+# The database is written with a vector size of 2048.
+# TODO: unsupported feature
+# statement ok
+# ATTACH '{DATA_DIR}/storage/block_size_16kb.db' (TYPE DUCKDB, READONLY)
+
+# TODO: unsupported feature
+# statement error
+# ATTACH '{DATA_DIR}/storage/vector_size_512.db' (TYPE DUCKDB, READONLY)
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH '{DATA_DIR}/storage/index_0-9-1.db' (TYPE DUCKDB, READONLY);

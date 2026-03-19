@@ -1,0 +1,104 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a(b STRUCT(i INTEGER, j INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES ({'i': 1, 'j': 2}), (NULL), ({'i': NULL, 'j': 2}), (ROW(1, NULL));
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a;
+# ----
+# {'i': 1, 'j': 2}
+# NULL
+# {'i': NULL, 'j': 2}
+# {'i': 1, 'j': NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM a WHERE b IS NULL;
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a;
+# ----
+# {'i': 1, 'j': 2}
+# NULL
+# {'i': NULL, 'j': 2}
+# {'i': 1, 'j': NULL}
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM a WHERE b IS NULL;
+# ----
+# 1
+
+# deletes
+
+# TODO: unsupported feature
+# query I
+# DELETE FROM a WHERE (b).i=1
+# ----
+# 2
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a;
+# ----
+# NULL
+# {'i': NULL, 'j': 2}
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a;
+# ----
+# NULL
+# {'i': NULL, 'j': 2}
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM a WHERE b IS NULL;
+# ----
+# 1
+
+# updates
+
+# TODO: unsupported feature
+# query I
+# UPDATE a SET b={i: 7, j: 9} WHERE b IS NULL
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a;
+# ----
+# {'i': 7, 'j': 9}
+# {'i': NULL, 'j': 2}
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM a WHERE b IS NULL;
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a;
+# ----
+# {'i': 7, 'j': 9}
+# {'i': NULL, 'j': 2}
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM a WHERE b IS NULL;
+# ----
+# 0

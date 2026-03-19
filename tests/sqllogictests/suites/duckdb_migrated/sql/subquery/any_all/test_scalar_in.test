@@ -1,0 +1,86 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 IN (SELECT 1)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT NULL IN (SELECT 1)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 IN (SELECT NULL)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 IN (SELECT 2)
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3)
+
+# TODO: unsupported feature
+# query T
+# SELECT 4 IN (SELECT * FROM integers)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 IN (SELECT * FROM integers)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 IN (SELECT * FROM integers) FROM integers
+# ----
+# 1
+# 1
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (NULL)
+
+# TODO: unsupported feature
+# query T
+# SELECT 4 IN (SELECT * FROM integers)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query T
+# SELECT 1 IN (SELECT * FROM integers)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE (4 IN (SELECT * FROM integers)) IS NULL ORDER BY 1
+# ----
+# NULL
+# 1
+# 2
+# 3
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers WHERE (i IN (SELECT * FROM integers)) IS NULL ORDER BY 1
+# ----
+# NULL

@@ -1,0 +1,38 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS FROM range(0, 250000) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE i < 150000
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 100000
+
+# TODO: unsupported feature
+# statement ok
+# TRUNCATE test
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 0

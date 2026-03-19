@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS collate_test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE collate_test(s VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO collate_test VALUES ('hEllO'), ('WöRlD'), ('wozld')
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM collate_test WHERE 'BlA'='bLa'
+# ----
+# 0
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM collate_test WHERE s='hello'
+# ----
+# hEllO
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM collate_test ORDER BY s
+# ----
+# hEllO
+# wozld
+# WöRlD
+
+# TODO: unsupported feature
+# query T
+# SELECT * FROM collate_test ORDER BY s
+# ----
+# hEllO
+# WöRlD
+# wozld

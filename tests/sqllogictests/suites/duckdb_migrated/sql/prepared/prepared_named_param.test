@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# prepare q123 as select $param, $other_name, $param;
+
+# TODO: unsupported feature
+# query III
+# execute q123(param := 5, other_name := 3);
+# ----
+# 5	3	5
+
+# TODO: unsupported feature
+# statement error
+# execute q123(param := 5, 3)
+
+# TODO: unsupported feature
+# statement ok
+# prepare q01 as select $1, ?, $2;
+
+# TODO: unsupported feature
+# statement error
+# execute q01(4, 2, 0)
+
+# TODO: unsupported feature
+# statement error
+# prepare q02 as select $1, $param, $2;
+
+# TODO: unsupported feature
+# statement error
+# execute q01(a, 2, 0)

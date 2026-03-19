@@ -1,0 +1,76 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BOOL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES
+# (null), (true), (true), (true),
+# (true), (true), (true), (true),
+# (null), (null), (null), (null),
+# (null), (null), (null), (null),
+# (false), (false), (false), (false),
+# (false), (false), (false), (false),
+# (null), (true), (null), (false),
+# (false), (false), (false), (false);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOLEAN' and compression != 'Roaring';
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
+# ----
+
+# TODO: unsupported feature
+# query I
+# FROM test;
+# ----
+# null
+# 1
+# 1
+# 1
+# 1
+# 1
+# 1
+# 1
+# null
+# null
+# null
+# null
+# null
+# null
+# null
+# null
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0
+# 0
+# null
+# 1
+# null
+# 0
+# 0
+# 0
+# 0
+# 0
+
+# TODO: unsupported feature
+# query I
+# select count(*) from test WHERE a IS NOT NULL;
+# ----
+# 21

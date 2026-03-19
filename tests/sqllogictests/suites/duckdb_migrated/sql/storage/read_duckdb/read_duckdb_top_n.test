@@ -1,0 +1,44 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS rd.tbl
+
+# create a bunch of tables
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.tbl AS SELECT 0 grp, i val FROM range(0 * 1000, 0 * 1000 + 1000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.tbl AS SELECT 1 grp, i val FROM range(1 * 1000, 1 * 1000 + 1000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.tbl AS SELECT 2 grp, i val FROM range(2 * 1000, 2 * 1000 + 1000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.tbl AS SELECT 3 grp, i val FROM range(3 * 1000, 3 * 1000 + 1000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.tbl AS SELECT 4 grp, i val FROM range(4 * 1000, 4 * 1000 + 1000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd

@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl as select COLUMNS(*)::VARIANT from test_all_types()
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I nosort expected_res
+# select "<all_types_columns>"::VARIANT from test_all_types()
+# ----
+
+# TODO: unsupported feature
+# query I nosort expected_res
+# select "<all_types_columns>" from tbl
+# ----
+
+# reset label expected_res

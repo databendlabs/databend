@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS x
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMP TABLE x (x INT);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE x (x INT);
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(DISTINCT database_oid) FROM duckdb_tables();
+# ----
+# 2

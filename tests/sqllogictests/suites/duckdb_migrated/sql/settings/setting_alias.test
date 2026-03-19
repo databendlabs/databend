@@ -1,0 +1,21 @@
+# TODO: unknown function
+# query II
+# SELECT current_setting('null_order'), (SELECT value FROM duckdb_settings() WHERE name='null_order')
+# ----
+# NULLS_LAST	NULLS_LAST
+
+# TODO: unknown function
+# query II
+# SELECT current_setting('null_order'), (SELECT value FROM duckdb_settings() WHERE name='null_order')
+# ----
+# NULLS_FIRST	NULLS_FIRST
+
+# TODO: unsupported feature
+# statement ok
+# RESET null_order
+
+# TODO: unknown function
+# query II
+# SELECT current_setting('null_order'), (SELECT value FROM duckdb_settings() WHERE name='null_order')
+# ----
+# NULLS_LAST	NULLS_LAST

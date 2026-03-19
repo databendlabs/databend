@@ -1,0 +1,112 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (s ROW(a INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT {'a': i} FROM range(0, 10000) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(22767, 32767) tbl(i);
+# INSERT INTO test SELECT {'a': 1337} FROM range(2147473647, 2147483647) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(2147473647, 2147483647) tbl(i);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (s ROW(a INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT {'a': i} FROM range(0, 10000) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(22767, 32767) tbl(i);
+# INSERT INTO test SELECT {'a': 1337} FROM range(2147473647, 2147483647) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(2147473647, 2147483647) tbl(i);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (s ROW(a INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT {'a': i} FROM range(0, 10000) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(22767, 32767) tbl(i);
+# INSERT INTO test SELECT {'a': 1337} FROM range(2147473647, 2147483647) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(2147473647, 2147483647) tbl(i);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (s ROW(a INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT {'a': i} FROM range(0, 10000) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(22767, 32767) tbl(i);
+# INSERT INTO test SELECT {'a': 1337} FROM range(2147473647, 2147483647) tbl(i);
+# INSERT INTO test SELECT {'a': i} FROM range(2147473647, 2147483647) tbl(i);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21475127495000	0	2147483646	40000
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

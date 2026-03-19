@@ -1,0 +1,55 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# FIXME - why not?
+
+# TODO: unsupported feature
+# statement error
+# SELECT i, (SELECT SUM(i + 1) OVER ()) FROM integers ORDER BY i
+
+# TODO: unsupported feature
+# query II
+# SELECT i, (SELECT SUM((SELECT i + 1)) OVER ()) FROM integers ORDER BY i
+# ----
+# NULL	NULL
+# 1	2
+# 2	3
+# 3	4
+
+# TODO: unsupported feature
+# query II
+# SELECT i, (SELECT SUM((SELECT i + 1)) OVER () WHERE i>=2) FROM integers ORDER BY i
+# ----
+# NULL	NULL
+# 1	NULL
+# 2	3
+# 3	4
+
+# mix of aggregates and windows
+
+# TODO: unsupported feature
+# query II
+# SELECT i, (SELECT SUM((SELECT SUM(i))) OVER ()) FROM integers GROUP BY i ORDER BY i
+# ----
+# NULL	NULL
+# 1	1
+# 2	2
+# 3	3
+
+# TODO: unsupported feature
+# query II
+# SELECT i, (SELECT SUM(win) FROM (SELECT SUM((SELECT i1.i + integers.i)) OVER () AS win FROM integers i1) t) FROM integers ORDER BY i
+# ----
+# NULL	NULL
+# 1	36
+# 2	48
+# 3	60

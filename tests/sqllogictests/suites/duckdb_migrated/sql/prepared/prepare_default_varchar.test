@@ -1,0 +1,339 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT ?
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(27)
+# ----
+# 27
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1('hello world')
+# ----
+# hello world
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1([1, 2, 3])
+# ----
+# [1, 2, 3]
+
+# comparison between two parameters
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v2 AS SELECT ?=?
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2(27, 27)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2('hello world', 'hello mars')
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2(1, 1.0)
+# ----
+# 1
+
+#is 1 now string to list casting is implemented
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2([1, 2, 3], '[1, 2, 3]')
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement error
+# EXECUTE v2([[1, 2, 3]], [1, 2, 3])
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v3 AS SELECT (SELECT ?)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v3(27)
+# ----
+# 27
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v3('hello world')
+# ----
+# hello world
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v3([1, 2, 3])
+# ----
+# [1, 2, 3]
+
+# unbound parameter with IS NULL
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v4 AS SELECT ? IS NULL
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v4(27)
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v4('hello world')
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v4(NULL)
+# ----
+# 1
+
+# unbound parameter with IN list
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v5 AS SELECT ? IN (?, ?)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v5(27, 27, 28)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v5('hello world', 'hello', 'world')
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v5(NULL, 27, 28)
+# ----
+# NULL
+
+# unbound parameter with COUNT
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v6 AS SELECT COUNT(?)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v6(27)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v6('hello world')
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v6(NULL)
+# ----
+# 0
+
+# unbound parameter with printf
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v7 AS SELECT printf('%s: %d', ?, ?)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v7('time', 27)
+# ----
+# time: 27
+
+# TODO: unsupported feature
+# statement error
+# EXECUTE v7('hello world', [1, 2, 3])
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v8 AS SELECT [?]
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v8(27)
+# ----
+# [27]
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v8('hello world')
+# ----
+# [hello world]
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v8(NULL)
+# ----
+# [NULL]
+
+# unbound parameter with lists and NULL
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v9 AS SELECT [?, NULL]
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v9(27)
+# ----
+# [27, NULL]
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v9('hello world')
+# ----
+# [hello world, NULL]
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v9(NULL)
+# ----
+# [NULL, NULL]
+
+# unbound parameter with structs
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v10 AS SELECT {'x': ?}
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v10(27)
+# ----
+# {'x': 27}
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v10('hello world')
+# ----
+# {'x': hello world}
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v10(NULL)
+# ----
+# {'x': NULL}
+
+# unbound parameter with structs and NULL
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v11 AS SELECT {'x': ?, 'y': NULL}
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v11(27)
+# ----
+# {'x': 27, 'y': NULL}
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v11('hello world')
+# ----
+# {'x': hello world, 'y': NULL}
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v11(NULL)
+# ----
+# {'x': NULL, 'y': NULL}
+
+# values list
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v12 AS SELECT * FROM (VALUES (?, ?), (?, ?)) tbl(i, j)
+
+# TODO: unsupported feature
+# query II
+# EXECUTE v12(27, 28, 29, 30)
+# ----
+# 27	28
+# 29	30
+
+# TODO: unsupported feature
+# query II
+# EXECUTE v12('hello', 'world', 'a', NULL)
+# ----
+# hello	world
+# a	NULL
+
+# case
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v13 AS SELECT CASE WHEN ? THEN ? ELSE ? END
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v13(1=1, 1, 2)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v13(1=0, 'hello', 'world')
+# ----
+# world
+
+# parameter and null
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v14 AS SELECT ?+NULL
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v14(1)
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v15 AS SELECT ?=NULL
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v15(1)
+# ----
+# NULL
+
+# issue #2125
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v16 AS SELECT CASE WHEN (? = 1) AND (? = 2) AND (? = 3) AND ((? IS NULL)) THEN 1.5 ELSE 2.5 END AS a
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v16(1, 2, 3, NULL)
+# ----
+# 1.5
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v16(1, 2, 4, NULL)
+# ----
+# 2.5

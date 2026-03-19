@@ -1,0 +1,39 @@
+# TODO: unsupported feature
+# query I
+# SELECT current_setting('disabled_filesystems')
+# ----
+# (empty)
+
+# nop
+
+# TODO: unsupported feature
+# statement ok
+# RESET disabled_filesystems;
+
+# TODO: unsupported feature
+# statement ok
+# RESET disabled_filesystems;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/skip_row.csv')
+
+# TODO: unsupported feature
+# statement error
+# RESET disabled_filesystems;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM read_csv_auto('{DATA_DIR}/csv/auto/skip_row.csv')
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM abc.main.t1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM abc.t1;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM abc.csv;

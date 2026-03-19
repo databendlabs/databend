@@ -1,0 +1,193 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS base
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	gcol_x AS (x),
+# 	gcol_y AS (y),
+# 	y INTEGER,
+# 	x TEXT
+# 	CHECK (y > 5)
+# );
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl VALUES (5, 'test');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM tbl;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl;
+
+# --- CHECK - direct
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	gcol_x AS (x),
+# 	gcol_y AS (y),
+# 	y INTEGER CHECK (y > 5),
+# 	x TEXT
+# );
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl VALUES (5, 'test');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM tbl;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl;
+
+# --- UNIQUE | PRIMARY direct
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	gcol_x AS (x),
+# 	gcol_y AS (y),
+# 	y INTEGER UNIQUE,
+# 	x TEXT PRIMARY KEY
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM tbl;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl;
+
+# --- UNIQUE | PRIMARY indirect
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	gcol_x AS (x),
+# 	gcol_y AS (y),
+# 	y INTEGER,
+# 	x TEXT,
+# 	PRIMARY KEY (y),
+# 	UNIQUE (x)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO tbl VALUES (6,'test');
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM tbl;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl;
+
+# --- FOREIGN KEY
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE base (
+# 	price INTEGER PRIMARY KEY
+# );
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	gcol_nest AS (gcol),
+# 	gcol AS (x),
+# 	x INTEGER,
+# 	FOREIGN KEY (x) REFERENCES base (price)
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO base VALUES (5);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE base;
+
+# --- DEFAULT value
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	gcol2 AS (gcol1),
+# 	price INTEGER DEFAULT (5),
+# 	gcol1 AS (price),
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (DEFAULT);
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM tbl;
+# ----
+# 5	5	5
+
+# gcol1 is a dependency of gcol2
+
+# TODO: unsupported feature
+# statement error
+# ALTER TABLE tbl DROP COLUMN gcol1;
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE tbl DROP COLUMN gcol2;
+
+# gcol1 is no longer a dependency of anything
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE tbl DROP COLUMN gcol1;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM tbl;

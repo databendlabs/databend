@@ -1,0 +1,55 @@
+# TODO: unsupported feature
+# statement ok
+# PRAGMA default_order='desc'
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM range(0, 3) ORDER BY 1
+# ----
+# 2
+# 1
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# PRAGMA default_order='asc'
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM range(0, 3) ORDER BY 1
+# ----
+# 0
+# 1
+# 2
+
+# TODO: unsupported feature
+# statement error
+# PRAGMA default_order='unknown_order'
+
+# TODO: unsupported feature
+# statement ok
+# SET default_order='desc'
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM range(0, 3) ORDER BY 1
+# ----
+# 2
+# 1
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# SET default_order='asc'
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM range(0, 3) ORDER BY 1
+# ----
+# 0
+# 1
+# 2
+
+# TODO: unsupported feature
+# statement error
+# SET default_order='unknown_order'

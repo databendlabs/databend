@@ -1,0 +1,15 @@
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE OR REPLACE TABLE 'everflow_daily' AS SELECT case when i%10=0 THEN uuid()::VARCHAR ELSE 'N/A' END sub4 FROM range(0, 10000) t(i)
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE everflow_daily SET sub4 = NULL WHERE sub4 = 'N/A';
+
+# TODO: unsupported feature
+# query I
+# select count(*) from everflow_daily
+# where sub4 = 'N/A'
+# ----
+# 0

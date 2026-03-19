@@ -1,0 +1,211 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS s1.t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS s2.t1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t.t
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test.tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.tbl(col INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test.tbl VALUES (1), (2), (3);
+
+# TODO: unsupported feature
+# query I
+# SELECT test.tbl.col FROM test.tbl;
+# ----
+# 1
+# 2
+# 3
+
+# schema name with alias does not work
+
+# TODO: unsupported feature
+# statement error
+# SELECT test.t.col FROM test.tbl t;
+
+# TODO: unsupported feature
+# statement error
+# SELECT test.tbl.col FROM test.tbl t;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t.t(t ROW(t INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO t.t VALUES ({'t': 42});
+
+# "t" selects the column
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM t.t;
+# ----
+# {'t': 42}
+
+# "t.t" also selects the column
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t FROM t.t;
+# ----
+# {'t': 42}
+
+# t.t.t also selects the column
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t FROM t.t;
+# ----
+# {'t': 42}
+
+# t.t.t.t selects the field
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t.t FROM t.t;
+# ----
+# 42
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA t CASCADE;
+
+# test long nested struct
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t.t AS SELECT {'t': {'t': {'t': {'t': {'t': 42}}}}} t
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t.t.t.t.t.t FROM t.t;
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t.t.t.t.t FROM t.t;
+# ----
+# {'t': 42}
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t.t.t.t FROM t.t;
+# ----
+# {'t': {'t': 42}}
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t.t.t FROM t.t;
+# ----
+# {'t': {'t': {'t': 42}}}
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t.t FROM t.t;
+# ----
+# {'t': {'t': {'t': {'t': 42}}}}
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t.t FROM t.t;
+# ----
+# {'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+# TODO: unsupported feature
+# query I
+# SELECT t.t FROM t.t;
+# ----
+# {'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+# TODO: unsupported feature
+# query I
+# SELECT t FROM t.t;
+# ----
+# {'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA t CASCADE
+
+# test multiple tables with the same name but a different schema
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE s1.t1 AS SELECT 42 t
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE s2.t1 AS SELECT 84 t
+
+# TODO: unsupported feature
+# query I
+# SELECT s1.t1.t FROM s1.t1, s2.t1
+# ----
+# 42
+
+# TODO: unsupported feature
+# query I
+# SELECT * EXCLUDE (s1.t1.t) FROM s1.t1, s2.t1
+# ----
+# 84
+
+# TODO: unsupported feature
+# query I
+# SELECT * EXCLUDE (S1.T1.T) FROM s1.t1, s2.t1
+# ----
+# 84
+
+# TODO: unsupported feature
+# query I
+# SELECT s2.t1.t FROM s1.t1, s2.t1
+# ----
+# 84
+
+# test various failures
+
+# TODO: unsupported feature
+# statement error
+# SELECT testX.tbl.col FROM test.tbl;
+
+# TODO: unsupported feature
+# statement error
+# SELECT test.tblX.col FROM test.tbl;
+
+# TODO: unsupported feature
+# statement error
+# SELECT test.tbl.colX FROM test.tbl;

@@ -1,0 +1,385 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_bigint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_bool
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_integer
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_interval
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_smallint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_tinyint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_ubigint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_uinteger
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_usmallint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a_utinyint
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS aliens
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS person
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_tinyint AS SELECT range::tinyint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_smallint AS SELECT range::smallint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_integer AS SELECT range::integer i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_bigint AS SELECT range::bigint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_utinyint AS SELECT range::utinyint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_utinyint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_utinyint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_usmallint AS SELECT range::usmallint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_usmallint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_usmallint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_uinteger AS SELECT range::uinteger i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_uinteger
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_uinteger WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_ubigint AS SELECT range::ubigint i FROM range(0, 100)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_ubigint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_ubigint WHERE i=1
+# ----
+# 1	1	1	1
+
+
+# interval
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_interval AS SELECT interval (range) year i FROM range(1,1001)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
+# ----
+# 1 year	1000 years	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i=interval 1 year
+# ----
+# 1 year	1 year	1	1
+
+# bool
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a_bool AS SELECT range%2=0 i FROM range(0, 1000)
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool
+# ----
+# 0	1	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
+# ----
+# 0	0	500	500
+
+# enum
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE person (
+#     name text,
+#     current_mood mood
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO person VALUES ('Moe', 'happy');
+
+# TODO: unsupported feature
+# query TT
+# select * from person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_tinyint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_smallint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_integer WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bigint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_utinyint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_utinyint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_usmallint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_usmallint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_uinteger
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_uinteger WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_ubigint
+# ----
+# 0	99	100	100
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_ubigint WHERE i=1
+# ----
+# 1	1	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval
+# ----
+# 1 year	1000 years	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_interval WHERE i=interval 1 year
+# ----
+# 1 year	1 year	1	1
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool
+# ----
+# 0	1	1000	1000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
+# ----
+# 0	0	500	500
+
+# TODO: unsupported feature
+# query TT
+# select * from person
+# ----
+# Moe	happy
+
+# TODO: unsupported feature
+# statement ok
+# begin transaction
+
+# TODO: unsupported feature
+# statement ok
+# drop table person;
+
+# TODO: unsupported feature
+# statement ok
+# drop TYPE mood;
+
+# TODO: unsupported feature
+# statement ok
+# commit
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE aliens (
+#     name text,
+#     current_mood mood
+# );

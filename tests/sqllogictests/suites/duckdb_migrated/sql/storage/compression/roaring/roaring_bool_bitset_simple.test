@@ -1,0 +1,36 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BOOL);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT CASE WHEN i % 3 = 0 THEN true ELSE false END FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOL' AND compression != 'Roaring';
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test WHERE a IS true;
+# ----
+# 3334
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test WHERE a IS false;
+# ----
+# 6666
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test;

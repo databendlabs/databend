@@ -1,0 +1,63 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ducklake_column
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS ducklake_table
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS my_table
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE ducklake_table(end_snapshot BIGINT);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE ducklake_column(end_snapshot BIGINT);
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO ducklake_table VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO ducklake_column VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE ducklake_table SET end_snapshot = 3
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE ducklake_column SET end_snapshot = 3
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE my_table (a INTEGER, b INTEGER);

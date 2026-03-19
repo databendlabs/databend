@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE q AS SELECT x FROM generate_series(1, 10) t(x) OFFSET ? LIMIT ?;
+
+# Execute the prepared query with OFFSET = 3 and LIMIT = 5
+
+# TODO: unsupported feature
+# query I
+# EXECUTE q(3, 5);
+# ----
+# 4
+# 5
+# 6
+# 7
+# 8
+
+# Verify the result matches the direct query
+
+# TODO: unsupported feature
+# query I
+# SELECT x FROM generate_series(1, 10) t(x) OFFSET 3 LIMIT 5;
+# ----
+# 4
+# 5
+# 6
+# 7
+# 8

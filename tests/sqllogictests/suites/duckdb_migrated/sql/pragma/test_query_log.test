@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# SELECT CURRENT_SETTING('log_query_path')
+
+# TODO: unsupported feature
+# query I
+# SELECT 42
+# ----
+# 42
+
+# TODO: unsupported feature
+# statement ok
+# SELECT 100;SELECT 200
+
+# TODO: unsupported feature
+# statement ok
+# SELECT CURRENT_SETTING('log_query_path')

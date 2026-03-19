@@ -1,0 +1,68 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR, j BIGINT);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (repeat('a', 64), 1)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, 2 FROM test
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE j=2 - 1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, 3 FROM test
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE j=3 - 1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, 4 FROM test
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE j=4 - 1
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, 5 FROM test
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM test WHERE j=5 - 1
+
+# TODO: unsupported feature
+# query I
+# SELECT LENGTH(a) FROM test
+# ----
+# 640000
+
+# TODO: unsupported feature
+# query I
+# SELECT LENGTH(a) FROM test
+# ----
+# 640000
+
+# TODO: unsupported feature
+# query I
+# SELECT LENGTH(a) FROM test
+# ----
+# 640000
+
+# TODO: unsupported feature
+# query I
+# SELECT LENGTH(a) FROM test
+# ----
+# 640000

@@ -1,0 +1,105 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "a.b.c"
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "d.e.f.g"."a.b.c"
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS "d.e.f.g".abc
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS defg."a.b.c"
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS defg.abc
+
+# TODO: unsupported feature
+# statement ok
+# create table "a.b.c" (x int);
+
+# TODO: unsupported feature
+# query IIIIIIIIIIII
+# summarize "a.b.c";
+# ----
+# x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	NULL
+
+# TODO: unsupported feature
+# statement ok
+# create schema defg;
+
+# TODO: unsupported feature
+# statement ok
+# drop table "a.b.c";
+
+# TODO: unsupported feature
+# statement ok
+# create table defg."a.b.c" (x int);
+
+# Non-quoted schema name, quoted table name
+
+# TODO: unsupported feature
+# query IIIIIIIIIIII
+# summarize defg."a.b.c";
+# ----
+# x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	NULL
+
+# TODO: unsupported feature
+# statement ok
+# drop table defg."a.b.c";
+
+# TODO: unsupported feature
+# statement ok
+# create table defg.abc (x int);
+
+# Non-quoted schema name, non-quoted table name
+
+# TODO: unsupported feature
+# query IIIIIIIIIIII
+# summarize defg.abc;
+# ----
+# x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	NULL
+
+# TODO: unsupported feature
+# statement ok
+# drop table defg.abc;
+
+# TODO: unsupported feature
+# statement ok
+# drop schema defg;
+
+# TODO: unsupported feature
+# statement ok
+# create schema "d.e.f.g";
+
+# TODO: unsupported feature
+# statement ok
+# create table "d.e.f.g"."a.b.c" (x int);
+
+# Quoted schema name, quoted table name
+
+# TODO: unsupported feature
+# query IIIIIIIIIIII
+# summarize "d.e.f.g"."a.b.c";
+# ----
+# x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	NULL
+
+# TODO: unsupported feature
+# statement ok
+# drop table "d.e.f.g"."a.b.c"
+
+# TODO: unsupported feature
+# statement ok
+# create table "d.e.f.g".abc (x int);
+
+# Quoted schema name, non-quoted table name
+
+# TODO: unsupported feature
+# query IIIIIIIIIIII
+# summarize "d.e.f.g".abc;
+# ----
+# x	INTEGER	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	0	NULL

@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db1.integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.integers AS FROM range(0, 1000000);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE db1.integers
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT db1
+
+# TODO: unsupported feature
+# query I
+# SELECT case when used_blocks <= 3 then NULL else t end  FROM pragma_database_size() t WHERE database_name='db1';
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db1
+
+# TODO: unsupported feature
+# query I
+# SELECT case when used_blocks <= 3 then NULL else t end FROM pragma_database_size() t WHERE database_name='db1';
+# ----
+# NULL

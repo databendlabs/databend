@@ -1,0 +1,24 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES ('11'), ('11'), ('12'), (NULL);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint;
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test;
+# ----
+# 11
+# 11
+# 12
+# NULL

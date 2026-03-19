@@ -1,0 +1,90 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS test.v
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test.t
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# the view has aliases (b, c)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
+
+# check the view info
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.t CASCADE;
+
+
+# now reload
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.t
+
+# we need to recreate the view to query 'v' after recreating the table
+
+# TODO: unsupported feature
+# statement error
+# SELECT b,c FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.t CASCADE;
+
+
+# now reload
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.t
+
+# we need to recreate the view to query 'v' after recreating the table
+
+# TODO: unsupported feature
+# statement error
+# SELECT b,c FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v (b,c) AS SELECT * FROM test.t;
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.t CASCADE;

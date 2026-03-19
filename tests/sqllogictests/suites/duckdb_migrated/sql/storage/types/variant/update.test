@@ -1,0 +1,21 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (a VARIANT)
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl VALUES (42)
+
+# TODO: unsupported feature
+# statement ok
+# update tbl SET a = 21
+
+# TODO: unsupported feature
+# query I
+# select * from tbl
+# ----
+# 21

@@ -1,0 +1,14 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS v1
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW v1 AS SELECT current_schema();
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM v1;
+# ----
+# main

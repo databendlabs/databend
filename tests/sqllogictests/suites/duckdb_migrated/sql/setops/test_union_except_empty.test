@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# statement ok
+# create table t (i int);
+
+# TODO: unsupported feature
+# statement ok
+# insert into t values (1),(2),(3),(4),(4);
+
+# TODO: unsupported feature
+# query I
+# select i from t union select 1 where false order by 1;
+# ----
+# 1
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query I
+# select i from t except select 1 where false order by 1;
+# ----
+# 1
+# 2
+# 3
+# 4

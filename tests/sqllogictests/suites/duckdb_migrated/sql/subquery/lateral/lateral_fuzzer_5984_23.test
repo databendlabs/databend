@@ -1,0 +1,11 @@
+# TODO: unsupported feature
+# query I
+# SELECT 1 FROM (SELECT 1) t1(c1), (SELECT TRUE IN (TRUE, t1.c1::VARCHAR LIKE 'a' ESCAPE NULL));
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT t1.c1::VARCHAR LIKE 'a' ESCAPE NULL) FROM (SELECT 1) t1(c1)
+# ----
+# NULL

@@ -1,0 +1,9 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE S1 AS SELECT (? / 1) + 1;
+
+# TODO: unsupported feature
+# query I
+# EXECUTE S1(42)
+# ----
+# 43

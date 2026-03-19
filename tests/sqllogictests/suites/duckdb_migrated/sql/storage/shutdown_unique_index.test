@@ -1,0 +1,74 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22);
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 13	22
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (11, 24)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (12, 24)
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (12, 24)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	24
+# 13	22
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test WHERE a=12
+# ----
+# 12	24
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (11, 24)
+
+# TODO: unsupported feature
+# statement error
+# INSERT INTO test VALUES (12, 24)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	24
+# 13	22
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test WHERE a=12
+# ----
+# 12	24

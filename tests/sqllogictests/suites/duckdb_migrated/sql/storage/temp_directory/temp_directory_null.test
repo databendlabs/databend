@@ -1,0 +1,14 @@
+# this one worked from the start
+# TODO: unsupported feature
+# query I
+# select value from duckdb_settings() where name = 'temp_directory'
+# ----
+# (empty)
+
+# this used to create a directory with name "null" - should also be empty to denote NO temp dir
+
+# TODO: unsupported feature
+# query I
+# select value from duckdb_settings() where name = 'temp_directory'
+# ----
+# (empty)

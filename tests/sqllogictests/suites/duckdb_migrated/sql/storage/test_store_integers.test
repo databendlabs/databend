@@ -1,0 +1,305 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test2
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test2 (a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test2 VALUES (13), (12), (11)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT;
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+
+# verify that the tables are still there after a restart
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# NULL	NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test2 ORDER BY a
+# ----
+# 11
+# 12
+# 13
+
+# append a row
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (14, 23)
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# 14	23
+# NULL	NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM test ORDER BY a
+# ----
+# 11	22
+# 12	21
+# 13	22
+# 14	23
+# NULL	NULL
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test2

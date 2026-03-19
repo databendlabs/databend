@@ -1,0 +1,87 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS s1.integers
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers("COL1" INTEGER, "COL2" INTEGER)
+
+# *
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT * FROM integers
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM pragma_table_info('tbl') ORDER BY name
+# ----
+# COL1
+# COL2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl
+
+# col1, col2
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT COL1, COL2 FROM integers
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM pragma_table_info('tbl') ORDER BY name
+# ----
+# COL1
+# COL2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl
+
+# explicit table reference
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT integers.COL1, integers.COL2 FROM integers
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM pragma_table_info('tbl') ORDER BY name
+# ----
+# COL1
+# COL2
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE tbl
+
+# explicit schema reference
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA s1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE s1.integers("COL1" INTEGER, "COL2" INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl AS SELECT s1.integers.COL1, s1.integers.COL2 FROM s1.integers
+
+# TODO: unsupported feature
+# query I
+# SELECT name FROM pragma_table_info('tbl') ORDER BY name
+# ----
+# COL1
+# COL2

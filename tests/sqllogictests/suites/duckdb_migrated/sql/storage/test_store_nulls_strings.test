@@ -1,0 +1,44 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b STRING);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	hello
+
+# TODO: unsupported feature
+# query II
+# SELECT a, b FROM test ORDER BY a
+# ----
+# 12	NULL
+# 13	abcdefgh
+# NULL	hello
+
+# TODO: unsupported feature
+# statement error
+# CREATE TABLE test (a INTEGER, b STRING);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE IF NOT EXISTS test (a INTEGER, b STRING);
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test

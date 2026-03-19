@@ -1,0 +1,133 @@
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT UNNEST([1]))
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT UNNEST([NULL]))
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT UNNEST([]))
+# ----
+# NULL
+
+# correlated
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT UNNEST(i)) FROM (VALUES ([1])) tbl(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT UNNEST(i)) FROM (VALUES ([NULL])) tbl(i);
+# ----
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT UNNEST(i)) FROM (VALUES ([])) tbl(i);
+# ----
+# NULL
+
+# now with an aggregate
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT SUM(k) FROM (SELECT UNNEST(i)) tbl(k)) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 6
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT SUM(k)+SUM(l) FROM (SELECT UNNEST(i), UNNEST(j) FROM (VALUES ([1, 2, 3])) tbl(j)) tbl(k, l)) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 12
+
+# ANY
+
+# TODO: unsupported feature
+# query B
+# SELECT 1=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query B
+# SELECT 4=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 0
+
+# TODO: unsupported feature
+# query B
+# SELECT NULL=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 0
+
+# TODO: unsupported feature
+# query B
+# SELECT 4=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+# ----
+# 0
+
+# IN
+
+# TODO: unsupported feature
+# query B
+# SELECT 1 IN (SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 1
+
+# INSIDE a subquery
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT 1=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+# ----
+# NULL
+
+# INSIDE a subquery
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT 1=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 0
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+# ----
+# NULL
+
+# double correlated subqueries
+
+# TODO: unsupported feature
+# query I
+# SELECT (SELECT 1+i[1]=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+# ----
+# 1

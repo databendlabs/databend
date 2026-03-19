@@ -1,0 +1,15 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# create table tbl (col VARIANT)
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl SELECT NULL from range(0, 154840)
+
+# TODO: unsupported feature
+# statement ok
+# insert into tbl SELECT True from range(0, 5000)

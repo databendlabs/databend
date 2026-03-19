@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS rd.my_tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.my_tbl AS SELECT 42 i
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT

@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX i_index ON integers((j + 1), k)
+
+# TODO: unsupported feature
+# statement ok nosort duckdb_col
+# SELECT * FROM duckdb_indexes();
+
+# TODO: unsupported feature
+# statement ok nosort duckdb_col
+# SELECT * FROM duckdb_indexes;
+
+# TODO: unsupported feature
+# query I
+# select expressions from duckdb_indexes where table_name = 'integers';
+# ----
+# ['((j + 1))', k]

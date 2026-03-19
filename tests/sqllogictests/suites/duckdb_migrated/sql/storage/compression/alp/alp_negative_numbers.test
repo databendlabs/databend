@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS random_alp_double
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS random_double
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# create table random_double as select round(cos(1 / (random() + 0.001)), 5)::DOUBLE * -1 as data from range(0, 1023) tbl(i);
+# insert into random_double values (-0.0::DOUBLE);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('random_double') WHERE segment_type = 'double' AND compression != 'Uncompressed';
+# ----
+
+# Now create a duplicate of this table, compressed with ALP instead
+
+# TODO: unsupported feature
+# statement ok
+# create table random_alp_double as select * from random_double;
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('random_alp_double') WHERE segment_type = 'double' AND compression != 'ALP';
+# ----
+
+# Assert that the data was not corrupted by compressing to ALP
+
+# TODO: unsupported feature
+# query I sort r1
+# select * from random_double;
+# ----
+
+# TODO: unsupported feature
+# query I sort r1
+# select * from random_alp_double;
+# ----

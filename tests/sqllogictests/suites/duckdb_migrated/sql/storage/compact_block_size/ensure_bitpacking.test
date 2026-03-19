@@ -1,0 +1,29 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS larger_block_size.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS smaller_block_size.tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE smaller_block_size.tbl AS SELECT range AS i FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE larger_block_size.tbl AS SELECT range AS i FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT smaller_block_size;
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT larger_block_size;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) > 0 FROM pragma_storage_info('larger_block_size.tbl') WHERE compression = 'BitPacking';
+# ----
+# 1

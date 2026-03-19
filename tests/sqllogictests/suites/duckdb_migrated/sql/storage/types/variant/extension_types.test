@@ -1,0 +1,26 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (col VARIANT)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT into tbl select '127.0.0.1'::INET
+
+# FIXME: this works because INET is just a STRUCT under the hood,
+# perhaps we want to throw in the cast if there's an extension type on it?
+
+# TODO: unsupported feature
+# query I
+# select * from tbl
+# ----
+# {'ip_type': 1, 'address': 2130706433, 'mask': 32}
+
+# TODO: unsupported feature
+# query I
+# select COLUMNS(*)::INET from tbl
+# ----
+# 127.0.0.1

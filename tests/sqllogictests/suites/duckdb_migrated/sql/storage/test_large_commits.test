@@ -1,0 +1,30 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test(i INTEGER);
+
+# this should trigger an auto checkpoint
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT * FROM range(0, 100000) tbl(i)
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test
+# ----
+# 0	99999	100000
+
+# TODO: unsupported feature
+# query III
+# SELECT MIN(i), MAX(i), COUNT(*) FROM test
+# ----
+# 0	99999	100000
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test

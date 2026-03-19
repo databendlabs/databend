@@ -1,0 +1,175 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a AS SELECT {
+# 	'r1': {
+# 		'a': 'hello',
+# 		'b': 3
+# 	},
+# 	'r2': {
+# 		'a': 'world',
+# 		'b': 17,
+# 		'c': NULL
+# 	}
+# } c
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': hello, 'b': 3}, 'r2': {'a': world, 'b': 17, 'c': NULL}}
+
+# TODO: unsupported feature
+# query I
+# SELECT c['r1']['a'] from a
+# ----
+# hello
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': hello, 'b': 3}, 'r2': {'a': world, 'b': 17, 'c': NULL}}
+
+# TODO: unsupported feature
+# query I
+# SELECT c['r1']['a'] from a
+# ----
+# hello
+
+# update
+
+# TODO: unsupported feature
+# statement ok
+# UPDATE a SET c={
+# 	'r1': {
+# 		'a': 'blabla',
+# 		'b': 3
+# 	},
+# 	'r2': {
+# 		'a': 'world',
+# 		'b': 18,
+# 		'c': NULL
+# 	}
+# }
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+
+# TODO: unsupported feature
+# query I
+# SELECT c['r1']['a'] from a
+# ----
+# blabla
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+
+# TODO: unsupported feature
+# query I
+# SELECT c['r1']['a'] from a
+# ----
+# blabla
+
+# nulls at different levels
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (
+# {
+# 	'r1': {
+# 		'a': NULL,
+# 		'b': 3
+# 	},
+# 	'r2': {
+# 		'a': NULL,
+# 		'b': 17,
+# 		'c': NULL
+# 	}
+# })
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+# {'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES ({
+# 	'r1': NULL,
+# 	'r2': {
+# 		'a': NULL,
+# 		'b': 17,
+# 		'c': NULL
+# 	}
+# })
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+# {'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+# {'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES ({
+# 	'r1': NULL,
+# 	'r2': NULL
+# })
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+# {'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+# {'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+# {'r1': NULL, 'r2': NULL}
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES(NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+# {'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+# {'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+# {'r1': NULL, 'r2': NULL}
+# NULL
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM a
+# ----
+# {'r1': {'a': blabla, 'b': 3}, 'r2': {'a': world, 'b': 18, 'c': NULL}}
+# {'r1': {'a': NULL, 'b': 3}, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+# {'r1': NULL, 'r2': {'a': NULL, 'b': 17, 'c': NULL}}
+# {'r1': NULL, 'r2': NULL}
+# NULL
+
+# verify that no null values have crept their way into the stats
+
+# TODO: unsupported feature
+# query II
+# select column_path, stats from pragma_storage_info('a') where  stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
+# ----
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE a

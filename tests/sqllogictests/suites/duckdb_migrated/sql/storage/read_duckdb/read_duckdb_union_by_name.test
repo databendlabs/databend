@@ -1,0 +1,19 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS rd.my_tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.my_tbl AS SELECT 100 i, 84 col1
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE rd.my_tbl AS SELECT 200 i, 84 col2
+
+# TODO: unsupported feature
+# statement ok
+# DETACH rd

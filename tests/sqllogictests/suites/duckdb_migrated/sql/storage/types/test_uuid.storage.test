@@ -1,0 +1,79 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS uuids
+
+# load the DB from disk
+# create a table with uuid
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE uuids (u uuid);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO uuids VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'), (NULL), ('47183823-2574-4bfd-b411-99ed177d3e43'), ('{10203040506070800102030405060708}');
+
+# reload the database from disk a few times, and check that the data is still there
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uuids
+# ----
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+# NULL
+# 47183823-2574-4bfd-b411-99ed177d3e43
+# 10203040-5060-7080-0102-030405060708
+
+# can query by the upper case
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uuids WHERE u = 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'
+# ----
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# can also query by the standard format
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uuids WHERE u = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+# ----
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# TODO: unsupported feature
+# query I
+# SELECT u FROM uuids WHERE u > '10203040-5060-7080-0102-030405060708' ORDER BY 1;
+# ----
+# 47183823-2574-4bfd-b411-99ed177d3e43
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uuids
+# ----
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+# NULL
+# 47183823-2574-4bfd-b411-99ed177d3e43
+# 10203040-5060-7080-0102-030405060708
+
+# can query by the upper case
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uuids WHERE u = 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'
+# ----
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# can also query by the standard format
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM uuids WHERE u = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+# ----
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# TODO: unsupported feature
+# query I
+# SELECT u FROM uuids WHERE u > '10203040-5060-7080-0102-030405060708' ORDER BY 1;
+# ----
+# 47183823-2574-4bfd-b411-99ed177d3e43
+# a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11

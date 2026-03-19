@@ -1,0 +1,26 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE FUNCTION my_func(x) AS (x + x)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (
+# 	x INTEGER
+# );
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl VALUES (1), (2), (3), (NULL);
+
+# TODO: unsupported feature
+# query II
+# SELECT * FROM tbl, (SELECT my_func(x)) ORDER BY x NULLS LAST
+# ----
+# 1	2
+# 2	4
+# 3	6
+# NULL	NULL

@@ -1,0 +1,94 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test FROM test
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(a) + SUM(b) FROM test
+# ----
+# 6619136
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(a) + SUM(b) FROM test
+# ----
+# 6619136
+
+# TODO: unsupported feature
+# query I
+# SELECT SUM(a) + SUM(b) FROM test
+# ----
+# 6619136

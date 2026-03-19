@@ -1,0 +1,10 @@
+# TODO: unsupported feature
+# query III
+# FROM (SELECT 42) t(x), (SELECT x, row_number() OVER () QUALIFY NULL);
+# ----
+
+# TODO: unsupported feature
+# query II
+# FROM (SELECT 42) t(x), (SELECT x * 2 QUALIFY row_number() OVER () < 10);
+# ----
+# 42	84

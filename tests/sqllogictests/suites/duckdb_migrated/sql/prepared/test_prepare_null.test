@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS b
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE b (i TINYINT)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS INSERT INTO b VALUES ($1)
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s1 (NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM b
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s2 AS UPDATE b SET i=$1
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s2 (NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM b
+# ----
+# NULL
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s3 AS DELETE FROM b WHERE i=$1
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s3 (NULL)
+
+# TODO: unsupported feature
+# query I
+# SELECT i FROM b
+# ----
+# NULL

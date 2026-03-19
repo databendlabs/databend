@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS wal_promote.T
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE wal_promote.T AS (FROM range(0, 10));
+
+# TODO: unsupported feature
+# statement ok
+# DETACH wal_promote;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO wal_promote.T VALUES (42);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH wal_promote;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO wal_promote.T VALUES (42);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH wal_promote;

@@ -1,0 +1,27 @@
+# TODO: unsupported feature
+# statement ok
+# create schema s1;
+
+# TODO: unsupported feature
+# statement ok
+# create schema s2;
+
+# TODO: unsupported feature
+# statement ok
+# use s1;
+
+# TODO: unsupported feature
+# statement ok
+# use s2;
+
+# TODO: unsupported feature
+# statement ok
+# use s1;
+
+# TODO: unsupported feature
+# statement ok
+# reset schema;
+
+# TODO: unsupported feature
+# statement ok
+# reset search_path

@@ -1,0 +1,10 @@
+# explicitly load an in-memory database
+# TODO: unsupported feature
+# query III nosort dblist
+# SELECT * FROM pragma_database_list
+
+# TODO: unsupported feature
+# query II
+# SELECT name, file FROM pragma_database_list
+# ----
+# memory	NULL

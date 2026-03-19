@@ -1,0 +1,72 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS vals
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE vals(i INTEGER, v VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO vals SELECT i, i::VARCHAR FROM generate_series(1000000) t(i)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(0*100000) FROM (FROM vals LIMIT 0*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(1*100000) FROM (FROM vals LIMIT 1*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(2*100000) FROM (FROM vals LIMIT 2*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(3*100000) FROM (FROM vals LIMIT 3*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(4*100000) FROM (FROM vals LIMIT 4*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(5*100000) FROM (FROM vals LIMIT 5*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(6*100000) FROM (FROM vals LIMIT 6*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(7*100000) FROM (FROM vals LIMIT 7*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(8*100000) FROM (FROM vals LIMIT 8*100000)
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*)=(9*100000) FROM (FROM vals LIMIT 9*100000)
+# ----
+# 1

@@ -1,0 +1,28 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (s ROW(a INTEGER));
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test SELECT {'a': i} s FROM repeat(1, 1000) tbl(i);
+# INSERT INTO test SELECT {'a': i} s FROM repeat(2, 1000) tbl(i);
+# INSERT INTO test SELECT {'a': i} s FROM repeat(3, 1000) tbl(i);
+# INSERT INTO test SELECT {'a': i} s FROM repeat(4, 1000) tbl(i);
+# INSERT INTO test SELECT {'a': i} s FROM repeat(5, 1000) tbl(i);
+# INSERT INTO test SELECT {'a': i} s FROM repeat(6, 1000) tbl(i);
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21000	1	6	6000
+
+# TODO: unsupported feature
+# query IIII
+# SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+# ----
+# 21000	1	6	6000

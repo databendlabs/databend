@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl (n TEXT[]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl (n) SELECT CASE WHEN i < 100 THEN ['a', 'b'] ELSE [] END l FROM range(0, 1026) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl (n) SELECT CASE WHEN i < 100 THEN ['a', 'b'] ELSE [] END l FROM range(0, 1026) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl (n) SELECT CASE WHEN i < 100 THEN ['a', 'b'] ELSE [] END l FROM range(0, 1026) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# FROM tbl;

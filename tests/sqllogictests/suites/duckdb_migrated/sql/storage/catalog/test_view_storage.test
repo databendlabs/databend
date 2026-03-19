@@ -1,0 +1,90 @@
+# TODO: unsupported feature
+# statement ok
+# DROP VIEW IF EXISTS test.v
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test.t
+
+# FIXME: for this to work we need to serialize/deserialize dependencies
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA test;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v AS SELECT * FROM test.t;
+
+# read the info from the view
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.t CASCADE;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.t
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v AS SELECT * FROM test.t;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.t CASCADE;
+
+
+# restart the system
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test.t (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.t
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# CREATE VIEW test.v AS SELECT * FROM test.t;
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM test.v
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test.t CASCADE;

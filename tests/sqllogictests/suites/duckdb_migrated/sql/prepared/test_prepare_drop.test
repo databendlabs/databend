@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a (i TINYINT)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE p1 AS SELECT * FROM a
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE p1
+
+# only the conn which did the prepare can execute
+
+# TODO: unsupported feature
+# statement error
+# EXECUTE p1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE a
+
+# after dropping the table, the statement fails
+
+# TODO: unsupported feature
+# statement error
+# EXECUTE p1
+
+# TODO: unsupported feature
+# statement ok
+# DEALLOCATE p1

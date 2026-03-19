@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE test DROP COLUMN b
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY 1
+# ----
+# 11
+# 12
+# 13
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM test ORDER BY 1
+# ----
+# 11
+# 12
+# 13

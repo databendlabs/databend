@@ -1,0 +1,31 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db1.tbl
+
+# TODO: unsupported feature
+# statement ok
+# attach ':memory:' as db1;
+
+# TODO: unsupported feature
+# statement ok
+# attach ':memory:' as db2;
+
+# TODO: unsupported feature
+# statement ok
+# use db1;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SEQUENCE seq;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db1.tbl (id INTEGER DEFAULT nextval('seq'), s VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# USE db2;
+
+# TODO: unsupported feature
+# statement ok
+# ALTER TABLE db1.tbl ADD COLUMN m INTEGER DEFAULT nextval('seq');

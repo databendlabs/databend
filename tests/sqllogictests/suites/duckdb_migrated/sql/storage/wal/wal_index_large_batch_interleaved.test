@@ -1,0 +1,51 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS tbl
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE tbl(a INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE INDEX idx_a ON tbl(a);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl SELECT r FROM range(0*10000, 0*10000 + 5120) t(r);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a >= 0*10000 AND a <= 0*10000 + 5000;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl SELECT r FROM range(1*10000, 1*10000 + 5120) t(r);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a >= 1*10000 AND a <= 1*10000 + 5000;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO tbl SELECT r FROM range(2*10000, 2*10000 + 5120) t(r);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM tbl WHERE a >= 2*10000 AND a <= 2*10000 + 5000;
+
+# TODO: unsupported feature
+# query II
+# EXPLAIN ANALYZE SELECT * FROM tbl WHERE a = 25010;
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 25010;
+# ----
+# 25010
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM tbl WHERE a = 24999;
+# ----

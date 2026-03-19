@@ -1,0 +1,23 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS all_types
+
+# TODO: unsupported feature
+# statement ok
+# create table all_types as select * exclude(small_enum, medium_enum, large_enum, "union", bit) from test_all_types();
+
+# TODO: unsupported feature
+# query T nosort result_1
+# select * from all_types_csv_1;
+
+# TODO: unsupported feature
+# query T nosort result_1
+# select * from all_types_csv_2;
+
+# TODO: unsupported feature
+# query T nosort result_parquet
+# select * from all_types_parquet_1;
+
+# TODO: unsupported feature
+# query T nosort result_paruet
+# select * from all_types_parquet_2;

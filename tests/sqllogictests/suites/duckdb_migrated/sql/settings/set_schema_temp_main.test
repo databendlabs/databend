@@ -1,0 +1,5 @@
+statement error
+CREATE SCHEMA temp.s1;
+
+statement error
+CREATE SCHEMA system.s1;

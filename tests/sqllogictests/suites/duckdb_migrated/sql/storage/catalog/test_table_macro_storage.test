@@ -1,0 +1,81 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_tbl
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_tbl (id INT, name string, height double);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO  test_tbl values (1,'tom', 1.1), (2,'dick',1.2),(3,'harry', 1.2),
+#                              (4,'mary',0.9), (5,'mungo', 0.8), (6,'midge', 0.5);
+
+# create a table macro
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO xt(a, _name) as TABLE SELECT * FROM test_tbl WHERE id<=a or name = _name;
+
+# use the macro
+
+# TODO: unsupported feature
+# query III
+# SELECT * FROM xt(10, '*') ORDER BY  height limit 1;
+# ----
+# 6	midge	0.5
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TEMPORARY MACRO my_seq(start , finish, stride:=3) as TABLE SELECT  * FROM generate_series(start , finish , stride);
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM my_seq(0,6);
+# ----
+# 0
+# 3
+# 6
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM xt(100, 'joe');
+
+# TODO: unsupported feature
+# statement ok
+# DROP MACRO TABLE xt;
+
+# TODO: unsupported feature
+# statement error
+# SELECT * from my_seq(0,10,2);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE MACRO my_range(rend) AS TABLE SELECT * FROM range(rend);
+
+# TODO: unsupported feature
+# query I
+# SELECT * from my_range(2);
+# ----
+# 0
+# 1
+
+
+
+# check the WAL
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM xt(100, 'joe');
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM my_seq(0,3,2);
+
+# TODO: unsupported feature
+# query I
+# SELECT * from my_range(2);
+# ----
+# 0
+# 1

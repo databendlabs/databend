@@ -1,0 +1,869 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS autocheckpoint_db.delete_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS autocheckpoint_db.tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS entry_count_db.delete_tbl
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS entry_count_db.tbl
+
+#
+# Part 1: Test autocheckpoint based on entry count threshold
+#
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE autocheckpoint_db.tbl(x INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE autocheckpoint_db.delete_tbl(x INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.delete_tbl SELECT * FROM range(0, 100);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT autocheckpoint_db;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 0 bytes
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (0);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 0;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 1;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (2);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 2;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (3);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 3;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (4);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 4;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (5);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 5;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (6);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 6;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (7);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 7;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (8);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 8;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (9);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 9;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 10;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (11);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 11;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (12);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 12;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (13);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 13;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (14);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 14;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (15);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 15;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (16);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 16;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (17);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 17;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (18);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 18;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (19);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM autocheckpoint_db.delete_tbl WHERE x = 19;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size != '0 bytes' FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 1
+
+# This INSERT triggers auto checkpoint (since entry count currently >= 100)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO autocheckpoint_db.tbl VALUES (9999);
+
+# WAL should be 0 after checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_size FROM pragma_database_size() WHERE database_name = 'autocheckpoint_db';
+# ----
+# 0 bytes
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM autocheckpoint_db.tbl;
+# ----
+# 21
+
+# TODO: unsupported feature
+# statement ok
+# DETACH autocheckpoint_db;
+
+#
+# Part 2: Verify entry count via WAL replay metrics
+#
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE entry_count_db.tbl(x INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE entry_count_db.delete_tbl(x INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.delete_tbl SELECT * FROM range(0, 10000);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT entry_count_db;
+
+# Run 20 transactions with INSERT + DELETE (same as autocheckpoint test)
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (0);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 0;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (1);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 1;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (2);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 2;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (3);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 3;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (4);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 4;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (5);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 5;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (6);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 6;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (7);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 7;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (8);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 8;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (9);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 9;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (10);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 10;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (11);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 11;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (12);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 12;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (13);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 13;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (14);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 14;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (15);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 15;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (16);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 16;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (17);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 17;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (18);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 18;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+# TODO: unsupported feature
+# statement ok
+# BEGIN TRANSACTION;
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO entry_count_db.tbl VALUES (19);
+
+# TODO: unsupported feature
+# statement ok
+# DELETE FROM entry_count_db.delete_tbl WHERE x = 19;
+
+# TODO: unsupported feature
+# statement ok
+# COMMIT;
+
+
+# Detach and re-attach with profiling to count WAL replay entries
+
+# TODO: unsupported feature
+# statement ok
+# DETACH entry_count_db;
+
+# TODO: unsupported feature
+# query I
+# SELECT wal_replay_entry_count FROM replay_metrics;
+# ----
+# 101
+
+# TODO: unsupported feature
+# statement ok
+# DETACH entry_count_db;

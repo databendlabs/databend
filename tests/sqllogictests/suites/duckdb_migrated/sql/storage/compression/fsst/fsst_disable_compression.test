@@ -1,0 +1,36 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# load the DB from disk
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT concat('longprefix', i) FROM range(0, 30000) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT DISTINCT compression FROM pragma_storage_info('test') where segment_type = 'VARCHAR';
+# ----
+# FSST
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test AS SELECT concat('longprefix', i) FROM range(0, 30000) t(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT BOOL_OR(compression ILIKE 'fsst%') FROM pragma_storage_info('test')
+# ----
+# 0

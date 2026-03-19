@@ -1,0 +1,223 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_empty
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_empty_large
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_empty (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_empty VALUES('');
+# INSERT INTO test_empty VALUES('A');
+# INSERT INTO test_empty VALUES(NULL);
+# INSERT INTO test_empty VALUES('B');
+# INSERT INTO test_empty VALUES('');
+# INSERT INTO test_empty VALUES('A');
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# select * from test_empty;
+# ----
+# (empty)
+# A
+# NULL
+# B
+# (empty)
+# A
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='fsst' FROM pragma_storage_info('test_empty') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_empty_large AS SELECT '' as a from range(0,10000) union all select 'A' union all select '';
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query III
+# select count(*), min(a[1]), max(a[1]) from test_empty_large limit 5;
+# ----
+# 10002	(empty)	A
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='fsst' FROM pragma_storage_info('test_empty_large') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_empty
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_empty_large
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_empty (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_empty VALUES('');
+# INSERT INTO test_empty VALUES('A');
+# INSERT INTO test_empty VALUES(NULL);
+# INSERT INTO test_empty VALUES('B');
+# INSERT INTO test_empty VALUES('');
+# INSERT INTO test_empty VALUES('A');
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# select * from test_empty;
+# ----
+# (empty)
+# A
+# NULL
+# B
+# (empty)
+# A
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dictionary' FROM pragma_storage_info('test_empty') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_empty_large AS SELECT '' as a from range(0,10000) union all select 'A' union all select '';
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query III
+# select count(*), min(a[1]), max(a[1]) from test_empty_large limit 5;
+# ----
+# 10002	(empty)	A
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dictionary' FROM pragma_storage_info('test_empty_large') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_empty
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_empty_large
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v1
+
+onlyif compression=dict_fsst
+
+# TODO: unsupported feature
+# statement ok
+# USE db_v13
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_empty (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_empty VALUES('');
+# INSERT INTO test_empty VALUES('A');
+# INSERT INTO test_empty VALUES(NULL);
+# INSERT INTO test_empty VALUES('B');
+# INSERT INTO test_empty VALUES('');
+# INSERT INTO test_empty VALUES('A');
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# select * from test_empty;
+# ----
+# (empty)
+# A
+# NULL
+# B
+# (empty)
+# A
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test_empty') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_empty_large AS SELECT '' as a from range(0,10000) union all select 'A' union all select '';
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query III
+# select count(*), min(a[1]), max(a[1]) from test_empty_large limit 5;
+# ----
+# 10002	(empty)	A
+
+# TODO: unsupported feature
+# query I
+# SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test_empty_large') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_empty
+
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE test_empty_large

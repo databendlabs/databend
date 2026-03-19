@@ -1,0 +1,21 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test_dict
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test_dict (a VARCHAR);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test_dict SELECT i::VARCHAR FROM range(0, 2000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# CHECKPOINT
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+# ----
+# Dictionary

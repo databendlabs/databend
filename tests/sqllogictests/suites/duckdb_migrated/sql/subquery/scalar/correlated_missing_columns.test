@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# statement ok
+# CALL dbgen(sf=0);
+
+# verify that we can grab missing columns from either the correlated subquery or the outer (uncorrelated) subquery
+
+# TODO: unsupported feature
+# statement error
+# SELECT (SELECT l_linestat FROM orders) FROM lineitem
+
+# TODO: unsupported feature
+# statement error
+# SELECT (SELECT l_returnfla FROM orders) FROM lineitem
+
+# TODO: unsupported feature
+# statement error
+# SELECT (SELECT o_totalp FROM orders) FROM lineitem
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM lineitem WHERE (SELECT SUM(l_orderkey) > 0)
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM lineitem WHERE (SELECT SUM(o_orderke) FROM orders)
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM lineitem WHERE (SELECT SUM(o_orderke) OVER () FROM orders)
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM lineitem GROUP BY (SELECT SUM(o_orderke) OVER () FROM orders)
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM lineitem LIMIT (SELECT SUM(o_orderke) FROM orders LIMIT 1)

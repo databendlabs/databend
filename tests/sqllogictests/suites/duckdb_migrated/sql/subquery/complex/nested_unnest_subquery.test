@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS nested_lists
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE nested_lists(l INTEGER[][]);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO nested_lists VALUES (ARRAY[ARRAY[0], ARRAY[1]]), (ARRAY[ARRAY[2], ARRAY[NULL, 3]]), (ARRAY[ARRAY[4, 5], ARRAY[6, 7], ARRAY[], ARRAY[8]]), (NULL), (ARRAY[NULL]::INT[][]);
+
+# TODO: unsupported feature
+# query I
+# SELECT UNNEST(l) FROM nested_lists
+# ----
+# [0]
+# [1]
+# [2]
+# [NULL, 3]
+# [4, 5]
+# [6, 7]
+# []
+# [8]
+# NULL
+
+# TODO: unsupported feature
+# query II
+# SELECT l, (SELECT SUM(a) FROM (SELECT UNNEST(b) AS a FROM (SELECT UNNEST(l) AS b))) FROM nested_lists ORDER BY l
+# ----
+# NULL	NULL
+# [[0], [1]]	1
+# [[2], [NULL, 3]]	5
+# [[4, 5], [6, 7], [], [8]]	30
+# [NULL]	NULL

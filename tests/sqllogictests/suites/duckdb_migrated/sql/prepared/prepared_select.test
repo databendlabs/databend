@@ -1,0 +1,73 @@
+# select - from - where with subquery
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS SELECT ?::VARCHAR FROM (SELECT ?::INTEGER) tbl(i) WHERE i > ?::INTEGER
+
+# TODO: unsupported feature
+# query I
+# EXECUTE s1('hello', 2, 1)
+# ----
+# hello
+
+# select - from - where - groupby - having
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s2 AS
+# SELECT FIRST(?::VARCHAR)
+# FROM (VALUES (?::INTEGER)) tbl(i)
+# WHERE i > ?::INTEGER
+# GROUP BY i % ?::INTEGER
+# HAVING SUM(i)::VARCHAR <> ?::VARCHAR
+
+# TODO: unsupported feature
+# query I
+# EXECUTE s2('hello', 2, 1, 2, 'blabla')
+# ----
+# hello
+
+# TODO: unsupported feature
+# query I
+# EXECUTE s2('hello', 2, 1, 2, '2')
+# ----
+
+# union
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s3 AS
+# SELECT LENGTH(?::VARCHAR)
+# UNION ALL
+# SELECT ?::INTEGER
+# ORDER BY 1
+
+# TODO: unsupported feature
+# query I
+# EXECUTE s3('hello', 3)
+# ----
+# 3
+# 5
+
+# IN clause
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s4 AS SELECT ?::INTEGER IN (?::INTEGER, ?::INTEGER, ?::INTEGER)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE s4(1, 2, 3, 1)
+# ----
+# 1
+
+# IN clause with subquery
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s5 AS SELECT ?::INTEGER IN (SELECT i FROM (VALUES (?::INTEGER), (?::INTEGER), (?::INTEGER)) tbl(i))
+
+# TODO: unsupported feature
+# query I
+# EXECUTE s5(1, 2, 3, 1)
+# ----
+# 1

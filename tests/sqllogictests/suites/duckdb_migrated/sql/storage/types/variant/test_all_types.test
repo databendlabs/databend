@@ -1,0 +1,25 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS table_
+
+# union gets extracted to their individual values
+# We skip this because the comparison breaks when comparing SMALLINT vs VARCHAR
+# TODO: unsupported feature
+# statement ok
+# create table table_<all_types_columns> as select "<all_types_columns>"::VARIANT col from test_all_types()
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# select col = (select "<all_types_columns>"::VARIANT as "<all_types_columns>" from test_all_types() offset 0 limit 1) from table_<all_types_columns> t1 offset 0 limit 1
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# select col = (select "<all_types_columns>"::VARIANT as "<all_types_columns>" from test_all_types() offset 1 limit 1) from table_<all_types_columns> t1 offset 1 limit 1
+# ----
+# 1

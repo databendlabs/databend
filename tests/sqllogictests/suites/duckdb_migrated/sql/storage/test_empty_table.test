@@ -1,0 +1,37 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a INTEGER, b VARCHAR)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 0
+
+# Verify that the table exists after restarting the database.
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test VALUES (1, 2)
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM test
+# ----
+# 1

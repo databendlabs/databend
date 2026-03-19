@@ -1,0 +1,35 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS db.t
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH '{TEMP_DIR}/partial_manager.db' AS db (BLOCK_SIZE 16384);
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE db.t AS FROM read_csv('{DATA_DIR}/csv/rabo-anon.csv.gz', strict_mode=FALSE);
+
+# TODO: unsupported feature
+# statement ok
+# DETACH db;
+
+# TODO: unsupported feature
+# statement ok
+# ATTACH '{TEMP_DIR}/partial_manager.db' AS db;
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT("XXX XXX/XXX") FROM db.t WHERE "XXX XXX/XXX" IS NOT NULL;
+# ----
+# 3767
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(*) FROM db.t WHERE "XXX XXX/XXX" IS NULL;
+# ----
+# 5460
+
+# TODO: unsupported feature
+# statement ok
+# SELECT * FROM db.t;

@@ -1,0 +1,56 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE test (a BOOL);
+
+# 8 runs per Vector
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO test
+# SELECT
+#   CASE
+#     WHEN i % 1000 < 100 THEN true
+#     WHEN i % 1000 < 200 THEN false
+#     ELSE NULL
+#   END
+# FROM range(0, 10000) tbl(i);
+
+# TODO: unsupported feature
+# statement ok
+# checkpoint
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VALIDITY' and compression != 'Roaring';
+# ----
+
+# TODO: unsupported feature
+# query I
+# SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BOOL' and compression != 'Roaring';
+# ----
+
+# TODO: unsupported feature
+# query I
+# select count(*) from test WHERE a IS true;
+# ----
+# 1000
+
+# TODO: unsupported feature
+# query I
+# select count(*) from test WHERE a IS false;
+# ----
+# 1000
+
+# TODO: unsupported feature
+# query I
+# select count(*) from test WHERE a IS null;
+# ----
+# 8000
+
+# TODO: unsupported feature
+# statement ok
+# delete from test;

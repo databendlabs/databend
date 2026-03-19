@@ -1,0 +1,49 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS a
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE a (i TINYINT)
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO a VALUES (42)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s3 AS SELECT * FROM a WHERE i=$1
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s3(10000)
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s3(42)
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s3(84)
+
+# TODO: unsupported feature
+# statement ok
+# DEALLOCATE s3
+
+# can't run a query with a param without PREPARE
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM a WHERE i=$1
+
+# TODO: unsupported feature
+# statement error
+# SELECT * FROM a WHERE i=CAST($1 AS VARCHAR)
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE s1 AS SELECT to_years($1), CAST(list_value($1) AS BIGINT[]);
+
+# TODO: unsupported feature
+# statement ok
+# EXECUTE s1(1);

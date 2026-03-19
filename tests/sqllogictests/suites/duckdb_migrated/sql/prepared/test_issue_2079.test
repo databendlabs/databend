@@ -1,0 +1,61 @@
+# TODO: unsupported feature
+# statement ok
+# PREPARE v1 AS SELECT ? + 1.0 AS a
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v1(2.0)
+# ----
+# 3.0
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v2 AS SELECT ? * 2.0 AS a
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v2(2.0)
+# ----
+# 4.0
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v3 AS SELECT ? = 2.0 AS a
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v3(2.0)
+# ----
+# True
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v4 AS SELECT 2.0 IN (1.0, 1.5, ?)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v4(2.0)
+# ----
+# True
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v4(2.5)
+# ----
+# False
+
+# TODO: unsupported feature
+# statement ok
+# PREPARE v5 AS SELECT ? IN (1.0, 1.5, 2.0)
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v5(2.0)
+# ----
+# True
+
+# TODO: unsupported feature
+# query I
+# EXECUTE v5(2.5)
+# ----
+# False

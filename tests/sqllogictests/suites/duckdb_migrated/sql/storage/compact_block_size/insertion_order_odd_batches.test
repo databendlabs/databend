@@ -1,0 +1,70 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# This test defaults to other counts for smaller block sizes.
+# TODO: unsupported feature
+# query I
+# CREATE TABLE integers AS SELECT * FROM range(0, 100000) tbl(i);
+# ----
+# 100000
+
+# check the block count and median number of rows per row group
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(DISTINCT block_id) < 60 FROM pragma_storage_info('integers');
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT MEDIAN(count) FROM pragma_storage_info('integers');
+# ----
+# 2047
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers_parquet LIMIT 5
+# ----
+# 0
+# 1
+# 2
+# 3
+# 4
+
+# TODO: unsupported feature
+# query I
+# SELECT * FROM integers_parquet LIMIT 5 OFFSET 73654
+# ----
+# 73654
+# 73655
+# 73656
+# 73657
+# 73658
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(DISTINCT block_id) < 60 FROM pragma_storage_info('integers_parquet');
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet');
+# ----
+# 2047
+
+# verify that reading without preserving insertion order creates the same size table
+
+# TODO: unsupported feature
+# query I
+# SELECT COUNT(DISTINCT block_id) < 60 FROM pragma_storage_info('integers_parquet_no_order');
+# ----
+# 1
+
+# TODO: unsupported feature
+# query I
+# SELECT MEDIAN(count) FROM pragma_storage_info('integers_parquet_no_order');
+# ----
+# 2047

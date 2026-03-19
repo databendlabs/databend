@@ -1,0 +1,17 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS test
+
+# TODO: unsupported feature
+# statement ok
+# create table test as select 42 i
+
+# TODO: unsupported feature
+# statement ok
+# prepare q1 as SELECT cast(? AS VARCHAR) FROM test
+
+# TODO: unsupported feature
+# query T
+# execute q1('oops')
+# ----
+# oops

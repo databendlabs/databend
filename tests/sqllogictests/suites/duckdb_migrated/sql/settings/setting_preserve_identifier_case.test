@@ -1,0 +1,47 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS MYSCHEMA.INTEGERS
+
+# TODO: unsupported feature
+# query I
+# SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+# ----
+# 1
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA MYSCHEMA;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE MYSCHEMA.INTEGERS(I INTEGER);
+
+# TODO: unsupported feature
+# query III
+# SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+# ----
+# MYSCHEMA	INTEGERS	I
+
+# TODO: unsupported feature
+# statement ok
+# DROP SCHEMA MYSCHEMA CASCADE
+
+# TODO: unsupported feature
+# query I
+# SELECT value FROM duckdb_settings() WHERE name='preserve_identifier_case'
+# ----
+# 0
+
+# TODO: unsupported feature
+# statement ok
+# CREATE SCHEMA MYSCHEMA;
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE MYSCHEMA.INTEGERS(I INTEGER);
+
+# TODO: unsupported feature
+# query III
+# SELECT duckdb_tables.schema_name, duckdb_tables.table_name, column_name FROM duckdb_tables JOIN duckdb_columns USING (table_oid);
+# ----
+# myschema	integers	i

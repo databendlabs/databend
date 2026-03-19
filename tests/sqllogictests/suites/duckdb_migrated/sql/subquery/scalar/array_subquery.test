@@ -1,0 +1,107 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS integers
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE integers(i INTEGER);
+
+# TODO: unsupported feature
+# statement ok
+# INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# uncorrelated
+
+# TODO: unsupported feature
+# query II
+# SELECT i, ARRAY(
+# 	SELECT 42
+# ) top
+# FROM integers i1
+# ORDER BY i
+# ----
+# NULL	[42]
+# 1	[42]
+# 2	[42]
+# 3	[42]
+
+# single element
+
+# TODO: unsupported feature
+# query II
+# SELECT i, ARRAY(
+# 	SELECT i FROM integers WHERE i1.i=i
+# ) top
+# FROM integers i1
+# ORDER BY i
+# ----
+# NULL	[]
+# 1	[1]
+# 2	[2]
+# 3	[3]
+
+# multiple elements
+
+# TODO: unsupported feature
+# query II
+# SELECT i, ARRAY(
+# 	SELECT i FROM integers WHERE i>i1.i ORDER BY i ASC NULLS FIRST
+# ) top
+# FROM integers i1
+# ORDER BY i
+# ----
+# NULL	[]
+# 1	[2, 3]
+# 2	[3]
+# 3	[]
+
+# array with limit
+
+# TODO: unsupported feature
+# query II
+# SELECT i, ARRAY(
+# 	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3
+# ) top
+# FROM integers
+# ORDER BY i
+# ----
+# NULL	[]
+# 1	[1, 1, 1]
+# 2	[2, 2, 2]
+# 3	[3, 3, 3]
+
+# array with limit and offset
+
+# TODO: unsupported feature
+# query II
+# SELECT i, ARRAY(
+# 	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3 OFFSET 3
+# ) top
+# FROM integers
+# ORDER BY i
+# ----
+# NULL	[]
+# 1	[1, 1, 1]
+# 2	[2, 2, 2]
+# 3	[3, 3, 3]
+
+# offset on the edge
+
+# TODO: unsupported feature
+# query II
+# SELECT i, ARRAY(
+# 	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3 OFFSET 62
+# ) top
+# FROM integers
+# ORDER BY i
+# ----
+# NULL	[]
+# 1	[1, 1]
+# 2	[2, 2]
+# 3	[3, 3]
+
+# should only allow one column in array subquery
+
+# TODO: unsupported feature
+# statement error
+# select array(select 1,2)

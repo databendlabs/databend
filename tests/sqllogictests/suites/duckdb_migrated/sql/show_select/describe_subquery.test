@@ -1,0 +1,48 @@
+# TODO: unsupported feature
+# statement ok
+# DROP TABLE IF EXISTS t
+
+# TODO: unsupported feature
+# query I
+# SELECT column_name FROM (DESCRIBE SELECT 42 AS a)
+# ----
+# a
+
+# TODO: unsupported feature
+# query I
+# SELECT t.column_name FROM (DESCRIBE SELECT 42 AS a) t
+# ----
+# a
+
+# TODO: unsupported feature
+# statement ok
+# (DESCRIBE SELECT 42 AS a)
+
+# TODO: unsupported feature
+# statement ok
+# CREATE TABLE t AS SELECT 42 AS a
+
+# TODO: unsupported feature
+# query I
+# SELECT t.column_name FROM (DESCRIBE t) t
+# ----
+# a
+
+# TODO: unsupported feature
+# statement ok
+# FROM (SHOW databases) t
+
+# TODO: unsupported feature
+# query I
+# SELECT column_name FROM (DESCRIBE ( DESCRIBE SELECT * FROM (SELECT 32 as a)));
+# ----
+# column_name
+# column_type
+# null
+# key
+# default
+# extra
+
+# TODO: unsupported feature
+# statement ok
+# (DESCRIBE (values(42))) UNION ALL (DESCRIBE (values(42)));
