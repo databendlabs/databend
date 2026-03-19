@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -40,6 +41,8 @@ use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::rcte_hooks::RcteHookRegistry;
+use databend_storages_common_blocks::memory::IN_MEMORY_R_CTE_DATA;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -104,6 +107,48 @@ async fn run_query_two_u64(ctx: Arc<QueryContext>, sql: &str) -> Result<(u64, u6
     let stream = executor.execute(ctx).await?;
     let blocks: Vec<DataBlock> = stream.try_collect().await?;
     Ok(extract_two_u64(blocks))
+}
+
+async fn create_internal_recursive_cte_memory_table(
+    ctx: Arc<QueryContext>,
+    database: &str,
+    table_name: &str,
+) -> Result<u64> {
+    let schema = TableSchemaRefExt::create(vec![TableField::new(
+        "a",
+        infer_schema_type(&DataType::Number(NumberDataType::Int32))?,
+    )]);
+
+    let mut options = BTreeMap::new();
+    options.insert(OPT_KEY_RECURSIVE_CTE.to_string(), "1".to_string());
+
+    let create_table_plan = CreateTablePlan {
+        schema,
+        create_option: CreateOption::Create,
+        tenant: Tenant {
+            tenant: ctx.get_tenant().tenant,
+        },
+        catalog: ctx.get_current_catalog(),
+        database: database.to_string(),
+        table: table_name.to_string(),
+        engine: Engine::Memory,
+        engine_options: Default::default(),
+        table_properties: Default::default(),
+        table_partition: None,
+        storage_params: None,
+        options,
+        field_comments: vec![],
+        cluster_key: None,
+        as_select: None,
+        table_indexes: None,
+        table_constraints: None,
+        attached_columns: None,
+    };
+    let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+    interpreter.execute2().await?;
+
+    let table = ctx.get_table(CATALOG_DEFAULT, database, table_name).await?;
+    Ok(table.get_id())
 }
 
 /// Deterministically reproduce wrong results when recursive CTE internal table names are not
@@ -340,6 +385,196 @@ fn recursive_cte_issue_19498_stress_repro() -> anyhow::Result<()> {
                     Ok::<(usize, (u64, u64)), ErrorCode>((launched, got))
                 }));
             }
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn recursive_cte_runtime_id_shared_across_child_contexts() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let ctx = fixture.new_query_ctx().await?;
+
+        let parent_runtime_id = ctx.get_or_create_logical_recursive_cte_runtime_id(7);
+        let child_ctx = QueryContext::create_from(ctx.as_ref());
+        let child_runtime_id = child_ctx.get_or_create_logical_recursive_cte_runtime_id(7);
+        let different_runtime_id = child_ctx.get_or_create_logical_recursive_cte_runtime_id(8);
+
+        if parent_runtime_id != child_runtime_id {
+            return Err(ErrorCode::Internal(format!(
+                "expected shared runtime id across query contexts, parent={parent_runtime_id}, child={child_runtime_id}"
+            )));
+        }
+
+        if parent_runtime_id == different_runtime_id {
+            return Err(ErrorCode::Internal(format!(
+                "expected different logical recursive cte ids to map to different runtime ids, got {different_runtime_id}"
+            )));
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn recursive_cte_temp_table_cleanup_drops_catalog_and_in_memory_state() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("create database if not exists {db}"))
+            .await?;
+
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.set_current_database(db.clone()).await?;
+
+        let table_name = "rcte_cleanup_catalog_drop";
+        let table_id =
+            create_internal_recursive_cte_memory_table(ctx.clone(), &db, table_name).await?;
+        let key = InMemoryDataKey {
+            temp_prefix: None,
+            table_id,
+        };
+        assert!(IN_MEMORY_R_CTE_DATA.read().contains_key(&key));
+
+        let catalog = ctx.get_current_catalog();
+        ctx.add_recursive_cte_temp_table(&catalog, &db, table_name);
+        ctx.drop_recursive_cte_temp_table().await?;
+
+        let check_ctx = fixture.new_query_ctx().await?;
+        check_ctx.set_current_database(db.clone()).await?;
+        if check_ctx
+            .get_table(CATALOG_DEFAULT, &db, table_name)
+            .await
+            .is_ok()
+        {
+            return Err(ErrorCode::Internal(
+                "expected recursive CTE cleanup to drop catalog table".to_string(),
+            ));
+        }
+
+        if IN_MEMORY_R_CTE_DATA.read().contains_key(&key) {
+            return Err(ErrorCode::Internal(
+                "expected recursive CTE cleanup to drop in-memory recursive state".to_string(),
+            ));
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn recursive_cte_reuse_with_multiple_correlated_subqueries_regression() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("create database if not exists {db}"))
+            .await?;
+
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.set_current_database(db).await?;
+        ctx.get_settings().set_max_threads(8)?;
+
+        let sql = "WITH RECURSIVE digits(z, lp) AS (
+                     SELECT '1', 1
+                     UNION ALL SELECT CAST(lp + 1 AS TEXT), lp + 1 FROM digits WHERE lp < 3
+                   ),
+                   x(s, ind) AS (
+                     SELECT '..', 1
+                     UNION ALL
+                     SELECT
+                       substr(s, 1, ind - 1) || z || substr(s, ind + 1),
+                       instr(substr(s, 1, ind - 1) || z || substr(s, ind + 1), '.')
+                     FROM x, digits AS z
+                     WHERE ind > 0
+                       AND NOT EXISTS (
+                         SELECT 1 FROM digits AS lp
+                         WHERE z.z = '1' AND lp.lp = 2
+                       )
+                       AND NOT EXISTS (
+                         SELECT 1 FROM digits AS lp2
+                         WHERE z.z = '2' AND lp2.lp = 3
+                       )
+                   )
+                   SELECT count(*) FROM x";
+
+        let got = run_query_single_u64(ctx, sql).await?;
+        if got != 3 {
+            return Err(ErrorCode::Internal(format!(
+                "expected 3 rows from multi-correlated recursive cte reuse query, got {got}"
+            )));
+        }
+
+        Ok::<(), ErrorCode>(())
+    })?;
+
+    Ok(())
+}
+
+#[test]
+fn recursive_cte_reuse_in_correlated_subquery_regression() -> anyhow::Result<()> {
+    let outer_rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+
+    outer_rt.block_on(async {
+        let fixture = Arc::new(TestFixture::setup().await?);
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("create database if not exists {db}"))
+            .await?;
+
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.set_current_database(db).await?;
+        ctx.get_settings().set_max_threads(8)?;
+
+        let sql = "WITH RECURSIVE digits(z, lp) AS (
+                     SELECT '1', 1
+                     UNION ALL SELECT CAST(lp + 1 AS TEXT), lp + 1 FROM digits WHERE lp < 3
+                   ),
+                   x(s, ind) AS (
+                     SELECT '..', 1
+                     UNION ALL
+                     SELECT
+                       substr(s, 1, ind - 1) || z || substr(s, ind + 1),
+                       instr(substr(s, 1, ind - 1) || z || substr(s, ind + 1), '.')
+                     FROM x, digits AS z
+                     WHERE ind > 0
+                       AND NOT EXISTS (
+                         SELECT 1 FROM digits AS lp
+                         WHERE z.z = '1' AND lp.lp = 2
+                       )
+                   )
+                   SELECT count(*) FROM x";
+
+        let got = run_query_single_u64(ctx, sql).await?;
+        if got != 7 {
+            return Err(ErrorCode::Internal(format!(
+                "expected 7 rows from recursive cte reuse query, got {got}"
+            )));
         }
 
         Ok::<(), ErrorCode>(())

@@ -64,7 +64,6 @@ default-members = [
 # Workspace dependencies
 [workspace.dependencies]
 databend-common-ast = { path = "src/query/ast" }
-databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-base = { path = "src/common/base" }
 databend-common-binaries = { path = "src/binaries" }
 databend-common-building = { path = "src/common/building" }
@@ -104,6 +103,7 @@ databend-common-protos = { path = "src/meta/protos" }
 databend-common-script = { path = "src/query/script" }
 databend-common-settings = { path = "src/query/settings" }
 databend-common-sql = { path = "src/query/sql" }
+databend-common-sql-test-support = { path = "src/query/sql/test-support" }
 databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
 databend-common-statistics = { path = "src/common/statistics" }
 databend-common-storage = { path = "src/common/storage" }
@@ -318,7 +318,7 @@ jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.5"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
 lance-core = "1.0.4"
-lance-encoding = "1.0.4"
+lance-encoding = { version = "1.0.4", features = ["protoc"] }
 lance-file = "1.0.4"
 lance-io = { version = "1.0.4", default-features = false }
 lance-table = "1.0.4"

@@ -21,7 +21,7 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::*;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::test_utils;
+use databend_common_sql_test_support::parse_raw_expr;
 use goldenfile::Mint;
 use jsonb::OwnedJsonb;
 
@@ -235,7 +235,7 @@ fn test_find_leveled_eq_filters() {
     ];
 
     for (text, expected_catalog, expected_database, expected_table) in cases {
-        let raw_expr = test_utils::parse_raw_expr(text, &cols);
+        let raw_expr = parse_raw_expr(text, &cols, &BUILTIN_FUNCTIONS);
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let expr = type_check::rewrite_function_to_cast(expr);

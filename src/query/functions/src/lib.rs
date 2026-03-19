@@ -27,7 +27,6 @@ pub mod aggregates;
 mod cast_rules;
 pub mod scalars;
 pub mod srfs;
-pub mod test_utils;
 
 pub fn is_builtin_function(name: &str) -> bool {
     let name = Ascii::new(name);
@@ -110,6 +109,13 @@ pub const GENERAL_SEARCH_FUNCTIONS: [Ascii<&str>; 3] = [
     Ascii::new("match"),
     Ascii::new("query"),
     Ascii::new("score"),
+];
+
+pub const GENERAL_SPATIAL_FUNCTIONS: [Ascii<&str>; 4] = [
+    Ascii::new("st_contains"),
+    Ascii::new("st_intersects"),
+    Ascii::new("st_within"),
+    Ascii::new("st_equals"),
 ];
 
 fn builtin_functions() -> FunctionRegistry {

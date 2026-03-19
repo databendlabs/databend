@@ -44,6 +44,8 @@ pub use segment_reader::RowOrientedSegmentReader;
 pub use segment_reader::SegmentReader;
 pub use segment_reader::read_column_oriented_segment;
 pub use snapshot_history_reader::SnapshotHistoryReader;
+pub use spatial_index::SpatialIndexReadResult;
+pub use spatial_index::SpatialIndexReader;
 pub use spatial_index::load_spatial_index_files;
 pub use spatial_index::load_spatial_index_meta;
 pub use statistics::*;

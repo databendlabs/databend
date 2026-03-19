@@ -28,6 +28,7 @@ pub struct PhysicalRuntimeFilters {
 /// A single runtime filter is constructed once from the build side and then
 /// pushed down to multiple table scans on the probe side. This is particularly
 /// useful when join columns form equivalence classes (e.g., t1.c1 = t2.c1 = t3.c1),
+/// or spatial functions (e.g., st_within(t1.location, t2.location) ),
 /// allowing one filter to be applied to multiple tables.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PhysicalRuntimeFilter {
@@ -52,4 +53,7 @@ pub struct PhysicalRuntimeFilter {
 
     /// Enable min-max filter for this runtime filter
     pub enable_min_max_runtime_filter: bool,
+
+    /// Is a spatial function runtime filter
+    pub is_spatial: bool,
 }

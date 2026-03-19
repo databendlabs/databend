@@ -1,6 +1,11 @@
 # Optimizer Test Data
 
-This directory contains test data for query optimizer tests. The tests are structured as follows:
+This directory contains test data for query optimizer tests. It is now the canonical shared data set for both test runners:
+
+- `src/query/sql/tests/it/planner.rs` runs the lightweight SQL-side replay.
+- `src/query/service/tests/it/sql/planner/optimizer/optimizer_test.rs` runs the service-side replay, including physical plans.
+
+The tests are structured as follows:
 
 ## Directory Structure
 
@@ -87,13 +92,21 @@ Test cases can reference these files using the `statistics_file` field. The fram
 
 ## Table Definitions
 
-Table definitions are stored in SQL files in the `tables/` directory. Each file contains `CREATE TABLE` statements. The framework will execute these SQL statements to set up the test environment. If a table already exists, the error will be ignored.
+Table definitions are stored in SQL files in the `tables/` directory. Each file contains `CREATE TABLE` statements.
+
+- The lightweight runner parses and registers these SQL statements into its in-memory fixture.
+- The service runner executes the same SQL statements to set up the test environment. If a table already exists, the error will be ignored.
 
 ## Running Tests
 
-### Run All Tests
+### Run All Service-side Tests
 ```bash
 cargo test --package databend-query --test it -- sql::planner::optimizer::optimizer_test::test_optimizer --exact --nocapture
+```
+
+### Run All Lightweight Shared Tests
+```bash
+cargo test --package databend-common-sql --test it -- planner::test_lite_replay_service_optimizer_cases --exact --nocapture
 ```
 
 ### Run Tests from Specific Subdirectory
@@ -103,10 +116,10 @@ TEST_SUBDIR=tpcds cargo test --package databend-query --test it -- sql::planner:
 
 ## Generated Result Files
 
-Each test case generates three result files in the corresponding subdirectory under `results/`:
+Each test case generates up to three result files in the corresponding subdirectory under `results/`:
 - `{test_name}_raw.txt` - The raw plan before optimization
 - `{test_name}_optimized.txt` - The optimized logical plan
-- `{test_name}_physical.txt` - The physical execution plan
+- `{test_name}_physical.txt` - The physical execution plan when the runner supports physical planning
 
 ## Adding New Tests
 

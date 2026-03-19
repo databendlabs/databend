@@ -55,11 +55,13 @@ tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
+unicase = { workspace = true }
 xorfilter-rs = { workspace = true }
 zerocopy = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }
+databend-common-sql-test-support = { workspace = true }
 
 anyhow = { workspace = true }
 divan = { workspace = true }

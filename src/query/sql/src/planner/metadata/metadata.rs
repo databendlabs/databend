@@ -83,6 +83,7 @@ pub struct Metadata {
     /// Mappings from base column index to scan id.
     base_column_scan_id: HashMap<Symbol, usize>,
     next_runtime_filter_id: usize,
+    next_logical_recursive_cte_id: u32,
 }
 
 impl Metadata {
@@ -213,6 +214,12 @@ impl Metadata {
 
     pub fn row_id_indexes(&self) -> Vec<Symbol> {
         self.table_row_id_index.values().copied().collect()
+    }
+
+    pub fn allocate_logical_recursive_cte_id(&mut self) -> u32 {
+        let logical_recursive_cte_id = self.next_logical_recursive_cte_id;
+        self.next_logical_recursive_cte_id += 1;
+        logical_recursive_cte_id
     }
 
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {

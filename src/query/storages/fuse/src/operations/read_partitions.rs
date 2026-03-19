@@ -1059,6 +1059,7 @@ impl FuseTable {
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
         let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
+        let mut spatial_stats = HashMap::new();
 
         for column_id in meta.col_metas.keys() {
             // ignore all deleted field
@@ -1075,6 +1076,13 @@ impl FuseTable {
 
             if let Some(stat) = meta.col_stats.get(column_id) {
                 columns_stats.insert(*column_id, stat.clone());
+            }
+            if let Some(stats) = meta
+                .spatial_stats
+                .as_ref()
+                .and_then(|stats| stats.get(column_id))
+            {
+                spatial_stats.insert(*column_id, stats.clone());
             }
         }
 
@@ -1093,9 +1101,16 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
+            meta.spatial_index_location.clone(),
+            meta.spatial_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stats),
+            if spatial_stats.is_empty() {
+                None
+            } else {
+                Some(spatial_stats)
+            },
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
@@ -1112,6 +1127,7 @@ impl FuseTable {
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
         let mut columns_stat = HashMap::with_capacity(projection.len());
+        let mut spatial_stats = HashMap::new();
 
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         for column in &columns {
@@ -1122,6 +1138,13 @@ impl FuseTable {
                 }
                 if let Some(column_stat) = meta.col_stats.get(column_id) {
                     columns_stat.insert(*column_id, column_stat.clone());
+                }
+                if let Some(stats) = meta
+                    .spatial_stats
+                    .as_ref()
+                    .and_then(|stats| stats.get(column_id))
+                {
+                    spatial_stats.insert(*column_id, stats.clone());
                 }
             }
         }
@@ -1143,9 +1166,16 @@ impl FuseTable {
             location,
             meta.bloom_filter_index_location.clone(),
             meta.bloom_filter_index_size,
+            meta.spatial_index_location.clone(),
+            meta.spatial_index_size.unwrap_or(0),
             rows_count,
             columns_meta,
             Some(columns_stat),
+            if spatial_stats.is_empty() {
+                None
+            } else {
+                Some(spatial_stats)
+            },
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),

@@ -26,11 +26,14 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
+use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_SPATIAL_FUNCTIONS;
 use databend_common_io::ewkb_to_geo;
 use geo::BoundingRect;
 use geo::Rect;
 use geozero::wkb::Ewkb;
+use unicase::Ascii;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpatialOp {
@@ -43,7 +46,9 @@ pub enum SpatialOp {
 #[derive(Debug, Clone)]
 pub struct SpatialPredicate {
     pub column_id: ColumnId,
-    pub query_rect: Rect<f64>,
+    // if `query_rect` is None, it is an empty rect, like `POINT EMPTY`.
+    // Empty rect will not intersect with any other rect.
+    pub query_rect: Option<Rect<f64>>,
     pub query_srid: i32,
     pub op: SpatialOp,
     pub placeholder: String,
@@ -63,7 +68,7 @@ pub fn collect_spatial_predicates(
 ) -> Result<Option<SpatialPredicateResult>> {
     let mut used_names = expr.column_refs().into_keys().collect::<HashSet<_>>();
     let mut visitor = SpatialPredicateVisitor::new(schema, spatial_index_columns, &mut used_names);
-    let new_expr = match databend_common_expression::visit_expr(expr, &mut visitor)? {
+    let new_expr = match visit_expr(expr, &mut visitor)? {
         Some(expr) => expr,
         None => expr.clone(),
     };
@@ -123,16 +128,6 @@ impl<'a> SpatialPredicateVisitor<'a> {
                     None
                 }
             }
-            Expr::Cast(cast) => match cast.expr.as_ref() {
-                Expr::ColumnRef(ColumnRef { id, .. }) => {
-                    if is_spatial_type(&cast.dest_type) {
-                        Some(id.clone())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            },
             _ => None,
         }
     }
@@ -149,18 +144,18 @@ impl<'a> SpatialPredicateVisitor<'a> {
         }
     }
 
-    fn scalar_to_query(scalar: &Scalar) -> Option<(Rect<f64>, i32)> {
+    fn scalar_to_query(scalar: &Scalar) -> Option<(Option<Rect<f64>>, i32)> {
         match scalar {
             Scalar::Geometry(buffer) => {
                 let mut ewkb = Ewkb(buffer.as_slice());
                 let (geom, srid) = ewkb_to_geo(&mut ewkb).ok()?;
-                let rect = geom.bounding_rect()?;
+                let rect = geom.bounding_rect();
                 Some((rect, srid.unwrap_or(0)))
             }
             Scalar::Geography(geo) => {
                 let mut ewkb = Ewkb(geo.0.as_slice());
                 let (geom, _) = ewkb_to_geo(&mut ewkb).ok()?;
-                let rect = geom.bounding_rect()?;
+                let rect = geom.bounding_rect();
                 Some((rect, 4326))
             }
             _ => None,
@@ -182,11 +177,8 @@ impl ExprVisitor<String> for SpatialPredicateVisitor<'_> {
 
         let func_name = id.name();
         let func_name = func_name.as_ref();
-        let spatial_fn = matches!(
-            func_name,
-            "st_contains" | "st_intersects" | "st_within" | "st_equals"
-        );
-        if !spatial_fn || args.len() != 2 {
+        let uni_case_func_name = Ascii::new(func_name);
+        if !GENERAL_SPATIAL_FUNCTIONS.contains(&uni_case_func_name) || args.len() != 2 {
             return Self::visit_function_call(call, self);
         }
 

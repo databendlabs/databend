@@ -29,12 +29,23 @@ fn one_null_column() -> Vec<(&'static str, Column)> {
     )]
 }
 
+fn filter_short_circuit_columns() -> Vec<(&'static str, Column)> {
+    vec![
+        ("a", UInt8Type::from_data(vec![0_u8, 1, 2])),
+        (
+            "b",
+            StringType::from_data(vec!["not-bool", "not-bool", "not-bool"]),
+        ),
+    ]
+}
+
 #[test]
 fn test_boolean() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("boolean.txt").unwrap();
 
     test_and(file);
+    test_filter_bool(file);
     test_not(file);
     test_or(file);
     test_xor(file);
@@ -87,6 +98,32 @@ fn test_not(file: &mut impl Write) {
             vec![true, true, false].into(),
         ),
     )]);
+}
+
+fn test_filter_bool(file: &mut impl Write) {
+    run_ast(file, "and_filters(null, true)", &[]);
+    run_ast(
+        file,
+        "and_filters((a > 1), true)",
+        one_null_column().as_slice(),
+    );
+    run_ast(
+        file,
+        "and_filters((a > 10), CAST(b AS BOOLEAN))",
+        filter_short_circuit_columns().as_slice(),
+    );
+
+    run_ast(file, "or_filters(null, true)", &[]);
+    run_ast(
+        file,
+        "or_filters((a > 1), false)",
+        one_null_column().as_slice(),
+    );
+    run_ast(
+        file,
+        "or_filters((a < 10), CAST(b AS BOOLEAN))",
+        filter_short_circuit_columns().as_slice(),
+    );
 }
 
 fn test_or(file: &mut impl Write) {

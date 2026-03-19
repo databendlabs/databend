@@ -109,6 +109,7 @@ pub fn create_table_bound_column_ref(
         visibility: Visibility::Visible,
         virtual_expr: None,
         is_srf: false,
+        column_name_lower: None,
     };
     ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
 }

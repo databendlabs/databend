@@ -37,7 +37,7 @@ enum-as-inner = { workspace = true }
 futures = { workspace = true }
 jsonb = { workspace = true }
 lance-core = { workspace = true }
-lance-encoding = { workspace = true, features = ["protoc"] }
+lance-encoding = { workspace = true }
 lance-file = { workspace = true, features = ["protoc"] }
 lance-io = { workspace = true }
 lance-table = { workspace = true, features = ["protoc"] }

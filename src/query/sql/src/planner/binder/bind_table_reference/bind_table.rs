@@ -205,6 +205,7 @@ impl Binder {
                     table_index,
                     change_type,
                     sample,
+                    true,
                 )?;
 
                 if let Some(alias) = alias {
@@ -325,6 +326,7 @@ impl Binder {
                     table_index,
                     None,
                     sample,
+                    true,
                 )?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;

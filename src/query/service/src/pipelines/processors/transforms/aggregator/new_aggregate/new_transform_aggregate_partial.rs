@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::ProbeState;
@@ -62,10 +63,12 @@ pub struct Spiller {
 impl Spiller {
     pub fn create(
         ctx: Arc<QueryContext>,
+        schema: DataSchemaRef,
         partition_streams: SharedPartitionStream,
         bucket_num: usize,
     ) -> Result<Self> {
-        let spiller = NewAggregateSpiller::try_create(ctx.clone(), bucket_num, partition_streams)?;
+        let spiller =
+            NewAggregateSpiller::try_create(ctx.clone(), bucket_num, schema, partition_streams)?;
         Ok(Self {
             inner: spiller,
             bucket_num,
@@ -140,7 +143,8 @@ impl NewTransformPartialAggregate {
         bucket_num: usize,
         is_row_shuffle: bool,
     ) -> Result<Box<dyn Processor>> {
-        let spillers = Spiller::create(ctx.clone(), partition_stream, bucket_num)?;
+        let spill_schema = params.spill_schema();
+        let spillers = Spiller::create(ctx.clone(), spill_schema, partition_stream, bucket_num)?;
 
         let arena = Arc::new(Bump::new());
 

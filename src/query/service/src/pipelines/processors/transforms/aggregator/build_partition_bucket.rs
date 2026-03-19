@@ -51,11 +51,12 @@ fn build_partition_bucket_experimental(
     let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
     match shuffle_mode {
         AggregateShuffleMode::Row => {
+            let schema = params.spill_schema();
             pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
                     input,
                     output,
-                    NewAggregateSpillReader::try_create(ctx.clone())?,
+                    NewAggregateSpillReader::try_create(ctx.clone(), schema.clone())?,
                 )))
             })?;
 

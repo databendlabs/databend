@@ -36,6 +36,7 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_io::Axis;
 use databend_common_io::Extremum;
+use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use databend_common_io::geo_to_ewkt;
@@ -1766,7 +1767,7 @@ fn st_transform_impl(
         .map_err(Box::new(ErrorCode::from))
         .and_then(|mut geom| {
             // EPSG:4326 WGS84 in proj4rs is in radians, not degrees.
-            if from_srid == 4326 {
+            if from_srid == GEOGRAPHY_SRID {
                 geom.to_radians_in_place();
             }
             if transform(&from_proj, &to_proj, &mut geom).is_err() {
@@ -1775,7 +1776,7 @@ fn st_transform_impl(
                     from_srid, to_srid
                 )));
             }
-            if to_srid == 4326 {
+            if to_srid == GEOGRAPHY_SRID {
                 geom.to_degrees_in_place();
             }
             let round_geom = round_geometry_coordinates(geom);
