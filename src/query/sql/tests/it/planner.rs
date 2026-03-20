@@ -22,9 +22,8 @@ use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
 
-use self::fixture::LiteTableContext;
-
 mod fixture;
+pub(crate) use self::fixture::LiteTableContext;
 
 struct LiteRunner(Arc<LiteTableContext>);
 
@@ -85,6 +84,30 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         optimizer_skip_list: &[],
         default_node_num: 2,
     },
+    LiteReplayCaseSpec {
+        name: "eager_q0",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "eager_q1",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "eager_q2",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "eager_q3",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
 ];
 
 impl TestCaseRunner for LiteRunner {
@@ -100,7 +123,7 @@ impl TestCaseRunner for LiteRunner {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
     let suite = TestSuite::new(
         TestSuite::optimizer_data_dir(),
