@@ -32,7 +32,7 @@ echo "CREATE TABLE test_tsv
 
 # do copy
 echo "SET GLOBAL input_read_buffer_size = 111;" | $BENDSQL_CLIENT_CONNECT
-COPY_SQL="copy into test_tsv from 's3://testbucket/tmp/multi_tsv/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900/') PATTERN = '.*' FILE_FORMAT = (type = TSV) force=true"
+COPY_SQL="copy into test_tsv from 's3://testbucket/tmp/multi_tsv/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900/') PATTERN = '.*' FILE_FORMAT = (type = TEXT) force=true"
 echo "${COPY_SQL}" |  $BENDSQL_CLIENT_CONNECT
 echo "SET GLOBAL input_read_buffer_size = 1048576;" | $BENDSQL_CLIENT_CONNECT
 

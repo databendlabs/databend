@@ -23,7 +23,7 @@ use databend_common_io::display_decimal_128_trimmed;
 use databend_common_io::display_decimal_256_trimmed;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 use geozero::ToWkt;
 use geozero::wkb::Ewkb;
 
@@ -33,14 +33,14 @@ use crate::field_encoder::write_tsv_escaped_string;
 
 pub enum StringFormatter {
     Csv { quote_char: u8 },
-    Tsv { record_delimiter: u8 },
+    Text { record_delimiter: u8 },
 }
 
 impl StringFormatter {
     fn write_string(&self, bytes: &[u8], buf: &mut Vec<u8>) {
         match self {
             StringFormatter::Csv { quote_char } => write_csv_string(bytes, buf, *quote_char),
-            StringFormatter::Tsv { record_delimiter } => {
+            StringFormatter::Text { record_delimiter } => {
                 write_tsv_escaped_string(bytes, buf, *record_delimiter)
             }
         }
@@ -87,11 +87,11 @@ impl FieldEncoderCSV {
         }
     }
 
-    pub fn create_tsv(params: &TsvFileFormatParams, settings: OutputFormatSettings) -> Self {
+    pub fn create_tsv(params: &TextFileFormatParams, settings: OutputFormatSettings) -> Self {
         Self {
             simple: FieldEncoderValues::create_for_tsv(params, settings.clone()),
             nested: FieldEncoderJSON::create(settings),
-            string_formatter: StringFormatter::Tsv {
+            string_formatter: StringFormatter::Text {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
             },
         }

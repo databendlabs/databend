@@ -144,10 +144,10 @@ impl Binder {
                 ));
             };
         }
-        if let FileFormatParams::Tsv(fmt) = &stage_info.file_format_params {
+        if let FileFormatParams::Text(fmt) = &stage_info.file_format_params {
             if fmt.field_delimiter.is_empty() {
                 return Err(ErrorCode::BadArguments(
-                    "It is not supported to unload TSV file when FIELD_DELIMITER is ''",
+                    "It is not supported to unload TEXT file when FIELD_DELIMITER is ''",
                 ));
             };
         }

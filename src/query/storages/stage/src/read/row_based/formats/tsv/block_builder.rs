@@ -25,10 +25,10 @@ use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
-use crate::read::row_based::formats::tsv::format::TsvInputFormat;
+use crate::read::row_based::formats::tsv::format::TextInputFormat;
 use crate::read::row_based::utils::get_decode_error_by_pos;
 
-pub struct TsvDecoder {
+pub struct TextDecoder {
     pub load_context: Arc<LoadContext>,
     pub field_decoder: SeparatedTextDecoder,
 
@@ -38,8 +38,8 @@ pub struct TsvDecoder {
     pub trim_cr: bool,
 }
 
-impl TsvDecoder {
-    pub fn create(fmt: TsvInputFormat, load_context: Arc<LoadContext>) -> Self {
+impl TextDecoder {
+    pub fn create(fmt: TextInputFormat, load_context: Arc<LoadContext>) -> Self {
         let field_decoder =
             SeparatedTextDecoder::create_tsv(&fmt.params, load_context.settings.clone());
         let field_delimiter = fmt.params.field_delimiter.as_bytes().first().copied();
@@ -188,7 +188,7 @@ impl TsvDecoder {
     }
 }
 
-impl RowDecoder for TsvDecoder {
+impl RowDecoder for TextDecoder {
     fn add(&self, state: &mut BlockBuilderState, batch: RowBatchWithPosition) -> Result<()> {
         let data = batch.data.into_nd_json().unwrap();
 

@@ -191,7 +191,7 @@ impl Table for InferSchemaTable {
         };
         let maybe_field_delimiter = match &file_format_params {
             FileFormatParams::Csv(fmt) => Some(("CSV", fmt.field_delimiter.as_str())),
-            FileFormatParams::Tsv(fmt) => Some(("TSV", fmt.field_delimiter.as_str())),
+            FileFormatParams::Text(fmt) => Some(("TEXT", fmt.field_delimiter.as_str())),
             _ => None,
         };
 
@@ -236,7 +236,7 @@ impl Table for InferSchemaTable {
         let info = InferSchemaPartInfo::from_part(&part)?;
 
         match info.file_format_params {
-            FileFormatParams::Csv(_) | FileFormatParams::Tsv(_) | FileFormatParams::NdJson(_) => {
+            FileFormatParams::Csv(_) | FileFormatParams::Text(_) | FileFormatParams::NdJson(_) => {
                 let partitions = info
                     .stage_file_infos
                     .iter()
@@ -310,7 +310,7 @@ impl Table for InferSchemaTable {
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "infer_schema is currently limited to format Parquet, CSV, TSV and NDJSON",
+                    "infer_schema is currently limited to format Parquet, CSV, TEXT and NDJSON",
                 ));
             }
         }
