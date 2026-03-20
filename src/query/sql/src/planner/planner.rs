@@ -51,8 +51,6 @@ use crate::NameResolutionContext;
 use crate::VariableNormalizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::optimize;
-use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
 use crate::plans::Plan;
 
@@ -291,22 +289,6 @@ impl Planner {
             )
             .set_sample_executor(self.query_executor.clone())
             .clone();
-
-        {
-            let mut agg_indices = metadata.read().agg_indices().clone();
-            let optimizer = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-                RuleID::NormalizeScalarFilter,
-                RuleID::FilterNulls,
-                RuleID::EliminateFilter,
-                RuleID::MergeFilter,
-            ]);
-            for indices in &mut agg_indices.values_mut() {
-                for index in indices {
-                    index.s_expr = optimizer.optimize_sync(&index.s_expr)?;
-                }
-            }
-            metadata.write().replace_agg_indices(agg_indices);
-        }
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateIndexStmt;
@@ -48,8 +49,8 @@ use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
+use parking_lot::RwLock;
 
-use crate::AggIndexPlan;
 use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
@@ -58,11 +59,13 @@ use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 use crate::Symbol;
+use crate::TableEntry;
 use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::build_agg_index_plan_for_table;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::SExprVisitor;
 use crate::optimizer::ir::VisitAction;
@@ -168,6 +171,7 @@ impl Binder {
         let catalog = self.ctx.get_current_catalog();
         let database = self.ctx.get_current_database();
         let tables = metadata.read().tables().to_vec();
+        let index_metadata = Arc::new(RwLock::new(metadata.read().clone()));
 
         for table_entry in tables {
             let table = table_entry.table();
@@ -188,24 +192,13 @@ impl Binder {
 
                 let mut s_exprs = Vec::with_capacity(indexes.len());
                 for (index_id, _, index_meta) in indexes {
-                    let tokens = tokenize_sql(&index_meta.query)?;
-                    let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                    let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                    new_bind_context.planning_agg_index = true;
-                    if let Statement::Query(query) = &stmt {
-                        let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;
-                        let s_expr = normalize_agg_index_s_expr(
-                            metadata,
-                            table_entry.index(),
-                            table_entry.database(),
-                            table_entry.name(),
-                            &s_expr,
-                        )?;
-                        s_exprs.push(AggIndexPlan {
-                            index_id,
-                            sql: index_meta.query.clone(),
-                            s_expr,
-                        });
+                    if let Some(agg_index_plan) = self.bind_agg_index_query_locally(
+                        &index_meta,
+                        &table_entry,
+                        index_id,
+                        index_metadata.clone(),
+                    )? {
+                        s_exprs.push(agg_index_plan);
                     }
                 }
                 agg_indexes.extend(s_exprs);
@@ -222,6 +215,59 @@ impl Binder {
         }
 
         Ok(())
+    }
+
+    fn bind_agg_index_query_locally(
+        &self,
+        index_meta: &IndexMeta,
+        table_entry: &TableEntry,
+        index_id: u64,
+        index_metadata: MetadataRef,
+    ) -> Result<Option<crate::AggIndexPlan>> {
+        let tokens = tokenize_sql(&index_meta.query)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let Statement::Query(query) = &stmt else {
+            return Ok(None);
+        };
+
+        let initial_table_count = index_metadata.read().tables().len();
+        index_metadata
+            .write()
+            .set_table_source_of_index(table_entry.index(), true);
+
+        let mut index_binder = Binder::new(
+            self.ctx.clone(),
+            self.catalogs.clone(),
+            self.name_resolution_ctx.clone(),
+            index_metadata,
+        )
+        .with_subquery_executor(self.subquery_executor.clone());
+        let mut index_bind_context = BindContext::new();
+        index_bind_context.planning_agg_index = true;
+        let (s_expr, _) = index_binder.bind_query(&mut index_bind_context, query)?;
+        if index_binder.metadata.read().tables().len() != initial_table_count {
+            return Err(ErrorCode::Internal(format!(
+                "aggregating index query introduced unexpected tables while binding `{}`",
+                index_meta.query
+            )));
+        }
+        let s_expr = normalize_agg_index_s_expr(
+            &index_binder.metadata,
+            table_entry.index(),
+            table_entry.database(),
+            table_entry.name(),
+            &s_expr,
+        )?;
+
+        Ok(Some(build_agg_index_plan_for_table(
+            self.ctx.clone(),
+            self.subquery_executor.clone(),
+            index_binder.metadata.clone(),
+            table_entry.index(),
+            index_id,
+            index_meta.query.clone(),
+            s_expr,
+        )?))
     }
 
     #[async_backtrace::framed]
@@ -996,10 +1042,6 @@ fn normalize_agg_index_s_expr(
     s_expr: &SExpr,
 ) -> Result<SExpr> {
     let actual_table_index = find_scan_table_index(s_expr)?;
-    if actual_table_index == canonical_table_index {
-        return Ok(s_expr.clone());
-    }
-
     let replacements = {
         let metadata = metadata.read();
         build_agg_index_column_replacements(

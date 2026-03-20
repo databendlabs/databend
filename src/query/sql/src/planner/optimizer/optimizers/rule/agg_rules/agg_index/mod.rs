@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod prepare;
 mod query_rewrite;
+mod rewrite;
 
-pub use query_rewrite::*;
+pub use prepare::AggIndexViewInfo;
+pub use query_rewrite::build_agg_index_plan_for_table;
+pub use query_rewrite::try_rewrite;

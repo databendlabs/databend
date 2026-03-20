@@ -28,3 +28,5 @@ pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer_api::Optimizer;
 pub use optimizer_context::OptimizerContext;
+pub use optimizers::rule::AggIndexViewInfo;
+pub use optimizers::rule::build_agg_index_plan_for_table;

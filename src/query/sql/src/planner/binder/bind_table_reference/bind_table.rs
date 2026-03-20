@@ -136,6 +136,29 @@ impl Binder {
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
+        if bind_context.planning_agg_index {
+            let source_table_index = {
+                let metadata = self.metadata.read();
+                metadata
+                    .get_table_index(Some(&database), &table_name)
+                    .filter(|table_index| metadata.table(*table_index).is_source_of_index())
+            };
+            if let Some(table_index) = source_table_index {
+                let (s_expr, mut bind_context) = self.bind_base_table(
+                    bind_context,
+                    database.as_str(),
+                    table_index,
+                    None,
+                    sample,
+                )?;
+
+                if let Some(alias) = alias {
+                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
+                return Ok((s_expr, bind_context));
+            }
+        }
+
         // Resolve table with catalog
         let table_meta = {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {

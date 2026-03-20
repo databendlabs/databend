@@ -21,9 +21,9 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_sql::AggIndexPlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::optimizer::build_agg_index_plan_for_table;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
@@ -382,11 +382,22 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
         let (mut query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         {
             let mut metadata = metadata.write();
-            metadata.add_agg_indices("default.default.t".to_string(), vec![AggIndexPlan {
-                index_id: 0,
-                sql: suite.index.to_string(),
-                s_expr: index,
-            }]);
+            let table_index = metadata
+                .tables()
+                .iter()
+                .find(|table| table.name() == "t")
+                .map(|table| table.index())
+                .expect("query metadata should contain table t");
+            metadata.add_agg_indices(
+                "default.default.t".to_string(),
+                vec![build_agg_index_plan_for_table(
+                    &metadata,
+                    table_index,
+                    0,
+                    suite.index.to_string(),
+                    index,
+                )?],
+            );
         }
         query.clear_applied_rules();
 

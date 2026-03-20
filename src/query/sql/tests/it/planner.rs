@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_sql::AggIndexPlan;
+use databend_common_sql::optimizer::build_agg_index_plan_for_table;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
 use databend_common_sql::optimizer::ir::VisitAction;
@@ -32,6 +32,7 @@ use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
+use parking_lot::RwLock;
 
 mod fixture;
 pub(crate) use self::fixture::LiteTableContext;
@@ -157,16 +158,30 @@ impl TestCaseRunner for AggIndexLiteRunner {
     async fn optimize_plan(&self, plan: Plan) -> Result<Plan> {
         if let Plan::Query { metadata, .. } = &plan {
             let mut agg_index_plans = Vec::with_capacity(self.agg_index_sqls.len());
+            let child_metadata = Arc::new(RwLock::new(metadata.read().clone()));
+            let table_index = {
+                let metadata_ref = metadata.read();
+                metadata_ref
+                    .tables()
+                    .iter()
+                    .find(|table| table.name() == self.agg_index_table)
+                    .map(|table| table.index())
+                    .expect("agg index table should exist in query metadata")
+            };
             for (index_id, sql) in self.agg_index_sqls.iter().enumerate() {
                 let index_plan = self.ctx.bind_sql(sql).await?;
                 let Plan::Query { s_expr, .. } = index_plan else {
                     unreachable!("agg index sql must bind to a query plan");
                 };
-                agg_index_plans.push(AggIndexPlan {
-                    index_id: index_id as u64,
-                    sql: sql.to_string(),
-                    s_expr: *s_expr,
-                });
+                agg_index_plans.push(build_agg_index_plan_for_table(
+                    self.ctx.clone(),
+                    None,
+                    child_metadata.clone(),
+                    table_index,
+                    index_id as u64,
+                    sql.to_string(),
+                    *s_expr,
+                )?);
             }
             metadata.write().add_agg_indices(
                 format!("default.default.{}", self.agg_index_table),
@@ -445,13 +460,29 @@ async fn optimize_with_debug_agg_index(
     let Plan::Query { s_expr, .. } = index_plan else {
         unreachable!("index sql must bind to query plan");
     };
+    let table_index = {
+        let metadata_guard = metadata.read();
+        metadata_guard
+            .tables()
+            .iter()
+            .find(|table| table.name() == "t")
+            .map(|table| table.index())
+            .expect("query metadata should contain table t")
+    };
+    let agg_index_plan = {
+        build_agg_index_plan_for_table(
+            ctx.clone(),
+            None,
+            Arc::new(RwLock::new(metadata.read().clone())),
+            table_index,
+            0,
+            index_sql.to_string(),
+            *s_expr,
+        )?
+    };
     metadata
         .write()
-        .add_agg_indices("default.default.t".to_string(), vec![AggIndexPlan {
-            index_id: 0,
-            sql: index_sql.to_string(),
-            s_expr: *s_expr,
-        }]);
+        .add_agg_indices("default.default.t".to_string(), vec![agg_index_plan]);
 
     ctx.optimize_plan(plan).await
 }
@@ -563,33 +594,35 @@ async fn test_lite_agg_index_auto_bound_index_plan_is_normalized() -> Result<()>
     let ctx = create_auto_bound_agg_index_ctx(index_sql).await?;
     let plan = ctx.bind_sql(query_sql).await?;
 
-    let (query_scan, metadata) = match &plan {
+    let (query_scan, metadata_ref) = match &plan {
         Plan::Query {
             s_expr, metadata, ..
         } => (
             find_scan(s_expr)?.expect("query scan should exist"),
-            metadata.read(),
+            metadata.clone(),
         ),
         _ => unreachable!("debug test must bind to query plan"),
     };
+    let metadata = metadata_ref.read();
 
     let agg_index = metadata
         .get_agg_indices("default.default.t")
         .expect("agg index should be bound from catalog")
         .first()
         .expect("agg index should not be empty");
+    let index_metadata = agg_index.metadata.read();
     let index_scan = find_scan(&agg_index.s_expr)?.expect("index scan should exist");
     let query_columns = describe_table_columns(&metadata, query_scan.table_index);
-    let index_columns = describe_table_columns(&metadata, index_scan.table_index);
+    let index_columns = describe_table_columns(&index_metadata, index_scan.table_index);
     let index_bound_columns = describe_bound_columns(&agg_index.s_expr)?;
 
     assert_eq!(
-        index_scan.table_index, query_scan.table_index,
-        "catalog-bound agg index scan should be normalized to query table_index"
-    );
-    assert_eq!(
         index_columns, query_columns,
         "catalog-bound agg index table metadata should match query table metadata"
+    );
+    assert!(
+        !Arc::ptr_eq(&agg_index.metadata, &metadata_ref),
+        "catalog-bound agg index should use metadata independent from the main query",
     );
     assert!(
         index_scan.statistics.table_stats.is_none(),
@@ -606,10 +639,58 @@ async fn test_lite_agg_index_auto_bound_index_plan_is_normalized() -> Result<()>
     assert_eq!(
         index_bound_columns,
         vec![
-            "db=Some(\"default\") table=Some(\"t\") col=a idx=0 table_index=Some(0)".to_string(),
-            "db=Some(\"default\") table=Some(\"t\") col=b idx=1 table_index=Some(0)".to_string(),
+            format!(
+                "db=Some(\"default\") table=Some(\"t\") col=a idx=0 table_index=Some({})",
+                index_scan.table_index
+            ),
+            format!(
+                "db=Some(\"default\") table=Some(\"t\") col=b idx=1 table_index=Some({})",
+                index_scan.table_index
+            ),
         ],
-        "catalog-bound agg index raw plan should keep canonical bound column names and table_index",
+        "catalog-bound agg index raw plan should keep canonical bound column names inside index metadata",
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lite_agg_index_auto_bound_share_child_metadata() -> Result<()> {
+    let ctx = LiteTableContext::create_isolated().await?;
+    ctx.configure_for_optimizer_case(false)?;
+    ctx.get_settings()
+        .set_setting("enable_aggregating_index_scan".to_string(), "1".to_string())?;
+    ctx.set_can_scan_from_agg_index(true);
+    ctx.register_table_sql("create table t(a int, b int, c int)")
+        .await?;
+    ctx.register_agg_index(
+        "default",
+        "t",
+        "idx1",
+        "select b, sum(a) from t where b > 1 group by b",
+    )?;
+    ctx.register_agg_index(
+        "default",
+        "t",
+        "idx2",
+        "select b, max(c) from t where b > 2 group by b",
+    )?;
+
+    let plan = ctx
+        .bind_sql("select sum(a), b from t where b > 1 group by b")
+        .await?;
+    let metadata = match &plan {
+        Plan::Query { metadata, .. } => metadata.read(),
+        _ => unreachable!("debug test must bind to query plan"),
+    };
+    let agg_indices = metadata
+        .get_agg_indices("default.default.t")
+        .expect("agg index should be bound from catalog");
+
+    assert_eq!(agg_indices.len(), 2);
+    assert!(
+        Arc::ptr_eq(&agg_indices[0].metadata, &agg_indices[1].metadata),
+        "catalog-bound agg indices should share the same child metadata",
     );
 
     Ok(())

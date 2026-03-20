@@ -36,6 +36,7 @@ use databend_common_expression::types::DataType;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
+use crate::optimizer::AggIndexViewInfo;
 use crate::optimizer::ir::SExpr;
 
 /// Planner use [`usize`] as it's index type.
@@ -90,7 +91,9 @@ pub struct Metadata {
 pub struct AggIndexPlan {
     pub index_id: u64,
     pub sql: String,
+    pub metadata: MetadataRef,
     pub s_expr: SExpr,
+    pub prepared: Arc<AggIndexViewInfo>,
 }
 
 impl Metadata {
@@ -100,6 +103,12 @@ impl Metadata {
 
     pub fn table(&self, index: IndexType) -> &TableEntry {
         self.tables.get(index).expect("metadata must contain table")
+    }
+
+    pub fn set_table_source_of_index(&mut self, index: IndexType, source_of_index: bool) {
+        if let Some(table) = self.tables.get_mut(index) {
+            table.source_of_index = source_of_index;
+        }
     }
 
     pub fn tables(&self) -> &[TableEntry] {
