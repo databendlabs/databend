@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::mem;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::types::DataType;
@@ -28,8 +29,8 @@ use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::aggregate::AggregateRewriter;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::select::SelectList;
 use crate::format_scalar;
 use crate::optimizer::ir::SExpr;
@@ -226,48 +227,19 @@ impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
             self.is_lazy_srf = true;
         }
 
-        if let ScalarExpr::AggregateFunction(agg_func) = expr {
+        if matches!(expr, ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)) {
             self.is_lazy_srf = true;
-            if let Some(agg_item) = self
-                .bind_context
-                .aggregate_info
-                .lookup_aggregate_function(agg_func)
-            {
-                let column_binding = ColumnBindingBuilder::new(
-                    agg_func.display_name.clone(),
-                    agg_item.index,
-                    Box::new(agg_item.scalar.data_type()?),
-                    Visibility::InVisible,
-                )
-                .build();
+            let span = expr.span();
+            AggregateRewriter::rewrite_existing_expr(
+                &self.bind_context.aggregate_info,
+                expr,
+                "ProjectSet rewrite expected aggregate functions to be pre-registered",
+            )
+            .map_err(|err| ErrorCode::Internal(err.message()))?;
 
-                let column_ref: ScalarExpr = BoundColumnRef {
-                    span: expr.span(),
-                    column: column_binding.clone(),
-                }
-                .into();
-                *expr = column_ref;
-            }
-            return Ok(());
-        }
-
-        if let ScalarExpr::UDAFCall(udaf) = expr {
-            self.is_lazy_srf = true;
-            if let Some(agg_item) = self.bind_context.aggregate_info.lookup_udaf_call(udaf) {
-                let column_binding = ColumnBindingBuilder::new(
-                    udaf.display_name.clone(),
-                    agg_item.index,
-                    Box::new(agg_item.scalar.data_type()?),
-                    Visibility::InVisible,
-                )
-                .build();
-
-                let column_ref: ScalarExpr = BoundColumnRef {
-                    span: expr.span(),
-                    column: column_binding,
-                }
-                .into();
-                *expr = column_ref;
+            if let ScalarExpr::BoundColumnRef(column_ref) = expr {
+                column_ref.span = span;
+                column_ref.column.visibility = Visibility::InVisible;
             }
             return Ok(());
         }

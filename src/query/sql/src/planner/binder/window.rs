@@ -451,10 +451,7 @@ impl<'a> WindowRewriter<'a> {
                         Visibility::Visible,
                     )
                     .build();
-                    let col = BoundColumnRef {
-                        span: arg.span(),
-                        column,
-                    };
+                    let col = BoundColumnRef { span: arg.span(), column };
                     let expr = ScalarExpr::BoundColumnRef(col.clone());
                     arg.replace_sub_scalar(group_expr.scalar.clone(), expr)?;
                 }
@@ -467,17 +464,16 @@ impl<'a> WindowRewriter<'a> {
                 .add_derived_column(name.to_string(), ty.clone());
 
             // Generate a ColumnBinding for each argument of aggregates
-            let column = ColumnBindingBuilder::new(
-                name.to_string(),
-                index,
-                Box::new(ty),
-                Visibility::Visible,
-            )
-            .build();
             Ok((
                 BoundColumnRef {
                     span: arg.span(),
-                    column,
+                    column: ColumnBindingBuilder::new(
+                        name.to_string(),
+                        index,
+                        Box::new(ty),
+                        Visibility::Visible,
+                    )
+                    .build(),
                 },
                 arg.clone(),
             ))
