@@ -169,7 +169,6 @@ impl Binder {
         metadata: &MetadataRef,
     ) -> Result<()> {
         let catalog = self.ctx.get_current_catalog();
-        let database = self.ctx.get_current_database();
         let tables = metadata.read().tables().to_vec();
         let index_metadata = Arc::new(RwLock::new(metadata.read().clone()));
 
@@ -205,12 +204,9 @@ impl Binder {
             }
 
             if !agg_indexes.is_empty() {
-                // Should use bound table id.
-                let table_name = table.name();
-                let full_table_name = format!("{catalog}.{database}.{table_name}");
                 metadata
                     .write()
-                    .add_agg_indices(full_table_name, agg_indexes);
+                    .add_agg_indices(table_entry.index(), agg_indexes);
             }
         }
 

@@ -76,7 +76,7 @@ pub struct Metadata {
     non_lazy_columns: ColumnSet,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
-    agg_indices: HashMap<String, Vec<AggIndexPlan>>,
+    agg_indices: HashMap<IndexType, Vec<AggIndexPlan>>,
     max_column_position: usize, // for CSV
 
     /// Scan id of each scan operator.
@@ -349,8 +349,8 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indices(&mut self, table: String, agg_indices: Vec<AggIndexPlan>) {
-        match self.agg_indices.entry(table) {
+    pub fn add_agg_indices(&mut self, table_index: IndexType, agg_indices: Vec<AggIndexPlan>) {
+        match self.agg_indices.entry(table_index) {
             Entry::Occupied(occupied) => occupied.into_mut().extend(agg_indices),
             Entry::Vacant(vacant) => {
                 vacant.insert(agg_indices);
@@ -358,16 +358,16 @@ impl Metadata {
         }
     }
 
-    pub fn agg_indices(&self) -> &HashMap<String, Vec<AggIndexPlan>> {
+    pub fn agg_indices(&self) -> &HashMap<IndexType, Vec<AggIndexPlan>> {
         &self.agg_indices
     }
 
-    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<String, Vec<AggIndexPlan>>) {
+    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<IndexType, Vec<AggIndexPlan>>) {
         self.agg_indices = agg_indices
     }
 
-    pub fn get_agg_indices(&self, table: &str) -> Option<&[AggIndexPlan]> {
-        self.agg_indices.get(table).map(|v| v.as_slice())
+    pub fn get_agg_indices(&self, table_index: IndexType) -> Option<&[AggIndexPlan]> {
+        self.agg_indices.get(&table_index).map(|v| v.as_slice())
     }
 
     pub fn has_agg_indices(&self) -> bool {

@@ -137,9 +137,13 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
 
         // Aggregating index
         if let Some(agg_index) = agg_index {
+            let table_index = self
+                .inner
+                .table_index
+                .expect("agg index should only exist for bound table scans");
             let index = ctx
                 .metadata
-                .get_agg_indices(&table_name)
+                .get_agg_indices(table_index)
                 .unwrap()
                 .iter()
                 .find(|index| index.index_id == agg_index.index_id)

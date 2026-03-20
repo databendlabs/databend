@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Once;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -128,8 +127,6 @@ static TEST_BUILD_INFO: BuildInfo = BuildInfo {
 };
 
 static INIT_GLOBALS: Once = Once::new();
-static GLOBAL_CATALOG_MANAGER: OnceLock<Arc<CatalogManager>> = OnceLock::new();
-static INIT_GLOBAL_CATALOG_MANAGER: Once = Once::new();
 
 fn init_globals() {
     INIT_GLOBALS.call_once(|| {
@@ -188,10 +185,6 @@ impl DummyCatalog {
             .insert((database.to_string(), table.name().to_string()), table);
     }
 
-    fn clear_tables(&self) {
-        self.tables.write().clear();
-    }
-
     fn insert_index(&self, table_id: MetaId, index_id: u64, name: &str, query: &str) {
         self.indexes.write().entry(table_id).or_default().push((
             index_id,
@@ -203,10 +196,6 @@ impl DummyCatalog {
                 ..Default::default()
             },
         ));
-    }
-
-    fn clear_indexes(&self) {
-        self.indexes.write().clear();
     }
 }
 
@@ -692,56 +681,27 @@ pub struct LiteTableContext {
 }
 
 impl LiteTableContext {
-    async fn create_with_catalog_manager(shared_catalog_manager: bool) -> Result<Arc<Self>> {
+    async fn create_with_catalog_manager() -> Result<Arc<Self>> {
         init_globals();
 
         let tenant = Tenant::new_literal("default");
         let settings = Settings::create(tenant.clone());
         let shared_settings = Settings::create(tenant.clone());
-        let catalog_manager = if shared_catalog_manager {
-            if let Some(catalog_manager) = GLOBAL_CATALOG_MANAGER.get() {
-                catalog_manager.clone()
-            } else {
-                let default_catalog = Arc::new(DummyCatalog::default());
-                let default_catalog_dyn: Arc<dyn Catalog> = default_catalog;
-                let mut rpc_conf = RpcClientConf::empty();
-                rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
-                rpc_conf.timeout = Some(Duration::from_millis(1));
-                let catalog_manager = Arc::new(CatalogManager {
-                    meta: MetaStoreProvider::new(rpc_conf)
-                        .create_meta_store::<DatabendRuntime>()
-                        .await
-                        .map_err(|err| ErrorCode::Internal(err.to_string()))?,
-                    default_catalog: default_catalog_dyn,
-                    external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
-                    catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
-                    catalog_caches: Default::default(),
-                });
-                let catalog_manager = GLOBAL_CATALOG_MANAGER
-                    .get_or_init(|| catalog_manager.clone())
-                    .clone();
-                INIT_GLOBAL_CATALOG_MANAGER.call_once(|| {
-                    GlobalInstance::set(catalog_manager.clone());
-                });
-                catalog_manager
-            }
-        } else {
-            let default_catalog = Arc::new(DummyCatalog::default());
-            let default_catalog_dyn: Arc<dyn Catalog> = default_catalog;
-            let mut rpc_conf = RpcClientConf::empty();
-            rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
-            rpc_conf.timeout = Some(Duration::from_millis(1));
-            Arc::new(CatalogManager {
-                meta: MetaStoreProvider::new(rpc_conf)
-                    .create_meta_store::<DatabendRuntime>()
-                    .await
-                    .map_err(|err| ErrorCode::Internal(err.to_string()))?,
-                default_catalog: default_catalog_dyn,
-                external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
-                catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
-                catalog_caches: Default::default(),
-            })
-        };
+        let default_catalog = Arc::new(DummyCatalog::default());
+        let default_catalog_dyn: Arc<dyn Catalog> = default_catalog;
+        let mut rpc_conf = RpcClientConf::empty();
+        rpc_conf.endpoints = vec!["http://127.0.0.1:1".to_string()];
+        rpc_conf.timeout = Some(Duration::from_millis(1));
+        let catalog_manager = Arc::new(CatalogManager {
+            meta: MetaStoreProvider::new(rpc_conf)
+                .create_meta_store::<DatabendRuntime>()
+                .await
+                .map_err(|err| ErrorCode::Internal(err.to_string()))?,
+            default_catalog: default_catalog_dyn,
+            external_catalogs: HashMap::<String, Arc<dyn Catalog>>::new(),
+            catalog_creators: HashMap::<CatalogType, Arc<dyn CatalogCreator>>::new(),
+            catalog_caches: Default::default(),
+        });
         let default_catalog: Arc<DummyCatalog> = catalog_manager
             .default_catalog
             .as_any()
@@ -749,8 +709,6 @@ impl LiteTableContext {
             .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
             .clone()
             .into();
-        default_catalog.clear_tables();
-        default_catalog.clear_indexes();
 
         Ok(Arc::new(Self {
             catalog_manager,
@@ -837,11 +795,11 @@ impl LiteTableContext {
     }
 
     pub async fn create() -> Result<Arc<Self>> {
-        Self::create_with_catalog_manager(true).await
+        Self::create_with_catalog_manager().await
     }
 
     pub async fn create_isolated() -> Result<Arc<Self>> {
-        Self::create_with_catalog_manager(false).await
+        Self::create_with_catalog_manager().await
     }
 
     pub fn set_table_warehouse_distribution(&self, enabled: bool) {
@@ -1578,7 +1536,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_create_clears_catalog_tables() -> Result<()> {
+    async fn test_create_keeps_catalog_tables_isolated() -> Result<()> {
         let ctx1 = LiteTableContext::create().await?;
         ctx1.register_table_with_stats("default", "t1", test_fields(), None, HashMap::new())?;
         ctx1.default_catalog
@@ -1592,6 +1550,9 @@ mod tests {
                 .await
                 .is_err()
         );
+        ctx1.default_catalog
+            .get_table(&ctx1.tenant, "default", "t1")
+            .await?;
         Ok(())
     }
 }

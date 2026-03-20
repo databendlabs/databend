@@ -183,10 +183,9 @@ impl TestCaseRunner for AggIndexLiteRunner {
                     *s_expr,
                 )?);
             }
-            metadata.write().add_agg_indices(
-                format!("default.default.{}", self.agg_index_table),
-                agg_index_plans,
-            );
+            metadata
+                .write()
+                .add_agg_indices(table_index, agg_index_plans);
         }
 
         self.ctx.optimize_plan(plan).await
@@ -365,6 +364,16 @@ fn find_scan(s_expr: &SExpr) -> Result<Option<&databend_common_sql::plans::Scan>
     }
 }
 
+fn collect_scan_table_indexes(s_expr: &SExpr, table_indexes: &mut Vec<usize>) {
+    if let RelOperator::Scan(scan) = s_expr.plan() {
+        table_indexes.push(scan.table_index);
+    }
+
+    for child in s_expr.children() {
+        collect_scan_table_indexes(child, table_indexes);
+    }
+}
+
 fn describe_table_columns(
     metadata: &databend_common_sql::Metadata,
     table_index: usize,
@@ -482,7 +491,7 @@ async fn optimize_with_debug_agg_index(
     };
     metadata
         .write()
-        .add_agg_indices("default.default.t".to_string(), vec![agg_index_plan]);
+        .add_agg_indices(table_index, vec![agg_index_plan]);
 
     ctx.optimize_plan(plan).await
 }
@@ -606,7 +615,7 @@ async fn test_lite_agg_index_auto_bound_index_plan_is_normalized() -> Result<()>
     let metadata = metadata_ref.read();
 
     let agg_index = metadata
-        .get_agg_indices("default.default.t")
+        .get_agg_indices(query_scan.table_index)
         .expect("agg index should be bound from catalog")
         .first()
         .expect("agg index should not be empty");
@@ -684,7 +693,14 @@ async fn test_lite_agg_index_auto_bound_share_child_metadata() -> Result<()> {
         _ => unreachable!("debug test must bind to query plan"),
     };
     let agg_indices = metadata
-        .get_agg_indices("default.default.t")
+        .get_agg_indices(
+            find_scan(match &plan {
+                Plan::Query { s_expr, .. } => s_expr,
+                _ => unreachable!("debug test must bind to query plan"),
+            })?
+            .expect("query scan should exist")
+            .table_index,
+        )
         .expect("agg index should be bound from catalog");
 
     assert_eq!(agg_indices.len(), 2);
@@ -692,6 +708,80 @@ async fn test_lite_agg_index_auto_bound_share_child_metadata() -> Result<()> {
         Arc::ptr_eq(&agg_indices[0].metadata, &agg_indices[1].metadata),
         "catalog-bound agg indices should share the same child metadata",
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lite_agg_index_auto_bound_for_cross_database_table() -> Result<()> {
+    let ctx = LiteTableContext::create_isolated().await?;
+    ctx.configure_for_optimizer_case(false)?;
+    ctx.get_settings()
+        .set_setting("enable_aggregating_index_scan".to_string(), "1".to_string())?;
+    ctx.set_can_scan_from_agg_index(true);
+    ctx.register_table_sql("create table other_db.t(a int, b int, c int)")
+        .await?;
+    ctx.register_agg_index(
+        "other_db",
+        "t",
+        "idx1",
+        "select b, sum(a) from other_db.t where b > 1 group by b",
+    )?;
+
+    let plan = ctx
+        .bind_sql("select sum(a), b from other_db.t where b > 1 group by b")
+        .await?;
+    let (query_scan, metadata_ref) = match &plan {
+        Plan::Query {
+            s_expr, metadata, ..
+        } => (
+            find_scan(s_expr)?.expect("query scan should exist"),
+            metadata.clone(),
+        ),
+        _ => unreachable!("debug test must bind to query plan"),
+    };
+    let metadata = metadata_ref.read();
+
+    assert_eq!(
+        metadata.table(query_scan.table_index).database(),
+        "other_db"
+    );
+    assert!(
+        metadata.get_agg_indices(query_scan.table_index).is_some(),
+        "cross-database table should keep its bound agg index",
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lite_agg_index_auto_bound_for_repeated_table_scans() -> Result<()> {
+    let ctx =
+        create_auto_bound_agg_index_ctx("select b, sum(a) from t where b > 1 group by b").await?;
+    let plan = ctx
+        .bind_sql("select l.a, r.c from t as l join t as r on l.b = r.b")
+        .await?;
+    let (s_expr, metadata_ref) = match &plan {
+        Plan::Query {
+            s_expr, metadata, ..
+        } => (s_expr, metadata.clone()),
+        _ => unreachable!("debug test must bind to query plan"),
+    };
+    let metadata = metadata_ref.read();
+    let mut table_indexes = Vec::new();
+    collect_scan_table_indexes(s_expr, &mut table_indexes);
+
+    assert_eq!(
+        table_indexes.len(),
+        2,
+        "self join should bind two table scans"
+    );
+    for table_index in table_indexes {
+        assert!(
+            metadata.get_agg_indices(table_index).is_some(),
+            "each repeated table scan should keep its bound agg index",
+        );
+    }
 
     Ok(())
 }

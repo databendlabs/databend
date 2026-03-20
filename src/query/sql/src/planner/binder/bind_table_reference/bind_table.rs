@@ -140,8 +140,15 @@ impl Binder {
             let source_table_index = {
                 let metadata = self.metadata.read();
                 metadata
-                    .get_table_index(Some(&database), &table_name)
-                    .filter(|table_index| metadata.table(*table_index).is_source_of_index())
+                    .tables()
+                    .iter()
+                    .find(|table| {
+                        table.is_source_of_index()
+                            && table.catalog() == catalog
+                            && table.database() == database
+                            && table.name() == table_name
+                    })
+                    .map(|table| table.index())
             };
             if let Some(table_index) = source_table_index {
                 let (s_expr, mut bind_context) = self.bind_base_table(
