@@ -150,6 +150,7 @@ impl Binder {
                     table_index,
                     None,
                     sample,
+                    true,
                 )?;
 
                 if let Some(alias) = alias {

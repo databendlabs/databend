@@ -16,6 +16,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::Once;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -125,36 +127,16 @@ static TEST_BUILD_INFO: BuildInfo = BuildInfo {
     embedded_license: String::new(),
 };
 
-thread_local! {
-    static INIT_TESTING_GLOBALS: std::sync::Once = const { std::sync::Once::new() };
-    static THREAD_CATALOG_MANAGER: std::cell::OnceCell<Arc<CatalogManager>> =
-        const { std::cell::OnceCell::new() };
-}
+static INIT_GLOBALS: Once = Once::new();
+static GLOBAL_CATALOG_MANAGER: OnceLock<Arc<CatalogManager>> = OnceLock::new();
+static INIT_GLOBAL_CATALOG_MANAGER: Once = Once::new();
 
-fn init_testing_globals() {
-    #[cfg(debug_assertions)]
-    {
-        INIT_TESTING_GLOBALS.with(|init| {
-            init.call_once(|| {
-                let thread_name = std::thread::current().name().unwrap().to_string();
-                GlobalInstance::init_testing(&thread_name);
-                GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                    .expect("init global config");
-                OssLicenseManager::init("default".to_string()).expect("init oss license manager");
-            });
-        });
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        static INIT_GLOBALS: std::sync::Once = std::sync::Once::new();
-        INIT_GLOBALS.call_once(|| {
-            GlobalInstance::init_production();
-            GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
-                .expect("init global config");
-            OssLicenseManager::init("default".to_string()).expect("init oss license manager");
-        });
-    }
+fn init_globals() {
+    INIT_GLOBALS.call_once(|| {
+        GlobalInstance::init_production();
+        GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO).expect("init global config");
+        OssLicenseManager::init("default".to_string()).expect("init oss license manager");
+    });
 }
 
 fn unsupported<T>(name: &str) -> Result<T> {
