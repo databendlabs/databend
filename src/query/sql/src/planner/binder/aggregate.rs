@@ -290,6 +290,59 @@ impl AggregateInfo {
         items
     }
 
+    fn lookup_existing_aggregate_function_column(
+        &self,
+        aggregate: &AggregateFunction,
+        new_name: &str,
+    ) -> Result<Option<ColumnBinding>> {
+        let Some(replaced_args) = self.try_replace_function_args(&aggregate.args, &aggregate.func_name)?
+        else {
+            return Ok(None);
+        };
+        let Some(replaced_sort_descs) =
+            self.try_replace_sort_descs(&aggregate.sort_descs, &aggregate.func_name)?
+        else {
+            return Ok(None);
+        };
+
+        let replaced_agg = AggregateFunction {
+            span: aggregate.span,
+            display_name: aggregate.display_name.clone(),
+            func_name: aggregate.func_name.clone(),
+            distinct: aggregate.distinct,
+            params: aggregate.params.clone(),
+            args: replaced_args,
+            return_type: aggregate.return_type.clone(),
+            sort_descs: replaced_sort_descs,
+        };
+
+        Ok(self.lookup_aggregate_function_column(&replaced_agg, new_name))
+    }
+
+    fn lookup_existing_udaf_call_column(
+        &self,
+        udaf: &UDAFCall,
+        new_name: &str,
+    ) -> Result<Option<ColumnBinding>> {
+        let Some(replaced_args) = self.try_replace_function_args(&udaf.arguments, &udaf.name)?
+        else {
+            return Ok(None);
+        };
+
+        let replaced_udaf = UDAFCall {
+            span: udaf.span,
+            name: udaf.name.clone(),
+            display_name: udaf.display_name.clone(),
+            arg_types: udaf.arg_types.clone(),
+            state_fields: udaf.state_fields.clone(),
+            return_type: udaf.return_type.clone(),
+            arguments: replaced_args,
+            udf_type: udaf.udf_type.clone(),
+        };
+
+        Ok(self.lookup_udaf_call_column(&replaced_udaf, new_name))
+    }
+
     /// Deduplicate, rewrite, and register an aggregate function in `AggregateInfo`.
     fn intern_aggregate_function_column(
         &mut self,
@@ -448,6 +501,62 @@ impl AggregateInfo {
             .collect()
     }
 
+    fn try_replace_sort_descs(
+        &self,
+        sort_descs: &[AggregateFunctionScalarSortDesc],
+        func_name: &str,
+    ) -> Result<Option<Vec<AggregateFunctionScalarSortDesc>>> {
+        let mut replaced_sort_descs = Vec::with_capacity(sort_descs.len());
+        for (i, desc) in sort_descs.iter().enumerate() {
+            let name = format!("{}_sort_desc_{}", func_name, i);
+            let expr = &desc.expr;
+
+            let replaced = if let ScalarExpr::BoundColumnRef(column_ref) = expr {
+                Some((true, column_ref.clone()))
+            } else {
+                if let Some(item) = self
+                    .aggregate_arguments
+                    .iter()
+                    .chain(self.group_items.iter())
+                    .chain(self.aggregate_sort_descs.iter())
+                    .find(|x| x.scalar.equivalent(expr))
+                    .cloned()
+                    {
+                        let column_binding = ColumnBindingBuilder::new(
+                            name,
+                            item.index,
+                            Box::new(expr.data_type()?),
+                        Visibility::Visible,
+                    )
+                        .build();
+
+                    Some((
+                        true,
+                        BoundColumnRef {
+                            span: expr.span(),
+                            column: column_binding,
+                        },
+                    ))
+                } else {
+                    None
+                }
+            };
+
+            let Some((is_reuse_index, column)) = replaced else {
+                return Ok(None);
+            };
+
+            replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
+                expr: column.into(),
+                is_reuse_index,
+                nulls_first: desc.nulls_first,
+                asc: desc.asc,
+            });
+        }
+
+        Ok(Some(replaced_sort_descs))
+    }
+
     fn replace_function_args(
         &mut self,
         metadata: &MetadataRef,
@@ -513,7 +622,48 @@ impl AggregateInfo {
             .collect()
     }
 
-    fn replace_grouping(&mut self, function: &FunctionCall) -> Result<FunctionCall> {
+    fn try_replace_function_args(
+        &self,
+        args: &[ScalarExpr],
+        func_name: &str,
+    ) -> Result<Option<Vec<ScalarExpr>>> {
+        let mut replaced_args = Vec::with_capacity(args.len());
+        for (i, arg) in args.iter().enumerate() {
+            let name = format!("{}_arg_{}", func_name, i);
+            let data_type = arg.data_type()?;
+            if let ScalarExpr::BoundColumnRef(column_ref) = arg {
+                replaced_args.push(column_ref.clone().into());
+                continue;
+            }
+
+            let Some(item) = self
+                .group_items
+                .iter()
+                .chain(self.aggregate_arguments.iter())
+                .find(|x| &x.scalar == arg)
+            else {
+                return Ok(None);
+            };
+
+            replaced_args.push(
+                BoundColumnRef {
+                    span: arg.span(),
+                    column: ColumnBindingBuilder::new(
+                        name,
+                        item.index,
+                        Box::new(data_type),
+                        Visibility::Visible,
+                    )
+                    .build(),
+                }
+                .into(),
+            );
+        }
+
+        Ok(Some(replaced_args))
+    }
+
+    fn replace_grouping(&self, function: &FunctionCall) -> Result<FunctionCall> {
         if self.grouping_sets.is_none() {
             return Err(ErrorCode::SemanticError(
                 "grouping can only be called in GROUP BY GROUPING SETS clauses",
@@ -586,6 +736,18 @@ impl AggregateRewriter<'_> {
         rewriter.visit(expr)
     }
 
+    pub fn rewrite_existing_expr(
+        aggregate_info: &AggregateInfo,
+        expr: &mut ScalarExpr,
+        error_message: &str,
+    ) -> Result<()> {
+        let mut rewriter = ExistingAggregateRewriter {
+            aggregate_info,
+            error_message,
+        };
+        rewriter.visit(expr)
+    }
+
     pub fn check_no_aggregate_calls(expr: &ScalarExpr, error_message: &str) -> Result<()> {
         let f = |scalar: &ScalarExpr| {
             matches!(
@@ -599,6 +761,61 @@ impl AggregateRewriter<'_> {
             return Err(ErrorCode::Internal(error_message.to_string()));
         }
 
+        Ok(())
+    }
+}
+
+struct ExistingAggregateRewriter<'a> {
+    aggregate_info: &'a AggregateInfo,
+    error_message: &'a str,
+}
+
+impl<'a> VisitorMut<'a> for ExistingAggregateRewriter<'a> {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        match expr {
+            ScalarExpr::AggregateFunction(aggregate) => {
+                let Some(column) = self
+                    .aggregate_info
+                    .lookup_existing_aggregate_function_column(aggregate, &aggregate.display_name)?
+                else {
+                    return Err(ErrorCode::SemanticError(self.error_message.to_string()));
+                };
+                *expr = BoundColumnRef { span: None, column }.into();
+                Ok(())
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                let Some(column) = self
+                    .aggregate_info
+                    .lookup_existing_udaf_call_column(udaf, &udaf.display_name)?
+                else {
+                    return Err(ErrorCode::SemanticError(self.error_message.to_string()));
+                };
+                *expr = BoundColumnRef { span: None, column }.into();
+                Ok(())
+            }
+            _ => walk_expr_mut(self, expr),
+        }
+    }
+
+    fn visit_function_call(&mut self, func: &'a mut FunctionCall) -> Result<()> {
+        if func.func_name.eq_ignore_ascii_case("grouping") {
+            let replaced = self.aggregate_info.replace_grouping(func)?;
+            *func = replaced;
+            return Ok(());
+        }
+
+        for expr in &mut func.arguments {
+            self.visit(expr)?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_window_function(&mut self, _window: &'a mut crate::plans::WindowFunc) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_subquery_expr(&mut self, _subquery: &'a mut crate::plans::SubqueryExpr) -> Result<()> {
         Ok(())
     }
 }
@@ -1459,5 +1676,66 @@ mod tests {
         let second = agg_info.replace_grouping(&first).unwrap();
         assert_eq!(second.params, first.params);
         assert_eq!(second.arguments, first.arguments);
+    }
+
+    #[test]
+    fn rewrite_existing_expr_reuses_registered_aggregate() {
+        let replaced = AggregateFunction {
+            span: None,
+            display_name: "sum(a + 1)".to_string(),
+            func_name: "sum".to_string(),
+            distinct: false,
+            params: vec![],
+            args: vec![test_column("sum_arg_0", Symbol::new(1))],
+            return_type: Box::new(DataType::Number(NumberDataType::Int64)),
+            sort_descs: vec![],
+        };
+
+        let mut agg_info = AggregateInfo::default();
+        agg_info.aggregate_functions.push(ScalarItem {
+            scalar: replaced.clone().into(),
+            index: Symbol::new(42),
+        });
+
+        let mut expr: ScalarExpr = replaced.into();
+        AggregateRewriter::rewrite_existing_expr(
+            &agg_info,
+            &mut expr,
+            "unexpected aggregate registration",
+        )
+        .unwrap();
+
+        assert!(matches!(
+            expr,
+            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                column: ColumnBinding { index, .. },
+                ..
+            }) if index == Symbol::new(42)
+        ));
+    }
+
+    #[test]
+    fn rewrite_existing_expr_rejects_new_aggregate_registration() {
+        let mut expr: ScalarExpr = AggregateFunction {
+            span: None,
+            display_name: "sum(a)".to_string(),
+            func_name: "sum".to_string(),
+            distinct: false,
+            params: vec![],
+            args: vec![test_column("a", Symbol::new(0))],
+            return_type: Box::new(DataType::Number(NumberDataType::Int64)),
+            sort_descs: vec![],
+        }
+        .into();
+
+        let agg_info = AggregateInfo::default();
+        let err = AggregateRewriter::rewrite_existing_expr(
+            &agg_info,
+            &mut expr,
+            "reject new aggregate",
+        )
+        .unwrap_err();
+
+        assert_eq!(err.message(), "reject new aggregate");
     }
 }

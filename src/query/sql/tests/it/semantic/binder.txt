@@ -90,6 +90,34 @@ EvalScalar
                 └── limit: NONE
 
 
+=== order_by_can_introduce_aggregate_in_aggregate_query ===
+description: ORDER BY may introduce a new aggregate expression when the query is already aggregated.
+sql: SELECT count(*) FROM t ORDER BY sum(number)
+status: ok
+Sort
+├── sort keys: [sum(number) (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [COUNT(*) (#1) AS (#1), sum(number) (#2) AS (#2)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [count() AS (#1), sum(t.number (#0)) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== order_by_aggregate_does_not_make_scalar_projection_valid ===
+description: Introducing an aggregate in ORDER BY must not make a non-aggregated SELECT list valid.
+sql: SELECT number FROM t ORDER BY sum(number)
+status: error
+code: 1065
+message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
+
 === aggregate_argument_prefers_base_column_over_select_alias ===
 description: Inside an aggregate function, a same-name select alias should not shadow the base column.
 sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a

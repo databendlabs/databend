@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod eager_aggregation;
+mod normalize_scalar;
 mod selectivity;
