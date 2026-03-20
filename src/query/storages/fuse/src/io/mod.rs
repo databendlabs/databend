@@ -34,6 +34,7 @@ pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
 pub use read::VirtualBlockReadResult;
 pub use read::VirtualColumnReader;
+pub use read::build_columns_meta;
 pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
 pub use snapshots::SnapshotLiteExtended;

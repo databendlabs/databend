@@ -32,6 +32,7 @@ use log::info;
 
 use super::block_format::FuseNativeBlockFormat;
 use super::block_format::FuseParquetBlockFormat;
+use super::read_block_context::ReadBlockContext;
 use super::read_data_transform::ReadDataTransform;
 use crate::FuseStorageFormat;
 use crate::fuse_part::FuseBlockPartInfo;
@@ -91,15 +92,16 @@ pub fn build_fuse_source_pipeline(
         }
     }
     let block_format = match storage_format {
-        FuseStorageFormat::Native => {
-            FuseNativeBlockFormat::create(ctx.clone(), block_reader.clone(), index_reader.clone())
-        }
-        FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(
-            block_reader.clone(),
-            index_reader.clone(),
-            virtual_reader.clone(),
-        ),
+        FuseStorageFormat::Native => FuseNativeBlockFormat::create(block_reader.clone()),
+        FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(block_reader.clone()),
     };
+    let read_block_context = ReadBlockContext::create(
+        ctx.clone(),
+        storage_format,
+        block_format,
+        index_reader.clone(),
+        virtual_reader.clone(),
+    )?;
 
     pipeline.add_transform(|input, output| {
         Ok(TransformRuntimeFilterWait::create(
@@ -116,7 +118,7 @@ pub fn build_fuse_source_pipeline(
             ctx.clone(),
             table_schema.clone(),
             block_reader.clone(),
-            block_format.clone(),
+            read_block_context.clone(),
             input,
             output,
         )

@@ -29,9 +29,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_sql::IndexType;
-use databend_storages_common_io::ReadSettings;
 
-use super::block_format::FuseBlockFormat;
+use super::read_block_context::ReadBlockContext;
 use crate::io::BlockReader;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
@@ -43,11 +42,10 @@ use crate::pruning::SpatialRuntimePruner;
 pub struct ReadDataTransform {
     func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
-    block_format: Arc<dyn FuseBlockFormat>,
+    read_block_context: Arc<ReadBlockContext>,
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
-    read_settings: ReadSettings,
 }
 
 impl ReadDataTransform {
@@ -57,23 +55,21 @@ impl ReadDataTransform {
         ctx: Arc<dyn TableContext>,
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
-        block_format: Arc<dyn FuseBlockFormat>,
+        read_block_context: Arc<ReadBlockContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
-        let read_settings = ReadSettings::from_ctx(&ctx)?;
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
             ReadDataTransform {
                 func_ctx,
                 block_reader,
-                block_format,
+                read_block_context,
                 table_schema,
                 scan_id,
                 context: ctx,
-                read_settings,
             },
         )))
     }
@@ -102,6 +98,7 @@ impl ReadDataTransform {
     }
 
     fn create_runtime_pruners(&self) -> Result<(ExprRuntimePruner, Option<SpatialRuntimePruner>)> {
+        let read_settings = self.read_block_context.read_settings();
         let inlist_bloom_prune_threshold =
             self.context
                 .get_settings()
@@ -112,7 +109,7 @@ impl ReadDataTransform {
             self.func_ctx.clone(),
             self.table_schema.clone(),
             self.block_reader.operator(),
-            self.read_settings,
+            read_settings,
             inlist_bloom_prune_threshold,
             runtime_filters
                 .iter()
@@ -122,7 +119,7 @@ impl ReadDataTransform {
         let spatial_runtime_pruner = SpatialRuntimePruner::try_create(
             self.table_schema.clone(),
             self.block_reader.operator(),
-            self.read_settings,
+            read_settings,
             &runtime_filters,
         )?;
 
@@ -146,12 +143,11 @@ impl ReadDataTransform {
             }
 
             parts_to_read.push(part.clone());
-            let block_format = self.block_format.clone();
-            let settings = self.read_settings;
+            let read_block_context = self.read_block_context.clone();
 
             read_tasks.push(async move {
                 databend_common_base::runtime::spawn(async move {
-                    block_format.read_data(part, settings).await
+                    read_block_context.read_data(part).await
                 })
                 .await
                 .unwrap()

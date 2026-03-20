@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
@@ -62,13 +63,25 @@ impl BlockReader {
 
         let part = FuseBlockPartInfo::from_part(part)?;
         let settings = ReadSettings::from_ctx(ctx)?;
+        self.read_native_columns_data_by_merge_io(
+            &settings,
+            &part.location,
+            &part.columns_meta,
+            ignore_column_ids,
+        )
+        .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn read_native_columns_data_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<NativeSourceData> {
         let read_res = self
-            .read_columns_data_by_merge_io(
-                &settings,
-                &part.location,
-                &part.columns_meta,
-                ignore_column_ids,
-            )
+            .read_columns_data_by_merge_io(settings, location, columns_meta, ignore_column_ids)
             .await?;
 
         let column_buffers = read_res.column_buffers()?;
@@ -86,8 +99,7 @@ impl BlockReader {
                 .leaf_column_ids
                 .iter()
                 .filter_map(|column_id| {
-                    let native_meta = part
-                        .columns_meta
+                    let native_meta = columns_meta
                         .get(column_id)
                         .and_then(ColumnMeta::as_native)?;
                     let data = column_buffers.get(column_id)?;
@@ -198,5 +210,34 @@ impl BlockReader {
             .collect::<Vec<ColumnMeta>>();
         let schema = DataSchema::from(&schema);
         Some((metas, ArrowSchema::from(&schema)))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn async_read_native_columns_meta(
+        operator: &Operator,
+        loc: &str,
+    ) -> Option<(HashMap<ColumnId, ColumnMeta>, u64)> {
+        let stat = operator.stat(loc).await.ok()?;
+        let reader = operator.reader(loc).await.ok()?;
+
+        let (native_metas, _) = read_meta_async(reader.clone(), stat.content_length() as usize)
+            .await
+            .ok()?;
+        if native_metas.is_empty() {
+            return None;
+        }
+
+        let num_rows = native_metas[0]
+            .pages
+            .iter()
+            .map(|page| page.num_values)
+            .sum();
+        let metas = native_metas
+            .into_iter()
+            .enumerate()
+            .map(|(index, meta)| (index as u32, ColumnMeta::Native(meta)))
+            .collect();
+
+        Some((metas, num_rows))
     }
 }

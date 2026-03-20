@@ -12,67 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use super::FuseBlockFormat;
-use crate::FuseBlockPartInfo;
-use crate::io::AggIndexReader;
+use super::ReadBlockMeta;
 use crate::io::BlockReader;
-use crate::io::TableMetaLocationGenerator;
-use crate::operations::read::native_data_source::NativeDataSource;
-use crate::operations::read::read_data_source::ReadDataSource;
+use crate::operations::read::raw_data_source::RawDataSource;
 
 pub struct FuseNativeBlockFormat {
-    ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
-    index_reader: Arc<Option<AggIndexReader>>,
 }
 
 impl FuseNativeBlockFormat {
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        block_reader: Arc<BlockReader>,
-        index_reader: Arc<Option<AggIndexReader>>,
-    ) -> Arc<dyn FuseBlockFormat> {
-        Arc::new(Self {
-            ctx,
-            block_reader,
-            index_reader,
-        })
+    pub fn create(block_reader: Arc<BlockReader>) -> Arc<dyn FuseBlockFormat> {
+        Arc::new(Self { block_reader })
     }
 }
 
 #[async_trait::async_trait]
 impl FuseBlockFormat for FuseNativeBlockFormat {
     #[async_backtrace::framed]
-    async fn read_data(
+    async fn read_data_by_merge_io(
         &self,
-        part: PartInfoPtr,
-        _settings: ReadSettings,
-    ) -> Result<ReadDataSource> {
-        let fuse_part = FuseBlockPartInfo::from_part(&part)?;
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<RawDataSource> {
+        let source = self
+            .block_reader
+            .read_native_columns_data_by_merge_io(
+                settings,
+                location,
+                columns_meta,
+                ignore_column_ids,
+            )
+            .await?;
 
-        if let Some(index_reader) = self.index_reader.as_ref() {
-            let loc = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                &fuse_part.location,
-                index_reader.index_id(),
-            );
-            if let Some(data) = index_reader.read_native_data(&loc).await {
-                return Ok(ReadDataSource::Native(Box::new(
-                    NativeDataSource::AggIndex(data),
-                )));
-            }
-        }
+        Ok(RawDataSource::Native(source))
+    }
 
-        Ok(ReadDataSource::Native(Box::new(NativeDataSource::Normal(
-            self.block_reader
-                .async_read_native_columns_data(&part, &self.ctx, &None)
-                .await?,
-        ))))
+    async fn read_block_meta(&self, location: &str) -> Option<ReadBlockMeta> {
+        let operator = self.block_reader.operator();
+        let (columns_meta, num_rows) =
+            BlockReader::async_read_native_columns_meta(&operator, location).await?;
+
+        Some(ReadBlockMeta {
+            columns_meta,
+            num_rows,
+        })
     }
 }

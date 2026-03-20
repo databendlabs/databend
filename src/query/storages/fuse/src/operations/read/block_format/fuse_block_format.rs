@@ -12,20 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_exception::Result;
-use databend_storages_common_io::ReadSettings;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
-use crate::operations::read::read_data_source::ReadDataSource;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+
+use crate::operations::read::raw_data_source::RawDataSource;
+
+pub struct ReadBlockMeta {
+    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub num_rows: u64,
+}
 
 /// Format-specific reader for Fuse blocks.
 ///
 /// The common read transform owns partition dispatch, runtime pruning, and
-/// concurrency. Implementations only need to turn one pruned part into the
-/// source payload that downstream format-specific deserializers consume.
+/// concurrency. Implementations only need to expose basic read primitives for
+/// arbitrary block locations and let the common read pipeline decide what the
+/// content means.
 #[async_trait::async_trait]
 pub trait FuseBlockFormat: Send + Sync {
-    /// Reads one block part and returns the wrapped source payload for the
-    /// common read pipeline.
-    async fn read_data(&self, part: PartInfoPtr, settings: ReadSettings) -> Result<ReadDataSource>;
+    /// Reads raw column data from the given block location.
+    async fn read_data_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<RawDataSource>;
+
+    /// Reads the metadata needed to fetch an arbitrary block location.
+    async fn read_block_meta(&self, location: &str) -> Option<ReadBlockMeta>;
 }
