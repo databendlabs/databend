@@ -1,0 +1,24 @@
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), sum(l_extendedprice) (#25) AS (#25), sum(o_totalprice) (#26) AS (#26)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25), sum(orders.o_totalprice (#19)) AS (#26)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), orders.o_totalprice (#19) AS (#19)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+

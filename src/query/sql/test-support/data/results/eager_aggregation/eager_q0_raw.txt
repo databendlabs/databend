@@ -1,0 +1,36 @@
+Sort
+├── sort keys: [sum(l_extendedprice * (1 - l_discount)) (#34) DESC NULLS LAST, orders.o_orderdate (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#34) AS (#34)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(sum_arg_0 (#33)) AS (#34)]
+        └── EvalScalar
+            ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))) AS (#33)]
+            └── Filter
+                ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING'), eq(lineitem.l_orderkey (#17), orders.o_orderkey (#0)), lt(orders.o_orderdate (#4), '1995-03-15'), gt(lineitem.l_shipdate (#27), '1995-03-15')]
+                └── Join(Cross)
+                    ├── build keys: []
+                    ├── probe keys: []
+                    ├── other filters: []
+                    ├── Scan
+                    │   ├── table: default.lineitem (#2)
+                    │   ├── filters: []
+                    │   ├── order by: []
+                    │   └── limit: NONE
+                    └── Join(Inner)
+                        ├── build keys: [customer.c_custkey (#9)]
+                        ├── probe keys: [orders.o_custkey (#1)]
+                        ├── other filters: []
+                        ├── Scan
+                        │   ├── table: default.customer (#1)
+                        │   ├── filters: []
+                        │   ├── order by: []
+                        │   └── limit: NONE
+                        └── Scan
+                            ├── table: default.orders (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+

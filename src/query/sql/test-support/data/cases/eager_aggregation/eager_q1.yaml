@@ -1,0 +1,14 @@
+name: "eager_q1"
+description: "Single-side eager aggregation with filtered lineitem"
+
+sql: |
+  SELECT o_orderkey, sum(l_extendedprice * (1-l_discount))
+  FROM lineitem, orders
+  WHERE o_orderkey = l_orderkey
+  AND l_returnflag = 'R'
+  GROUP BY o_orderkey
+
+tables:
+  customer: eager_aggregation/customer.sql
+  orders: eager_aggregation/orders.sql
+  lineitem: eager_aggregation/lineitem.sql
