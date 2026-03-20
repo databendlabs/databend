@@ -1,0 +1,17 @@
+Fixes #19578
+
+## Problem
+When parsing SQL with parentheses around UNION expressions, the parentheses were lost during AST conversion, causing panics when trying to display the query.
+
+## Solution
+Modified SetOperationParser::primary method in src/query/ast/src/parser/query.rs to properly wrap grouped expressions as SetExpr::Query.
+
+## Changes
+- Changed SetOperationElement::Group(expr) => expr to SetOperationElement::Group(expr) => SetExpr::Query(Box::new(expr.into_query()))
+- This ensures parentheses are preserved when converting AST back to SQL
+
+## Testing
+All UNION expressions with parentheses now parse and serialize correctly:
+- SELECT 1 UNION (SELECT 1 UNION SELECT 1 UNION SELECT 1)
+- SELECT 1 UNION (SELECT 2)
+- (SELECT 1) UNION SELECT 2
