@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_meta_client::ClientHandle;
+use databend_meta_client::types::protobuf::WatchRequest;
+use databend_meta_client::types::protobuf::WatchResponse;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::protobuf::WatchRequest;
-use databend_meta_types::protobuf::WatchResponse;
 use display_more::DisplayOptionExt;
 use futures::FutureExt;
 use futures::Stream;

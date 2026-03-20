@@ -28,7 +28,7 @@ use databend_common_storages_information_schema::SchemataTable;
 use databend_common_storages_information_schema::StatisticsTable;
 use databend_common_storages_information_schema::TablesTable;
 use databend_common_storages_information_schema::ViewsTable;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::SeqV;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;

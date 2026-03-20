@@ -235,6 +235,12 @@ fn test_range_index_spatial() -> anyhow::Result<()> {
         schema.clone(),
         Some(spatial_stats.clone()),
     );
+    run_text_spatial(
+        file,
+        "st_equals(g, to_geometry('POINT EMPTY'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
 
     let spatial_stats_4326 = build_spatial_stats(&schema, 0.0, 0.0, 10.0, 10.0, 4326, false);
     run_text_spatial(
@@ -372,6 +378,8 @@ fn build_spatial_stats(
         max_y: OrderedFloat(max_y),
         srid,
         has_null,
+        has_empty_rect: false,
+        is_valid: true,
     };
     [(column_id, stats)].into_iter().collect()
 }

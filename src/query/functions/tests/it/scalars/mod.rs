@@ -60,7 +60,7 @@ mod tuple;
 mod variant;
 mod vector;
 
-pub use databend_common_functions::test_utils as parser;
+pub use databend_common_sql_test_support as parser;
 
 #[derive(Clone)]
 pub struct TestContext<'a> {
@@ -129,6 +129,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
                 .iter()
                 .map(|(name, entry)| (*name, entry.data_type()))
                 .collect::<Vec<_>>(),
+            &BUILTIN_FUNCTIONS,
         );
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
@@ -366,10 +367,14 @@ fn test_if_function() -> anyhow::Result<()> {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_expression::types::*;
-    let raw_expr = parser::parse_raw_expr("if(eq(n,1), sum_sid + 1,100)", &[
-        ("n", UInt8Type::data_type()),
-        ("sum_sid", Int32Type::data_type().wrap_nullable()),
-    ]);
+    let raw_expr = parser::parse_raw_expr(
+        "if(eq(n,1), sum_sid + 1,100)",
+        &[
+            ("n", UInt8Type::data_type()),
+            ("sum_sid", Int32Type::data_type().wrap_nullable()),
+        ],
+        &BUILTIN_FUNCTIONS,
+    );
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
     let block = DataBlock::new(
         vec![

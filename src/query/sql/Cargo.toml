@@ -34,7 +34,7 @@ databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
-databend-meta-types = { workspace = true }
+databend-meta-client = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
@@ -80,6 +80,13 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+databend-common-grpc = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-sql-test-support = { workspace = true }
+databend-meta-client = { workspace = true }
+databend-meta-runtime = { workspace = true }
+databend-storages-common-session = { workspace = true }
 goldenfile = { workspace = true }
 
 [lints]

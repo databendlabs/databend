@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -143,7 +146,7 @@ pub fn compute_output_field_paths(
                 parquet::schema::types::Type::GroupType { fields, .. } => {
                     let idx = fields
                         .iter()
-                        .position(|t| t.name().eq_ignore_ascii_case(name))
+                        .position(|t| parquet_field_name_matches_path_name(t.name(), name))
                         .ok_or_else(|| error_cannot_find_field(field.name(), parquet_schema))?;
                     path.push(idx);
                     ty = &fields[idx];
@@ -163,4 +166,24 @@ pub fn error_cannot_find_field(name: &str, schema: &parquet::schema::types::Type
         "Cannot find field {} in the parquet schema {:?}",
         name, schema
     ))
+}
+
+fn parquet_field_name_matches_path_name(parquet_field_name: &str, path_name: &str) -> bool {
+    parquet_field_name.eq_ignore_ascii_case(path_name)
+        || QuotedIdent::<String>::from_str(path_name)
+            .is_ok_and(|quoted| parquet_field_name.eq_ignore_ascii_case(&quoted.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parquet_field_name_matches_path_name;
+
+    #[test]
+    fn test_parquet_field_name_matches_quoted_path_name() {
+        assert!(parquet_field_name_matches_path_name("A", "\"A\""));
+        assert!(parquet_field_name_matches_path_name("A", "\"a\""));
+        assert!(parquet_field_name_matches_path_name("simple", "simple"));
+        assert!(parquet_field_name_matches_path_name("simple", "SIMPLE"));
+        assert!(!parquet_field_name_matches_path_name("A", "\"B\""));
+    }
 }

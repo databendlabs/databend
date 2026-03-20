@@ -30,6 +30,7 @@ mod block_vec;
 mod common;
 mod decimal;
 mod display;
+mod evaluator;
 mod fill_field_default_value;
 mod group_by;
 mod hilbert;

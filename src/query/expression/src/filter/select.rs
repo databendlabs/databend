@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use super::SelectionBuffers;
 use crate::Selector;
 use crate::Value;
-use crate::arrow::and_validities;
 use crate::filter::SelectOp;
 use crate::types::AnyType;
 use crate::types::BooleanType;
@@ -36,14 +35,13 @@ use crate::types::Decimal256Type;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::EmptyArrayType;
-use crate::types::NullableType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
-use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::timestamp_tz::TimestampTzType;
+use crate::utils::filter_helper::FilterHelpers;
 use crate::with_number_mapped_type;
 
 impl Selector<'_> {
@@ -68,18 +66,8 @@ impl Selector<'_> {
             }
         }
 
-        // Remove `NullableColumn` and get the inner column and validity.
-        let mut validity = None;
-        if let (Value::Column(column), DataType::Nullable(_)) = (&left, &left_data_type) {
-            let nullable_column = column.clone().into_nullable().unwrap();
-            left = Value::Column(nullable_column.column);
-            validity = Some(nullable_column.validity);
-        }
-        if let (Value::Column(column), DataType::Nullable(_)) = (&right, &right_data_type) {
-            let nullable_column = column.clone().into_nullable().unwrap();
-            right = Value::Column(nullable_column.column);
-            validity = and_validities(Some(nullable_column.validity), validity);
-        }
+        let (left, right, validity) =
+            FilterHelpers::normalize_compare_values(left, &left_data_type, right, &right_data_type);
 
         let op = if let (Value::Scalar(_), Value::Column(_)) = (&left, &right) {
             op.reverse()
@@ -246,39 +234,9 @@ impl Selector<'_> {
             matches!(data_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
         );
 
-        let count = match data_type {
-            DataType::Boolean => {
-                let value = value.try_downcast::<BooleanType>().unwrap();
-                match value {
-                    Value::Scalar(scalar) => {
-                        self.select_boolean_scalar_adapt(scalar, buffers, has_false)
-                    }
-                    Value::Column(column) => {
-                        self.select_boolean_column_adapt(column, buffers, has_false)
-                    }
-                }
-            }
-            DataType::Nullable(box DataType::Boolean) => {
-                let nullable_value = value.try_downcast::<NullableType<BooleanType>>().unwrap();
-                match nullable_value {
-                    Value::Scalar(None) => {
-                        self.select_boolean_scalar_adapt(false, buffers, has_false)
-                    }
-                    Value::Scalar(Some(scalar)) => {
-                        self.select_boolean_scalar_adapt(scalar, buffers, has_false)
-                    }
-                    Value::Column(NullableColumn { column, validity }) => {
-                        let bitmap = &column & &validity;
-                        self.select_boolean_column_adapt(bitmap, buffers, has_false)
-                    }
-                }
-            }
-            _ => {
-                return Err(ErrorCode::UnsupportedDataType(format!(
-                    "Filtering by single Value only supports Boolean or Nullable(Boolean), but getting {:?}",
-                    &data_type
-                )));
-            }
+        let count = match FilterHelpers::decode_predicate(value) {
+            Value::Scalar(scalar) => self.select_boolean_scalar_adapt(scalar, buffers, has_false),
+            Value::Column(bitmap) => self.select_boolean_column_adapt(bitmap, buffers, has_false),
         };
         Ok(count)
     }

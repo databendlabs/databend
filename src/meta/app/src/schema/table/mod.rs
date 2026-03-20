@@ -31,8 +31,8 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::MetaId;
 use maplit::hashmap;
 
 use super::CatalogInfo;
@@ -1186,11 +1186,11 @@ pub struct TruncateTableReply {}
 pub struct EmptyProto {}
 
 mod kvapi_key_impl {
-    use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::Key;
-    use databend_meta_kvapi::kvapi::KeyBuilder;
-    use databend_meta_kvapi::kvapi::KeyError;
-    use databend_meta_kvapi::kvapi::KeyParser;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::KeyBuilder;
+    use databend_meta_client::kvapi::KeyError;
+    use databend_meta_client::kvapi::KeyParser;
 
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
@@ -1361,8 +1361,8 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::Key;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::Key;
 
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableMeta;

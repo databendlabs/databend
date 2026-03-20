@@ -80,7 +80,7 @@ use databend_common_version::DATABEND_CREDITS_LICENSES;
 use databend_common_version::DATABEND_CREDITS_NAMES;
 use databend_common_version::DATABEND_CREDITS_VERSIONS;
 use databend_common_version::DATABEND_OPT_LEVEL;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::SeqV;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;

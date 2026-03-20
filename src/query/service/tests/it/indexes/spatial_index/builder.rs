@@ -121,7 +121,6 @@ fn test_spatial_index_builder_with_index() -> Result<()> {
 
     let field_names = field_names.unwrap();
     assert!(field_names.contains(&format!("{geom_column_id}")));
-    assert!(field_names.contains(&format!("{geom_column_id}_srid")));
     let stats = stats.unwrap();
     assert_eq!(stats.min_x, OrderedFloat(1.0));
     assert_eq!(stats.max_x, OrderedFloat(3.0));
@@ -138,6 +137,7 @@ fn test_spatial_index_builder_without_index() -> Result<()> {
 
     assert!(field_names.is_none());
     let stats = stats.unwrap();
+    assert!(stats.is_valid);
     assert_eq!(stats.min_x, OrderedFloat(1.0));
     assert_eq!(stats.max_x, OrderedFloat(3.0));
     assert_eq!(stats.srid, 4326);
@@ -150,8 +150,8 @@ fn test_spatial_index_builder_mixed_srid() -> Result<()> {
     let schema = build_schema();
     let block = build_block_mixed_srid()?;
     let (field_names, stats) = build_spatial_index(schema, true, block)?;
-
     assert!(field_names.is_none());
-    assert!(stats.is_none());
+    let stats = stats.unwrap();
+    assert!(!stats.is_valid);
     Ok(())
 }

@@ -21,19 +21,24 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 
-use super::broadcast_recv_transform::BroadcastRecvTransform;
+use super::broadcast_recv_transform::ExchangeRecvTransform;
 use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
-use super::exchange_sink::build_broadcast_outbound_channels;
+use super::exchange_params::GlobalExchangeParams;
 use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
+use super::hash_send_transform::HashSendTransform;
+use crate::servers::flight::v1::exchange::BroadcastRecvTransform;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_outbound_channels;
+use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_channels;
 use crate::servers::flight::v1::network::create_local_channels;
+use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;
@@ -55,7 +60,9 @@ impl ExchangeTransform {
             ExchangeParams::NodeShuffleExchange(params) => {
                 Self::node_shuffle(ctx, pipeline, injector, params)
             }
-            ExchangeParams::GlobalShuffleExchange(_params) => Ok(()),
+            ExchangeParams::GlobalShuffleExchange(params) => {
+                Self::hash_exchange(ctx, pipeline, params)
+            }
         }
     }
 
@@ -141,8 +148,7 @@ impl ExchangeTransform {
 
         assert_eq!(channel_set.channels.len(), local_threads);
 
-        let max_bytes = 20 * 1024 * 1024;
-        let local_outbound = create_local_channels(&channel_set, max_bytes);
+        let local_outbound = create_local_channels(&channel_set);
         let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
 
         let mut items = Vec::with_capacity(local_threads);
@@ -161,6 +167,75 @@ impl ExchangeTransform {
         let mut items = Vec::with_capacity(local_threads);
         for idx in 0..channel_set.channels.len() {
             items.push(BroadcastRecvTransform::create_item(
+                idx,
+                channel_set.create_receiver(idx, &params.schema),
+                waker.clone(),
+            ));
+        }
+
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
+        Ok(())
+    }
+
+    fn hash_exchange(
+        ctx: &Arc<QueryContext>,
+        pipeline: &mut Pipeline,
+        params: &GlobalExchangeParams,
+    ) -> Result<()> {
+        let mut local_pos = 0;
+        let mut local_threads = 0;
+
+        for (dest, threads) in params.destination_channels.iter() {
+            if dest == &params.executor_id {
+                local_threads = threads.len();
+                break;
+            }
+
+            local_pos += threads.len();
+        }
+
+        let waker = pipeline.get_waker();
+        let compression = ctx.get_settings().get_query_flight_compression()?;
+        let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
+        let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
+
+        pipeline.resize(local_threads, false)?;
+
+        let query_id = &params.query_id;
+        let exchange_id = &params.exchange_id;
+        let exchange_manager = DataExchangeManager::instance();
+
+        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+        assert_eq!(channel_set.channels.len(), local_threads);
+
+        let local_outbound = create_local_channels(&channel_set);
+        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+
+        let scatter = Arc::new(HashFlightScatter::try_create(
+            ctx.get_function_context()?,
+            params.shuffle_keys.clone(),
+            remote_outbound.len(),
+            local_pos,
+        )?);
+
+        let mut items = Vec::with_capacity(local_threads);
+        for idx in 0..local_threads {
+            items.push(HashSendTransform::create_item(
+                idx,
+                local_pos + idx,
+                scatter.clone(),
+                remote_outbound.clone(),
+                waker.clone(),
+                rows_threshold,
+                bytes_threshold,
+            ));
+        }
+
+        pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
+
+        let mut items = Vec::with_capacity(local_threads);
+        for idx in 0..channel_set.channels.len() {
+            items.push(ExchangeRecvTransform::create_item(
                 idx,
                 channel_set.create_receiver(idx, &params.schema),
                 waker.clone(),

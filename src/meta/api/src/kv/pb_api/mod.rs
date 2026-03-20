@@ -26,16 +26,16 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_proto_conv::FromToProto;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::DirName;
-use databend_meta_kvapi::kvapi::KVApi;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_kvapi::kvapi::ListOptions;
-use databend_meta_kvapi::kvapi::NonEmptyItem;
-use databend_meta_types::Change;
-use databend_meta_types::SeqV;
-use databend_meta_types::UpsertKV;
-use databend_meta_types::protobuf::StreamItem;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::DirName;
+use databend_meta_client::kvapi::KVApi;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::NonEmptyItem;
+use databend_meta_client::types::Change;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_client::types::protobuf::StreamItem;
 use futures::TryStreamExt;
 use futures::future::FutureExt;
 use futures::future::TryFutureExt;
@@ -505,18 +505,16 @@ mod tests {
     use databend_common_meta_app::storage::StorageS3Config;
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_proto_conv::FromToProto;
-    use databend_meta_kvapi::kvapi::DirName;
-    use databend_meta_kvapi::kvapi::KVApi;
-    use databend_meta_kvapi::kvapi::KVStream;
-    use databend_meta_kvapi::kvapi::ListOptions;
-    use databend_meta_kvapi::kvapi::UpsertKVReply;
-    use databend_meta_kvapi::kvapi::limit_stream;
-    use databend_meta_types::MetaError;
-    use databend_meta_types::SeqV;
-    use databend_meta_types::TxnReply;
-    use databend_meta_types::TxnRequest;
-    use databend_meta_types::UpsertKV;
-    use databend_meta_types::protobuf::StreamItem;
+    use databend_meta_client::kvapi::DirName;
+    use databend_meta_client::kvapi::KVApi;
+    use databend_meta_client::kvapi::KVStream;
+    use databend_meta_client::kvapi::ListOptions;
+    use databend_meta_client::kvapi::limit_stream;
+    use databend_meta_client::types::MetaError;
+    use databend_meta_client::types::SeqV;
+    use databend_meta_client::types::TxnReply;
+    use databend_meta_client::types::TxnRequest;
+    use databend_meta_client::types::protobuf::StreamItem;
     use futures::StreamExt;
     use futures::TryStreamExt;
     use futures::stream::BoxStream;
@@ -536,15 +534,11 @@ mod tests {
     impl KVApi for FooKV {
         type Error = MetaError;
 
-        async fn upsert_kv(&self, _req: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
-            unimplemented!()
-        }
-
         async fn get_many_kv(
             &self,
             keys: BoxStream<'static, Result<String, Self::Error>>,
         ) -> Result<KVStream<Self::Error>, Self::Error> {
-            use databend_meta_kvapi::kvapi::fail_fast;
+            use databend_meta_client::kvapi::fail_fast;
             use futures::TryStreamExt;
 
             let kvs = self.kvs.clone();
@@ -573,6 +567,13 @@ mod tests {
 
             let strm = futures::stream::iter(items);
             Ok(limit_stream(strm, opts.limit))
+        }
+
+        async fn upsert_kv(
+            &self,
+            _req: databend_meta_client::types::UpsertKV,
+        ) -> Result<databend_meta_client::types::Change<Vec<u8>>, Self::Error> {
+            unimplemented!()
         }
 
         async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {

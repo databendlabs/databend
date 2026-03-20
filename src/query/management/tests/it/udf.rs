@@ -25,10 +25,10 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_meta_kvapi::kvapi::KvApiExt;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::MatchSeq;
-use databend_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_udf() -> anyhow::Result<()> {

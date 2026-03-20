@@ -130,7 +130,7 @@ impl Binder {
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
 
-        let schema = self.schema_project(
+        let required_values_schema = self.schema_project(
             &table.schema(),
             columns,
             &format!("{database_name}.{table_name}"),
@@ -143,7 +143,7 @@ impl Binder {
                     let new_row = bind_context
                         .exprs_to_scalar(
                             &row,
-                            &Arc::new(schema.clone().into()),
+                            &Arc::new(required_values_schema.clone().into()),
                             self.ctx.clone(),
                             &self.name_resolution_ctx,
                             self.metadata.clone(),
@@ -173,7 +173,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
-                                schema,
+                                required_values_schema,
                                 &values_str,
                                 CopyIntoTableMode::Insert {
                                     overwrite: *overwrite,
@@ -215,12 +215,14 @@ impl Binder {
                             ));
                         }
                         let (required_source_schema, values_consts) = if let Some(value) = value {
-                            self.prepared_values(value, &schema, settings).await?
+                            self.prepared_values(value, &required_values_schema, settings)
+                                .await?
                         } else {
-                            (schema.clone(), vec![])
+                            (required_values_schema.clone(), vec![])
                         };
 
-                        let required_values_schema: DataSchemaRef = Arc::new(schema.clone().into());
+                        let required_values_schema: DataSchemaRef =
+                            Arc::new(required_values_schema.clone().into());
 
                         let default_exprs = if file_format_params.need_field_default() {
                             Some(
@@ -270,7 +272,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
-                                schema,
+                                required_values_schema,
                                 value,
                                 stage_info,
                                 files_info,
@@ -290,7 +292,7 @@ impl Binder {
             database: database_name,
             table: table_name,
             branch: branch_name,
-            schema,
+            schema: required_values_schema,
             overwrite: *overwrite,
             source: input_source?,
             table_info: None,

@@ -39,25 +39,35 @@ use databend_common_expression::types::array::ArrayColumnBuilder;
 /// * `inlist` - Deduplicated list of build key column
 /// * `min_max` - The min and max values of the build column
 /// * `bloom` - The deduplicated hashes of the build column
+/// * `spatial` - The RTrees of the Geometry or Geography column
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
 pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
     pub min_max: Option<SerializableDomain>,
     pub bloom: Option<Vec<u64>>,
+    pub spatial: Option<SpatialPacket>,
 }
 
 impl Debug for RuntimeFilterPacket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "RuntimeFilterPacket {{ id: {}, inlist: {:?}, min_max: {:?}, bloom: {:?} }}",
+            "RuntimeFilterPacket {{ id: {}, inlist: {:?}, min_max: {:?}, bloom: {:?}, spatial: {:?} }}",
             self.id,
             self.inlist,
             self.min_max,
-            self.bloom.is_some()
+            self.bloom.is_some(),
+            self.spatial.is_some()
         )
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SpatialPacket {
+    pub valid: bool,
+    pub srid: Option<i32>,
+    pub rtrees: Vec<u8>,
 }
 
 /// Represents a collection of runtime filter packets that correspond to a join operator.
@@ -109,6 +119,7 @@ struct FlightRuntimeFilterPacket {
     pub bloom: Option<usize>,
     pub inlist: Option<usize>,
     pub min_max: Option<SerializableDomain>,
+    pub spatial: Option<SpatialPacket>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
@@ -161,6 +172,7 @@ impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
                     bloom: bloom_pos,
                     inlist: inlist_pos,
                     min_max: packet.min_max,
+                    spatial: packet.spatial,
                 });
             }
 
@@ -226,6 +238,7 @@ impl TryFrom<DataBlock> for JoinRuntimeFilterPacket {
                     inlist,
                     id: flight_packet.id,
                     min_max: flight_packet.min_max,
+                    spatial: flight_packet.spatial,
                 });
             }
 

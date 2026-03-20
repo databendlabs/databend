@@ -15,8 +15,8 @@ anyhow = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
-databend-meta-kvapi = { workspace = true }
-databend-meta-runtime-api = { workspace = true }
+databend-meta-client = { workspace = true }
+databend-meta-test-harness = { workspace = true }
 tokio = { workspace = true }
 
 [lints]

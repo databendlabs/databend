@@ -32,7 +32,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::infer_table_schema;
@@ -51,7 +50,6 @@ use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowGroups;
 use parquet::arrow::parquet_to_arrow_field_levels;
-use parquet::arrow::parquet_to_arrow_schema;
 use parquet::basic::Compression;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
@@ -254,10 +252,11 @@ impl SpillsBufferPool {
         self: &Arc<Self>,
         op: Operator,
         path: String,
+        data_schema: DataSchemaRef,
         row_groups: Vec<RowGroupMetaData>,
         target: SpillTarget,
     ) -> Result<SpillsDataReader> {
-        SpillsDataReader::create(path, op, row_groups, self.clone(), target)
+        SpillsDataReader::create(path, op, data_schema, row_groups, self.clone(), target)
     }
 
     pub fn fetch_ranges(
@@ -568,6 +567,7 @@ impl SpillsDataWriter {
                 let row_groups = writer.writer.flushed_row_groups().to_vec();
                 let bytes_written = writer.writer.bytes_written();
                 writer.writer.into_inner()?.close()?;
+
                 Ok((bytes_written, row_groups))
             }
         }
@@ -589,6 +589,7 @@ impl SpillsDataReader {
     pub fn create(
         location: String,
         operator: Operator,
+        data_schema: DataSchemaRef,
         row_groups: Vec<RowGroupMetaData>,
         spills_buffer_pool: Arc<SpillsBufferPool>,
         target: SpillTarget,
@@ -598,9 +599,6 @@ impl SpillsDataReader {
                 "Parquet reader cannot read empty row groups.",
             ));
         }
-
-        let arrow_schema = parquet_to_arrow_schema(row_groups[0].schema_descr(), None)?;
-        let data_schema = DataSchemaRef::new(DataSchema::try_from(&arrow_schema)?);
 
         let field_levels = parquet_to_arrow_field_levels(
             row_groups[0].schema_descr(),

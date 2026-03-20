@@ -44,8 +44,8 @@ databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
+databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
-databend-meta-types = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-io = { workspace = true }
@@ -60,7 +60,6 @@ tempfile = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-meta-kvapi = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 jsonb = { workspace = true }
 tokio = { workspace = true }

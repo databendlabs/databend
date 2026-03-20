@@ -21,8 +21,8 @@ use databend_common_management::SelectedNode;
 use databend_common_management::WarehouseApi;
 use databend_common_management::WarehouseInfo;
 use databend_enterprise_resources_management::ResourcesManagement;
-use databend_meta_types::NodeInfo;
-use databend_meta_types::NodeType;
+use databend_meta_client::types::NodeInfo;
+use databend_meta_client::types::NodeType;
 
 pub struct SystemResourcesManagement {
     pub warehouse_manager: Arc<dyn WarehouseApi>,

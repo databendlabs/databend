@@ -34,7 +34,7 @@ use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::segment_format_from_location;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;

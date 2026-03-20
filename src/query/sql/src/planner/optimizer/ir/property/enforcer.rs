@@ -28,6 +28,7 @@ use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RequiredProperty;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
+use crate::plans::ScalarExpr;
 
 /// Enforcer is a trait that can enforce the physical property
 pub trait Enforcer: std::fmt::Debug + Send + Sync {
@@ -71,6 +72,9 @@ impl Enforcer for DistributionEnforcer {
             Distribution::Broadcast => Ok(Exchange::Broadcast.into()),
             Distribution::NodeToNodeHash(hash_keys) => {
                 Ok(Exchange::NodeToNodeHash(hash_keys.clone()).into())
+            }
+            Distribution::GlobalHash(hash_keys) => {
+                Ok(Exchange::GlobalHash(hash_keys.clone()).into())
             }
             Distribution::Random | Distribution::Any => Err(ErrorCode::Internal(
                 "Cannot enforce random or any distribution",
@@ -122,11 +126,22 @@ impl PropertyEnforcer {
         if let RelOperator::Join(_) = &plan {
             let (probe_required_property, build_required_property) =
                 required_properties.split_at_mut(1);
-            if let Distribution::NodeToNodeHash(probe_keys) =
-                &mut probe_required_property[0].distribution
-                && let Distribution::NodeToNodeHash(build_keys) =
-                    &mut build_required_property[0].distribution
-            {
+
+            let keys: Option<(&mut Vec<ScalarExpr>, &mut Vec<ScalarExpr>)> = match (
+                &mut probe_required_property[0].distribution,
+                &mut build_required_property[0].distribution,
+            ) {
+                (
+                    Distribution::NodeToNodeHash(probe_keys),
+                    Distribution::NodeToNodeHash(build_keys),
+                )
+                | (Distribution::GlobalHash(probe_keys), Distribution::GlobalHash(build_keys)) => {
+                    Some((probe_keys, build_keys))
+                }
+                _ => None,
+            };
+
+            if let Some((probe_keys, build_keys)) = keys {
                 let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
                 for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
                     let probe_key_data_type = probe_key.data_type()?;

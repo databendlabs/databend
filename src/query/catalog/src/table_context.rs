@@ -436,7 +436,6 @@ pub trait TableContext: Send + Sync {
         _files_info: StageFilesInfo,
         _files_to_copy: Option<Vec<StageFileInfo>>,
         _max_column_position: usize,
-        _case_sensitive: bool,
         _on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
         unimplemented!()
@@ -461,6 +460,15 @@ pub trait TableContext: Send + Sync {
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
 
     async fn drop_m_cte_temp_table(&self) -> Result<()>;
+
+    fn add_recursive_cte_temp_table(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+    );
+
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()>;
 
     fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
         unimplemented!()

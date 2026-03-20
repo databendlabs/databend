@@ -22,7 +22,7 @@ use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_meta_types::NodeInfo;
+use databend_meta_client::types::NodeInfo;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::BroadcastSink;
@@ -229,6 +229,24 @@ impl FragmentDeriveHandle {
                 }
 
                 Some(DataExchange::NodeToNodeExchange(NodeToNodeExchange {
+                    id: GlobalUniq::unique(),
+                    destination_ids,
+                    destination_channels,
+                    shuffle_keys: exchange_sink.keys.clone(),
+                    allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
+                }))
+            }
+            FragmentKind::GlobalShuffle => {
+                let destination_ids = get_executors(cluster.clone());
+
+                let mut destination_channels = Vec::with_capacity(destination_ids.len());
+
+                for destination in &destination_ids {
+                    let channels = (0..num_threads).map(|_| GlobalUniq::unique()).collect();
+                    destination_channels.push((destination.clone(), channels));
+                }
+
+                Some(DataExchange::GlobalShuffleExchange(NodeToNodeExchange {
                     id: GlobalUniq::unique(),
                     destination_ids,
                     destination_channels,

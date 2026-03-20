@@ -778,38 +778,29 @@ impl<'a> TypeChecker<'a> {
                         self.resolve_function(*span, "contains", vec![], &args)
                     }
                 } else {
-                    let mut result = list
-                        .iter()
-                        .map(|e| Expr::BinaryOp {
-                            span: *span,
-                            op: BinaryOperator::Eq,
-                            left: expr.clone(),
-                            right: Box::new(e.clone()),
-                        })
-                        .fold(None, |mut acc, e| {
-                            match acc.as_mut() {
-                                None => acc = Some(e),
-                                Some(acc) => {
-                                    *acc = Expr::BinaryOp {
-                                        span: *span,
-                                        op: BinaryOperator::Or,
-                                        left: Box::new(acc.clone()),
-                                        right: Box::new(e),
-                                    }
-                                }
-                            }
-                            acc
-                        })
-                        .unwrap();
+                    let mut predicate_levels =
+                        Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
+
+                    for item in list {
+                        let (predicate, _) = *self.resolve_binary_op_or_subquery(
+                            span,
+                            &BinaryOperator::Eq,
+                            expr.as_ref(),
+                            item,
+                        )?;
+                        self.merge_or_level(*span, &mut predicate_levels, predicate)?;
+                    }
+
+                    let result = self
+                        .fold_or_levels(*span, predicate_levels)?
+                        .expect("IN list should not be empty");
+                    let data_type = result.data_type()?;
 
                     if *not {
-                        result = Expr::UnaryOp {
-                            span: *span,
-                            op: UnaryOperator::Not,
-                            expr: Box::new(result),
-                        };
+                        self.resolve_scalar_function_call(*span, "not", vec![], vec![result])
+                    } else {
+                        Ok(Box::new((result, data_type)))
                     }
-                    self.resolve(&result)
                 }
             }
 
@@ -1555,6 +1546,56 @@ impl<'a> TypeChecker<'a> {
         } else {
             self.resolve_binary_op(*span, op, left, right)
         }
+    }
+
+    fn merge_or_level(
+        &mut self,
+        span: Span,
+        predicate_levels: &mut Vec<Option<ScalarExpr>>,
+        mut predicate: ScalarExpr,
+    ) -> Result<()> {
+        let mut level = 0;
+
+        loop {
+            if predicate_levels.len() == level {
+                predicate_levels.push(Some(predicate));
+                return Ok(());
+            }
+
+            if let Some(left) = predicate_levels[level].take() {
+                let (or_predicate, _) =
+                    *self
+                        .resolve_scalar_function_call(span, "or", vec![], vec![left, predicate])?;
+                predicate = or_predicate;
+                level += 1;
+            } else {
+                predicate_levels[level] = Some(predicate);
+                return Ok(());
+            }
+        }
+    }
+
+    fn fold_or_levels(
+        &mut self,
+        span: Span,
+        predicate_levels: Vec<Option<ScalarExpr>>,
+    ) -> Result<Option<ScalarExpr>> {
+        let mut result = None;
+
+        for predicate in predicate_levels.into_iter().rev().flatten() {
+            result = Some(match result {
+                None => predicate,
+                Some(acc) => {
+                    let (or_predicate, _) =
+                        *self.resolve_scalar_function_call(span, "or", vec![], vec![
+                            acc, predicate,
+                        ])?;
+                    or_predicate
+                }
+            });
+        }
+
+        Ok(result)
     }
 
     fn resolve_scalar_subquery(

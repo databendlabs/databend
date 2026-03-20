@@ -1,0 +1,66 @@
+Exchange
+├── output columns: [sum(revenue) (#27), orders.o_orderkey (#18)]
+├── exchange type: Merge
+└── AggregateFinal
+    ├── output columns: [sum(revenue) (#27), orders.o_orderkey (#18)]
+    ├── group by: [o_orderkey]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)))]
+    ├── estimated rows: 1.00
+    └── Exchange
+        ├── output columns: [sum(revenue) (#27), orders.o_orderkey (#18)]
+        ├── exchange type: Hash(0)
+        └── AggregatePartial
+            ├── group by: [o_orderkey]
+            ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)))]
+            ├── estimated rows: 1.00
+            └── HashJoin
+                ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#17), orders.o_orderkey (#18)]
+                ├── join type: INNER
+                ├── build keys: [orders.o_orderkey (#18)]
+                ├── probe keys: [loss.l_orderkey (#0)]
+                ├── keys is null equal: [false]
+                ├── filters: []
+                ├── build join filters:
+                │   └── filter id:0, build key:orders.o_orderkey (#18), probe targets:[loss.l_orderkey (#0)@scan0], filter type:bloom,inlist,min_max
+                ├── estimated rows: 0.00
+                ├── Exchange(Build)
+                │   ├── output columns: [orders.o_orderkey (#18)]
+                │   ├── exchange type: Broadcast
+                │   └── TableScan
+                │       ├── table: default.default.orders
+                │       ├── scan id: 1
+                │       ├── output columns: [o_orderkey (#18)]
+                │       ├── read rows: 0
+                │       ├── read size: 0
+                │       ├── partitions total: 0
+                │       ├── partitions scanned: 0
+                │       ├── push downs: [filters: [orders.o_orderdate (#22) >= '1995-05-01' and orders.o_orderdate (#22) <= '1995-05-31'], limit: NONE]
+                │       └── estimated rows: 0.00
+                └── AggregateFinal(Probe)
+                    ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#17), lineitem.l_orderkey (#0)]
+                    ├── group by: [l_orderkey]
+                    ├── aggregate functions: [sum(sum_arg_0)]
+                    ├── estimated rows: 1.00
+                    └── Exchange
+                        ├── output columns: [sum(l_extendedprice * (1 - l_discount)) (#17), lineitem.l_orderkey (#0)]
+                        ├── exchange type: Hash(0)
+                        └── AggregatePartial
+                            ├── group by: [l_orderkey]
+                            ├── aggregate functions: [sum(sum_arg_0)]
+                            ├── estimated rows: 1.00
+                            └── EvalScalar
+                                ├── output columns: [lineitem.l_orderkey (#0), sum_arg_0 (#16)]
+                                ├── expressions: [lineitem.l_extendedprice (#5) * (1 - lineitem.l_discount (#6))]
+                                ├── estimated rows: 0.00
+                                └── TableScan
+                                    ├── table: default.default.lineitem
+                                    ├── scan id: 0
+                                    ├── output columns: [l_orderkey (#0), l_extendedprice (#5), l_discount (#6)]
+                                    ├── read rows: 0
+                                    ├── read size: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [lineitem.l_returnflag (#8) = 'R'], limit: NONE]
+                                    ├── apply join filters: [#0]
+                                    └── estimated rows: 0.00
+

@@ -67,6 +67,7 @@ impl TransformHashJoin {
             rf_desc.inlist_threshold,
             rf_desc.bloom_threshold,
             rf_desc.min_max_threshold,
+            rf_desc.spatial_threshold,
         )?;
 
         Ok(ProcessorPtr::create(Box::new(TransformHashJoin {
@@ -230,14 +231,12 @@ impl Processor for TransformHashJoin {
                 if wait_res.is_leader() {
                     let spilled = self.join.is_spill_happened();
                     let packet = self.join.build_runtime_filter()?;
-                    if let Some(packets) = &packet.packets {
-                        info!(
-                            "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
-                            spilled,
-                            packets.len(),
-                            packet.disable_all_due_to_spill
-                        );
-                    };
+                    info!(
+                        "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
+                        spilled,
+                        packet.packets.as_ref().map_or(0, |p| p.len()),
+                        packet.disable_all_due_to_spill
+                    );
 
                     self.rf_desc.globalization(packet).await?;
                 }

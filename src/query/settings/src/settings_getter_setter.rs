@@ -351,17 +351,25 @@ impl Settings {
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         self.try_get_u64("max_inlist_to_or")
     }
+
     pub fn get_inlist_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("inlist_runtime_filter_threshold")
     }
+
     pub fn get_inlist_runtime_bloom_prune_threshold(&self) -> Result<u64> {
         self.try_get_u64("inlist_runtime_bloom_prune_threshold")
     }
+
     pub fn get_bloom_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("bloom_runtime_filter_threshold")
     }
+
     pub fn get_min_max_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("min_max_runtime_filter_threshold")
+    }
+
+    pub fn get_spatial_runtime_filter_threshold(&self) -> Result<u64> {
+        self.try_get_u64("spatial_runtime_filter_threshold")
     }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
@@ -1005,6 +1013,14 @@ impl Settings {
 
     pub fn get_flight_retry_interval(&self) -> Result<u64> {
         self.try_get_u64("flight_connection_retry_interval")
+    }
+
+    pub fn get_hash_shuffle_rows_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_rows_threshold")? as usize)
+    }
+
+    pub fn get_hash_shuffle_bytes_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_bytes_threshold")? as usize)
     }
 
     pub fn get_network_policy(&self) -> Result<String> {

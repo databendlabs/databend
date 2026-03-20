@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use databend_query::storages::index::filters::BlockFilter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_io::ReadSettings;
 use futures_util::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -117,8 +121,11 @@ async fn get_block_filter(fixture: &TestFixture, columns: &[String]) -> Result<B
     let path = *path.as_string().unwrap();
     let length = block.get_by_offset(1).index(0).unwrap();
 
+    let ctx = fixture.new_query_ctx().await?;
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
     load_bloom_filter_by_columns(
         DataOperator::instance().operator(),
+        &ReadSettings::from_ctx(&table_ctx)?,
         columns,
         path,
         *length.as_number().unwrap().as_u_int64().unwrap(),

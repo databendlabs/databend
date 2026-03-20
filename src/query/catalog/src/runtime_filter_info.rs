@@ -61,6 +61,7 @@ pub struct RuntimeFilterEntry {
     pub id: usize,
     pub probe_expr: Expr<String>,
     pub bloom: Option<RuntimeFilterBloom>,
+    pub spatial: Option<RuntimeFilterSpatial>,
     pub inlist: Option<Expr<String>>,
     pub inlist_value_count: usize,
     pub min_max: Option<Expr<String>>,
@@ -76,6 +77,14 @@ pub struct RuntimeFilterBloom {
     pub filter: RuntimeBloomFilter,
 }
 
+#[derive(Clone)]
+pub struct RuntimeFilterSpatial {
+    pub column_name: String,
+    pub srid: i32,
+    pub rtrees: Arc<Vec<u8>>,
+    pub rtree_bounds: Option<[f64; 4]>,
+}
+
 #[derive(Default)]
 pub struct RuntimeFilterStats {
     bloom_time_ns: AtomicU64,
@@ -83,6 +92,9 @@ pub struct RuntimeFilterStats {
     inlist_min_max_time_ns: AtomicU64,
     min_max_rows_filtered: AtomicU64,
     min_max_partitions_pruned: AtomicU64,
+    spatial_time_ns: AtomicU64,
+    spatial_rows_filtered: AtomicU64,
+    spatial_partitions_pruned: AtomicU64,
 }
 
 impl RuntimeFilterStats {
@@ -105,6 +117,14 @@ impl RuntimeFilterStats {
             .fetch_add(partitions_pruned, Ordering::Relaxed);
     }
 
+    pub fn record_spatial(&self, time_ns: u64, rows_filtered: u64, partitions_pruned: u64) {
+        self.spatial_time_ns.fetch_add(time_ns, Ordering::Relaxed);
+        self.spatial_rows_filtered
+            .fetch_add(rows_filtered, Ordering::Relaxed);
+        self.spatial_partitions_pruned
+            .fetch_add(partitions_pruned, Ordering::Relaxed);
+    }
+
     pub fn snapshot(&self) -> RuntimeFilterStatsSnapshot {
         RuntimeFilterStatsSnapshot {
             bloom_time_ns: self.bloom_time_ns.load(Ordering::Relaxed),
@@ -112,6 +132,9 @@ impl RuntimeFilterStats {
             inlist_min_max_time_ns: self.inlist_min_max_time_ns.load(Ordering::Relaxed),
             min_max_rows_filtered: self.min_max_rows_filtered.load(Ordering::Relaxed),
             min_max_partitions_pruned: self.min_max_partitions_pruned.load(Ordering::Relaxed),
+            spatial_time_ns: self.spatial_time_ns.load(Ordering::Relaxed),
+            spatial_rows_filtered: self.spatial_rows_filtered.load(Ordering::Relaxed),
+            spatial_partitions_pruned: self.spatial_partitions_pruned.load(Ordering::Relaxed),
         }
     }
 }
@@ -123,6 +146,9 @@ pub struct RuntimeFilterStatsSnapshot {
     pub inlist_min_max_time_ns: u64,
     pub min_max_rows_filtered: u64,
     pub min_max_partitions_pruned: u64,
+    pub spatial_time_ns: u64,
+    pub spatial_rows_filtered: u64,
+    pub spatial_partitions_pruned: u64,
 }
 
 #[derive(Clone, Debug)]

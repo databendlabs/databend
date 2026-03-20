@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::AlterViewPlan;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

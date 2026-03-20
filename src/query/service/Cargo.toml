@@ -104,10 +104,8 @@ databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-meta-client = { workspace = true }
-databend-meta-kvapi = { workspace = true }
 databend-meta-plugin-semaphore = { workspace = true }
 databend-meta-runtime = { workspace = true }
-databend-meta-types = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-index = { workspace = true }
@@ -123,6 +121,8 @@ fastrace = { workspace = true }
 flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
+geo = { workspace = true }
+geo-index = { workspace = true }
 geozero = { workspace = true }
 headers = { workspace = true }
 hex = { workspace = true }
@@ -172,6 +172,7 @@ tokio-util = { workspace = true }
 toml = { workspace = true }
 tonic = { workspace = true }
 typetag = { workspace = true }
+unicase = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
@@ -179,6 +180,7 @@ zip = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
+databend-common-sql-test-support = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 geo = { workspace = true }
 goldenfile = { workspace = true }

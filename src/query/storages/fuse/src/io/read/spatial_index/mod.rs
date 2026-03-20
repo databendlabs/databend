@@ -13,5 +13,8 @@
 // limitations under the License.
 
 mod spatial_index_loader;
+mod spatial_index_reader;
 pub use spatial_index_loader::load_spatial_index_files;
 pub use spatial_index_loader::load_spatial_index_meta;
+pub use spatial_index_reader::SpatialIndexReadResult;
+pub use spatial_index_reader::SpatialIndexReader;

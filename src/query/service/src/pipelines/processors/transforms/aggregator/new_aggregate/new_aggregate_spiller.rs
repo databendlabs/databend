@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
@@ -320,6 +321,7 @@ pub struct NewAggregateSpiller<P: PartitionStream = SharedPartitionStream> {
     pub memory_settings: MemorySettings,
     read_setting: ReadSettings,
     partition_stream: P,
+    data_schema: DataSchemaRef,
     payload_writers: AggregatePayloadWriters,
 }
 
@@ -327,6 +329,7 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         partition_count: usize,
+        data_schema: DataSchemaRef,
         partition_stream: P,
     ) -> Result<Self> {
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
@@ -339,6 +342,7 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
         Ok(Self {
             memory_settings,
             read_setting,
+            data_schema,
             partition_stream,
             payload_writers,
         })
@@ -363,29 +367,34 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
     }
 
     pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
-        restore_payload(self.read_setting, payload)
+        restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
 
 pub struct NewAggregateSpillReader {
     read_setting: ReadSettings,
+    data_schema: DataSchemaRef,
 }
 
 impl NewAggregateSpillReader {
-    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, schema: DataSchemaRef) -> Result<Self> {
         let table_ctx: Arc<dyn TableContext> = ctx;
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
-        Ok(Self { read_setting })
+        Ok(Self {
+            read_setting,
+            data_schema: schema,
+        })
     }
 
     pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
-        restore_payload(self.read_setting, payload)
+        restore_payload(self.read_setting, payload, &self.data_schema)
     }
 }
 
 fn restore_payload(
     read_setting: ReadSettings,
     payload: NewSpilledPayload,
+    data_schema: &DataSchemaRef,
 ) -> Result<AggregateMeta> {
     let NewSpilledPayload {
         bucket,
@@ -401,6 +410,7 @@ fn restore_payload(
     let mut reader = buffer_pool.reader(
         operator.clone(),
         location.clone(),
+        data_schema.clone(),
         vec![row_group.clone()],
         target,
     )?;
@@ -449,9 +459,11 @@ fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats) {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::sync::Arc;
 
     use databend_common_exception::Result;
     use databend_common_expression::DataBlock;
+    use databend_common_expression::DataSchema;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
 
@@ -467,8 +479,12 @@ mod tests {
 
         let partition_count = 4;
         let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
-        let mut spiller =
-            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream)?;
+        let mut spiller = NewAggregateSpiller::try_create(
+            ctx.clone(),
+            partition_count,
+            Arc::new(DataSchema::empty()),
+            partition_stream,
+        )?;
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
 
@@ -496,8 +512,12 @@ mod tests {
 
         let partition_count = 4;
         let partition_stream = LocalPartitionStream::new(1024, 1024 * 1024, partition_count);
-        let mut spiller =
-            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream)?;
+        let mut spiller = NewAggregateSpiller::try_create(
+            ctx.clone(),
+            partition_count,
+            Arc::new(DataSchema::empty()),
+            partition_stream,
+        )?;
 
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
 

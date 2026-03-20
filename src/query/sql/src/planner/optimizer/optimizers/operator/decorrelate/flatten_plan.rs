@@ -50,10 +50,12 @@ use crate::plans::JoinEquiCondition;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::ProjectSet;
+use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::Sequence;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::UnionAll;
@@ -1006,6 +1008,9 @@ impl SubqueryDecorrelatorOptimizer {
             RelOperator::DummyTableScan(scan) => scan.clone().into(),
             RelOperator::ConstantTableScan(scan) => self.clone_outer_constant_table_scan(scan)?,
             RelOperator::Scan(scan) => self.clone_outer_scan(scan),
+            RelOperator::RecursiveCteScan(scan) => self.clone_outer_recursive_cte_scan(scan)?,
+            RelOperator::UnionAll(union_all) => self.clone_outer_union_all(union_all)?,
+            RelOperator::Sequence(sequence) => self.clone_outer_sequence(sequence),
             RelOperator::EvalScalar(eval) => self.clone_outer_eval_scalar(eval)?,
             RelOperator::Limit(limit) => limit.clone().into(),
             RelOperator::Sort(sort) => {
@@ -1115,6 +1120,87 @@ impl SubqueryDecorrelatorOptimizer {
             ..Default::default()
         }
         .into()
+    }
+
+    fn clone_outer_recursive_cte_scan(&mut self, scan: &RecursiveCteScan) -> Result<RelOperator> {
+        let mut metadata = self.metadata.write();
+        let fields = scan
+            .fields
+            .iter()
+            .map(|field| {
+                let index = field.name().parse()?;
+                let column_entry = metadata.column(index).clone();
+                let derived_index =
+                    metadata.add_derived_column(column_entry.name(), column_entry.data_type());
+                self.derived_columns.insert(index, derived_index);
+                Ok(DataField::new(
+                    &derived_index.to_string(),
+                    field.data_type().clone(),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(RecursiveCteScan {
+            fields,
+            table_name: scan.table_name.clone(),
+            logical_recursive_cte_id: scan.logical_recursive_cte_id,
+        }
+        .into())
+    }
+
+    fn clone_outer_union_all(&mut self, union_all: &UnionAll) -> Result<RelOperator> {
+        let mut union_all = union_all.clone();
+        union_all.left_outputs = union_all
+            .left_outputs
+            .drain(..)
+            .map(|(old, mut expr)| {
+                let Some(&new) = self.derived_columns.get(&old) else {
+                    return Ok((old, expr));
+                };
+                if let Some(expr) = &mut expr {
+                    for used_column in expr.used_columns() {
+                        expr.replace_column(used_column, self.get_derived(used_column)?)?;
+                    }
+                }
+                Ok((new, expr))
+            })
+            .collect::<Result<_>>()?;
+        union_all.right_outputs = union_all
+            .right_outputs
+            .drain(..)
+            .map(|(old, mut expr)| {
+                let Some(&new) = self.derived_columns.get(&old) else {
+                    return Ok((old, expr));
+                };
+                if let Some(expr) = &mut expr {
+                    for used_column in expr.used_columns() {
+                        expr.replace_column(used_column, self.get_derived(used_column)?)?;
+                    }
+                }
+                Ok((new, expr))
+            })
+            .collect::<Result<_>>()?;
+
+        let mut metadata = self.metadata.write();
+        union_all.output_indexes = union_all
+            .output_indexes
+            .iter()
+            .copied()
+            .map(|old| {
+                let column_entry = metadata.column(old);
+                let name = column_entry.name().to_string();
+                let data_type = column_entry.data_type();
+                let new = metadata.add_derived_column(name, data_type);
+                self.derived_columns.insert(old, new);
+                new
+            })
+            .collect();
+
+        Ok(union_all.into())
+    }
+
+    fn clone_outer_sequence(&mut self, sequence: &Sequence) -> RelOperator {
+        sequence.clone().into()
     }
 
     fn clone_outer_eval_scalar(&mut self, eval: &EvalScalar) -> Result<RelOperator> {

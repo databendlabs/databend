@@ -17,11 +17,11 @@
 use std::sync::Arc;
 
 use databend_meta_client::ClientHandle;
+use databend_meta_client::types::MetaClientError;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::protobuf::WatchRequest;
+use databend_meta_client::types::protobuf::WatchResponse;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::MetaClientError;
-use databend_meta_types::SeqV;
-use databend_meta_types::protobuf::WatchRequest;
-use databend_meta_types::protobuf::WatchResponse;
 use futures::StreamExt;
 use log::debug;
 use log::warn;

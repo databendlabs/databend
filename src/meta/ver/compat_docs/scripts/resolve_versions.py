@@ -24,7 +24,7 @@ class ExternalMinCompatibles:
     """Resolves ext: CalVer references to databend repo tag versions.
 
     Combines two data sources:
-    - external-meta-min-compatibles.txt: CalVer → (min_server, min_client)
+    - external-meta-min-compatibles.txt: CalVer → (min_client, min_server)
     - min_compatible_versions.txt: CalVer → first repo tag (per column)
     """
 
@@ -36,7 +36,7 @@ class ExternalMinCompatibles:
     ):
         """
         Args:
-            min_compatibles: CalVer → (min_server, min_client) from external crate.
+            min_compatibles: CalVer → (min_client, min_server) from external crate.
             client_calver_to_tag: maps a client CalVer to the first databend tag that uses it.
             service_calver_to_tag: maps a service CalVer to the first databend tag that uses it.
         """
@@ -68,18 +68,18 @@ class ExternalMinCompatibles:
     def resolve_min_server(self, v: str) -> str | None:
         """Resolve a MetaClient column value to a min-server repo tag.
 
-        If v is "ext:X", looks up X → (min_server, _) and translates to a tag.
+        If v is "ext:X", looks up X → (_, min_server) and translates to a tag.
         Non-ext values pass through unchanged.
         """
-        return self._resolve(v, 0, self._service_calver_to_tag)
+        return self._resolve(v, 1, self._service_calver_to_tag)
 
     def resolve_min_client(self, v: str) -> str | None:
         """Resolve a MetaService column value to a min-client repo tag.
 
-        If v is "ext:X", looks up X → (_, min_client) and translates to a tag.
+        If v is "ext:X", looks up X → (min_client, _) and translates to a tag.
         Non-ext values pass through unchanged.
         """
-        return self._resolve(v, 1, self._client_calver_to_tag)
+        return self._resolve(v, 0, self._client_calver_to_tag)
 
     def resolve_to_min_compatibles(
         self, tag: str, meta_client: str, meta_service: str

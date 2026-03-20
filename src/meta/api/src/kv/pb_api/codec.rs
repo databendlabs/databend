@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use databend_common_proto_conv::FromToProto;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::NonEmptyItem;
-use databend_meta_types::Change;
-use databend_meta_types::Operation;
-use databend_meta_types::SeqV;
-use databend_meta_types::protobuf::StreamItem;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::NonEmptyItem;
+use databend_meta_client::types::Change;
+use databend_meta_client::types::Operation;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::protobuf::StreamItem;
 
 use super::compress;
 use crate::kv_pb_api::errors::NoneValue;

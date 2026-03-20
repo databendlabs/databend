@@ -200,12 +200,13 @@ impl Binder {
         };
 
         let dest_entity_name = format!("{database_name}.{table_name}");
-        let stage_schema = match &stmt.dst_columns {
+        let required_values_table_schema = match &stmt.dst_columns {
             Some(cols) => self.schema_project(&table.schema(), cols, &dest_entity_name)?,
             None => self.schema_project(&table.schema(), &[], &dest_entity_name)?,
         };
 
-        let required_values_schema: DataSchemaRef = Arc::new(stage_schema.clone().into());
+        let required_values_schema: DataSchemaRef =
+            Arc::new(required_values_table_schema.clone().into());
 
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(
@@ -228,7 +229,7 @@ impl Binder {
             no_file_to_copy: false,
             from_attachment: false,
             stage_table_info: StageTableInfo {
-                schema: stage_schema,
+                schema: required_values_table_schema,
                 files_info,
                 stage_info,
                 is_select: false,
@@ -271,15 +272,18 @@ impl Binder {
                     column: ColumnRef {
                         database: None,
                         table: None,
-                        column: AstColumnID::Name(Identifier::from_name_with_quoted(
-                            None,
-                            if case_sensitive {
-                                dest_field.name().to_string()
-                            } else {
-                                dest_field.name().to_lowercase().to_string()
-                            },
-                            Some('"'),
-                        )),
+                        column: AstColumnID::Name(if case_sensitive {
+                            Identifier::from_name_with_quoted(
+                                None,
+                                dest_field.name().to_string(),
+                                Some('"'),
+                            )
+                        } else {
+                            Identifier::from_name(
+                                None,
+                                dest_field.name().to_lowercase().to_string(),
+                            )
+                        }),
                     },
                 };
                 // cast types to variant, tuple will be rewrite as `json_object_keep_null`
@@ -484,11 +488,6 @@ impl Binder {
         if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
-        let case_sensitive = plan
-            .stage_table_info
-            .copy_into_table_options
-            .column_match_mode
-            == Some(ColumnMatchMode::CaseSensitive);
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -499,7 +498,6 @@ impl Binder {
                 plan.stage_table_info.files_info.clone(),
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
-                case_sensitive,
                 Some(
                     plan.stage_table_info
                         .copy_into_table_options

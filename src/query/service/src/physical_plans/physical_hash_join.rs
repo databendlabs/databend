@@ -31,6 +31,7 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_SPATIAL_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
@@ -48,6 +49,7 @@ use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use tokio::sync::Barrier;
+use unicase::Ascii;
 
 use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
@@ -79,8 +81,15 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol)>>,
+    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
     Vec<((usize, bool), usize)>,
+    Vec<Option<IndexType>>,
+);
+
+type JoinNonEquiConditionsResult = (
+    Vec<RemoteExpr>,
+    Vec<RemoteExpr>,
+    Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
     Vec<Option<IndexType>>,
 );
 
@@ -280,6 +289,10 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        if self.join_type.is_any_join() {
+            return Err(ErrorCode::Unimplemented("ANY JOIN is not supported yet"));
+        }
+
         let desc = Arc::new(HashJoinDesc::create(self)?);
         let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
@@ -897,8 +910,17 @@ impl PhysicalPlanBuilder {
             // Process runtime filter expressions
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter
                 .map(|(expr, scan_id, table_index, column_idx)| {
-                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS)
-                        .map(|casted_expr| (casted_expr, scan_id, table_index, column_idx))
+                    check_cast(expr.span(), false, expr, &common_ty, &BUILTIN_FUNCTIONS).map(
+                        |casted_expr| {
+                            (
+                                casted_expr,
+                                scan_id,
+                                table_index,
+                                column_idx,
+                                condition.is_null_equal,
+                            )
+                        },
+                    )
                 })
                 .transpose()?;
 
@@ -908,23 +930,31 @@ impl PhysicalPlanBuilder {
             let (right_expr, _) =
                 ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter =
-                left_expr_for_runtime_filter.map(|(expr, scan_id, table_index, column_idx)| {
+            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(
+                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
                     (
                         ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS).0,
                         scan_id,
                         table_index,
                         column_idx,
+                        is_null_equal,
                     )
-                });
+                },
+            );
 
             // Add to result collections
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
             left_join_conditions_rt.push(left_expr_for_runtime_filter.map(
-                |(expr, scan_id, table_index, column_idx)| {
-                    (expr.as_remote_expr(), scan_id, table_index, column_idx)
+                |(expr, scan_id, table_index, column_idx, is_null_equal)| {
+                    (
+                        expr.as_remote_expr(),
+                        scan_id,
+                        table_index,
+                        column_idx,
+                        is_null_equal,
+                    )
                 },
             ));
             build_table_indexes.push(build_table_index);
@@ -1192,16 +1222,122 @@ impl PhysicalPlanBuilder {
     ///
     /// # Arguments
     /// * `join` - Join operation
+    /// * `probe_schema` - Probe schema
+    /// * `build_schema` - Build schema
     /// * `merged_schema` - Merged schema
     ///
     /// # Returns
-    /// * `Result<Vec<RemoteExpr>>` - Processed non-equi conditions
+    /// * Tuple containing processed non equi join conditions and related data
     fn process_non_equi_conditions(
         &self,
         join: &Join,
+        probe_schema: &DataSchemaRef,
+        build_schema: &DataSchemaRef,
         merged_schema: &DataSchemaRef,
-    ) -> Result<Vec<RemoteExpr>> {
-        join.non_equi_conditions
+    ) -> Result<JoinNonEquiConditionsResult> {
+        let mut spatial_right_join_conditions = Vec::new();
+        let mut spatial_left_join_conditions_rt = Vec::new();
+        let mut spatial_build_table_indexes = Vec::new();
+
+        let resolve_spatial_column = |expr: &ScalarExpr| -> Option<(Symbol, DataType)> {
+            let column_idx = match expr {
+                ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
+                _ => None,
+            }?;
+            let binding = self.metadata.read();
+            let column = binding.column(column_idx);
+            if !matches!(column, ColumnEntry::BaseTableColumn(_)) {
+                return None;
+            }
+            let data_type = column.data_type().remove_nullable();
+            if !matches!(data_type, DataType::Geometry | DataType::Geography) {
+                return None;
+            }
+            Some((column_idx, data_type))
+        };
+
+        // collect spatial functions to build runtime filters.
+        for scalar in &join.non_equi_conditions {
+            let ScalarExpr::FunctionCall(func) = scalar else {
+                continue;
+            };
+
+            let func_name = func.func_name.as_ref();
+            let uni_case_func_name = Ascii::new(func_name);
+            if !GENERAL_SPATIAL_FUNCTIONS.contains(&uni_case_func_name) || func.arguments.len() != 2
+            {
+                continue;
+            }
+            let Some((left_idx, left_type)) = resolve_spatial_column(&func.arguments[0]) else {
+                continue;
+            };
+            let Some((right_idx, right_type)) = resolve_spatial_column(&func.arguments[1]) else {
+                continue;
+            };
+            if left_type != right_type {
+                continue;
+            }
+
+            let left_in_probe = probe_schema
+                .column_with_name(&left_idx.to_string())
+                .is_some();
+            let right_in_probe = probe_schema
+                .column_with_name(&right_idx.to_string())
+                .is_some();
+            let left_in_build = build_schema
+                .column_with_name(&left_idx.to_string())
+                .is_some();
+            let right_in_build = build_schema
+                .column_with_name(&right_idx.to_string())
+                .is_some();
+
+            let (probe_arg, build_arg) = if left_in_probe && right_in_build {
+                (&func.arguments[0], &func.arguments[1])
+            } else if left_in_build && right_in_probe {
+                (&func.arguments[1], &func.arguments[0])
+            } else {
+                continue;
+            };
+
+            let build_expr = build_arg
+                .type_check(build_schema.as_ref())?
+                .project_column_ref(|index| build_schema.index_of(&index.to_string()))?;
+            let (build_expr, _) =
+                ConstantFolder::fold(&build_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            spatial_right_join_conditions.push(build_expr.as_remote_expr());
+
+            let probe_expr_for_runtime_filter = self.prepare_runtime_filter_expr(probe_arg)?;
+            let probe_expr_for_runtime_filter =
+                probe_expr_for_runtime_filter.map(|(expr, scan_id, table_index, column_idx)| {
+                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    (
+                        expr.as_remote_expr(),
+                        scan_id,
+                        table_index,
+                        column_idx,
+                        false,
+                    )
+                });
+            spatial_left_join_conditions_rt.push(probe_expr_for_runtime_filter);
+
+            let build_table_index = if build_arg.used_columns().len() == 1 {
+                let column_idx = *build_arg.used_columns().iter().next().unwrap();
+                if matches!(
+                    self.metadata.read().column(column_idx),
+                    ColumnEntry::BaseTableColumn(_)
+                ) {
+                    self.metadata.read().column(column_idx).table_index()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            spatial_build_table_indexes.push(build_table_index);
+        }
+
+        let non_equi_conditions = join
+            .non_equi_conditions
             .iter()
             .map(|scalar| {
                 let expr = scalar
@@ -1210,7 +1346,14 @@ impl PhysicalPlanBuilder {
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok(expr.as_remote_expr())
             })
-            .collect::<Result<_>>()
+            .collect::<Result<_>>()?;
+
+        Ok((
+            non_equi_conditions,
+            spatial_right_join_conditions,
+            spatial_left_join_conditions_rt,
+            spatial_build_table_indexes,
+        ))
     }
 
     fn build_nested_loop_filter_info(
@@ -1361,7 +1504,19 @@ impl PhysicalPlanBuilder {
             self.create_output_schema(join, probe_fields, build_fields, &column_projections)?;
 
         // Step 10: Process non-equi conditions
-        let non_equi_conditions = self.process_non_equi_conditions(join, &merged_schema)?;
+        let (
+            non_equi_conditions,
+            spatial_right_join_conditions,
+            spatial_left_join_conditions_rt,
+            spatial_build_table_indexes,
+        ) = self.process_non_equi_conditions(join, &probe_schema, &build_schema, &merged_schema)?;
+
+        let mut runtime_filter_right_conditions = right_join_conditions.clone();
+        runtime_filter_right_conditions.extend(spatial_right_join_conditions);
+        let mut runtime_filter_left_conditions_rt = left_join_conditions_rt.clone();
+        runtime_filter_left_conditions_rt.extend(spatial_left_join_conditions_rt);
+        let mut runtime_filter_build_table_indexes = build_table_indexes.clone();
+        runtime_filter_build_table_indexes.extend(spatial_build_table_indexes);
 
         // Step 11: Build runtime filter
         let runtime_filter = build_runtime_filter(
@@ -1369,9 +1524,9 @@ impl PhysicalPlanBuilder {
             &self.metadata,
             join,
             s_expr,
-            &right_join_conditions,
-            left_join_conditions_rt,
-            build_table_indexes,
+            &runtime_filter_right_conditions,
+            runtime_filter_left_conditions_rt,
+            runtime_filter_build_table_indexes,
         )
         .await?;
 
@@ -1380,10 +1535,13 @@ impl PhysicalPlanBuilder {
 
         // Step 12: Create and return the HashJoin
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
-        let broadcast_id = if build_side_data_distribution
-            .as_ref()
-            .is_some_and(|e| matches!(e, databend_common_sql::plans::Exchange::NodeToNodeHash(_)))
-        {
+        let broadcast_id = if build_side_data_distribution.as_ref().is_some_and(|e| {
+            matches!(
+                e,
+                databend_common_sql::plans::Exchange::NodeToNodeHash(_)
+                    | databend_common_sql::plans::Exchange::GlobalHash(_)
+            )
+        }) {
             Some(self.ctx.get_next_broadcast_id())
         } else {
             None

@@ -1,0 +1,29 @@
+name: "eager_q0"
+description: "Eager aggregation candidate on lineitem side with join and order by"
+
+sql: |
+  SELECT
+      l_orderkey,
+      sum(l_extendedprice * (1 - l_discount)) AS revenue,
+      o_orderdate,
+      o_shippriority
+  FROM
+      orders join customer on c_custkey = o_custkey,
+      lineitem
+  WHERE
+      c_mktsegment = 'BUILDING'
+      AND l_orderkey = o_orderkey
+      AND o_orderdate < CAST('1995-03-15' AS date)
+      AND l_shipdate > CAST('1995-03-15' AS date)
+  GROUP BY
+      l_orderkey,
+      o_orderdate,
+      o_shippriority
+  ORDER BY
+      revenue DESC,
+      o_orderdate
+
+tables:
+  customer: eager_aggregation/customer.sql
+  orders: eager_aggregation/orders.sql
+  lineitem: eager_aggregation/lineitem.sql

@@ -204,6 +204,7 @@ pub async fn do_refresh_table_index(
                 NgramIndexTransform::new(
                     ctx.clone(),
                     operator.clone(),
+                    settings,
                     ngram_index_arg.index_ngram_args.clone(),
                     ngram_index_arg.ngram_index_names.clone(),
                     ngram_index_arg.existing_names_prefix.clone(),
@@ -371,7 +372,7 @@ async fn check_ngram_index_generated(
         .map(|meta| meta.content_length())
     {
         let bloom_index_meta =
-            load_index_meta(operator.clone(), &index_location, content_length).await?;
+            load_index_meta(operator.clone(), &index_location, content_length, None).await?;
 
         let mut all_generated = true;
         for ngram_index_name in &ngram_index_arg.ngram_index_names {
@@ -534,6 +535,7 @@ impl AsyncSource for IndexSource {
 pub struct NgramIndexTransform {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
+    settings: ReadSettings,
     index_ngram_args: Vec<NgramArgs>,
     ngram_index_names: Vec<String>,
     existing_names_prefix: Vec<String>,
@@ -543,6 +545,7 @@ impl NgramIndexTransform {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
+        settings: ReadSettings,
         index_ngram_args: Vec<NgramArgs>,
         ngram_index_names: Vec<String>,
         existing_names_prefix: Vec<String>,
@@ -550,6 +553,7 @@ impl NgramIndexTransform {
         Self {
             ctx,
             operator,
+            settings,
             index_ngram_args,
             ngram_index_names,
             existing_names_prefix,
@@ -607,6 +611,7 @@ impl AsyncTransform for NgramIndexTransform {
 
                 let mut block_filter = load_bloom_filter_by_columns(
                     self.operator.clone(),
+                    &self.settings,
                     &index_columns,
                     &index_path,
                     block_meta.bloom_filter_index_size,

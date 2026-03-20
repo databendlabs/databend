@@ -26,12 +26,17 @@ mod exchange_source_reader;
 mod exchange_transform;
 mod exchange_transform_scatter;
 mod exchange_transform_shuffle;
+mod hash_send_sink;
+mod hash_send_source;
+mod hash_send_transform;
 mod statistics_receiver;
 mod statistics_sender;
 
 pub mod serde;
 
-pub use broadcast_recv_transform::BroadcastRecvTransform;
+pub use broadcast_recv_transform::ExchangeRecvTransform;
+pub type BroadcastRecvTransform = ExchangeRecvTransform;
+pub type HashRecvTransform = ExchangeRecvTransform;
 pub use broadcast_send_transform::BroadcastSendTransform;
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
@@ -46,3 +51,6 @@ pub use exchange_sorting::ExchangeSorting;
 pub use exchange_transform_scatter::ScatterTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
 pub use exchange_transform_shuffle::ExchangeShuffleTransform;
+pub use hash_send_sink::HashSendSink;
+pub use hash_send_source::HashSendSource;
+pub use hash_send_transform::HashSendTransform;

@@ -26,7 +26,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncMpscSink;
 use databend_common_pipeline::sinks::AsyncMpscSinker;
 use databend_common_storage::DataOperator;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use tokio::time::Instant;
 
 use super::writer::ResultCacheWriter;
