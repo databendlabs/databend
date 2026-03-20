@@ -89,6 +89,20 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT sum(number) OVER () FROM t",
         },
         SqlTestCase {
+            name: "window_partition_rejects_new_aggregate",
+            description:
+                "A window PARTITION BY clause must not introduce a new aggregate expression.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (PARTITION BY sum(number)) FROM t",
+        },
+        SqlTestCase {
+            name: "window_order_rejects_new_aggregate",
+            description:
+                "A window ORDER BY clause must not introduce a new aggregate expression.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t",
+        },
+        SqlTestCase {
             name: "unnest_over_aggregate_is_planned_after_aggregate",
             description:
                 "A set-returning function over an aggregate should stay above the aggregate phase instead of rewriting the aggregate away early.",

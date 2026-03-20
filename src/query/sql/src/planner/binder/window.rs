@@ -485,11 +485,22 @@ impl<'a> WindowRewriter<'a> {
     }
 
     fn rewrite_aggregate_expr(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        let aggregate_call_count = self.bind_context.aggregate_info.aggregate_calls_for_plan().len();
+        let mut aggregate_info = self.bind_context.aggregate_info.clone();
+
         AggregateRewriter::rewrite_expr(
-            &mut self.bind_context.aggregate_info,
+            &mut aggregate_info,
             self.metadata.clone(),
             expr,
         )?;
+
+        if aggregate_info.aggregate_calls_for_plan().len() != aggregate_call_count {
+            return Err(ErrorCode::SemanticError(
+                "Window specification and arguments cannot contain aggregate functions"
+                    .to_string(),
+            ));
+        }
+
         AggregateRewriter::check_no_aggregate_calls(
             expr,
             "window aggregate rewrite must replace aggregate calls with BoundColumnRef",
