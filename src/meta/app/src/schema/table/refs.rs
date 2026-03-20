@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 
 use super::TableLvtCheck;
 
@@ -89,10 +89,10 @@ pub struct ListTableTagsReq {
 }
 
 mod kvapi_key_impl {
-    use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::KeyBuilder;
-    use databend_meta_kvapi::kvapi::KeyError;
-    use databend_meta_kvapi::kvapi::KeyParser;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::KeyBuilder;
+    use databend_meta_client::kvapi::KeyError;
+    use databend_meta_client::kvapi::KeyParser;
 
     use crate::schema::TableId;
     use crate::schema::table::TableIdTagName;

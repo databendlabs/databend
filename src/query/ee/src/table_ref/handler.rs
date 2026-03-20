@@ -31,7 +31,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::check_table_ref_access;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
 
 pub struct RealTableRefHandler {}

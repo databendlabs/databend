@@ -30,7 +30,7 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_meta_types::MatchSeq;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndexMeta;
