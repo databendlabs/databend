@@ -514,30 +514,28 @@ impl AggregateInfo {
 
             let replaced = if let ScalarExpr::BoundColumnRef(column_ref) = expr {
                 Some((true, column_ref.clone()))
-            } else {
-                if let Some(item) = self
-                    .aggregate_arguments
-                    .iter()
-                    .chain(self.group_items.iter())
-                    .chain(self.aggregate_sort_descs.iter())
-                    .find(|x| x.scalar.equivalent(expr))
-                    .cloned()
-                {
-                    let column_binding = ColumnBindingBuilder::new(
-                        name,
-                        item.index,
-                        Box::new(expr.data_type()?),
-                        Visibility::Visible,
-                    )
-                    .build();
+            } else if let Some(item) = self
+                .aggregate_arguments
+                .iter()
+                .chain(self.group_items.iter())
+                .chain(self.aggregate_sort_descs.iter())
+                .find(|x| x.scalar.equivalent(expr))
+                .cloned()
+            {
+                let column_binding = ColumnBindingBuilder::new(
+                    name,
+                    item.index,
+                    Box::new(expr.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
 
-                    Some((true, BoundColumnRef {
-                        span: expr.span(),
-                        column: column_binding,
-                    }))
-                } else {
-                    None
-                }
+                Some((true, BoundColumnRef {
+                    span: expr.span(),
+                    column: column_binding,
+                }))
+            } else {
+                None
             };
 
             let Some((is_reuse_index, column)) = replaced else {
