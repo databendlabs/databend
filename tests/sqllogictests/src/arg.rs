@@ -17,11 +17,39 @@ use clap::Parser;
 // Add options when run sqllogictest, such as specific dir or file
 #[derive(Parser, Debug, Clone)]
 pub struct SqlLogicTestArgs {
+    #[arg(
+        long = "run",
+        use_value_delimiter = true,
+        value_delimiter = ',',
+        conflicts_with_all = ["dir", "file", "skipped_dir", "skipped_file"],
+        help = "Run sqllogictests by glob patterns."
+    )]
+    pub run: Option<Vec<String>>,
+
+    #[arg(
+        long = "skip",
+        use_value_delimiter = true,
+        value_delimiter = ',',
+        requires = "run",
+        conflicts_with_all = ["dir", "file", "skipped_dir", "skipped_file"],
+        help = "Skip sqllogictests by glob patterns. Requires --run"
+    )]
+    pub skip: Option<Vec<String>>,
+
+    // Choose suits to run
+    #[arg(
+        short = 'u',
+        long = "suites",
+        help = "The tests to be run will come from under suits",
+        default_value = "tests/sqllogictests/suites"
+    )]
+    pub suites: String,
+
     // Set specific dir to run
     #[arg(
         short = 'd',
         long = "run_dir",
-        help = "Run sqllogictests in specific directory, the arg is optional"
+        help = "Run sqllogictests in a specific directory name found under --suites, the arg is optional"
     )]
     pub dir: Option<String>,
 
@@ -29,7 +57,7 @@ pub struct SqlLogicTestArgs {
     #[arg(
         short = 'f',
         long = "run_file",
-        help = "Run sqllogictests in specific test file, the arg is optional"
+        help = "Run sqllogictests in a specific test file name found under --suites, the arg is optional"
     )]
     pub file: Option<String>,
 
@@ -37,7 +65,7 @@ pub struct SqlLogicTestArgs {
     #[arg(
         short = 's',
         long = "skip_dir",
-        help = "Skip sqllogictests in specific directory, the arg is optional"
+        help = "Skip sqllogictests in specific directory names found under --suites, the arg is optional"
     )]
     pub skipped_dir: Option<String>,
 
@@ -45,7 +73,7 @@ pub struct SqlLogicTestArgs {
     #[arg(
         short = 'x',
         long = "skip_file",
-        help = "Skip sqllogictests in specific test file, the arg is optional"
+        help = "Skip sqllogictests in specific test file names found under --suites, the arg is optional"
     )]
     pub skipped_file: Option<String>,
 
@@ -58,15 +86,6 @@ pub struct SqlLogicTestArgs {
         help = "Choose handlers to run tests, support mysql, http handler, the arg is optional. If use multiple handlers, please use \',\' to split them"
     )]
     pub handlers: Option<Vec<String>>,
-
-    // Choose suits to run
-    #[arg(
-        short = 'u',
-        long = "suites",
-        help = "The tests to be run will come from under suits",
-        default_value = "tests/sqllogictests/suites"
-    )]
-    pub suites: String,
 
     // If enable complete mode
     #[arg(

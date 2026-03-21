@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::Matcher;
@@ -32,80 +33,37 @@ use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::plans::Plan;
-use databend_common_storages_fuse::TableContext;
-use databend_query::sessions::QueryContext;
-use databend_query::test_kits::TestFixture;
 use goldenfile::Mint;
 
-use super::test_utils::execute_sql;
-use super::test_utils::raw_plan;
+use crate::planner::LiteTableContext;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_eager_aggregation() -> anyhow::Result<()> {
-    let mut mint = Mint::new("tests/it/sql/planner/optimizer/optimizers/rule/agg_rules/testdata");
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_eager_aggregation_with_lite_table_context() -> Result<()> {
+    let mut mint = Mint::new("tests/it");
     let mut file = mint.new_goldenfile("eager_aggregation.txt")?;
 
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
+    let ctx = LiteTableContext::create().await?;
     for sql in [CUSTOMER_TABLE, ORDERS_TABLE, LINEITEM_TABLE] {
-        execute_sql(&ctx, sql).await?;
+        ctx.register_table_sql(sql).await?;
     }
 
-    const Q0: &str = "SELECT
-    l_orderkey,
-    sum(l_extendedprice * (1 - l_discount)) AS revenue,
-    o_orderdate,
-    o_shippriority
-FROM
-    orders join customer on c_custkey = o_custkey,
-    lineitem
-WHERE
-    c_mktsegment = 'BUILDING'
-    AND l_orderkey = o_orderkey
-    AND o_orderdate < CAST('1995-03-15' AS date)
-    AND l_shipdate > CAST('1995-03-15' AS date)
-GROUP BY
-    l_orderkey,
-    o_orderdate,
-    o_shippriority
-ORDER BY
-    revenue DESC,
-    o_orderdate";
-
-    const Q1: &str = "SELECT o_orderkey, sum(l_extendedprice * (1-l_discount))
-FROM lineitem, orders
-WHERE o_orderkey = l_orderkey
-AND l_returnflag = 'R'
-GROUP BY o_orderkey";
-
-    const Q2: &str = "SELECT o_orderkey, sum(l_extendedprice), sum(o_totalprice)
-FROM lineitem, orders
-WHERE o_orderkey = l_orderkey
-GROUP BY o_orderkey";
-
-    // todo: lazy aggr,
-    // The predicate on o_orderdate highly selective.
-    // In this case, we should delay the group-by until after
-    // the join.
-    const Q3: &str = "SELECT o_orderkey, sum(revenue)
-    FROM (SELECT l_orderkey, sum(l_extendedprice * (1-l_discount)) as revenue
-        FROM lineitem WHERE l_returnflag = 'R' GROUP BY l_orderkey) as loss, orders
-    WHERE o_orderkey = l_orderkey
-    AND o_orderdate BETWEEN CAST('1995-05-01' as date) AND CAST('1995-05-31' as date)
-    GROUP BY o_orderkey";
-
-    for (i, sql) in [Q0, Q1, Q2, Q3].iter().copied().enumerate() {
-        run_query(&mut file, &ctx, i, sql).await?;
+    for (idx, sql) in [Q0, Q1, Q2, Q3, Q4, Q5, Q6].iter().copied().enumerate() {
+        run_eager_aggregation_query(&mut file, &ctx, idx, sql).await?;
     }
 
     Ok(())
 }
 
-async fn run_query(file: &mut File, ctx: &Arc<QueryContext>, idx: usize, sql: &str) -> Result<()> {
+async fn run_eager_aggregation_query(
+    file: &mut File,
+    ctx: &Arc<LiteTableContext>,
+    idx: usize,
+    sql: &str,
+) -> Result<()> {
     writeln!(file, "=== #{idx} sql ===")?;
     writeln!(file, "{sql}\n")?;
 
-    let plan = raw_plan(ctx, sql).await?;
+    let plan = ctx.bind_sql(sql).await?;
 
     let Plan::Query {
         s_expr, metadata, ..
@@ -126,24 +84,24 @@ async fn run_query(file: &mut File, ctx: &Arc<QueryContext>, idx: usize, sql: &s
     let mut state = TransformResult::new();
     let rule = RuleEagerAggregation::new(metadata.clone());
 
-    for (i, matcher) in rule.matchers().iter().enumerate() {
-        let mut v = Extractor {
+    for (matcher_idx, matcher) in rule.matchers().iter().enumerate() {
+        let mut extractor = Extractor {
             matcher,
             result: None,
         };
-        before_expr.accept(&mut v)?;
-        if let Some(s_expr) = v.result {
-            rule.apply_matcher(i, &s_expr, &mut state)?;
+        before_expr.accept(&mut extractor)?;
+        if let Some(s_expr) = extractor.result {
+            rule.apply_matcher(matcher_idx, &s_expr, &mut state)?;
             if !state.results().is_empty() {
                 break;
             }
         }
     }
 
-    for (i, result) in state.results().iter().enumerate() {
-        writeln!(file, "=== #{idx} apply plan {i} ===")?;
-        let plan = plan.replace_query_s_expr(result.clone());
-        writeln!(file, "{}", plan.format_indent(Default::default())?)?;
+    for (result_idx, result) in state.results().iter().enumerate() {
+        writeln!(file, "=== #{idx} apply plan {result_idx} ===")?;
+        let rewritten = plan.replace_query_s_expr(result.clone());
+        writeln!(file, "{}", rewritten.format_indent(Default::default())?)?;
     }
 
     Ok(())
@@ -169,16 +127,66 @@ async fn optimize_before(opt_ctx: Arc<OptimizerContext>, s_expr: &SExpr) -> Resu
     let s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
         .optimize_async(s_expr)
         .await?;
-
     let s_expr = RuleNormalizeAggregateOptimizer::new().optimize_sync(&s_expr)?;
     let s_expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize_sync(&s_expr)?;
     let s_expr = RecursiveRuleOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES)
         .optimize_sync(&s_expr)?;
-    let s_expr = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate])
-        .optimize_sync(&s_expr)?;
-
-    Ok(s_expr)
+    RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(&s_expr)
 }
+
+const Q0: &str = "SELECT
+    l_orderkey,
+    sum(l_extendedprice * (1 - l_discount)) AS revenue,
+    o_orderdate,
+    o_shippriority
+FROM
+    orders join customer on c_custkey = o_custkey,
+    lineitem
+WHERE
+    c_mktsegment = 'BUILDING'
+    AND l_orderkey = o_orderkey
+    AND o_orderdate < CAST('1995-03-15' AS date)
+    AND l_shipdate > CAST('1995-03-15' AS date)
+GROUP BY
+    l_orderkey,
+    o_orderdate,
+    o_shippriority
+ORDER BY
+    revenue DESC,
+    o_orderdate";
+
+const Q1: &str = "SELECT o_orderkey, sum(l_extendedprice * (1-l_discount))
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+AND l_returnflag = 'R'
+GROUP BY o_orderkey";
+
+const Q2: &str = "SELECT o_orderkey, sum(l_extendedprice), sum(o_totalprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q3: &str = "SELECT o_orderkey, sum(revenue)
+    FROM (SELECT l_orderkey, sum(l_extendedprice * (1-l_discount)) as revenue
+        FROM lineitem WHERE l_returnflag = 'R' GROUP BY l_orderkey) as loss, orders
+    WHERE o_orderkey = l_orderkey
+    AND o_orderdate BETWEEN CAST('1995-05-01' as date) AND CAST('1995-05-31' as date)
+    GROUP BY o_orderkey";
+
+const Q4: &str = "SELECT o_orderkey, count(*)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q5: &str = "SELECT o_orderkey, sum(l_extendedprice) + 1
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q6: &str = "SELECT o_orderkey, count(*) + 1
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
 
 const CUSTOMER_TABLE: &str = "CREATE TABLE customer
 (

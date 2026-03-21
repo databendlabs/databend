@@ -24,7 +24,7 @@ use crate::read::row_based::batch::RowBatch;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::SeparatorState;
 
-pub struct TsvRowSeparator {
+pub struct TextRowSeparator {
     // remain from last read batch
     last_partial_row: Vec<u8>,
     pos: Position,
@@ -38,16 +38,16 @@ pub struct TsvRowSeparator {
 /// - avoid realloc.
 /// - able to get the original data for diagnostic.
 ///
-/// TsvRowSeparator is more complicated than NdJsonRowSeparator:
+/// TextRowSeparator is more complicated than NdJsonRowSeparator:
 /// delimiter in content can present as '\<delimiter>',
 /// which means \n can also present as '\<a_real_newline>' ( the default of mysql)
-impl SeparatorState for TsvRowSeparator {
+impl SeparatorState for TextRowSeparator {
     fn append(&mut self, batch: BytesBatch) -> Result<(Vec<RowBatchWithPosition>, FileStatus)> {
         self.separate(batch)
     }
 }
 
-impl TsvRowSeparator {
+impl TextRowSeparator {
     pub fn try_create(path: &str, record_delimiter: &[u8], rows_to_skip: u64) -> Result<Self> {
         let record_delimiter_byte = *record_delimiter.last().unwrap();
         Ok(Self {
@@ -134,7 +134,7 @@ mod tests {
         exp_rows: usize,
         exp_output: Option<NdjsonRowBatch>,
     ) -> Result<()> {
-        let mut sep = TsvRowSeparator::try_create("test", record_delimiter, 0).unwrap();
+        let mut sep = TextRowSeparator::try_create("test", record_delimiter, 0).unwrap();
         sep.last_partial_row = last.to_vec();
 
         let input = BytesBatch {

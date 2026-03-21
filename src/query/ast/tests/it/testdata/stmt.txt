@@ -11670,7 +11670,6 @@ Query(
                                 "tsv",
                             ),
                             connection: {},
-                            case_sensitive: None,
                         },
                         alias: None,
                     },
@@ -22226,7 +22225,6 @@ Query(
                             pattern: None,
                             file_format: None,
                             connection: {},
-                            case_sensitive: None,
                         },
                         alias: None,
                     },
@@ -22319,7 +22317,6 @@ Query(
                                 "PARQUET",
                             ),
                             connection: {},
-                            case_sensitive: None,
                         },
                         alias: Some(
                             TableAlias {
@@ -22464,7 +22461,6 @@ Query(
                                         "parquet",
                                     ),
                                     connection: {},
-                                    case_sensitive: None,
                                 },
                                 alias: Some(
                                     TableAlias {
@@ -22593,7 +22589,6 @@ Query(
                             connection: {
                                 "endpoint_url": "xxx",
                             },
-                            case_sensitive: None,
                         },
                         alias: Some(
                             TableAlias {

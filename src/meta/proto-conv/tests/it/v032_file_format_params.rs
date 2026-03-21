@@ -17,7 +17,7 @@ use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileCompression;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 use fastrace::func_name;
 
 use crate::common;
@@ -73,7 +73,7 @@ fn test_decode_v32_tsv_file_format_params() -> anyhow::Result<()> {
     ];
 
     let want = || {
-        mt::principal::FileFormatParams::Tsv(TsvFileFormatParams {
+        mt::principal::FileFormatParams::Text(TextFileFormatParams {
             compression: StageFileCompression::Gzip,
             headers: 1,
             field_delimiter: "fd".to_string(),

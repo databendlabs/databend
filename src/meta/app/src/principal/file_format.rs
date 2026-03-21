@@ -59,7 +59,8 @@ const OPT_USE_LOGIC_TYPE: &str = "use_logic_type";
 #[serde(tag = "type")]
 pub enum FileFormatParams {
     Csv(CsvFileFormatParams),
-    Tsv(TsvFileFormatParams),
+    #[serde(alias = "Tsv")]
+    Text(TextFileFormatParams),
     NdJson(NdJsonFileFormatParams),
     Json(JsonFileFormatParams),
     Xml(XmlFileFormatParams),
@@ -73,7 +74,7 @@ impl FileFormatParams {
     pub fn get_type(&self) -> StageFileFormatType {
         match self {
             FileFormatParams::Csv(_) => StageFileFormatType::Csv,
-            FileFormatParams::Tsv(_) => StageFileFormatType::Tsv,
+            FileFormatParams::Text(_) => StageFileFormatType::Text,
             FileFormatParams::NdJson(_) => StageFileFormatType::NdJson,
             FileFormatParams::Json(_) => StageFileFormatType::Json,
             FileFormatParams::Xml(_) => StageFileFormatType::Xml,
@@ -87,7 +88,7 @@ impl FileFormatParams {
     pub fn suffix(&self) -> &str {
         match self {
             FileFormatParams::Csv(_) => ".csv",
-            FileFormatParams::Tsv(_) => ".tsv",
+            FileFormatParams::Text(_) => ".txt",
             FileFormatParams::NdJson(_) => ".ndjson",
             FileFormatParams::Json(_) => ".json",
             FileFormatParams::Xml(_) => ".xml",
@@ -102,7 +103,7 @@ impl FileFormatParams {
         matches!(
             self,
             FileFormatParams::Csv(_)
-                | FileFormatParams::Tsv(_)
+                | FileFormatParams::Text(_)
                 | FileFormatParams::NdJson(_)
                 | FileFormatParams::Parquet(_)
         )
@@ -114,7 +115,9 @@ impl FileFormatParams {
                 Ok(FileFormatParams::Parquet(ParquetFileFormatParams::default()))
             }
             StageFileFormatType::Csv => Ok(FileFormatParams::Csv(CsvFileFormatParams::default())),
-            StageFileFormatType::Tsv => Ok(FileFormatParams::Tsv(TsvFileFormatParams::default())),
+            StageFileFormatType::Text => {
+                Ok(FileFormatParams::Text(TextFileFormatParams::default()))
+            }
             StageFileFormatType::NdJson => {
                 Ok(FileFormatParams::NdJson(NdJsonFileFormatParams::default()))
             }
@@ -138,7 +141,7 @@ impl FileFormatParams {
     pub fn compression(&self) -> StageFileCompression {
         match self {
             FileFormatParams::Csv(v) => v.compression,
-            FileFormatParams::Tsv(v) => v.compression,
+            FileFormatParams::Text(v) => v.compression,
             FileFormatParams::NdJson(v) => v.compression,
             FileFormatParams::Json(v) => v.compression,
             FileFormatParams::Xml(v) => v.compression,
@@ -298,8 +301,8 @@ impl FileFormatParams {
                     geometry_format: std::default::Default::default(),
                 })
             }
-            StageFileFormatType::Tsv => {
-                let default = TsvFileFormatParams::default();
+            StageFileFormatType::Text => {
+                let default = TextFileFormatParams::default();
                 let compression = reader.take_compression_default_none()?;
                 let headers = reader.take_u64(OPT_SKIP_HEADER, default.headers)?;
                 let field_delimiter =
@@ -309,7 +312,7 @@ impl FileFormatParams {
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
-                FileFormatParams::Tsv(TsvFileFormatParams {
+                FileFormatParams::Text(TextFileFormatParams {
                     compression,
                     headers,
                     field_delimiter,
@@ -360,7 +363,7 @@ impl FileFormatParams {
         }
 
         match self {
-            FileFormatParams::Tsv(p) => {
+            FileFormatParams::Text(p) => {
                 check_field_delimiter_tsv(&p.field_delimiter).map_err(|msg| {
                     format!(
                         "{} is currently set to '{}'. {msg}",
@@ -541,7 +544,7 @@ impl CsvFileFormatParams {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TsvFileFormatParams {
+pub struct TextFileFormatParams {
     pub compression: StageFileCompression,
     pub headers: u64,
     pub field_delimiter: String,
@@ -551,9 +554,9 @@ pub struct TsvFileFormatParams {
     pub quote: String,
 }
 
-impl Default for TsvFileFormatParams {
+impl Default for TextFileFormatParams {
     fn default() -> Self {
-        TsvFileFormatParams {
+        TextFileFormatParams {
             compression: StageFileCompression::None,
             headers: 0,
             field_delimiter: "\t".to_string(),
@@ -565,10 +568,10 @@ impl Default for TsvFileFormatParams {
     }
 }
 
-impl TsvFileFormatParams {
-    pub fn downcast_unchecked(params: &FileFormatParams) -> &TsvFileFormatParams {
+impl TextFileFormatParams {
+    pub fn downcast_unchecked(params: &FileFormatParams) -> &TextFileFormatParams {
         match params {
-            FileFormatParams::Tsv(p) => p,
+            FileFormatParams::Text(p) => p,
             _ => unreachable!(),
         }
     }
@@ -921,10 +924,10 @@ impl Display for FileFormatParams {
                     params.quoted_empty_field_as,
                 )
             }
-            FileFormatParams::Tsv(params) => {
+            FileFormatParams::Text(params) => {
                 write!(
                     f,
-                    "TYPE = TSV COMPRESSION = {:?} \
+                    "TYPE = TEXT COMPRESSION = {:?} \
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' QUOTE = '{}' \
                      SKIP_HEADER = {} \
                      NAN_DISPLAY = '{}'",
@@ -1066,12 +1069,12 @@ fn parse_null_if(null_if: Option<String>) -> Result<Vec<String>> {
 mod tests {
     use super::*;
 
-    fn get_tsv_params(options: BTreeMap<String, String>) -> TsvFileFormatParams {
+    fn get_tsv_params(options: BTreeMap<String, String>) -> TextFileFormatParams {
         let params =
             FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
                 .expect("tsv file format options should parse");
         match params {
-            FileFormatParams::Tsv(v) => v,
+            FileFormatParams::Text(v) => v,
             _ => unreachable!("expected tsv params"),
         }
     }
@@ -1079,7 +1082,7 @@ mod tests {
     #[test]
     fn test_tsv_field_delimiter_empty_string() {
         let mut options = BTreeMap::new();
-        options.insert("type".to_string(), "TSV".to_string());
+        options.insert("type".to_string(), "TEXT".to_string());
         options.insert("field_delimiter".to_string(), "".to_string());
 
         let params = get_tsv_params(options);

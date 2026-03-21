@@ -324,6 +324,31 @@ impl ScalarExpr {
         Ok(())
     }
 
+    pub fn replace_column_with_scalar(
+        &mut self,
+        old: Symbol,
+        new_scalar: &ScalarExpr,
+    ) -> Result<()> {
+        struct ReplaceColumnVisitor<'a> {
+            old: Symbol,
+            new_scalar: &'a ScalarExpr,
+        }
+
+        impl VisitorMut<'_> for ReplaceColumnVisitor<'_> {
+            fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+                if matches!(expr, ScalarExpr::BoundColumnRef(col) if col.column.index == self.old) {
+                    *expr = self.new_scalar.clone();
+                    return Ok(());
+                }
+                walk_expr_mut(self, expr)
+            }
+        }
+
+        let mut visitor = ReplaceColumnVisitor { old, new_scalar };
+        visitor.visit(self)?;
+        Ok(())
+    }
+
     pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<Symbol, DataType> {
         struct UsedColumnsVisitor {
             columns: HashMap<Symbol, DataType>,

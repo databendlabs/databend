@@ -48,7 +48,7 @@ use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
@@ -86,7 +86,7 @@ impl SeparatedTextDecoder {
         }
     }
 
-    pub fn create_tsv(_params: &TsvFileFormatParams, settings: InputFormatSettings) -> Self {
+    pub fn create_tsv(_params: &TextFileFormatParams, settings: InputFormatSettings) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],

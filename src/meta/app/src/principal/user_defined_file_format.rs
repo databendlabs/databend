@@ -51,3 +51,39 @@ impl TryFrom<Vec<u8>> for UserDefinedFileFormat {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::principal::TextFileFormatParams;
+
+    #[test]
+    fn test_deserialize_legacy_tsv_file_format_type() {
+        let legacy = br#"{
+            "name":"legacy_text",
+            "file_format_params":{
+                "type":"Tsv",
+                "compression":"None",
+                "headers":0,
+                "field_delimiter":"\t",
+                "record_delimiter":"\n",
+                "nan_display":"NaN",
+                "escape":"\\",
+                "quote":"'"
+            },
+            "creator":{
+                "username":"root",
+                "hostname":"%"
+            }
+        }"#;
+
+        let file_format = UserDefinedFileFormat::try_from(legacy.to_vec()).unwrap();
+        assert_eq!(
+            file_format.file_format_params,
+            FileFormatParams::Text(TextFileFormatParams::default())
+        );
+
+        let serialized = serde_json::to_value(&file_format).unwrap();
+        assert_eq!(serialized["file_format_params"]["type"], "Text");
+    }
+}

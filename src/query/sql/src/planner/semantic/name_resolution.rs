@@ -40,6 +40,12 @@ pub enum NameResolutionSuggest {
 }
 
 impl NameResolutionContext {
+    // rely on normalize_identifier() do not change quote
+    pub fn is_case_sensitive(&self, ident: &Identifier) -> bool {
+        (ident.is_quoted() && self.quoted_ident_case_sensitive)
+            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive)
+    }
+
     pub fn not_found_suggest(&self, ident: &Identifier) -> Option<NameResolutionSuggest> {
         if !ident.name.chars().any(|c| c.is_uppercase()) {
             return None;

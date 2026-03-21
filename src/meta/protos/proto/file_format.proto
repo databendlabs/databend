@@ -25,7 +25,7 @@ enum StageFileFormatType {
   Parquet = 4;
   Xml = 5;
   NdJson = 6;
-  Tsv = 7;
+  Text = 7;
   Lance = 8;
 }
 
@@ -82,7 +82,7 @@ message FileFormatParams {
   oneof format {
     ParquetFileFormatParams parquet = 1;
     CsvFileFormatParams csv = 2;
-    TsvFileFormatParams tsv = 3;
+    TextFileFormatParams text = 3;
     JsonFileFormatParams json = 4;
     NdJsonFileFormatParams nd_json = 5;
     XmlFileFormatParams xml = 6;
@@ -124,7 +124,7 @@ message CsvFileFormatParams {
   optional string quoted_empty_field_as = 15;
 }
 
-message TsvFileFormatParams {
+message TextFileFormatParams {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 

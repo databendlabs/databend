@@ -21,7 +21,7 @@ function run() {
 }
 
 run "csv"
-run "tsv"
+run "text"
 run "ndjson"
 run "parquet"
 

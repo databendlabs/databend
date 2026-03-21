@@ -23,6 +23,7 @@ cookie = { workspace = true }
 databend-common-exception = { workspace = true }
 env_logger = { workspace = true }
 futures-util = { workspace = true }
+glob = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
@@ -38,6 +39,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
 walkdir = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

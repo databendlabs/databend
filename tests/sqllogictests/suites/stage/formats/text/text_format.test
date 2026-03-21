@@ -1,6 +1,5 @@
-
 query TT
-select $1, $2 from @data/tsv/escape.tsv (file_format => 'tsv')
+select $1, $2 from @data/tsv/escape.tsv (file_format => 'text')
 ----
 "a 1
 "a" 2
@@ -15,14 +14,14 @@ select $1, $2 from @data/tsv/escape.tsv (file_format => 'tsv')
 
 
 query TT
-select hex($1), hex($2) from @data/tsv/whitespace.tsv (file_format => 'tsv')
+select hex($1), hex($2) from @data/tsv/whitespace.tsv (file_format => 'text')
 ----
 3120 3220
 2033 2034
 203520 3620
 
 query TT
-select $1, $2 from @data/tsv/no_newline.tsv (file_format => 'tsv') a order by $1
+select $1, $2 from @data/tsv/no_newline.tsv (file_format => 'text') a order by $1
 ----
 1 2
 3 4
@@ -41,11 +40,11 @@ statement ok
 create table tsv_crlf_trim_repro(a string not null, b string not null)
 
 query TIITI
-copy into tsv_crlf_trim_repro from @data/tsv/crlf_record_delimiter.tsv file_format = (type = TSV record_delimiter = '\r\n')
+copy into tsv_crlf_trim_repro from @data/tsv/crlf_record_delimiter.tsv file_format = (type = TEXT record_delimiter = '\r\n')
 ----
 tsv/crlf_record_delimiter.tsv 1 0 NULL NULL
 
-# regression for TSV CRLF record delimiter: the trailing CR should be trimmed
+# regression for TEXT CRLF record delimiter: the trailing CR should be trimmed
 query TT
 select hex(a), hex(b) from tsv_crlf_trim_repro
 ----
@@ -58,7 +57,7 @@ statement ok
 create table tsv_crlf_empty_line_repro(a string null)
 
 query TIITI
-copy into tsv_crlf_empty_line_repro from @data/tsv/crlf_empty_line.tsv file_format = (type = TSV record_delimiter = '\r\n')
+copy into tsv_crlf_empty_line_repro from @data/tsv/crlf_empty_line.tsv file_format = (type = TEXT record_delimiter = '\r\n')
 ----
 tsv/crlf_empty_line.tsv 0 0 NULL NULL
 
@@ -75,7 +74,7 @@ statement ok
 create table tsv_crlf_unterminated_data_cr_repro(a string not null, b string not null)
 
 query TIITI
-copy into tsv_crlf_unterminated_data_cr_repro from @data/tsv/crlf_unterminated_data_cr.tsv file_format = (type = TSV record_delimiter = '\r\n')
+copy into tsv_crlf_unterminated_data_cr_repro from @data/tsv/crlf_unterminated_data_cr.tsv file_format = (type = TEXT record_delimiter = '\r\n')
 ----
 tsv/crlf_unterminated_data_cr.tsv 1 0 NULL NULL
 

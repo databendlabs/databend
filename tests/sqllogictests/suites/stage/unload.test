@@ -107,17 +107,17 @@ statement ok
 remove @unload;
 
 query ???
-copy into @unload from ii file_format=(format_name='tsv');
+copy into @unload from ii file_format=(format_name='text');
 ----
 3 12 12
 
 query ??
 select right(name, 4), size from list_stage(location=>'@unload');
 ----
-.tsv 12
+.txt 12
 
 query ??
-select $1, $2 from @unload(file_format => 'tsv');
+select $1, $2 from @unload(file_format => 'text');
 ----
 1 2
 3 4
@@ -137,6 +137,17 @@ query ??
 select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
 ----
 3 4
+
+# for compat
+query ???
+copy into @unload/a_raw_path.csv from (select 5,6) file_format=(type=csv) single=true include_query_id=true use_raw_path=true detailed_output=true overwrite=true;
+----
+a_raw_path.csv 4 1
+
+query ??
+select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
+----
+5 6
 
 statement error 1006.*file already exists
 copy into @unload/a_raw_path.csv from (select 3,4) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=false overwrite=false;

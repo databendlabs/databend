@@ -35,7 +35,7 @@ def test_empty(tid, val, typ, options, expected):
     conn.exec(f"create or replace stage {name} {fmt}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     # test copy
@@ -79,7 +79,7 @@ def test_null(tid, val, typ, options, expected):
     conn.exec(f"create or replace stage {name} {fmt}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{val},1') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     # test copy
@@ -124,7 +124,7 @@ def test_null_display_empty(
     conn.exec(f"create or replace stage {name} {fmt}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{data},1') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{data},1') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     # test
@@ -162,7 +162,7 @@ def test_column_not_match(data, check, exp):
     conn.exec(f"create or replace stage {name}")
 
     # gen data
-    res = conn.query_row(f"copy into @{name} from (select '{data}') file_format=(type=tsv)")
+    res = conn.query_row(f"copy into @{name} from (select '{data}') file_format=(type=TSV)")
     assert res.values()[0] == 1
 
     copy_sql = f"copy into {name} from @{name} file_format=(type=csv error_on_column_count_mismatch={check}) on_error=continue"

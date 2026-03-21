@@ -34,7 +34,7 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_storages_stage::BytesBatch;
 use databend_common_storages_stage::parse_tsv_records_for_infer_schema;
@@ -44,7 +44,7 @@ use regex::RegexSet;
 use crate::table_functions::infer_schema::merge::merge_schema;
 
 const MAX_SINGLE_FILE_BYTES: usize = 100 * 1024 * 1024;
-static TSV_INFER_REGEX_SET: LazyLock<RegexSet> = LazyLock::new(|| {
+static TEXT_INFER_REGEX_SET: LazyLock<RegexSet> = LazyLock::new(|| {
     RegexSet::new([
         r"(?i)^(true)$|^(false)$(?-i)", // BOOLEAN
         r"^-?(\d+)$",                   // INTEGER
@@ -59,12 +59,12 @@ static TSV_INFER_REGEX_SET: LazyLock<RegexSet> = LazyLock::new(|| {
 });
 
 #[derive(Default, Copy, Clone)]
-struct TsvInferredDataType {
+struct TextInferredDataType {
     // 0:Boolean,1:Integer,2:Float64,3:Date32,4:TsS,5:TsMS,6:TsUS,7:TsNS,8:Utf8
     packed: u16,
 }
 
-impl TsvInferredDataType {
+impl TextInferredDataType {
     fn get(&self) -> DataType {
         match self.packed {
             0 => DataType::Null,
@@ -93,7 +93,7 @@ impl TsvInferredDataType {
             return;
         };
 
-        self.packed |= if let Some(m) = TSV_INFER_REGEX_SET.matches(string).into_iter().next() {
+        self.packed |= if let Some(m) = TEXT_INFER_REGEX_SET.matches(string).into_iter().next() {
             if m == 1 && string.len() >= 19 && string.parse::<i64>().is_err() {
                 1 << 8
             } else {
@@ -136,7 +136,7 @@ impl InferSchemaSeparator {
 
     fn infer_tsv_schema(
         bytes: &[u8],
-        params: &TsvFileFormatParams,
+        params: &TextFileFormatParams,
         is_eof: bool,
         max_records: Option<usize>,
     ) -> std::result::Result<Schema, Option<ArrowError>> {
@@ -157,7 +157,7 @@ impl InferSchemaSeparator {
             let (first_idx, first_field) = first;
             if first_idx != 0 {
                 return Err(ArrowError::ParseError(
-                    "invalid TSV field index stream when inferring schema".to_string(),
+                    "invalid TEXT field index stream when inferring schema".to_string(),
                 ));
             }
 
@@ -197,7 +197,7 @@ impl InferSchemaSeparator {
                 .collect::<Vec<_>>()
         };
 
-        let mut column_types = vec![TsvInferredDataType::default(); headers.len()];
+        let mut column_types = vec![TextInferredDataType::default(); headers.len()];
         let max_records = max_records.unwrap_or(usize::MAX);
         if params.headers == 0 && rows_seen < max_records {
             for (idx, t) in column_types.iter_mut().enumerate().take(headers.len()) {
@@ -280,7 +280,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
                     .map(|(schema, _)| schema)
                     .map_err(Some)
             }
-            FileFormatParams::Tsv(params) => {
+            FileFormatParams::Text(params) => {
                 Self::infer_tsv_schema(file_bytes, params, batch.is_eof, self.max_records)
             }
             FileFormatParams::NdJson(_) => {
@@ -302,7 +302,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "InferSchemaSeparator is currently limited to format CSV, TSV and NDJSON",
+                    "InferSchemaSeparator is currently limited to format CSV, TEXT and NDJSON",
                 ));
             }
         };
@@ -383,15 +383,15 @@ fn human_readable_size(bytes: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_app::principal::TsvFileFormatParams;
+    use databend_common_meta_app::principal::TextFileFormatParams;
 
     use super::*;
 
     #[test]
     fn test_infer_tsv_schema_with_custom_record_delimiter() {
-        let params = TsvFileFormatParams {
+        let params = TextFileFormatParams {
             record_delimiter: "|".to_string(),
-            ..TsvFileFormatParams::default()
+            ..TextFileFormatParams::default()
         };
         let schema =
             InferSchemaSeparator::infer_tsv_schema("1\t2|3\t4|".as_bytes(), &params, true, None)
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_infer_tsv_schema_with_escaped_delimiters() {
-        let params = TsvFileFormatParams::default();
+        let params = TextFileFormatParams::default();
         let schema =
             InferSchemaSeparator::infer_tsv_schema(b"1\\t2\t3\\n4\n5\t6\n", &params, true, None)
                 .unwrap();
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_infer_tsv_schema_all_supported_types() {
-        let params = TsvFileFormatParams::default();
+        let params = TextFileFormatParams::default();
         let schema = InferSchemaSeparator::infer_tsv_schema(
             b"true\t42\t3.14\t2024-01-02\t2024-01-02 03:04:05\t2024-01-02 03:04:05.123\t2024-01-02 03:04:05.123456\t2024-01-02 03:04:05.123456789\thello\n",
             &params,
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn test_infer_tsv_schema_header_names() {
-        let params = TsvFileFormatParams {
+        let params = TextFileFormatParams {
             headers: 1,
             ..Default::default()
         };
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_infer_tsv_schema_max_records() {
-        let params = TsvFileFormatParams::default();
+        let params = TextFileFormatParams::default();
         let schema =
             InferSchemaSeparator::infer_tsv_schema(b"1\ntext\n", &params, true, Some(1)).unwrap();
         assert_eq!(schema.field(0).data_type(), &DataType::Int64);
@@ -479,7 +479,7 @@ mod tests {
 
     #[test]
     fn test_infer_tsv_table_schema_type_conversion() {
-        let params = TsvFileFormatParams::default();
+        let params = TextFileFormatParams::default();
         let arrow_schema = InferSchemaSeparator::infer_tsv_schema(
             b"true\t42\t3.14\t2024-01-02\t2024-01-02 03:04:05\t2024-01-02 03:04:05.123\t2024-01-02 03:04:05.123456\t2024-01-02 03:04:05.123456789\thello\n",
             &params,
