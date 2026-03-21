@@ -138,6 +138,17 @@ select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
 ----
 3 4
 
+# for compat
+query ???
+copy into @unload/a_raw_path.csv from (select 5,6) file_format=(type=csv) single=true include_query_id=true use_raw_path=true detailed_output=true overwrite=true;
+----
+a_raw_path.csv 4 1
+
+query ??
+select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
+----
+5 6
+
 statement error 1006.*file already exists
 copy into @unload/a_raw_path.csv from (select 3,4) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=false overwrite=false;
 

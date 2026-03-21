@@ -233,10 +233,15 @@ fn check_options(
     match (raw_options.include_query_id, raw_options.use_raw_path) {
         (Some(include_query_id), Some(use_raw_path)) => {
             if include_query_id == use_raw_path {
-                return Err(ErrorCode::InvalidArgument(format!(
-                    "conflict copy_options: include_query_id={} and use_raw_path={}",
-                    include_query_id, use_raw_path
-                )));
+                if use_raw_path {
+                    // for compat
+                    options.include_query_id = false;
+                } else {
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "conflict copy_options: include_query_id={} and use_raw_path={}",
+                        include_query_id, use_raw_path
+                    )));
+                }
             }
         }
         (None, Some(true)) => {
