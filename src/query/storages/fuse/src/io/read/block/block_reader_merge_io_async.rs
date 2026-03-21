@@ -49,8 +49,7 @@ impl BlockReader {
 
 impl BlockReadContext {
     #[async_backtrace::framed]
-    pub async fn 
-    read_columns_data_by_merge_io(
+    pub async fn read_columns_data_by_merge_io(
         &self,
         settings: &ReadSettings,
         location: &str,
