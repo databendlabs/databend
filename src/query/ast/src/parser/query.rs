@@ -268,7 +268,11 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
 
     fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
         let set_expr = match input.elem {
-            SetOperationElement::Group(expr) => expr,
+            SetOperationElement::Group(expr) => {
+                let mut query = expr.into_query();
+                query.span = transform_span(input.span.tokens);
+                SetExpr::Query(Box::new(query))
+            }
             SetOperationElement::SelectStmt {
                 hints,
                 distinct,
