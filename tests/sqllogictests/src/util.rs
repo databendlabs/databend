@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
@@ -22,7 +23,7 @@ use std::time::Instant;
 use bollard::Docker;
 use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
-use clap::Parser;
+use glob::glob;
 use redis::Commands;
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,7 +39,6 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::mysql::Mysql;
 use testcontainers_modules::redis::REDIS_PORT;
 use testcontainers_modules::redis::Redis;
-use walkdir::DirEntry;
 use walkdir::WalkDir;
 
 use crate::arg::SqlLogicTestArgs;
@@ -86,16 +86,16 @@ pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
     Ok(parsed_rows)
 }
 
-fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
+fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<PathBuf> {
     for entry in WalkDir::new(suit)
         .min_depth(0)
         .max_depth(100)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
     {
-        let e = entry.as_ref().unwrap();
-        if e.file_type().is_dir() && e.file_name().to_str().unwrap() == dir {
-            return Ok(entry?);
+        let entry = entry?;
+        if entry.file_type().is_dir() && entry.file_name().to_str().unwrap() == dir {
+            return Ok(entry.into_path());
         }
     }
     Err(DSqlLogicTestError::SelfError(
@@ -103,19 +103,13 @@ fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
     ))
 }
 
-pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
-    let args = SqlLogicTestArgs::parse();
+fn get_legacy_files(suit: PathBuf, args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
     let mut files = vec![];
-
     let dirs = match args.dir {
         Some(ref dir) => {
             // Find specific dir
-            let dir_entry = find_specific_dir(dir, suit);
-            match dir_entry {
-                Ok(dir_entry) => Some(dir_entry.into_path()),
-                // If didn't find specific dir, return empty vec
-                Err(_) => None,
-            }
+            // If didn't find specific dir, return empty vec.
+            find_specific_dir(dir, suit).ok()
         }
         None => Some(suit),
     };
@@ -129,7 +123,7 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
         .filter_entry(|e| {
-            if let Some(skipped_dir) = &args.skipped_dir {
+            if let Some(skipped_dir) = args.skipped_dir.as_ref() {
                 let dirs = skipped_dir.split(',').collect::<Vec<&str>>();
                 if dirs.contains(&e.file_name().to_str().unwrap()) {
                     return false;
@@ -137,9 +131,77 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
             }
             true
         })
-        .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
     {
-        files.push(entry);
+        let entry = entry?;
+        if !entry.file_type().is_dir() {
+            files.push(entry.into_path());
+        }
+    }
+    Ok(files)
+}
+
+fn expand_path(path: &Path, files: &mut BTreeSet<PathBuf>) -> Result<()> {
+    if path.is_file() {
+        files.insert(path.to_path_buf());
+        return Ok(());
+    }
+    if path.is_dir() {
+        for entry in WalkDir::new(path)
+            .min_depth(0)
+            .max_depth(100)
+            .sort_by(|a, b| a.file_name().cmp(b.file_name()))
+            .into_iter()
+        {
+            let entry = entry?;
+            if !entry.file_type().is_dir() {
+                files.insert(entry.into_path());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn expand_glob_patterns(patterns: &[String]) -> Result<BTreeSet<PathBuf>> {
+    let mut files = BTreeSet::new();
+    for pattern in patterns {
+        let entries = glob(pattern).map_err(|e| {
+            DSqlLogicTestError::SelfError(format!("Invalid glob pattern '{pattern}': {e}"))
+        })?;
+        for entry in entries {
+            let path = entry.map_err(|e| {
+                DSqlLogicTestError::SelfError(format!(
+                    "Failed to resolve glob entry for pattern '{pattern}': {e}"
+                ))
+            })?;
+            expand_path(&path, &mut files)?;
+        }
+    }
+    Ok(files)
+}
+
+fn get_glob_files(args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
+    let Some(patterns) = args.run.as_ref() else {
+        return Ok(vec![]);
+    };
+
+    let mut selected = expand_glob_patterns(patterns)?;
+    if let Some(skip_patterns) = args.skip.as_ref() {
+        let skipped = expand_glob_patterns(skip_patterns)?;
+        selected.retain(|path| !skipped.contains(path));
+    }
+
+    Ok(selected.into_iter().collect())
+}
+
+pub fn collect_files(args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
+    if args.run.is_some() {
+        return get_glob_files(args);
+    }
+
+    let mut files = vec![];
+    let suits = std::fs::read_dir(&args.suites)?;
+    for suit in suits {
+        files.extend(get_legacy_files(suit?.path(), args)?);
     }
     Ok(files)
 }
@@ -180,6 +242,110 @@ pub fn collect_lazy_dir(file_path: &Path, lazy_dirs: &mut HashSet<LazyDir>) -> R
         lazy_dirs.insert(LazyDir::Dictionaries);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::*;
+
+    fn make_args(suites: String) -> SqlLogicTestArgs {
+        SqlLogicTestArgs {
+            run: None,
+            skip: None,
+            dir: None,
+            file: None,
+            skipped_dir: None,
+            skipped_file: None,
+            handlers: None,
+            suites,
+            complete: false,
+            no_fail_fast: false,
+            parallel: 1,
+            enable_sandbox: false,
+            debug: false,
+            bench: false,
+            force_load: false,
+            database: "default".to_string(),
+            port: 8000,
+        }
+    }
+
+    fn write_test_file(path: &Path) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, "statement ok\nselect 1;\n").unwrap();
+    }
+
+    #[test]
+    fn collect_files_keeps_legacy_directory_lookup() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("suites");
+        write_test_file(&suites.join("base/00_dummy/00_0000_dummy.test"));
+        write_test_file(&suites.join("base/00_other/00_0001_other.test"));
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.dir = Some("00_dummy".to_string());
+
+        let files = collect_files(&args).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert!(files[0].ends_with("00_0000_dummy.test"));
+    }
+
+    #[test]
+    fn collect_files_supports_glob_file_and_directory_patterns() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("ignored-suites");
+        let dir_file = temp.path().join("cases/base/00_dummy/00_0000_dummy.test");
+        let extra_file = temp.path().join("cases/extra/10_0000_extra.test");
+        write_test_file(&dir_file);
+        write_test_file(&extra_file);
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.run = Some(vec![
+            temp.path()
+                .join("cases/base/00_dummy")
+                .to_string_lossy()
+                .into_owned(),
+            temp.path()
+                .join("cases/extra/*.test")
+                .to_string_lossy()
+                .into_owned(),
+        ]);
+
+        let files = collect_files(&args).unwrap();
+
+        assert_eq!(files, vec![dir_file, extra_file]);
+    }
+
+    #[test]
+    fn collect_files_applies_glob_skip_and_deduplicates_matches() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("ignored-suites");
+        let keep_file = temp.path().join("cases/base/00_dummy/00_keep.test");
+        let skip_file = temp.path().join("cases/base/00_dummy/00_skip.test");
+        write_test_file(&keep_file);
+        write_test_file(&skip_file);
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.run = Some(vec![
+            temp.path()
+                .join("cases/base/00_dummy")
+                .to_string_lossy()
+                .into_owned(),
+            keep_file.to_string_lossy().into_owned(),
+        ]);
+        args.skip = Some(vec![skip_file.to_string_lossy().into_owned()]);
+
+        let files = collect_files(&args).unwrap();
+
+        assert_eq!(files, vec![keep_file]);
+    }
 }
 
 pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>, force_load: bool) -> Result<()> {

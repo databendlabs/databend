@@ -15,13 +15,34 @@ Run all tests with specific handler.
 databend-sqllogictests --handlers <handler_name>
 ```
 ---
-Run tests under specific directory.
+Run tests by glob pattern.
 
+```shell
+databend-sqllogictests --run 'tests/sqllogictests/suites/base/**/*.test'
+```
+or
+```shell
+databend-sqllogictests --run '**/suites/base/**/*'
+```
+
+
+---
+Run a small set of files or directories with multiple glob patterns.
+```shell
+databend-sqllogictests --run 'tests/sqllogictests/suites/base/00_dummy/*.test,tests/sqllogictests/suites/base/03_common/*.test'
+```
+---
+Skip part of the matched files.
+```shell
+databend-sqllogictests --run 'tests/sqllogictests/suites/base/**/*.test' --skip 'tests/sqllogictests/suites/base/01_system'
+```
+---
+Run tests under a specific directory name found under `--suites`.
 ```shell
 databend-sqllogictests --run_dir <dir_name>
 ```
 ---
-Run tests under specific file. This is the most commonly used command because users do not need to run all tests at a time and only need to run their newly added test files or test files with changes
+Run tests under a specific file name found under `--suites`.
 ```shell
 databend-sqllogictests --run_file <file_name>
 ```
@@ -44,7 +65,7 @@ databend-sqllogictests --help
 ### Parallel
 If you want to run test files in parallel, please add the following args:
 ```shell
-databend-sqllogictest --enable_sandbox --parallel <number>
+databend-sqllogictests --enable_sandbox --parallel <number>
 ```
 
 When start databend query, please add `--internal-enable-sandbox-tenant` config.
