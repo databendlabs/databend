@@ -1303,6 +1303,19 @@ fn test_query() {
         r#"(select * from t1 union select * from t2) intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
+        // Issue #19578: preserve parentheses in UNION queries
+        r#"SELECT 1 UNION (SELECT 1 UNION SELECT 1 UNION SELECT 1)"#,
+        r#"SELECT 1 UNION (SELECT 2)"#,
+        r#"(SELECT 1) UNION SELECT 2"#,
+        r#"(SELECT 1) UNION (SELECT 2)"#,
+        r#"SELECT 1 UNION SELECT 2 UNION (SELECT 3 UNION SELECT 4)"#,
+        r#"(SELECT 1 UNION SELECT 2) UNION SELECT 3"#,
+        // With INTERSECT and EXCEPT
+        r#"SELECT 1 INTERSECT (SELECT 1 INTERSECT SELECT 1)"#,
+        r#"(SELECT 1) EXCEPT SELECT 2"#,
+        // Complex cases
+        r#"SELECT a FROM t1 UNION (SELECT b FROM t2 INTERSECT SELECT c FROM t3)"#,
+        r#"(SELECT * FROM t1 WHERE x > 0) UNION SELECT * FROM t2"#,
         r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
         r#"SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo"#,
         r#"SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu"#,

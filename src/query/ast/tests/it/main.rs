@@ -18,4 +18,3 @@ mod decimal;
 mod display;
 mod parser;
 mod token;
-mod union_parentheses;
