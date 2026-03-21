@@ -15,8 +15,8 @@
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Dialect;
-use databend_common_ast::ParseMode;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::ParseMode;
 
 #[test]
 fn test_union_with_parentheses() {
@@ -41,7 +41,7 @@ fn test_union_with_parentheses() {
         
         // Parse the SQL
         let tokens = tokenize_sql(sql).unwrap();
-        let (rest, stmt) = parse_sql(&tokens, Dialect::PostgreSQL, ParseMode::Default)
+        let (stmt, rest) = parse_sql(&tokens, Dialect::PostgreSQL)
             .unwrap_or_else(|e| panic!("Failed to parse SQL '{}': {:?}", sql, e));
         
         assert!(rest.is_empty(), "Not all input consumed for '{}'", sql);
@@ -60,7 +60,7 @@ fn test_union_with_parentheses() {
         println!("Formatted: {}", formatted);
         
         let tokens2 = tokenize_sql(&formatted).unwrap();
-        let (rest2, stmt2) = parse_sql(&tokens2, Dialect::PostgreSQL, ParseMode::Default)
+        let (stmt2, rest2) = parse_sql(&tokens2, Dialect::PostgreSQL)
             .unwrap_or_else(|e| panic!("Failed to re-parse formatted SQL '{}': {:?}", formatted, e));
         
         assert!(rest2.is_empty(), "Not all input consumed for re-parse of '{}'", formatted);
@@ -84,7 +84,7 @@ fn test_union_with_parentheses() {
 
 fn verify_parentheses_preserved(set_expr: &SetExpr, original_sql: &str) {
     match set_expr {
-        SetExpr::SetOperation(op) => {
+        SetExpr::SetOperation(_op) => {
             // Check if this operation should have parentheses based on original SQL
             let sql_lower = original_sql.to_lowercase();
             let has_parentheses = sql_lower.contains("(select") && sql_lower.contains(")");
@@ -111,7 +111,7 @@ fn test_issue_19578_specific() {
     let sql = "SELECT 1 UNION (SELECT 1 UNION SELECT 1 UNION SELECT 1)";
     
     let tokens = tokenize_sql(sql).unwrap();
-    let (rest, stmt) = parse_sql(&tokens, Dialect::PostgreSQL, ParseMode::Default)
+    let (stmt, rest) = parse_sql(&tokens, Dialect::PostgreSQL)
         .expect("Failed to parse issue #19578 SQL");
     
     assert!(rest.is_empty());
@@ -126,7 +126,7 @@ fn test_issue_19578_specific() {
     
     // Re-parse to ensure no panic
     let tokens2 = tokenize_sql(&formatted).unwrap();
-    let (rest2, _) = parse_sql(&tokens2, Dialect::PostgreSQL, ParseMode::Default)
+    let (_, rest2) = parse_sql(&tokens2, Dialect::PostgreSQL)
         .expect("Failed to re-parse formatted SQL");
     
     assert!(rest2.is_empty());
