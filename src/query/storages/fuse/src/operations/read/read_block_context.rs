@@ -28,7 +28,7 @@ use super::read_data_source::ReadDataSource;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
-use crate::io::BlockReader;
+use crate::io::BlockReadContext;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
@@ -36,7 +36,7 @@ use crate::io::VirtualColumnReader;
 pub struct ReadBlockContext {
     read_settings: ReadSettings,
     storage_format: FuseStorageFormat,
-    block_reader: Arc<BlockReader>,
+    block_read_ctx: BlockReadContext,
     block_format: Arc<dyn FuseBlockFormat>,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -46,7 +46,7 @@ impl ReadBlockContext {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         storage_format: FuseStorageFormat,
-        block_reader: Arc<BlockReader>,
+        block_read_ctx: BlockReadContext,
         block_format: Arc<dyn FuseBlockFormat>,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -54,7 +54,7 @@ impl ReadBlockContext {
         Ok(Arc::new(Self {
             read_settings: ReadSettings::from_ctx(&ctx)?,
             storage_format,
-            block_reader,
+            block_read_ctx,
             block_format,
             index_reader,
             virtual_reader,
@@ -82,7 +82,7 @@ impl ReadBlockContext {
         let raw_data = self
             .block_format
             .read_data_by_merge_io(
-                &self.block_reader,
+                &self.block_read_ctx,
                 &self.read_settings,
                 &fuse_part.location,
                 &fuse_part.columns_meta,
@@ -112,11 +112,11 @@ impl ReadBlockContext {
             &fuse_part.location,
             index_reader.index_id(),
         );
-        let index_block_reader = index_reader.block_reader();
+        let index_block_read_ctx = index_reader.block_read_context();
 
         let Some(block_meta) = self
             .block_format
-            .read_block_meta(index_block_reader.as_ref(), &location)
+            .read_block_meta(index_block_read_ctx.operator(), &location)
             .await
         else {
             return Ok(None);
@@ -125,7 +125,7 @@ impl ReadBlockContext {
         let raw_data = match self
             .block_format
             .read_data_by_merge_io(
-                index_block_reader.as_ref(),
+                &index_block_read_ctx,
                 &self.read_settings,
                 &location,
                 &block_meta.columns_meta,

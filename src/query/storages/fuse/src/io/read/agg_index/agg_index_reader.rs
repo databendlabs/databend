@@ -30,6 +30,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
+use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 
 #[derive(Clone)]
@@ -100,8 +101,8 @@ impl AggIndexReader {
     }
 
     #[inline(always)]
-    pub fn block_reader(&self) -> Arc<BlockReader> {
-        self.reader.clone()
+    pub fn block_read_context(&self) -> BlockReadContext {
+        self.reader.read_context()
     }
 
     pub(super) fn apply_agg_info(&self, block: DataBlock) -> Result<DataBlock> {

@@ -20,9 +20,11 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use opendal::Operator;
 
 use super::FuseBlockFormat;
 use super::ReadBlockMeta;
+use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 use crate::operations::read::raw_data_source::RawDataSource;
 
@@ -39,13 +41,13 @@ impl FuseBlockFormat for FuseNativeBlockFormat {
     #[async_backtrace::framed]
     async fn read_data_by_merge_io(
         &self,
-        reader: &BlockReader,
+        read_ctx: &BlockReadContext,
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<RawDataSource> {
-        let source = reader
+        let source = read_ctx
             .read_native_columns_data_by_merge_io(
                 settings,
                 location,
@@ -57,10 +59,9 @@ impl FuseBlockFormat for FuseNativeBlockFormat {
         Ok(RawDataSource::Native(source))
     }
 
-    async fn read_block_meta(&self, reader: &BlockReader, location: &str) -> Option<ReadBlockMeta> {
-        let operator = reader.operator();
+    async fn read_block_meta(&self, operator: &Operator, location: &str) -> Option<ReadBlockMeta> {
         let (columns_meta, num_rows) =
-            BlockReader::async_read_native_columns_meta(&operator, location).await?;
+            BlockReader::async_read_native_columns_meta(operator, location).await?;
 
         Some(ReadBlockMeta {
             columns_meta,

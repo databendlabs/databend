@@ -19,8 +19,9 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use opendal::Operator;
 
-use crate::io::BlockReader;
+use crate::io::BlockReadContext;
 use crate::operations::read::raw_data_source::RawDataSource;
 
 pub struct ReadBlockMeta {
@@ -39,7 +40,7 @@ pub trait FuseBlockFormat: Send + Sync {
     /// Reads raw column data from the given block location.
     async fn read_data_by_merge_io(
         &self,
-        reader: &BlockReader,
+        read_ctx: &BlockReadContext,
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
@@ -47,5 +48,5 @@ pub trait FuseBlockFormat: Send + Sync {
     ) -> Result<RawDataSource>;
 
     /// Reads the metadata needed to fetch an arbitrary block location.
-    async fn read_block_meta(&self, reader: &BlockReader, location: &str) -> Option<ReadBlockMeta>;
+    async fn read_block_meta(&self, operator: &Operator, location: &str) -> Option<ReadBlockMeta>;
 }

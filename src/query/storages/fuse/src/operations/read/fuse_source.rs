@@ -98,7 +98,7 @@ pub fn build_fuse_source_pipeline(
     let read_block_context = ReadBlockContext::create(
         ctx.clone(),
         storage_format,
-        block_reader.clone(),
+        block_reader.read_context(),
         block_format,
         index_reader.clone(),
         virtual_reader.clone(),

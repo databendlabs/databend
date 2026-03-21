@@ -29,11 +29,28 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use crate::BlockReadResult;
+use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 
 impl BlockReader {
     #[async_backtrace::framed]
     pub async fn read_columns_data_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<BlockReadResult> {
+        self.read_context()
+            .read_columns_data_by_merge_io(settings, location, columns_meta, ignore_column_ids)
+            .await
+    }
+}
+
+impl BlockReadContext {
+    #[async_backtrace::framed]
+    pub async fn 
+    read_columns_data_by_merge_io(
         &self,
         settings: &ReadSettings,
         location: &str,
@@ -54,7 +71,7 @@ impl BlockReader {
 
         let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
 
-        for (_index, (column_id, ..)) in self.project_indices.iter() {
+        for (_index, (column_id, ..)) in self.project_indices().iter() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if ignore_column_ids.contains(column_id) {
                     continue;
@@ -104,10 +121,10 @@ impl BlockReader {
         }
 
         let merge_io_result =
-            MergeIOReader::merge_io_read(settings, self.operator.clone(), location, &ranges)
+            MergeIOReader::merge_io_read(settings, self.operator().clone(), location, &ranges)
                 .await?;
 
-        if self.put_cache {
+        if self.put_cache() {
             // add raw data (compressed raw bytes) to column cache
             for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
                 // Should NOT use `range.start` as part of the cache key,

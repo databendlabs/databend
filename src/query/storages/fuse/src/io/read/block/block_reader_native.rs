@@ -36,6 +36,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
 
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 
 // Native storage format
@@ -80,13 +81,33 @@ impl BlockReader {
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<NativeSourceData> {
+        self.read_context()
+            .read_native_columns_data_by_merge_io(
+                settings,
+                location,
+                columns_meta,
+                ignore_column_ids,
+            )
+            .await
+    }
+}
+
+impl BlockReadContext {
+    #[async_backtrace::framed]
+    pub async fn read_native_columns_data_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<NativeSourceData> {
         let read_res = self
             .read_columns_data_by_merge_io(settings, location, columns_meta, ignore_column_ids)
             .await?;
 
         let column_buffers = read_res.column_buffers()?;
         let mut results = BTreeMap::new();
-        for (index, column_node) in self.project_column_nodes.iter().enumerate() {
+        for (index, column_node) in self.project_column_nodes().iter().enumerate() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if column_node.leaf_column_ids.len() == 1
                     && ignore_column_ids.contains(&column_node.leaf_column_ids[0])
@@ -112,7 +133,9 @@ impl BlockReader {
         }
         Ok(results)
     }
+}
 
+impl BlockReader {
     #[async_backtrace::framed]
     pub async fn read_native_columns_data(
         op: Operator,
