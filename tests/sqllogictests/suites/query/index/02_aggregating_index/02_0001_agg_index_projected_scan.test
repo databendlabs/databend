@@ -102,3 +102,69 @@ query IIR
 SELECT MAX(a), MIN(b), weighted_avg(a,b) from t;
 ----
 2 1 1.2857143
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS testi3;
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS testi4;
+
+statement ok
+CREATE TABLE t_mismatch_parquet (a int, b int, c int) storage_format = 'parquet'
+
+statement ok
+INSERT INTO t_mismatch_parquet VALUES (10,1,4), (20,2,4), (30,2,5)
+
+statement ok
+CREATE AGGREGATING INDEX testi3 AS SELECT b, MAX(a), SUM(a) from t_mismatch_parquet WHERE c > 1 GROUP BY b
+
+statement ok
+REFRESH AGGREGATING INDEX testi3
+
+query I
+SELECT b from t_mismatch_parquet WHERE c > 1 GROUP BY b ORDER BY b
+----
+1
+2
+
+query II
+SELECT b, SUM(a) from t_mismatch_parquet WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 10
+2 50
+
+query I
+SELECT SUM(a) from t_mismatch_parquet WHERE c > 1 GROUP BY b ORDER BY 1
+----
+10
+50
+
+statement ok
+CREATE TABLE t_mismatch_native (a int, b int, c int) storage_format = 'native'
+
+statement ok
+INSERT INTO t_mismatch_native VALUES (10,1,4), (20,2,4), (30,2,5)
+
+statement ok
+CREATE AGGREGATING INDEX testi4 AS SELECT b, MAX(a), SUM(a) from t_mismatch_native WHERE c > 1 GROUP BY b
+
+statement ok
+REFRESH AGGREGATING INDEX testi4
+
+query I
+SELECT b from t_mismatch_native WHERE c > 1 GROUP BY b ORDER BY b
+----
+1
+2
+
+query II
+SELECT b, SUM(a) from t_mismatch_native WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 10
+2 50
+
+query I
+SELECT SUM(a) from t_mismatch_native WHERE c > 1 GROUP BY b ORDER BY 1
+----
+10
+50

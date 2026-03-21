@@ -99,6 +99,11 @@ impl AggIndexReader {
         self.compression
     }
 
+    #[inline(always)]
+    pub fn block_reader(&self) -> Arc<BlockReader> {
+        self.reader.clone()
+    }
+
     pub(super) fn apply_agg_info(&self, block: DataBlock) -> Result<DataBlock> {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
 

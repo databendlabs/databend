@@ -28,13 +28,11 @@ use crate::io::BlockReader;
 use crate::io::build_columns_meta;
 use crate::operations::read::raw_data_source::RawDataSource;
 
-pub struct FuseParquetBlockFormat {
-    block_reader: Arc<BlockReader>,
-}
+pub struct FuseParquetBlockFormat;
 
 impl FuseParquetBlockFormat {
-    pub fn create(block_reader: Arc<BlockReader>) -> Arc<dyn FuseBlockFormat> {
-        Arc::new(Self { block_reader })
+    pub fn create() -> Arc<dyn FuseBlockFormat> {
+        Arc::new(Self)
     }
 }
 
@@ -43,21 +41,21 @@ impl FuseBlockFormat for FuseParquetBlockFormat {
     #[async_backtrace::framed]
     async fn read_data_by_merge_io(
         &self,
+        reader: &BlockReader,
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<RawDataSource> {
-        let source = self
-            .block_reader
+        let source = reader
             .read_columns_data_by_merge_io(settings, location, columns_meta, ignore_column_ids)
             .await?;
 
         Ok(RawDataSource::Parquet(source))
     }
 
-    async fn read_block_meta(&self, location: &str) -> Option<ReadBlockMeta> {
-        let operator = self.block_reader.operator();
+    async fn read_block_meta(&self, reader: &BlockReader, location: &str) -> Option<ReadBlockMeta> {
+        let operator = reader.operator();
         let metadata = read_metadata_async(location, &operator, None).await.ok()?;
         debug_assert_eq!(metadata.num_row_groups(), 1);
         let row_group = &metadata.row_groups()[0];

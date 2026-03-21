@@ -92,12 +92,13 @@ pub fn build_fuse_source_pipeline(
         }
     }
     let block_format = match storage_format {
-        FuseStorageFormat::Native => FuseNativeBlockFormat::create(block_reader.clone()),
-        FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(block_reader.clone()),
+        FuseStorageFormat::Native => FuseNativeBlockFormat::create(),
+        FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(),
     };
     let read_block_context = ReadBlockContext::create(
         ctx.clone(),
         storage_format,
+        block_reader.clone(),
         block_format,
         index_reader.clone(),
         virtual_reader.clone(),
