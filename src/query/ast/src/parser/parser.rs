@@ -26,7 +26,9 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
 use crate::ast::ProcedureIdentity;
+use crate::ast::Query;
 use crate::ast::SelectTarget;
+use crate::ast::SetExpr;
 use crate::ast::Statement;
 use crate::ast::StatementWithFormat;
 use crate::ast::TableRef;
@@ -225,7 +227,7 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
 #[allow(dead_code)]
 fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
     #[derive(VisitorMut)]
-    #[visitor(Range(enter), Literal(enter), ExplainKind(enter), SelectTarget(enter))]
+    #[visitor(Range(enter), Literal(enter), ExplainKind(enter), SelectTarget(enter), SetExpr(enter))]
     struct ResetAST;
 
     impl ResetAST {
@@ -251,6 +253,25 @@ fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
             if let SelectTarget::StarColumns { column_filter, .. } = target {
                 *column_filter = None
             }
+        }
+
+        fn enter_set_expr(&mut self, set_expr: &mut SetExpr) {
+            let collapsed = match set_expr {
+                SetExpr::Query(query) if Self::is_grouping_wrapper(query) => Some(query.body.clone()),
+                _ => None,
+            };
+
+            if let Some(body) = collapsed {
+                *set_expr = body;
+            }
+        }
+
+        fn is_grouping_wrapper(query: &Query) -> bool {
+            query.with.is_none()
+                && query.order_by.is_empty()
+                && query.limit.is_empty()
+                && query.offset.is_none()
+                && !query.ignore_result
         }
     }
 
