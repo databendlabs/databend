@@ -90,10 +90,10 @@ impl PartitionedBuild {
         }
     }
 
-    pub fn add_block<const SCAN_MAP: bool>(&mut self, data: Option<DataBlock>) -> Result<()> {
+    pub fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         let Some(data_block) = data else {
             if let Some(chunk) = self.accumulator.finalize() {
-                self.ingest_chunk::<SCAN_MAP>(chunk)?;
+                self.ingest_chunk(chunk)?;
             }
 
             return Ok(());
@@ -101,13 +101,13 @@ impl PartitionedBuild {
 
         let data_block = self.prepare_data(data_block)?;
         for ready_block in self.accumulator.accumulate(data_block) {
-            self.ingest_chunk::<SCAN_MAP>(ready_block)?;
+            self.ingest_chunk(ready_block)?;
         }
 
         Ok(())
     }
 
-    fn ingest_chunk<const SCAN_MAP: bool>(&mut self, chunk: DataBlock) -> Result<()> {
+    fn ingest_chunk(&mut self, chunk: DataBlock) -> Result<()> {
         let num_rows = chunk.num_rows();
         let mut columns = chunk.take_columns();
         let data_columns = columns.split_off(self.desc.build_keys.len());
@@ -123,7 +123,7 @@ impl PartitionedBuild {
         Ok(())
     }
 
-    fn prepare_data<const SCAN_MAP: bool>(&self, mut chunk: DataBlock) -> Result<DataBlock> {
+    fn prepare_data(&self, mut chunk: DataBlock) -> Result<DataBlock> {
         let num_rows = chunk.num_rows();
 
         let keys_entries = self.desc.build_key(&chunk, &self.function_ctx)?;
@@ -133,14 +133,7 @@ impl PartitionedBuild {
         if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
             if bitmap.true_count() != bitmap.len() {
                 keys_block = keys_block.filter_with_bitmap(&bitmap)?;
-
-                chunk = match SCAN_MAP {
-                    true => {
-                        let null_keys = chunk.clone().filter_with_bitmap(&(!(&bitmap)))?;
-                        DataBlock::concat(&[chunk.filter_with_bitmap(&bitmap)?, null_keys])?
-                    }
-                    false => chunk.filter_with_bitmap(&bitmap)?,
-                };
+                chunk = chunk.filter_with_bitmap(&bitmap)?;
             }
         }
 
@@ -184,7 +177,7 @@ impl PartitionedBuild {
             HashMethodKind::T(method) => {
                 let mut hashes = Vec::new();
                 method.build_keys_hashes(keys_state, &mut hashes);
-                self.hash_table.insert_chunk(&hashes, row_offset)?;
+                self.hash_table.insert_chunk(&hashes, row_offset);
                 self.build_block_idx += 1;
             }
         });
