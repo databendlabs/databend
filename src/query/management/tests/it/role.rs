@@ -18,8 +18,8 @@ use anyhow::Result;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_meta_client::types::UpsertKV;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_types::UpsertKV;
 use tokio::sync::Mutex;
 
 fn make_role_key(role: &str) -> String {
@@ -29,9 +29,9 @@ fn make_role_key(role: &str) -> String {
 mod add {
 
     use databend_common_meta_app::principal::RoleInfo;
-    use databend_meta_kvapi::kvapi::KVApi;
-    use databend_meta_types::MatchSeq;
-    use databend_meta_types::Operation;
+    use databend_meta_client::kvapi::KVApi;
+    use databend_meta_client::types::MatchSeq;
+    use databend_meta_client::types::Operation;
 
     use super::*;
 

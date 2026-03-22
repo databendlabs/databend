@@ -24,7 +24,7 @@ pub use csv::CSVOutputFormat;
 pub use json::JSONOutputFormat;
 pub use ndjson::NDJSONOutputFormatBase;
 pub use parquet::ParquetOutputFormat;
-pub use tsv::TSVOutputFormat;
+pub use tsv::TEXTOutputFormat;
 
 pub trait OutputFormat: Send {
     fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>>;

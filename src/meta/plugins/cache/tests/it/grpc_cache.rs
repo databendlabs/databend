@@ -14,19 +14,38 @@
 
 //! Test special cases of grpc API: transaction().
 
+use std::sync::Arc;
 use std::time::Duration;
 
+use databend_meta_client::ClientHandle;
+use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
+use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::errors::CreationError;
+use databend_meta_client::runtime_api::RuntimeApi;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::UpsertKV;
+use databend_meta_client::types::normalize_meta::NormalizeMeta;
 use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
-use databend_meta_test_harness::make_grpc_client;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
-use databend_meta_types::SeqV;
-use databend_meta_types::UpsertKV;
-use databend_meta_types::normalize_meta::NormalizeMeta;
 use log::debug;
 use test_harness::test;
 use tokio::time::sleep;
+
+fn make_grpc_client<R: RuntimeApi>(
+    addresses: Vec<String>,
+) -> Result<Arc<ClientHandle<R>>, CreationError> {
+    MetaGrpcClient::<R>::try_create(
+        addresses,
+        "root",
+        "xxx",
+        Some(Duration::from_secs(2)),
+        Some(Duration::from_secs(10)),
+        None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
+    )
+}
 
 #[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
 #[fastrace::trace]

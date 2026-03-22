@@ -18,13 +18,13 @@ use databend_common_meta_api::deserialize_struct;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::serialization_util::deserialize_u64;
 use databend_common_proto_conv::FromToProto;
-use databend_meta_kvapi::kvapi;
-use databend_meta_kvapi::kvapi::KvApiExt;
-use databend_meta_types::MetaAPIError;
-use databend_meta_types::MetaDataError;
-use databend_meta_types::MetaDataReadError;
-use databend_meta_types::MetaError;
-use databend_meta_types::anyerror::AnyError;
+use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::types::MetaAPIError;
+use databend_meta_client::types::MetaDataError;
+use databend_meta_client::types::MetaDataReadError;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::anyerror::AnyError;
 
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::OutputPort;
@@ -31,7 +30,7 @@ pub struct TransformRecursiveCteScan {
     ctx: Arc<QueryContext>,
     table: Option<Arc<dyn Table>>,
     table_name: String,
-    exec_id: Option<u64>,
+    reader_id: Option<u64>,
 }
 
 impl TransformRecursiveCteScan {
@@ -39,7 +38,6 @@ impl TransformRecursiveCteScan {
         ctx: Arc<QueryContext>,
         output_port: Arc<OutputPort>,
         table_name: String,
-        exec_id: Option<u64>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(
             ctx.get_scan_progress(),
@@ -48,7 +46,7 @@ impl TransformRecursiveCteScan {
                 ctx,
                 table: None,
                 table_name,
-                exec_id,
+                reader_id: None,
             },
         )
     }
@@ -78,22 +76,29 @@ impl AsyncSource for TransformRecursiveCteScan {
             .as_any()
             .downcast_ref::<RecursiveCteMemoryTable>()
             .unwrap();
-        let data = if let Some(id) = self.exec_id {
-            memory_table.take_by_id(id)
+        let reader_id = if let Some(reader_id) = self.reader_id {
+            reader_id
         } else {
-            return Err(ErrorCode::Internal(format!(
-                "Internal, TransformRecursiveCteScan not exec_id on CTE: {}",
-                self.table_name,
-            )));
+            let reader_id = memory_table.register_reader();
+            self.reader_id = Some(reader_id);
+            reader_id
         };
+        let data = memory_table.take_generation_blocks(reader_id);
         if data.is_empty() {
             return Ok(None);
         }
         let data = DataBlock::concat(&data)?;
-        if data.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(data))
+        Ok((data.num_rows() > 0).then_some(data))
+    }
+
+    async fn on_finish(&mut self) -> Result<()> {
+        if let (Some(table), Some(reader_id)) = (&self.table, self.reader_id.take()) {
+            let memory_table = table
+                .as_any()
+                .downcast_ref::<RecursiveCteMemoryTable>()
+                .unwrap();
+            memory_table.unregister_reader(reader_id);
         }
+        Ok(())
     }
 }

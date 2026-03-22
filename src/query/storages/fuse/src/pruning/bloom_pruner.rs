@@ -32,6 +32,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
@@ -60,6 +61,7 @@ pub trait BloomPruner {
 pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
     func_ctx: &FunctionContext,
     dal: &Operator,
+    settings: &ReadSettings,
     data_schema: &TableSchemaRef,
     expr: &Expr<String>,
     part: &FuseBlockPartInfo,
@@ -97,7 +99,12 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
         .map(|field| BloomIndex::build_filter_bloom_name(index_location.1, field))
         .collect::<Result<Vec<_>>>()?;
     let filter = index_location
-        .read_block_filter(dal.clone(), &index_columns, part.bloom_filter_index_size)
+        .read_block_filter(
+            dal.clone(),
+            settings,
+            &index_columns,
+            part.bloom_filter_index_size,
+        )
         .await?;
 
     let bloom_index = BloomIndex::from_filter_block(
@@ -141,6 +148,8 @@ pub struct BloomPrunerCreator {
     /// the data accessor
     dal: Operator,
 
+    settings: ReadSettings,
+
     /// the schema of data being indexed
     data_schema: TableSchemaRef,
 
@@ -153,6 +162,7 @@ impl BloomPrunerCreator {
         func_ctx: FunctionContext,
         schema: &TableSchemaRef,
         dal: Operator,
+        settings: ReadSettings,
         filter_expr: Option<&Expr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
@@ -206,6 +216,7 @@ impl BloomPrunerCreator {
             like_scalar_map,
             ngram_args,
             dal,
+            settings,
             data_schema: schema.clone(),
             bloom_index_builder,
         })))
@@ -243,7 +254,12 @@ impl BloomPrunerCreator {
 
         // load the relevant index columns
         let maybe_filter = index_location
-            .read_block_filter(self.dal.clone(), &index_columns, index_length)
+            .read_block_filter(
+                self.dal.clone(),
+                &self.settings,
+                &index_columns,
+                index_length,
+            )
             .await;
 
         let maybe_filter = match (&maybe_filter, &self.bloom_index_builder) {

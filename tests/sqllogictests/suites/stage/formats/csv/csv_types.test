@@ -61,7 +61,7 @@ statement ok
 create table complex(a tuple(tuple(string, variant), map(int, variant), array(tuple(map(string, int), int))), b int);
 
 query TIITI
-copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'tsv' field_delimiter='|');
+copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'text' field_delimiter='|');
 ----
 tsv/complex_types.tsv 1 0 NULL NULL
 

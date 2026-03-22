@@ -150,8 +150,8 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
-use databend_meta_types::MetaId;
-use databend_meta_types::SeqV;
+use databend_meta_client::types::MetaId;
+use databend_meta_client::types::SeqV;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
@@ -929,6 +929,19 @@ impl TableContext for CtxDelegation {
     }
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn add_recursive_cte_temp_table(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+    ) {
+        todo!()
+    }
+
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
         todo!()
     }
 }

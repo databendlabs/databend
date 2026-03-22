@@ -32,7 +32,7 @@ databend-common-storages-basic = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-users = { workspace = true }
-databend-meta-types = { workspace = true }
+databend-meta-client = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 futures = { workspace = true }

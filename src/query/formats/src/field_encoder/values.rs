@@ -54,7 +54,7 @@ use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 use lexical_core::ToLexical;
@@ -93,7 +93,7 @@ impl FieldEncoderValues {
         }
     }
 
-    pub fn create_for_tsv(params: &TsvFileFormatParams, settings: OutputFormatSettings) -> Self {
+    pub fn create_for_tsv(params: &TextFileFormatParams, settings: OutputFormatSettings) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),

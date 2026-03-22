@@ -1,0 +1,59 @@
+statement ok
+drop table if exists complex
+
+statement ok
+create table complex(a tuple(tuple(string, variant), map(int, variant), array(tuple(map(string, int), int))), b int);
+
+query TIITI
+copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'text' field_delimiter='|');
+----
+tsv/complex_types.tsv 1 0 NULL NULL
+
+
+query ?I
+select * from complex
+----
+(("c	d",{"a":1}),{1:["a",0]},[({"x":2},3)]) 1
+
+statement ok
+drop stage if exists tsv_types
+
+statement ok
+create stage tsv_types file_format = (type = 'text');
+
+statement ok
+copy into @tsv_types from complex;
+
+
+query T
+select $1 from @tsv_types
+----
+[["c\td",{"a":1}],{1:["a",0]},[[{"x":2},3]]]
+
+statement ok
+remove @tsv_types
+
+statement ok
+copy into @tsv_types from complex file_format = (type = 'text' field_delimiter=',');
+
+
+query T
+select $1 from @tsv_types(file_format => 'text');
+----
+[["c\td"\,{"a":1}]\,{1:["a"\,0]}\,[[{"x":2}\,3]]],1
+
+statement ok
+DROP TABLE if exists books;
+
+statement ok
+CREATE TABLE books ( title VARCHAR NULL, author VARCHAR NULL, date VARCHAR NULL, publish_time TIMESTAMP NULL );
+
+query TIITI
+copy into books from @data/tsv/books.tsv file_format = (type = 'text');
+----
+tsv/books.tsv 6 0 NULL NULL
+
+query IIIII
+select count(), count_if(title is null), count_if(author is null), count_if(date is null), count_if(publish_time is null) from books
+----
+6 0 0 2 0

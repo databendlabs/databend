@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_meta::meta_node::meta_handle::MetaHandle;
 use databend_meta::metrics::meta_metrics_to_prometheus_string;
-use databend_meta_runtime_api::SpawnApi;
+use databend_meta::runtime_api::SpawnApi;
 use poem::IntoResponse;
 use poem::Response;
 

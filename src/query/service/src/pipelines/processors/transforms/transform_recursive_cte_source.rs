@@ -14,11 +14,9 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::Runtime;
@@ -46,13 +44,13 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::Symbol;
 use databend_common_sql::plans::CreateTablePlan;
-use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use futures_util::TryStreamExt;
+use md5::Digest;
+use md5::Md5;
 
 use crate::interpreters::CreateTableInterpreter;
-use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::QueryFinishHooks;
 use crate::physical_plans::PhysicalPlan;
@@ -67,6 +65,11 @@ use crate::sessions::QueryContext;
 use crate::stream::PullingExecutorStream;
 
 // The whole recursive cte as source.
+enum CachedReplayAction {
+    Replay(VecDeque<DataBlock>),
+    Populate,
+}
+
 pub struct TransformRecursiveCteSource {
     ctx: Arc<QueryContext>,
     union_plan: UnionAll,
@@ -74,12 +77,12 @@ pub struct TransformRecursiveCteSource {
     right_outputs: Vec<(Symbol, Option<Expr>)>,
 
     recursive_step: usize,
-    cte_scan_tables: Vec<(u64, Arc<dyn Table>)>,
-    cte_exec_ids: HashMap<String, Vec<u64>>,
+    cte_scan_tables: Vec<Arc<dyn Table>>,
+    active_step_blocks: Option<VecDeque<DataBlock>>,
+    active_step_has_output: bool,
+    replay_blocks: Option<VecDeque<DataBlock>>,
+    owns_cache_population: bool,
 }
-
-static NEXT_R_CTE_ID: AtomicU64 = AtomicU64::new(1);
-static NEXT_R_CTE_SOURCE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
 
 impl TransformRecursiveCteSource {
     pub fn try_create(
@@ -90,17 +93,14 @@ impl TransformRecursiveCteSource {
         let mut union_plan = union_plan;
 
         // Recursive CTE uses internal MEMORY tables addressed by name in the current database.
-        // If we keep using the stable scan name (cte name/alias), concurrent queries can interfere
-        // by creating/dropping/recreating the same table name, leading to wrong or flaky results.
-        //
-        // Make the internal table names unique by prefixing them with query id + source instance id.
-        // Query id alone is insufficient when one query has multiple recursive CTE sources running
-        // concurrently (e.g. multiple scalar subqueries each containing recursive CTE).
-        // This is purely internal and does not change user-visible semantics.
-        let source_instance_id = NEXT_R_CTE_SOURCE_INSTANCE_ID.fetch_add(1, Ordering::Relaxed);
-        let rcte_prefix = make_rcte_prefix(&ctx.get_id(), source_instance_id);
+        // Use a stable per-query/per-plan prefix so duplicated recursive sources produced by
+        // decorrelation can reuse the same internal tables and cached outputs.
+        let rcte_prefix = make_rcte_prefix(&ctx, &union_plan)?;
         let local_cte_scan_names = {
-            let names = collect_local_recursive_scan_names(&union_plan.right);
+            let names = collect_local_recursive_scan_names(
+                &union_plan.right,
+                union_plan.logical_recursive_cte_id,
+            );
             if names.is_empty() {
                 union_plan.cte_scan_names.clone()
             } else {
@@ -116,18 +116,17 @@ impl TransformRecursiveCteSource {
             .map(String::as_str)
             .collect();
 
-        let mut exec_ids: HashMap<String, Vec<u64>> = HashMap::new();
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.left,
+            union_plan.logical_recursive_cte_id,
             &local_cte_scan_name_set,
             &rcte_prefix,
-            &mut exec_ids,
         );
         rewrite_assign_and_strip_recursive_cte(
             &mut union_plan.right,
+            union_plan.logical_recursive_cte_id,
             &local_cte_scan_name_set,
             &rcte_prefix,
-            &mut exec_ids,
         );
         for name in union_plan.cte_scan_names.iter_mut() {
             *name = format!("{rcte_prefix}{name}");
@@ -165,7 +164,10 @@ impl TransformRecursiveCteSource {
                 right_outputs,
                 recursive_step: 0,
                 cte_scan_tables: vec![],
-                cte_exec_ids: exec_ids,
+                active_step_blocks: None,
+                active_step_has_output: false,
+                replay_blocks: None,
+                owns_cache_population: false,
             },
         )
     }
@@ -174,8 +176,7 @@ impl TransformRecursiveCteSource {
         ctx: Arc<QueryContext>,
         recursive_step: usize,
         union_plan: UnionAll,
-        cte_ids: &HashMap<String, Vec<u64>>,
-    ) -> Result<(Vec<DataBlock>, Vec<(u64, Arc<dyn Table>)>)> {
+    ) -> Result<(Vec<DataBlock>, Vec<Arc<dyn Table>>)> {
         if ctx.get_settings().get_max_cte_recursive_depth()? < recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
@@ -194,11 +195,7 @@ impl TransformRecursiveCteSource {
                         table_name,
                     )
                     .await?;
-                let prepare_id = cte_ids
-                    .get(table_name)
-                    .and_then(|ids| ids.last())
-                    .ok_or_else(|| ErrorCode::Internal("Recursive CTE prepare id not found"))?;
-                cte_scan_tables.push((*prepare_id, table));
+                cte_scan_tables.push(table);
             }
             union_plan.left.clone()
         } else {
@@ -222,80 +219,229 @@ impl TransformRecursiveCteSource {
     }
 }
 
-fn make_rcte_prefix(query_id: &str, source_instance_id: u64) -> String {
-    // Keep it readable and safe as an identifier.
-    // Preserve full query-id entropy and add per-source uniqueness to avoid collisions across:
-    // 1) concurrent queries and 2) multiple recursive CTE sources within one query.
+fn make_rcte_prefix(ctx: &Arc<QueryContext>, union_plan: &UnionAll) -> Result<String> {
+    let query_id = ctx.get_id();
     let suffix = if query_id.is_empty() {
         "unknown"
     } else {
-        query_id
+        query_id.as_str()
     };
-    format!("__rcte_{suffix}_{source_instance_id}_")
+    if let Some(logical_recursive_cte_id) = union_plan.logical_recursive_cte_id {
+        let runtime_id =
+            ctx.get_or_create_logical_recursive_cte_runtime_id(logical_recursive_cte_id);
+        return Ok(format!(
+            "__rcte_{suffix}_{runtime_id}_{logical_recursive_cte_id}_"
+        ));
+    }
+    let mut names = union_plan.cte_scan_names.clone();
+    names.sort();
+    let digest = format!("{:x}", Md5::digest(names.join(",").as_bytes()));
+    Ok(format!("__rcte_{suffix}_{digest}_"))
+}
+
+fn same_logical_recursive_cte(left: Option<u32>, right: Option<u32>) -> bool {
+    left.zip(right).is_some_and(|(left, right)| left == right)
+}
+
+fn matches_logical_recursive_cte_scope(scope: Option<u32>, candidate: Option<u32>) -> bool {
+    scope.is_none() || same_logical_recursive_cte(scope, candidate)
 }
 
 fn rewrite_assign_and_strip_recursive_cte(
     plan: &mut PhysicalPlan,
+    logical_recursive_cte_id: Option<u32>,
     local_cte_scan_name_set: &HashSet<&str>,
     prefix: &str,
-    exec_ids: &mut HashMap<String, Vec<u64>>,
 ) {
     // Only nested recursive UNION nodes that reference the current recursive CTE should be
     // downgraded to normal unions to avoid nested recursive sources for the same table.
     if let Some(union_all) = UnionAll::from_mut_physical_plan(plan) {
+        let same_logical_recursive_cte = same_logical_recursive_cte(
+            logical_recursive_cte_id,
+            union_all.logical_recursive_cte_id,
+        );
         if !union_all.cte_scan_names.is_empty()
-            && union_all
-                .cte_scan_names
-                .iter()
-                .all(|name| local_cte_scan_name_set.contains(name.as_str()))
+            && (same_logical_recursive_cte
+                || union_all
+                    .cte_scan_names
+                    .iter()
+                    .all(|name| local_cte_scan_name_set.contains(name.as_str())))
         {
             union_all.cte_scan_names.clear();
         }
     }
 
     if let Some(recursive_cte_scan) = RecursiveCteScan::from_mut_physical_plan(plan) {
-        if local_cte_scan_name_set.contains(recursive_cte_scan.table_name.as_str()) {
+        let same_logical_recursive_cte = same_logical_recursive_cte(
+            logical_recursive_cte_id,
+            recursive_cte_scan.logical_recursive_cte_id,
+        );
+        if same_logical_recursive_cte
+            || local_cte_scan_name_set.contains(recursive_cte_scan.table_name.as_str())
+        {
             recursive_cte_scan.table_name = format!("{prefix}{}", recursive_cte_scan.table_name);
-            let id = NEXT_R_CTE_ID.fetch_add(1, Ordering::Relaxed);
-            recursive_cte_scan.exec_id = Some(id);
-            exec_ids
-                .entry(recursive_cte_scan.table_name.clone())
-                .or_default()
-                .push(id);
         }
     }
 
     for child in plan.children_mut() {
-        rewrite_assign_and_strip_recursive_cte(child, local_cte_scan_name_set, prefix, exec_ids);
+        rewrite_assign_and_strip_recursive_cte(
+            child,
+            logical_recursive_cte_id,
+            local_cte_scan_name_set,
+            prefix,
+        );
     }
 }
 
-fn collect_local_recursive_scan_names(plan: &PhysicalPlan) -> Vec<String> {
-    fn walk(plan: &PhysicalPlan, names: &mut Vec<String>, seen: &mut HashSet<String>) {
-        // Nested recursive unions belong to other recursive CTEs. Leave them to their own
-        // TransformRecursiveCteSource instance.
+fn collect_local_recursive_scan_names(
+    plan: &PhysicalPlan,
+    logical_recursive_cte_id: Option<u32>,
+) -> Vec<String> {
+    fn walk(
+        plan: &PhysicalPlan,
+        logical_recursive_cte_id: Option<u32>,
+        names: &mut Vec<String>,
+        seen: &mut HashSet<String>,
+    ) {
         if let Some(union_all) = UnionAll::from_physical_plan(plan) {
-            if !union_all.cte_scan_names.is_empty() {
+            let same_logical_recursive_cte = same_logical_recursive_cte(
+                logical_recursive_cte_id,
+                union_all.logical_recursive_cte_id,
+            );
+            if !union_all.cte_scan_names.is_empty() && !same_logical_recursive_cte {
                 return;
             }
         }
 
         if let Some(recursive_cte_scan) = RecursiveCteScan::from_physical_plan(plan) {
-            if seen.insert(recursive_cte_scan.table_name.clone()) {
+            let same_logical_recursive_cte = matches_logical_recursive_cte_scope(
+                logical_recursive_cte_id,
+                recursive_cte_scan.logical_recursive_cte_id,
+            );
+            if same_logical_recursive_cte && seen.insert(recursive_cte_scan.table_name.clone()) {
                 names.push(recursive_cte_scan.table_name.clone());
             }
             return;
         }
 
         for child in plan.children() {
-            walk(child, names, seen);
+            walk(child, logical_recursive_cte_id, names, seen);
         }
     }
 
     let mut names = Vec::new();
     let mut seen = HashSet::new();
-    walk(plan, &mut names, &mut seen);
+    walk(plan, logical_recursive_cte_id, &mut names, &mut seen);
     names
+}
+
+fn recursive_cte_memory_table(table: &dyn Table) -> &RecursiveCteMemoryTable {
+    table
+        .as_any()
+        .downcast_ref::<RecursiveCteMemoryTable>()
+        .unwrap()
+}
+
+fn canonical_recursive_cte_memory_table(
+    tables: &[Arc<dyn Table>],
+) -> Option<&RecursiveCteMemoryTable> {
+    tables
+        .iter()
+        .min_by(|left, right| {
+            left.name()
+                .cmp(right.name())
+                .then_with(|| left.get_id().cmp(&right.get_id()))
+        })
+        .map(|table| recursive_cte_memory_table(table.as_ref()))
+}
+
+fn finish_cache_population_for_tables(tables: &[Arc<dyn Table>], sealed: bool) {
+    for table in tables {
+        recursive_cte_memory_table(table.as_ref()).finish_cache_population(sealed);
+    }
+}
+
+async fn wait_for_recursive_cte_cache_state_change(
+    first_table: &RecursiveCteMemoryTable,
+    state_changes: &mut tokio::sync::watch::Receiver<u64>,
+) {
+    if !first_table.is_running() {
+        tokio::task::yield_now().await;
+        return;
+    }
+
+    let _ = state_changes.changed().await;
+}
+
+async fn prepare_cached_replay_action_for_tables(tables: &[Arc<dyn Table>]) -> CachedReplayAction {
+    let Some(first_table) = canonical_recursive_cte_memory_table(tables) else {
+        return CachedReplayAction::Populate;
+    };
+    let mut state_changes = first_table.subscribe_cache_population_change();
+
+    loop {
+        if first_table.is_sealed() {
+            return CachedReplayAction::Replay(VecDeque::from(first_table.cached_output_blocks()));
+        }
+
+        if first_table.begin_cache_population() {
+            for table in tables {
+                let memory_table = recursive_cte_memory_table(table.as_ref());
+                if memory_table.get_id() == first_table.get_id() {
+                    continue;
+                }
+                memory_table.finish_cache_population(false);
+                let started = memory_table.begin_cache_population();
+                debug_assert!(
+                    started,
+                    "recursive CTE cache population should reset every scan table together"
+                );
+            }
+            return CachedReplayAction::Populate;
+        }
+
+        wait_for_recursive_cte_cache_state_change(first_table, &mut state_changes).await;
+    }
+}
+
+impl TransformRecursiveCteSource {
+    fn finish_owned_cache_population(&mut self, sealed: bool) {
+        if self.owns_cache_population {
+            finish_cache_population_for_tables(&self.cte_scan_tables, sealed);
+            self.owns_cache_population = false;
+        }
+    }
+
+    async fn try_prepare_cached_replay(&mut self) -> Result<bool> {
+        create_memory_table_for_cte_scan(&self.ctx, &self.union_plan.right).await?;
+        if self.cte_scan_tables.is_empty() {
+            for table_name in self.union_plan.cte_scan_names.iter() {
+                let table = self
+                    .ctx
+                    .get_table(
+                        &self.ctx.get_current_catalog(),
+                        &self.ctx.get_current_database(),
+                        table_name,
+                    )
+                    .await?;
+                self.cte_scan_tables.push(table);
+            }
+        }
+
+        if self.cte_scan_tables.is_empty() {
+            return Ok(false);
+        }
+        match prepare_cached_replay_action_for_tables(&self.cte_scan_tables).await {
+            CachedReplayAction::Replay(replay_blocks) => {
+                self.replay_blocks = Some(replay_blocks);
+                Ok(true)
+            }
+            CachedReplayAction::Populate => {
+                self.owns_cache_population = true;
+                Ok(false)
+            }
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -303,82 +449,106 @@ impl AsyncSource for TransformRecursiveCteSource {
     const NAME: &'static str = "TransformRecursiveCteSource";
 
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let mut res = None;
-        let mut data = DataBlock::empty();
-        match Self::execute_r_cte(
-            self.ctx.clone(),
-            self.recursive_step,
-            self.union_plan.clone(),
-            &self.cte_exec_ids,
-        )
-        .await
-        {
-            Ok(res) => {
-                if !res.0.is_empty() {
-                    data = DataBlock::concat(&res.0)?;
+        loop {
+            if let Some(replay_blocks) = self.replay_blocks.as_mut() {
+                if let Some(block) = replay_blocks.pop_front() {
+                    return Ok(Some(block));
                 }
-                if !res.1.is_empty() {
-                    self.cte_scan_tables = res.1;
-                }
+                self.replay_blocks = None;
+                return Ok(None);
             }
-            Err(e) => {
-                return Err(ErrorCode::Internal(format!(
-                    "Failed to execute recursive cte: {:?}",
-                    e
-                )));
-            }
-        };
-        self.recursive_step += 1;
 
-        let row_size = data.num_rows();
-        if row_size > 0 {
-            let func_ctx = self.ctx.get_function_context()?;
-            data = project_block(
-                &func_ctx,
-                data,
-                &self.union_plan.left.output_schema()?,
-                &self.union_plan.right.output_schema()?,
-                &self.left_outputs,
-                &self.right_outputs,
-                self.recursive_step == 1,
-            )?;
-            // Prepare the data of next round recursive.
-            debug_assert_eq!(self.cte_scan_tables.len(), self.cte_exec_ids.len());
-            for (prepare_id, table) in self.cte_scan_tables.iter() {
-                let memory_table = table
-                    .as_any()
-                    .downcast_ref::<RecursiveCteMemoryTable>()
-                    .unwrap();
-                memory_table.update_with_id(*prepare_id, vec![data.clone()]);
+            if self.active_step_blocks.is_none() {
+                if self.recursive_step == 0 && self.try_prepare_cached_replay().await? {
+                    continue;
+                }
+
+                if self.recursive_step > 0 {
+                    for table in self.cte_scan_tables.iter() {
+                        let memory_table = recursive_cte_memory_table(table.as_ref());
+                        memory_table.set_active_generation(self.recursive_step - 1);
+                    }
+                }
+
+                match Self::execute_r_cte(
+                    self.ctx.clone(),
+                    self.recursive_step,
+                    self.union_plan.clone(),
+                )
+                .await
+                {
+                    Ok((data_blocks, cte_scan_tables)) => {
+                        if !cte_scan_tables.is_empty() {
+                            self.cte_scan_tables = cte_scan_tables;
+                        }
+                        if data_blocks.is_empty() {
+                            self.finish_owned_cache_population(true);
+                            return Ok(None);
+                        }
+                        self.active_step_blocks = Some(VecDeque::from(data_blocks));
+                        self.active_step_has_output = false;
+                    }
+                    Err(e) => {
+                        self.finish_owned_cache_population(false);
+                        return Err(ErrorCode::Internal(format!(
+                            "failed to start recursive cte step: {:?}",
+                            e
+                        )));
+                    }
+                }
             }
-            res = Some(data);
-        } else {
-            let ctx = self.ctx.clone();
-            let table_names = self.union_plan.cte_scan_names.clone();
-            // Recursive end, remove all tables
-            let _ = drop_tables(ctx, table_names).await?;
+
+            if let Some(data) = self
+                .active_step_blocks
+                .as_mut()
+                .and_then(|blocks| blocks.pop_front())
+            {
+                let func_ctx = self.ctx.get_function_context()?;
+                let projected_block = project_block(
+                    &func_ctx,
+                    data,
+                    &self.union_plan.left.output_schema()?,
+                    &self.union_plan.right.output_schema()?,
+                    &self.left_outputs,
+                    &self.right_outputs,
+                    self.recursive_step == 0,
+                )?;
+
+                if projected_block.num_rows() == 0 {
+                    continue;
+                }
+
+                for table in self.cte_scan_tables.iter() {
+                    let memory_table = recursive_cte_memory_table(table.as_ref());
+                    memory_table
+                        .append_generation_block(self.recursive_step, projected_block.clone());
+                }
+
+                if let Some(first_table) =
+                    canonical_recursive_cte_memory_table(&self.cte_scan_tables)
+                {
+                    first_table.cache_output_block(projected_block.clone());
+                }
+
+                self.active_step_has_output = true;
+                return Ok(Some(projected_block));
+            }
+
+            self.active_step_blocks = None;
+            if self.active_step_has_output {
+                self.recursive_step += 1;
+                continue;
+            }
+
+            self.finish_owned_cache_population(true);
+            return Ok(None);
         }
-        Ok(res)
     }
-}
 
-async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result<()> {
-    for table_name in table_names {
-        let drop_table_plan = DropTablePlan {
-            if_exists: true,
-            tenant: Tenant {
-                tenant: ctx.get_tenant().tenant,
-            },
-            catalog: ctx.get_current_catalog(),
-            database: ctx.get_current_database(),
-            table: table_name.to_string(),
-            all: true,
-        };
-        let drop_table_interpreter =
-            DropTableInterpreter::try_create(ctx.clone(), drop_table_plan)?;
-        drop_table_interpreter.execute2().await?;
+    async fn on_finish(&mut self) -> Result<()> {
+        self.finish_owned_cache_population(false);
+        Ok(())
     }
-    Ok(())
 }
 
 async fn create_memory_table_for_cte_scan(
@@ -462,9 +632,13 @@ async fn create_memory_table_for_cte_scan(
     };
 
     for create_table_plan in create_table_plans {
+        let table_name = create_table_plan.table.clone();
+        let database_name = create_table_plan.database.clone();
         let create_table_interpreter =
             CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
         create_table_interpreter.execute2().await?;
+        let catalog_name = ctx.get_current_catalog();
+        ctx.add_recursive_cte_temp_table(&catalog_name, &database_name, &table_name);
     }
 
     Ok(())
@@ -550,5 +724,201 @@ fn check_type(
         Err(ErrorCode::IllegalDataType(
             "The data type on both sides of the union does not match",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_catalog::table::Table;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_sql::plans::TableOptions;
+    use databend_common_storages_basic::RecursiveCteMemoryTable;
+    use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+
+    use super::*;
+
+    static NEXT_TEST_TABLE_ID: AtomicU64 = AtomicU64::new(1);
+
+    fn new_named_test_recursive_cte_memory_table(name: &str) -> Arc<dyn Table> {
+        let table_id = NEXT_TEST_TABLE_ID.fetch_add(1, Ordering::Relaxed);
+        let mut table_info = TableInfo::default();
+        table_info.ident.table_id = table_id;
+        table_info.name = name.to_string();
+        table_info.meta.options = TableOptions::default();
+        table_info.meta.options.insert(
+            OPT_KEY_TEMP_PREFIX.to_string(),
+            format!("rcte-test-{table_id}"),
+        );
+
+        Arc::from(RecursiveCteMemoryTable::try_create(table_info).unwrap())
+    }
+
+    fn new_test_recursive_cte_memory_table() -> Arc<dyn Table> {
+        let table_id = NEXT_TEST_TABLE_ID.load(Ordering::Relaxed);
+        new_named_test_recursive_cte_memory_table(&format!("rcte_test_{table_id}"))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_reacquires_population_after_unsealed_exit() {
+        let table = new_test_recursive_cte_memory_table();
+        let memory_table = recursive_cte_memory_table(table.as_ref());
+        assert!(memory_table.begin_cache_population());
+
+        let waiter_table = table.clone();
+        let waiter = databend_common_base::runtime::spawn(async move {
+            prepare_cached_replay_action_for_tables(&[waiter_table]).await
+        });
+
+        tokio::task::yield_now().await;
+        memory_table.finish_cache_population(false);
+
+        match waiter.await.unwrap() {
+            CachedReplayAction::Populate => {}
+            CachedReplayAction::Replay(_) => {
+                panic!("expected cache ownership to be reacquired after unsealed exit")
+            }
+        }
+
+        assert!(memory_table.is_running());
+        assert!(!memory_table.is_sealed());
+        memory_table.finish_cache_population(false);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_uses_canonical_scan_table_name() {
+        let later_named_table = new_named_test_recursive_cte_memory_table("z_scan");
+        let earlier_named_table = new_named_test_recursive_cte_memory_table("a_scan");
+        let memory_table = recursive_cte_memory_table(earlier_named_table.as_ref());
+
+        assert!(memory_table.begin_cache_population());
+        memory_table.cache_output_block(DataBlock::empty());
+        memory_table.finish_cache_population(true);
+
+        match prepare_cached_replay_action_for_tables(&[later_named_table, earlier_named_table])
+            .await
+        {
+            CachedReplayAction::Replay(replay_blocks) => {
+                assert_eq!(replay_blocks.len(), 1);
+            }
+            CachedReplayAction::Populate => {
+                panic!("expected sealed cache replay to choose the canonical scan-table name")
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_uses_canonical_scan_table_order() {
+        let first_table = new_test_recursive_cte_memory_table();
+        let second_table = new_test_recursive_cte_memory_table();
+        let first_memory_table = recursive_cte_memory_table(first_table.as_ref());
+
+        assert!(first_memory_table.begin_cache_population());
+        first_memory_table.cache_output_block(DataBlock::empty());
+        first_memory_table.finish_cache_population(true);
+
+        match prepare_cached_replay_action_for_tables(&[second_table, first_table]).await {
+            CachedReplayAction::Replay(replay_blocks) => {
+                assert_eq!(replay_blocks.len(), 1);
+            }
+            CachedReplayAction::Populate => {
+                panic!("expected sealed cache replay to be independent of scan-table order")
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_reacquires_population_for_noncanonical_first_scan_table() {
+        let noncanonical_first_table = new_named_test_recursive_cte_memory_table("z_scan");
+        let canonical_second_table = new_named_test_recursive_cte_memory_table("a_scan");
+        let noncanonical_first_memory_table =
+            recursive_cte_memory_table(noncanonical_first_table.as_ref());
+        let canonical_second_memory_table =
+            recursive_cte_memory_table(canonical_second_table.as_ref());
+
+        noncanonical_first_memory_table.append_generation_block(0, DataBlock::empty());
+        noncanonical_first_memory_table.set_active_generation(0);
+        let stale_reader = noncanonical_first_memory_table.register_reader();
+        assert!(
+            noncanonical_first_memory_table
+                .take_one_block(stale_reader)
+                .is_some()
+        );
+
+        assert!(canonical_second_memory_table.begin_cache_population());
+
+        let waiter_noncanonical_first_table = noncanonical_first_table.clone();
+        let waiter_canonical_second_table = canonical_second_table.clone();
+        let waiter = databend_common_base::runtime::spawn(async move {
+            prepare_cached_replay_action_for_tables(&[
+                waiter_noncanonical_first_table,
+                waiter_canonical_second_table,
+            ])
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        canonical_second_memory_table.finish_cache_population(false);
+
+        match waiter.await.unwrap() {
+            CachedReplayAction::Populate => {}
+            CachedReplayAction::Replay(_) => {
+                panic!("expected cache ownership to be reacquired for every scan table")
+            }
+        }
+
+        assert!(canonical_second_memory_table.is_running());
+        assert!(noncanonical_first_memory_table.is_running());
+        assert!(
+            noncanonical_first_memory_table
+                .take_one_block(stale_reader)
+                .is_none()
+        );
+
+        canonical_second_memory_table.finish_cache_population(false);
+        noncanonical_first_memory_table.finish_cache_population(false);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cached_replay_reacquires_population_for_all_scan_tables() {
+        let first_table = new_test_recursive_cte_memory_table();
+        let second_table = new_test_recursive_cte_memory_table();
+        let first_memory_table = recursive_cte_memory_table(first_table.as_ref());
+        let second_memory_table = recursive_cte_memory_table(second_table.as_ref());
+
+        second_memory_table.append_generation_block(0, DataBlock::empty());
+        second_memory_table.set_active_generation(0);
+        let stale_reader = second_memory_table.register_reader();
+        assert!(second_memory_table.take_one_block(stale_reader).is_some());
+
+        assert!(first_memory_table.begin_cache_population());
+
+        let waiter_first_table = first_table.clone();
+        let waiter_second_table = second_table.clone();
+        let waiter = databend_common_base::runtime::spawn(async move {
+            prepare_cached_replay_action_for_tables(&[waiter_first_table, waiter_second_table])
+                .await
+        });
+
+        tokio::task::yield_now().await;
+        first_memory_table.finish_cache_population(false);
+
+        match waiter.await.unwrap() {
+            CachedReplayAction::Populate => {}
+            CachedReplayAction::Replay(_) => {
+                panic!("expected cache ownership to be reacquired for every scan table")
+            }
+        }
+
+        assert!(first_memory_table.is_running());
+        assert!(second_memory_table.is_running());
+        assert!(!first_memory_table.is_sealed());
+        assert!(!second_memory_table.is_sealed());
+        assert!(second_memory_table.take_one_block(stale_reader).is_none());
+
+        first_memory_table.finish_cache_population(false);
+        second_memory_table.finish_cache_population(false);
     }
 }

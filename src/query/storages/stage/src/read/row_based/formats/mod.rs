@@ -18,5 +18,5 @@ mod tsv;
 
 pub use csv::CsvInputFormat;
 pub use ndjson::NdJsonInputFormat;
-pub use tsv::TsvInputFormat;
+pub use tsv::TextInputFormat;
 pub use tsv::parse_tsv_records_for_infer_schema;

@@ -83,7 +83,6 @@ impl Binder {
                 files_info,
                 alias,
                 None,
-                options.case_sensitive.unwrap_or(false),
                 None,
             )
             .await

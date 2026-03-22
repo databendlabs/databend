@@ -31,6 +31,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use log::info;
 
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
+use crate::pipelines::processors::transforms::new_hash_join::join::FinishedJoin;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::RuntimeFiltersDesc;
@@ -67,6 +68,7 @@ impl TransformHashJoin {
             rf_desc.inlist_threshold,
             rf_desc.bloom_threshold,
             rf_desc.min_max_threshold,
+            rf_desc.spatial_threshold,
         )?;
 
         Ok(ProcessorPtr::create(Box::new(TransformHashJoin {
@@ -106,6 +108,11 @@ impl Processor for TransformHashJoin {
 
             if !matches!(self.stage, Stage::Finished) {
                 self.stage = Stage::Finished;
+
+                let mut finished = FinishedJoin::create();
+                std::mem::swap(&mut finished, &mut self.join);
+                drop(finished);
+
                 self.stage_sync_barrier.reduce_quorum(1);
             }
 
@@ -230,14 +237,12 @@ impl Processor for TransformHashJoin {
                 if wait_res.is_leader() {
                     let spilled = self.join.is_spill_happened();
                     let packet = self.join.build_runtime_filter()?;
-                    if let Some(packets) = &packet.packets {
-                        info!(
-                            "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
-                            spilled,
-                            packets.len(),
-                            packet.disable_all_due_to_spill
-                        );
-                    };
+                    info!(
+                        "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
+                        spilled,
+                        packet.packets.as_ref().map_or(0, |p| p.len()),
+                        packet.disable_all_due_to_spill
+                    );
 
                     self.rf_desc.globalization(packet).await?;
                 }
@@ -287,6 +292,11 @@ impl Processor for TransformHashJoin {
                     );
 
                     self.instant = Instant::now();
+
+                    let mut finished = FinishedJoin::create();
+                    std::mem::swap(&mut finished, &mut self.join);
+                    drop(finished);
+
                     Stage::Finished
                 }
                 false => {

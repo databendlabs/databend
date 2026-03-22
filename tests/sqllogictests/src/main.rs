@@ -27,7 +27,6 @@ use sqllogictest::Location;
 use sqllogictest::QueryExpect;
 use sqllogictest::Record;
 use sqllogictest::Runner;
-use sqllogictest::TestError;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
 use testcontainers::ContainerAsync;
@@ -40,18 +39,23 @@ use crate::client::ClientType;
 use crate::client::HttpClient;
 use crate::client::MySQLClient;
 use crate::client::QueryResultFormat;
+use crate::diagnostics::capture_failure_diagnostics;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use crate::report::ErrorRecord;
+use crate::report::RunReport;
 use crate::util::ColumnType;
+use crate::util::collect_files;
 use crate::util::collect_lazy_dir;
-use crate::util::get_files;
 use crate::util::lazy_prepare_data;
 use crate::util::lazy_run_dictionary_containers;
 use crate::util::run_ttc_container;
 
 mod arg;
 mod client;
+mod diagnostics;
 mod error;
+mod report;
 mod util;
 
 const HANDLER_MYSQL: &str = "mysql";
@@ -286,46 +290,28 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     let mut lazy_dirs = HashSet::new();
     let mut files = vec![];
     let start = Instant::now();
-    // Walk each suit dir and read all files in it
-    // After get a slt file, set the file name to databend
-    let suits = std::fs::read_dir(args.suites).unwrap();
-    for suit in suits {
-        // Get a suit and find all slt files in the suit
-        let suit = suit.unwrap().path();
-        // Parse the suit and find all slt files
-        let suit_files = get_files(suit)?;
-        for suit_file in suit_files.into_iter() {
-            let file_name = suit_file
-                .as_ref()
-                .unwrap()
-                .path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+    for suit_file in collect_files(&args)?.into_iter() {
+        let file_name = suit_file.file_name().unwrap().to_str().unwrap().to_string();
 
-            if !file_name.ends_with(".test") {
-                continue;
-            }
-            if let Some(ref specific_file) = args.file
-                && !specific_file.split(',').any(|f| f.eq(&file_name))
-            {
-                continue;
-            }
-            if let Some(ref skip_file) = args.skipped_file
-                && skip_file.split(',').any(|f| f.eq(&file_name))
-            {
-                continue;
-            }
-            num_of_tests += parse_file::<ColumnType>(suit_file.as_ref().unwrap().path())
-                .unwrap()
-                .len();
-
-            collect_lazy_dir(suit_file.as_ref().unwrap().path(), &mut lazy_dirs)?;
-            files.push(suit_file);
+        if !file_name.ends_with(".test") {
+            continue;
         }
+        if let Some(ref specific_file) = args.file
+            && !specific_file.split(',').any(|f| f.eq(&file_name))
+        {
+            continue;
+        }
+        if let Some(ref skip_file) = args.skipped_file
+            && skip_file.split(',').any(|f| f.eq(&file_name))
+        {
+            continue;
+        }
+        num_of_tests += parse_file::<ColumnType>(&suit_file).unwrap().len();
+
+        collect_lazy_dir(&suit_file, &mut lazy_dirs)?;
+        files.push(suit_file);
     }
+    let selected_files = files.len();
 
     if !args.bench {
         // lazy load test data
@@ -336,15 +322,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
 
     if args.complete {
         for file in files {
-            let file_name = file
-                .as_ref()
-                .unwrap()
-                .path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+            let file_name = file.file_name().unwrap().to_str().unwrap().to_string();
 
             let col_separator = " ";
             let validator = default_validator;
@@ -353,7 +331,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
             // todo: The behavior of normalizer for multi line string is incorrect
             runner
                 .update_test_file(
-                    file.unwrap().path(),
+                    &file,
                     col_separator,
                     validator,
                     sqllogictest::default_normalizer,
@@ -366,12 +344,24 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         let mut tasks = Vec::with_capacity(files.len());
         for file in files {
             let client_type = client_type.clone();
-            tasks.push(async move {
-                run_file_async(&client_type, args.bench, file.unwrap().path()).await
-            });
+            tasks.push(async move { run_file_async(&client_type, args.bench, file).await });
         }
-        // Run all tasks parallel
-        run_parallel_async(tasks, num_of_tests).await?;
+        let error_records = run_parallel_async(tasks).await;
+        let report = RunReport::new(
+            selected_files,
+            num_of_tests,
+            num_of_tests > 0,
+            args.no_fail_fast,
+            start.elapsed(),
+            error_records,
+        );
+        println!("{}", report.render());
+
+        if report.has_failures() {
+            return Err(DSqlLogicTestError::SelfError(
+                "sqllogictest failed".to_string(),
+            ));
+        }
     }
     let duration = start.elapsed();
     println!(
@@ -411,29 +401,23 @@ fn column_validator(loc: Location, actual: Vec<ColumnType>, expected: Vec<Column
 }
 
 async fn run_parallel_async(
-    tasks: Vec<impl Future<Output = std::result::Result<Vec<TestError>, TestError>>>,
-    num_of_tests: usize,
-) -> Result<()> {
+    tasks: Vec<impl Future<Output = std::result::Result<Vec<ErrorRecord>, ErrorRecord>>>,
+) -> Vec<ErrorRecord> {
     let args = SqlLogicTestArgs::parse();
     let jobs = tasks.len().clamp(1, args.parallel);
     let tasks = stream::iter(tasks).buffer_unordered(jobs);
     let no_fail_fast = args.no_fail_fast;
     if !no_fail_fast {
-        let errors = tasks
+        tasks
             .filter_map(|result| async { result.err() })
             .collect()
-            .await;
-        handle_error_records(errors, no_fail_fast, num_of_tests)
+            .await
     } else {
-        let errors: Vec<Vec<TestError>> = tasks
+        let errors: Vec<Vec<ErrorRecord>> = tasks
             .filter_map(|result| async { result.ok() })
             .collect()
             .await;
-        handle_error_records(
-            errors.into_iter().flatten().collect(),
-            no_fail_fast,
-            num_of_tests,
-        )
+        errors.into_iter().flatten().collect()
     }
 }
 
@@ -441,7 +425,7 @@ async fn run_file_async(
     client_type: &ClientType,
     bench: bool,
     filename: impl AsRef<Path>,
-) -> std::result::Result<Vec<TestError>, TestError> {
+) -> std::result::Result<Vec<ErrorRecord>, ErrorRecord> {
     let start = Instant::now();
 
     let mut error_records = vec![];
@@ -482,10 +466,18 @@ async fn run_file_async(
                     continue;
                 }
 
+                let diagnostics = capture_failure_diagnostics(&mut runner).await;
+                let error_record = ErrorRecord::new(
+                    filename.to_string(),
+                    e,
+                    diagnostics.query_id,
+                    diagnostics.non_default_settings,
+                );
+
                 if no_fail_fast {
-                    error_records.push(e);
+                    error_records.push(error_record);
                 } else {
-                    return Err(e);
+                    return Err(error_record);
                 }
             }
             _ => {}
@@ -506,28 +498,4 @@ async fn run_file_async(
         );
     }
     Ok(error_records)
-}
-
-fn handle_error_records(
-    error_records: Vec<TestError>,
-    no_fail_fast: bool,
-    num_of_tests: usize,
-) -> Result<()> {
-    if error_records.is_empty() {
-        return Ok(());
-    }
-
-    println!(
-        "Test finished, fail fast {}, {} out of {} records failed to run",
-        if no_fail_fast { "disabled" } else { "enabled" },
-        error_records.len(),
-        num_of_tests
-    );
-    for (idx, error_record) in error_records.iter().enumerate() {
-        println!("{idx}: {}", error_record.display(true));
-    }
-
-    Err(DSqlLogicTestError::SelfError(
-        "sqllogictest failed".to_string(),
-    ))
 }

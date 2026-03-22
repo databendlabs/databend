@@ -87,7 +87,7 @@ group by t_10.a, t_100.a
 ----
 Memo
 ├── root group: #8
-├── estimated memory: 26.12 KiB
+├── estimated memory: 28.50 KiB
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: []
@@ -143,7 +143,7 @@ Memo
 │   ├── #0 EvalScalar [#7]
 │   ├── #1 EvalScalar [#14]
 │   ├── #2 EvalScalar [#20]
-│   ├── #3 EvalScalar [#24]
+│   ├── #3 EvalScalar [#26]
 │   └── #4 Exchange: (Merge) [#8]
 ├── Group #9
 │   ├── Best properties
@@ -207,22 +207,34 @@ Memo
 │   └── #0 Aggregate [#19]
 ├── Group #21
 │   ├── Best properties
-│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }, { dist: Broadcast }]
-│   └── #0 Join [#11, #16]
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_10.a (#0)::Int32 NULL) }]
+│   └── #0 Aggregate [#3]
 ├── Group #22
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_10.a (#0)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
-│   ├── #0 EvalScalar [#21]
-│   └── #1 Exchange: (Hash(t_10.a (#0)::Int32 NULL)) [#22]
+│   │   ├── { dist: Broadcast }: expr: #2, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_10.a (#0)::Int32 NULL, t_100.a (#1)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   ├── #0 Aggregate [#21]
+│   ├── #1 Exchange: (Hash(t_10.a (#0)::Int32 NULL,t_100.a (#1)::Int32 NULL)) [#22]
+│   └── #2 Exchange: (Broadcast) [#22]
 ├── Group #23
 │   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }, { dist: Broadcast }]
+│   └── #0 Join [#11, #22]
+├── Group #24
+│   ├── Best properties
+│   │   ├── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_10.a (#0)::Int32 NULL) }: expr: #1, cost: <slt:ignore>, children: [{ dist: Any }]
+│   ├── #0 EvalScalar [#23]
+│   └── #1 Exchange: (Hash(t_10.a (#0)::Int32 NULL)) [#24]
+├── Group #25
+│   ├── Best properties
 │   │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Hash(t_10.a (#0)::Int32 NULL) }]
-│   └── #0 Aggregate [#22]
-└── Group #24
+│   └── #0 Aggregate [#24]
+└── Group #26
     ├── Best properties
     │   └── { dist: Any }: expr: #0, cost: <slt:ignore>, children: [{ dist: Any }]
-    └── #0 Aggregate [#23]
+    └── #0 Aggregate [#25]
 
 
 statement ok

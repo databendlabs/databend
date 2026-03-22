@@ -1,0 +1,20 @@
+statement ok
+drop table if exists raw_logs
+
+statement ok
+create table raw_logs(line string)
+
+query TIITI
+copy into raw_logs
+from @data/csv/raw_logs.csv
+file_format = (type = TEXT field_delimiter = '' record_delimiter = '\n')
+----
+csv/raw_logs.csv 3 0 NULL NULL
+
+query T
+-- Parse logs later with string functions
+SELECT line, regexp_extract(line, '\\[([^\\]]+)\\]', 1) as timestamp, regexp_extract(line, 'ERROR|WARN|INFO') as level FROM raw_logs;
+----
+[2026-02-28 10:00:00] INFO Startup completed, service ready 2026-02-28 10:00:00 INFO
+[2026-02-28 10:01:00] WARN Disk usage is 85% 2026-02-28 10:01:00 WARN
+[2026-02-28 10:02:00] ERROR Failed to open file 'x,y.txt' 2026-02-28 10:02:00 ERROR

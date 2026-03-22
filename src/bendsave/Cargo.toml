@@ -20,7 +20,6 @@ databend-meta = { workspace = true }
 databend-meta-cli-config = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
-databend-meta-types = { workspace = true }
 databend-query = { workspace = true }
 
 anyhow = { workspace = true }

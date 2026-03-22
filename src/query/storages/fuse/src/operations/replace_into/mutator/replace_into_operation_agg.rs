@@ -761,7 +761,12 @@ impl AggregationContext {
         // using load_bloom_filter_by_columns is attractive,
         // but it do not care about the version of the bloom filter index
         let block_filter = location
-            .read_block_filter(self.data_accessor.clone(), &col_names, index_len)
+            .read_block_filter(
+                self.data_accessor.clone(),
+                &self.read_settings,
+                &col_names,
+                index_len,
+            )
             .await?;
 
         // reorder the filter according to the order of bloom_on_conflict_field

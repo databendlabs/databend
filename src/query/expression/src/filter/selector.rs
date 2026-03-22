@@ -19,7 +19,6 @@ use databend_common_exception::Result;
 use itertools::Itertools;
 
 use super::SelectionBuffers;
-use crate::Column;
 use crate::EvalContext;
 use crate::EvaluateOptions;
 use crate::Evaluator;
@@ -33,6 +32,7 @@ use crate::filter::SelectOp;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::utils::filter_helper::FilterHelpers;
 
 // SelectStrategy is used to determine the iteration strategy of the index.
 // (1) True: iterate true index in `true_selection`.
@@ -374,15 +374,7 @@ impl<'a> Selector<'a> {
             .into_column()
             .map_err(|v| ErrorCode::Internal(format!("Can not convert to column: {v}")))?;
 
-        // Extract StringColumn and validity from Column
-        let (column, validity) = match column.into_nullable() {
-            Ok(nullable) => (
-                nullable.column.into_string().unwrap(),
-                Some(nullable.validity),
-            ),
-            Err(Column::String(column)) => (column, None),
-            _ => unreachable!(),
-        };
+        let (column, validity) = FilterHelpers::split_nullable_string_column(column);
 
         self.select_like(
             column,

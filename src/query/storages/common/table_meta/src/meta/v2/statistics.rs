@@ -74,7 +74,7 @@ pub struct ClusterStatistics {
 }
 
 /// Spatial statistics for geometry/geography columns.
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default, FrozenAPI)]
 pub struct SpatialStatistics {
     pub min_x: OrderedFloat<f64>,
     pub min_y: OrderedFloat<f64>,
@@ -82,6 +82,9 @@ pub struct SpatialStatistics {
     pub max_y: OrderedFloat<f64>,
     pub srid: i32,
     pub has_null: bool,
+    pub has_empty_rect: bool,
+    // Srid mixed or all rects are empty.
+    pub is_valid: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default, FrozenAPI)]

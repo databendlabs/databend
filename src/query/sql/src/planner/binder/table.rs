@@ -64,7 +64,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
@@ -130,7 +130,6 @@ impl Binder {
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
-        case_sensitive: bool,
         on_error_mode: Option<OnErrorMode>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
@@ -141,7 +140,6 @@ impl Binder {
                 files_info,
                 files_to_copy,
                 max_column_position,
-                case_sensitive,
                 on_error_mode,
             )
             .await?;
@@ -165,7 +163,7 @@ impl Binder {
         );
 
         let (s_expr, mut bind_context) =
-            self.bind_base_table(bind_context, "system", table_index, None, &None)?;
+            self.bind_base_table(bind_context, "system", table_index, None, &None, false)?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -316,6 +314,7 @@ impl Binder {
             SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
                 fields,
                 table_name,
+                logical_recursive_cte_id: cte_info.logical_recursive_cte_id,
             }))),
             new_bind_ctx,
         ))
@@ -369,6 +368,7 @@ impl Binder {
         table_index: IndexType,
         change_type: Option<ChangeType>,
         sample: &Option<SampleConfig>,
+        case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(bind_context.clone())?;
 
@@ -409,6 +409,7 @@ impl Binder {
                     .table_index(Some(*table_index))
                     .column_position(*column_position)
                     .virtual_expr(virtual_expr.clone())
+                    .case_sensitive(case_sensitive)
                     .build();
                     bind_context.add_column_binding(column_binding);
                     base_column_scan_id.insert(*column_index, scan_id);

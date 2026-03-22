@@ -176,7 +176,7 @@ impl Table for StageTable {
             }
             FileFormatParams::Csv(_)
             | FileFormatParams::NdJson(_)
-            | FileFormatParams::Tsv(_)
+            | FileFormatParams::Text(_)
             | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
             FileFormatParams::Lance(_) => Err(ErrorCode::Unimplemented(
                 "LANCE stage table read is not supported".to_string(),
@@ -221,7 +221,7 @@ impl Table for StageTable {
             FileFormatParams::Orc(_) => {
                 OrcTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
-            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
+            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Text(_) => {
                 let compact_threshold = ctx.get_read_block_thresholds();
                 RowBasedReadPipelineBuilder {
                     stage_table_info,

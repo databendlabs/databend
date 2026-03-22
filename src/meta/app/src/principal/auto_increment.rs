@@ -15,7 +15,7 @@
 use std::fmt::Display;
 
 use databend_common_expression::ColumnId;
-use databend_meta_types::MetaId;
+use databend_meta_client::types::MetaId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct AutoIncrementKey {
@@ -39,10 +39,10 @@ impl Display for AutoIncrementKey {
 }
 
 mod kvapi_key_impl {
-    use databend_meta_kvapi::kvapi;
-    use databend_meta_kvapi::kvapi::KeyBuilder;
-    use databend_meta_kvapi::kvapi::KeyError;
-    use databend_meta_kvapi::kvapi::KeyParser;
+    use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::KeyBuilder;
+    use databend_meta_client::kvapi::KeyError;
+    use databend_meta_client::kvapi::KeyParser;
 
     use crate::principal::auto_increment::AutoIncrementKey;
 

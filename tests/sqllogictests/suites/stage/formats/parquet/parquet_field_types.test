@@ -1,54 +1,60 @@
-query ??
+query TTBTI
+select * from infer_schema(location=>'@data/parquet/tuple.parquet')
+----
+id INT 0 parquet/tuple.parquet 0
+t TUPLE(A INT32, B STRING) 0 parquet/tuple.parquet 1
+
+query I?
 select * from @data/parquet/tuple.parquet;
 ----
 1 (1,"a")
 2 (3,"b")
 3 (3,"c")
 
-query ??
-select * from @data/parquet/tuple.parquet where t:a = 1;
+query I?
+select * from @data/parquet/tuple.parquet where t:A = 1;
 ----
 1 (1,"a")
 
-query ??
-select * from @data/parquet/tuple.parquet where t:a = id;
+query I?
+select * from @data/parquet/tuple.parquet where t:A = id;
 ----
 1 (1,"a")
 3 (3,"c")
 
-query ??
-select * from @data/parquet/tuple.parquet where t:a >= 2;
+query I?
+select * from @data/parquet/tuple.parquet where t:A >= 2;
 ----
 2 (3,"b")
 3 (3,"c")
 
-query ?
-select t:b from @data/parquet/tuple.parquet where t:a >= 2;
+query T
+select t:B from @data/parquet/tuple.parquet where  t:A >= 2;
 ----
 b
 c
 
-query ?
-select t:b from @data/parquet/tuple.parquet
+query T
+select t:B from @data/parquet/tuple.parquet
 ----
 a
 b
 c
 
-query ???
-select id, t:a, t from @data/parquet/tuple.parquet
+query II?
+select id, t:A, t from @data/parquet/tuple.parquet
 ----
 1 1 (1,"a")
 2 3 (3,"b")
 3 3 (3,"c")
 
-query ???
-select id, t:a, t from @data/parquet/tuple.parquet where id > 2
+query II?
+select id, t:A, t from @data/parquet/tuple.parquet where id > 2
 ----
 3 3 (3,"c")
 
-query ???
-select id, t:a, t from @data/parquet/tuple.parquet where to_string(t:b) < 'c'
+query II?
+select id, t:A, t from @data/parquet/tuple.parquet where to_string(t:B) < 'c'
 ----
 1 1 (1,"a")
 2 3 (3,"b")
@@ -88,7 +94,7 @@ select name[1] from @data/parquet/complex.parquet limit 3
 (NULL,NULL,"official",NULL,"Quigley282",["Wilmer32"],["Mr."],NULL,NULL)
 (NULL,NULL,"official",NULL,"Collier206",["Towanda270"],["Mrs."],NULL,NULL)
 
-query ?
+query T
 select name[1].5 from @data/parquet/complex.parquet limit 3
 ----
 Infection Control
@@ -103,7 +109,7 @@ NULL
 ["Towanda270"]
 
 # the physical type of column t_timestamp is INT96
-query ?????
+query TTBTI
 select * from infer_schema (location => '@data/parquet/int96.parquet')
 ----
 id VARCHAR 1 parquet/int96.parquet 0
@@ -137,12 +143,12 @@ drop table if exists t
 statement ok
 create table t(id string null, t_bool boolean null, t_float float null, t_double double null, t_timestamp timestamp null, t_data date null, t_array array(int null))
 
-query ?????
+query TIITI
 copy into t from @data/parquet/int96.parquet
 ----
 parquet/int96.parquet 4 0 NULL NULL
 
-query ???????
+query TBRR???
 select * from t order by id
 ----
 100051130 1 1.000003 10.000000000003 2021-09-20 16:00:00.000000 2021-09-21 [0,0,1,2,2,3]
@@ -156,17 +162,17 @@ drop table if exists t1
 statement ok
 create table t1(id string null, t variant null)
 
-query ?????
+query TIITI
 copy into t1 from @data/parquet/tuple.parquet
 ----
 parquet/tuple.parquet 3 0 NULL NULL
 
-query ??
+query T?
 select * from t1 order by id
 ----
-1 {"a":1,"b":"a"}
-2 {"a":3,"b":"b"}
-3 {"a":3,"b":"c"}
+1 {"A":1,"B":"a"}
+2 {"A":3,"B":"b"}
+3 {"A":3,"B":"c"}
 
 statement ok
 drop table if exists t2
@@ -179,7 +185,7 @@ copy into t2 from (select a, parse_json(b) from @data/parquet/json_string.parque
 ----
 parquet/json_string.parquet 4 0 NULL NULL
 
-query TT
+query T?
 select * from t2 order by a
 ----
 1 {"k1":"v1","k2":"v2"}
@@ -195,7 +201,7 @@ copy into t2 from @data/parquet/invalid_json_string.parquet FILE_FORMAT = (type 
 ----
 parquet/invalid_json_string.parquet 2 0 NULL NULL
 
-query TT
+query T?
 select * from t2 order by a
 ----
 1 {"k1":"v1","k2":"v2"}

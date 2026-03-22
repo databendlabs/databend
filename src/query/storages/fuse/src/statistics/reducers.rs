@@ -233,6 +233,8 @@ pub fn reduce_spatial_statistics<T: Borrow<Option<StatisticsOfSpatialColumns>>>(
         let mut max_y = first.max_y;
         let srid = first.srid;
         let mut has_null = first.has_null;
+        let mut has_empty_rect = first.has_empty_rect;
+        let mut is_valid = first.is_valid;
         let mut srid_mixed = false;
 
         for stat in stats.iter().skip(1) {
@@ -245,9 +247,11 @@ pub fn reduce_spatial_statistics<T: Borrow<Option<StatisticsOfSpatialColumns>>>(
             max_x = max_x.max(stat.max_x);
             max_y = max_y.max(stat.max_y);
             has_null |= stat.has_null;
+            has_empty_rect |= stat.has_empty_rect;
+            is_valid &= stat.is_valid;
         }
 
-        if srid_mixed {
+        if srid_mixed || !is_valid {
             continue;
         }
 
@@ -258,6 +262,8 @@ pub fn reduce_spatial_statistics<T: Borrow<Option<StatisticsOfSpatialColumns>>>(
             max_y,
             srid,
             has_null,
+            has_empty_rect,
+            is_valid,
         });
     }
 
