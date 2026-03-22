@@ -91,8 +91,6 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         }
     }
 
-    /// Insert a chunk of rows starting at `row_offset` (1-based).
-    /// `hashes[i]` is the hash for the row at flat index `row_offset + i`.
     pub fn insert_chunk(&mut self, hashes: &[u64], row_offset: usize) {
         let mask = self.bucket_mask;
         for (i, h) in hashes.iter().enumerate() {

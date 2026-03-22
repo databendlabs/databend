@@ -20,53 +20,46 @@ use databend_common_expression::DataBlock;
 /// Accumulates rows from input blocks into fixed-size output chunks
 /// using mutable ColumnBuilders. When the accumulated rows reach
 /// `chunk_size`, a chunk is flushed and returned.
-///
-/// This avoids the overhead of `DataBlock::concat()` + `slice()` by
-/// directly appending rows into builders.
 pub struct FixedSizeChunkAccumulator {
     chunk_size: usize,
-    builders: Option<Vec<ColumnBuilder>>,
     builder_rows: usize,
+    builders: Vec<ColumnBuilder>,
 }
 
 impl FixedSizeChunkAccumulator {
     pub fn new(chunk_size: usize) -> Self {
         FixedSizeChunkAccumulator {
             chunk_size,
-            builders: None,
+            builders: vec![],
             builder_rows: 0,
         }
     }
 
-    /// Accumulate a block. Returns any full chunks that were flushed.
     pub fn accumulate(&mut self, block: DataBlock) -> Vec<DataBlock> {
         let mut output = Vec::new();
         self.append_block(block, &mut output);
         output
     }
 
-    /// Flush remaining rows as the last (possibly shorter) chunk.
-    pub fn flush(&mut self) -> Option<DataBlock> {
-        if self.builder_rows == 0 {
-            return None;
+    pub fn finalize(&mut self) -> Option<DataBlock> {
+        match self.builder_rows {
+            0 => None,
+            _ => Some(self.build_chunk()),
         }
-        Some(self.build_chunk())
     }
 
-    /// Reset the accumulator, discarding any buffered rows.
     pub fn reset(&mut self) {
-        self.builders = None;
         self.builder_rows = 0;
+        self.builders = vec![];
     }
 
     fn ensure_builders(&mut self, block: &DataBlock) {
-        if self.builders.is_none() {
-            let builders = block
+        if self.builders.is_empty() {
+            self.builders = block
                 .columns()
                 .iter()
                 .map(|entry| ColumnBuilder::with_capacity(&entry.data_type(), self.chunk_size))
                 .collect();
-            self.builders = Some(builders);
         }
     }
 
@@ -85,16 +78,9 @@ impl FixedSizeChunkAccumulator {
             let remaining_capacity = self.chunk_size - self.builder_rows;
             let rows_to_copy = (block_rows - offset).min(remaining_capacity);
 
-            let builders = self.builders.as_mut().unwrap();
-            if offset == 0 && rows_to_copy == block_rows {
-                for (builder, col) in builders.iter_mut().zip(columns.iter()) {
-                    builder.append_column(col);
-                }
-            } else {
-                for (builder, col) in builders.iter_mut().zip(columns.iter()) {
-                    let sliced = col.slice(offset..offset + rows_to_copy);
-                    builder.append_column(&sliced);
-                }
+            for (builder, col) in self.builders.iter_mut().zip(columns.iter()) {
+                let sliced = col.slice(offset..offset + rows_to_copy);
+                builder.append_column(&sliced);
             }
 
             self.builder_rows += rows_to_copy;
@@ -107,9 +93,10 @@ impl FixedSizeChunkAccumulator {
     }
 
     fn build_chunk(&mut self) -> DataBlock {
-        let builders = self.builders.take().unwrap();
-        let num_rows = self.builder_rows;
         self.builder_rows = 0;
+        let num_rows = self.builder_rows;
+
+        let builders = std::mem::take(&mut self.builders);
 
         // Reinitialize builders with same column types for next chunk.
         let mut new_builders = Vec::with_capacity(builders.len());
@@ -119,7 +106,7 @@ impl FixedSizeChunkAccumulator {
             columns.push(BlockEntry::from(b.build()));
             new_builders.push(ColumnBuilder::with_capacity(&dt, self.chunk_size));
         }
-        self.builders = Some(new_builders);
+        self.builders = new_builders;
 
         DataBlock::new(columns, num_rows)
     }
@@ -151,7 +138,7 @@ mod tests {
         let chunks = acc.accumulate(make_int_block(vec![1, 2, 3]));
         assert!(chunks.is_empty());
 
-        let last = acc.flush().unwrap();
+        let last = acc.finalize().unwrap();
         assert_eq!(extract_int_col(&last), vec![1, 2, 3]);
     }
 
@@ -162,7 +149,7 @@ mod tests {
         assert_eq!(chunks.len(), 1);
         assert_eq!(extract_int_col(&chunks[0]), vec![1, 2, 3]);
 
-        assert!(acc.flush().is_none());
+        assert!(acc.finalize().is_none());
     }
 
     #[test]
@@ -173,7 +160,7 @@ mod tests {
         assert_eq!(extract_int_col(&chunks[0]), vec![1, 2, 3]);
         assert_eq!(extract_int_col(&chunks[1]), vec![4, 5, 6]);
 
-        let last = acc.flush().unwrap();
+        let last = acc.finalize().unwrap();
         assert_eq!(extract_int_col(&last), vec![7]);
     }
 
@@ -185,14 +172,14 @@ mod tests {
         assert_eq!(chunks.len(), 1);
         assert_eq!(extract_int_col(&chunks[0]), vec![1, 2, 3, 4]);
 
-        let last = acc.flush().unwrap();
+        let last = acc.finalize().unwrap();
         assert_eq!(extract_int_col(&last), vec![5]);
     }
 
     #[test]
     fn test_flush_empty() {
         let mut acc = FixedSizeChunkAccumulator::new(4);
-        assert!(acc.flush().is_none());
+        assert!(acc.finalize().is_none());
     }
 
     #[test]
@@ -200,7 +187,7 @@ mod tests {
         let mut acc = FixedSizeChunkAccumulator::new(4);
         acc.accumulate(make_int_block(vec![1, 2, 3]));
         acc.reset();
-        assert!(acc.flush().is_none());
+        assert!(acc.finalize().is_none());
     }
 
     #[test]
@@ -215,7 +202,7 @@ mod tests {
         assert_eq!(chunks[0].num_rows(), 3);
         assert_eq!(chunks[0].num_columns(), 2);
 
-        let last = acc.flush().unwrap();
+        let last = acc.finalize().unwrap();
         assert_eq!(last.num_rows(), 2);
         assert_eq!(last.num_columns(), 2);
 
@@ -231,14 +218,14 @@ mod tests {
         let mut acc = FixedSizeChunkAccumulator::new(2);
         let chunks = acc.accumulate(make_int_block(vec![1, 2]));
         assert_eq!(chunks.len(), 1);
-        assert!(acc.flush().is_none());
+        assert!(acc.finalize().is_none());
 
         // Accumulator can be reused after flush
         let chunks = acc.accumulate(make_int_block(vec![3, 4, 5]));
         assert_eq!(chunks.len(), 1);
         assert_eq!(extract_int_col(&chunks[0]), vec![3, 4]);
 
-        let last = acc.flush().unwrap();
+        let last = acc.finalize().unwrap();
         assert_eq!(extract_int_col(&last), vec![5]);
     }
 }

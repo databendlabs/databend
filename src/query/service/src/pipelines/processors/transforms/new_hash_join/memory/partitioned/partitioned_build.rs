@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
@@ -49,27 +50,21 @@ pub fn flat_to_row_ptr(flat_index: usize) -> RowPtr {
 
 /// Per-thread build state for partitioned hash join.
 pub struct PartitionedBuild {
-    /// Build blocks, each strictly CHUNK_SIZE rows (last may be shorter).
     pub chunks: Vec<DataBlock>,
-    /// Per-chunk build key states for key comparison during probe.
-    pub build_keys_states: Vec<KeysState>,
-    /// Compact hash table (u32 row indices, 1-based).
-    pub hash_table: CompactJoinHashTable<u32>,
-    /// Build columns in ColumnVec format for fast gather.
-    pub columns: Vec<ColumnVec>,
-    /// Column types for build side.
-    pub column_types: Vec<DataType>,
-    /// Total build rows.
-    pub num_rows: usize,
-    /// Hash method for key extraction.
     pub method: HashMethodKind,
-    /// Join descriptor.
-    pub desc: Arc<HashJoinDesc>,
-    /// Function context.
-    pub function_ctx: FunctionContext,
-    /// Visited bitmap for right outer/semi/anti joins (1-based indexing, index 0 unused).
+    pub build_keys_states: Vec<KeysState>,
+    pub hash_table: CompactJoinHashTable<u32>,
+
+    pub columns: Vec<ColumnVec>,
+    pub column_types: Vec<DataType>,
+
+    pub num_rows: usize,
+    pub build_block_idx: usize,
+
     pub visited: Vec<u8>,
-    /// Fixed-size chunk accumulator using mutable columns.
+    pub desc: Arc<HashJoinDesc>,
+    pub function_ctx: FunctionContext,
+
     accumulator: FixedSizeChunkAccumulator,
 }
 
@@ -91,94 +86,113 @@ impl PartitionedBuild {
             function_ctx,
             visited: Vec::new(),
             accumulator: FixedSizeChunkAccumulator::new(CHUNK_SIZE),
+            build_block_idx: 0,
         }
     }
 
-    /// Push a build block. None signals end of input.
-    pub fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        match data {
-            Some(block) if !block.is_empty() => {
-                let flushed = self.accumulator.accumulate(block);
-                for chunk in flushed {
-                    self.ingest_chunk(chunk)?;
-                }
+    pub fn add_block<const SCAN_MAP: bool>(&mut self, data: Option<DataBlock>) -> Result<()> {
+        let Some(data_block) = data else {
+            if let Some(chunk) = self.accumulator.finalize() {
+                self.ingest_chunk::<SCAN_MAP>(chunk)?;
             }
-            _ => {
-                if let Some(chunk) = self.accumulator.flush() {
-                    self.ingest_chunk(chunk)?;
-                }
-            }
-        }
-        Ok(())
-    }
 
-    /// Process a flushed chunk: compute KeysState immediately.
-    fn ingest_chunk(&mut self, chunk: DataBlock) -> Result<()> {
-        let num_rows = chunk.num_rows();
-        with_hash_method!(|T| match &self.method {
-            HashMethodKind::T(method) => {
-                let keys_entries = self.desc.build_key(&chunk, &self.function_ctx)?;
-                let mut keys_block = DataBlock::new(keys_entries, num_rows);
-                self.desc.remove_keys_nullable(&mut keys_block);
-                let keys = ProjectedBlock::from(keys_block.columns());
-                let keys_state = method.build_keys_state(keys, num_rows)?;
-                self.build_keys_states.push(keys_state);
-            }
-        });
-        self.num_rows += num_rows;
-        self.chunks.push(chunk);
-        Ok(())
-    }
-
-    /// Finalize build: build hash table chunk by chunk, extract ColumnVec.
-    pub fn final_build(&mut self) -> Result<()> {
-        if self.num_rows == 0 {
             return Ok(());
-        }
+        };
 
-        // Allocate hash table with known total rows
-        self.hash_table = CompactJoinHashTable::new(self.num_rows);
-
-        // Process one chunk at a time: compute hashes, insert into table
-        let mut row_offset = 1; // 1-based indexing
-        with_hash_method!(|T| match &self.method {
-            HashMethodKind::T(method) => {
-                for keys_state in &self.build_keys_states {
-                    let mut hashes = Vec::new();
-                    method.build_keys_hashes(keys_state, &mut hashes);
-                    self.hash_table.insert_chunk(&hashes, row_offset);
-                    row_offset += hashes.len();
-                }
-            }
-        });
-
-        // Project build columns and extract ColumnVec
-        if let Some(first_chunk) = self.chunks.first() {
-            let first_projected = first_chunk.clone().project(&self.desc.build_projection);
-            self.column_types = (0..first_projected.num_columns())
-                .map(|offset| first_projected.get_by_offset(offset).data_type())
-                .collect();
-
-            let num_cols = first_projected.num_columns();
-            let mut columns = Vec::with_capacity(num_cols);
-            for offset in 0..num_cols {
-                let full_columns: Vec<Column> = self
-                    .chunks
-                    .iter()
-                    .map(|chunk| {
-                        chunk
-                            .clone()
-                            .project(&self.desc.build_projection)
-                            .get_by_offset(offset)
-                            .to_column()
-                    })
-                    .collect();
-                columns.push(Column::take_downcast_column_vec(&full_columns));
-            }
-            self.columns = columns;
+        let data_block = self.prepare_data(data_block)?;
+        for ready_block in self.accumulator.accumulate(data_block) {
+            self.ingest_chunk::<SCAN_MAP>(ready_block)?;
         }
 
         Ok(())
+    }
+
+    fn ingest_chunk<const SCAN_MAP: bool>(&mut self, chunk: DataBlock) -> Result<()> {
+        let num_rows = chunk.num_rows();
+        let mut columns = chunk.take_columns();
+        let data_columns = columns.split_off(self.desc.build_keys.len());
+        let keys = ProjectedBlock::from(&columns);
+
+        let keys_state = with_hash_method!(|T| match &self.method {
+            HashMethodKind::T(method) => method.build_keys_state(keys, num_rows)?,
+        });
+
+        self.num_rows += num_rows;
+        self.build_keys_states.push(keys_state);
+        self.chunks.push(DataBlock::new(data_columns, num_rows));
+        Ok(())
+    }
+
+    fn prepare_data<const SCAN_MAP: bool>(&self, mut chunk: DataBlock) -> Result<DataBlock> {
+        let num_rows = chunk.num_rows();
+
+        let keys_entries = self.desc.build_key(&chunk, &self.function_ctx)?;
+        let mut keys_block = DataBlock::new(keys_entries, num_rows);
+
+        chunk = chunk.project(&self.desc.build_projection);
+        if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+            if bitmap.true_count() != bitmap.len() {
+                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+
+                chunk = match SCAN_MAP {
+                    true => {
+                        let null_keys = chunk.clone().filter_with_bitmap(&(!(&bitmap)))?;
+                        DataBlock::concat(&[chunk.filter_with_bitmap(&bitmap)?, null_keys])?
+                    }
+                    false => chunk.filter_with_bitmap(&bitmap)?,
+                };
+            }
+        }
+
+        self.desc.remove_keys_nullable(&mut keys_block);
+        keys_block.merge_block(chunk);
+        Ok(keys_block)
+    }
+
+    pub fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+        if self.num_rows == 0 {
+            return Ok(None);
+        }
+
+        if self.build_block_idx == 0 {
+            // Allocate hash table with known total rows
+            self.hash_table = CompactJoinHashTable::new(self.num_rows);
+
+            if let Some(first_chunk) = self.chunks.first() {
+                self.column_types = (0..first_chunk.num_columns())
+                    .map(|offset| first_chunk.get_by_offset(offset).data_type())
+                    .collect();
+
+                let num_cols = first_chunk.num_columns();
+                let mut columns = Vec::with_capacity(num_cols);
+                for offset in 0..num_cols {
+                    let full_columns: Vec<Column> = self
+                        .chunks
+                        .iter()
+                        .map(|chunk| chunk.get_by_offset(offset).to_column())
+                        .collect();
+                    columns.push(Column::take_downcast_column_vec(&full_columns));
+                }
+                self.columns = columns;
+            }
+        }
+
+        let row_offset = CHUNK_SIZE * self.build_block_idx + 1;
+        let keys_state = &self.build_keys_states[self.build_block_idx];
+
+        with_hash_method!(|T| match &self.method {
+            HashMethodKind::T(method) => {
+                let mut hashes = Vec::new();
+                method.build_keys_hashes(keys_state, &mut hashes);
+                self.hash_table.insert_chunk(&hashes, row_offset)?;
+                self.build_block_idx += 1;
+            }
+        });
+
+        match self.build_block_idx == self.chunks.len() {
+            true => Ok(None),
+            false => Ok(Some(ProgressValues { rows: 0, bytes: 0 })),
+        }
     }
 
     pub fn reset(&mut self) {
