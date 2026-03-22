@@ -227,7 +227,13 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
 #[allow(dead_code)]
 fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
     #[derive(VisitorMut)]
-    #[visitor(Range(enter), Literal(enter), ExplainKind(enter), SelectTarget(enter), SetExpr(enter))]
+    #[visitor(
+        Range(enter),
+        Literal(enter),
+        ExplainKind(enter),
+        SelectTarget(enter),
+        SetExpr(enter)
+    )]
     struct ResetAST;
 
     impl ResetAST {
@@ -257,7 +263,9 @@ fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
 
         fn enter_set_expr(&mut self, set_expr: &mut SetExpr) {
             let collapsed = match set_expr {
-                SetExpr::Query(query) if Self::is_grouping_wrapper(query) => Some(query.body.clone()),
+                SetExpr::Query(query) if Self::is_grouping_wrapper(query) => {
+                    Some(query.body.clone())
+                }
                 _ => None,
             };
 
