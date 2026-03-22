@@ -93,7 +93,6 @@ impl FixedSizeChunkAccumulator {
     }
 
     fn build_chunk(&mut self) -> DataBlock {
-        self.builder_rows = 0;
         let num_rows = self.builder_rows;
 
         let builders = std::mem::take(&mut self.builders);
@@ -106,6 +105,8 @@ impl FixedSizeChunkAccumulator {
             columns.push(BlockEntry::from(b.build()));
             new_builders.push(ColumnBuilder::with_capacity(&dt, self.chunk_size));
         }
+
+        self.builder_rows = 0;
         self.builders = new_builders;
 
         DataBlock::new(columns, num_rows)
