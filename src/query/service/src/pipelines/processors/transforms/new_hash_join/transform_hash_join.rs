@@ -31,6 +31,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use log::info;
 
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
+use crate::pipelines::processors::transforms::new_hash_join::join::FinishedJoin;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::RuntimeFiltersDesc;
@@ -106,6 +107,11 @@ impl Processor for TransformHashJoin {
 
             if !matches!(self.stage, Stage::Finished) {
                 self.stage = Stage::Finished;
+
+                let mut finished = FinishedJoin::create();
+                std::mem::swap(&mut finished, &mut self.join);
+                drop(finished);
+
                 self.stage_sync_barrier.reduce_quorum(1);
             }
 
@@ -287,6 +293,11 @@ impl Processor for TransformHashJoin {
                     );
 
                     self.instant = Instant::now();
+
+                    let mut finished = FinishedJoin::create();
+                    std::mem::swap(&mut finished, &mut self.join);
+                    drop(finished);
+
                     Stage::Finished
                 }
                 false => {
