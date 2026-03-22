@@ -1313,6 +1313,9 @@ fn test_query() {
         // With INTERSECT and EXCEPT
         r#"SELECT 1 INTERSECT (SELECT 1 INTERSECT SELECT 1)"#,
         r#"(SELECT 1) EXCEPT SELECT 2"#,
+        // CI regressions from set_operator.test and fuzz aggregate queries
+        r#"SELECT * FROM a EXCEPT SELECT * FROM b UNION ALL SELECT * FROM b EXCEPT SELECT * FROM a"#,
+        r#"SELECT count() + 1 FROM (SELECT * FROM agg_fuzz_result1 EXCEPT SELECT * FROM agg_fuzz_result2 UNION ALL SELECT * FROM agg_fuzz_result2 EXCEPT SELECT * FROM agg_fuzz_result1)"#,
         // Complex cases
         r#"SELECT a FROM t1 UNION (SELECT b FROM t2 INTERSECT SELECT c FROM t3)"#,
         r#"(SELECT * FROM t1 WHERE x > 0) UNION SELECT * FROM t2"#,
