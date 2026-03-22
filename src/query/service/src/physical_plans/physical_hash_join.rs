@@ -497,7 +497,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                if self.broadcast_id.is_some() {
+                if self.broadcast_id.is_some() && self.join_type == JoinType::Inner {
                     factory.create_partitioned_join(self.join_type)?
                 } else {
                     factory.create_hash_join(self.join_type, 0)?
