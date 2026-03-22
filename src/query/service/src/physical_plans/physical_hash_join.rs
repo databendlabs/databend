@@ -481,6 +481,8 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
+        let use_partitioned_join = self.broadcast_id.is_some() && self.join_type == JoinType::Inner;
+
         let barrier = databend_common_base::base::Barrier::new(output_len);
         let stage_sync_barrier = Arc::new(barrier);
         let mut join_sinks = Vec::with_capacity(output_len * 2);
@@ -497,7 +499,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                if self.broadcast_id.is_some() && self.join_type == JoinType::Inner {
+                if use_partitioned_join {
                     factory.create_partitioned_join(self.join_type)?
                 } else {
                     factory.create_hash_join(self.join_type, 0)?
@@ -518,11 +520,12 @@ impl HashJoin {
         let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
         builder.main_pipeline.add_pipe(join_pipe);
 
-        // In the case of spilling, we need to share state among multiple threads
-        // Quickly fetch all data from this round to quickly start the next round
-        builder
-            .main_pipeline
-            .resize(builder.main_pipeline.output_len(), true)
+        if !use_partitioned_join {
+            let item_size = builder.main_pipeline.output_len();
+            builder.main_pipeline.resize(item_size, true)?;
+        }
+
+        Ok(())
     }
 
     fn join_factory(
