@@ -199,7 +199,7 @@ impl Binder {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
         for order in order_by.items {
             if from_context.in_grouping {
-                let mut group_checker = GroupingChecker::new(from_context);
+                let mut group_checker = GroupingChecker::new(from_context, false);
                 // Perform grouping check on original scalar expression if order item is alias.
                 if let Some(scalar_item) = select_list
                     .items

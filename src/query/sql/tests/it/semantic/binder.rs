@@ -96,6 +96,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT sum(number) AS s FROM t QUALIFY s > 0",
         },
         SqlTestCase {
+            name: "qualify_rejects_direct_aggregate",
+            description: "A raw aggregate expression must be rejected directly in QUALIFY.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number FROM t QUALIFY sum(number) > 0",
+        },
+        SqlTestCase {
             name: "qualify_rejects_udaf_alias",
             description: "A UDAF alias must still be rejected in QUALIFY.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
@@ -256,6 +262,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             description: "QUALIFY in a grouped query should still accept grouped aliases while binding the window phase.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number % 2 AS a, row_number() OVER (ORDER BY a) AS rn FROM t GROUP BY a QUALIFY a = 1",
+        },
+        SqlTestCase {
+            name: "qualify_grouping_context_rejects_aggregate_alias",
+            description: "QUALIFY in a grouped query must still reject aggregate aliases while using grouping-aware binding.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number % 2 AS a, sum(number) AS s, row_number() OVER (ORDER BY a) AS rn FROM t GROUP BY a QUALIFY s > 0",
         },
         SqlTestCase {
             name: "group_by_srf_alias_from_sqllogictest_binds",

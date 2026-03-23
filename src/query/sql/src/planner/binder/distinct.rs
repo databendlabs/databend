@@ -47,7 +47,7 @@ impl Binder {
             .map(|(_, item)| {
                 let mut scalar = item.scalar;
                 if bind_context.in_grouping {
-                    let mut group_checker = GroupingChecker::new(bind_context);
+                    let mut group_checker = GroupingChecker::new(bind_context, false);
                     group_checker.visit(&mut scalar)?;
                 } else if !bind_context.windows.window_functions.is_empty() {
                     let mut window_checker = WindowChecker::new(bind_context);

@@ -18,7 +18,6 @@ use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::Finder;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
@@ -32,7 +31,6 @@ use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
-use crate::plans::Visitor;
 use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
 
@@ -67,21 +65,11 @@ impl Binder {
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::QualifyClause);
 
-        let f = |scalar: &ScalarExpr| scalar.is_aggregate();
-        let mut finder = Finder::new(&f);
-        finder.visit(&qualify)?;
-        if !finder.scalars().is_empty() {
-            return Err(ErrorCode::SemanticError(
-                "Qualify clause must not contain aggregate functions".to_string(),
-            )
-            .set_span(qualify.span()));
-        }
-
         let scalar = {
             let mut qualify = qualify;
             if bind_context.in_grouping {
                 // If we are in grouping context, we will perform the grouping check
-                let mut grouping_checker = GroupingChecker::new(bind_context);
+                let mut grouping_checker = GroupingChecker::new(bind_context, true);
                 grouping_checker.visit(&mut qualify)?;
             } else {
                 let mut qualify_checker = QualifyChecker::new(bind_context);
@@ -132,40 +120,35 @@ impl VisitorMut<'_> for QualifyChecker<'_> {
         }
 
         if let ScalarExpr::AggregateFunction(agg) = expr {
-            let Some(column_binding) = self
-                .bind_context
-                .aggregate_info
-                .lookup_aggregate_function_column(agg, &agg.display_name)
-            else {
-                return Err(ErrorCode::Internal("Invalid aggregate function"));
-            };
-
-            *expr = BoundColumnRef {
-                span: None,
-                column: column_binding,
-            }
-            .into();
-            return Ok(());
+            return Err(ErrorCode::SemanticError(
+                "Qualify clause must not contain aggregate functions".to_string(),
+            )
+            .set_span(agg.span));
         }
 
         if let ScalarExpr::UDAFCall(udaf) = expr {
-            let Some(column_binding) = self
-                .bind_context
-                .aggregate_info
-                .lookup_udaf_call_column(udaf, &udaf.display_name)
-            else {
-                return Err(ErrorCode::Internal("Invalid udaf function"));
-            };
-
-            *expr = BoundColumnRef {
-                span: None,
-                column: column_binding,
-            }
-            .into();
-            return Ok(());
+            return Err(ErrorCode::SemanticError(
+                "Qualify clause must not contain aggregate functions".to_string(),
+            )
+            .set_span(udaf.span));
         }
 
         walk_expr_mut(self, expr)
+    }
+
+    fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
+        if self
+            .bind_context
+            .aggregate_info
+            .has_aggregate_call_index(column.column.index)
+        {
+            return Err(ErrorCode::SemanticError(
+                "Qualify clause must not contain aggregate functions".to_string(),
+            )
+            .set_span(column.span));
+        }
+
+        Ok(())
     }
 
     fn visit_subquery_expr(&mut self, _: &mut SubqueryExpr) -> Result<()> {

@@ -180,7 +180,7 @@ impl Binder {
             .map(|(_, item)| {
                 if bind_context.in_grouping {
                     let mut scalar = item.scalar.clone();
-                    let mut grouping_checker = GroupingChecker::new(bind_context);
+                    let mut grouping_checker = GroupingChecker::new(bind_context, false);
                     grouping_checker.visit(&mut scalar)?;
 
                     if let Some(x) = columns.iter_mut().find(|x| x.index == item.index) {
