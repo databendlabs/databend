@@ -135,11 +135,28 @@ impl LikePattern<'_> {
         has_end_percent: bool,
         segments: &[Vec<u8>],
     ) -> bool {
+        let segments_len = segments.len();
+        match segments_len {
+            // Repeated '%' can collapse a simple pattern to zero concrete segments.
+            0 => return true,
+            // Repeated '%' can also collapse to a single concrete segment, which is
+            // equivalent to one of the simpler LIKE variants.
+            1 => {
+                let segment = &segments[0];
+                return match (has_start_percent, has_end_percent) {
+                    (false, false) => haystack == segment,
+                    (true, false) => haystack.ends_with(segment),
+                    (false, true) => haystack.starts_with(segment),
+                    (true, true) => find(haystack, segment).is_some(),
+                };
+            }
+            _ => {}
+        }
+
         let haystack_len = haystack.len();
         if haystack_len == 0 {
             return false;
         }
-        let segments_len = segments.len();
         debug_assert!(haystack_len > 0);
         debug_assert!(segments_len > 1);
         let mut haystack_start_idx = 0;
@@ -394,5 +411,26 @@ fn test_generate_like_pattern() {
     ];
     for (pattern, pattern_type) in test_cases {
         assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes(), 1));
+    }
+}
+
+#[test]
+fn test_like_pattern_with_repeated_percent() {
+    let test_cases = vec![
+        ("ababac", "abab%%%%%", true),
+        ("aba", "abab%%%%%", false),
+        ("zzabab", "%%%%abab", true),
+        ("zzababzz", "%%%%abab%%%%", true),
+        ("zzabazz", "%%%%abab%%%%", false),
+        ("", "%%%%%", true),
+        ("anything", "%%%%%", true),
+    ];
+
+    for (haystack, pattern, expected) in test_cases {
+        assert_eq!(
+            generate_like_pattern(pattern.as_bytes(), haystack.len()).compare(haystack.as_bytes()),
+            expected,
+            "{haystack:?} LIKE {pattern:?}"
+        );
     }
 }
