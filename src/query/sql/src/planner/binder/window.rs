@@ -484,11 +484,21 @@ impl<'a> WindowRewriter<'a> {
     }
 
     fn rewrite_aggregate_expr(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        AggregateRewriter::rewrite_existing_expr(
-            &self.bind_context.aggregate_info,
-            expr,
-            "Window specification and arguments cannot contain aggregate functions",
-        )?;
+        if self.bind_context.aggregate_info.has_group_items()
+            || self.bind_context.aggregate_info.has_aggregate_calls()
+        {
+            AggregateRewriter::rewrite_expr(
+                &mut self.bind_context.aggregate_info,
+                self.metadata.clone(),
+                expr,
+            )?;
+        } else {
+            AggregateRewriter::rewrite_existing_expr(
+                &self.bind_context.aggregate_info,
+                expr,
+                "Window specification and arguments cannot contain aggregate functions",
+            )?;
+        }
 
         AggregateRewriter::check_no_aggregate_calls(
             expr,

@@ -143,6 +143,24 @@ EvalScalar
             └── limit: NONE
 
 
+=== aggregate_argument_can_fallback_to_select_alias_in_select_clause ===
+description: Inside the SELECT list, an aggregate argument should still fall back to a same-select alias when no base column exists.
+sql: SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3
+status: ok
+EvalScalar
+├── scalars: [sum(c1) (#2) AS (#2), number % 3 (#1) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(t.number (#0), 3) AS (#1)]
+    ├── aggregate functions: [sum(number % 3 (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [modulo(t.number (#0), 3) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === window_aggregate_does_not_become_group_aggregate ===
 description: An aggregate used as a window function should stay in the window phase rather than becoming a group aggregate.
 sql: SELECT sum(number) OVER () FROM t
@@ -337,6 +355,36 @@ EvalScalar
                 ├── filters: []
                 ├── order by: []
                 └── limit: NONE
+
+
+=== named_window_aggregate_order_by_existing_group_aggregate_binds ===
+description: A grouped query should be able to introduce an aggregate inside a named window clause and reuse it across the window aggregate and ORDER BY.
+sql: SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))
+status: ok
+EvalScalar
+├── scalars: [empsalary.depname (#0) AS (#0), sum(sum(salary)) OVER w (#4) AS (#4)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [1 AS (#3)]
+    ├── order by items: [sum(salary) (#2) AS (#2)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum_part_0 (#3) ASC NULLS LAST, sum(salary) (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
+        └── EvalScalar
+            ├── scalars: [sum(salary) (#2) AS (#2), sum(salary) (#2) AS (#2), 1 AS (#3)]
+            └── Aggregate(Initial)
+                ├── group items: [empsalary.depname (#0) AS (#0)]
+                ├── aggregate functions: [sum(empsalary.salary (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.empsalary (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
 
 
 === inherited_named_window_from_sqllogictest_binds ===

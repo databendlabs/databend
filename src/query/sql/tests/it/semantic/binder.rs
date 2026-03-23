@@ -99,6 +99,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT a AS c2, sum(c2) FROM t GROUP BY a",
         },
         SqlTestCase {
+            name: "aggregate_argument_can_fallback_to_select_alias_in_select_clause",
+            description: "Inside the SELECT list, an aggregate argument should still fall back to a same-select alias when no base column exists.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3",
+        },
+        SqlTestCase {
             name: "window_aggregate_does_not_become_group_aggregate",
             description: "An aggregate used as a window function should stay in the window phase rather than becoming a group aggregate.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
@@ -151,6 +157,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             description: "A named WINDOW clause from sqllogictests should bind as a normal window specification.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, empno UInt64, salary UInt64)"],
             sql: "SELECT depname, empno, salary, sum(salary) OVER w FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY empno)",
+        },
+        SqlTestCase {
+            name: "named_window_aggregate_order_by_existing_group_aggregate_binds",
+            description: "A grouped query should be able to introduce an aggregate inside a named window clause and reuse it across the window aggregate and ORDER BY.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))",
         },
         SqlTestCase {
             name: "inherited_named_window_from_sqllogictest_binds",

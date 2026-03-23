@@ -2230,13 +2230,18 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        // Resolve aggregate arguments against input columns first; aliases like
-        // `SELECT sum(c2) AS c2 ... HAVING sum(c2)` must not leak into the
-        // aggregate argument binding path.
+        // Only force aggregate arguments to skip alias resolution in contexts
+        // that would otherwise prefer aliases over input columns, such as
+        // HAVING or ORDER BY. In the SELECT list we still want the existing
+        // column-first fallback so `sum(c1)` can bind a same-select alias when
+        // there is no real `c1` column.
         self.in_aggregate_function = true;
         let original_context = self.bind_context.expr_context.clone();
-        self.bind_context
-            .set_expr_context(ExprContext::InAggregateFunction);
+        let disallow_alias_resolution = original_context.prefer_resolve_alias();
+        if disallow_alias_resolution {
+            self.bind_context
+                .set_expr_context(ExprContext::InAggregateFunction);
+        }
         let arguments_result = (|| {
             let mut arguments = vec![];
             let mut arg_types = vec![];
@@ -2247,7 +2252,9 @@ impl<'a> TypeChecker<'a> {
             }
             Ok::<_, ErrorCode>((arguments, arg_types))
         })();
-        self.bind_context.set_expr_context(original_context.clone());
+        if disallow_alias_resolution {
+            self.bind_context.set_expr_context(original_context.clone());
+        }
         self.in_aggregate_function = false;
         let (mut arguments, mut arg_types) = arguments_result?;
 
@@ -2259,10 +2266,14 @@ impl<'a> TypeChecker<'a> {
                      asc,
                      nulls_first,
                  }| {
-                    self.bind_context
-                        .set_expr_context(ExprContext::InAggregateFunction);
+                    if disallow_alias_resolution {
+                        self.bind_context
+                            .set_expr_context(ExprContext::InAggregateFunction);
+                    }
                     let result = self.resolve(expr);
-                    self.bind_context.set_expr_context(original_context.clone());
+                    if disallow_alias_resolution {
+                        self.bind_context.set_expr_context(original_context.clone());
+                    }
                     let box (scalar_expr, _) = result?;
 
                     Ok(AggregateFunctionScalarSortDesc {
