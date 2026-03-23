@@ -71,8 +71,17 @@ pub enum FragmentKind {
     // Broadcast
     Expansive,
     Merge,
-    // Ping-pong based hash shuffle (used by hash join)
+    // Ping-pong based hash shuffle
     GlobalShuffle,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum DataDistribution {
+    Random,
+    NodeHash(Vec<RemoteExpr>),
+    GlobalHash(Vec<RemoteExpr>),
+    Broadcast,
+    Serial,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]

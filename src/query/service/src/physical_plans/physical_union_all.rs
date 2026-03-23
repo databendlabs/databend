@@ -28,8 +28,10 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::SExpr;
 use itertools::Itertools;
+use recursive::recursive;
 
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -87,6 +89,16 @@ impl IPhysicalPlan for UnionAll {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(UnionAllFormatter::create(self))
+    }
+
+    #[recursive]
+    fn output_data_distribution(&self) -> DataDistribution {
+        let left_dist = self.left.output_data_distribution();
+        let right_dist = self.right.output_data_distribution();
+        match left_dist == right_dist {
+            true => left_dist,
+            false => DataDistribution::Random,
+        }
     }
 
     fn get_desc(&self) -> Result<String> {

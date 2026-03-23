@@ -29,6 +29,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::JoinPredicate;
 use databend_common_sql::binder::wrap_cast;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::RelationalProperty;
 use databend_common_sql::optimizer::ir::SExpr;
@@ -93,6 +94,10 @@ impl IPhysicalPlan for RangeJoin {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(RangeJoinFormatter::create(self))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn get_desc(&self) -> Result<String> {

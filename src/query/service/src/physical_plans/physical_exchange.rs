@@ -21,6 +21,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::optimizer::ir::SExpr;
 
@@ -73,6 +74,16 @@ impl IPhysicalPlan for Exchange {
 
     fn is_distributed_plan(&self) -> bool {
         true
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        match &self.kind {
+            FragmentKind::Init => DataDistribution::Random,
+            FragmentKind::Normal => DataDistribution::NodeHash(self.keys.clone()),
+            FragmentKind::Expansive => DataDistribution::Broadcast,
+            FragmentKind::Merge => DataDistribution::Serial,
+            FragmentKind::GlobalShuffle => DataDistribution::GlobalHash(self.keys.clone()),
+        }
     }
 
     fn display_in_profile(&self) -> bool {

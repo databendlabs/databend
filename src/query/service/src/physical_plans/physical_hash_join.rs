@@ -43,6 +43,7 @@ use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
@@ -193,6 +194,10 @@ impl IPhysicalPlan for HashJoin {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(HashJoinFormatter::create(self))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.probe.output_data_distribution()
     }
 
     fn get_desc(&self) -> Result<String> {
@@ -481,7 +486,16 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        let use_partitioned_join = self.broadcast_id.is_some() && self.join_type == JoinType::Inner;
+        // let use_partitioned_join = self.join_type == JoinType::Inner && self.broadcast_id.is_some();
+        let use_partitioned_join = self.join_type == JoinType::Inner
+            && matches!(
+                self.build.output_data_distribution(),
+                DataDistribution::GlobalHash(_)
+            )
+            && matches!(
+                self.probe.output_data_distribution(),
+                DataDistribution::GlobalHash(_)
+            );
 
         let barrier = databend_common_base::base::Barrier::new(output_len);
         let stage_sync_barrier = Arc::new(barrier);
@@ -1416,7 +1430,7 @@ impl PhysicalPlanBuilder {
         }
 
         for scalar in &join.non_equi_conditions {
-            predicates.push(resolve_scalar(scalar, &merged).map_err(|err|{
+            predicates.push(resolve_scalar(scalar, &merged).map_err(|err| {
                 err.add_message(format!(
                     "Failed build nested loop filter schema: {merged:#?} non_equi_conditions: {:#?}",
                     join.non_equi_conditions

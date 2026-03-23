@@ -30,6 +30,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::PlanScope;
 use databend_common_sql::Metadata;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use dyn_clone::DynClone;
 use serde::Deserializer;
 use serde::Serializer;
@@ -166,6 +167,14 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     fn is_warehouse_distributed_plan(&self) -> bool {
         self.children()
             .any(|child| child.is_warehouse_distributed_plan())
+    }
+
+    #[recursive::recursive]
+    fn output_data_distribution(&self) -> DataDistribution {
+        match self.children().next() {
+            None => DataDistribution::Random,
+            Some(child) => child.output_data_distribution(),
+        }
     }
 
     fn display_in_profile(&self) -> bool {
