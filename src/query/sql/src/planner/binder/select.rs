@@ -88,10 +88,7 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
         let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
-            )
+            scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
         };
 
         let mut finder = Finder::new(&f);

@@ -21,6 +21,33 @@ use crate::framework::golden::setup_context;
 use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_outcome;
 
+const TEST_UDAF_SQL: &str = r#"
+CREATE OR REPLACE FUNCTION weighted_avg (a INT, b INT) STATE { sum INT, weight INT } RETURNS FLOAT
+LANGUAGE javascript AS $$
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+$$
+"#;
+
 async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
     let outcome = match ctx.bind_sql(case.sql).await {
@@ -57,10 +84,22 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT number + 1 AS s FROM t WHERE s > 1",
         },
         SqlTestCase {
+            name: "where_rejects_udaf",
+            description: "A UDAF in WHERE must be rejected like any other aggregate.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT a FROM t WHERE weighted_avg(a, b) > 0",
+        },
+        SqlTestCase {
             name: "qualify_rejects_aggregate_alias",
             description: "An aggregate alias must still be rejected in QUALIFY.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT sum(number) AS s FROM t QUALIFY s > 0",
+        },
+        SqlTestCase {
+            name: "qualify_rejects_udaf_alias",
+            description: "A UDAF alias must still be rejected in QUALIFY.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT weighted_avg(a, b) AS s FROM t QUALIFY s > 0",
         },
         SqlTestCase {
             name: "qualify_accepts_window_alias",
@@ -229,6 +268,24 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL",
+        },
+        SqlTestCase {
+            name: "grouped_select_udaf_binds",
+            description: "A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g",
+        },
+        SqlTestCase {
+            name: "group_by_all_collects_non_udaf_select_items",
+            description: "GROUP BY ALL should also skip UDAF select items when inferring grouping keys.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY ALL",
+        },
+        SqlTestCase {
+            name: "group_by_rejects_udaf_item",
+            description: "Explicit GROUP BY items must reject UDAF calls just like builtin aggregates.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT weighted_avg(a, b) FROM t GROUP BY weighted_avg(a, b)",
         },
         SqlTestCase {
             name: "combined_grouping_sets_binds",

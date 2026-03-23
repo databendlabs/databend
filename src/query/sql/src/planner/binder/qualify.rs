@@ -67,7 +67,7 @@ impl Binder {
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::QualifyClause);
 
-        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
+        let f = |scalar: &ScalarExpr| scalar.is_aggregate();
         let mut finder = Finder::new(&f);
         finder.visit(&qualify)?;
         if !finder.scalars().is_empty() {
@@ -138,6 +138,23 @@ impl VisitorMut<'_> for QualifyChecker<'_> {
                 .lookup_aggregate_function_column(agg, &agg.display_name)
             else {
                 return Err(ErrorCode::Internal("Invalid aggregate function"));
+            };
+
+            *expr = BoundColumnRef {
+                span: None,
+                column: column_binding,
+            }
+            .into();
+            return Ok(());
+        }
+
+        if let ScalarExpr::UDAFCall(udaf) = expr {
+            let Some(column_binding) = self
+                .bind_context
+                .aggregate_info
+                .lookup_udaf_call_column(udaf, &udaf.display_name)
+            else {
+                return Err(ErrorCode::Internal("Invalid udaf function"));
             };
 
             *expr = BoundColumnRef {

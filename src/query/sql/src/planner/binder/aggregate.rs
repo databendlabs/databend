@@ -745,12 +745,7 @@ impl AggregateRewriter<'_> {
     }
 
     pub fn check_no_aggregate_calls(expr: &ScalarExpr, error_message: &str) -> Result<()> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)
-            )
-        };
+        let f = |scalar: &ScalarExpr| scalar.is_aggregate();
         let mut finder = Finder::new(&f);
         finder.visit(expr)?;
         if !finder.scalars().is_empty() {
@@ -1164,7 +1159,7 @@ impl Binder {
         // Resolve group items with `FROM` context. Since the alias item can not be resolved
         // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
 
-        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
+        let f = |scalar: &ScalarExpr| scalar.is_aggregate();
         let mut groups = Vec::new();
         for (idx, select_item) in select_list.items.iter().enumerate() {
             let mut finder = Finder::new(&f);
@@ -1279,10 +1274,7 @@ impl Binder {
 
         // Check group by contains aggregate functions or not
         let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
-            )
+            scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
         };
 
         for item in bind_context.aggregate_info.group_items.iter() {
@@ -1290,9 +1282,15 @@ impl Binder {
             finder.visit(&item.scalar)?;
             if !finder.scalars().is_empty() {
                 let scalar = finder.scalars().first().unwrap();
+                let display_name = match scalar {
+                    ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
+                    ScalarExpr::UDAFCall(udaf) => udaf.display_name.clone(),
+                    ScalarExpr::WindowFunction(window) => window.display_name.clone(),
+                    _ => format!("{scalar:?}"),
+                };
                 return Err(ErrorCode::SemanticError(format!(
-                    "GROUP BY items can't contain aggregate functions or window functions: {:?}",
-                    scalar
+                    "GROUP BY items can't contain aggregate functions or window functions: {}",
+                    display_name
                 ))
                 .set_span(scalar.span()));
             }

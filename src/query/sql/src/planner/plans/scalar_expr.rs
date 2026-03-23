@@ -151,6 +151,13 @@ impl Hash for ScalarExpr {
 }
 
 impl ScalarExpr {
+    pub fn is_aggregate(&self) -> bool {
+        matches!(
+            self,
+            ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)
+        )
+    }
+
     pub fn data_type(&self) -> Result<DataType> {
         Ok(self.as_expr()?.data_type().clone())
     }

@@ -254,6 +254,15 @@ impl Binder {
                     )?;
                     Ok(aggregate)
                 }
+                udaf @ ScalarExpr::UDAFCall(_) => {
+                    let mut udaf = udaf.clone();
+                    AggregateRewriter::rewrite_expr(
+                        &mut bind_context.aggregate_info,
+                        self.metadata.clone(),
+                        &mut udaf,
+                    )?;
+                    Ok(udaf)
+                }
                 ScalarExpr::LambdaFunction(lambda_func) => {
                     let args = lambda_func
                         .args

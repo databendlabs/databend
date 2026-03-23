@@ -38,9 +38,23 @@ EvalScalar
         └── limit: NONE
 
 
+=== where_rejects_udaf ===
+description: A UDAF in WHERE must be rejected like any other aggregate.
+sql: SELECT a FROM t WHERE weighted_avg(a, b) > 0
+status: error
+code: 1065
+message: Where clause can't contain aggregate or window functions
+
 === qualify_rejects_aggregate_alias ===
 description: An aggregate alias must still be rejected in QUALIFY.
 sql: SELECT sum(number) AS s FROM t QUALIFY s > 0
+status: error
+code: 1065
+message: Qualify clause must not contain aggregate functions
+
+=== qualify_rejects_udaf_alias ===
+description: A UDAF alias must still be rejected in QUALIFY.
+sql: SELECT weighted_avg(a, b) AS s FROM t QUALIFY s > 0
 status: error
 code: 1065
 message: Qualify clause must not contain aggregate functions
@@ -604,6 +618,49 @@ EvalScalar
             ├── order by: []
             └── limit: NONE
 
+
+=== grouped_select_udaf_binds ===
+description: A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.
+sql: SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g
+status: ok
+EvalScalar
+├── scalars: [weighted_avg(a, b) (#5) AS (#5), g (#2) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(t.a (#0), 2) AS (#2)]
+    ├── aggregate functions: [weighted_avg(a, b) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [modulo(t.a (#0), 2) AS (#2), CAST(t.a (#0) AS Int32 NULL) AS (#3), CAST(t.b (#1) AS Int32 NULL) AS (#4)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_all_collects_non_udaf_select_items ===
+description: GROUP BY ALL should also skip UDAF select items when inferring grouping keys.
+sql: SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY ALL
+status: ok
+EvalScalar
+├── scalars: [weighted_avg(a, b) (#5) AS (#5), g (#2) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(t.a (#0), 2) AS (#2)]
+    ├── aggregate functions: [weighted_avg(a, b) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [modulo(t.a (#0), 2) AS (#2), CAST(t.a (#0) AS Int32 NULL) AS (#3), CAST(t.b (#1) AS Int32 NULL) AS (#4)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_rejects_udaf_item ===
+description: Explicit GROUP BY items must reject UDAF calls just like builtin aggregates.
+sql: SELECT weighted_avg(a, b) FROM t GROUP BY weighted_avg(a, b)
+status: error
+code: 1065
+message: GROUP BY items can't contain aggregate functions or window functions: weighted_avg(a, b)
 
 === combined_grouping_sets_binds ===
 description: A normal GROUP BY item combined with GROUPING SETS should bind through the combined-group expansion path.

@@ -227,10 +227,7 @@ impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
             self.is_lazy_srf = true;
         }
 
-        if matches!(
-            expr,
-            ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)
-        ) {
+        if expr.is_aggregate() {
             self.is_lazy_srf = true;
             let span = expr.span();
             AggregateRewriter::rewrite_existing_expr(
