@@ -24,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::number::NumberDataType;
@@ -150,7 +151,89 @@ async fn create_internal_recursive_cte_memory_table(
     let table = ctx.get_table(CATALOG_DEFAULT, database, table_name).await?;
     Ok(table.get_id())
 }
+async fn run_query_blocks(ctx: Arc<QueryContext>, sql: &str) -> Result<Vec<DataBlock>> {
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(sql).await?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let stream = executor.execute(ctx).await?;
+    stream.try_collect().await
+}
 
+async fn run_query_pretty(ctx: Arc<QueryContext>, sql: &str) -> Result<String> {
+    let blocks = run_query_blocks(ctx, sql).await?;
+    Ok(pretty_format_blocks(&blocks)?.to_string())
+}
+
+#[test]
+fn recursive_cte_correlated_not_exists_recursive_input_uses_anti_join() -> anyhow::Result<()> {
+    let handle = std::thread::Builder::new()
+        .name("recursive_cte_correlated_not_exists_recursive_input_uses_anti_join".to_string())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || -> anyhow::Result<()> {
+            let outer_rt = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .build()?;
+
+            outer_rt.block_on(async {
+                let fixture = TestFixture::setup().await?;
+                let ctx = fixture.new_query_ctx().await?;
+
+                let explain_sql = r#"
+EXPLAIN
+WITH RECURSIVE input(sud) AS (
+    VALUES('53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79')
+),
+digits(z, lp) AS (
+    VALUES('1', 1)
+    UNION ALL SELECT CAST(lp+1 AS TEXT), lp+1 FROM digits WHERE lp<9
+),
+x(s, ind) AS (
+    SELECT sud, position('.' IN sud) FROM input
+    UNION ALL
+    SELECT
+        substr(s, 1, ind-1) || z || substr(s, ind+1),
+        position('.' IN (substr(s, 1, ind-1) || z || substr(s, ind+1)))
+    FROM x, digits AS z
+    WHERE ind>0
+    AND NOT EXISTS (
+        SELECT 1 FROM digits AS lp
+        WHERE z.z = substr(s, ((ind-1)/9)::int*9 + lp, 1)
+        OR z.z = substr(s, ((ind-1)%9) + (lp-1)*9 + 1, 1)
+        OR z.z = substr(s,
+            (((ind-1)/27)::int * 27) +
+            ((((ind-1)%9)/3)::int * 3) +
+            ((lp-1)/3)::int * 9 +
+            ((lp-1)%3) + 1, 1)
+    )
+)
+SELECT s FROM x WHERE ind=0
+"#;
+
+                let explain = run_query_pretty(ctx, explain_sql).await?;
+
+                assert!(
+                    explain.contains("join type: RIGHT ANTI"),
+                    "expected recursive NOT EXISTS to decorrelate into anti join, got:\n{explain}"
+                );
+                assert!(
+                    !explain.contains("join type: LEFT MARK")
+                        && !explain.contains("join type: RIGHT MARK"),
+                    "expected recursive NOT EXISTS to avoid mark join, got:\n{explain}"
+                );
+
+                Ok::<(), anyhow::Error>(())
+            })?;
+
+            Ok(())
+        })?;
+
+    handle.join().map_err(|_| {
+        anyhow::anyhow!("recursive_cte_correlated_not_exists_recursive_input_uses_anti_join thread panicked")
+    })??;
+
+    Ok(())
+}
 /// Deterministically reproduce wrong results when recursive CTE internal table names are not
 /// unique per recursive source instance.
 ///

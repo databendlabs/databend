@@ -54,6 +54,26 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 
 impl SubqueryDecorrelatorOptimizer {
+    fn matches_simple_subquery_input(s_expr: &SExpr) -> bool {
+        match s_expr.plan() {
+            RelOperator::Scan(_) | RelOperator::RecursiveCteScan(_) | RelOperator::UnionAll(_) => {
+                true
+            }
+            RelOperator::EvalScalar(_) => s_expr
+                .child(0)
+                .map(|child| {
+                    matches!(
+                        child.plan(),
+                        RelOperator::Scan(_)
+                            | RelOperator::RecursiveCteScan(_)
+                            | RelOperator::UnionAll(_)
+                    )
+                })
+                .unwrap_or(false),
+            _ => false,
+        }
+    }
+
     // Try to decorrelate a `CrossApply` into `SemiJoin` or `AntiJoin`.
     // We only do simple decorrelation here, the scheme is:
     // 1. If the subquery is correlated, we will try to decorrelate it into `SemiJoin`
@@ -73,7 +93,7 @@ impl SubqueryDecorrelatorOptimizer {
         //      \
         //       Filter
         //        \
-        //         Get
+        //         Get / RecursiveCteScan / UnionAll
         //
         // (2) EvalScalar
         //      \
@@ -81,36 +101,20 @@ impl SubqueryDecorrelatorOptimizer {
         //        \
         //         EvalScalar
         //          \
-        //           Get
-        let matchers = [
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                }],
-            },
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::EvalScalar,
-                        children: vec![Matcher::MatchOp {
-                            op_type: RelOp::Scan,
-                            children: vec![],
-                        }],
-                    }],
-                }],
-            },
-        ];
-        if !matchers
-            .iter()
-            .any(|matcher| matcher.matches(&subquery.subquery))
-        {
+        //           Get / RecursiveCteScan / UnionAll
+        let matched = matches!(subquery.subquery.plan(), RelOperator::EvalScalar(_))
+            && subquery
+                .subquery
+                .child(0)
+                .map(|child| {
+                    matches!(child.plan(), RelOperator::Filter(_))
+                        && child
+                            .child(0)
+                            .map(Self::matches_simple_subquery_input)
+                            .unwrap_or(false)
+                })
+                .unwrap_or(false);
+        if !matched {
             return Ok(None);
         }
 
