@@ -69,7 +69,7 @@ mod tests {
                 "record_delimiter":"\n",
                 "nan_display":"NaN",
                 "escape":"\\",
-                "quote":"'"
+                "quote":"\""
             },
             "creator":{
                 "username":"root",

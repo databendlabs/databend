@@ -592,7 +592,8 @@ impl Default for TextFileFormatParams {
             field_delimiter: "\t".to_string(),
             record_delimiter: "\n".to_string(),
             escape: "\\".to_string(),
-            quote: "\'".to_string(),
+            // not used, only for compat
+            quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
             empty_field_as: EmptyFieldAs::FieldDefault,
             output_header: false,
@@ -962,7 +963,7 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = TEXT COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' QUOTE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' \
                      SKIP_HEADER = {} OUTPUT_HEADER = {} \
                      NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} \
                      ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
@@ -970,7 +971,6 @@ impl Display for FileFormatParams {
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
                     escape_string(&params.escape),
-                    escape_string(&params.quote),
                     params.headers,
                     params.output_header,
                     escape_string(&params.null_display),
