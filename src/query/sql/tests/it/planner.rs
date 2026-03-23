@@ -143,6 +143,15 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_bind_like_with_empty_escape() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    ctx.bind_sql("SELECT 'a' LIKE 'a' ESCAPE ''").await?;
+
+    Ok(())
+}
+
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {
     for sql in case.tables.values() {
         for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {

@@ -5620,14 +5620,12 @@ impl<'a> TypeChecker<'a> {
         like_str: &str,
         escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let new_like_str = if let Some(escape) = escape {
-            Cow::Owned(convert_escape_pattern(
-                like_str,
-                escape.chars().next().unwrap(),
-            ))
-        } else {
-            Cow::Borrowed(like_str)
-        };
+        let new_like_str =
+            if let Some(escape_char) = escape.as_ref().and_then(|escape| escape.chars().next()) {
+                Cow::Owned(convert_escape_pattern(like_str, escape_char))
+            } else {
+                Cow::Borrowed(like_str)
+            };
         if check_percent(&new_like_str) {
             // Convert to `a is not null`
             let is_not_null = Expr::IsNull {

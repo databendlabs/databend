@@ -1,0 +1,6 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/19562
+
+query B
+SELECT 'a' LIKE 'a' ESCAPE ''
+----
+1
