@@ -1460,6 +1460,9 @@ impl TableContext for LiteTableContext {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_sql::optimizer::ir::RelExpr;
+    use databend_common_sql::optimizer::ir::SExpr;
+
     use super::*;
 
     fn test_fields() -> Vec<TableField> {
@@ -1467,6 +1470,17 @@ mod tests {
             "a",
             TableDataType::Number(NumberDataType::UInt64),
         )]
+    }
+
+    fn find_scan_expr(expr: &SExpr) -> Option<&SExpr> {
+        if matches!(
+            expr.plan.as_ref(),
+            databend_common_sql::plans::RelOperator::Scan(_)
+        ) {
+            return Some(expr);
+        }
+
+        expr.children().find_map(find_scan_expr)
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -1506,6 +1520,52 @@ mod tests {
                 .await
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_derive_cardinality_with_full_range_uint64_stats() -> Result<()> {
+        let ctx = LiteTableContext::create().await?;
+        ctx.configure_for_optimizer_case(true)?;
+        ctx.register_table_with_stats(
+            "default",
+            "t",
+            vec![TableField::new(
+                "d",
+                TableDataType::Number(NumberDataType::UInt64),
+            )],
+            Some(TableStatistics {
+                num_rows: Some(2),
+                data_size: Some(16),
+                data_size_compressed: None,
+                index_size: None,
+                bloom_index_size: None,
+                ngram_index_size: None,
+                inverted_index_size: None,
+                vector_index_size: None,
+                virtual_column_size: None,
+                number_of_blocks: Some(1),
+                number_of_segments: Some(1),
+            }),
+            HashMap::from([("d".to_string(), BasicColumnStatistics {
+                min: Some(Datum::UInt(0)),
+                max: Some(Datum::UInt(u64::MAX)),
+                ndv: Some(2),
+                null_count: 0,
+                in_memory_size: 16,
+            })]),
+        )?;
+
+        let plan = ctx.bind_sql("SELECT d FROM t").await?;
+        let optimized_plan = ctx.optimize_plan(plan).await?;
+        let Plan::Query { s_expr, .. } = optimized_plan else {
+            panic!("expected query plan");
+        };
+        let scan_expr = find_scan_expr(s_expr.as_ref()).expect("expected scan expr");
+        let stat_info = RelExpr::with_s_expr(scan_expr).derive_cardinality()?;
+        let column_stat = stat_info.statistics.column_stats.values().next().unwrap();
+
+        assert_eq!(column_stat.ndv.value(), 2.0);
         Ok(())
     }
 }

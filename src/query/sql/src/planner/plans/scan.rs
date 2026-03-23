@@ -175,6 +175,18 @@ impl Scan {
     }
 }
 
+fn inclusive_integer_span(max: &Datum, min: &Datum) -> Option<f64> {
+    match (max, min) {
+        (Datum::UInt(max), Datum::UInt(min)) if max >= min => {
+            Some((u128::from(*max) - u128::from(*min) + 1) as f64)
+        }
+        (Datum::Int(max), Datum::Int(min)) if max >= min => {
+            Some((*max as i128 - *min as i128 + 1) as f64)
+        }
+        _ => None,
+    }
+}
+
 impl PartialEq for Scan {
     fn eq(&self, other: &Self) -> bool {
         self.table_index == other.table_index
@@ -283,10 +295,7 @@ impl Operator for Scan {
 
                 // Alter ndv based on min and max if the datum is uint or int.
                 let ndv = match (&max, &min) {
-                    (Datum::UInt(m), Datum::UInt(n)) if m >= n => ndv.reduce((m - n + 1) as _),
-                    (Datum::Int(m), Datum::Int(n)) if m >= n => {
-                        ndv.reduce(m.saturating_add(1).saturating_sub(*n) as _)
-                    }
+                    _ if let Some(span) = inclusive_integer_span(&max, &min) => ndv.reduce(span),
                     _ if max == min => Ndv::Stat(1.0),
                     _ => ndv,
                 };
