@@ -1,0 +1,4 @@
+# issue 19575
+
+query error number overflowed
+SELECT 251658240::BIGINT * 1080863910568919040::BIGINT;

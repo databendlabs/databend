@@ -179,9 +179,12 @@ where
     (L, R): ResultTypeOfBinary,
     AddMulResult<L, R>: ResultTypeOfUnary + std::ops::Mul<Output = AddMulResult<L, R>>,
 {
-    registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<AddMulResult<L, R>>, _>(
-        "multiply",
-        |_, lhs, rhs| {
+    registry
+        .scalar_builder("multiply")
+        .function()
+        .typed_2_arg::<NumberType<L>, NumberType<R>, NumberType<AddMulResult<L, R>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, lhs, rhs| {
             (|| {
                 let lm: AddMulResult<L, R> = num_traits::cast::cast(lhs.max)?;
                 let ln: AddMulResult<L, R> = num_traits::cast::cast(lhs.min)?;
@@ -198,13 +201,24 @@ where
                     max: x.max(y).max(m).max(n),
                 }))
             })()
-            .unwrap_or(FunctionDomain::Full)
-        },
-        |a, b, _| {
-            (AsPrimitive::<AddMulResult<L, R>>::as_(a))
-                * (AsPrimitive::<AddMulResult<L, R>>::as_(b))
-        },
-    );
+            .unwrap_or(FunctionDomain::MayThrow)
+        })
+        .vectorized(vectorize_with_builder_2_arg::<
+            NumberType<L>,
+            NumberType<R>,
+            NumberType<AddMulResult<L, R>>,
+        >(|a, b, output, ctx| {
+            let lhs = AsPrimitive::<AddMulResult<L, R>>::as_(a);
+            let rhs = AsPrimitive::<AddMulResult<L, R>>::as_(b);
+            match lhs.checked_mul(rhs) {
+                Some(value) => output.push(value),
+                None => {
+                    ctx.set_error(output.len(), "number overflowed");
+                    output.push(AddMulResult::<L, R>::default());
+                }
+            }
+        }))
+        .register();
 }
 
 pub fn divide_function<L: AsPrimitive<F64>, R: AsPrimitive<F64>>(

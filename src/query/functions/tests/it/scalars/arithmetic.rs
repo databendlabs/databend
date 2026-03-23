@@ -14,15 +14,23 @@
 
 use std::io::Write;
 
+use databend_common_exception::ErrorCode;
 use databend_common_expression::Column;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::type_check;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::number::*;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 
+use super::parser;
 use super::run_ast;
 
 #[test]
@@ -78,6 +86,27 @@ fn test_arithmetic() {
     test_bitwise_not(file, columns);
     test_bitwise_shift_left(file, columns);
     test_bitwise_shift_right(file, columns);
+}
+
+#[test]
+fn test_bigint_constant_multiply_overflow() {
+    let raw_expr = parser::parse_raw_expr(
+        "251658240::BIGINT * 1080863910568919040::BIGINT",
+        &[],
+        &BUILTIN_FUNCTIONS,
+    );
+    let expr = type_check::rewrite_function_to_cast(
+        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap(),
+    );
+    let func_ctx = FunctionContext::default();
+    let (optimized_expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
+
+    let block = DataBlock::empty_with_rows(1);
+    let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+    let err = evaluator.run(&optimized_expr).unwrap_err();
+
+    assert_eq!(err.code(), ErrorCode::BAD_ARGUMENTS);
+    assert!(err.message().contains("number overflowed"), "{err}");
 }
 
 fn test_add(file: &mut impl Write, columns: &[(&str, Column)]) {
