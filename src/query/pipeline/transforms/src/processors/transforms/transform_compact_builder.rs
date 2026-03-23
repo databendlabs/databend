@@ -72,7 +72,7 @@ impl AccumulatingTransform for BlockCompactBuilder {
             let rows_per_block = self.thresholds.calc_rows_for_compact(num_bytes, num_rows);
             Ok(vec![DataBlock::empty_with_meta(Box::new(
                 BlockCompactMeta::Split {
-                    block: data,
+                    blocks: vec![data],
                     rows_per_block,
                 },
             ))])
