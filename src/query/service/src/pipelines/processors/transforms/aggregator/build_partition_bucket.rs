@@ -49,6 +49,7 @@ fn build_partition_bucket_experimental(
     shuffle_mode: AggregateShuffleMode,
 ) -> Result<()> {
     let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
+    let base_consumed_bits = shuffle_mode.determine_radix_bits();
     match shuffle_mode {
         AggregateShuffleMode::Row => {
             let schema = params.spill_schema();
@@ -115,6 +116,7 @@ fn build_partition_bucket_experimental(
             output_port.clone(),
             params.clone(),
             id,
+            base_consumed_bits,
             ctx.clone(),
             tx.clone(),
             rx.clone(),
