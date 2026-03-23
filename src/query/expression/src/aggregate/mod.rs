@@ -154,6 +154,7 @@ pub struct HashTableConfig {
     // Max radix bits across all threads, this is a hint to repartition
     pub current_max_radix_bits: Arc<AtomicU64>,
     pub initial_radix_bits: u64,
+    pub partition_start_bit: u64,
     pub max_radix_bits: u64,
     pub repartition_radix_bits_incr: u64,
     pub block_fill_factor: f64,
@@ -167,6 +168,7 @@ impl Default for HashTableConfig {
         Self {
             current_max_radix_bits: Arc::new(AtomicU64::new(3)),
             initial_radix_bits: 3,
+            partition_start_bit: 0,
             max_radix_bits: MAX_RADIX_BITS,
             repartition_radix_bits_incr: 2,
             block_fill_factor: 1.8,
@@ -208,6 +210,11 @@ impl HashTableConfig {
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {
         self.initial_radix_bits = initial_radix_bits;
         self.current_max_radix_bits = Arc::new(AtomicU64::new(initial_radix_bits));
+        self
+    }
+
+    pub fn with_partition_start_bit(mut self, partition_start_bit: u64) -> Self {
+        self.partition_start_bit = partition_start_bit;
         self
     }
 

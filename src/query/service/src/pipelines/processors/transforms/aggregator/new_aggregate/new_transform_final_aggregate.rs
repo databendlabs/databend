@@ -74,6 +74,9 @@ pub struct NewTransformFinalAggregate {
     flush_state: PayloadFlushState,
     statistics: AggregationStatistics,
     _id: usize,
+    base_consumed_bits: u64,
+    max_partition_depth: usize,
+    current_partition_depth: usize,
     spiller: NewAggregateSpiller<LocalPartitionStream>,
     settings: MemorySettings,
     max_aggregate_spill_level: usize,
@@ -85,21 +88,18 @@ impl NewTransformFinalAggregate {
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
         _id: usize,
+        base_consumed_bits: u64,
         ctx: Arc<QueryContext>,
         tx: Sender<FinalAggregateTask>,
         rx: Receiver<FinalAggregateTask>,
     ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
-        let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()?;
+        let available_partition_depths = 48_u64.saturating_sub(base_consumed_bits) as usize;
+        let max_partition_depth = available_partition_depths.saturating_sub(1);
+        let max_aggregate_spill_level =
+            (settings.get_max_aggregate_spill_level()? as usize).min(max_partition_depth);
 
-        let hashtable = AggregateHashTable::new(
-            params.group_data_types.clone(),
-            params.aggregate_functions.clone(),
-            HashTableConfig::default()
-                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64)
-                .with_experiment_hash_index(params.enable_experiment_hash_index),
-            Arc::new(Bump::new()),
-        );
+        let hashtable = Self::create_hashtable(&params, base_consumed_bits, 0);
         let flush_state = PayloadFlushState::default();
 
         let spiller = NewAggregateSpiller::try_create(
@@ -128,14 +128,55 @@ impl NewTransformFinalAggregate {
             flush_state,
             statistics: AggregationStatistics::new("NewFinalAggregate"),
             _id,
+            base_consumed_bits,
+            max_partition_depth,
+            current_partition_depth: 0,
             spiller,
             settings: MemorySettings::from_aggregate_settings(&ctx)?,
-            max_aggregate_spill_level: max_aggregate_spill_level as usize,
+            max_aggregate_spill_level,
         }))
     }
 }
 
 impl NewTransformFinalAggregate {
+    fn create_hashtable(
+        params: &Arc<AggregatorParams>,
+        base_consumed_bits: u64,
+        spilled_depth: usize,
+    ) -> AggregateHashTable {
+        AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            HashTableConfig::default()
+                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64)
+                .with_partition_start_bit(base_consumed_bits + spilled_depth as u64)
+                .with_experiment_hash_index(params.enable_experiment_hash_index),
+            Arc::new(Bump::new()),
+        )
+    }
+
+    fn reset_hashtable(&mut self, spilled_depth: usize) {
+        let partition_depth = spilled_depth.min(self.max_partition_depth);
+        self.hashtable = HashTable::AggregateHashTable(Self::create_hashtable(
+            &self.params,
+            self.base_consumed_bits,
+            partition_depth,
+        ));
+        self.current_partition_depth = partition_depth;
+    }
+
+    // One final-aggregate processor handles both the original input stream and
+    // recursively spilled tasks received from the channel. Those tasks may
+    // belong to different spill depths, and each depth must consume a different
+    // hash bit (`base_consumed_bits + spilled_depth`) when building the internal
+    // 2-way partitions.
+    fn ensure_spill_depth(&mut self, spilled_depth: usize) {
+        let partition_depth = spilled_depth.min(self.max_partition_depth);
+        if self.current_partition_depth != partition_depth {
+            self.reset_hashtable(spilled_depth);
+        }
+    }
+
     fn handle_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
         if payload.data_block.is_empty() {
             return Ok(());
@@ -219,10 +260,6 @@ impl NewTransformFinalAggregate {
     fn spill_out(&mut self) -> Result<()> {
         self.spilled_occurred = true;
         if let HashTable::AggregateHashTable(v) = mem::take(&mut self.hashtable) {
-            let group_types = v.payload.group_types.clone();
-            let aggrs = v.payload.aggrs.clone();
-            let config = v.config.clone();
-
             for (bucket, payload) in v.payload.payloads.into_iter().enumerate() {
                 if payload.len() == 0 {
                     continue;
@@ -231,17 +268,10 @@ impl NewTransformFinalAggregate {
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                 self.spiller.spill(bucket, data_block)?;
             }
-
-            let arena = Arc::new(Bump::new());
-            self.hashtable = HashTable::AggregateHashTable(AggregateHashTable::new(
-                group_types,
-                aggrs,
-                config,
-                arena,
-            ));
         } else {
             unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
         }
+        self.reset_hashtable(self.current_partition_depth);
         Ok(())
     }
 
@@ -254,10 +284,6 @@ impl NewTransformFinalAggregate {
         }
 
         if let HashTable::AggregateHashTable(mut ht) = mem::take(&mut self.hashtable) {
-            let group_types = ht.payload.group_types.clone();
-            let aggrs = ht.payload.aggrs.clone();
-            let config = ht.config.clone();
-
             self.statistics.log_finish_statistics(&ht);
             let mut blocks = vec![];
             self.flush_state.clear();
@@ -280,12 +306,7 @@ impl NewTransformFinalAggregate {
                     self.output.push_data(Ok(concat));
                 }
             }
-            self.hashtable = HashTable::AggregateHashTable(AggregateHashTable::new(
-                group_types,
-                aggrs,
-                config,
-                Arc::new(Bump::new()),
-            ));
+            self.reset_hashtable(self.current_partition_depth);
         }
 
         Ok(())
@@ -381,9 +402,11 @@ impl Processor for NewTransformFinalAggregate {
     fn process(&mut self) -> Result<()> {
         let input_data = self.input_data.take();
         if let Some(meta) = input_data {
-            self.handle_meta(meta, true)?;
+            self.ensure_spill_depth(0);
+            self.handle_meta(meta, self.max_aggregate_spill_level > 0)?;
             return Ok(());
         } else if let Some(mut task) = self.channel_data.take() {
+            self.ensure_spill_depth(task.spilled_depth);
             let meta = AggregateMeta::NewSpilled(mem::take(&mut task.spilled_payload));
             if task.spilled_depth >= self.max_aggregate_spill_level {
                 self.handle_meta(meta, false)?;
@@ -394,6 +417,7 @@ impl Processor for NewTransformFinalAggregate {
 
             return Ok(());
         } else {
+            self.ensure_spill_depth(0);
             let sender = mem::take(&mut self.tx)
                 .expect("logic error: called finished for input data more than once");
             self.finish(0, sender)?;
