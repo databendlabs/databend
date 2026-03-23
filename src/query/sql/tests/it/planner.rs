@@ -145,7 +145,7 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {
     for sql in case.tables.values() {
         for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
-            ctx.register_table_sql(statement).await?;
+            ctx.register_setup_sql(statement).await?;
         }
     }
     Ok(())

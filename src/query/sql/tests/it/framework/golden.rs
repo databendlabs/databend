@@ -75,7 +75,7 @@ pub(crate) fn open_golden_file(group: &str, file_name: &str) -> Result<GoldenFil
 pub(crate) async fn setup_context(case: &SqlTestCase) -> Result<Arc<LiteTableContext>> {
     let ctx = LiteTableContext::create().await?;
     for setup_sql in case.setup_sqls {
-        ctx.register_table_sql(setup_sql).await?;
+        ctx.register_setup_sql(setup_sql).await?;
     }
     Ok(ctx)
 }
