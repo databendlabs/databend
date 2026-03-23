@@ -263,7 +263,7 @@ impl FileFormatParams {
                     .remove(OPT_EMPTY_FIELD_AS)
                     .map(|s| EmptyFieldAs::from_str(&s))
                     .transpose()?
-                    .unwrap_or(EmptyFieldAs::Null);
+                    .unwrap_or_default();
                 let binary_format = reader
                     .options
                     .remove(OPT_BINARY_FORMAT)

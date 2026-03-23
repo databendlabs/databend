@@ -46,7 +46,7 @@ pub struct TextDecoder {
 impl TextDecoder {
     pub fn create(fmt: TextInputFormat, load_context: Arc<LoadContext>) -> Self {
         let field_decoder =
-            SeparatedTextDecoder::create_tsv(&fmt.params, load_context.settings.clone());
+            SeparatedTextDecoder::create_text(&fmt.params, load_context.settings.clone());
         let field_delimiter = fmt.params.field_delimiter.as_bytes().first().copied();
 
         // we only accept \r\n when len > 1

@@ -85,10 +85,10 @@ impl SeparatedTextDecoder {
         }
     }
 
-    pub fn create_tsv(_params: &TextFileFormatParams, settings: InputFormatSettings) -> Self {
+    pub fn create_text(params: &TextFileFormatParams, settings: InputFormatSettings) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
-                null_if: vec![_params.null_display.as_bytes().to_vec()],
+                null_if: vec![params.null_display.as_bytes().to_vec()],
                 settings: settings.clone(),
                 binary_format: Default::default(),
             },
