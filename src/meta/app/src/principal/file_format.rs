@@ -1108,7 +1108,7 @@ fn parse_null_if(null_if: Option<String>) -> Result<Vec<String>> {
 mod tests {
     use super::*;
 
-    fn get_tsv_params(options: BTreeMap<String, String>) -> TextFileFormatParams {
+    fn get_text_params(options: BTreeMap<String, String>) -> TextFileFormatParams {
         let params =
             FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
                 .expect("tsv file format options should parse");
@@ -1119,17 +1119,17 @@ mod tests {
     }
 
     #[test]
-    fn test_tsv_field_delimiter_empty_string() {
+    fn test_text_field_delimiter_empty_string() {
         let mut options = BTreeMap::new();
         options.insert("type".to_string(), "TEXT".to_string());
         options.insert("field_delimiter".to_string(), "".to_string());
 
-        let params = get_tsv_params(options);
+        let params = get_text_params(options);
         assert_eq!(params.field_delimiter, "".to_string());
     }
 
     #[test]
-    fn test_tsv_extended_options() {
+    fn test_text_extended_options() {
         let mut options = BTreeMap::new();
         options.insert("type".to_string(), "TEXT".to_string());
         options.insert(
@@ -1141,7 +1141,7 @@ mod tests {
         options.insert("null_display".to_string(), "NULL".to_string());
         options.insert("empty_field_as".to_string(), "string".to_string());
 
-        let params = get_tsv_params(options);
+        let params = get_text_params(options);
         assert!(!params.error_on_column_count_mismatch);
         assert_eq!(params.headers, 2);
         assert!(params.output_header);

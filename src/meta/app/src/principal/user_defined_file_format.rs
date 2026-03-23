@@ -58,7 +58,7 @@ mod tests {
     use crate::principal::TextFileFormatParams;
 
     #[test]
-    fn test_deserialize_legacy_tsv_file_format_type() {
+    fn test_deserialize_legacy_text_file_format_type() {
         let legacy = br#"{
             "name":"legacy_text",
             "file_format_params":{

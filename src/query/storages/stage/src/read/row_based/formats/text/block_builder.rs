@@ -28,7 +28,7 @@ use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
-use crate::read::row_based::formats::tsv::format::TextInputFormat;
+use crate::read::row_based::formats::text::format::TextInputFormat;
 use crate::read::row_based::utils::get_decode_error_by_pos;
 
 pub struct TextDecoder {
