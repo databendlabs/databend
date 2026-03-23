@@ -433,6 +433,11 @@ impl<'a> AggregateRewriter<'a> {
                 "grouping can only be called in GROUP BY GROUPING SETS clauses",
             ));
         }
+        if function.arguments.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "grouping requires at least one argument",
+            ));
+        }
         let grouping_id_column = agg_info
             .grouping_sets
             .as_ref()

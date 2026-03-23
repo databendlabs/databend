@@ -1138,6 +1138,18 @@ impl<'a> TypeChecker<'a> {
 
                 let args: Vec<&Expr> = args.iter().collect();
 
+                if func_name.eq_ignore_ascii_case("grouping") {
+                    return self.resolve_grouping_function(
+                        *span,
+                        *distinct,
+                        params.len(),
+                        &args,
+                        order_by.len(),
+                        window.is_some(),
+                        lambda.is_some(),
+                    );
+                }
+
                 if GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name) {
                     // general window function
                     if window.is_none() {
@@ -3305,6 +3317,99 @@ impl<'a> TypeChecker<'a> {
         };
 
         Ok(Box::new((return_scalar, return_type)))
+    }
+
+    fn resolve_grouping_function(
+        &mut self,
+        span: Span,
+        distinct: bool,
+        params_len: usize,
+        args: &[&Expr],
+        order_by_len: usize,
+        has_window: bool,
+        has_lambda: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if distinct || params_len > 0 || order_by_len > 0 || has_window || has_lambda {
+            return Err(ErrorCode::SemanticError(
+                "grouping does not support DISTINCT, parameters, ORDER BY, lambda, or window syntax",
+            )
+            .set_span(span));
+        }
+
+        if self.in_aggregate_function {
+            return Err(ErrorCode::SemanticError(
+                "grouping function is not allowed inside aggregate functions",
+            )
+            .set_span(span));
+        }
+
+        if self.in_window_function {
+            return Err(ErrorCode::SemanticError(
+                "grouping function is not allowed inside window functions",
+            )
+            .set_span(span));
+        }
+
+        match self.bind_context.expr_context {
+            ExprContext::WhereClause => {
+                return Err(ErrorCode::SemanticError(
+                    "grouping function is not allowed in WHERE clause",
+                )
+                .set_span(span));
+            }
+            ExprContext::QualifyClause => {
+                return Err(ErrorCode::SemanticError(
+                    "grouping function is not allowed in QUALIFY clause",
+                )
+                .set_span(span));
+            }
+            ExprContext::GroupClaue => {
+                return Err(ErrorCode::SemanticError(
+                    "grouping function is not allowed in GROUP BY clause",
+                )
+                .set_span(span));
+            }
+            ExprContext::LimitClause => {
+                return Err(ErrorCode::SemanticError(
+                    "grouping function is not allowed in LIMIT clause",
+                )
+                .set_span(span));
+            }
+            ExprContext::InSetReturningFunction => {
+                return Err(ErrorCode::SemanticError(
+                    "grouping function is not allowed in set-returning functions",
+                )
+                .set_span(span));
+            }
+            ExprContext::InLambdaFunction => {
+                return Err(ErrorCode::SemanticError(
+                    "grouping function is not allowed in lambda expressions",
+                )
+                .set_span(span));
+            }
+            ExprContext::InAsyncFunction => {
+                return Err(ErrorCode::SemanticError(
+                    "grouping function is not allowed in async functions",
+                )
+                .set_span(span));
+            }
+            _ => {}
+        }
+
+        let arguments = args
+            .iter()
+            .map(|arg| self.resolve(arg).map(|boxed| boxed.0))
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Box::new((
+            ScalarExpr::FunctionCall(FunctionCall {
+                span,
+                func_name: "grouping".to_string(),
+                params: vec![],
+                arguments,
+            }),
+            DataType::Number(NumberDataType::UInt32),
+        )))
     }
 
     /// Resolve function call.

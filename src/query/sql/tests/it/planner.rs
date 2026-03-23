@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
@@ -163,5 +164,53 @@ async fn run_test_case(
 
     let runner = LiteRunner(ctx.clone());
     run_test_case_core(case, mints.mint_for(case), &runner).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_invalid_grouping_queries_return_semantic_errors() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_table_sql("CREATE TABLE students(course STRING, type STRING);")
+        .await?;
+
+    let semantic_error = ErrorCode::SemanticError("").code();
+    let bad_arguments = ErrorCode::BadArguments("").code();
+
+    for (sql, expected_code, expected_message) in [
+        (
+            "SELECT GROUPING()",
+            semantic_error,
+            "grouping can only be called in GROUP BY GROUPING SETS clauses",
+        ),
+        (
+            "SELECT GROUPING() FROM students",
+            semantic_error,
+            "grouping can only be called in GROUP BY GROUPING SETS clauses",
+        ),
+        (
+            "SELECT GROUPING(NULL) FROM students GROUP BY GROUPING SETS ((course))",
+            bad_arguments,
+            "Arguments of grouping should be group by expressions",
+        ),
+        (
+            "SELECT GROUPING() FROM students GROUP BY GROUPING SETS ((course))",
+            semantic_error,
+            "grouping requires at least one argument",
+        ),
+        (
+            "SELECT course FROM students WHERE GROUPING(course)=0 GROUP BY course",
+            semantic_error,
+            "grouping function is not allowed in WHERE clause",
+        ),
+    ] {
+        let err = ctx.bind_sql(sql).await.expect_err(sql);
+        assert_eq!(err.code(), expected_code, "{sql}: {}", err.display_text());
+        assert!(
+            err.message().contains(expected_message),
+            "{sql}: {}",
+            err.display_text()
+        );
+    }
+
     Ok(())
 }
