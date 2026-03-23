@@ -427,6 +427,12 @@ impl<'a> AggregateRewriter<'a> {
     }
 
     fn replace_grouping(&mut self, function: &FunctionCall) -> Result<FunctionCall> {
+        if function.arguments.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "grouping requires at least one argument",
+            ));
+        }
+
         let agg_info = &mut self.bind_context.aggregate_info;
         if agg_info.grouping_sets.is_none() {
             return Err(ErrorCode::SemanticError(

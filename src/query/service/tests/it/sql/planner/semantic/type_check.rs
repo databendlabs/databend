@@ -15,6 +15,7 @@
 use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Expr;
+use databend_common_sql::Planner;
 use databend_common_sql::parse_exprs;
 use databend_query::test_kits::TestFixture;
 
@@ -81,6 +82,30 @@ async fn test_inlist_with_null_builds_shallow_or_tree() -> anyhow::Result<()> {
         depth <= 16,
         "expected balanced OR tree depth <= 16, got {depth}"
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_invalid_grouping_returns_semantic_error() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let mut planner = Planner::new(ctx.clone());
+    fixture
+        .execute_command("CREATE TABLE students(course STRING, type STRING)")
+        .await?;
+
+    for sql in ["SELECT GROUPING()", "SELECT GROUPING() FROM students"] {
+        let err = planner
+            .plan_sql(sql)
+            .await
+            .expect_err("invalid grouping() should return a semantic error");
+        assert!(
+            err.message()
+                .contains("grouping requires at least one argument"),
+            "unexpected error for `{sql}`: {err}"
+        );
+    }
 
     Ok(())
 }
