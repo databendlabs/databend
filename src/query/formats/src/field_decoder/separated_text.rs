@@ -39,7 +39,6 @@ use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::collect_number;
 use databend_common_io::cursor_ext::read_num_text_exact;
@@ -89,7 +88,7 @@ impl SeparatedTextDecoder {
     pub fn create_tsv(_params: &TextFileFormatParams, settings: InputFormatSettings) -> Self {
         SeparatedTextDecoder {
             common_settings: InputCommonSettings {
-                null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
+                null_if: vec![_params.null_display.as_bytes().to_vec()],
                 settings: settings.clone(),
                 binary_format: Default::default(),
             },
