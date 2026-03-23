@@ -150,10 +150,10 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    /// If current binding table is a view, record its database and name.
+    /// If current binding table is a view, record its catalog, database and name.
     ///
     /// It's used to check if the view has a loop dependency.
-    pub view_info: Option<(String, String)>,
+    pub view_info: Option<(String, String, String)>,
 
     /// True if there is async function in current context, need rewrite.
     pub have_async_func: bool,
