@@ -44,3 +44,16 @@ fn test_multi_table_insert_parse_error() {
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
     }
 }
+
+#[test]
+fn test_like_escape_quote_display() {
+    let sqls = [
+        "SELECT 'a' LIKE 'a' ESCAPE '''';",
+        "SELECT 'a' LIKE ANY ('a', 'b') ESCAPE '''';",
+        "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE '''';",
+    ];
+
+    for sql in sqls {
+        test_stmt_display(sql);
+    }
+}
