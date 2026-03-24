@@ -11,6 +11,10 @@ def _assert_eq(sql, actual, expected):
         )
 
 
+def _quote_sql_string(value):
+    return value.replace("'", "''")
+
+
 def run(conn, sql):
     try:
         if isinstance(sql, tuple):
@@ -39,3 +43,18 @@ def prepare(conn, name):
 def clean_up(conn, name):
     conn.exec(f"drop stage if exists {name}")
     conn.exec(f"drop database if exists {name}")
+
+
+def read_stage_text(copy_env, path):
+    conn = copy_env.conn
+    sql = f"select read_file('{_quote_sql_string(path)}')::STRING"
+    return conn.query_row(sql).values()[0]
+
+
+def unload_and_read_stage_text(copy_env, path, query, file_format_clause):
+    conn = copy_env.conn
+    conn.exec(
+        f"copy into {path} from {query} "
+        f"{file_format_clause} single=true use_raw_path=true overwrite=true"
+    )
+    return read_stage_text(copy_env, path)

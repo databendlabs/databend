@@ -59,6 +59,8 @@ pub fn get_output_format(
             let field_encoder = FieldEncoderCSV::create_tsv(params, settings.clone());
             let headers = if let Some(options) = &clickhouse {
                 options.headers
+            } else if params.output_header {
+                1
             } else {
                 0
             };
