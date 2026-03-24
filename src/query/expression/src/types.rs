@@ -294,18 +294,6 @@ impl DataType {
             DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
                 OrderedFloat(f32::INFINITY),
             ))),
-            DataType::Number(NumberDataType::UInt8) => {
-                Ok(Scalar::Number(NumberScalar::UInt8(u8::MAX)))
-            }
-            DataType::Number(NumberDataType::UInt16) => {
-                Ok(Scalar::Number(NumberScalar::UInt16(u16::MAX)))
-            }
-            DataType::Number(NumberDataType::UInt32) => {
-                Ok(Scalar::Number(NumberScalar::UInt32(u32::MAX)))
-            }
-            DataType::Number(NumberDataType::UInt64) => {
-                Ok(Scalar::Number(NumberScalar::UInt64(u64::MAX)))
-            }
             DataType::Number(NumberDataType::Int32) => {
                 Ok(Scalar::Number(NumberScalar::Int32(i32::MAX)))
             }
@@ -334,18 +322,6 @@ impl DataType {
             DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
                 OrderedFloat(f32::NEG_INFINITY),
             ))),
-            DataType::Number(NumberDataType::UInt8) => {
-                Ok(Scalar::Number(NumberScalar::UInt8(u8::MIN)))
-            }
-            DataType::Number(NumberDataType::UInt16) => {
-                Ok(Scalar::Number(NumberScalar::UInt16(u16::MIN)))
-            }
-            DataType::Number(NumberDataType::UInt32) => {
-                Ok(Scalar::Number(NumberScalar::UInt32(u32::MIN)))
-            }
-            DataType::Number(NumberDataType::UInt64) => {
-                Ok(Scalar::Number(NumberScalar::UInt64(u64::MIN)))
-            }
             DataType::Number(NumberDataType::Int32) => {
                 Ok(Scalar::Number(NumberScalar::Int32(i32::MIN)))
             }
