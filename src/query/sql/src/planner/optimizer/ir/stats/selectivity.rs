@@ -421,19 +421,9 @@ impl SelectivityVisitor<'_> {
         comparison_op: ComparisonOp,
         const_datum: &Datum,
     ) -> Result<Selectivity> {
-        if !has_exact_f64_integer_range(&column_stat.min, &column_stat.max)
-            || !has_exact_f64_integer_value(const_datum)
-        {
-            return Ok(Selectivity::Unknown);
-        }
-
-        let min = column_stat.min.as_double()?;
-        let max = column_stat.max.as_double()?;
+        let cmp_min = const_datum.compare(&column_stat.min)?;
+        let cmp_max = const_datum.compare(&column_stat.max)?;
         let ndv = column_stat.ndv;
-        let numeric_literal = const_datum.as_double()?;
-
-        let cmp_min = numeric_literal.total_cmp(&min);
-        let cmp_max = numeric_literal.total_cmp(&max);
 
         use Ordering::*;
         let selectivity = match (comparison_op, cmp_min, cmp_max) {
@@ -457,6 +447,15 @@ impl SelectivityVisitor<'_> {
                 return Ok(selectivity);
             }
             (ComparisonOp::LT | ComparisonOp::LTE, _, _) => {
+                if !has_exact_f64_integer_range(&column_stat.min, &column_stat.max)
+                    || !has_exact_f64_integer_value(const_datum)
+                {
+                    return Ok(Selectivity::Unknown);
+                }
+
+                let min = column_stat.min.as_double()?;
+                let max = column_stat.max.as_double()?;
+                let numeric_literal = const_datum.as_double()?;
                 let n = (numeric_literal - min + 1.0) / (max - min + 1.0);
                 update_statistic(column_stat, column_stat.min.clone(), const_datum.clone(), n)?;
                 return Ok(Selectivity::N(n));
@@ -483,6 +482,15 @@ impl SelectivityVisitor<'_> {
                 return Ok(Selectivity::equal_selectivity(ndv, false));
             }
             (ComparisonOp::GT | ComparisonOp::GTE, _, _) => {
+                if !has_exact_f64_integer_range(&column_stat.min, &column_stat.max)
+                    || !has_exact_f64_integer_value(const_datum)
+                {
+                    return Ok(Selectivity::Unknown);
+                }
+
+                let min = column_stat.min.as_double()?;
+                let max = column_stat.max.as_double()?;
+                let numeric_literal = const_datum.as_double()?;
                 let n = (max - numeric_literal + 1.0) / (max - min + 1.0);
                 update_statistic(column_stat, const_datum.clone(), column_stat.max.clone(), n)?;
                 return Ok(Selectivity::N(n));
@@ -1117,6 +1125,36 @@ mod tests {
             estimated_rows > 0.0,
             "expected positive selectivity, got estimated_rows={estimated_rows}"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_comparison_with_large_uint64_range_keeps_exact_boundary_selectivity() -> Result<()> {
+        let min = 10_000_000_000_000_000_u64;
+        let max = min + 10;
+        let columns = &[("a", UInt64Type::data_type())];
+
+        for (expr_text, expected_rows) in
+            [(format!("a >= {min}"), 100.0), (format!("a < {min}"), 0.0)]
+        {
+            let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+                min: Datum::UInt(min),
+                max: Datum::UInt(max),
+                ndv: Ndv::Stat(11.0),
+                null_count: 0,
+                histogram: None,
+            })]);
+            let raw_expr = parse_raw_expr(&expr_text, columns, &BUILTIN_FUNCTIONS);
+            let expr = raw_expr_to_scalar(&raw_expr, columns);
+            let mut estimator = SelectivityEstimator::new(column_stats, 100.0);
+            let estimated_rows = estimator.apply(&[expr])?;
+
+            assert_eq!(
+                estimated_rows, expected_rows,
+                "{expr_text} should stay exact"
+            );
+        }
 
         Ok(())
     }
