@@ -1,6 +1,7 @@
 # GitHub issue: https://github.com/databendlabs/databend/issues/19562
 
-query B
+statement error 1065
 SELECT 'a' LIKE 'a' ESCAPE ''
-----
-1
+
+statement error 1065
+SELECT 'a' LIKE 'a' ESCAPE 'ab'
