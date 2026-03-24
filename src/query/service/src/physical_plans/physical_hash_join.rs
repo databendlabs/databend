@@ -503,15 +503,13 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        let use_partitioned_join = self.join_type == JoinType::Inner
-            && matches!(
-                self.build.output_data_distribution(),
-                DataDistribution::GlobalHash(_)
-            )
-            && matches!(
-                self.probe.output_data_distribution(),
-                DataDistribution::GlobalHash(_)
-            );
+        let use_partitioned_join = matches!(
+            self.build.output_data_distribution(),
+            DataDistribution::GlobalHash(_)
+        ) && matches!(
+            self.probe.output_data_distribution(),
+            DataDistribution::GlobalHash(_)
+        );
 
         let barrier = databend_common_base::base::Barrier::new(output_len);
         let stage_sync_barrier = Arc::new(barrier);
