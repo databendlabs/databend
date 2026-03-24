@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::mem;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -46,6 +48,7 @@ use crate::pipelines::processors::transforms::aggregator::transform_aggregate_pa
 use crate::sessions::QueryContext;
 
 const SPILL_BUCKET_NUM: usize = 2;
+const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
 
 enum Stage {
     Input,
@@ -53,6 +56,7 @@ enum Stage {
 }
 
 pub struct FinalAggregateTask {
+    task_id: u64,
     spilled_depth: usize,
     spilled_payload: Vec<NewSpilledPayload>,
     tx: Sender<FinalAggregateTask>,
@@ -80,6 +84,7 @@ pub struct NewTransformFinalAggregate {
     spiller: NewAggregateSpiller<LocalPartitionStream>,
     settings: MemorySettings,
     max_aggregate_spill_level: usize,
+    next_task_id: Arc<AtomicU64>,
 }
 
 impl NewTransformFinalAggregate {
@@ -92,9 +97,11 @@ impl NewTransformFinalAggregate {
         ctx: Arc<QueryContext>,
         tx: Sender<FinalAggregateTask>,
         rx: Receiver<FinalAggregateTask>,
+        next_task_id: Arc<AtomicU64>,
     ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
-        let available_partition_depths = 48_u64.saturating_sub(base_consumed_bits) as usize;
+        let available_partition_depths =
+            (48_u64.saturating_sub(base_consumed_bits) / SPILL_BUCKET_BITS) as usize;
         let max_partition_depth = available_partition_depths.saturating_sub(1);
         let max_aggregate_spill_level =
             (settings.get_max_aggregate_spill_level()? as usize).min(max_partition_depth);
@@ -134,11 +141,20 @@ impl NewTransformFinalAggregate {
             spiller,
             settings: MemorySettings::from_aggregate_settings(&ctx)?,
             max_aggregate_spill_level,
+            next_task_id,
         }))
     }
 }
 
 impl NewTransformFinalAggregate {
+    fn next_task_id(&self) -> u64 {
+        self.next_task_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn partition_start_bit(base_consumed_bits: u64, spilled_depth: usize) -> u64 {
+        base_consumed_bits + spilled_depth as u64 * SPILL_BUCKET_BITS
+    }
+
     fn create_hashtable(
         params: &Arc<AggregatorParams>,
         base_consumed_bits: u64,
@@ -148,8 +164,11 @@ impl NewTransformFinalAggregate {
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),
             HashTableConfig::default()
-                .with_initial_radix_bits(SPILL_BUCKET_NUM.trailing_zeros() as u64)
-                .with_partition_start_bit(base_consumed_bits + spilled_depth as u64)
+                .with_initial_radix_bits(SPILL_BUCKET_BITS)
+                .with_partition_start_bit(Self::partition_start_bit(
+                    base_consumed_bits,
+                    spilled_depth,
+                ))
                 .with_experiment_hash_index(params.enable_experiment_hash_index),
             Arc::new(Bump::new()),
         )
@@ -168,8 +187,8 @@ impl NewTransformFinalAggregate {
     // One final-aggregate processor handles both the original input stream and
     // recursively spilled tasks received from the channel. Those tasks may
     // belong to different spill depths, and each depth must consume a different
-    // hash bit (`base_consumed_bits + spilled_depth`) when building the internal
-    // 2-way partitions.
+    // hash-bit window when building the internal partitions. The window start is
+    // `base_consumed_bits + spilled_depth * SPILL_BUCKET_BITS`.
     fn ensure_spill_depth(&mut self, spilled_depth: usize) {
         let partition_depth = spilled_depth.min(self.max_partition_depth);
         if self.current_partition_depth != partition_depth {
@@ -275,16 +294,38 @@ impl NewTransformFinalAggregate {
         Ok(())
     }
 
-    fn finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
+    fn finish(
+        &mut self,
+        task_id: Option<u64>,
+        spilled_depth: usize,
+        tx: Sender<FinalAggregateTask>,
+    ) -> Result<()> {
         if self.spilled_occurred {
+            let (output_rows, hash_index_resizes) = match &self.hashtable {
+                HashTable::AggregateHashTable(ht) => {
+                    (ht.payload.len(), ht.hash_index_resize_count())
+                }
+                _ => unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state before spill"),
+            };
             self.spill_finish(spilled_depth, tx)?;
+            if let Some(task_id) = task_id {
+                self.statistics.log_task_finish_statistics(
+                    task_id,
+                    self._id,
+                    spilled_depth,
+                    output_rows,
+                    hash_index_resizes,
+                    true,
+                );
+            } else {
+                self.statistics.reset();
+            }
 
             self.spilled_occurred = false;
             return Ok(());
         }
 
         if let HashTable::AggregateHashTable(mut ht) = mem::take(&mut self.hashtable) {
-            self.statistics.log_finish_statistics(&ht);
             let mut blocks = vec![];
             self.flush_state.clear();
 
@@ -306,6 +347,18 @@ impl NewTransformFinalAggregate {
                     self.output.push_data(Ok(concat));
                 }
             }
+            if let Some(task_id) = task_id {
+                self.statistics.log_task_finish_statistics(
+                    task_id,
+                    self._id,
+                    spilled_depth,
+                    ht.payload.len(),
+                    ht.hash_index_resize_count(),
+                    false,
+                );
+            } else {
+                self.statistics.log_finish_statistics(&ht);
+            }
             self.reset_hashtable(self.current_partition_depth);
         }
 
@@ -321,9 +374,25 @@ impl NewTransformFinalAggregate {
             chunks[payload.bucket as usize].push(payload);
         }
 
-        for chunk in chunks.into_iter() {
+        let next_spill_depth = spilled_depth + 1;
+        for (bucket, chunk) in chunks.into_iter().enumerate() {
+            let task_id = self.next_task_id();
+            let rows = chunk
+                .iter()
+                .map(|payload| payload.row_group.num_rows() as usize)
+                .sum::<usize>();
+            log::info!(
+                "Spill finish emitted task: task_id={}, processor={}, spill_depth={}, bucket={}, payloads={}, rows={}",
+                task_id,
+                self._id,
+                spilled_depth,
+                bucket,
+                chunk.len(),
+                rows,
+            );
             let spilled = FinalAggregateTask {
-                spilled_depth: spilled_depth + 1,
+                task_id,
+                spilled_depth: next_spill_depth,
                 spilled_payload: chunk,
                 tx: tx.clone(),
             };
@@ -407,20 +476,21 @@ impl Processor for NewTransformFinalAggregate {
             return Ok(());
         } else if let Some(mut task) = self.channel_data.take() {
             self.ensure_spill_depth(task.spilled_depth);
+            self.statistics.reset();
             let meta = AggregateMeta::NewSpilled(mem::take(&mut task.spilled_payload));
             if task.spilled_depth >= self.max_aggregate_spill_level {
                 self.handle_meta(meta, false)?;
             } else {
                 self.handle_meta(meta, true)?;
             }
-            self.finish(task.spilled_depth, task.tx)?;
+            self.finish(Some(task.task_id), task.spilled_depth, task.tx)?;
 
             return Ok(());
         } else {
             self.ensure_spill_depth(0);
             let sender = mem::take(&mut self.tx)
                 .expect("logic error: called finished for input data more than once");
-            self.finish(0, sender)?;
+            self.finish(None, 0, sender)?;
         }
 
         Ok(())
