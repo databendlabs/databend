@@ -18,6 +18,7 @@ use std::fmt::Display;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -52,6 +53,10 @@ impl IPhysicalPlan for RecursiveCteScan {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {

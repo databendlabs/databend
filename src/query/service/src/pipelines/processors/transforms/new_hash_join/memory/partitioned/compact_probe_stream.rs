@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
@@ -36,6 +37,7 @@ struct CompactProbeStream<'a, Key: ?Sized + Eq, const MATCHED: bool> {
     key_idx: usize,
     build_idx: u32,
     matched_num_rows: usize,
+    probe_validity: Option<Bitmap>,
 
     probe_hashes: Vec<u64>,
     bucket_mask: usize,
@@ -54,9 +56,22 @@ impl<'a, Key: ?Sized + Eq + Send + Sync + 'static, const MATCHED: bool> ProbeStr
                 break;
             }
 
+            if self
+                .probe_validity
+                .as_ref()
+                .is_some_and(|validity| !validity.get_bit(self.key_idx))
+            {
+                if !MATCHED {
+                    res.unmatched.push(self.key_idx as u64);
+                }
+                self.key_idx += 1;
+                continue;
+            }
+
             if self.build_idx == 0 {
                 let bucket = (self.probe_hashes[self.key_idx] as usize) & self.bucket_mask;
                 self.build_idx = self.hash_table.first_index(bucket);
+
                 if self.build_idx == 0 {
                     if !MATCHED {
                         res.unmatched.push(self.key_idx as u64);
@@ -70,9 +85,9 @@ impl<'a, Key: ?Sized + Eq + Send + Sync + 'static, const MATCHED: bool> ProbeStr
 
             while self.build_idx != 0 {
                 let bi = self.build_idx as usize;
+                let row_idx = (bi - 1) & CHUNK_MASK;
                 let chunk_idx = (bi - 1) >> CHUNK_BITS;
-                let offset = (bi - 1) & CHUNK_MASK;
-                let build_key = unsafe { self.build_accs[chunk_idx].key_unchecked(offset) };
+                let build_key = unsafe { self.build_accs[chunk_idx].key_unchecked(row_idx) };
 
                 if build_key == probe_key {
                     res.matched_probe.push(self.key_idx as u64);
@@ -114,6 +129,11 @@ where
 {
     let probe_keys_entries = desc.probe_key(data, function_ctx)?;
     let mut probe_keys_block = DataBlock::new(probe_keys_entries, data.num_rows());
+    let probe_validity = match desc.from_correlated_subquery {
+        true => None,
+        false => desc.build_valids_by_keys(&probe_keys_block)?,
+    };
+
     desc.remove_keys_nullable(&mut probe_keys_block);
 
     let keys = ProjectedBlock::from(probe_keys_block.columns());
@@ -133,6 +153,7 @@ where
         key_idx: 0,
         build_idx: 0,
         matched_num_rows: 0,
+        probe_validity,
         probe_hashes,
         bucket_mask,
         probe_acc,

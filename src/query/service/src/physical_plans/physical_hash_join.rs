@@ -197,7 +197,24 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn output_data_distribution(&self) -> DataDistribution {
-        self.probe.output_data_distribution()
+        let build_dist = self.build.output_data_distribution();
+        let probe_dist = self.probe.output_data_distribution();
+
+        let can_preserve_global_hash = self.join_type == JoinType::Inner
+            && matches!(
+                &build_dist,
+                DataDistribution::GlobalHash(keys) if keys == &self.build_keys
+            )
+            && matches!(
+                &probe_dist,
+                DataDistribution::GlobalHash(keys) if keys == &self.probe_keys
+            );
+
+        if can_preserve_global_hash {
+            probe_dist
+        } else {
+            DataDistribution::Random
+        }
     }
 
     fn get_desc(&self) -> Result<String> {
@@ -486,7 +503,6 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        // let use_partitioned_join = self.join_type == JoinType::Inner && self.broadcast_id.is_some();
         let use_partitioned_join = self.join_type == JoinType::Inner
             && matches!(
                 self.build.output_data_distribution(),

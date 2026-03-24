@@ -169,13 +169,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
             .any(|child| child.is_warehouse_distributed_plan())
     }
 
-    #[recursive::recursive]
-    fn output_data_distribution(&self) -> DataDistribution {
-        match self.children().next() {
-            None => DataDistribution::Random,
-            Some(child) => child.output_data_distribution(),
-        }
-    }
+    fn output_data_distribution(&self) -> DataDistribution;
 
     fn display_in_profile(&self) -> bool {
         true

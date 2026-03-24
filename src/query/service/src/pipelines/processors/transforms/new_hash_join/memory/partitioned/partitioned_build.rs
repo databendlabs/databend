@@ -195,6 +195,7 @@ impl PartitionedBuild {
         self.columns.clear();
         self.column_types.clear();
         self.num_rows = 0;
+        self.build_block_idx = 0;
         self.visited.clear();
         self.accumulator.reset();
     }

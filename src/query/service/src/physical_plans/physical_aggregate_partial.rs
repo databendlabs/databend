@@ -32,6 +32,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformRankLimitSort;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
@@ -79,6 +80,10 @@ impl IPhysicalPlan for AggregatePartial {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     #[recursive::recursive]

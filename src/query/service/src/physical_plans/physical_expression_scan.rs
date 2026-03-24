@@ -22,6 +22,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -57,6 +58,10 @@ impl IPhysicalPlan for ExpressionScan {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {

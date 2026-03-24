@@ -139,8 +139,7 @@ impl Join for PartitionedLeftSemiJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.build.final_build()?;
-        Ok(None)
+        self.build.final_build()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

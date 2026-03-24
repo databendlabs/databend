@@ -17,6 +17,7 @@ use std::any::Any;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::IPhysicalPlan;
@@ -51,6 +52,10 @@ impl IPhysicalPlan for Sequence {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.right.output_data_distribution()
     }
 
     #[recursive::recursive]

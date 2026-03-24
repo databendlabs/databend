@@ -28,6 +28,7 @@ use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::SExpr;
@@ -146,6 +147,15 @@ impl IPhysicalPlan for Sort {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(SortFormatter::create(self))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        match self.step {
+            SortStep::Single | SortStep::Partial | SortStep::Final | SortStep::Shuffled => {
+                DataDistribution::Serial
+            }
+            SortStep::Sample | SortStep::Route => DataDistribution::Random,
+        }
     }
 
     #[recursive::recursive]

@@ -39,6 +39,7 @@ use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::DefaultExprBinder;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -84,6 +85,10 @@ impl IPhysicalPlan for Duplicate {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -133,6 +138,10 @@ impl IPhysicalPlan for Shuffle {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -218,6 +227,10 @@ impl IPhysicalPlan for ChunkFilter {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
+    }
+
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkFilterFormatter::create(self))
     }
@@ -281,6 +294,10 @@ impl IPhysicalPlan for ChunkEvalScalar {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -353,6 +370,10 @@ impl IPhysicalPlan for ChunkCastSchema {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -494,6 +515,10 @@ impl IPhysicalPlan for ChunkFillAndReorder {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -643,6 +668,10 @@ impl IPhysicalPlan for ChunkAppendData {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -804,6 +833,10 @@ impl IPhysicalPlan for ChunkMerge {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
+    }
+
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkMergeFormatter::create(self))
     }
@@ -874,6 +907,10 @@ impl IPhysicalPlan for ChunkCommitInsert {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Serial
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

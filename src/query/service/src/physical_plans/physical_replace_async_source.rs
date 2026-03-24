@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::NameResolutionContext;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::plans::InsertValue;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -46,6 +47,10 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {

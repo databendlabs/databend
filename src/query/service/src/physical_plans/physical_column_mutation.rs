@@ -25,6 +25,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -63,6 +64,10 @@ impl IPhysicalPlan for ColumnMutation {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     #[recursive::recursive]

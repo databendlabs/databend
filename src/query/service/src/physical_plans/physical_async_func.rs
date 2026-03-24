@@ -24,6 +24,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::AsyncFunctionDesc;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::SExpr;
 use itertools::Itertools;
 
@@ -57,6 +58,10 @@ impl IPhysicalPlan for AsyncFunction {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     #[recursive::recursive]

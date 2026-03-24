@@ -182,9 +182,11 @@ impl Join for PartitionedRightAntiJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.build.final_build()?;
-        self.build.init_visited();
-        Ok(None)
+        let progress = self.build.final_build()?;
+        if progress.is_none() {
+            self.build.init_visited();
+        }
+        Ok(progress)
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

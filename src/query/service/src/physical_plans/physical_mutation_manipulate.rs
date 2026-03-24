@@ -24,6 +24,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::Pipe;
 use databend_common_sql::binder::MutationStrategy;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::MatchExpr;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
@@ -65,6 +66,10 @@ impl IPhysicalPlan for MutationManipulate {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {

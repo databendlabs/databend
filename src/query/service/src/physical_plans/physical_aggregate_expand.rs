@@ -22,6 +22,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::Symbol;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::plans::GroupingSets;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -56,6 +57,10 @@ impl IPhysicalPlan for AggregateExpand {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     #[recursive::recursive]

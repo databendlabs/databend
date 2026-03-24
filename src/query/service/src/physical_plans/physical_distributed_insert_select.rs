@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_sql::ColumnBinding;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -51,6 +52,10 @@ impl IPhysicalPlan for DistributedInsertSelect {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     #[recursive::recursive]

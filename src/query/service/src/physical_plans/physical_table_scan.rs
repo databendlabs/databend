@@ -64,6 +64,7 @@ use databend_common_sql::VirtualColumn;
 use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_storages_fuse::FuseTable;
@@ -109,6 +110,10 @@ impl IPhysicalPlan for TableScan {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Self::output_fields(self.source.schema(), &self.name_mapping).map(DataSchema::new_ref)
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
