@@ -451,7 +451,10 @@ impl<'a> WindowRewriter<'a> {
                         Visibility::Visible,
                     )
                     .build();
-                    let col = BoundColumnRef { span: arg.span(), column };
+                    let col = BoundColumnRef {
+                        span: arg.span(),
+                        column,
+                    };
                     let expr = ScalarExpr::BoundColumnRef(col.clone());
                     arg.replace_sub_scalar(group_expr.scalar.clone(), expr)?;
                 }

@@ -34,11 +34,7 @@ fn write_normalized_identifier(
 ) -> Result<()> {
     let normalized = normalize_identifier(ident, context);
     let quote = normalized.quote.unwrap_or('-');
-    writeln!(
-        file,
-        "{label}: name={} quote={quote}",
-        normalized.name
-    )?;
+    writeln!(file, "{label}: name={} quote={quote}", normalized.name)?;
     Ok(())
 }
 

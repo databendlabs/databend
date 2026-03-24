@@ -210,7 +210,12 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         "or_filters(a = 5, a = 6)",
         "not(a = 5)",
     ] {
-        run_case(&mut file, expr, &[("a", UInt64Type::data_type())], logical_stats.clone())?;
+        run_case(
+            &mut file,
+            expr,
+            &[("a", UInt64Type::data_type())],
+            logical_stats.clone(),
+        )?;
     }
     run_case(
         &mut file,
@@ -244,7 +249,12 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         }),
     ]);
     for expr in ["a % 4 = 1", "a % 4 = 5"] {
-        run_case(&mut file, expr, &[("a", UInt64Type::data_type())], mod_stats.clone())?;
+        run_case(
+            &mut file,
+            expr,
+            &[("a", UInt64Type::data_type())],
+            mod_stats.clone(),
+        )?;
     }
 
     write_case_title(
@@ -260,7 +270,12 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         histogram: None,
     })]);
     for expr in ["s like 'ab%'", "s like '%ab_'"] {
-        run_case(&mut file, expr, &[("s", DataType::String)], like_stats.clone())?;
+        run_case(
+            &mut file,
+            expr,
+            &[("s", DataType::String)],
+            like_stats.clone(),
+        )?;
     }
 
     Ok(())

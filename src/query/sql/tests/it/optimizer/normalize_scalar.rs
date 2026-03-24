@@ -142,11 +142,7 @@ fn predicate_texts(target: Target, expr: &SExpr) -> Result<Vec<String>> {
         .collect()
 }
 
-fn write_case(
-    file: &mut impl Write,
-    case: &Case,
-    columns: &[(&str, DataType)],
-) -> Result<()> {
+fn write_case(file: &mut impl Write, case: &Case, columns: &[(&str, DataType)]) -> Result<()> {
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "operator: {}", case.target.as_str())?;
     writeln!(file, "input: {}", case.expr_text)?;

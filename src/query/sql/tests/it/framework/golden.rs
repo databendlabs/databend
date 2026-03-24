@@ -80,11 +80,7 @@ pub(crate) async fn setup_context(case: &SqlTestCase) -> Result<Arc<LiteTableCon
     Ok(ctx)
 }
 
-pub(crate) fn write_case_title(
-    file: &mut impl Write,
-    name: &str,
-    description: &str,
-) -> Result<()> {
+pub(crate) fn write_case_title(file: &mut impl Write, name: &str, description: &str) -> Result<()> {
     writeln!(file, "=== {name} ===")?;
     if !description.is_empty() {
         writeln!(file, "description: {description}")?;
@@ -98,10 +94,7 @@ pub(crate) fn write_case_header(file: &mut impl Write, case: &SqlTestCase) -> Re
     Ok(())
 }
 
-pub(crate) fn write_case_outcome(
-    file: &mut impl Write,
-    outcome: &SqlTestOutcome,
-) -> Result<()> {
+pub(crate) fn write_case_outcome(file: &mut impl Write, outcome: &SqlTestOutcome) -> Result<()> {
     match outcome {
         SqlTestOutcome::Plan(plan) => {
             writeln!(file, "status: ok")?;

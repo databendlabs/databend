@@ -118,6 +118,13 @@ status: error
 code: 1065
 message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
 
+=== order_by_count_does_not_make_scalar_projection_valid ===
+description: The sqllogictest ORDER BY count(*) pattern must still reject a scalar projection.
+sql: SELECT number FROM t ORDER BY count(*) + 1
+status: error
+code: 1065
+message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
+
 === aggregate_argument_prefers_base_column_over_select_alias ===
 description: Inside an aggregate function, a same-name select alias should not shadow the base column.
 sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a
@@ -170,6 +177,251 @@ status: error
 code: 1065
 message: Window specification and arguments cannot contain aggregate functions
 
+=== duplicate_window_expression_reuses_window_binding ===
+description: Repeated identical window expressions should reuse the registered window binding.
+sql: SELECT row_number() OVER (ORDER BY number), row_number() OVER (ORDER BY number) FROM t
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY number) (#1) AS (#1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [t.number (#0) AS (#0)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.number (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== laglead_window_from_sqllogictest_binds ===
+description: A sqllogictest LEAD window pattern should still bind through the lag/lead rewrite path.
+sql: SELECT lead(number, 1, 0) OVER (PARTITION BY number % 3 ORDER BY number + 1) FROM t
+status: ok
+EvalScalar
+├── scalars: [lead(number, 1, 0) OVER (PARTITION BY number % 3 ORDER BY number + 1) (#4) AS (#4)]
+└── Window
+    ├── aggregate function: lead
+    ├── partition items: [modulo(t.number (#0), 3) AS (#2)]
+    ├── order by items: [plus(t.number (#0), 1) AS (#3)]
+    ├── frame: [Rows: Following(Some(Number(1_u64))) ~ Following(Some(Number(1_u64)))]
+    └── Sort
+        ├── sort keys: [lead_part_0 (#2) ASC NULLS LAST, lead_order_0 (#3) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: LagLead(LagLeadFunction { is_lag: false, arg: BoundColumnRef(BoundColumnRef { span: Some(12..18), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "number", column_name_lower: None, index: 0, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } }), offset: 1, default: Some(BoundColumnRef(BoundColumnRef { span: Some(23..24), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "lead_default_value", column_name_lower: None, index: 1, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })), return_type: Nullable(Number(UInt64)) })
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0), CAST(0 AS UInt64 NULL) AS (#1), modulo(t.number (#0), 3) AS (#2), plus(t.number (#0), 1) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== nth_value_window_binds ===
+description: An NTH_VALUE window expression should still bind through the dedicated nth_value rewrite path.
+sql: SELECT nth_value(number, 2) OVER (ORDER BY number) FROM t
+status: ok
+EvalScalar
+├── scalars: [nth_value(number, 2) OVER (ORDER BY number) (#1) AS (#1)]
+└── Window
+    ├── aggregate function: nth_value
+    ├── partition items: []
+    ├── order by items: [t.number (#0) AS (#0)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.number (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0), t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== window_partition_rewrites_group_item_expression ===
+description: A window partition expression over grouped aliases should rewrite non-column group items back to their group-item columns.
+sql: SELECT number % 3 AS a, number % 4 AS b, row_number() OVER (PARTITION BY b % 2 ORDER BY a) FROM t GROUP BY a, b
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY b % 2 ORDER BY a) (#5) AS (#5), a (#1) AS (#6), b (#2) AS (#7)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(b (#2), 2) AS (#3)]
+    ├── order by items: [a (#1) AS (#4)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, row_number_order_0 (#4) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [modulo(b (#2), 2) AS (#3), a (#1) AS (#4)]
+            └── Aggregate(Initial)
+                ├── group items: [modulo(t.number (#0), 3) AS (#1), modulo(t.number (#0), 4) AS (#2)]
+                ├── aggregate functions: []
+                └── EvalScalar
+                    ├── scalars: [modulo(t.number (#0), 3) AS (#1), modulo(t.number (#0), 4) AS (#2)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== qualify_cte_then_outer_aggregate_from_sqllogictest_binds ===
+description: A sqllogictest pattern that filters with QUALIFY inside a CTE before an outer aggregate should still bind.
+sql: WITH test AS (SELECT number % 10 AS id, number AS full_matched FROM t QUALIFY row_number() OVER (PARTITION BY id ORDER BY number DESC) = 1) SELECT full_matched, count() FROM test GROUP BY full_matched HAVING full_matched = 3
+status: ok
+EvalScalar
+├── scalars: [t.number (#0) AS (#0), count() (#4) AS (#4)]
+└── Filter
+    ├── filters: [eq(t.number (#0), 3)]
+    └── Aggregate(Initial)
+        ├── group items: [t.number (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── EvalScalar
+                ├── scalars: [t.number (#0) AS (#0), modulo(t.number (#0), 10) AS (#1)]
+                └── Filter
+                    ├── filters: [eq(row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3), 1)]
+                    └── Window
+                        ├── aggregate function: row_number
+                        ├── partition items: [modulo(t.number (#0), 10) AS (#2)]
+                        ├── order by items: [t.number (#0) AS (#0) DESC]
+                        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+                        └── Sort
+                            ├── sort keys: [row_number_part_0 (#2) ASC NULLS LAST, t.number (#0) DESC NULLS LAST]
+                            ├── limit: [NONE]
+                            ├── window top: NONE
+                            ├── window function: RowNumber
+                            └── EvalScalar
+                                ├── scalars: [t.number (#0) AS (#0), modulo(t.number (#0), 10) AS (#2)]
+                                └── Scan
+                                    ├── table: default.t (#0)
+                                    ├── filters: []
+                                    ├── order by: []
+                                    └── limit: NONE
+
+
+=== named_window_from_sqllogictest_binds ===
+description: A named WINDOW clause from sqllogictests should bind as a normal window specification.
+sql: SELECT depname, empno, salary, sum(salary) OVER w FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY empno)
+status: ok
+EvalScalar
+├── scalars: [empsalary.depname (#0) AS (#0), empsalary.empno (#1) AS (#1), empsalary.salary (#2) AS (#2), sum(salary) OVER w (#3) AS (#3)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: [empsalary.empno (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.empno (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(31..49), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(35..41), column: ColumnBinding { database_name: Some("default"), table_name: Some("empsalary"), column_position: Some(3), table_index: Some(0), column_name: "salary", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(salary) OVER w" })
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.empno (#1) AS (#1), empsalary.salary (#2) AS (#2)]
+            └── Scan
+                ├── table: default.empsalary (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== inherited_named_window_from_sqllogictest_binds ===
+description: An inherited named WINDOW specification should bind without losing the base partition spec.
+sql: SELECT rank() OVER w1, dense_rank() OVER w2 FROM empsalary WINDOW w1 AS (PARTITION BY depname), w2 AS (w1 ORDER BY salary DESC)
+status: ok
+EvalScalar
+├── scalars: [rank() OVER w1 (#2) AS (#2), dense_rank() OVER w2 (#3) AS (#3)]
+└── Window
+    ├── aggregate function: rank
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Rank
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0)]
+            └── Window
+                ├── aggregate function: dense_rank
+                ├── partition items: [empsalary.depname (#0) AS (#0)]
+                ├── order by items: [empsalary.salary (#1) AS (#1) DESC]
+                ├── frame: [Range: Preceding(None) ~ CurrentRow]
+                └── Sort
+                    ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.salary (#1) DESC NULLS LAST]
+                    ├── limit: [NONE]
+                    ├── window top: NONE
+                    ├── window function: DenseRank
+                    └── EvalScalar
+                        ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+                        └── Scan
+                            ├── table: default.empsalary (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== recursive_named_window_chain_binds ===
+description: A recursive chain of named WINDOW references should resolve inherited partition and order specs.
+sql: SELECT rank() OVER w3 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (w1), w3 AS (w2)
+status: ok
+EvalScalar
+├── scalars: [rank() OVER w3 (#2) AS (#2)]
+└── Window
+    ├── aggregate function: rank
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: [empsalary.salary (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.salary (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Rank
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+            └── Scan
+                ├── table: default.empsalary (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== inherited_named_window_rejects_partition_override ===
+description: Referencing a named window must not add a new PARTITION BY clause.
+sql: SELECT rank() OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary), w2 AS (w1 PARTITION BY depname)
+status: error
+code: 1065
+message: WINDOW specification with named WINDOW reference cannot specify PARTITION BY
+
+=== inherited_named_window_rejects_duplicate_order_by ===
+description: Referencing a named window with ORDER BY must not specify another ORDER BY.
+sql: SELECT rank() OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary), w2 AS (w1 ORDER BY depname)
+status: error
+code: 1065
+message: Cannot specify ORDER BY if referenced named WINDOW specifies ORDER BY
+
+=== inherited_named_window_rejects_base_frame ===
+description: Referencing a named window that already contains a frame specification must be rejected.
+sql: SELECT sum(salary) OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary ROWS CURRENT ROW), w2 AS (w1)
+status: error
+code: 1065
+message: Cannot reference named WINDOW containing frame specification
+
 === unnest_over_aggregate_is_planned_after_aggregate ===
 description: A set-returning function over an aggregate should stay above the aggregate phase instead of rewriting the aggregate away early.
 sql: SELECT unnest(max([11, 12]))
@@ -183,5 +435,286 @@ EvalScalar
         └── EvalScalar
             ├── scalars: [[11, 12] AS (#0)]
             └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== duplicate_srf_expression_reuses_project_set_binding ===
+description: Repeated identical SRF expressions should reuse the registered ProjectSet binding.
+sql: SELECT unnest([1, 2, 3]), unnest([1, 2, 3])
+status: ok
+EvalScalar
+├── scalars: [get(unnest([1, 2, 3]) (#0)) AS (#1), get(unnest([1, 2, 3]) (#0)) AS (#2)]
+└── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(14..23), value: Array(UInt8([1, 2, 3])) })] }), index: 0 }] })
+    └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== qualify_named_window_with_subquery_binds ===
+description: QUALIFY should preserve subqueries while checking named window aliases.
+sql: SELECT i, p, o, row_number() OVER w AS rn FROM qt WINDOW w AS (PARTITION BY p ORDER BY o) QUALIFY rn = (SELECT i FROM qt LIMIT 1)
+status: ok
+EvalScalar
+├── scalars: [qt.i (#0) AS (#0), qt.p (#1) AS (#1), qt.o (#2) AS (#2), row_number() OVER w (#3) AS (#3)]
+└── Filter
+    ├── filters: [eq(row_number() OVER w (#3), SUBQUERY AS (#4))]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: qt.i (#4)
+    │       └── Limit
+    │           ├── limit: [1]
+    │           ├── offset: [0]
+    │           └── EvalScalar
+    │               ├── scalars: [qt.i (#4) AS (#4)]
+    │               └── Scan
+    │                   ├── table: default.qt (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: [qt.p (#1) AS (#1)]
+        ├── order by items: [qt.o (#2) AS (#2)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [qt.p (#1) ASC NULLS LAST, qt.o (#2) ASC NULLS LAST]
+            ├── limit: [NONE]
+            ├── window top: NONE
+            ├── window function: RowNumber
+            └── EvalScalar
+                ├── scalars: [qt.p (#1) AS (#1), qt.o (#2) AS (#2)]
+                └── Scan
+                    ├── table: default.qt (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== qualify_grouping_context_uses_grouping_checker ===
+description: QUALIFY in a grouped query should still accept grouped aliases while binding the window phase.
+sql: SELECT number % 2 AS a, row_number() OVER (ORDER BY a) AS rn FROM t GROUP BY a QUALIFY a = 1
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY a) (#3) AS (#3), a (#1) AS (#4)]
+└── Filter
+    ├── filters: [eq(a (#1), 1)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [a (#1) AS (#2)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [row_number_order_0 (#2) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [a (#1) AS (#2)]
+                └── Aggregate(Initial)
+                    ├── group items: [modulo(t.number (#0), 2) AS (#1)]
+                    ├── aggregate functions: []
+                    └── EvalScalar
+                        ├── scalars: [modulo(t.number (#0), 2) AS (#1)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== group_by_srf_alias_from_sqllogictest_binds ===
+description: A sqllogictest GROUP BY pattern that groups by an SRF select alias should bind successfully.
+sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3
+status: ok
+Sort
+├── sort keys: [col3 (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t_str.col1 (#0) AS (#0), col3 (#3) AS (#4)]
+    └── Aggregate(Initial)
+        ├── group items: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
+        ├── aggregate functions: []
+        └── EvalScalar
+            ├── scalars: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
+            └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(23..49), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(30..48), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(36..37), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(44..47), value: String(",") })] })] }), index: 2 }] })
+                └── Scan
+                    ├── table: default.t_str (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== group_by_all_collects_non_aggregate_select_items ===
+description: GROUP BY ALL should expand to the non-aggregate SELECT items only.
+sql: SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL
+status: ok
+EvalScalar
+├── scalars: [sum(number) (#2) AS (#2), a (#1) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(t.number (#0), 2) AS (#1)]
+    ├── aggregate functions: [sum(t.number (#0)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.number (#0) AS (#0), modulo(t.number (#0), 2) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== combined_grouping_sets_binds ===
+description: A normal GROUP BY item combined with GROUPING SETS should bind through the combined-group expansion path.
+sql: SELECT quantity, brand, segment, sum(quantity) FROM sales GROUP BY brand, GROUPING SETS(segment, quantity)
+status: ok
+EvalScalar
+├── scalars: [sales.brand (#0) AS (#0), sales.segment (#1) AS (#1), sales.quantity (#2) AS (#2), sum(quantity) (#7) AS (#7)]
+└── Aggregate(Initial)
+    ├── group items: [sales.brand (#0) AS (#0), sales.segment (#1) AS (#1), sales.quantity (#2) AS (#2), _grouping_id (#6) AS (#6)]
+    ├── aggregate functions: [sum(sales.quantity (#2)) AS (#7)]
+    └── EvalScalar
+        ├── scalars: [sales.brand (#0) AS (#0), sales.segment (#1) AS (#1), sales.quantity (#2) AS (#2)]
+        └── Scan
+            ├── table: default.sales (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== grouping_outside_grouping_sets_is_rejected ===
+description: grouping() should still be rejected when the query is not using grouping sets semantics.
+sql: SELECT a, grouping(a) FROM g GROUP BY a
+status: error
+code: 1065
+message: grouping can only be called in GROUP BY GROUPING SETS clauses
+
+=== grouping_rejects_non_group_item_argument ===
+description: grouping() arguments must still be actual GROUP BY expressions inside grouping sets.
+sql: SELECT a, grouping(c) FROM g GROUP BY GROUPING SETS ((a), ())
+status: error
+code: 1006
+message: Arguments of grouping should be group by expressions
+
+=== cube_grouping_function_binds ===
+description: CUBE should expand into grouping sets and allow grouping(...) to bind against the generated grouping id.
+sql: SELECT a, b, sum(c) AS sc, grouping(a, b) FROM g GROUP BY CUBE(a, b)
+status: ok
+EvalScalar
+├── scalars: [g.a (#0) AS (#0), g.b (#1) AS (#1), sum(c) (#6) AS (#6), grouping(_grouping_id (#5)) AS (#7)]
+└── Aggregate(Initial)
+    ├── group items: [g.a (#0) AS (#0), g.b (#1) AS (#1), _grouping_id (#5) AS (#5)]
+    ├── aggregate functions: [sum(g.c (#2)) AS (#6)]
+    └── EvalScalar
+        ├── scalars: [g.a (#0) AS (#0), g.b (#1) AS (#1), g.c (#2) AS (#2)]
+        └── Scan
+            ├── table: default.g (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_over_srf_from_sqllogictest_binds ===
+description: A sqllogictest aggregate-over-SRF pattern should still bind with ProjectSet below Aggregate.
+sql: SELECT max(unnest(split(t.col2, ','))) FROM t_str AS t
+status: ok
+EvalScalar
+├── scalars: [max(unnest(split(t.col2, ','))) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [max(max_arg_0 (#2)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [get(unnest(split(t.col2 (#0), ',')) (#1)) AS (#2)]
+        └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(11..37), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(18..36), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 0, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(32..35), value: String(",") })] })] }), index: 1 }] })
+            └── Scan
+                ├── table: default.t_str (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== unnest_over_wrapped_aggregate_from_sqllogictest_binds ===
+description: A sqllogictest SRF-over-aggregate pattern with an extra scalar wrapper should still bind with ProjectSet above Aggregate.
+sql: SELECT unnest(split(max(t.col2), ',')) FROM t_str AS t
+status: ok
+EvalScalar
+├── scalars: [get(unnest(split(max(t.col2), ',')) (#2)) AS (#3)]
+└── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..38), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(14..37), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(20..31), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "max(t.col2)", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: InVisible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(33..36), value: String(",") })] })] }), index: 2 }] })
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [max(t_str.col2 (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t_str.col2 (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t_str (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_function_inside_window_over_rollup_binds ===
+description: A sqllogictest grouping() pattern should still rewrite correctly when used inside a window over rollup output.
+sql: SELECT grouping(salary), grouping(depname), sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) FROM empsalary GROUP BY ROLLUP(depname, salary)
+status: ok
+EvalScalar
+├── scalars: [sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) (#8) AS (#8), grouping(_grouping_id (#4)) AS (#9), grouping(_grouping_id (#4)) AS (#10)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [plus(grouping(_grouping_id (#4)), grouping(_grouping_id (#4))) AS (#6)]
+    ├── order by items: [grouping(_grouping_id (#4)) AS (#7) DESC]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum_part_0 (#6) ASC NULLS LAST, sum_order_0 (#7) DESC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(44..154), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(48..64), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 5, data_type: Number(UInt32), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC)" })
+        └── EvalScalar
+            ├── scalars: [grouping(_grouping_id (#4)) AS (#5), plus(grouping(_grouping_id (#4)), grouping(_grouping_id (#4))) AS (#6), grouping(_grouping_id (#4)) AS (#7)]
+            └── Aggregate(Initial)
+                ├── group items: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1), _grouping_id (#4) AS (#4)]
+                ├── aggregate functions: []
+                └── EvalScalar
+                    ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.empsalary (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== within_group_window_aggregate_binds ===
+description: A WITHIN GROUP window aggregate should bind its sort descriptors without turning into a grouped aggregate.
+sql: SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary
+status: ok
+EvalScalar
+├── scalars: [listagg(CAST(salary AS STRING), '|') WITHIN GROUP ( ORDER BY empno DESC ) OVER (PARTITION BY depname ORDER BY empno) (#4) AS (#4)]
+└── Window
+    ├── aggregate function: listagg
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: [empsalary.empno (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.empno (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(7..122), func_name: "listagg", distinct: false, params: [String("|")], args: [BoundColumnRef(BoundColumnRef { span: Some(20..26), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "listagg_arg_0", column_name_lower: None, index: 3, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(String), sort_descs: [AggregateFunctionScalarSortDesc { expr: BoundColumnRef(BoundColumnRef { span: Some(68..73), column: ColumnBinding { database_name: Some("default"), table_name: Some("empsalary"), column_position: Some(2), table_index: Some(0), column_name: "empno", column_name_lower: None, index: 1, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } }), is_reuse_index: false, nulls_first: false, asc: false }], display_name: "listagg(CAST(salary AS STRING), '|') WITHIN GROUP ( ORDER BY empno DESC ) OVER (PARTITION BY depname ORDER BY empno)" })
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.empno (#1) AS (#1), empsalary.empno (#1) AS (#1), CAST(empsalary.salary (#2) AS String NULL) AS (#3)]
+            └── Scan
+                ├── table: default.empsalary (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== within_group_group_aggregate_binds ===
+description: A non-window WITHIN GROUP aggregate should register its sort descriptors in the aggregate phase.
+sql: SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) FROM empsalary
+status: ok
+EvalScalar
+├── scalars: [listagg(CAST(salary AS STRING), '|') WITHIN GROUP ( ORDER BY empno DESC ) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [listagg('|')(listagg_arg_0 (#2)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [empsalary.empno (#0) AS (#0), CAST(empsalary.salary (#1) AS String NULL) AS (#2)]
+        └── Scan
+            ├── table: default.empsalary (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 

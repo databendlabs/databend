@@ -19,10 +19,7 @@ use crate::framework::golden::open_golden_file;
 use crate::framework::golden::setup_context;
 use crate::framework::golden::write_case_header;
 
-async fn write_optimized_case(
-    file: &mut impl std::io::Write,
-    case: &SqlTestCase,
-) -> Result<()> {
+async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase) -> Result<()> {
     let ctx = setup_context(case).await?;
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
@@ -31,7 +28,11 @@ async fn write_optimized_case(
     writeln!(file, "raw_plan:")?;
     writeln!(file, "{}", raw_plan.format_indent(Default::default())?)?;
     writeln!(file, "optimized_plan:")?;
-    writeln!(file, "{}", optimized_plan.format_indent(Default::default())?)?;
+    writeln!(
+        file,
+        "{}",
+        optimized_plan.format_indent(Default::default())?
+    )?;
     writeln!(file)?;
 
     Ok(())
@@ -44,8 +45,7 @@ async fn test_eager_aggregation_optimizer_outcomes() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "count_star_can_preaggregate_build_side",
-            description:
-                "COUNT(*) grouped by the join key should allow eager aggregation on one side.",
+            description: "COUNT(*) grouped by the join key should allow eager aggregation on one side.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
             sql: "SELECT o_orderkey, count(*)
 FROM lineitem, orders
@@ -54,8 +54,7 @@ GROUP BY o_orderkey",
         },
         SqlTestCase {
             name: "sum_plus_constant_preserves_eager_aggregation",
-            description:
-                "A SUM output used inside a scalar expression should still optimize through eager aggregation.",
+            description: "A SUM output used inside a scalar expression should still optimize through eager aggregation.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
             sql: "SELECT o_orderkey, sum(l_extendedprice) + 1
 FROM lineitem, orders
@@ -64,8 +63,7 @@ GROUP BY o_orderkey",
         },
         SqlTestCase {
             name: "count_plus_constant_preserves_eager_aggregation",
-            description:
-                "A COUNT output used inside a scalar expression should still optimize through eager aggregation.",
+            description: "A COUNT output used inside a scalar expression should still optimize through eager aggregation.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
             sql: "SELECT o_orderkey, count(*) + 1
 FROM lineitem, orders

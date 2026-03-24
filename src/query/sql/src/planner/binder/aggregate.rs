@@ -295,7 +295,8 @@ impl AggregateInfo {
         aggregate: &AggregateFunction,
         new_name: &str,
     ) -> Result<Option<ColumnBinding>> {
-        let Some(replaced_args) = self.try_replace_function_args(&aggregate.args, &aggregate.func_name)?
+        let Some(replaced_args) =
+            self.try_replace_function_args(&aggregate.args, &aggregate.func_name)?
         else {
             return Ok(None);
         };
@@ -521,22 +522,19 @@ impl AggregateInfo {
                     .chain(self.aggregate_sort_descs.iter())
                     .find(|x| x.scalar.equivalent(expr))
                     .cloned()
-                    {
-                        let column_binding = ColumnBindingBuilder::new(
-                            name,
-                            item.index,
-                            Box::new(expr.data_type()?),
+                {
+                    let column_binding = ColumnBindingBuilder::new(
+                        name,
+                        item.index,
+                        Box::new(expr.data_type()?),
                         Visibility::Visible,
                     )
-                        .build();
+                    .build();
 
-                    Some((
-                        true,
-                        BoundColumnRef {
-                            span: expr.span(),
-                            column: column_binding,
-                        },
-                    ))
+                    Some((true, BoundColumnRef {
+                        span: expr.span(),
+                        column: column_binding,
+                    }))
                 } else {
                     None
                 }
@@ -776,7 +774,10 @@ impl<'a> VisitorMut<'a> for ExistingAggregateRewriter<'a> {
             ScalarExpr::AggregateFunction(aggregate) => {
                 let Some(column) = self
                     .aggregate_info
-                    .lookup_existing_aggregate_function_column(aggregate, &aggregate.display_name)?
+                    .lookup_existing_aggregate_function_column(
+                        aggregate,
+                        &aggregate.display_name,
+                    )?
                 else {
                     return Err(ErrorCode::SemanticError(self.error_message.to_string()));
                 };
@@ -1729,12 +1730,9 @@ mod tests {
         .into();
 
         let agg_info = AggregateInfo::default();
-        let err = AggregateRewriter::rewrite_existing_expr(
-            &agg_info,
-            &mut expr,
-            "reject new aggregate",
-        )
-        .unwrap_err();
+        let err =
+            AggregateRewriter::rewrite_existing_expr(&agg_info, &mut expr, "reject new aggregate")
+                .unwrap_err();
 
         assert_eq!(err.message(), "reject new aggregate");
     }

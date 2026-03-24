@@ -29,8 +29,8 @@ use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
-use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::select::SelectList;
 use crate::format_scalar;
 use crate::optimizer::ir::SExpr;
@@ -227,7 +227,10 @@ impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
             self.is_lazy_srf = true;
         }
 
-        if matches!(expr, ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)) {
+        if matches!(
+            expr,
+            ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)
+        ) {
             self.is_lazy_srf = true;
             let span = expr.span();
             AggregateRewriter::rewrite_existing_expr(
