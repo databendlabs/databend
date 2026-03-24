@@ -254,10 +254,10 @@ mod tests {
     #[test]
     fn test_float_param() {
         let mut stmt = parse_stmt("SELECT ?");
-        let params = serde_json::json!([3.14]);
+        let params = serde_json::json!([1.5]);
         substitute_params(&mut stmt, &params).unwrap();
         let result = stmt.to_string();
-        assert!(result.contains("3.14"), "expected 3.14 in: {result}");
+        assert!(result.contains("1.5"), "expected 1.5 in: {result}");
     }
 
     #[test]
