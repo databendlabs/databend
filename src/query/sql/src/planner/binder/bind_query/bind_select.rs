@@ -147,6 +147,14 @@ impl Binder {
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
         self.analyze_window(&mut from_context, &mut select_list)?;
 
+        debug_assert!(
+            select_list
+                .items
+                .iter()
+                .all(|item| !item.scalar.is_aggregate()),
+            "SELECT projection expects aggregate/UDAF calls to be rewritten before projection analysis",
+        );
+
         let aliases = select_list
             .items
             .iter()
@@ -176,11 +184,7 @@ impl Binder {
         };
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
-        let (mut scalar_items, projections) = self.analyze_projection(
-            &from_context.aggregate_info,
-            &from_context.windows,
-            &select_list,
-        )?;
+        let mut projection = self.analyze_projection(&from_context, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(self.analyze_aggregate_having(&mut from_context, &aliases, having)?)
@@ -196,9 +200,8 @@ impl Binder {
 
         let order_items = self.analyze_order_items(
             &mut from_context,
-            &mut scalar_items,
+            &mut projection,
             &aliases,
-            &projections,
             order_by,
             stmt.distinct,
         )?;
@@ -209,7 +212,7 @@ impl Binder {
             self.analyze_lazy_materialization(
                 &from_context,
                 stmt,
-                &scalar_items,
+                &projection,
                 &select_list,
                 &where_scalar,
                 &order_items.items,
@@ -243,19 +246,13 @@ impl Binder {
         }
 
         if stmt.distinct {
-            s_expr = self.bind_distinct(
-                stmt.span,
-                &mut from_context,
-                &projections,
-                &mut scalar_items,
-                s_expr,
-            )?;
+            s_expr = self.bind_distinct(stmt.span, &mut from_context, &mut projection, s_expr)?;
         }
 
-        s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+        s_expr = self.bind_projection(&mut from_context, projection, s_expr)?;
 
         if !order_items.items.is_empty() {
-            s_expr = self.bind_order_by(&from_context, order_items, &select_list, s_expr)?;
+            s_expr = self.bind_order_by(order_items, s_expr)?;
         }
 
         if from_context.have_async_func {

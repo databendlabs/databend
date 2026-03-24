@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -25,13 +24,11 @@ use super::ExprContext;
 use crate::BindContext;
 use crate::Symbol;
 use crate::binder::Binder;
-use crate::binder::ColumnBinding;
 use crate::binder::aggregate::AggregateRewriter;
+use crate::binder::project::SelectOutputAnalysis;
 use crate::binder::scalar::ScalarBinder;
-use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::SExpr;
-use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
@@ -53,16 +50,14 @@ pub struct OrderItem {
     pub index: Symbol,
     pub asc: bool,
     pub nulls_first: bool,
-    pub name: String,
 }
 
 impl Binder {
     pub fn analyze_order_items(
         &mut self,
         bind_context: &mut BindContext,
-        scalar_items: &mut HashMap<Symbol, ScalarItem>,
+        projection: &mut SelectOutputAnalysis,
         aliases: &[(String, ScalarExpr)],
-        projections: &[ColumnBinding],
         order_by: &[OrderByExpr],
         distinct: bool,
     ) -> Result<OrderItems> {
@@ -78,7 +73,7 @@ impl Binder {
                     ..
                 } => {
                     let index = *index as usize;
-                    if index == 0 || index > projections.len() {
+                    if index == 0 || index > projection.column_count() {
                         return Err(ErrorCode::SemanticError(format!(
                             "ORDER BY position {} is not in select list",
                             index
@@ -87,12 +82,11 @@ impl Binder {
                     }
 
                     let index = index - 1;
-                    let projection = &projections[index];
+                    let projection_column = projection.column_at(index).unwrap();
 
                     let asc = order.asc.unwrap_or(true);
                     order_items.push(OrderItem {
-                        index: projection.index,
-                        name: projection.column_name.clone(),
+                        index: projection_column.index,
                         asc,
                         nulls_first: order
                             .nulls_first
@@ -109,7 +103,7 @@ impl Binder {
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr)?;
 
-                    if let Some((idx, (alias, _))) = aliases
+                    if let Some((idx, _)) = aliases
                         .iter()
                         .enumerate()
                         .find(|(_, (_, scalar))| bound_expr.eq(scalar))
@@ -117,8 +111,7 @@ impl Binder {
                         // The order by expression is in the select list.
                         let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
-                            index: projections[idx].index,
-                            name: alias.clone(),
+                            index: projection.column_at(idx).unwrap().index,
                             asc,
                             nulls_first: order
                                 .nulls_first
@@ -140,7 +133,9 @@ impl Binder {
                                         ..
                                     }) = nest_scalar
                                     {
-                                        if let Some(scalar_item) = scalar_items.get(&column.index) {
+                                        if let Some(scalar_item) =
+                                            projection.source_scalar_item(column.index)
+                                        {
                                             return Ok(Some(scalar_item.scalar.clone()));
                                         }
                                     }
@@ -172,11 +167,12 @@ impl Binder {
                             scalar: rewrite_scalar,
                             index: column_binding.index,
                         };
-                        scalar_items.insert(column_binding.index, item);
+                        let projection_item =
+                            self.prepare_select_output_item(bind_context, &item)?;
+                        projection.insert_scalar(item, projection_item);
                         let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
                             index: column_binding.index,
-                            name: column_binding.column_name,
                             asc,
                             nulls_first: order
                                 .nulls_first
@@ -189,28 +185,9 @@ impl Binder {
         Ok(OrderItems { items: order_items })
     }
 
-    pub fn bind_order_by(
-        &mut self,
-        from_context: &BindContext,
-        order_by: OrderItems,
-        select_list: &SelectList<'_>,
-        child: SExpr,
-    ) -> Result<SExpr> {
+    pub fn bind_order_by(&mut self, order_by: OrderItems, child: SExpr) -> Result<SExpr> {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
         for order in order_by.items {
-            if from_context.in_grouping {
-                let mut group_checker = GroupingChecker::new(from_context, false);
-                // Perform grouping check on original scalar expression if order item is alias.
-                if let Some(scalar_item) = select_list
-                    .items
-                    .iter()
-                    .find(|item| item.alias == order.name)
-                {
-                    let mut scalar = scalar_item.scalar.clone();
-                    group_checker.visit(&mut scalar)?;
-                }
-            }
-
             let order_by_item = SortItem {
                 index: order.index,
                 asc: order.asc,
