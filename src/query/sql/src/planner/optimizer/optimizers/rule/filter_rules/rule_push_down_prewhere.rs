@@ -56,10 +56,11 @@ pub struct RulePushDownPrewhere {
     id: RuleID,
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
+    enable_parquet_prewhere: bool,
 }
 
 impl RulePushDownPrewhere {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(metadata: MetadataRef, enable_parquet_prewhere: bool) -> Self {
         Self {
             id: RuleID::PushDownPrewhere,
             matchers: vec![
@@ -82,6 +83,7 @@ impl RulePushDownPrewhere {
                 },
             ],
             metadata,
+            enable_parquet_prewhere,
         }
     }
 
@@ -175,7 +177,11 @@ impl RulePushDownPrewhere {
         let metadata = self.metadata.read().clone();
 
         let table = metadata.table(scan.table_index).table();
-        if !table.support_prewhere() {
+        if !should_push_down_prewhere(
+            table.support_prewhere(),
+            table.storage_format_as_parquet(),
+            self.enable_parquet_prewhere,
+        ) {
             // cannot optimize
             return Ok(s_expr.clone());
         }
@@ -237,6 +243,27 @@ impl RulePushDownPrewhere {
                 Arc::new(child_expr),
             ))
         }
+    }
+}
+
+fn should_push_down_prewhere(
+    support_prewhere: bool,
+    storage_format_as_parquet: bool,
+    enable_parquet_prewhere: bool,
+) -> bool {
+    support_prewhere && (!storage_format_as_parquet || enable_parquet_prewhere)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_push_down_prewhere;
+
+    #[test]
+    fn test_should_push_down_prewhere_respects_parquet_setting() {
+        assert!(!should_push_down_prewhere(true, true, false));
+        assert!(should_push_down_prewhere(true, true, true));
+        assert!(should_push_down_prewhere(true, false, false));
+        assert!(!should_push_down_prewhere(false, false, true));
     }
 }
 
