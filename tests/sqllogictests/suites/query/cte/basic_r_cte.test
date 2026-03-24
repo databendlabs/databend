@@ -517,6 +517,7 @@ WHERE NOT EXISTS (
 ORDER BY z;
 ----
 1
+2
 4
 
 query T
