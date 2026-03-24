@@ -108,6 +108,18 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         optimizer_skip_list: &[],
         default_node_num: 1,
     },
+    LiteReplayCaseSpec {
+        name: "19574_correlated_exists_union",
+        warehouse_distribution: false,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "19574_correlated_exists_union_all",
+        warehouse_distribution: false,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
 ];
 
 impl TestCaseRunner for LiteRunner {

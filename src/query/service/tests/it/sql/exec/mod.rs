@@ -167,4 +167,5 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
     Ok(())
 }
 
+mod correlated_subquery_regression;
 mod get_table_bind_test;

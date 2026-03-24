@@ -855,13 +855,21 @@ impl SubqueryDecorrelatorOptimizer {
             need_cross_join = true;
         }
 
+        let rel_expr = RelExpr::with_s_expr(subquery);
+        let left_prop = rel_expr.derive_relational_prop_child(0)?;
+        let right_prop = rel_expr.derive_relational_prop_child(1)?;
+        let left_need_cross_join =
+            need_cross_join || !correlated_columns.is_subset(&left_prop.outer_columns);
+        let right_need_cross_join =
+            need_cross_join || !correlated_columns.is_subset(&right_prop.outer_columns);
+
         let mut union_all = union_all.clone();
         let left_flatten_plan = self.flatten_plan(
             outer,
             subquery.left_child(),
             correlated_columns,
             flatten_info,
-            need_cross_join,
+            left_need_cross_join,
         )?;
 
         union_all.left_outputs = union_all
@@ -877,7 +885,7 @@ impl SubqueryDecorrelatorOptimizer {
                 Ok((new, expr))
             })
             .chain(correlated_columns.iter().copied().map(|old| {
-                let new = *self.derived_columns.get(&old).unwrap();
+                let new = self.get_derived(old)?;
                 Ok((new, None))
             }))
             .collect::<Result<_>>()?;
@@ -888,7 +896,7 @@ impl SubqueryDecorrelatorOptimizer {
             subquery.right_child(),
             correlated_columns,
             flatten_info,
-            need_cross_join,
+            right_need_cross_join,
         )?;
         union_all.right_outputs = union_all
             .right_outputs
@@ -902,8 +910,8 @@ impl SubqueryDecorrelatorOptimizer {
                 };
                 Ok((new, expr))
             })
-            .chain(correlated_columns.iter().map(|old| {
-                let new = *self.derived_columns.get(old).unwrap();
+            .chain(correlated_columns.iter().copied().map(|old| {
+                let new = self.get_derived(old)?;
                 Ok((new, None))
             }))
             .collect::<Result<_>>()?;

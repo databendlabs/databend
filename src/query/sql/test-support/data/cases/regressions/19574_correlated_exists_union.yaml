@@ -1,0 +1,11 @@
+name: "19574_correlated_exists_union"
+description: "Correlated EXISTS over UNION should decorrelate without panicking"
+
+sql: |
+  SELECT *
+  FROM (VALUES (1)) t(f1)
+  WHERE EXISTS (
+    SELECT 1
+    UNION
+    SELECT 2 WHERE f1 = 1
+  );
