@@ -519,17 +519,17 @@ impl Binder {
                 ));
             };
         }
-        let projection = self.analyze_projection(&from_context, &select_list)?;
+        let select_info = self.analyze_projection(&from_context, &select_list)?;
 
-        if projection.column_count() != plan.required_source_schema.num_fields() {
+        if select_info.column_count() != plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(
                 "Number of columns in select list ({}) does not match that of the corresponding table ({})",
-                projection.column_count(),
+                select_info.column_count(),
                 plan.required_source_schema.num_fields(),
             )));
         }
 
-        let mut s_expr = self.bind_projection(&mut from_context, projection, s_expr)?;
+        let mut s_expr = self.bind_projection(&mut from_context, select_info, s_expr)?;
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;

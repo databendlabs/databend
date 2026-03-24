@@ -132,6 +132,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT sum(number) AS s FROM t HAVING s > 0",
         },
         SqlTestCase {
+            name: "having_aggregate_does_not_make_scalar_projection_valid",
+            description: "Introducing an aggregate in HAVING must not make a non-aggregated SELECT list valid.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number FROM t HAVING count(*) > 0",
+        },
+        SqlTestCase {
             name: "order_by_can_introduce_aggregate_in_aggregate_query",
             description: "ORDER BY may introduce a new aggregate expression when the query is already aggregated.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],

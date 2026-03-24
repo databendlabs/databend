@@ -90,7 +90,7 @@ pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::get_storage_params_from_options;
 pub use location::parse_storage_params_from_uri;
 pub use location::parse_uri_location;
-pub use project::SelectOutputAnalysis;
+pub use project::SelectInfo;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;

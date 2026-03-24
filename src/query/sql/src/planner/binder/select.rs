@@ -40,7 +40,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::binder::bind_table_reference::JoinConditions;
-use crate::binder::project::SelectOutputAnalysis;
+use crate::binder::project::SelectInfo;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
@@ -306,10 +306,10 @@ impl Binder {
         );
 
         if distinct {
-            let mut projection =
-                SelectOutputAnalysis::from_columns(new_bind_context.all_column_bindings().to_vec());
+            let mut select_info =
+                SelectInfo::from_columns(new_bind_context.all_column_bindings().to_vec());
             new_expr =
-                self.bind_distinct(left_span, &mut new_bind_context, &mut projection, new_expr)?;
+                self.bind_distinct(left_span, &mut new_bind_context, &mut select_info, new_expr)?;
         }
 
         Ok((new_expr, new_bind_context))
@@ -380,9 +380,8 @@ impl Binder {
             .set_cte_context(right_context.cte_context);
 
         // then apply distinct
-        let mut projection =
-            SelectOutputAnalysis::from_columns(left_context.all_column_bindings().to_vec());
-        let s_expr = self.bind_distinct(left_span, &mut left_context, &mut projection, s_expr)?;
+        let mut select_info = SelectInfo::from_columns(left_context.all_column_bindings().to_vec());
+        let s_expr = self.bind_distinct(left_span, &mut left_context, &mut select_info, s_expr)?;
         Ok((s_expr, left_context))
     }
 
@@ -482,7 +481,7 @@ impl Binder {
         &self,
         bind_context: &BindContext,
         stmt: &SelectStmt,
-        projection: &SelectOutputAnalysis,
+        select_info: &SelectInfo,
         select_list: &SelectList,
         where_scalar: &Option<ScalarExpr>,
         order_by: &[OrderItem],
@@ -579,7 +578,7 @@ impl Binder {
 
         let mut order_by_cols = HashSet::with_capacity(order_by.len());
         for o in order_by {
-            if let Some(scalar) = projection.source_scalar_item(o.index) {
+            if let Some(scalar) = select_info.source_scalar_item(o.index) {
                 let cols = scalar.scalar.used_columns();
                 order_by_cols.extend(cols);
             } else {

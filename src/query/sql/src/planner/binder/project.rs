@@ -83,24 +83,24 @@ impl RemoveIdentifierQuote {
     }
 }
 
-pub struct SelectOutputAnalysis {
-    pub(in crate::planner::binder) source_scalars: HashMap<Symbol, ScalarItem>,
-    pub(in crate::planner::binder) projection_scalars: HashMap<Symbol, ScalarItem>,
-    pub(in crate::planner::binder) columns: Vec<ColumnBinding>,
+pub struct SelectInfo {
+    pub(super) source_scalars: HashMap<Symbol, ScalarItem>,
+    pub(super) projection_scalars: HashMap<Symbol, ScalarItem>,
+    pub(super) columns: Vec<ColumnBinding>,
 }
 
-pub(in crate::planner::binder) struct ProjectionPlanInput {
+pub(super) struct ProjectionPlanInput {
     pub items: Vec<ScalarItem>,
     pub output_columns: Vec<ColumnBinding>,
 }
 
-pub(in crate::planner::binder) struct DistinctPlanInput {
+pub(super) struct DistinctPlanInput {
     pub pre_distinct_items: Vec<ScalarItem>,
     pub group_items: Vec<ScalarItem>,
 }
 
-impl SelectOutputAnalysis {
-    pub(in crate::planner::binder) fn from_columns(columns: Vec<ColumnBinding>) -> Self {
+impl SelectInfo {
+    pub(super) fn from_columns(columns: Vec<ColumnBinding>) -> Self {
         Self {
             source_scalars: HashMap::new(),
             projection_scalars: HashMap::new(),
@@ -112,12 +112,12 @@ impl SelectOutputAnalysis {
         self.columns.len()
     }
 
-    pub(in crate::planner::binder) fn column_at(&self, index: usize) -> Option<&ColumnBinding> {
+    pub(super) fn column_at(&self, index: usize) -> Option<&ColumnBinding> {
         self.columns.get(index)
     }
 
-    pub(in crate::planner::binder) fn into_projection_plan(self) -> Result<ProjectionPlanInput> {
-        let SelectOutputAnalysis {
+    pub(super) fn into_projection_plan(self) -> Result<ProjectionPlanInput> {
+        let SelectInfo {
             projection_scalars,
             columns,
             ..
@@ -141,10 +141,7 @@ impl SelectOutputAnalysis {
         })
     }
 
-    pub(in crate::planner::binder) fn take_distinct_plan(
-        &mut self,
-        span: Span,
-    ) -> DistinctPlanInput {
+    pub(super) fn take_distinct_plan(&mut self, span: Span) -> DistinctPlanInput {
         let pre_distinct_items = self
             .projection_scalars
             .drain()
@@ -168,21 +165,25 @@ impl SelectOutputAnalysis {
         }
     }
 
-    pub(in crate::planner::binder) fn source_scalar_item(
-        &self,
-        index: Symbol,
-    ) -> Option<&ScalarItem> {
+    pub(super) fn source_scalar_item(&self, index: Symbol) -> Option<&ScalarItem> {
         self.source_scalars.get(&index)
     }
 
-    pub(in crate::planner::binder) fn insert_scalar(
-        &mut self,
-        source_item: ScalarItem,
-        projection_item: ScalarItem,
-    ) {
+    pub(super) fn insert_scalar(&mut self, source_item: ScalarItem, projection_item: ScalarItem) {
         self.source_scalars.insert(source_item.index, source_item);
         self.projection_scalars
             .insert(projection_item.index, projection_item);
+    }
+
+    pub(super) fn rebuild_projection_items<F>(&mut self, mut prepare_item: F) -> Result<()>
+    where F: FnMut(&ScalarItem) -> Result<ScalarItem> {
+        self.projection_scalars.clear();
+        for source_item in self.source_scalars.values() {
+            let projection_item = prepare_item(source_item)?;
+            self.projection_scalars
+                .insert(projection_item.index, projection_item);
+        }
+        Ok(())
     }
 }
 
@@ -193,7 +194,7 @@ impl Binder {
             || bind_context.aggregate_info.has_aggregate_calls()
     }
 
-    pub(in crate::planner::binder) fn prepare_select_output_scalar(
+    pub(super) fn prepare_select_output_scalar(
         &self,
         bind_context: &BindContext,
         scalar: &ScalarExpr,
@@ -209,7 +210,7 @@ impl Binder {
         Ok(scalar)
     }
 
-    pub(in crate::planner::binder) fn prepare_select_output_item(
+    pub(super) fn prepare_select_output_item(
         &self,
         bind_context: &BindContext,
         item: &ScalarItem,
@@ -218,6 +219,15 @@ impl Binder {
             scalar: self.prepare_select_output_scalar(bind_context, &item.scalar)?,
             index: item.index,
         })
+    }
+
+    pub(crate) fn refresh_select_output(
+        &self,
+        bind_context: &BindContext,
+        select_info: &mut SelectInfo,
+    ) -> Result<()> {
+        select_info
+            .rebuild_projection_items(|item| self.prepare_select_output_item(bind_context, item))
     }
 
     /// Resolve which output slot a select item should project.
@@ -268,7 +278,7 @@ impl Binder {
         &mut self,
         bind_context: &BindContext,
         select_list: &SelectList,
-    ) -> Result<SelectOutputAnalysis> {
+    ) -> Result<SelectInfo> {
         let mut columns = Vec::with_capacity(select_list.items.len());
         let mut source_scalars = HashMap::new();
         let mut projection_scalars = HashMap::new();
@@ -302,7 +312,7 @@ impl Binder {
             columns.push(column_binding);
         }
 
-        Ok(SelectOutputAnalysis {
+        Ok(SelectInfo {
             source_scalars,
             projection_scalars,
             columns,
@@ -312,11 +322,11 @@ impl Binder {
     pub fn bind_projection(
         &mut self,
         bind_context: &mut BindContext,
-        projection: SelectOutputAnalysis,
+        select_info: SelectInfo,
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::SelectClause);
-        let plan = projection.into_projection_plan()?;
+        let plan = select_info.into_projection_plan()?;
         let eval_scalar = EvalScalar { items: plan.items };
         let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
         bind_context.columns = plan.output_columns;

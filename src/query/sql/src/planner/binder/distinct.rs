@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 
 use crate::BindContext;
 use crate::binder::Binder;
-use crate::binder::project::SelectOutputAnalysis;
+use crate::binder::project::SelectInfo;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
@@ -29,10 +29,10 @@ impl Binder {
         &self,
         span: Span,
         _bind_context: &mut BindContext,
-        projection: &mut SelectOutputAnalysis,
+        select_info: &mut SelectInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        let distinct_input = projection.take_distinct_plan(span);
+        let distinct_input = select_info.take_distinct_plan(span);
         let pre_distinct_items = distinct_input.pre_distinct_items;
         let group_items = distinct_input.group_items;
 

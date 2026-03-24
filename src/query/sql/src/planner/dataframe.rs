@@ -41,7 +41,7 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::SelectOutputAnalysis;
+use crate::planner::binder::SelectInfo;
 use crate::plans::Limit;
 
 pub struct Dataframe {
@@ -52,7 +52,7 @@ pub struct Dataframe {
 }
 
 impl Dataframe {
-    fn apply_select_output(self, projection: SelectOutputAnalysis) -> Result<Self> {
+    fn apply_select_output(self, select_info: SelectInfo) -> Result<Self> {
         let Dataframe {
             query_ctx,
             mut binder,
@@ -60,7 +60,7 @@ impl Dataframe {
             s_expr,
         } = self;
 
-        let s_expr = binder.bind_projection(&mut bind_context, projection, s_expr)?;
+        let s_expr = binder.bind_projection(&mut bind_context, select_info, s_expr)?;
         let s_expr = binder.add_internal_column_into_expr(&mut bind_context, s_expr)?;
 
         Ok(Self {
@@ -165,9 +165,9 @@ impl Dataframe {
             .binder
             .normalize_select_list(bind_context, select_list)?;
 
-        let projection = self.binder.analyze_projection(bind_context, &select_list)?;
+        let select_info = self.binder.analyze_projection(bind_context, &select_list)?;
 
-        self.apply_select_output(projection)
+        self.apply_select_output(select_info)
     }
 
     pub async fn filter(mut self, expr: Expr) -> Result<Self> {
@@ -202,7 +202,7 @@ impl Dataframe {
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
 
-        let projection = self
+        let select_info = self
             .binder
             .analyze_projection(&self.bind_context, &select_list)?;
 
@@ -210,7 +210,7 @@ impl Dataframe {
             .binder
             .bind_aggregate(&mut self.bind_context, self.s_expr)?;
 
-        self.apply_select_output(projection)
+        self.apply_select_output(select_info)
     }
 
     pub async fn aggregate(
@@ -257,11 +257,11 @@ impl Dataframe {
                 .bind_having(&mut self.bind_context, having, self.s_expr)?;
         }
 
-        let projection = self
+        let select_info = self
             .binder
             .analyze_projection(&self.bind_context, &select_list)?;
 
-        self.apply_select_output(projection)
+        self.apply_select_output(select_info)
     }
 
     pub fn distinct_col(self, columns: &[&str]) -> Result<Self> {
@@ -286,16 +286,16 @@ impl Dataframe {
             .normalize_select_list(&mut self.bind_context, select_list.as_slice())?;
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
-        let mut projection = self
+        let mut select_info = self
             .binder
             .analyze_projection(&self.bind_context, &select_list)?;
         self.s_expr = self.binder.bind_distinct(
             None,
             &mut self.bind_context,
-            &mut projection,
+            &mut select_info,
             self.s_expr,
         )?;
-        self.apply_select_output(projection)
+        self.apply_select_output(select_info)
     }
 
     pub async fn limit(mut self, limit: Option<usize>, offset: usize) -> Result<Self> {
@@ -357,19 +357,21 @@ impl Dataframe {
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
-        let mut projection = self
+        let mut select_info = self
             .binder
             .analyze_projection(&self.bind_context, &select_list)?;
         let order_items = self.binder.analyze_order_items(
             &mut self.bind_context,
-            &mut projection,
+            &mut select_info,
             &aliases,
             &order,
             distinct,
         )?;
+        self.binder
+            .refresh_select_output(&self.bind_context, &mut select_info)?;
         self.s_expr = self.binder.bind_order_by(order_items, self.s_expr)?;
 
-        self.apply_select_output(projection)
+        self.apply_select_output(select_info)
     }
 
     pub async fn except(mut self, dataframe: Dataframe) -> Result<Self> {

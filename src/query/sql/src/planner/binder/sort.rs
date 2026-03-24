@@ -25,7 +25,7 @@ use crate::BindContext;
 use crate::Symbol;
 use crate::binder::Binder;
 use crate::binder::aggregate::AggregateRewriter;
-use crate::binder::project::SelectOutputAnalysis;
+use crate::binder::project::SelectInfo;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::SExpr;
@@ -56,7 +56,7 @@ impl Binder {
     pub fn analyze_order_items(
         &mut self,
         bind_context: &mut BindContext,
-        projection: &mut SelectOutputAnalysis,
+        select_info: &mut SelectInfo,
         aliases: &[(String, ScalarExpr)],
         order_by: &[OrderByExpr],
         distinct: bool,
@@ -73,7 +73,7 @@ impl Binder {
                     ..
                 } => {
                     let index = *index as usize;
-                    if index == 0 || index > projection.column_count() {
+                    if index == 0 || index > select_info.column_count() {
                         return Err(ErrorCode::SemanticError(format!(
                             "ORDER BY position {} is not in select list",
                             index
@@ -82,7 +82,7 @@ impl Binder {
                     }
 
                     let index = index - 1;
-                    let projection_column = projection.column_at(index).unwrap();
+                    let projection_column = select_info.column_at(index).unwrap();
 
                     let asc = order.asc.unwrap_or(true);
                     order_items.push(OrderItem {
@@ -111,7 +111,7 @@ impl Binder {
                         // The order by expression is in the select list.
                         let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
-                            index: projection.column_at(idx).unwrap().index,
+                            index: select_info.column_at(idx).unwrap().index,
                             asc,
                             nulls_first: order
                                 .nulls_first
@@ -134,7 +134,7 @@ impl Binder {
                                     }) = nest_scalar
                                     {
                                         if let Some(scalar_item) =
-                                            projection.source_scalar_item(column.index)
+                                            select_info.source_scalar_item(column.index)
                                         {
                                             return Ok(Some(scalar_item.scalar.clone()));
                                         }
@@ -169,7 +169,7 @@ impl Binder {
                         };
                         let projection_item =
                             self.prepare_select_output_item(bind_context, &item)?;
-                        projection.insert_scalar(item, projection_item);
+                        select_info.insert_scalar(item, projection_item);
                         let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
                             index: column_binding.index,

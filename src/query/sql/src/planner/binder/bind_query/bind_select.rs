@@ -184,7 +184,7 @@ impl Binder {
         };
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
-        let mut projection = self.analyze_projection(&from_context, &select_list)?;
+        let mut select_info = self.analyze_projection(&from_context, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(self.analyze_aggregate_having(&mut from_context, &aliases, having)?)
@@ -200,11 +200,12 @@ impl Binder {
 
         let order_items = self.analyze_order_items(
             &mut from_context,
-            &mut projection,
+            &mut select_info,
             &aliases,
             order_by,
             stmt.distinct,
         )?;
+        self.refresh_select_output(&from_context, &mut select_info)?;
 
         // After all analysis is done.
         if from_context.srf_info.srfs.is_empty() {
@@ -212,7 +213,7 @@ impl Binder {
             self.analyze_lazy_materialization(
                 &from_context,
                 stmt,
-                &projection,
+                &select_info,
                 &select_list,
                 &where_scalar,
                 &order_items.items,
@@ -246,10 +247,10 @@ impl Binder {
         }
 
         if stmt.distinct {
-            s_expr = self.bind_distinct(stmt.span, &mut from_context, &mut projection, s_expr)?;
+            s_expr = self.bind_distinct(stmt.span, &mut from_context, &mut select_info, s_expr)?;
         }
 
-        s_expr = self.bind_projection(&mut from_context, projection, s_expr)?;
+        s_expr = self.bind_projection(&mut from_context, select_info, s_expr)?;
 
         if !order_items.items.is_empty() {
             s_expr = self.bind_order_by(order_items, s_expr)?;

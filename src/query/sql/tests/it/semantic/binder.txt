@@ -135,6 +135,13 @@ EvalScalar
                 └── limit: NONE
 
 
+=== having_aggregate_does_not_make_scalar_projection_valid ===
+description: Introducing an aggregate in HAVING must not make a non-aggregated SELECT list valid.
+sql: SELECT number FROM t HAVING count(*) > 0
+status: error
+code: 1065
+message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
+
 === order_by_can_introduce_aggregate_in_aggregate_query ===
 description: ORDER BY may introduce a new aggregate expression when the query is already aggregated.
 sql: SELECT count(*) FROM t ORDER BY sum(number)
