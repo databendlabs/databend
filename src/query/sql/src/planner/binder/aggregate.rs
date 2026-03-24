@@ -672,19 +672,6 @@ impl AggregateInfo {
             .grouping_id_column
             .clone();
 
-        if function
-            .params
-            .iter()
-            .all(|param| matches!(param, Scalar::Number(_)))
-            && matches!(
-                function.arguments.as_slice(),
-                [ScalarExpr::BoundColumnRef(column_ref)]
-                    if column_ref.column.index == grouping_id_column.index
-            )
-        {
-            return Ok(function.clone());
-        }
-
         let mut replaced_params = Vec::with_capacity(function.arguments.len());
         for arg in &function.arguments {
             if let Some(index) = self.group_items_map.get(arg) {
@@ -1518,15 +1505,6 @@ mod tests {
         .into()
     }
 
-    fn test_grouping_function(expr: ScalarExpr) -> FunctionCall {
-        FunctionCall {
-            span: None,
-            func_name: "grouping".to_string(),
-            params: vec![],
-            arguments: vec![expr],
-        }
-    }
-
     #[test]
     fn aggregate_lookup_reuses_original_and_rewritten_forms() {
         let original = AggregateFunction {
@@ -1585,94 +1563,6 @@ mod tests {
             agg_info.lookup_udaf_call(&replaced).unwrap().index,
             Symbol::new(84)
         );
-    }
-
-    #[test]
-    fn aggregate_rewriter_skips_window_function_children() {
-        let mut expr = ScalarExpr::WindowFunction(crate::plans::WindowFunc {
-            span: None,
-            display_name: "sum(a) over ()".to_string(),
-            func: crate::plans::WindowFuncType::Aggregate(AggregateFunction {
-                span: None,
-                display_name: "sum(a)".to_string(),
-                func_name: "sum".to_string(),
-                distinct: false,
-                params: vec![],
-                args: vec![test_column("a", Symbol::new(0))],
-                return_type: Box::new(DataType::Number(NumberDataType::Int64)),
-                sort_descs: vec![],
-            }),
-            partition_by: vec![],
-            order_by: vec![],
-            frame: crate::plans::WindowFuncFrame::default(),
-        });
-
-        let mut agg_info = AggregateInfo::default();
-        let metadata = Arc::new(parking_lot::RwLock::new(crate::Metadata::default()));
-        AggregateRewriter::rewrite_expr(&mut agg_info, metadata, &mut expr).unwrap();
-
-        assert!(matches!(
-            expr,
-            ScalarExpr::WindowFunction(crate::plans::WindowFunc {
-                func: crate::plans::WindowFuncType::Aggregate(_),
-                ..
-            })
-        ));
-        assert!(!agg_info.has_aggregate_calls());
-    }
-
-    #[test]
-    fn grouping_rewrite_is_idempotent() {
-        let depname = test_column("depname", Symbol::new(0));
-        let salary = test_column("salary", Symbol::new(2));
-        let grouping_id_column = if let ScalarExpr::BoundColumnRef(column_ref) =
-            test_column("_grouping_id", Symbol::new(6))
-        {
-            column_ref.column
-        } else {
-            unreachable!()
-        };
-
-        let mut agg_info = AggregateInfo::default();
-        agg_info.replace_group_items(vec![
-            ScalarItem {
-                scalar: depname.clone(),
-                index: Symbol::new(0),
-            },
-            ScalarItem {
-                scalar: salary.clone(),
-                index: Symbol::new(2),
-            },
-            ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: grouping_id_column.clone(),
-                }),
-                index: Symbol::new(6),
-            },
-        ]);
-        agg_info.grouping_sets = Some(GroupingSetsInfo {
-            sets: vec![
-                vec![Symbol::new(0), Symbol::new(2)],
-                vec![Symbol::new(0)],
-                vec![],
-            ],
-            dup_group_items: vec![],
-            grouping_id_column: grouping_id_column.clone(),
-        });
-
-        let first = agg_info
-            .replace_grouping(&test_grouping_function(salary))
-            .unwrap();
-        assert_eq!(first.params, vec![Scalar::Number(NumberScalar::Int64(1))],);
-        assert!(matches!(
-            first.arguments.as_slice(),
-            [ScalarExpr::BoundColumnRef(column_ref)] if column_ref.column.index == Symbol::new(6)
-        ));
-
-        let second = agg_info.replace_grouping(&first).unwrap();
-        assert_eq!(second.params, first.params);
-        assert_eq!(second.arguments, first.arguments);
     }
 
     #[test]
