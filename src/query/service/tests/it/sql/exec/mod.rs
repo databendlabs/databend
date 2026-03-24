@@ -21,7 +21,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::OptimizeCompactBlockInterpreter;
-use databend_query::physical_plans::PhysicalPlanBuilder;
+use databend_query::interpreters::SelectInterpreter;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
@@ -170,7 +170,8 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_result_projection_schema_matches_nullable_join_outputs() -> anyhow::Result<()> {
+async fn test_result_projection_schema_mismatch_returns_error_on_select_execution()
+-> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
@@ -188,37 +189,39 @@ async fn test_result_projection_schema_matches_nullable_join_outputs() -> anyhow
         let _ = interpreter.execute(ctx.clone()).await?;
     }
 
-    for query in [
-        "select c from issue_19568_t1 left outer join issue_19568_t2 on issue_19568_t1.a = issue_19568_t2.c order by c nulls first",
-        "select a, c from issue_19568_t1 full outer join issue_19568_t2 on issue_19568_t1.a = issue_19568_t2.c order by a nulls first, c nulls first",
-        "select c from issue_19568_t1 left outer join issue_19568_t2 on issue_19568_t1.a > issue_19568_t2.c order by c nulls first",
-        "select a, c from issue_19568_t1 full outer join issue_19568_t2 on issue_19568_t1.a < issue_19568_t2.c order by a nulls first, c nulls first",
-    ] {
-        let (plan, _) = planner.plan_sql(query).await?;
-        let Plan::Query {
-            s_expr,
-            bind_context,
-            metadata,
-            ..
-        } = plan
-        else {
-            unreachable!("expected query plan");
-        };
+    let query = "SELECT c FROM issue_19568_t1 LEFT OUTER JOIN issue_19568_t2 ON issue_19568_t1.a = issue_19568_t2.c ORDER BY c NULLS FIRST";
+    let (plan, _) = planner.plan_sql(query).await?;
+    let Plan::Query {
+        s_expr,
+        mut bind_context,
+        metadata,
+        formatted_ast,
+        ignore_result,
+        ..
+    } = plan
+    else {
+        unreachable!("expected query plan");
+    };
 
-        let mut builder = PhysicalPlanBuilder::new(metadata, ctx.clone(), false);
-        let physical_plan = builder.build(&s_expr, bind_context.column_set()).await?;
-        let output_schema = physical_plan.output_schema()?;
-
-        for column in &bind_context.columns {
-            let field = output_schema.field_with_name(&column.index.to_string())?;
-            assert_eq!(
-                field.data_type(),
-                column.data_type.as_ref(),
-                "query `{query}` produced mismatched result projection schema for column {}",
-                column.column_name
-            );
-        }
+    for column in &mut bind_context.columns {
+        column.data_type = Box::new(column.data_type.remove_nullable());
     }
+
+    let interpreter = SelectInterpreter::try_create(
+        ctx.clone(),
+        *bind_context,
+        *s_expr,
+        metadata,
+        formatted_ast,
+        ignore_result,
+    )?;
+    let err = match interpreter.execute(ctx).await {
+        Ok(_) => panic!("expected DATA_STRUCT_MISS_MATCH for query: {query}"),
+        Err(err) => err,
+    };
+
+    assert_eq!(err.code(), ErrorCode::DATA_STRUCT_MISS_MATCH);
+    assert!(err.message().contains("Result projection schema mismatch"));
 
     Ok(())
 }
