@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_column::types::timestamp_tz;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -257,5 +258,23 @@ fn test_find_leveled_eq_filters() {
             expected_database,
             expected_table
         ]);
+    }
+}
+
+#[test]
+fn test_pg_hex_literal_type_check() {
+    let cases = [
+        ("typeof(X'ABCD')", Scalar::String("BINARY".to_string())),
+        ("to_hex(X'ABCD')", Scalar::String("abcd".to_string())),
+    ];
+
+    for (text, expected) in cases {
+        let raw_expr = parse_raw_expr(text, &[], &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let expr = type_check::rewrite_function_to_cast(expr);
+        let (expr, _) =
+            ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+        let scalar = expr.into_constant().unwrap().scalar;
+        assert_eq!(scalar, expected, "{text}");
     }
 }

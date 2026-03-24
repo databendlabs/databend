@@ -1609,6 +1609,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             value: parse_uint(str, 16).map_err(nom::Err::Failure)?,
         })
     });
+    let hex_binary = map_res(pg_literal_hex_str, |str| {
+        Ok(ExprElement::Literal {
+            value: parse_binary_hex(str).map_err(nom::Err::Failure)?,
+        })
+    });
     let decimal_float = map_res(
         verify(
             rule! {
@@ -1757,7 +1762,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         LiteralCodeString => with_span!(code_string).parse(i),
         LiteralInteger => with_span!(decimal_uint).parse(i),
         LiteralFloat => with_span!(rule!{ #decimal_float | #dot_number_map_access }).parse(i),
-        MySQLLiteralHex | PGLiteralHex => with_span!(hex_uint).parse(i),
+        MySQLLiteralHex => with_span!(hex_uint).parse(i),
+        PGLiteralHex => with_span!(hex_binary).parse(i),
         TRUE | FALSE => with_span!(boolean).parse(i),
         NULL => with_span!(null).parse(i),
         ROW => with_span!(column_row).parse(i),
@@ -1924,6 +1930,9 @@ pub fn literal(i: Input) -> IResult<Literal> {
     let mut hex_uint = map_res(literal_hex_str, |str| {
         parse_uint(str, 16).map_err(nom::Err::Failure)
     });
+    let mut hex_binary = map_res(pg_literal_hex_str, |str| {
+        parse_binary_hex(str).map_err(nom::Err::Failure)
+    });
     let mut decimal_float = map_res(
         rule! {
            LiteralFloat
@@ -1936,7 +1945,8 @@ pub fn literal(i: Input) -> IResult<Literal> {
         LiteralCodeString => code_string.parse(i),
         LiteralInteger => decimal_uint.parse(i),
         LiteralFloat => decimal_float.parse(i),
-        MySQLLiteralHex | PGLiteralHex => hex_uint(i),
+        MySQLLiteralHex => hex_uint(i),
+        PGLiteralHex => hex_binary(i),
         TRUE | FALSE => boolean.parse(i),
         NULL => null.parse(i),
     );
@@ -1951,23 +1961,21 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
 pub fn literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
     // 0XFFFF
-    let mysql_hex = map(
+    map(
         rule! {
             MySQLLiteralHex
         },
         |token| &token.text()[2..],
-    );
-    // x'FFFF'
-    let pg_hex = map(
+    )
+    .parse(i)
+}
+
+pub fn pg_literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
+    map(
         rule! {
             PGLiteralHex
         },
         |token| &token.text()[2..token.text().len() - 1],
-    );
-
-    rule!(
-        #mysql_hex
-        | #pg_hex
     )
     .parse(i)
 }
@@ -2840,6 +2848,12 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
             scale: 0,
         })
     }
+}
+
+pub fn parse_binary_hex(text: &str) -> Result<Literal, ErrorKind> {
+    let bytes =
+        hex::decode(text).map_err(|_| ErrorKind::Other("unable to parse binary hex literal"))?;
+    Ok(Literal::Binary(bytes))
 }
 
 fn try_negate_literal(literal: &Literal) -> Option<Literal> {

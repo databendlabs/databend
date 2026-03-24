@@ -44,3 +44,11 @@ fn test_multi_table_insert_parse_error() {
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
     }
 }
+
+#[test]
+fn test_binary_literal_display() {
+    let sql = "select X'ABCD'";
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    assert_eq!(stmt.to_string(), "SELECT X'ABCD'");
+}

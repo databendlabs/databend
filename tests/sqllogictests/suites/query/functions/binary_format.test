@@ -13,6 +13,11 @@ insert into fmt_bin values
 statement ok
 set binary_output_format = 'hex'
 
+query TT
+select typeof(X'ABCD'), to_hex(X'ABCD')
+----
+BINARY abcd
+
 query IT
 select v from fmt_bin order by id
 ----
