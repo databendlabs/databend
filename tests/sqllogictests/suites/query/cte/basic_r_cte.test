@@ -151,6 +151,44 @@ with recursive t as (select 1 as x union all select x+1 from t where x < 3) sele
 1
 
 
+statement ok
+set numeric_cast_option = 'truncating'
+
+query T
+WITH RECURSIVE input(sud) AS (
+    VALUES('53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79')
+),
+digits(z, lp) AS (
+    VALUES('1', 1)
+    UNION ALL SELECT CAST(lp+1 AS TEXT), lp+1 FROM digits WHERE lp<9
+),
+x(s, ind) AS (
+    SELECT sud, position('.' IN sud) FROM input
+    UNION ALL
+    SELECT
+        substr(s, 1, ind-1) || z || substr(s, ind+1),
+        position('.' IN (substr(s, 1, ind-1) || z || substr(s, ind+1)))
+    FROM x, digits AS z
+    WHERE ind>0
+    AND NOT EXISTS (
+        SELECT 1 FROM digits AS lp
+        WHERE z.z = substr(s, ((ind-1)/9)::int*9 + lp, 1)
+        OR z.z = substr(s, ((ind-1)%9) + (lp-1)*9 + 1, 1)
+        OR z.z = substr(s,
+            (((ind-1)/27)::int * 27) +
+            ((((ind-1)%9)/3)::int * 3) +
+            ((lp-1)/3)::int * 9 +
+            ((lp-1)%3) + 1, 1)
+    )
+)
+SELECT s FROM x WHERE ind=0;
+----
+534678912672195348198342567859761423426853791713924856961537284287419635345286179
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+
 # recursive cte scan used by multiple times in recursive part of recursive cte
 query I
 with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t;

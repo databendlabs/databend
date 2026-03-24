@@ -56,7 +56,10 @@ use crate::plans::SubqueryType;
 impl SubqueryDecorrelatorOptimizer {
     fn matches_simple_subquery_input(s_expr: &SExpr) -> bool {
         match s_expr.plan() {
-            RelOperator::Scan(_) | RelOperator::RecursiveCteScan(_) | RelOperator::UnionAll(_) => {
+            RelOperator::Scan(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::UnionAll(_)
+            | RelOperator::ConstantTableScan(_) => {
                 true
             }
             RelOperator::EvalScalar(_) => s_expr
@@ -67,6 +70,7 @@ impl SubqueryDecorrelatorOptimizer {
                         RelOperator::Scan(_)
                             | RelOperator::RecursiveCteScan(_)
                             | RelOperator::UnionAll(_)
+                            | RelOperator::ConstantTableScan(_)
                     )
                 })
                 .unwrap_or(false),
@@ -139,13 +143,12 @@ impl SubqueryDecorrelatorOptimizer {
         let mut left_conditions = vec![];
         let mut right_conditions = vec![];
         let mut non_equi_conditions = vec![];
-        let mut left_filters = vec![];
         let mut right_filters = vec![];
         for pred in filter.predicates.iter() {
             let join_condition = JoinPredicate::new(pred, &outer_prop, &filter_prop);
             match join_condition {
-                JoinPredicate::Left(filter) | JoinPredicate::ALL(filter) => {
-                    left_filters.push(filter.clone());
+                JoinPredicate::Left(_) | JoinPredicate::ALL(_) => {
+                    non_equi_conditions.push(pred.clone());
                 }
                 JoinPredicate::Right(filter) => {
                     right_filters.push(filter.clone());
@@ -194,18 +197,7 @@ impl SubqueryDecorrelatorOptimizer {
         };
 
         // Rewrite plan to semi-join.
-        let mut left_child = outer.clone();
-        if !left_filters.is_empty() {
-            left_child = SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: left_filters,
-                    }
-                    .into(),
-                ),
-                Arc::new(left_child),
-            );
-        }
+        let left_child = outer.clone();
 
         // Remove `Filter` from subquery.
         let mut right_child = subquery
