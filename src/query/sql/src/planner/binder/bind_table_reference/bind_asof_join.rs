@@ -164,13 +164,13 @@ impl Binder {
                     .data_type()?
                     .remove_nullable()
                     .infinity()
-                    .unwrap()
+                    .map_err(ErrorCode::BadDataValueType)?
             } else {
                 left_column
                     .data_type()?
                     .remove_nullable()
                     .ninfinity()
-                    .unwrap()
+                    .map_err(ErrorCode::BadDataValueType)?
             };
             ConstantExpr {
                 span: left_column.span(),

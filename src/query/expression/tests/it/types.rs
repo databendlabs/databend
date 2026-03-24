@@ -15,8 +15,12 @@
 use arrow_schema::Schema;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz;
@@ -88,5 +92,36 @@ fn test_convert_types() {
         let data = serialize_column(&c);
         let c2 = deserialize_column(&data).unwrap();
         assert_eq!(c, c2, "in {idx} | datatype: {}", c.data_type());
+    }
+}
+
+#[test]
+fn test_integer_infinity_boundaries() {
+    let cases = [
+        (
+            DataType::Number(NumberDataType::UInt8),
+            Scalar::Number(NumberScalar::UInt8(u8::MAX)),
+            Scalar::Number(NumberScalar::UInt8(u8::MIN)),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt16),
+            Scalar::Number(NumberScalar::UInt16(u16::MAX)),
+            Scalar::Number(NumberScalar::UInt16(u16::MIN)),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt32),
+            Scalar::Number(NumberScalar::UInt32(u32::MAX)),
+            Scalar::Number(NumberScalar::UInt32(u32::MIN)),
+        ),
+        (
+            DataType::Number(NumberDataType::UInt64),
+            Scalar::Number(NumberScalar::UInt64(u64::MAX)),
+            Scalar::Number(NumberScalar::UInt64(u64::MIN)),
+        ),
+    ];
+
+    for (data_type, max_value, min_value) in cases {
+        assert_eq!(data_type.infinity().unwrap(), max_value, "{data_type:?}");
+        assert_eq!(data_type.ninfinity().unwrap(), min_value, "{data_type:?}");
     }
 }
