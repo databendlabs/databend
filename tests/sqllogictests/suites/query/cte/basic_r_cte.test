@@ -472,6 +472,7 @@ x(s, ind) AS (
 SELECT substr(s, 3, 1) AS z FROM x WHERE ind <> 3 ORDER BY z;
 ----
 1
+2
 4
 
 query T
