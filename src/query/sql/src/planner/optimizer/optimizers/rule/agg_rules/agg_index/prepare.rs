@@ -315,19 +315,25 @@ impl QueryInfo {
         new_selection_set: &mut HashSet<ScalarItem>,
     ) -> Result<Option<Vec<ScalarExpr>>> {
         let mut rewritten = Vec::with_capacity(args.len());
+        let mut all_rewritten = true;
         for arg in args {
-            let Some(new_arg) = self.check_output_cols(
+            let new_arg = self.check_output_cols(
                 arg,
                 index_output_cols,
                 index_column_map,
                 new_selection_set,
-            )?
-            else {
-                return Ok(None);
-            };
-            rewritten.push(new_arg);
+            )?;
+            if let Some(new_arg) = new_arg {
+                rewritten.push(new_arg);
+            } else {
+                all_rewritten = false;
+            }
         }
-        Ok(Some(rewritten))
+        if all_rewritten {
+            Ok(Some(rewritten))
+        } else {
+            Ok(None)
+        }
     }
 
     pub(super) fn check_output_cols(

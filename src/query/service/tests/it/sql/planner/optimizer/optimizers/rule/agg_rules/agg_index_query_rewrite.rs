@@ -228,6 +228,13 @@ fn get_test_suites() -> Vec<TestSuite> {
             index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec![],
         },
+        TestSuite {
+            query: "select avg(a) from t",
+            index: "select count(), count(a), sum(a), sum(b) from t",
+            is_matched: true,
+            index_selection: vec!["index_col_2 (#2)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
         // query: eval-agg-eval-filter-scan, index: eval-agg-eval-scan
         TestSuite {
             query: "select sum(a) + 1 from t where b > 1 group by b",
