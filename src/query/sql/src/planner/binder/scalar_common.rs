@@ -97,12 +97,25 @@ pub fn grouping_clause_error(function: &FunctionCall, clause_name: &str) -> Erro
     let err = if function.params.is_empty() && function.arguments.is_empty() {
         ErrorCode::BadArguments("grouping requires at least one argument")
     } else {
-        ErrorCode::SemanticError(format!(
-            "{clause_name} clause can't contain grouping functions"
-        ))
+        ErrorCode::SemanticError(format!("{clause_name} can't contain grouping functions"))
     };
 
     err.set_span(function.span)
+}
+
+pub fn reject_grouping_functions<'a>(
+    scalars: impl IntoIterator<Item = &'a ScalarExpr>,
+    clause_name: &str,
+) -> Result<()> {
+    for scalar in scalars {
+        let mut grouping_finder = Finder::new(&is_grouping_function);
+        grouping_finder.visit(scalar)?;
+        if let Some(ScalarExpr::FunctionCall(func)) = grouping_finder.scalars().first() {
+            return Err(grouping_clause_error(func, clause_name));
+        }
+    }
+
+    Ok(())
 }
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {

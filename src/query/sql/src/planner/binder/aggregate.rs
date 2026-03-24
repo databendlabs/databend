@@ -34,6 +34,7 @@ use itertools::Itertools;
 use super::ExprContext;
 use super::Finder;
 use super::prune_by_children;
+use super::reject_grouping_functions;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::Symbol;
@@ -930,6 +931,15 @@ impl Binder {
                 ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
             )
         };
+
+        reject_grouping_functions(
+            bind_context
+                .aggregate_info
+                .group_items
+                .iter()
+                .map(|item| &item.scalar),
+            "GROUP BY items",
+        )?;
 
         for item in bind_context.aggregate_info.group_items.iter() {
             let mut finder = Finder::new(&f);

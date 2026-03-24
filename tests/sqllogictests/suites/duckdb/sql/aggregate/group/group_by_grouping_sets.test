@@ -84,6 +84,15 @@ SELECT count() FROM t WHERE GROUPING() = 0 GROUP BY a
 statement error
 SELECT count() OVER () FROM t GROUP BY a QUALIFY GROUPING() = 0
 
+statement error
+SELECT count() FROM t t1 JOIN t t2 ON GROUPING() = 0 GROUP BY t1.a
+
+statement error
+SELECT 1 FROM t GROUP BY GROUPING SETS ((GROUPING()))
+
+statement error
+SELECT GROUPING(a) AS g, count() OVER () FROM t GROUP BY GROUPING SETS ((a), ()) QUALIFY g = 0
+
 query TTI
 select a, b, sum(c) as sc from t group by grouping sets ((a,b),(),(b),(a)) order by sc;
 ----

@@ -95,20 +95,49 @@ async fn test_invalid_grouping_returns_semantic_error() -> anyhow::Result<()> {
         .execute_command("CREATE TABLE students(course STRING, type STRING)")
         .await?;
 
-    for sql in [
-        "SELECT GROUPING()",
-        "SELECT GROUPING() FROM students",
-        "SELECT count() FROM students WHERE GROUPING() = 0 GROUP BY course",
-        "SELECT count() OVER () FROM students GROUP BY course QUALIFY GROUPING() = 0",
+    for (sql, expected) in [
+        (
+            "SELECT GROUPING()",
+            "grouping requires at least one argument",
+        ),
+        (
+            "SELECT GROUPING() FROM students",
+            "grouping requires at least one argument",
+        ),
+        (
+            "SELECT count() FROM students WHERE GROUPING() = 0 GROUP BY course",
+            "grouping requires at least one argument",
+        ),
+        (
+            "SELECT count() OVER () FROM students GROUP BY course QUALIFY GROUPING() = 0",
+            "grouping requires at least one argument",
+        ),
+        (
+            "SELECT count() \
+             FROM students s1 \
+             JOIN students s2 ON GROUPING() = 0 \
+             GROUP BY s1.course",
+            "grouping requires at least one argument",
+        ),
+        (
+            "SELECT 1 FROM students GROUP BY GROUPING SETS ((GROUPING()))",
+            "grouping requires at least one argument",
+        ),
+        (
+            "SELECT GROUPING(course) AS g, count() OVER () \
+             FROM students \
+             GROUP BY GROUPING SETS ((course), ()) \
+             QUALIFY g = 0",
+            "Qualify clause can't contain grouping functions",
+        ),
     ] {
         let err = planner
             .plan_sql(sql)
             .await
             .expect_err("invalid grouping() should return a semantic error");
         assert!(
-            err.message()
-                .contains("grouping requires at least one argument"),
-            "unexpected error for `{sql}`: {err}"
+            err.message().contains(expected),
+            "unexpected error for `{sql}`: {err}",
         );
     }
 

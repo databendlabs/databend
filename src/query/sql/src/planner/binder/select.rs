@@ -32,8 +32,7 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::Finder;
-use super::grouping_clause_error;
-use super::is_grouping_function;
+use super::reject_grouping_functions;
 use super::sort::OrderItem;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -105,11 +104,7 @@ impl Binder {
             .set_span(scalar.span()));
         }
 
-        let mut grouping_finder = Finder::new(&is_grouping_function);
-        grouping_finder.visit(&scalar)?;
-        if let Some(ScalarExpr::FunctionCall(func)) = grouping_finder.scalars().first() {
-            return Err(grouping_clause_error(func, "Where"));
-        }
+        reject_grouping_functions(std::iter::once(&scalar), "Where clause")?;
 
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),

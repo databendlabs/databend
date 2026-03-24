@@ -19,8 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::Finder;
-use super::grouping_clause_error;
-use super::is_raw_grouping_function;
+use super::reject_grouping_functions;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ColumnBindingBuilder;
@@ -80,11 +79,7 @@ impl Binder {
             .set_span(qualify.span()));
         }
 
-        let mut grouping_finder = Finder::new(&is_raw_grouping_function);
-        grouping_finder.visit(&qualify)?;
-        if let Some(ScalarExpr::FunctionCall(func)) = grouping_finder.scalars().first() {
-            return Err(grouping_clause_error(func, "Qualify"));
-        }
+        reject_grouping_functions(std::iter::once(&qualify), "Qualify clause")?;
 
         let scalar = {
             let mut qualify = qualify;
