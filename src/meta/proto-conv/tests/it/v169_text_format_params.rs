@@ -20,8 +20,8 @@ use fastrace::func_name;
 use crate::common;
 
 #[test]
-fn test_decode_v170_text_file_format_params() -> anyhow::Result<()> {
-    let text_file_format_params_v170 = vec![
+fn test_decode_v169_text_file_format_params() -> anyhow::Result<()> {
+    let text_file_format_params_v169 = vec![
         8, 11, 16, 2, 26, 1, 124, 34, 1, 10, 42, 8, 110, 97, 110, 95, 117, 116, 102, 56, 50, 1, 92,
         58, 1, 34, 66, 4, 78, 85, 76, 76, 72, 1, 82, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65,
         85, 76, 84, 88, 1, 160, 6, 169, 1, 168, 6, 24,
@@ -42,8 +42,8 @@ fn test_decode_v170_text_file_format_params() -> anyhow::Result<()> {
 
     common::test_load_old(
         func_name!(),
-        text_file_format_params_v170.as_slice(),
-        170,
+        text_file_format_params_v169.as_slice(),
+        169,
         want(),
     )?;
     common::test_pb_from_to(func_name!(), want())?;
