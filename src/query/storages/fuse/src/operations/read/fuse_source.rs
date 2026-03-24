@@ -33,6 +33,7 @@ use log::info;
 use super::block_format::FuseNativeBlockFormat;
 use super::block_format::FuseParquetBlockFormat;
 use super::read_block_context::ReadBlockContext;
+use super::read_data_transform::ReadDataProgress;
 use super::read_data_transform::ReadDataTransform;
 use crate::FuseStorageFormat;
 use crate::fuse_part::FuseBlockPartInfo;
@@ -113,6 +114,8 @@ pub fn build_fuse_source_pipeline(
         ))
     })?;
 
+    let progress = ReadDataProgress::new(pipeline.output_len());
+
     pipeline.add_transform(|input, output| {
         ReadDataTransform::create(
             plan.scan_id,
@@ -120,6 +123,7 @@ pub fn build_fuse_source_pipeline(
             table_schema.clone(),
             block_reader.clone(),
             read_block_context.clone(),
+            progress.clone(),
             input,
             output,
         )
