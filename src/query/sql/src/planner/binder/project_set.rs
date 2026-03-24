@@ -189,7 +189,7 @@ impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
             if let Some(agg_item) = self
                 .bind_context
                 .aggregate_info
-                .get_aggregate_function(&agg_func.display_name)
+                .get_aggregate_function(agg_func)
             {
                 let column_binding = ColumnBindingBuilder::new(
                     agg_func.display_name.clone(),

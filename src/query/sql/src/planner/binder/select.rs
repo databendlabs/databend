@@ -510,7 +510,7 @@ impl Binder {
             || stmt.distinct
             || stmt.qualify.is_some()
             || !bind_context.aggregate_info.group_items.is_empty()
-            || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || bind_context.aggregate_info.has_aggregates()
             || bind_context.has_srf_recursive()
         {
             return Ok(());

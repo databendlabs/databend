@@ -542,7 +542,7 @@ impl<'a> VisitorMut<'a> for WindowAggregateRewriter<'a> {
             let Some(agg) = self
                 .bind_context
                 .aggregate_info
-                .get_aggregate_function(&agg_func.display_name)
+                .get_aggregate_function(agg_func)
             else {
                 return Err(ErrorCode::BadArguments("Invalid window function argument"));
             };

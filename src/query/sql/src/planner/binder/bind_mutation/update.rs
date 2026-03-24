@@ -237,12 +237,17 @@ impl Binder {
                     AggregateRewriter::new(&mut mutation.bind_context, self.metadata.clone());
                 rewriter.visit(&mut any_func).unwrap();
 
-                let new = mutation
-                    .bind_context
-                    .aggregate_info
-                    .get_aggregate_function(&display_name)
-                    .unwrap()
-                    .index;
+                let new = match &any_func {
+                    ScalarExpr::AggregateFunction(agg) => {
+                        mutation
+                            .bind_context
+                            .aggregate_info
+                            .get_aggregate_function(agg)
+                            .unwrap()
+                            .index
+                    }
+                    _ => unreachable!("aggregate rewriter must keep aggregate shape here"),
+                };
 
                 let (cast, new) = if !binding.data_type.is_nullable() {
                     let ColumnBinding {

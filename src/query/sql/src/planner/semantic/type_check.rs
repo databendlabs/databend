@@ -5692,9 +5692,18 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         }
 
-        let tenant = self.ctx.get_tenant();
-        let provider = UserApiProvider::instance();
-        let udf = databend_common_base::runtime::block_on(provider.get_udf(&tenant, udf_name))?;
+        let udf = if let Some(udf) = self.bind_context.udf_cache.read().get(udf_name).cloned() {
+            udf
+        } else {
+            let tenant = self.ctx.get_tenant();
+            let provider = UserApiProvider::instance();
+            let udf = databend_common_base::runtime::block_on(provider.get_udf(&tenant, udf_name))?;
+            self.bind_context
+                .udf_cache
+                .write()
+                .insert(udf_name.to_string(), udf.clone());
+            udf
+        };
 
         let Some(udf) = udf else {
             return Ok(None);

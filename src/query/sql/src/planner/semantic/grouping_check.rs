@@ -115,10 +115,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 return Err(ErrorCode::Internal("Group Check: Invalid window function"));
             }
             ScalarExpr::AggregateFunction(agg) => {
-                let Some(agg_func) = self
-                    .bind_context
-                    .aggregate_info
-                    .get_aggregate_function(&agg.display_name)
+                let Some(agg_func) = self.bind_context.aggregate_info.get_aggregate_function(agg)
                 else {
                     return Err(ErrorCode::Internal("Invalid aggregate function"));
                 };
@@ -138,11 +135,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 return Ok(());
             }
             ScalarExpr::UDAFCall(udaf) => {
-                let Some(agg_func) = self
-                    .bind_context
-                    .aggregate_info
-                    .get_aggregate_function(&udaf.display_name)
-                else {
+                let Some(agg_func) = self.bind_context.aggregate_info.get_udaf_call(udaf) else {
                     return Err(ErrorCode::Internal("Invalid udaf function"));
                 };
 
@@ -214,8 +207,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         if self
             .bind_context
             .aggregate_info
-            .get_aggregate_function(&column.column.column_name)
-            .is_some()
+            .has_aggregate_index(column.column.index)
         {
             // Be replaced by `AggregateRewriter`.
             return Ok(());

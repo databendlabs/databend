@@ -129,8 +129,11 @@ pub struct GroupingSetsInfo {
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
-    /// Aggregation functions
+    /// Builtin aggregation functions.
     pub aggregate_functions: Vec<ScalarItem>,
+
+    /// User-defined aggregation functions.
+    pub udaf_calls: Vec<ScalarItem>,
 
     /// Arguments of aggregation functions
     pub aggregate_arguments: Vec<ScalarItem>,
@@ -143,10 +146,6 @@ pub struct AggregateInfo {
 
     /// Output columns of aggregation, including group items and aggregate functions.
     pub output_columns: Vec<ColumnBinding>,
-
-    /// Mapping: (aggregate function display name) -> (index of agg func in `aggregate_functions`)
-    /// This is used to find a aggregate function in current context.
-    aggregate_functions_map: HashMap<String, usize>,
 
     /// Mapping: (group item) -> (index of group item in `group_items`)
     /// This is used to check if a scalar expression is a group item.
@@ -161,17 +160,96 @@ pub struct AggregateInfo {
 }
 
 impl AggregateInfo {
-    fn push_aggregate_function(&mut self, item: ScalarItem, display_name: String) {
+    fn push_aggregate_function(&mut self, item: ScalarItem) {
         self.aggregate_functions.push(item);
-        self.aggregate_functions_map
-            .insert(display_name, self.aggregate_functions.len() - 1);
     }
 
-    pub fn get_aggregate_function(&self, display_name: &str) -> Option<&ScalarItem> {
-        self.aggregate_functions_map
-            .get(display_name)
-            .map(|index| &self.aggregate_functions[*index])
+    fn push_udaf_call(&mut self, item: ScalarItem) {
+        self.udaf_calls.push(item);
     }
+
+    pub fn get_aggregate_function(&self, aggregate: &AggregateFunction) -> Option<&ScalarItem> {
+        self.aggregate_functions.iter().find(|item| {
+            matches!(
+                &item.scalar,
+                ScalarExpr::AggregateFunction(existing)
+                    if aggregate_functions_match(existing, aggregate)
+            )
+        })
+    }
+
+    pub fn get_udaf_call(&self, udaf: &UDAFCall) -> Option<&ScalarItem> {
+        self.udaf_calls.iter().find(|item| {
+            matches!(
+                &item.scalar,
+                ScalarExpr::UDAFCall(existing) if udaf_calls_match(existing, udaf)
+            )
+        })
+    }
+
+    pub fn find_replaced_aggregate_function(
+        &self,
+        aggregate: &AggregateFunction,
+        new_name: &str,
+    ) -> Option<ColumnBinding> {
+        self.get_aggregate_function(aggregate).map(|scalar_item| {
+            debug_assert_eq!(
+                &scalar_item.scalar.data_type().unwrap(),
+                aggregate.return_type.as_ref()
+            );
+            build_replaced_aggregate_column(new_name, scalar_item.index, &aggregate.return_type)
+        })
+    }
+
+    pub fn find_replaced_udaf_call(
+        &self,
+        udaf: &UDAFCall,
+        new_name: &str,
+    ) -> Option<ColumnBinding> {
+        self.get_udaf_call(udaf).map(|scalar_item| {
+            debug_assert_eq!(
+                &scalar_item.scalar.data_type().unwrap(),
+                udaf.return_type.as_ref()
+            );
+            build_replaced_aggregate_column(new_name, scalar_item.index, &udaf.return_type)
+        })
+    }
+
+    pub fn has_aggregates(&self) -> bool {
+        !self.aggregate_functions.is_empty() || !self.udaf_calls.is_empty()
+    }
+
+    pub fn has_aggregate_index(&self, index: Symbol) -> bool {
+        self.aggregate_functions
+            .iter()
+            .chain(self.udaf_calls.iter())
+            .any(|item| item.index == index)
+    }
+
+    pub fn aggregate_functions_for_plan(&self) -> Vec<ScalarItem> {
+        let mut items = self.aggregate_functions.clone();
+        items.extend(self.udaf_calls.iter().cloned());
+        items.sort_by_key(|item| item.index);
+        items
+    }
+}
+
+fn aggregate_functions_match(left: &AggregateFunction, right: &AggregateFunction) -> bool {
+    left.func_name == right.func_name
+        && left.distinct == right.distinct
+        && left.params == right.params
+        && left.args == right.args
+        && left.return_type == right.return_type
+        && left.sort_descs == right.sort_descs
+}
+
+fn udaf_calls_match(left: &UDAFCall, right: &UDAFCall) -> bool {
+    left.name == right.name
+        && left.arg_types == right.arg_types
+        && left.state_fields == right.state_fields
+        && left.return_type == right.return_type
+        && left.arguments == right.arguments
+        && left.udf_type == right.udf_type
 }
 
 pub(super) struct AggregateRewriter<'a> {
@@ -190,12 +268,11 @@ impl<'a> AggregateRewriter<'a> {
     /// Replace the arguments of aggregate function with a BoundColumnRef, and
     /// add the replaced aggregate function and the arguments into `AggregateInfo`.
     fn replace_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<ScalarExpr> {
-        if let Some(column) = find_replaced_aggregate_function(
-            &self.bind_context.aggregate_info,
-            &aggregate.display_name,
-            &aggregate.return_type,
-            &aggregate.display_name,
-        ) {
+        if let Some(column) = self
+            .bind_context
+            .aggregate_info
+            .find_replaced_aggregate_function(aggregate, &aggregate.display_name)
+        {
             return Ok(BoundColumnRef { span: None, column }.into());
         }
 
@@ -219,24 +296,22 @@ impl<'a> AggregateRewriter<'a> {
             sort_descs: replaced_sort_desc,
         };
 
-        self.bind_context.aggregate_info.push_aggregate_function(
-            ScalarItem {
+        self.bind_context
+            .aggregate_info
+            .push_aggregate_function(ScalarItem {
                 scalar: replaced_agg.clone().into(),
                 index,
-            },
-            replaced_agg.display_name.clone(),
-        );
+            });
 
         Ok(replaced_agg.into())
     }
 
     fn replace_udaf_call(&mut self, udaf: &UDAFCall) -> Result<ScalarExpr> {
-        if let Some(column) = find_replaced_aggregate_function(
-            &self.bind_context.aggregate_info,
-            &udaf.display_name,
-            &udaf.return_type,
-            &udaf.display_name,
-        ) {
+        if let Some(column) = self
+            .bind_context
+            .aggregate_info
+            .find_replaced_udaf_call(udaf, &udaf.display_name)
+        {
             return Ok(BoundColumnRef { span: None, column }.into());
         }
 
@@ -258,13 +333,10 @@ impl<'a> AggregateRewriter<'a> {
             udf_type: udaf.udf_type.clone(),
         };
 
-        self.bind_context.aggregate_info.push_aggregate_function(
-            ScalarItem {
-                scalar: replaced_udaf.clone().into(),
-                index,
-            },
-            replaced_udaf.display_name.clone(),
-        );
+        self.bind_context.aggregate_info.push_udaf_call(ScalarItem {
+            scalar: replaced_udaf.clone().into(),
+            index,
+        });
 
         Ok(replaced_udaf.into())
     }
@@ -701,7 +773,7 @@ impl Binder {
         let aggregate_plan = Aggregate {
             mode: AggregateMode::Initial,
             group_items: agg_info.group_items.clone(),
-            aggregate_functions: agg_info.aggregate_functions.clone(),
+            aggregate_functions: agg_info.aggregate_functions_for_plan(),
             from_distinct: false,
             rank_limit: None,
 
@@ -1105,24 +1177,16 @@ impl Binder {
     }
 }
 
-/// Replace [`AggregateFunction`] with a [`ColumnBinding`] if the function is already replaced.
-pub fn find_replaced_aggregate_function(
-    agg_info: &AggregateInfo,
-    display_name: &str,
-    return_type: &DataType,
+fn build_replaced_aggregate_column(
     new_name: &str,
-) -> Option<ColumnBinding> {
-    agg_info
-        .get_aggregate_function(display_name)
-        .map(|scalar_item| {
-            // This expression is already replaced.
-            debug_assert_eq!(&scalar_item.scalar.data_type().unwrap(), return_type);
-            ColumnBindingBuilder::new(
-                new_name.to_string(),
-                scalar_item.index,
-                Box::new(return_type.clone()),
-                Visibility::Visible,
-            )
-            .build()
-        })
+    index: Symbol,
+    return_type: &DataType,
+) -> ColumnBinding {
+    ColumnBindingBuilder::new(
+        new_name.to_string(),
+        index,
+        Box::new(return_type.clone()),
+        Visibility::Visible,
+    )
+    .build()
 }
