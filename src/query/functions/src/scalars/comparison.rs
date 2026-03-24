@@ -1013,10 +1013,8 @@ fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomai
             min: pattern.clone(),
             max: Some(pattern),
         })),
-        LikePattern::EndOfPercent(_) => {
-            let mut pat_str = pattern;
-            // remove the last char '%'
-            pat_str.pop();
+        LikePattern::EndOfPercent(v) => {
+            let pat_str = std::str::from_utf8(v.as_ref()).ok()?.to_string();
             let pat_len = pat_str.chars().count();
             let other = StringDomain {
                 min: pat_str.clone(),
@@ -1366,9 +1364,33 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 #[cfg(test)]
 mod tests {
     use databend_common_expression::FunctionContext;
+    use databend_common_expression::types::string::StringDomain;
     use jsonb::OwnedJsonb;
 
     use super::*;
+
+    #[test]
+    fn test_calc_like_domain_repeated_trailing_percent_matches_normalized_prefix() {
+        let matching = StringDomain {
+            min: "ababac".to_string(),
+            max: Some("ababac".to_string()),
+        };
+        let non_matching = StringDomain {
+            min: "aba".to_string(),
+            max: Some("aba".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&matching, "abab%".to_string()),
+            calc_like_domain(&matching, "abab%%%%%".to_string()),
+            "repeated trailing % should fold like a single trailing %"
+        );
+        assert_eq!(
+            calc_like_domain(&non_matching, "abab%%%%%".to_string()),
+            calc_like_domain(&non_matching, "abab%".to_string()),
+            "non-matching prefixes should also stay consistent"
+        );
+    }
 
     #[test]
     fn test_variant_like_repeated_percent_preserves_simple_scalar_semantics() {
