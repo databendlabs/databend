@@ -67,14 +67,26 @@ fn has_exact_f64_integer_value(datum: &Datum) -> bool {
     }
 }
 
-fn has_exact_f64_integer_range(min: &Datum, max: &Datum) -> bool {
+fn has_exact_f64_uint_span(min: u64, max: u64) -> bool {
+    max >= min && (u128::from(max) - u128::from(min) + 1) <= u128::from(MAX_EXACT_F64_INTEGER)
+}
+
+fn has_exact_f64_int_span(min: i64, max: i64) -> bool {
+    max >= min && (max as i128 - min as i128 + 1) <= MAX_EXACT_F64_INTEGER as i128
+}
+
+pub(crate) fn has_exact_f64_integer_range(min: &Datum, max: &Datum) -> bool {
     match (min, max) {
         (Datum::UInt(min), Datum::UInt(max)) => {
-            *min < MAX_EXACT_F64_INTEGER && *max < MAX_EXACT_F64_INTEGER
+            *min < MAX_EXACT_F64_INTEGER
+                && *max < MAX_EXACT_F64_INTEGER
+                && has_exact_f64_uint_span(*min, *max)
         }
         (Datum::Int(min), Datum::Int(max)) => {
             let limit = MAX_EXACT_F64_INTEGER as i64;
-            (-limit..=limit).contains(min) && (-limit..limit).contains(max)
+            (-limit..=limit).contains(min)
+                && (-limit..limit).contains(max)
+                && has_exact_f64_int_span(*min, *max)
         }
         _ => true,
     }
@@ -854,6 +866,7 @@ mod tests {
     use databend_common_expression::RawExpr;
     use databend_common_expression::types::ArgType;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::UInt64Type;
     use databend_common_functions::BUILTIN_FUNCTIONS;
     use databend_common_sql_test_support::parse_raw_expr;
@@ -1155,6 +1168,30 @@ mod tests {
                 "{expr_text} should stay exact"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_comparison_with_large_signed_span_does_not_round_to_full_selectivity() -> Result<()> {
+        let limit = 1_i64 << 53;
+        let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+            min: Datum::Int(-limit),
+            max: Datum::Int(0),
+            ndv: Ndv::Stat(4.0),
+            null_count: 0,
+            histogram: None,
+        })]);
+        let columns = &[("a", Int64Type::data_type())];
+        let raw_expr = parse_raw_expr("a < -1", columns, &BUILTIN_FUNCTIONS);
+        let expr = raw_expr_to_scalar(&raw_expr, columns);
+        let mut estimator = SelectivityEstimator::new(column_stats, 100.0);
+        let estimated_rows = estimator.apply(&[expr])?;
+
+        assert!(
+            estimated_rows < 100.0,
+            "expected interior predicate on unsafe signed range to avoid full selectivity, got estimated_rows={estimated_rows}"
+        );
 
         Ok(())
     }

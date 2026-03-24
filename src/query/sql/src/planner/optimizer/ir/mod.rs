@@ -47,3 +47,4 @@ pub use stats::MAX_SELECTIVITY;
 pub use stats::Ndv;
 pub use stats::SelectivityEstimator;
 pub use stats::UniformSampleSet;
+pub(crate) use stats::has_exact_f64_integer_range;

@@ -45,6 +45,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
+use crate::optimizer::ir::has_exact_f64_integer_range;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -175,8 +176,6 @@ impl Scan {
     }
 }
 
-const MAX_EXACT_F64_INTEGER: u64 = 1 << 53;
-
 fn inclusive_integer_span(max: &Datum, min: &Datum) -> Option<f64> {
     match (max, min) {
         (Datum::UInt(max), Datum::UInt(min)) if max >= min => {
@@ -186,19 +185,6 @@ fn inclusive_integer_span(max: &Datum, min: &Datum) -> Option<f64> {
             Some((*max as i128 - *min as i128 + 1) as f64)
         }
         _ => None,
-    }
-}
-
-fn has_exact_integer_histogram_bounds(min: &Datum, max: &Datum) -> bool {
-    match (min, max) {
-        (Datum::UInt(min), Datum::UInt(max)) => {
-            *min < MAX_EXACT_F64_INTEGER && *max < MAX_EXACT_F64_INTEGER
-        }
-        (Datum::Int(min), Datum::Int(max)) => {
-            let limit = MAX_EXACT_F64_INTEGER as i64;
-            (-limit..=limit).contains(min) && (-limit..limit).contains(max)
-        }
-        _ => true,
     }
 }
 
@@ -321,7 +307,7 @@ impl Operator for Scan {
                     histogram.clone()
                 } else {
                     num_rows.and_then(|num_rows| {
-                        if !has_exact_integer_histogram_bounds(&min, &max) {
+                        if !has_exact_f64_integer_range(&min, &max) {
                             return None;
                         }
                         let num_rows = num_rows.saturating_sub(col_stat.null_count);
@@ -430,6 +416,33 @@ mod tests {
         }
     }
 
+    fn test_scan_for_int64_stats(min: i64, max: i64, ndv: u64) -> Scan {
+        let column = Symbol::new(0);
+
+        Scan {
+            table_index: 0,
+            columns: ColumnSet::from_iter([column]),
+            statistics: Arc::new(Statistics {
+                table_stats: Some(TableStatistics {
+                    num_rows: Some(16),
+                    ..Default::default()
+                }),
+                column_stats: HashMap::from([(
+                    column,
+                    Some(BasicColumnStatistics {
+                        min: Some(Datum::Int(min)),
+                        max: Some(Datum::Int(max)),
+                        ndv: Some(ndv),
+                        null_count: 0,
+                        in_memory_size: 0,
+                    }),
+                )]),
+                histograms: HashMap::new(),
+            }),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_derive_stats_skips_histogram_for_full_range_uint64() -> Result<()> {
         let scan = test_scan_for_uint64_stats(0, u64::MAX, 4);
@@ -467,6 +480,23 @@ mod tests {
     fn test_derive_stats_skips_histogram_at_f64_precision_boundary() -> Result<()> {
         let limit = 1_u64 << 53;
         let scan = test_scan_for_uint64_stats(limit - 2, limit, 3);
+        let expr = SExpr::create_leaf(scan);
+        let stat_info = RelExpr::with_s_expr(&expr).derive_cardinality()?;
+        let column_stat = stat_info
+            .statistics
+            .column_stats
+            .get(&Symbol::new(0))
+            .expect("missing column stats");
+
+        assert!(column_stat.histogram.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_derive_stats_skips_histogram_for_large_signed_span() -> Result<()> {
+        let limit = 1_i64 << 53;
+        let scan = test_scan_for_int64_stats(-limit, 0, 4);
         let expr = SExpr::create_leaf(scan);
         let stat_info = RelExpr::with_s_expr(&expr).derive_cardinality()?;
         let column_stat = stat_info
