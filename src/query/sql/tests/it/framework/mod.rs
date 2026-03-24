@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod framework;
-mod optimizer;
-mod planner;
+#[allow(dead_code)]
+pub(crate) mod golden;
+
+mod lite_context;
+
+pub(crate) use lite_context::LiteTableContext;
