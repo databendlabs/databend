@@ -32,6 +32,8 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::Finder;
+use super::grouping_clause_error;
+use super::is_grouping_function;
 use super::sort::OrderItem;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -87,20 +89,26 @@ impl Binder {
             aliases,
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
-        let f = |scalar: &ScalarExpr| {
+        let contains_agg_or_window = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
                 ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
             )
         };
 
-        let mut finder = Finder::new(&f);
+        let mut finder = Finder::new(&contains_agg_or_window);
         finder.visit(&scalar)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
                 "Where clause can't contain aggregate or window functions".to_string(),
             )
             .set_span(scalar.span()));
+        }
+
+        let mut grouping_finder = Finder::new(&is_grouping_function);
+        grouping_finder.visit(&scalar)?;
+        if let Some(ScalarExpr::FunctionCall(func)) = grouping_finder.scalars().first() {
+            return Err(grouping_clause_error(func, "Where"));
         }
 
         let filter_plan = Filter {

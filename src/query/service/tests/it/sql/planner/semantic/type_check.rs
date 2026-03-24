@@ -95,7 +95,12 @@ async fn test_invalid_grouping_returns_semantic_error() -> anyhow::Result<()> {
         .execute_command("CREATE TABLE students(course STRING, type STRING)")
         .await?;
 
-    for sql in ["SELECT GROUPING()", "SELECT GROUPING() FROM students"] {
+    for sql in [
+        "SELECT GROUPING()",
+        "SELECT GROUPING() FROM students",
+        "SELECT count() FROM students WHERE GROUPING() = 0 GROUP BY course",
+        "SELECT count() OVER () FROM students GROUP BY course QUALIFY GROUPING() = 0",
+    ] {
         let err = planner
             .plan_sql(sql)
             .await

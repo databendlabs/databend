@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
@@ -27,6 +28,8 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 use crate::plans::walk_expr;
+
+pub const GROUPING_FUNC_NAME: &str = "grouping";
 
 // Visitor that find Expressions that match a particular predicate
 pub struct Finder<'a, F>
@@ -73,6 +76,33 @@ where F: Fn(&ScalarExpr) -> bool
         }
         Ok(())
     }
+}
+
+pub fn is_grouping_function(scalar: &ScalarExpr) -> bool {
+    matches!(
+        scalar,
+        ScalarExpr::FunctionCall(func) if func.func_name.eq_ignore_ascii_case(GROUPING_FUNC_NAME)
+    )
+}
+
+pub fn is_raw_grouping_function(scalar: &ScalarExpr) -> bool {
+    matches!(
+        scalar,
+        ScalarExpr::FunctionCall(func)
+            if func.func_name.eq_ignore_ascii_case(GROUPING_FUNC_NAME) && func.params.is_empty()
+    )
+}
+
+pub fn grouping_clause_error(function: &FunctionCall, clause_name: &str) -> ErrorCode {
+    let err = if function.params.is_empty() && function.arguments.is_empty() {
+        ErrorCode::BadArguments("grouping requires at least one argument")
+    } else {
+        ErrorCode::SemanticError(format!(
+            "{clause_name} clause can't contain grouping functions"
+        ))
+    };
+
+    err.set_span(function.span)
 }
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {

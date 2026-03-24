@@ -78,6 +78,12 @@ SELECT GROUPING(NULL) FROM t
 statement error
 SELECT GROUPING(a) FROM t GROUP BY ()
 
+statement error
+SELECT count() FROM t WHERE GROUPING() = 0 GROUP BY a
+
+statement error
+SELECT count() OVER () FROM t GROUP BY a QUALIFY GROUPING() = 0
+
 query TTI
 select a, b, sum(c) as sc from t group by grouping sets ((a,b),(),(b),(a)) order by sc;
 ----
