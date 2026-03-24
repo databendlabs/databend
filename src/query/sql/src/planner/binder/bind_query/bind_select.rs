@@ -123,6 +123,16 @@ impl Binder {
         // Generate a analyzed select list with from context
         let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
 
+        // Preserve the original select-item semantics for clause alias resolution.
+        // `analyze_aggregate_select` / `analyze_window` may rewrite aggregates/windows
+        // to bound columns, but WHERE / QUALIFY validation still needs to see the
+        // original expressions behind aliases.
+        let semantic_aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+
         // analyze set returning functions
         self.analyze_project_set_select(&mut from_context, &mut select_list)?;
 
@@ -154,10 +164,11 @@ impl Binder {
             s_expr = self.bind_project_set(&mut from_context, s_expr, false)?;
         }
 
-        // To support using aliased column in `WHERE` clause,
-        // we should bind where after `select_list` is rewritten.
+        // Bind WHERE after select-list analysis so aliases are available, but
+        // resolve them against the original pre-rewrite select-item semantics.
         let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self.bind_where(&mut from_context, &aliases, expr, s_expr)?;
+            let (new_expr, scalar) =
+                self.bind_where(&mut from_context, &semantic_aliases, expr, s_expr)?;
             s_expr = new_expr;
             Some(scalar)
         } else {
@@ -178,7 +189,7 @@ impl Binder {
         };
 
         let qualify = if let Some(qualify) = &stmt.qualify {
-            Some(self.analyze_window_qualify(&mut from_context, &aliases, qualify)?)
+            Some(self.analyze_window_qualify(&mut from_context, &semantic_aliases, qualify)?)
         } else {
             None
         };

@@ -88,6 +88,10 @@ impl ExprContext {
     pub fn prefer_resolve_alias(&self) -> bool {
         !matches!(self, ExprContext::SelectClause | ExprContext::WhereClause)
     }
+
+    pub fn allow_resolve_alias(&self) -> bool {
+        !matches!(self, ExprContext::InAggregateFunction)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Deserialize, serde::Serialize)]
@@ -386,7 +390,15 @@ impl BindContext {
         let mut result = vec![];
         // Lookup parent context to resolve outer reference.
         let mut alias_match_count = 0;
-        if self.expr_context.prefer_resolve_alias() {
+        if !self.expr_context.allow_resolve_alias() {
+            self.search_bound_columns_recursively(
+                database,
+                table,
+                column,
+                column_case_sensitive,
+                &mut result,
+            );
+        } else if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases {
                 if database.is_none() && table.is_none() && name == alias {
                     result.push(NameResolutionResult::Alias {

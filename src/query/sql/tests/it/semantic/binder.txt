@@ -1,0 +1,145 @@
+=== simple_aggregate_query_binds ===
+description: A plain aggregate query should bind successfully.
+sql: SELECT avg(number) FROM t
+status: ok
+EvalScalar
+├── scalars: [divide(sum(number) (#1), if(eq(count(number) (#2), 0), 1, count(number) (#2))) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(t.number (#0)) AS (#1), count(t.number (#0)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.number (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== where_rejects_aggregate_alias ===
+description: An aggregate alias must still be rejected in WHERE.
+sql: SELECT sum(number) AS s FROM t WHERE s > 0
+status: error
+code: 1065
+message: Where clause can't contain aggregate or window functions
+
+=== where_accepts_scalar_alias ===
+description: A scalar alias should remain usable in WHERE.
+sql: SELECT number + 1 AS s FROM t WHERE s > 1
+status: ok
+EvalScalar
+├── scalars: [plus(t.number (#0), 1) AS (#1)]
+└── Filter
+    ├── filters: [gt(plus(t.number (#0), 1), 1)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== qualify_rejects_aggregate_alias ===
+description: An aggregate alias must still be rejected in QUALIFY.
+sql: SELECT sum(number) AS s FROM t QUALIFY s > 0
+status: error
+code: 1065
+message: Qualify clause must not contain aggregate functions
+
+=== qualify_accepts_window_alias ===
+description: A window alias should remain usable in QUALIFY.
+sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1
+status: ok
+EvalScalar
+├── scalars: [t.number (#0) AS (#0), row_number() OVER (ORDER BY number) (#1) AS (#1)]
+└── Filter
+    ├── filters: [eq(row_number() OVER (ORDER BY number) (#1), 1)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [t.number (#0) AS (#0)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [t.number (#0) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [t.number (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== having_accepts_aggregate_alias ===
+description: An aggregate alias should remain usable in HAVING.
+sql: SELECT sum(number) AS s FROM t HAVING s > 0
+status: ok
+EvalScalar
+├── scalars: [sum(number) (#1) AS (#1)]
+└── Filter
+    ├── filters: [gt(sum(number) (#1), 0)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== aggregate_argument_prefers_base_column_over_select_alias ===
+description: Inside an aggregate function, a same-name select alias should not shadow the base column.
+sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), sum(c2) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.c2 (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.c2 (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== window_aggregate_does_not_become_group_aggregate ===
+description: An aggregate used as a window function should stay in the window phase rather than becoming a group aggregate.
+sql: SELECT sum(number) OVER () FROM t
+status: ok
+EvalScalar
+├── scalars: [sum(number) OVER () (#1) AS (#1)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: []
+    ├── order by items: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── EvalScalar
+        ├── scalars: [t.number (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== unnest_over_aggregate_is_planned_after_aggregate ===
+description: A set-returning function over an aggregate should stay above the aggregate phase instead of rewriting the aggregate away early.
+sql: SELECT unnest(max([11, 12]))
+status: ok
+EvalScalar
+├── scalars: [get(unnest(max([11, 12])) (#2)) AS (#3)]
+└── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..28), func_name: "unnest", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(14..27), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "max([11, 12])", column_name_lower: None, index: 1, data_type: Nullable(Array(Number(UInt8))), visibility: InVisible, virtual_expr: None, is_srf: false } })] }), index: 2 }] })
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [max(max_arg_0 (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [[11, 12] AS (#0)]
+            └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+

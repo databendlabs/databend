@@ -2230,16 +2230,26 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        // Check aggregate function
+        // Resolve aggregate arguments against input columns first; aliases like
+        // `SELECT sum(c2) AS c2 ... HAVING sum(c2)` must not leak into the
+        // aggregate argument binding path.
         self.in_aggregate_function = true;
-        let mut arguments = vec![];
-        let mut arg_types = vec![];
-        for arg in args.iter() {
-            let box (argument, arg_type) = self.resolve(arg)?;
-            arguments.push(argument);
-            arg_types.push(arg_type);
-        }
+        let original_context = self.bind_context.expr_context.clone();
+        self.bind_context
+            .set_expr_context(ExprContext::InAggregateFunction);
+        let arguments_result = (|| {
+            let mut arguments = vec![];
+            let mut arg_types = vec![];
+            for arg in args.iter() {
+                let box (argument, arg_type) = self.resolve(arg)?;
+                arguments.push(argument);
+                arg_types.push(arg_type);
+            }
+            Ok::<_, ErrorCode>((arguments, arg_types))
+        })();
+        self.bind_context.set_expr_context(original_context.clone());
         self.in_aggregate_function = false;
+        let (mut arguments, mut arg_types) = arguments_result?;
 
         let sort_descs = order_by
             .iter()
@@ -2249,7 +2259,11 @@ impl<'a> TypeChecker<'a> {
                      asc,
                      nulls_first,
                  }| {
-                    let box (scalar_expr, _) = self.resolve(expr)?;
+                    self.bind_context
+                        .set_expr_context(ExprContext::InAggregateFunction);
+                    let result = self.resolve(expr);
+                    self.bind_context.set_expr_context(original_context.clone());
+                    let box (scalar_expr, _) = result?;
 
                     Ok(AggregateFunctionScalarSortDesc {
                         expr: scalar_expr,

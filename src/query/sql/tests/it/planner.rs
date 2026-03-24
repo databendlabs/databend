@@ -22,8 +22,7 @@ use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
 
-mod fixture;
-pub(crate) use self::fixture::LiteTableContext;
+use crate::framework::LiteTableContext;
 
 struct LiteRunner(Arc<LiteTableContext>);
 

@@ -78,3 +78,24 @@ async fn test_window_grouping_over_rollup() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unnest_aggregate_argument() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+
+    expects_ok(
+        "unnest aggregate argument",
+        fixture.execute_query("select unnest(max([11,12]))").await,
+        vec![
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 11       |",
+            "| 12       |",
+            "+----------+",
+        ],
+    )
+    .await?;
+
+    Ok(())
+}
