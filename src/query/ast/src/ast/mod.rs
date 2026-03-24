@@ -16,14 +16,14 @@
 mod common;
 mod expr;
 mod format;
+mod param_substitution;
 mod query;
 pub mod quote;
-mod param_substitution;
 pub(crate) mod statements;
 
 pub use common::*;
-pub use param_substitution::substitute_params;
 pub use expr::*;
 pub use format::*;
+pub use param_substitution::substitute_params;
 pub use query::*;
 pub use statements::*;
