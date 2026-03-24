@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -108,6 +109,7 @@ fn build_partition_bucket_experimental(
 
     let mut builder = TransformPipeBuilder::create();
     let (tx, rx) = async_channel::unbounded();
+    let next_task_id = Arc::new(AtomicU64::new(1));
     for id in 0..final_parallelism {
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
@@ -120,6 +122,7 @@ fn build_partition_bucket_experimental(
             ctx.clone(),
             tx.clone(),
             rx.clone(),
+            next_task_id.clone(),
         )?;
         builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
     }
