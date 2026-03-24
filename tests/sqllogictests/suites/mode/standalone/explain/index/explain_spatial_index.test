@@ -238,6 +238,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 7
     ├── partitions scanned: 7
+    ├── runtime filter pruning: 7 to 4 (3 pruned)
     ├── pruning stats: [segments: <range pruning: 7 to 7 <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
@@ -275,4 +276,3 @@ USE default
 
 statement ok
 DROP DATABASE test_spatial_index_db
-

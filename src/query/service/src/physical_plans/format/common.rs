@@ -59,14 +59,24 @@ fn format_pruning_cost_suffix(cost_micros: u64) -> String {
 }
 
 pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
+    let mut items = part_stats_summary_to_format_tree(info);
+    if let Some(pruning_stats) = part_pruning_stats_to_format_tree(info) {
+        items.push(pruning_stats);
+    }
+    items
+}
+
+pub fn part_stats_summary_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
     let read_size = format_byte_size(info.read_bytes);
-    let mut items = vec![
+    vec![
         FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
         FormatTreeNode::new(format!("read size: {}", read_size)),
         FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
-    ];
+    ]
+}
 
+pub fn part_pruning_stats_to_format_tree(info: &PartStatistics) -> Option<FormatTreeNode<String>> {
     // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
     let mut blocks_pruning_description = String::new();
 
@@ -186,13 +196,26 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             .unwrap();
         }
 
-        items.push(FormatTreeNode::new(format!(
+        return Some(FormatTreeNode::new(format!(
             "pruning stats: [{}]",
             pruning_description
         )));
     }
 
-    items
+    None
+}
+
+pub fn runtime_filter_pruning_to_format_tree(
+    partitions_before: usize,
+    partitions_pruned: usize,
+) -> FormatTreeNode<String> {
+    let partitions_pruned = partitions_pruned.min(partitions_before);
+    let partitions_after = partitions_before.saturating_sub(partitions_pruned);
+
+    FormatTreeNode::new(format!(
+        "runtime filter pruning: {} to {} ({} pruned)",
+        partitions_before, partitions_after, partitions_pruned
+    ))
 }
 
 pub fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<String>> {

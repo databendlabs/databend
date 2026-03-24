@@ -234,6 +234,7 @@ Exchange
         ├── read size: < 1 KiB
         ├── partitions total: 6
         ├── partitions scanned: 6
+        ├── runtime filter pruning: 6 to 1 (5 pruned)
         ├── pruning stats: [segments: <range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── apply join filters: [#0]

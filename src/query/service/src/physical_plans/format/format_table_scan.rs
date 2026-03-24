@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::DUMMY_TABLE_INDEX;
@@ -25,8 +27,10 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::append_output_rows_info;
 use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::part_stats_info_to_format_tree;
+use crate::physical_plans::format::part_pruning_stats_to_format_tree;
+use crate::physical_plans::format::part_stats_summary_to_format_tree;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
+use crate::physical_plans::format::runtime_filter_pruning_to_format_tree;
 
 pub struct TableScanFormatter<'a> {
     inner: &'a TableScan,
@@ -36,6 +40,34 @@ impl<'a> TableScanFormatter<'a> {
     pub fn create(inner: &'a TableScan) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(TableScanFormatter { inner })
     }
+
+    fn runtime_filter_parts_pruned(&self, ctx: &FormatContext<'_>) -> Option<usize> {
+        if !ctx
+            .scan_id_to_runtime_filters
+            .contains_key(&self.inner.scan_id)
+        {
+            return None;
+        }
+
+        ctx.profs
+            .get(&self.inner.get_id())
+            .map(|prof| prof.statistics[ProfileStatisticsName::RuntimeFilterPruneParts as usize])
+            .or_else(|| {
+                ctx.runtime_filter_reports
+                    .get(&self.inner.scan_id)
+                    .map(|reports| sum_runtime_filter_parts_pruned(reports))
+            })
+    }
+}
+
+fn sum_runtime_filter_parts_pruned(reports: &[RuntimeFilterReport]) -> usize {
+    reports
+        .iter()
+        .map(|report| {
+            report.stats.min_max_partitions_pruned as usize
+                + report.stats.spatial_partitions_pruned as usize
+        })
+        .sum()
 }
 
 impl<'a> PhysicalFormat for TableScanFormatter<'a> {
@@ -113,9 +145,22 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         ];
 
         // Part stats.
-        children.extend(part_stats_info_to_format_tree(
+        children.extend(part_stats_summary_to_format_tree(
             &self.inner.source.statistics,
         ));
+
+        if let Some(parts_pruned) = self.runtime_filter_parts_pruned(ctx) {
+            children.push(runtime_filter_pruning_to_format_tree(
+                self.inner.source.statistics.partitions_scanned,
+                parts_pruned,
+            ));
+        }
+
+        if let Some(pruning_stats) =
+            part_pruning_stats_to_format_tree(&self.inner.source.statistics)
+        {
+            children.push(pruning_stats);
+        }
         // Push downs.
         let push_downs = format!("push downs: [filters: [{filters}], limit: {limit}]");
         children.push(FormatTreeNode::new(push_downs));

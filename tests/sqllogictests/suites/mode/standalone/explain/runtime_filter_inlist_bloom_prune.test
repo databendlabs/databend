@@ -83,6 +83,7 @@ HashJoin
     ├── read size: 167.25 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
+    ├── runtime filter pruning: 99 to 14 (85 pruned)
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
@@ -231,6 +232,7 @@ HashJoin
     ├── read size: <slt:ignore>
     ├── partitions total: 99
     ├── partitions scanned: 99
+    ├── runtime filter pruning: 99 to 12 (87 pruned)
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
