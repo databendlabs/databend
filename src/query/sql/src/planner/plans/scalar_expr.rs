@@ -484,6 +484,36 @@ impl ScalarExpr {
         has_subquery.has_subquery
     }
 
+    pub fn has_set_returning_function(&self) -> bool {
+        struct HasSetReturningFunctionVisitor {
+            has_set_returning_function: bool,
+        }
+
+        impl<'a> Visitor<'a> for HasSetReturningFunctionVisitor {
+            fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    self.has_set_returning_function = true;
+                    return Ok(());
+                }
+
+                for expr in &func.arguments {
+                    self.visit(expr)?;
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = HasSetReturningFunctionVisitor {
+            has_set_returning_function: false,
+        };
+        visitor.visit(self).unwrap();
+        visitor.has_set_returning_function
+    }
+
     pub fn collect_subquery(&self, result: &mut Vec<SubqueryExpr>) {
         struct CollectSubQuery<'a> {
             subquerys: &'a mut Vec<SubqueryExpr>,

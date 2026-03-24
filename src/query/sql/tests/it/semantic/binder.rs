@@ -84,6 +84,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT number + 1 AS s FROM t WHERE s > 1",
         },
         SqlTestCase {
+            name: "where_alias_to_srf_uses_project_set_binding",
+            description: "A WHERE clause that references an SRF alias should keep the alias bound to the ProjectSet column instead of expanding back to the raw SRF.",
+            setup_sqls: &[],
+            sql: "SELECT unnest([1, 2, 3]) AS u WHERE u = 1",
+        },
+        SqlTestCase {
             name: "where_rejects_udaf",
             description: "A UDAF in WHERE must be rejected like any other aggregate.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
@@ -112,6 +118,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             description: "A window alias should remain usable in QUALIFY.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1",
+        },
+        SqlTestCase {
+            name: "qualify_alias_to_srf_uses_project_set_binding",
+            description: "A QUALIFY clause that references an SRF alias should keep the alias bound to the ProjectSet column instead of expanding back to the raw SRF.",
+            setup_sqls: &[],
+            sql: "SELECT unnest([1, 2, 3]) AS u QUALIFY u = 1",
         },
         SqlTestCase {
             name: "having_accepts_aggregate_alias",

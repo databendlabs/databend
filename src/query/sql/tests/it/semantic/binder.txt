@@ -38,6 +38,18 @@ EvalScalar
         └── limit: NONE
 
 
+=== where_alias_to_srf_uses_project_set_binding ===
+description: A WHERE clause that references an SRF alias should keep the alias bound to the ProjectSet column instead of expanding back to the raw SRF.
+sql: SELECT unnest([1, 2, 3]) AS u WHERE u = 1
+status: ok
+EvalScalar
+├── scalars: [get(unnest([1, 2, 3]) (#0)) AS (#1)]
+└── Filter
+    ├── filters: [eq(get(unnest([1, 2, 3]) (#0)), 1)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(14..23), value: Array(UInt8([1, 2, 3])) })] }), index: 0 }] })
+        └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
 === where_rejects_udaf ===
 description: A UDAF in WHERE must be rejected like any other aggregate.
 sql: SELECT a FROM t WHERE weighted_avg(a, b) > 0
@@ -89,6 +101,18 @@ EvalScalar
                     ├── filters: []
                     ├── order by: []
                     └── limit: NONE
+
+
+=== qualify_alias_to_srf_uses_project_set_binding ===
+description: A QUALIFY clause that references an SRF alias should keep the alias bound to the ProjectSet column instead of expanding back to the raw SRF.
+sql: SELECT unnest([1, 2, 3]) AS u QUALIFY u = 1
+status: ok
+EvalScalar
+├── scalars: [get(unnest([1, 2, 3]) (#0)) AS (#1)]
+└── Filter
+    ├── filters: [eq(get(unnest([1, 2, 3]) (#0)), 1)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(14..23), value: Array(UInt8([1, 2, 3])) })] }), index: 0 }] })
+        └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
 
 
 === having_accepts_aggregate_alias ===

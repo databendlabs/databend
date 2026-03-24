@@ -123,18 +123,18 @@ impl Binder {
         // Generate a analyzed select list with from context
         let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
 
-        // Preserve the original select-item semantics for clause alias resolution.
-        // `analyze_aggregate_select` / `analyze_window` may rewrite aggregates/windows
-        // to bound columns, but WHERE / QUALIFY validation still needs to see the
-        // original expressions behind aliases.
+        // analyze set returning functions
+        self.analyze_project_set_select(&mut from_context, &mut select_list)?;
+
+        // Preserve the original select-item semantics for clause alias resolution
+        // after SRF analysis. WHERE / QUALIFY still need the pre-aggregate and
+        // pre-window expressions behind aliases, but SRF aliases must already point
+        // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
         let semantic_aliases = select_list
             .items
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
-
-        // analyze set returning functions
-        self.analyze_project_set_select(&mut from_context, &mut select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {

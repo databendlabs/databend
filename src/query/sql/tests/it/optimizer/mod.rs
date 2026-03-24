@@ -14,4 +14,5 @@
 
 mod eager_aggregation;
 mod normalize_scalar;
+mod push_down_filter_project_set;
 mod selectivity;
