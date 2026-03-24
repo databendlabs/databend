@@ -12,12 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::PartInfoPtr;
+use std::time::Instant;
 
-use crate::io::BlockReadResult;
-use crate::io::VirtualBlockReadResult;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 
-pub enum ParquetDataSource {
-    AggIndex((PartInfoPtr, BlockReadResult)),
-    Normal((BlockReadResult, Option<VirtualBlockReadResult>)),
+pub(crate) struct ProfileGuard {
+    name: ProfileStatisticsName,
+    start: Instant,
+}
+
+impl ProfileGuard {
+    pub(crate) fn new(name: ProfileStatisticsName) -> Self {
+        Self {
+            name,
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Drop for ProfileGuard {
+    fn drop(&mut self) {
+        Profile::record_usize_profile(self.name.clone(), self.start.elapsed().as_nanos() as usize);
+    }
 }

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::PartInfoPtr;
+mod fuse_block_format;
+mod native;
+mod parquet;
 
-use crate::io::BlockReadResult;
-use crate::io::VirtualBlockReadResult;
-
-pub enum ParquetDataSource {
-    AggIndex((PartInfoPtr, BlockReadResult)),
-    Normal((BlockReadResult, Option<VirtualBlockReadResult>)),
-}
+pub use fuse_block_format::FuseBlockFormat;
+pub use fuse_block_format::ReadBlockMeta;
+pub use native::FuseNativeBlockFormat;
+pub use parquet::FuseParquetBlockFormat;

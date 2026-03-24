@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::PartInfoPtr;
-
 use crate::io::BlockReadResult;
-use crate::io::VirtualBlockReadResult;
+use crate::io::NativeSourceData;
 
-pub enum ParquetDataSource {
-    AggIndex((PartInfoPtr, BlockReadResult)),
-    Normal((BlockReadResult, Option<VirtualBlockReadResult>)),
+pub enum RawDataSource {
+    Native(NativeSourceData),
+    Parquet(BlockReadResult),
 }
