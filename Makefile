@@ -26,6 +26,7 @@ lint:
 
 lint-yaml:
 	yamllint -f auto .
+	python3 .github/scripts/check_sqllogic_stage_size_wiring.py
 
 check-license:
 	docker run -it --rm -v $(CURDIR):/github/workspace ghcr.io/korandoru/hawkeye-native:v2 check --config licenserc.toml && \
