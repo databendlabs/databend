@@ -1009,6 +1009,7 @@ fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomai
         LikePattern::StartOfPercent(v) if v.is_empty() => {
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
+        LikePattern::Constant(true) => Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN)),
         LikePattern::OrdinalStr(_) => Some(lhs.domain_eq(&StringDomain {
             min: pattern.clone(),
             max: Some(pattern),
@@ -1389,6 +1390,20 @@ mod tests {
             calc_like_domain(&non_matching, "abab%%%%%".to_string()),
             calc_like_domain(&non_matching, "abab%".to_string()),
             "non-matching prefixes should also stay consistent"
+        );
+    }
+
+    #[test]
+    fn test_calc_like_domain_all_percent_matches_single_percent() {
+        let domain = StringDomain {
+            min: "".to_string(),
+            max: Some("zzz".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&domain, "%".to_string()),
+            calc_like_domain(&domain, "%%%%%".to_string()),
+            "repeated all-% patterns should fold like a single %"
         );
     }
 
