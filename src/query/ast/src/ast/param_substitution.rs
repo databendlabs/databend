@@ -15,7 +15,6 @@
 use std::cell::Cell;
 use std::cell::RefCell;
 
-use crate::ast::ColumnID;
 use crate::ast::Expr;
 use crate::ast::Literal;
 use crate::ast::Statement;
@@ -116,34 +115,6 @@ pub fn substitute_params(stmt: &mut Statement, params: &serde_json::Value) -> Re
                         Some("params must be a JSON object for named placeholders (:name)".into());
                 }
             }
-            Expr::ColumnRef { column, .. }
-                if column.database.is_none()
-                    && column.table.is_none()
-                    && matches!(&column.column, ColumnID::Position(_)) =>
-            {
-                if let ColumnID::Position(col_pos) = &column.column {
-                    let arr = match params.as_array() {
-                        Some(arr) => arr,
-                        None => {
-                            *error.borrow_mut() = Some(
-                                "params must be a JSON array for positional placeholders ($N)"
-                                    .into(),
-                            );
-                            return;
-                        }
-                    };
-                    let idx = col_pos.pos - 1;
-                    if idx >= arr.len() {
-                        *error.borrow_mut() = Some(format!(
-                            "not enough parameters: ${} but only {} params provided",
-                            col_pos.pos,
-                            arr.len()
-                        ));
-                        return;
-                    }
-                    *expr = json_to_expr(&arr[idx]);
-                }
-            }
             _ => {}
         }
     };
@@ -219,16 +190,6 @@ mod tests {
         let result = stmt.to_string();
         assert!(result.contains("30"), "expected 30 in: {result}");
         assert!(result.contains("'Alice'"), "expected 'Alice' in: {result}");
-    }
-
-    #[test]
-    fn test_dollar_positional() {
-        let mut stmt = parse_stmt("SELECT $1, $2");
-        let params = serde_json::json!([42, "world"]);
-        substitute_params(&mut stmt, &params).unwrap();
-        let result = stmt.to_string();
-        assert!(result.contains("42"), "expected 42 in: {result}");
-        assert!(result.contains("'world'"), "expected 'world' in: {result}");
     }
 
     #[test]
@@ -413,17 +374,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sql_injection_dollar_params() {
-        let mut stmt = parse_stmt("SELECT $1");
-        let payload = "1 OR 1=1";
-        let params = serde_json::json!([payload]);
-        substitute_params(&mut stmt, &params).unwrap();
-        let exprs = extract_select_exprs(&stmt);
-        let val = assert_string_literal(exprs[0]);
-        assert_eq!(val, payload);
-    }
-
-    #[test]
     fn test_sql_injection_backslash_escape() {
         let mut stmt = parse_stmt("SELECT ?");
         let payload = "value\\' OR '1'='1";
@@ -517,15 +467,5 @@ mod tests {
         assert!(result.contains('1'), "expected 1 in: {result}");
         assert!(result.contains("'hello'"), "expected 'hello' in: {result}");
         assert!(result.contains("TRUE"), "expected TRUE in: {result}");
-    }
-
-    #[test]
-    fn test_dollar_reuse() {
-        let mut stmt = parse_stmt("SELECT $1, $1, $2");
-        let params = serde_json::json!([10, 20]);
-        substitute_params(&mut stmt, &params).unwrap();
-        let result = stmt.to_string();
-        assert!(result.contains("10"), "expected 10 in: {result}");
-        assert!(result.contains("20"), "expected 20 in: {result}");
     }
 }
