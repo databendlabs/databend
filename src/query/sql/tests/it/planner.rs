@@ -152,6 +152,8 @@ async fn test_like_escape_rejects_non_single_character_literal() -> Result<()> {
         "SELECT 'a' LIKE 'a' ESCAPE ''",
         "SELECT 'a' LIKE 'a' ESCAPE 'ab'",
         "SELECT 'a' LIKE ANY ('a', 'b') ESCAPE ''",
+        "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE ''",
+        "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE 'ab'",
     ] {
         let err = ctx.bind_sql(sql).await.unwrap_err();
         assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);

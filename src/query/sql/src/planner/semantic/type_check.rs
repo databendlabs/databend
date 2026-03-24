@@ -1607,6 +1607,10 @@ impl<'a> TypeChecker<'a> {
         modifier: &SubqueryModifier,
         op: &BinaryOperator,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let BinaryOperator::Like(escape) = op {
+            Self::validate_like_escape(*span, escape)?;
+        }
+
         Ok(match modifier {
             SubqueryModifier::Any | SubqueryModifier::Some => {
                 let comparison_op = SubqueryComparisonOp::try_from(op)?;
