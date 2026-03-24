@@ -254,19 +254,6 @@ fn should_push_down_prewhere(
     support_prewhere && (!storage_format_as_parquet || enable_parquet_prewhere)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::should_push_down_prewhere;
-
-    #[test]
-    fn test_should_push_down_prewhere_respects_parquet_setting() {
-        assert!(!should_push_down_prewhere(true, true, false));
-        assert!(should_push_down_prewhere(true, true, true));
-        assert!(should_push_down_prewhere(true, false, false));
-        assert!(!should_push_down_prewhere(false, false, true));
-    }
-}
-
 impl Rule for RulePushDownPrewhere {
     fn id(&self) -> RuleID {
         self.id
@@ -285,5 +272,18 @@ impl Rule for RulePushDownPrewhere {
 
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_push_down_prewhere;
+
+    #[test]
+    fn test_should_push_down_prewhere_respects_parquet_setting() {
+        assert!(!should_push_down_prewhere(true, true, false));
+        assert!(should_push_down_prewhere(true, true, true));
+        assert!(should_push_down_prewhere(true, false, false));
+        assert!(!should_push_down_prewhere(false, false, true));
     }
 }
