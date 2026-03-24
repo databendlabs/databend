@@ -213,7 +213,8 @@ SELECT s FROM x WHERE ind=0
                 let explain = run_query_pretty(ctx, explain_sql).await?;
 
                 assert!(
-                    explain.contains("HashJoin: LEFT ANTI"),
+                    explain.contains("HashJoin: LEFT ANTI")
+                        || explain.contains("HashJoin: RIGHT ANTI"),
                     "expected recursive NOT EXISTS to decorrelate into anti join, got:\n{explain}"
                 );
                 assert!(
