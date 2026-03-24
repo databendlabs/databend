@@ -148,6 +148,10 @@ impl SubqueryDecorrelatorOptimizer {
             let join_condition = JoinPredicate::new(pred, &outer_prop, &filter_prop);
             match join_condition {
                 JoinPredicate::Left(_) | JoinPredicate::ALL(_) => {
+                    // For correlated EXISTS / NOT EXISTS, predicates that reference only the
+                    // outer side must stay attached to the join condition. Pushing them down to
+                    // the outer input changes the subquery emptiness semantics and can filter out
+                    // rows that should survive a correlated NOT EXISTS.
                     non_equi_conditions.push(pred.clone());
                 }
                 JoinPredicate::Right(filter) => {

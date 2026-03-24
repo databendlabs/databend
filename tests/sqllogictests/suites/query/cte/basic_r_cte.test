@@ -150,6 +150,24 @@ with recursive t as (select 1 as x union all select x+1 from t where x < 3) sele
 ----
 1
 
+query T
+WITH RECURSIVE digits(z, lp) AS (
+    SELECT '1', 1
+    UNION ALL
+    SELECT CAST(lp + 1 AS TEXT), lp + 1 FROM digits WHERE lp < 3
+)
+SELECT z
+FROM digits AS z
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM digits AS lp
+    WHERE z.z = '1' AND lp.lp = 2
+)
+ORDER BY z;
+----
+2
+3
+
 
 statement ok
 set numeric_cast_option = 'truncating'
