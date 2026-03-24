@@ -197,8 +197,9 @@ pub async fn interpreter_plan_sql(
     ctx: Arc<QueryContext>,
     sql: &str,
     acquire_queue: bool,
+    params: Option<&serde_json::Value>,
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
-    let result = plan_sql(ctx.clone(), sql, acquire_queue).await;
+    let result = plan_sql(ctx.clone(), sql, acquire_queue, params).await;
     let short_sql = short_sql(
         sql.to_string(),
         ctx.get_settings().get_short_sql_max_length()?,
@@ -239,6 +240,7 @@ async fn plan_sql(
     ctx: Arc<QueryContext>,
     sql: &str,
     acquire_queue: bool,
+    params: Option<&serde_json::Value>,
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
     let mut planner = Planner::new_with_query_executor(
         ctx.clone(),
@@ -248,7 +250,14 @@ async fn plan_sql(
     );
 
     // Parse the SQL query, get extract additional information.
-    let extras = planner.parse_sql(sql)?;
+    let mut extras = planner.parse_sql(sql)?;
+
+    if let Some(params) = params {
+        databend_common_ast::ast::substitute_params(&mut extras.statement, params).map_err(
+            |e| ErrorCode::BadArguments(format!("parameter substitution failed: {e}")),
+        )?;
+    }
+
     auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
