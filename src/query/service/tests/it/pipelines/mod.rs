@@ -14,5 +14,6 @@
 
 mod executor;
 mod filter;
+mod result_projection;
 mod transforms;
 mod udf_transport;
