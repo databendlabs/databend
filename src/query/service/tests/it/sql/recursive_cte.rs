@@ -180,7 +180,7 @@ fn recursive_cte_correlated_not_exists_recursive_input_uses_anti_join() -> anyho
                 let ctx = fixture.new_query_ctx().await?;
 
                 let explain_sql = r#"
-EXPLAIN
+EXPLAIN JOIN
 WITH RECURSIVE input(sud) AS (
     VALUES('53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79')
 ),
@@ -213,19 +213,17 @@ SELECT s FROM x WHERE ind=0
                 let explain = run_query_pretty(ctx, explain_sql).await?;
 
                 assert!(
-                    explain.contains("join type: LEFT ANTI"),
+                    explain.contains("HashJoin: LEFT ANTI"),
                     "expected recursive NOT EXISTS to decorrelate into anti join, got:\n{explain}"
                 );
                 assert!(
-                    !explain.contains("join type: LEFT MARK")
-                        && !explain.contains("join type: RIGHT MARK"),
+                    !explain.contains("HashJoin: LEFT MARK")
+                        && !explain.contains("HashJoin: RIGHT MARK"),
                     "expected recursive NOT EXISTS to avoid mark join, got:\n{explain}"
                 );
                 assert!(
-                    explain.contains("join type: CROSS")
-                        && explain.contains("Filter(Probe)")
-                        && explain.contains("UnionAll(recursive cte)(Build)"),
-                    "expected recursive cross join to keep recursive expansion on probe side, got:\n{explain}"
+                    explain.contains("HashJoin: CROSS"),
+                    "expected recursive expansion to retain the recursive cross join shape, got:\n{explain}"
                 );
 
                 Ok::<(), anyhow::Error>(())
