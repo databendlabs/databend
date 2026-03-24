@@ -12,10 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_builder;
-mod format;
-mod parser;
-mod separator;
+use std::time::Instant;
 
-pub use format::TsvInputFormat;
-pub use parser::parse_tsv_records_for_infer_schema;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
+
+pub(crate) struct ProfileGuard {
+    name: ProfileStatisticsName,
+    start: Instant,
+}
+
+impl ProfileGuard {
+    pub(crate) fn new(name: ProfileStatisticsName) -> Self {
+        Self {
+            name,
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Drop for ProfileGuard {
+    fn drop(&mut self) {
+        Profile::record_usize_profile(self.name.clone(), self.start.elapsed().as_nanos() as usize);
+    }
+}

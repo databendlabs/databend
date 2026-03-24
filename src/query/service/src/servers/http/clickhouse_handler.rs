@@ -417,7 +417,7 @@ fn get_default_format(
 ) -> Result<ClickhouseFormatType> {
     let name = match &params.default_format {
         None => match headers.get("X-CLICKHOUSE-FORMAT") {
-            None => "TSV",
+            None => "TEXT",
             Some(v) => v.to_str().map_err_to_code(
                 ErrorCode::BadBytes,
                 || "value of X-CLICKHOUSE-FORMAT is not string",

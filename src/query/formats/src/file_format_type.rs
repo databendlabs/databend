@@ -26,7 +26,7 @@ use crate::output_format::JSONOutputFormat;
 use crate::output_format::NDJSONOutputFormatBase;
 use crate::output_format::OutputFormat;
 use crate::output_format::ParquetOutputFormat;
-use crate::output_format::TSVOutputFormat;
+use crate::output_format::TEXTOutputFormat;
 
 pub trait FileFormatTypeExt {
     fn get_content_type(&self) -> String;
@@ -55,14 +55,16 @@ pub fn get_output_format(
                 headers,
             ))
         }
-        FileFormatParams::Tsv(params) => {
+        FileFormatParams::Text(params) => {
             let field_encoder = FieldEncoderCSV::create_tsv(params, settings.clone());
             let headers = if let Some(options) = &clickhouse {
                 options.headers
+            } else if params.output_header {
+                1
             } else {
                 0
             };
-            Box::new(TSVOutputFormat::create(
+            Box::new(TEXTOutputFormat::create(
                 schema,
                 params,
                 field_encoder,
@@ -105,7 +107,7 @@ pub fn get_output_format(
 impl FileFormatTypeExt for StageFileFormatType {
     fn get_content_type(&self) -> String {
         match self {
-            StageFileFormatType::Tsv => "text/tab-separated-values; charset=UTF-8",
+            StageFileFormatType::Text => "text/tab-separated-values; charset=UTF-8",
             StageFileFormatType::Csv => "text/csv; charset=UTF-8",
             StageFileFormatType::Parquet => "application/octet-stream",
             StageFileFormatType::NdJson => "application/x-ndjson; charset=UTF-8",

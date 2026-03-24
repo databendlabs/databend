@@ -5,7 +5,7 @@ statement ok
 create table complex(a tuple(tuple(string, variant), map(int, variant), array(tuple(map(string, int), int))), b int);
 
 query TIITI
-copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'tsv' field_delimiter='|');
+copy into complex from @data/tsv/complex_types.tsv file_format = (type = 'text' field_delimiter='|');
 ----
 tsv/complex_types.tsv 1 0 NULL NULL
 
@@ -19,7 +19,7 @@ statement ok
 drop stage if exists tsv_types
 
 statement ok
-create stage tsv_types file_format = (type = 'tsv');
+create stage tsv_types file_format = (type = 'text');
 
 statement ok
 copy into @tsv_types from complex;
@@ -34,11 +34,11 @@ statement ok
 remove @tsv_types
 
 statement ok
-copy into @tsv_types from complex file_format = (type = 'tsv' field_delimiter=',');
+copy into @tsv_types from complex file_format = (type = 'text' field_delimiter=',');
 
 
 query T
-select $1 from @tsv_types(file_format => 'tsv');
+select $1 from @tsv_types(file_format => 'text');
 ----
 [["c\td"\,{"a":1}]\,{1:["a"\,0]}\,[[{"x":2}\,3]]],1
 
@@ -49,7 +49,7 @@ statement ok
 CREATE TABLE books ( title VARCHAR NULL, author VARCHAR NULL, date VARCHAR NULL, publish_time TIMESTAMP NULL );
 
 query TIITI
-copy into books from @data/tsv/books.tsv file_format = (type = 'tsv');
+copy into books from @data/tsv/books.tsv file_format = (type = 'text');
 ----
 tsv/books.tsv 6 0 NULL NULL
 

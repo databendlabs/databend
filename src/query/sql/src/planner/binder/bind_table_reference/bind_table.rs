@@ -264,7 +264,7 @@ impl Binder {
             "VIEW" => {
                 // TODO(leiysky): this check is error-prone,
                 // we should find a better way to do this.
-                Self::check_view_dep(bind_context, &database, &table_name)?;
+                Self::check_view_dep(bind_context, &catalog, &database, &table_name)?;
                 let query = table_meta
                     .options()
                     .get(QUERY)
@@ -273,7 +273,7 @@ impl Binder {
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                new_bind_context.view_info = Some((database.clone(), table_name));
+                new_bind_context.view_info = Some((catalog.clone(), database.clone(), table_name));
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
                         catalog,
@@ -339,19 +339,20 @@ impl Binder {
 
     pub(crate) fn check_view_dep(
         bind_context: &BindContext,
+        catalog: &str,
         database: &str,
         view_name: &str,
     ) -> Result<()> {
         match &bind_context.parent {
             Some(parent) => match &parent.view_info {
-                Some((db, v)) => {
-                    if db == database && v == view_name {
+                Some((cat, db, v)) => {
+                    if cat == catalog && db == database && v == view_name {
                         Err(ErrorCode::Internal(format!(
                             "View dependency loop detected (view: {}.{})",
                             database, view_name
                         )))
                     } else {
-                        Self::check_view_dep(parent, database, view_name)
+                        Self::check_view_dep(parent, catalog, database, view_name)
                     }
                 }
                 _ => Ok(()),

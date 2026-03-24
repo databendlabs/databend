@@ -15,27 +15,27 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::format::SeparatorState;
-use crate::read::row_based::formats::tsv::block_builder::TsvDecoder;
-use crate::read::row_based::formats::tsv::separator::TsvRowSeparator;
+use crate::read::row_based::formats::text::block_builder::TextDecoder;
+use crate::read::row_based::formats::text::separator::TextRowSeparator;
 
 #[derive(Clone)]
-pub struct TsvInputFormat {
-    pub(crate) params: TsvFileFormatParams,
+pub struct TextInputFormat {
+    pub(crate) params: TextFileFormatParams,
 }
 
-impl RowBasedFileFormat for TsvInputFormat {
+impl RowBasedFileFormat for TextInputFormat {
     fn try_create_separator(
         &self,
         _load_ctx: Arc<LoadContext>,
         path: &str,
     ) -> Result<Box<dyn SeparatorState>> {
-        Ok(Box::new(TsvRowSeparator::try_create(
+        Ok(Box::new(TextRowSeparator::try_create(
             path,
             self.params.record_delimiter.as_bytes(),
             self.params.headers,
@@ -43,6 +43,9 @@ impl RowBasedFileFormat for TsvInputFormat {
     }
 
     fn try_create_decoder(&self, load_ctx: Arc<LoadContext>) -> Result<Arc<dyn RowDecoder>> {
-        Ok(Arc::new(TsvDecoder::create(self.clone(), load_ctx.clone())))
+        Ok(Arc::new(TextDecoder::create(
+            self.clone(),
+            load_ctx.clone(),
+        )))
     }
 }

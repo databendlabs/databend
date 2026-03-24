@@ -5170,370 +5170,394 @@ Query {
                                 ),
                                 op: Union,
                                 all: true,
-                                left: SetOperation(
-                                    SetOperation {
+                                left: Query(
+                                    Query {
                                         span: Some(
-                                            69..75,
+                                            24..120,
                                         ),
-                                        op: Except,
-                                        all: false,
-                                        left: Select(
-                                            SelectStmt {
+                                        with: None,
+                                        body: SetOperation(
+                                            SetOperation {
                                                 span: Some(
-                                                    25..60,
+                                                    69..75,
                                                 ),
-                                                hints: None,
-                                                distinct: false,
-                                                top_n: None,
-                                                select_list: [
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                32..33,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            32..33,
-                                                                        ),
-                                                                        name: "f",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                35..36,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            35..36,
-                                                                        ),
-                                                                        name: "g",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                ],
-                                                from: [
-                                                    Table {
+                                                op: Except,
+                                                all: false,
+                                                left: Select(
+                                                    SelectStmt {
                                                         span: Some(
-                                                            42..60,
+                                                            25..60,
                                                         ),
-                                                        table: TableRef {
-                                                            catalog: None,
-                                                            database: None,
-                                                            table: Identifier {
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        32..33,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    32..33,
+                                                                                ),
+                                                                                name: "f",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        35..36,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    35..36,
+                                                                                ),
+                                                                                name: "g",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
                                                                 span: Some(
                                                                     42..60,
                                                                 ),
-                                                                name: "union_fuzz_result1",
-                                                                quote: None,
-                                                                ident_type: None,
+                                                                table: TableRef {
+                                                                    catalog: None,
+                                                                    database: None,
+                                                                    table: Identifier {
+                                                                        span: Some(
+                                                                            42..60,
+                                                                        ),
+                                                                        name: "union_fuzz_result1",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                    branch: None,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                with_options: None,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                                sample: None,
                                                             },
-                                                            branch: None,
-                                                        },
-                                                        alias: None,
-                                                        temporal: None,
-                                                        with_options: None,
-                                                        pivot: None,
-                                                        unpivot: None,
-                                                        sample: None,
+                                                        ],
+                                                        selection: None,
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
                                                     },
-                                                ],
-                                                selection: None,
-                                                group_by: None,
-                                                having: None,
-                                                window_list: None,
-                                                qualify: None,
-                                            },
-                                        ),
-                                        right: Select(
-                                            SelectStmt {
-                                                span: Some(
-                                                    84..119,
                                                 ),
-                                                hints: None,
-                                                distinct: false,
-                                                top_n: None,
-                                                select_list: [
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                91..92,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            91..92,
-                                                                        ),
-                                                                        name: "f",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                94..95,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            94..95,
-                                                                        ),
-                                                                        name: "g",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                ],
-                                                from: [
-                                                    Table {
+                                                right: Select(
+                                                    SelectStmt {
                                                         span: Some(
-                                                            101..119,
+                                                            84..119,
                                                         ),
-                                                        table: TableRef {
-                                                            catalog: None,
-                                                            database: None,
-                                                            table: Identifier {
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        91..92,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    91..92,
+                                                                                ),
+                                                                                name: "f",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        94..95,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    94..95,
+                                                                                ),
+                                                                                name: "g",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
                                                                 span: Some(
                                                                     101..119,
                                                                 ),
-                                                                name: "union_fuzz_result2",
-                                                                quote: None,
-                                                                ident_type: None,
+                                                                table: TableRef {
+                                                                    catalog: None,
+                                                                    database: None,
+                                                                    table: Identifier {
+                                                                        span: Some(
+                                                                            101..119,
+                                                                        ),
+                                                                        name: "union_fuzz_result2",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                    branch: None,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                with_options: None,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                                sample: None,
                                                             },
-                                                            branch: None,
-                                                        },
-                                                        alias: None,
-                                                        temporal: None,
-                                                        with_options: None,
-                                                        pivot: None,
-                                                        unpivot: None,
-                                                        sample: None,
+                                                        ],
+                                                        selection: None,
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
                                                     },
-                                                ],
-                                                selection: None,
-                                                group_by: None,
-                                                having: None,
-                                                window_list: None,
-                                                qualify: None,
+                                                ),
                                             },
                                         ),
+                                        order_by: [],
+                                        limit: [],
+                                        offset: None,
+                                        ignore_result: false,
                                     },
                                 ),
-                                right: SetOperation(
-                                    SetOperation {
+                                right: Query(
+                                    Query {
                                         span: Some(
-                                            192..198,
+                                            147..243,
                                         ),
-                                        op: Except,
-                                        all: false,
-                                        left: Select(
-                                            SelectStmt {
+                                        with: None,
+                                        body: SetOperation(
+                                            SetOperation {
                                                 span: Some(
-                                                    148..183,
+                                                    192..198,
                                                 ),
-                                                hints: None,
-                                                distinct: false,
-                                                top_n: None,
-                                                select_list: [
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                155..156,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            155..156,
-                                                                        ),
-                                                                        name: "f",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                158..159,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            158..159,
-                                                                        ),
-                                                                        name: "g",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                ],
-                                                from: [
-                                                    Table {
+                                                op: Except,
+                                                all: false,
+                                                left: Select(
+                                                    SelectStmt {
                                                         span: Some(
-                                                            165..183,
+                                                            148..183,
                                                         ),
-                                                        table: TableRef {
-                                                            catalog: None,
-                                                            database: None,
-                                                            table: Identifier {
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        155..156,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    155..156,
+                                                                                ),
+                                                                                name: "f",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        158..159,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    158..159,
+                                                                                ),
+                                                                                name: "g",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
                                                                 span: Some(
                                                                     165..183,
                                                                 ),
-                                                                name: "union_fuzz_result2",
-                                                                quote: None,
-                                                                ident_type: None,
+                                                                table: TableRef {
+                                                                    catalog: None,
+                                                                    database: None,
+                                                                    table: Identifier {
+                                                                        span: Some(
+                                                                            165..183,
+                                                                        ),
+                                                                        name: "union_fuzz_result2",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                    branch: None,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                with_options: None,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                                sample: None,
                                                             },
-                                                            branch: None,
-                                                        },
-                                                        alias: None,
-                                                        temporal: None,
-                                                        with_options: None,
-                                                        pivot: None,
-                                                        unpivot: None,
-                                                        sample: None,
+                                                        ],
+                                                        selection: None,
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
                                                     },
-                                                ],
-                                                selection: None,
-                                                group_by: None,
-                                                having: None,
-                                                window_list: None,
-                                                qualify: None,
-                                            },
-                                        ),
-                                        right: Select(
-                                            SelectStmt {
-                                                span: Some(
-                                                    207..242,
                                                 ),
-                                                hints: None,
-                                                distinct: false,
-                                                top_n: None,
-                                                select_list: [
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                214..215,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            214..215,
-                                                                        ),
-                                                                        name: "f",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                    AliasedExpr {
-                                                        expr: ColumnRef {
-                                                            span: Some(
-                                                                217..218,
-                                                            ),
-                                                            column: ColumnRef {
-                                                                database: None,
-                                                                table: None,
-                                                                column: Name(
-                                                                    Identifier {
-                                                                        span: Some(
-                                                                            217..218,
-                                                                        ),
-                                                                        name: "g",
-                                                                        quote: None,
-                                                                        ident_type: None,
-                                                                    },
-                                                                ),
-                                                            },
-                                                        },
-                                                        alias: None,
-                                                    },
-                                                ],
-                                                from: [
-                                                    Table {
+                                                right: Select(
+                                                    SelectStmt {
                                                         span: Some(
-                                                            224..242,
+                                                            207..242,
                                                         ),
-                                                        table: TableRef {
-                                                            catalog: None,
-                                                            database: None,
-                                                            table: Identifier {
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        214..215,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    214..215,
+                                                                                ),
+                                                                                name: "f",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                            AliasedExpr {
+                                                                expr: ColumnRef {
+                                                                    span: Some(
+                                                                        217..218,
+                                                                    ),
+                                                                    column: ColumnRef {
+                                                                        database: None,
+                                                                        table: None,
+                                                                        column: Name(
+                                                                            Identifier {
+                                                                                span: Some(
+                                                                                    217..218,
+                                                                                ),
+                                                                                name: "g",
+                                                                                quote: None,
+                                                                                ident_type: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                alias: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
                                                                 span: Some(
                                                                     224..242,
                                                                 ),
-                                                                name: "union_fuzz_result1",
-                                                                quote: None,
-                                                                ident_type: None,
+                                                                table: TableRef {
+                                                                    catalog: None,
+                                                                    database: None,
+                                                                    table: Identifier {
+                                                                        span: Some(
+                                                                            224..242,
+                                                                        ),
+                                                                        name: "union_fuzz_result1",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                    branch: None,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                with_options: None,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                                sample: None,
                                                             },
-                                                            branch: None,
-                                                        },
-                                                        alias: None,
-                                                        temporal: None,
-                                                        with_options: None,
-                                                        pivot: None,
-                                                        unpivot: None,
-                                                        sample: None,
+                                                        ],
+                                                        selection: None,
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
                                                     },
-                                                ],
-                                                selection: None,
-                                                group_by: None,
-                                                having: None,
-                                                window_list: None,
-                                                qualify: None,
+                                                ),
                                             },
                                         ),
+                                        order_by: [],
+                                        limit: [],
+                                        offset: None,
+                                        ignore_result: false,
                                     },
                                 ),
                             },
@@ -5773,119 +5797,131 @@ Query {
             ),
             op: Intersect,
             all: false,
-            left: SetOperation(
-                SetOperation {
+            left: Query(
+                Query {
                     span: Some(
-                        18..23,
+                        0..41,
                     ),
-                    op: Union,
-                    all: false,
-                    left: Select(
-                        SelectStmt {
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
                             span: Some(
-                                1..17,
+                                18..23,
                             ),
-                            hints: None,
-                            distinct: false,
-                            top_n: None,
-                            select_list: [
-                                StarColumns {
-                                    qualified: [
-                                        Star(
-                                            Some(
-                                                8..9,
-                                            ),
-                                        ),
-                                    ],
-                                    column_filter: None,
-                                },
-                            ],
-                            from: [
-                                Table {
+                            op: Union,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
                                     span: Some(
-                                        15..17,
+                                        1..17,
                                     ),
-                                    table: TableRef {
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        8..9,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
                                             span: Some(
                                                 15..17,
                                             ),
-                                            name: "t1",
-                                            quote: None,
-                                            ident_type: None,
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        15..17,
+                                                    ),
+                                                    name: "t1",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
                                         },
-                                        branch: None,
-                                    },
-                                    alias: None,
-                                    temporal: None,
-                                    with_options: None,
-                                    pivot: None,
-                                    unpivot: None,
-                                    sample: None,
-                                },
-                            ],
-                            selection: None,
-                            group_by: None,
-                            having: None,
-                            window_list: None,
-                            qualify: None,
-                        },
-                    ),
-                    right: Select(
-                        SelectStmt {
-                            span: Some(
-                                24..40,
-                            ),
-                            hints: None,
-                            distinct: false,
-                            top_n: None,
-                            select_list: [
-                                StarColumns {
-                                    qualified: [
-                                        Star(
-                                            Some(
-                                                31..32,
-                                            ),
-                                        ),
                                     ],
-                                    column_filter: None,
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
                                 },
-                            ],
-                            from: [
-                                Table {
+                            ),
+                            right: Select(
+                                SelectStmt {
                                     span: Some(
-                                        38..40,
+                                        24..40,
                                     ),
-                                    table: TableRef {
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        31..32,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
                                             span: Some(
                                                 38..40,
                                             ),
-                                            name: "t2",
-                                            quote: None,
-                                            ident_type: None,
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        38..40,
+                                                    ),
+                                                    name: "t2",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
                                         },
-                                        branch: None,
-                                    },
-                                    alias: None,
-                                    temporal: None,
-                                    with_options: None,
-                                    pivot: None,
-                                    unpivot: None,
-                                    sample: None,
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
                                 },
-                            ],
-                            selection: None,
-                            group_by: None,
-                            having: None,
-                            window_list: None,
-                            qualify: None,
+                            ),
                         },
                     ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
                 },
             ),
             right: Select(
@@ -5953,7 +5989,7 @@ Query {
 ---------- Input ----------
 (select * from t1 union select * from t2) union select * from t3
 ---------- Output ---------
-SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
+(SELECT * FROM t1 UNION SELECT * FROM t2) UNION SELECT * FROM t3
 ---------- AST ------------
 Query {
     span: Some(
@@ -5967,119 +6003,131 @@ Query {
             ),
             op: Union,
             all: false,
-            left: SetOperation(
-                SetOperation {
+            left: Query(
+                Query {
                     span: Some(
-                        18..23,
+                        0..41,
                     ),
-                    op: Union,
-                    all: false,
-                    left: Select(
-                        SelectStmt {
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
                             span: Some(
-                                1..17,
+                                18..23,
                             ),
-                            hints: None,
-                            distinct: false,
-                            top_n: None,
-                            select_list: [
-                                StarColumns {
-                                    qualified: [
-                                        Star(
-                                            Some(
-                                                8..9,
-                                            ),
-                                        ),
-                                    ],
-                                    column_filter: None,
-                                },
-                            ],
-                            from: [
-                                Table {
+                            op: Union,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
                                     span: Some(
-                                        15..17,
+                                        1..17,
                                     ),
-                                    table: TableRef {
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        8..9,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
                                             span: Some(
                                                 15..17,
                                             ),
-                                            name: "t1",
-                                            quote: None,
-                                            ident_type: None,
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        15..17,
+                                                    ),
+                                                    name: "t1",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
                                         },
-                                        branch: None,
-                                    },
-                                    alias: None,
-                                    temporal: None,
-                                    with_options: None,
-                                    pivot: None,
-                                    unpivot: None,
-                                    sample: None,
-                                },
-                            ],
-                            selection: None,
-                            group_by: None,
-                            having: None,
-                            window_list: None,
-                            qualify: None,
-                        },
-                    ),
-                    right: Select(
-                        SelectStmt {
-                            span: Some(
-                                24..40,
-                            ),
-                            hints: None,
-                            distinct: false,
-                            top_n: None,
-                            select_list: [
-                                StarColumns {
-                                    qualified: [
-                                        Star(
-                                            Some(
-                                                31..32,
-                                            ),
-                                        ),
                                     ],
-                                    column_filter: None,
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
                                 },
-                            ],
-                            from: [
-                                Table {
+                            ),
+                            right: Select(
+                                SelectStmt {
                                     span: Some(
-                                        38..40,
+                                        24..40,
                                     ),
-                                    table: TableRef {
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        31..32,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
                                             span: Some(
                                                 38..40,
                                             ),
-                                            name: "t2",
-                                            quote: None,
-                                            ident_type: None,
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        38..40,
+                                                    ),
+                                                    name: "t2",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
                                         },
-                                        branch: None,
-                                    },
-                                    alias: None,
-                                    temporal: None,
-                                    with_options: None,
-                                    pivot: None,
-                                    unpivot: None,
-                                    sample: None,
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
                                 },
-                            ],
-                            selection: None,
-                            group_by: None,
-                            having: None,
-                            window_list: None,
-                            qualify: None,
+                            ),
                         },
                     ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
                 },
             ),
             right: Select(
@@ -6147,7 +6195,7 @@ Query {
 ---------- Input ----------
 select * from t1 union (select * from t2 union select * from t3)
 ---------- Output ---------
-SELECT * FROM t1 UNION SELECT * FROM t2 UNION SELECT * FROM t3
+SELECT * FROM t1 UNION (SELECT * FROM t2 UNION SELECT * FROM t3)
 ---------- AST ------------
 Query {
     span: Some(
@@ -6214,59 +6262,660 @@ Query {
                     qualify: None,
                 },
             ),
-            right: SetOperation(
+            right: Query(
+                Query {
+                    span: Some(
+                        23..64,
+                    ),
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
+                            span: Some(
+                                41..46,
+                            ),
+                            op: Union,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        24..40,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        31..32,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
+                                            span: Some(
+                                                38..40,
+                                            ),
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        38..40,
+                                                    ),
+                                                    name: "t2",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                            right: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        47..63,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        54..55,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
+                                            span: Some(
+                                                61..63,
+                                            ),
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        61..63,
+                                                    ),
+                                                    name: "t3",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT 1 UNION (SELECT 1 UNION SELECT 1 UNION SELECT 1)
+---------- Output ---------
+SELECT 1 UNION (SELECT 1 UNION SELECT 1 UNION SELECT 1)
+---------- AST ------------
+Query {
+    span: Some(
+        9..14,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                9..14,
+            ),
+            op: Union,
+            all: false,
+            left: Select(
+                SelectStmt {
+                    span: Some(
+                        0..8,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    7..8,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            right: Query(
+                Query {
+                    span: Some(
+                        15..55,
+                    ),
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
+                            span: Some(
+                                40..45,
+                            ),
+                            op: Union,
+                            all: false,
+                            left: SetOperation(
+                                SetOperation {
+                                    span: Some(
+                                        25..30,
+                                    ),
+                                    op: Union,
+                                    all: false,
+                                    left: Select(
+                                        SelectStmt {
+                                            span: Some(
+                                                16..24,
+                                            ),
+                                            hints: None,
+                                            distinct: false,
+                                            top_n: None,
+                                            select_list: [
+                                                AliasedExpr {
+                                                    expr: Literal {
+                                                        span: Some(
+                                                            23..24,
+                                                        ),
+                                                        value: UInt64(
+                                                            1,
+                                                        ),
+                                                    },
+                                                    alias: None,
+                                                },
+                                            ],
+                                            from: [],
+                                            selection: None,
+                                            group_by: None,
+                                            having: None,
+                                            window_list: None,
+                                            qualify: None,
+                                        },
+                                    ),
+                                    right: Select(
+                                        SelectStmt {
+                                            span: Some(
+                                                31..39,
+                                            ),
+                                            hints: None,
+                                            distinct: false,
+                                            top_n: None,
+                                            select_list: [
+                                                AliasedExpr {
+                                                    expr: Literal {
+                                                        span: Some(
+                                                            38..39,
+                                                        ),
+                                                        value: UInt64(
+                                                            1,
+                                                        ),
+                                                    },
+                                                    alias: None,
+                                                },
+                                            ],
+                                            from: [],
+                                            selection: None,
+                                            group_by: None,
+                                            having: None,
+                                            window_list: None,
+                                            qualify: None,
+                                        },
+                                    ),
+                                },
+                            ),
+                            right: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        46..54,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    53..54,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT 1 UNION (SELECT 2)
+---------- Output ---------
+SELECT 1 UNION (SELECT 2)
+---------- AST ------------
+Query {
+    span: Some(
+        9..14,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                9..14,
+            ),
+            op: Union,
+            all: false,
+            left: Select(
+                SelectStmt {
+                    span: Some(
+                        0..8,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    7..8,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            right: Query(
+                Query {
+                    span: Some(
+                        15..25,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                16..24,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: Literal {
+                                        span: Some(
+                                            23..24,
+                                        ),
+                                        value: UInt64(
+                                            2,
+                                        ),
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+(SELECT 1) UNION SELECT 2
+---------- Output ---------
+(SELECT 1) UNION SELECT 2
+---------- AST ------------
+Query {
+    span: Some(
+        11..16,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                11..16,
+            ),
+            op: Union,
+            all: false,
+            left: Query(
+                Query {
+                    span: Some(
+                        0..10,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                1..9,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: Literal {
+                                        span: Some(
+                                            8..9,
+                                        ),
+                                        value: UInt64(
+                                            1,
+                                        ),
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+            right: Select(
+                SelectStmt {
+                    span: Some(
+                        17..25,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    24..25,
+                                ),
+                                value: UInt64(
+                                    2,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+(SELECT 1) UNION (SELECT 2)
+---------- Output ---------
+(SELECT 1) UNION (SELECT 2)
+---------- AST ------------
+Query {
+    span: Some(
+        11..16,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                11..16,
+            ),
+            op: Union,
+            all: false,
+            left: Query(
+                Query {
+                    span: Some(
+                        0..10,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                1..9,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: Literal {
+                                        span: Some(
+                                            8..9,
+                                        ),
+                                        value: UInt64(
+                                            1,
+                                        ),
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+            right: Query(
+                Query {
+                    span: Some(
+                        17..27,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                18..26,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: Literal {
+                                        span: Some(
+                                            25..26,
+                                        ),
+                                        value: UInt64(
+                                            2,
+                                        ),
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT 1 UNION SELECT 2 UNION (SELECT 3 UNION SELECT 4)
+---------- Output ---------
+SELECT 1 UNION SELECT 2 UNION (SELECT 3 UNION SELECT 4)
+---------- AST ------------
+Query {
+    span: Some(
+        24..29,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                24..29,
+            ),
+            op: Union,
+            all: false,
+            left: SetOperation(
                 SetOperation {
                     span: Some(
-                        41..46,
+                        9..14,
                     ),
                     op: Union,
                     all: false,
                     left: Select(
                         SelectStmt {
                             span: Some(
-                                24..40,
+                                0..8,
                             ),
                             hints: None,
                             distinct: false,
                             top_n: None,
                             select_list: [
-                                StarColumns {
-                                    qualified: [
-                                        Star(
-                                            Some(
-                                                31..32,
-                                            ),
+                                AliasedExpr {
+                                    expr: Literal {
+                                        span: Some(
+                                            7..8,
                                         ),
-                                    ],
-                                    column_filter: None,
-                                },
-                            ],
-                            from: [
-                                Table {
-                                    span: Some(
-                                        38..40,
-                                    ),
-                                    table: TableRef {
-                                        catalog: None,
-                                        database: None,
-                                        table: Identifier {
-                                            span: Some(
-                                                38..40,
-                                            ),
-                                            name: "t2",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                        branch: None,
+                                        value: UInt64(
+                                            1,
+                                        ),
                                     },
                                     alias: None,
-                                    temporal: None,
-                                    with_options: None,
-                                    pivot: None,
-                                    unpivot: None,
-                                    sample: None,
                                 },
                             ],
+                            from: [],
                             selection: None,
                             group_by: None,
                             having: None,
@@ -6277,7 +6926,629 @@ Query {
                     right: Select(
                         SelectStmt {
                             span: Some(
-                                47..63,
+                                15..23,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: Literal {
+                                        span: Some(
+                                            22..23,
+                                        ),
+                                        value: UInt64(
+                                            2,
+                                        ),
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                },
+            ),
+            right: Query(
+                Query {
+                    span: Some(
+                        30..55,
+                    ),
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
+                            span: Some(
+                                40..45,
+                            ),
+                            op: Union,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        31..39,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    38..39,
+                                                ),
+                                                value: UInt64(
+                                                    3,
+                                                ),
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                            right: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        46..54,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    53..54,
+                                                ),
+                                                value: UInt64(
+                                                    4,
+                                                ),
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+(SELECT 1 UNION SELECT 2) UNION SELECT 3
+---------- Output ---------
+(SELECT 1 UNION SELECT 2) UNION SELECT 3
+---------- AST ------------
+Query {
+    span: Some(
+        26..31,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                26..31,
+            ),
+            op: Union,
+            all: false,
+            left: Query(
+                Query {
+                    span: Some(
+                        0..25,
+                    ),
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
+                            span: Some(
+                                10..15,
+                            ),
+                            op: Union,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        1..9,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    8..9,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                            right: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        16..24,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    23..24,
+                                                ),
+                                                value: UInt64(
+                                                    2,
+                                                ),
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+            right: Select(
+                SelectStmt {
+                    span: Some(
+                        32..40,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    39..40,
+                                ),
+                                value: UInt64(
+                                    3,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT 1 INTERSECT (SELECT 1 INTERSECT SELECT 1)
+---------- Output ---------
+SELECT 1 INTERSECT (SELECT 1 INTERSECT SELECT 1)
+---------- AST ------------
+Query {
+    span: Some(
+        9..18,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                9..18,
+            ),
+            op: Intersect,
+            all: false,
+            left: Select(
+                SelectStmt {
+                    span: Some(
+                        0..8,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    7..8,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            right: Query(
+                Query {
+                    span: Some(
+                        19..48,
+                    ),
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
+                            span: Some(
+                                29..38,
+                            ),
+                            op: Intersect,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        20..28,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    27..28,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                            right: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        39..47,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    46..47,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+(SELECT 1) EXCEPT SELECT 2
+---------- Output ---------
+(SELECT 1) EXCEPT SELECT 2
+---------- AST ------------
+Query {
+    span: Some(
+        11..17,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                11..17,
+            ),
+            op: Except,
+            all: false,
+            left: Query(
+                Query {
+                    span: Some(
+                        0..10,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                1..9,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: Literal {
+                                        span: Some(
+                                            8..9,
+                                        ),
+                                        value: UInt64(
+                                            1,
+                                        ),
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+            right: Select(
+                SelectStmt {
+                    span: Some(
+                        18..26,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    25..26,
+                                ),
+                                value: UInt64(
+                                    2,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT * FROM a EXCEPT SELECT * FROM b UNION ALL SELECT * FROM b EXCEPT SELECT * FROM a
+---------- Output ---------
+((SELECT * FROM a EXCEPT SELECT * FROM b) UNION ALL SELECT * FROM b) EXCEPT SELECT * FROM a
+---------- AST ------------
+Query {
+    span: Some(
+        65..71,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                65..71,
+            ),
+            op: Except,
+            all: false,
+            left: SetOperation(
+                SetOperation {
+                    span: Some(
+                        39..48,
+                    ),
+                    op: Union,
+                    all: true,
+                    left: SetOperation(
+                        SetOperation {
+                            span: Some(
+                                16..22,
+                            ),
+                            op: Except,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        0..15,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        7..8,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
+                                            span: Some(
+                                                14..15,
+                                            ),
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        14..15,
+                                                    ),
+                                                    name: "a",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                            right: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        23..38,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        StarColumns {
+                                            qualified: [
+                                                Star(
+                                                    Some(
+                                                        30..31,
+                                                    ),
+                                                ),
+                                            ],
+                                            column_filter: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
+                                            span: Some(
+                                                37..38,
+                                            ),
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        37..38,
+                                                    ),
+                                                    name: "b",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                        },
+                    ),
+                    right: Select(
+                        SelectStmt {
+                            span: Some(
+                                49..64,
                             ),
                             hints: None,
                             distinct: false,
@@ -6287,7 +7558,7 @@ Query {
                                     qualified: [
                                         Star(
                                             Some(
-                                                54..55,
+                                                56..57,
                                             ),
                                         ),
                                     ],
@@ -6297,16 +7568,16 @@ Query {
                             from: [
                                 Table {
                                     span: Some(
-                                        61..63,
+                                        63..64,
                                     ),
                                     table: TableRef {
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
                                             span: Some(
-                                                61..63,
+                                                63..64,
                                             ),
-                                            name: "t3",
+                                            name: "b",
                                             quote: None,
                                             ident_type: None,
                                         },
@@ -6329,6 +7600,811 @@ Query {
                     ),
                 },
             ),
+            right: Select(
+                SelectStmt {
+                    span: Some(
+                        72..87,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        79..80,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                86..87,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        86..87,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT count() + 1 FROM (SELECT * FROM agg_fuzz_result1 EXCEPT SELECT * FROM agg_fuzz_result2 UNION ALL SELECT * FROM agg_fuzz_result2 EXCEPT SELECT * FROM agg_fuzz_result1)
+---------- Output ---------
+SELECT count() + 1 FROM (((SELECT * FROM agg_fuzz_result1 EXCEPT SELECT * FROM agg_fuzz_result2) UNION ALL SELECT * FROM agg_fuzz_result2) EXCEPT SELECT * FROM agg_fuzz_result1)
+---------- AST ------------
+Query {
+    span: Some(
+        0..173,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..173,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                AliasedExpr {
+                    expr: BinaryOp {
+                        span: Some(
+                            15..16,
+                        ),
+                        op: Plus,
+                        left: FunctionCall {
+                            span: Some(
+                                7..14,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..12,
+                                    ),
+                                    name: "count",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                17..18,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Subquery {
+                    span: Some(
+                        24..173,
+                    ),
+                    lateral: false,
+                    subquery: Query {
+                        span: Some(
+                            135..141,
+                        ),
+                        with: None,
+                        body: SetOperation(
+                            SetOperation {
+                                span: Some(
+                                    135..141,
+                                ),
+                                op: Except,
+                                all: false,
+                                left: SetOperation(
+                                    SetOperation {
+                                        span: Some(
+                                            94..103,
+                                        ),
+                                        op: Union,
+                                        all: true,
+                                        left: SetOperation(
+                                            SetOperation {
+                                                span: Some(
+                                                    56..62,
+                                                ),
+                                                op: Except,
+                                                all: false,
+                                                left: Select(
+                                                    SelectStmt {
+                                                        span: Some(
+                                                            25..55,
+                                                        ),
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            StarColumns {
+                                                                qualified: [
+                                                                    Star(
+                                                                        Some(
+                                                                            32..33,
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                                column_filter: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
+                                                                span: Some(
+                                                                    39..55,
+                                                                ),
+                                                                table: TableRef {
+                                                                    catalog: None,
+                                                                    database: None,
+                                                                    table: Identifier {
+                                                                        span: Some(
+                                                                            39..55,
+                                                                        ),
+                                                                        name: "agg_fuzz_result1",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                    branch: None,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                with_options: None,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                                sample: None,
+                                                            },
+                                                        ],
+                                                        selection: None,
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
+                                                    },
+                                                ),
+                                                right: Select(
+                                                    SelectStmt {
+                                                        span: Some(
+                                                            63..93,
+                                                        ),
+                                                        hints: None,
+                                                        distinct: false,
+                                                        top_n: None,
+                                                        select_list: [
+                                                            StarColumns {
+                                                                qualified: [
+                                                                    Star(
+                                                                        Some(
+                                                                            70..71,
+                                                                        ),
+                                                                    ),
+                                                                ],
+                                                                column_filter: None,
+                                                            },
+                                                        ],
+                                                        from: [
+                                                            Table {
+                                                                span: Some(
+                                                                    77..93,
+                                                                ),
+                                                                table: TableRef {
+                                                                    catalog: None,
+                                                                    database: None,
+                                                                    table: Identifier {
+                                                                        span: Some(
+                                                                            77..93,
+                                                                        ),
+                                                                        name: "agg_fuzz_result2",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                    branch: None,
+                                                                },
+                                                                alias: None,
+                                                                temporal: None,
+                                                                with_options: None,
+                                                                pivot: None,
+                                                                unpivot: None,
+                                                                sample: None,
+                                                            },
+                                                        ],
+                                                        selection: None,
+                                                        group_by: None,
+                                                        having: None,
+                                                        window_list: None,
+                                                        qualify: None,
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        right: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    104..134,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    StarColumns {
+                                                        qualified: [
+                                                            Star(
+                                                                Some(
+                                                                    111..112,
+                                                                ),
+                                                            ),
+                                                        ],
+                                                        column_filter: None,
+                                                    },
+                                                ],
+                                                from: [
+                                                    Table {
+                                                        span: Some(
+                                                            118..134,
+                                                        ),
+                                                        table: TableRef {
+                                                            catalog: None,
+                                                            database: None,
+                                                            table: Identifier {
+                                                                span: Some(
+                                                                    118..134,
+                                                                ),
+                                                                name: "agg_fuzz_result2",
+                                                                quote: None,
+                                                                ident_type: None,
+                                                            },
+                                                            branch: None,
+                                                        },
+                                                        alias: None,
+                                                        temporal: None,
+                                                        with_options: None,
+                                                        pivot: None,
+                                                        unpivot: None,
+                                                        sample: None,
+                                                    },
+                                                ],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                right: Select(
+                                    SelectStmt {
+                                        span: Some(
+                                            142..172,
+                                        ),
+                                        hints: None,
+                                        distinct: false,
+                                        top_n: None,
+                                        select_list: [
+                                            StarColumns {
+                                                qualified: [
+                                                    Star(
+                                                        Some(
+                                                            149..150,
+                                                        ),
+                                                    ),
+                                                ],
+                                                column_filter: None,
+                                            },
+                                        ],
+                                        from: [
+                                            Table {
+                                                span: Some(
+                                                    156..172,
+                                                ),
+                                                table: TableRef {
+                                                    catalog: None,
+                                                    database: None,
+                                                    table: Identifier {
+                                                        span: Some(
+                                                            156..172,
+                                                        ),
+                                                        name: "agg_fuzz_result1",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    branch: None,
+                                                },
+                                                alias: None,
+                                                temporal: None,
+                                                with_options: None,
+                                                pivot: None,
+                                                unpivot: None,
+                                                sample: None,
+                                            },
+                                        ],
+                                        selection: None,
+                                        group_by: None,
+                                        having: None,
+                                        window_list: None,
+                                        qualify: None,
+                                    },
+                                ),
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                    alias: None,
+                    pivot: None,
+                    unpivot: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+SELECT a FROM t1 UNION (SELECT b FROM t2 INTERSECT SELECT c FROM t3)
+---------- Output ---------
+SELECT a FROM t1 UNION (SELECT b FROM t2 INTERSECT SELECT c FROM t3)
+---------- AST ------------
+Query {
+    span: Some(
+        17..22,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                17..22,
+            ),
+            op: Union,
+            all: false,
+            left: Select(
+                SelectStmt {
+                    span: Some(
+                        0..16,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    7..8,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                7..8,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                14..16,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        14..16,
+                                    ),
+                                    name: "t1",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            right: Query(
+                Query {
+                    span: Some(
+                        23..68,
+                    ),
+                    with: None,
+                    body: SetOperation(
+                        SetOperation {
+                            span: Some(
+                                41..50,
+                            ),
+                            op: Intersect,
+                            all: false,
+                            left: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        24..40,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    31..32,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                31..32,
+                                                            ),
+                                                            name: "b",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
+                                            span: Some(
+                                                38..40,
+                                            ),
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        38..40,
+                                                    ),
+                                                    name: "t2",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                            right: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        51..67,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    58..59,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                58..59,
+                                                            ),
+                                                            name: "c",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            alias: None,
+                                        },
+                                    ],
+                                    from: [
+                                        Table {
+                                            span: Some(
+                                                65..67,
+                                            ),
+                                            table: TableRef {
+                                                catalog: None,
+                                                database: None,
+                                                table: Identifier {
+                                                    span: Some(
+                                                        65..67,
+                                                    ),
+                                                    name: "t3",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                                branch: None,
+                                            },
+                                            alias: None,
+                                            temporal: None,
+                                            with_options: None,
+                                            pivot: None,
+                                            unpivot: None,
+                                            sample: None,
+                                        },
+                                    ],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+(SELECT * FROM t1 WHERE x > 0) UNION SELECT * FROM t2
+---------- Output ---------
+(SELECT * FROM t1 WHERE x > 0) UNION SELECT * FROM t2
+---------- AST ------------
+Query {
+    span: Some(
+        31..36,
+    ),
+    with: None,
+    body: SetOperation(
+        SetOperation {
+            span: Some(
+                31..36,
+            ),
+            op: Union,
+            all: false,
+            left: Query(
+                Query {
+                    span: Some(
+                        0..30,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                1..29,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                StarColumns {
+                                    qualified: [
+                                        Star(
+                                            Some(
+                                                8..9,
+                                            ),
+                                        ),
+                                    ],
+                                    column_filter: None,
+                                },
+                            ],
+                            from: [
+                                Table {
+                                    span: Some(
+                                        15..17,
+                                    ),
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                15..17,
+                                            ),
+                                            name: "t1",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        branch: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            ],
+                            selection: Some(
+                                BinaryOp {
+                                    span: Some(
+                                        26..27,
+                                    ),
+                                    op: Gt,
+                                    left: ColumnRef {
+                                        span: Some(
+                                            24..25,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        24..25,
+                                                    ),
+                                                    name: "x",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                    right: Literal {
+                                        span: Some(
+                                            28..29,
+                                        ),
+                                        value: UInt64(
+                                            0,
+                                        ),
+                                    },
+                                },
+                            ),
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+            right: Select(
+                SelectStmt {
+                    span: Some(
+                        37..53,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        44..45,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                51..53,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        51..53,
+                                    ),
+                                    name: "t2",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                branch: None,
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
         },
     ),
     order_by: [],
@@ -6341,7 +8417,7 @@ Query {
 ---------- Input ----------
 SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo
 ---------- Output ---------
-SELECT * FROM (SELECT * EXCEPT SELECT *) AS foo
+SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) AS foo
 ---------- AST ------------
 Query {
     span: Some(
@@ -6386,60 +8462,84 @@ Query {
                                 ),
                                 op: Except,
                                 all: false,
-                                left: Select(
-                                    SelectStmt {
+                                left: Query(
+                                    Query {
                                         span: Some(
-                                            16..24,
+                                            15..25,
                                         ),
-                                        hints: None,
-                                        distinct: false,
-                                        top_n: None,
-                                        select_list: [
-                                            StarColumns {
-                                                qualified: [
-                                                    Star(
-                                                        Some(
-                                                            23..24,
-                                                        ),
-                                                    ),
+                                        with: None,
+                                        body: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    16..24,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    StarColumns {
+                                                        qualified: [
+                                                            Star(
+                                                                Some(
+                                                                    23..24,
+                                                                ),
+                                                            ),
+                                                        ],
+                                                        column_filter: None,
+                                                    },
                                                 ],
-                                                column_filter: None,
+                                                from: [],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
                                             },
-                                        ],
-                                        from: [],
-                                        selection: None,
-                                        group_by: None,
-                                        having: None,
-                                        window_list: None,
-                                        qualify: None,
+                                        ),
+                                        order_by: [],
+                                        limit: [],
+                                        offset: None,
+                                        ignore_result: false,
                                     },
                                 ),
-                                right: Select(
-                                    SelectStmt {
+                                right: Query(
+                                    Query {
                                         span: Some(
-                                            34..42,
+                                            33..43,
                                         ),
-                                        hints: None,
-                                        distinct: false,
-                                        top_n: None,
-                                        select_list: [
-                                            StarColumns {
-                                                qualified: [
-                                                    Star(
-                                                        Some(
-                                                            41..42,
-                                                        ),
-                                                    ),
+                                        with: None,
+                                        body: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    34..42,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    StarColumns {
+                                                        qualified: [
+                                                            Star(
+                                                                Some(
+                                                                    41..42,
+                                                                ),
+                                                            ),
+                                                        ],
+                                                        column_filter: None,
+                                                    },
                                                 ],
-                                                column_filter: None,
+                                                from: [],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
                                             },
-                                        ],
-                                        from: [],
-                                        selection: None,
-                                        group_by: None,
-                                        having: None,
-                                        window_list: None,
-                                        qualify: None,
+                                        ),
+                                        order_by: [],
+                                        limit: [],
+                                        offset: None,
+                                        ignore_result: false,
                                     },
                                 ),
                             },
@@ -6484,7 +8584,7 @@ Query {
 ---------- Input ----------
 SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo
 ---------- Output ---------
-SELECT * FROM (SELECT * EXCEPT SELECT *) AS foo
+SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) AS foo
 ---------- AST ------------
 Query {
     span: Some(
@@ -6519,7 +8619,7 @@ Query {
                     lateral: false,
                     subquery: Query {
                         span: Some(
-                            27..33,
+                            15..45,
                         ),
                         with: None,
                         body: SetOperation(
@@ -6529,60 +8629,84 @@ Query {
                                 ),
                                 op: Except,
                                 all: false,
-                                left: Select(
-                                    SelectStmt {
+                                left: Query(
+                                    Query {
                                         span: Some(
-                                            17..25,
+                                            16..26,
                                         ),
-                                        hints: None,
-                                        distinct: false,
-                                        top_n: None,
-                                        select_list: [
-                                            StarColumns {
-                                                qualified: [
-                                                    Star(
-                                                        Some(
-                                                            24..25,
-                                                        ),
-                                                    ),
+                                        with: None,
+                                        body: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    17..25,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    StarColumns {
+                                                        qualified: [
+                                                            Star(
+                                                                Some(
+                                                                    24..25,
+                                                                ),
+                                                            ),
+                                                        ],
+                                                        column_filter: None,
+                                                    },
                                                 ],
-                                                column_filter: None,
+                                                from: [],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
                                             },
-                                        ],
-                                        from: [],
-                                        selection: None,
-                                        group_by: None,
-                                        having: None,
-                                        window_list: None,
-                                        qualify: None,
+                                        ),
+                                        order_by: [],
+                                        limit: [],
+                                        offset: None,
+                                        ignore_result: false,
                                     },
                                 ),
-                                right: Select(
-                                    SelectStmt {
+                                right: Query(
+                                    Query {
                                         span: Some(
-                                            35..43,
+                                            34..44,
                                         ),
-                                        hints: None,
-                                        distinct: false,
-                                        top_n: None,
-                                        select_list: [
-                                            StarColumns {
-                                                qualified: [
-                                                    Star(
-                                                        Some(
-                                                            42..43,
-                                                        ),
-                                                    ),
+                                        with: None,
+                                        body: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    35..43,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    StarColumns {
+                                                        qualified: [
+                                                            Star(
+                                                                Some(
+                                                                    42..43,
+                                                                ),
+                                                            ),
+                                                        ],
+                                                        column_filter: None,
+                                                    },
                                                 ],
-                                                column_filter: None,
+                                                from: [],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
                                             },
-                                        ],
-                                        from: [],
-                                        selection: None,
-                                        group_by: None,
-                                        having: None,
-                                        window_list: None,
-                                        qualify: None,
+                                        ),
+                                        order_by: [],
+                                        limit: [],
+                                        offset: None,
+                                        ignore_result: false,
                                     },
                                 ),
                             },
@@ -7762,7 +9886,7 @@ Query {
                             values: Subquery(
                                 Query {
                                     span: Some(
-                                        77..117,
+                                        76..118,
                                     ),
                                     with: None,
                                     body: Select(
@@ -8958,7 +11082,7 @@ Query {
                     lateral: false,
                     subquery: Query {
                         span: Some(
-                            16..33,
+                            15..48,
                         ),
                         with: None,
                         body: Select(

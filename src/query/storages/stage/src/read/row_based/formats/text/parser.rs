@@ -17,16 +17,16 @@ use std::io::Cursor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::cursor_ext::BufferReadStringExt;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 
 use crate::read::row_based::batch::BytesBatch;
 use crate::read::row_based::batch::NdJsonRowBatchIter;
 use crate::read::row_based::batch::NdjsonRowBatch;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::SeparatorState;
-use crate::read::row_based::formats::tsv::separator::TsvRowSeparator;
+use crate::read::row_based::formats::text::separator::TextRowSeparator;
 
-pub struct TsvFieldReader<'a> {
+pub struct TextFieldReader<'a> {
     row: &'a [u8],
     field_delimiter: u8,
     field_start: usize,
@@ -34,7 +34,7 @@ pub struct TsvFieldReader<'a> {
     in_escape: bool,
 }
 
-impl<'a> TsvFieldReader<'a> {
+impl<'a> TextFieldReader<'a> {
     pub fn new(row: &'a [u8], field_delimiter: u8) -> Self {
         Self {
             row,
@@ -46,7 +46,7 @@ impl<'a> TsvFieldReader<'a> {
     }
 }
 
-impl<'a> Iterator for TsvFieldReader<'a> {
+impl<'a> Iterator for TextFieldReader<'a> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -78,7 +78,7 @@ struct InferSchemaIter {
     batches: std::vec::IntoIter<RowBatchWithPosition>,
     current_rows: Option<NdJsonRowBatchIter<'static>>,
     current_data: Option<Box<NdjsonRowBatch>>,
-    current_fields: Option<std::iter::Enumerate<TsvFieldReader<'static>>>,
+    current_fields: Option<std::iter::Enumerate<TextFieldReader<'static>>>,
     field_buf: Vec<u8>,
     record_delimiter: u8,
     field_delimiter: u8,
@@ -112,7 +112,7 @@ impl Iterator for InferSchemaIter {
                 if let Some(row) = rows.next() {
                     let row = trim_record_delimiter(row, self.record_delimiter, self.trim_cr);
 
-                    let reader = TsvFieldReader::new(row, self.field_delimiter).enumerate();
+                    let reader = TextFieldReader::new(row, self.field_delimiter).enumerate();
 
                     self.current_fields = Some(reader);
                     continue;
@@ -136,7 +136,7 @@ impl Iterator for InferSchemaIter {
                 }
                 Err(_) => {
                     return Some(Err(ErrorCode::BadBytes(
-                        "expected NDJson row batch for TSV".to_string(),
+                        "expected NDJson row batch for TEXT".to_string(),
                     )));
                 }
             }
@@ -146,12 +146,12 @@ impl Iterator for InferSchemaIter {
 
 pub fn parse_tsv_records_for_infer_schema(
     input: &[u8],
-    params: &TsvFileFormatParams,
+    params: &TextFileFormatParams,
     is_eof: bool,
 ) -> Result<impl Iterator<Item = Result<(usize, String)>>> {
     let record_delimiter = params.record_delimiter.as_bytes();
     let record_delimiter_byte = *record_delimiter.last().ok_or_else(|| {
-        ErrorCode::BadBytes("empty TSV record delimiter when infer schema".to_string())
+        ErrorCode::BadBytes("empty TEXT record delimiter when infer schema".to_string())
     })?;
     let field_delimiter = params
         .field_delimiter
@@ -159,10 +159,10 @@ pub fn parse_tsv_records_for_infer_schema(
         .first()
         .copied()
         .ok_or_else(|| {
-            ErrorCode::BadBytes("empty TSV field delimiter when infer schema".to_string())
+            ErrorCode::BadBytes("empty TEXT field delimiter when infer schema".to_string())
         })?;
 
-    let mut separator = TsvRowSeparator::try_create("infer_schema", record_delimiter, 0)?;
+    let mut separator = TextRowSeparator::try_create("infer_schema", record_delimiter, 0)?;
     let batch = BytesBatch {
         data: input.to_vec(),
         path: "infer_schema".to_string(),
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn test_tsv_field_reader() {
         let row = b"a\\tb\tc\\\\\td\t";
-        let fields: Vec<&[u8]> = TsvFieldReader::new(row, b'\t').collect();
+        let fields: Vec<&[u8]> = TextFieldReader::new(row, b'\t').collect();
         assert_eq!(fields, vec![
             b"a\\tb".as_slice(),
             b"c\\\\".as_slice(),
@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_parse_tsv_records_for_infer_schema() -> Result<()> {
-        let params = TsvFileFormatParams::default();
+        let params = TextFileFormatParams::default();
         let records = parse_tsv_records_for_infer_schema(b"1\\t2\t3\\n4\n5\t6\n", &params, true)?
             .collect::<Result<Vec<_>>>()?;
         assert_eq!(records, vec![

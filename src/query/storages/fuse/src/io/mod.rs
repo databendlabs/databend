@@ -20,6 +20,7 @@ mod write;
 
 pub use locations::TableMetaLocationGenerator;
 pub use read::AggIndexReader;
+pub use read::BlockReadContext;
 pub use read::BlockReadResult;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
@@ -34,6 +35,7 @@ pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
 pub use read::VirtualBlockReadResult;
 pub use read::VirtualColumnReader;
+pub use read::build_columns_meta;
 pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
 pub use snapshots::SnapshotLiteExtended;

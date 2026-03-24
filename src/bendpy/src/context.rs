@@ -219,7 +219,7 @@ impl PySessionContext {
     }
 
     #[pyo3(signature = (name, path, pattern = None, connection = None))]
-    fn register_tsv(
+    fn register_text(
         &mut self,
         name: &str,
         path: &str,

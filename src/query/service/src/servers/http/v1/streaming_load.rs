@@ -362,7 +362,7 @@ async fn read_multi_part(
                         }
                     }
                     FileFormatParams::Csv(_)
-                    | FileFormatParams::Tsv(_)
+                    | FileFormatParams::Text(_)
                     | FileFormatParams::NdJson(_) => {
                         let mut offset = 0;
                         loop {

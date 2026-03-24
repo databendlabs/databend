@@ -17,31 +17,36 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::TableDataType;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_io::cursor_ext::BufferReadStringExt;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_storage::FileParseError;
 
 use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
-use crate::read::row_based::formats::tsv::format::TsvInputFormat;
+use crate::read::row_based::formats::text::format::TextInputFormat;
 use crate::read::row_based::utils::get_decode_error_by_pos;
 
-pub struct TsvDecoder {
+pub struct TextDecoder {
     pub load_context: Arc<LoadContext>,
     pub field_decoder: SeparatedTextDecoder,
 
     pub field_delimiter: Option<u8>,
+    pub error_on_column_count_mismatch: bool,
+    pub empty_field_as: EmptyFieldAs,
 
     pub record_delimiter: u8,
     pub trim_cr: bool,
 }
 
-impl TsvDecoder {
-    pub fn create(fmt: TsvInputFormat, load_context: Arc<LoadContext>) -> Self {
+impl TextDecoder {
+    pub fn create(fmt: TextInputFormat, load_context: Arc<LoadContext>) -> Self {
         let field_decoder =
-            SeparatedTextDecoder::create_tsv(&fmt.params, load_context.settings.clone());
+            SeparatedTextDecoder::create_text(&fmt.params, load_context.settings.clone());
         let field_delimiter = fmt.params.field_delimiter.as_bytes().first().copied();
 
         // we only accept \r\n when len > 1
@@ -52,6 +57,8 @@ impl TsvDecoder {
             load_context,
             field_decoder,
             field_delimiter,
+            error_on_column_count_mismatch: fmt.params.error_on_column_count_mismatch,
+            empty_field_as: fmt.params.empty_field_as,
             record_delimiter,
             trim_cr,
         }
@@ -74,7 +81,53 @@ impl TsvDecoder {
         column_index: usize,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
-            self.load_context.push_default_value(builder, column_index)
+            let field = &self.load_context.schema.fields()[column_index];
+            match &self.empty_field_as {
+                EmptyFieldAs::FieldDefault => {
+                    self.load_context.push_default_value(builder, column_index)
+                }
+                EmptyFieldAs::Null => {
+                    if !matches!(field.data_type, TableDataType::Nullable(_)) {
+                        return Err(FileParseError::ColumnEmptyError {
+                            column_index,
+                            column_name: field.name().to_owned(),
+                            column_type: field.data_type.to_string(),
+                            empty_field_as: self.empty_field_as.to_string(),
+                            remedy: format!(
+                                "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
+                                field.name()
+                            ),
+                        });
+                    }
+                    builder.push_default();
+                    Ok(())
+                }
+                EmptyFieldAs::String => match builder {
+                    ColumnBuilder::String(b) => {
+                        b.put_and_commit("");
+                        Ok(())
+                    }
+                    ColumnBuilder::Nullable(box NullableColumnBuilder {
+                        builder: ColumnBuilder::String(b),
+                        validity,
+                    }) => {
+                        b.put_and_commit("");
+                        validity.push(true);
+                        Ok(())
+                    }
+                    ColumnBuilder::Nullable(_) => {
+                        builder.push_default();
+                        Ok(())
+                    }
+                    _ => Err(FileParseError::ColumnEmptyError {
+                        column_index,
+                        column_name: field.name().to_owned(),
+                        column_type: field.data_type.to_string(),
+                        empty_field_as: self.empty_field_as.to_string(),
+                        remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL.".to_string(),
+                    }),
+                },
+            }
         } else {
             // todo(youngsofun): optimize this later after refactor.
             let mut cursor = Cursor::new(col_data);
@@ -105,13 +158,20 @@ impl TsvDecoder {
         columns: &mut [ColumnBuilder],
     ) -> std::result::Result<(), FileParseError> {
         if self.field_delimiter.is_none() {
-            if columns.len() != 1 {
+            if columns.len() == 1 {
+                return self.read_column(&mut columns[0], buf, 0);
+            }
+            if self.error_on_column_count_mismatch {
                 return Err(FileParseError::NumberOfColumnsMismatch {
                     table: columns.len(),
                     file: 1,
                 });
             }
-            return self.read_column(&mut columns[0], buf, 0);
+            self.read_column(&mut columns[0], buf, 0)?;
+            for (column_index, column) in columns.iter_mut().enumerate().skip(1) {
+                self.read_column(column, &[], column_index)?;
+            }
+            return Ok(());
         }
         let field_delimiter = self.field_delimiter.unwrap();
         let num_columns = columns.len();
@@ -170,8 +230,12 @@ impl TsvDecoder {
                 field_end += 1;
             }
             if error.is_none() {
-                // expect: field_end > buf_len && column_index == num_columns
-                if column_index < num_columns {
+                if !self.error_on_column_count_mismatch {
+                    while column_index < num_columns {
+                        self.read_column(&mut columns[column_index], &[], column_index)?;
+                        column_index += 1;
+                    }
+                } else if column_index < num_columns {
                     error = Some(FileParseError::NumberOfColumnsMismatch {
                         table: num_columns,
                         file: column_index,
@@ -188,7 +252,7 @@ impl TsvDecoder {
     }
 }
 
-impl RowDecoder for TsvDecoder {
+impl RowDecoder for TextDecoder {
     fn add(&self, state: &mut BlockBuilderState, batch: RowBatchWithPosition) -> Result<()> {
         let data = batch.data.into_nd_json().unwrap();
 

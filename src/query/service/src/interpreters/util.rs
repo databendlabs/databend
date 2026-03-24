@@ -30,6 +30,7 @@ use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_script::Client;
 use databend_common_script::ir::ColumnAccess;
+use databend_common_sql::Metadata;
 use databend_common_sql::Planner;
 use databend_common_version::BUILD_INFO;
 use futures_util::TryStreamExt;
@@ -248,6 +249,25 @@ impl Client for ScriptClient {
             _ => scalar_ref_to_string(&value.as_ref()),
         })
     }
+}
+
+/// Check if a view's subquery references itself (directly or indirectly),
+/// which would create a circular dependency.
+pub fn check_view_circular_dependency(
+    metadata: &Metadata,
+    catalog: &str,
+    database: &str,
+    view_name: &str,
+) -> databend_common_exception::Result<()> {
+    for table in metadata.tables() {
+        if table.catalog() == catalog && table.database() == database && table.name() == view_name {
+            return Err(ErrorCode::Internal(format!(
+                "View dependency loop detected (view: {}.{})",
+                database, view_name
+            )));
+        }
+    }
+    Ok(())
 }
 
 #[derive(serde::Serialize)]

@@ -107,6 +107,11 @@ impl BlockThresholds {
     }
 
     #[inline]
+    pub fn check_too_large(&self, row_count: usize, block_size: usize) -> bool {
+        row_count > 2 * self.min_rows_per_block || block_size > self.max_bytes_per_block
+    }
+
+    #[inline]
     pub fn calc_rows_for_compact(&self, total_bytes: usize, total_rows: usize) -> usize {
         if self.check_for_compact(total_rows, total_bytes) {
             return total_rows;
