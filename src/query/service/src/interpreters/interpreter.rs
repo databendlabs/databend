@@ -253,9 +253,8 @@ async fn plan_sql(
     let mut extras = planner.parse_sql(sql)?;
 
     if let Some(params) = params {
-        databend_common_ast::ast::substitute_params(&mut extras.statement, params).map_err(
-            |e| ErrorCode::BadArguments(format!("parameter substitution failed: {e}")),
-        )?;
+        databend_common_ast::ast::substitute_params(&mut extras.statement, params)
+            .map_err(|e| ErrorCode::BadArguments(format!("parameter substitution failed: {e}")))?;
     }
 
     auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;

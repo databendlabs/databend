@@ -70,10 +70,7 @@ fn json_to_expr(value: &serde_json::Value) -> Expr {
     }
 }
 
-pub fn substitute_params(
-    stmt: &mut Statement,
-    params: &serde_json::Value,
-) -> Result<(), String> {
+pub fn substitute_params(stmt: &mut Statement, params: &serde_json::Value) -> Result<(), String> {
     let pos_index = Cell::new(0usize);
     let error: RefCell<Option<String>> = RefCell::new(None);
 
@@ -111,14 +108,12 @@ pub fn substitute_params(
                             *expr = json_to_expr(val);
                         }
                         None => {
-                            *error.borrow_mut() =
-                                Some(format!("missing named parameter: :{name}"));
+                            *error.borrow_mut() = Some(format!("missing named parameter: :{name}"));
                         }
                     }
                 } else {
-                    *error.borrow_mut() = Some(
-                        "params must be a JSON object for named placeholders (:name)".into(),
-                    );
+                    *error.borrow_mut() =
+                        Some("params must be a JSON object for named placeholders (:name)".into());
                 }
             }
             Expr::ColumnRef { column, .. }
@@ -331,7 +326,10 @@ mod tests {
         let params = serde_json::json!([""]);
         substitute_params(&mut stmt, &params).unwrap();
         let result = stmt.to_string();
-        assert!(result.contains("''"), "expected empty string '' in: {result}");
+        assert!(
+            result.contains("''"),
+            "expected empty string '' in: {result}"
+        );
     }
 
     #[test]
@@ -357,7 +355,6 @@ mod tests {
             "expected JSON object string in: {result}"
         );
     }
-
 
     #[test]
     fn test_sql_injection_single_quote() {
@@ -472,10 +469,7 @@ mod tests {
     #[test]
     fn test_sql_injection_statement_is_still_select() {
         let mut stmt = parse_stmt("SELECT ?, ?");
-        let params = serde_json::json!([
-            "'; DROP TABLE users; --",
-            "' OR '1'='1"
-        ]);
+        let params = serde_json::json!(["'; DROP TABLE users; --", "' OR '1'='1"]);
         substitute_params(&mut stmt, &params).unwrap();
         assert!(
             matches!(&stmt, Statement::Query(_)),
@@ -495,7 +489,10 @@ mod tests {
         let result = stmt.to_string();
         assert!(result.contains("42"), "expected 42 in: {result}");
         assert!(result.contains("'Alice'"), "expected 'Alice' in: {result}");
-        assert!(!result.contains('?'), "no placeholders should remain in: {result}");
+        assert!(
+            !result.contains('?'),
+            "no placeholders should remain in: {result}"
+        );
     }
 
     #[test]
@@ -505,7 +502,10 @@ mod tests {
         substitute_params(&mut stmt, &params).unwrap();
         let result = stmt.to_string();
         assert!(!result.contains(":id"), "no :id should remain in: {result}");
-        assert!(!result.contains(":name"), "no :name should remain in: {result}");
+        assert!(
+            !result.contains(":name"),
+            "no :name should remain in: {result}"
+        );
     }
 
     #[test]
@@ -516,10 +516,7 @@ mod tests {
         let result = stmt.to_string();
         assert!(result.contains('1'), "expected 1 in: {result}");
         assert!(result.contains("'hello'"), "expected 'hello' in: {result}");
-        assert!(
-            result.contains("TRUE"),
-            "expected TRUE in: {result}"
-        );
+        assert!(result.contains("TRUE"), "expected TRUE in: {result}");
     }
 
     #[test]
