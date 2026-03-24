@@ -192,11 +192,11 @@ fn inclusive_integer_span(max: &Datum, min: &Datum) -> Option<f64> {
 fn has_exact_integer_histogram_bounds(min: &Datum, max: &Datum) -> bool {
     match (min, max) {
         (Datum::UInt(min), Datum::UInt(max)) => {
-            *min <= MAX_EXACT_F64_INTEGER && *max <= MAX_EXACT_F64_INTEGER
+            *min < MAX_EXACT_F64_INTEGER && *max < MAX_EXACT_F64_INTEGER
         }
         (Datum::Int(min), Datum::Int(max)) => {
             let limit = MAX_EXACT_F64_INTEGER as i64;
-            (-limit..=limit).contains(min) && (-limit..=limit).contains(max)
+            (-limit..=limit).contains(min) && (-limit..limit).contains(max)
         }
         _ => true,
     }
@@ -459,6 +459,23 @@ mod tests {
             .expect("missing column stats");
 
         assert!(column_stat.histogram.is_some());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_derive_stats_skips_histogram_at_f64_precision_boundary() -> Result<()> {
+        let limit = 1_u64 << 53;
+        let scan = test_scan_for_uint64_stats(limit - 2, limit, 3);
+        let expr = SExpr::create_leaf(scan);
+        let stat_info = RelExpr::with_s_expr(&expr).derive_cardinality()?;
+        let column_stat = stat_info
+            .statistics
+            .column_stats
+            .get(&Symbol::new(0))
+            .expect("missing column stats");
+
+        assert!(column_stat.histogram.is_none());
 
         Ok(())
     }

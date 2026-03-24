@@ -54,6 +54,31 @@ pub const MAX_SELECTIVITY: f64 = 1f64;
 const FIXED_CHAR_SEL: f64 = 0.5;
 const ANY_CHAR_SEL: f64 = 0.9; // not 1, since it won't match end-of-string
 const FULL_WILDCARD_SEL: f64 = 2.0;
+const MAX_EXACT_F64_INTEGER: u64 = 1 << 53;
+
+fn has_exact_f64_integer_value(datum: &Datum) -> bool {
+    match datum {
+        Datum::UInt(value) => *value <= MAX_EXACT_F64_INTEGER,
+        Datum::Int(value) => {
+            let limit = MAX_EXACT_F64_INTEGER as i64;
+            (-limit..=limit).contains(value)
+        }
+        _ => true,
+    }
+}
+
+fn has_exact_f64_integer_range(min: &Datum, max: &Datum) -> bool {
+    match (min, max) {
+        (Datum::UInt(min), Datum::UInt(max)) => {
+            *min < MAX_EXACT_F64_INTEGER && *max < MAX_EXACT_F64_INTEGER
+        }
+        (Datum::Int(min), Datum::Int(max)) => {
+            let limit = MAX_EXACT_F64_INTEGER as i64;
+            (-limit..=limit).contains(min) && (-limit..limit).contains(max)
+        }
+        _ => true,
+    }
+}
 
 pub struct SelectivityEstimator {
     pub cardinality: f64,
@@ -396,6 +421,12 @@ impl SelectivityVisitor<'_> {
         comparison_op: ComparisonOp,
         const_datum: &Datum,
     ) -> Result<Selectivity> {
+        if !has_exact_f64_integer_range(&column_stat.min, &column_stat.max)
+            || !has_exact_f64_integer_value(const_datum)
+        {
+            return Ok(Selectivity::Unknown);
+        }
+
         let min = column_stat.min.as_double()?;
         let max = column_stat.max.as_double()?;
         let ndv = column_stat.ndv;
@@ -1063,6 +1094,29 @@ mod tests {
         })]);
         run_test(file, "s like 'ab%'", columns, column_stats.clone())?;
         run_test(file, "s like '%ab_'", columns, column_stats.clone())?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_comparison_with_full_range_uint64_keeps_positive_selectivity() -> Result<()> {
+        let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(u64::MAX),
+            ndv: Ndv::Stat(4.0),
+            null_count: 0,
+            histogram: None,
+        })]);
+        let columns = &[("a", UInt64Type::data_type())];
+        let raw_expr = parse_raw_expr("a > 18446744073709551613", columns, &BUILTIN_FUNCTIONS);
+        let expr = raw_expr_to_scalar(&raw_expr, columns);
+        let mut estimator = SelectivityEstimator::new(column_stats, 100.0);
+        let estimated_rows = estimator.apply(&[expr])?;
+
+        assert!(
+            estimated_rows > 0.0,
+            "expected positive selectivity, got estimated_rows={estimated_rows}"
+        );
 
         Ok(())
     }
