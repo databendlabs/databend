@@ -408,3 +408,248 @@ SELECT s, ind FROM x ORDER BY s, ind;
 3. 2
 32 0
 33 0
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+query T
+WITH RECURSIVE input(sud) AS (
+    VALUES('53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79')
+),
+digits(z, lp) AS (
+    VALUES('1', 1)
+    UNION ALL SELECT CAST(lp+1 AS TEXT), lp+1 FROM digits WHERE lp<9
+)
+SELECT z
+FROM (
+    SELECT sud AS s, position('.' IN sud) AS ind FROM input
+) AS x,
+digits AS z
+WHERE ind = 3
+  AND NOT EXISTS (
+      SELECT 1 FROM digits AS lp
+      WHERE z.z = substr(s, ((ind-1)/9)::int*9 + lp, 1)
+      OR z.z = substr(s, ((ind-1)%9) + (lp-1)*9 + 1, 1)
+      OR z.z = substr(s,
+          (((ind-1)/27)::int * 27) +
+          ((((ind-1)%9)/3)::int * 3) +
+          ((lp-1)/3)::int * 9 +
+          ((lp-1)%3) + 1, 1)
+  )
+ORDER BY z;
+----
+1
+2
+4
+
+query T
+WITH RECURSIVE input(sud) AS (
+    VALUES('53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79')
+),
+digits(z, lp) AS (
+    VALUES('1', 1)
+    UNION ALL SELECT CAST(lp+1 AS TEXT), lp+1 FROM digits WHERE lp<9
+),
+x(s, ind) AS (
+    SELECT sud, position('.' IN sud) FROM input
+    UNION ALL
+    SELECT
+        substr(s, 1, ind-1) || z || substr(s, ind+1),
+        position('.' IN (substr(s, 1, ind-1) || z || substr(s, ind+1)))
+    FROM x, digits AS z
+    WHERE ind = 3
+      AND NOT EXISTS (
+          SELECT 1 FROM digits AS lp
+          WHERE z.z = substr(s, ((ind-1)/9)::int*9 + lp, 1)
+          OR z.z = substr(s, ((ind-1)%9) + (lp-1)*9 + 1, 1)
+          OR z.z = substr(s,
+              (((ind-1)/27)::int * 27) +
+              ((((ind-1)%9)/3)::int * 3) +
+              ((lp-1)/3)::int * 9 +
+              ((lp-1)%3) + 1, 1)
+      )
+)
+SELECT substr(s, 3, 1) AS z FROM x WHERE ind <> 3 ORDER BY z;
+----
+1
+4
+
+query T
+SELECT z
+FROM (
+    SELECT
+        '53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79' AS s,
+        3 AS ind
+) AS x,
+(
+    SELECT '1' AS z, 1 AS lp
+    UNION ALL SELECT '2', 2
+    UNION ALL SELECT '3', 3
+    UNION ALL SELECT '4', 4
+    UNION ALL SELECT '5', 5
+    UNION ALL SELECT '6', 6
+    UNION ALL SELECT '7', 7
+    UNION ALL SELECT '8', 8
+    UNION ALL SELECT '9', 9
+) AS z
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM (
+        SELECT 1 AS lp
+        UNION ALL SELECT 2
+        UNION ALL SELECT 3
+        UNION ALL SELECT 4
+        UNION ALL SELECT 5
+        UNION ALL SELECT 6
+        UNION ALL SELECT 7
+        UNION ALL SELECT 8
+        UNION ALL SELECT 9
+    ) AS lp
+    WHERE z.z = substr(s, ((ind-1)/9)::int*9 + lp, 1)
+    OR z.z = substr(s, ((ind-1)%9) + (lp-1)*9 + 1, 1)
+    OR z.z = substr(s,
+        (((ind-1)/27)::int * 27) +
+        ((((ind-1)%9)/3)::int * 3) +
+        ((lp-1)/3)::int * 9 +
+        ((lp-1)%3) + 1, 1)
+)
+ORDER BY z;
+----
+1
+4
+
+query T
+SELECT z
+FROM (
+    SELECT
+        '53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79' AS s,
+        3 AS ind
+) AS x,
+(
+    SELECT '1' AS z, 1 AS lp
+    UNION ALL SELECT '2', 2
+    UNION ALL SELECT '3', 3
+    UNION ALL SELECT '4', 4
+    UNION ALL SELECT '5', 5
+    UNION ALL SELECT '6', 6
+    UNION ALL SELECT '7', 7
+    UNION ALL SELECT '8', 8
+    UNION ALL SELECT '9', 9
+) AS z
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM (
+        SELECT 1 AS lp
+        UNION ALL SELECT 2
+        UNION ALL SELECT 3
+        UNION ALL SELECT 4
+        UNION ALL SELECT 5
+        UNION ALL SELECT 6
+        UNION ALL SELECT 7
+        UNION ALL SELECT 8
+        UNION ALL SELECT 9
+    ) AS lp
+    WHERE z.z = substr(s, ((ind-1)/9)::int*9 + lp.lp, 1)
+    OR z.z = substr(s, ((ind-1)%9) + (lp.lp-1)*9 + 1, 1)
+    OR z.z = substr(s,
+        (((ind-1)/27)::int * 27) +
+        ((((ind-1)%9)/3)::int * 3) +
+        ((lp.lp-1)/3)::int * 9 +
+        ((lp.lp-1)%3) + 1, 1)
+)
+ORDER BY z;
+----
+1
+4
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+query TT
+WITH RECURSIVE digits(z, lp) AS (
+    SELECT '1', 1
+    UNION ALL
+    SELECT CAST(lp + 1 AS TEXT), lp + 1 FROM digits WHERE lp < 3
+),
+x(s, ind) AS (
+    SELECT '..', 1
+    UNION ALL
+    SELECT
+        substr(s, 1, ind - 1) || z || substr(s, ind + 1),
+        position('.' IN (substr(s, 1, ind - 1) || z || substr(s, ind + 1)))
+    FROM x, digits AS z
+    WHERE ind > 0
+)
+SELECT s, ind FROM x ORDER BY s, ind;
+----
+.. 1
+1. 2
+11 0
+12 0
+13 0
+2. 2
+21 0
+22 0
+23 0
+3. 2
+31 0
+32 0
+33 0
+
+query TT
+WITH RECURSIVE digits(z, lp) AS (
+    SELECT '1', 1
+    UNION ALL
+    SELECT CAST(lp + 1 AS TEXT), lp + 1 FROM digits WHERE lp < 3
+),
+x(s, ind) AS (
+    SELECT '..', 1
+    UNION ALL
+    SELECT
+        substr(s, 1, ind - 1) || z.z || substr(s, ind + 1),
+        position('.' IN (substr(s, 1, ind - 1) || z.z || substr(s, ind + 1)))
+    FROM x, digits AS z, digits AS lp
+    WHERE ind > 0 AND lp.lp = 2
+)
+SELECT s, ind FROM x ORDER BY s, ind;
+----
+.. 1
+1. 2
+11 0
+12 0
+13 0
+2. 2
+21 0
+22 0
+23 0
+3. 2
+31 0
+32 0
+33 0
+
+query TT
+WITH RECURSIVE digits(z, lp) AS (
+    VALUES ('1', 1), ('2', 2), ('3', 3)
+),
+x(s, ind) AS (
+    SELECT '..', 1
+    UNION ALL
+    SELECT
+        substr(s, 1, ind - 1) || z || substr(s, ind + 1),
+        position('.' IN (substr(s, 1, ind - 1) || z || substr(s, ind + 1)))
+    FROM x, digits AS z
+    WHERE ind > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM digits AS lp
+        WHERE z.z = '1' AND lp.lp = 2
+      )
+)
+SELECT s, ind FROM x ORDER BY s, ind;
+----
+.. 1
+2. 2
+22 0
+23 0
+3. 2
+32 0
+33 0

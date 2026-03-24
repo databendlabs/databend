@@ -59,9 +59,7 @@ impl SubqueryDecorrelatorOptimizer {
             RelOperator::Scan(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::UnionAll(_)
-            | RelOperator::ConstantTableScan(_) => {
-                true
-            }
+            | RelOperator::ConstantTableScan(_) => true,
             RelOperator::EvalScalar(_) => s_expr
                 .child(0)
                 .map(|child| {
