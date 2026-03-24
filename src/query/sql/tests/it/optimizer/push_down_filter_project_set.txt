@@ -5,7 +5,7 @@ raw_plan:
 EvalScalar
 ├── scalars: [products.name (#0) AS (#0), get(json_path_query(products.details (#1), '$.features.*') (#2)) AS (#3), json_path_query_first(products.details (#1), '$.features.*') AS (#4)]
 └── Filter
-    ├── filters: [eq(products.name (#0), 'Laptop'), eq(json_path_query_first(products.details (#1), '$.features.*'), to_variant('16GB')), eq(get(json_path_query(products.details (#1), '$.features.*')), to_variant('512GB'))]
+    ├── filters: [eq(products.name (#0), 'Laptop'), eq(json_path_query_first(products.details (#1), '$.features.*'), to_variant('16GB')), eq(get(json_path_query(products.details (#1), '$.features.*') (#2)), to_variant('512GB'))]
     └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(13..53), func_name: "json_path_query", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(29..36), column: ColumnBinding { database_name: Some("default"), table_name: Some("products"), column_position: Some(2), table_index: Some(0), column_name: "details", column_name_lower: None, index: 1, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(38..52), value: String("$.features.*") })] }), index: 2 }] })
         └── Scan
             ├── table: default.products (#0)
@@ -15,9 +15,9 @@ EvalScalar
 
 optimized_plan:
 EvalScalar
-├── scalars: [products.name (#0) AS (#0), get(json_path_query(products.details (#1), '$.features.*') (#2)) AS (#3), json_path_query_first(products.details (#1), '$.features.*') AS (#4), products.details (#1) AS (#5)]
+├── scalars: [products.name (#0) AS (#0), get(json_path_query(products.details (#1), '$.features.*') (#2)) AS (#3), json_path_query_first(products.details (#1), '$.features.*') AS (#4), products.details (#1) AS (#5), json_path_query(products.details (#1), '$.features.*') (#2) AS (#6)]
 └── Filter
-    ├── filters: [eq(get(json_path_query(products.details (#1), '$.features.*')), to_variant('512GB'))]
+    ├── filters: [eq(get(json_path_query(products.details (#1), '$.features.*') (#2)), to_variant('512GB'))]
     └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(13..53), func_name: "json_path_query", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(29..36), column: ColumnBinding { database_name: Some("default"), table_name: Some("products"), column_position: Some(2), table_index: Some(0), column_name: "details", column_name_lower: None, index: 1, data_type: Nullable(Variant), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(38..52), value: String("$.features.*") })] }), index: 2 }] })
         └── Scan
             ├── table: default.products (#0)
