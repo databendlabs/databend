@@ -1362,3 +1362,60 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 
     left.iter().eq(right.iter())
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FunctionContext;
+    use jsonb::OwnedJsonb;
+
+    use super::*;
+
+    #[test]
+    fn test_variant_like_repeated_percent_preserves_simple_scalar_semantics() {
+        let like = variant_vectorize_like_jsonb();
+        let value = Value::<VariantType>::Scalar(
+            r#"{"name":"abab"}"#.parse::<OwnedJsonb>().unwrap().to_vec(),
+        );
+        let escape = Value::<StringType>::Scalar("".to_string());
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 1,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+
+        let leading = like(
+            value.clone(),
+            Value::<StringType>::Scalar("%abab".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let repeated_leading = like(
+            value.clone(),
+            Value::<StringType>::Scalar("%%%%abab".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let trailing = like(
+            value.clone(),
+            Value::<StringType>::Scalar("abab%".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let repeated_trailing = like(
+            value,
+            Value::<StringType>::Scalar("abab%%%%".to_string()),
+            escape,
+            &mut ctx,
+        );
+
+        assert!(matches!(leading, Value::Scalar(false)));
+        assert_eq!(leading, repeated_leading);
+        assert!(matches!(trailing, Value::Scalar(false)));
+        assert_eq!(trailing, repeated_trailing);
+    }
+}

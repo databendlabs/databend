@@ -289,11 +289,40 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
                 if first_non_percent < len {
                     segments.push(pattern[first_non_percent..len].to_vec());
                 }
-                LikePattern::SimplePattern((has_start_percent, has_end_percent, segments))
+                normalize_simple_pattern(
+                    has_start_percent,
+                    has_end_percent,
+                    segments,
+                    haystack_size_hint,
+                )
             } else {
                 LikePattern::ComplexPattern(pattern)
             }
         }
+    }
+}
+
+fn normalize_simple_pattern<'a>(
+    has_start_percent: bool,
+    has_end_percent: bool,
+    mut segments: Vec<Vec<u8>>,
+    haystack_size_hint: usize,
+) -> LikePattern<'a> {
+    match segments.len() {
+        0 => LikePattern::Constant(true),
+        1 => {
+            let segment = segments.pop().unwrap();
+            match (has_start_percent, has_end_percent) {
+                (false, false) => LikePattern::OrdinalStr(Cow::Owned(segment)),
+                (true, false) => LikePattern::StartOfPercent(Cow::Owned(segment)),
+                (false, true) => LikePattern::EndOfPercent(Cow::Owned(segment)),
+                (true, true) => LikePattern::SurroundByPercent(VolnitskyBase::new_cow(
+                    Cow::Owned(segment),
+                    haystack_size_hint,
+                )),
+            }
+        }
+        _ => LikePattern::SimplePattern((has_start_percent, has_end_percent, segments)),
     }
 }
 
@@ -395,6 +424,19 @@ fn test_generate_like_pattern() {
         (
             "%databend%cloud%data%warehouse%",
             LikePattern::SimplePattern((true, true, segments)),
+        ),
+        ("%%%%%", LikePattern::Constant(true)),
+        (
+            "%%%%databend",
+            LikePattern::StartOfPercent("databend".as_bytes().into()),
+        ),
+        (
+            "databend%%%%",
+            LikePattern::EndOfPercent("databend".as_bytes().into()),
+        ),
+        (
+            "%%%%databend%%%%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("databend".as_bytes(), 1)),
         ),
         (
             "databend_cloud%data%warehouse",
