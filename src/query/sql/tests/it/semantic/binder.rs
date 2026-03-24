@@ -180,6 +180,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t",
         },
         SqlTestCase {
+            name: "window_order_rejects_window_alias_expansion",
+            description: "A window ORDER BY clause must still reject aliases that expand to a prior window expression.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER () AS rn, row_number() OVER (ORDER BY rn) FROM t",
+        },
+        SqlTestCase {
             name: "duplicate_window_expression_reuses_window_binding",
             description: "Repeated identical window expressions should reuse the registered window binding.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],

@@ -500,10 +500,30 @@ impl<'a> WindowRewriter<'a> {
             )?;
         }
 
+        WindowExprChecker.visit(expr)?;
+
         AggregateRewriter::check_no_aggregate_calls(
             expr,
             "window aggregate rewrite must replace aggregate calls with BoundColumnRef",
         )
+    }
+}
+
+struct WindowExprChecker;
+
+impl<'a> VisitorMut<'a> for WindowExprChecker {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if matches!(expr, ScalarExpr::WindowFunction(_)) {
+            return Err(ErrorCode::SemanticError(
+                "Window function cannot contain another window function".to_string(),
+            ));
+        }
+
+        walk_expr_mut(self, expr)
+    }
+
+    fn visit_subquery_expr(&mut self, _: &'a mut SubqueryExpr) -> Result<()> {
+        Ok(())
     }
 }
 
