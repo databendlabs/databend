@@ -206,8 +206,8 @@ impl Binder {
             )?;
         }
 
-        if from_context.aggregate_info.has_aggregates()
-            || !from_context.aggregate_info.group_items.is_empty()
+        if from_context.aggregate_info.has_aggregate_calls()
+            || from_context.aggregate_info.has_group_items()
         {
             s_expr = self.bind_aggregate(&mut from_context, s_expr)?;
         }

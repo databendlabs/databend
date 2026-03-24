@@ -149,9 +149,11 @@ impl Binder {
                             )
                             .map_err(|e| ErrorCode::SemanticError(e.message()))?;
 
-                        let mut rewriter =
-                            AggregateRewriter::new(bind_context, self.metadata.clone());
-                        rewriter.visit(&mut rewrite_scalar)?;
+                        AggregateRewriter::rewrite_expr(
+                            &mut bind_context.aggregate_info,
+                            self.metadata.clone(),
+                            &mut rewrite_scalar,
+                        )?;
 
                         if let ScalarExpr::ConstantExpr(..) = rewrite_scalar {
                             continue;
@@ -245,8 +247,11 @@ impl Binder {
             None => match original_scalar {
                 aggregate @ ScalarExpr::AggregateFunction(_) => {
                     let mut aggregate = aggregate.clone();
-                    let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-                    rewriter.visit(&mut aggregate)?;
+                    AggregateRewriter::rewrite_expr(
+                        &mut bind_context.aggregate_info,
+                        self.metadata.clone(),
+                        &mut aggregate,
+                    )?;
                     Ok(aggregate)
                 }
                 ScalarExpr::LambdaFunction(lambda_func) => {

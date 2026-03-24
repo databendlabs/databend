@@ -75,10 +75,6 @@ impl<'a> SetReturningAnalyzer<'a> {
             metadata,
         }
     }
-
-    fn as_aggregate_rewriter(&mut self) -> AggregateRewriter<'_> {
-        AggregateRewriter::new(self.bind_context, self.metadata.clone())
-    }
 }
 
 impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
@@ -92,8 +88,11 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 let mut replaced_args = Vec::with_capacity(func.arguments.len());
                 for arg in func.arguments.iter() {
                     let mut arg = arg.clone();
-                    let mut aggregate_rewriter = self.as_aggregate_rewriter();
-                    aggregate_rewriter.visit(&mut arg)?;
+                    AggregateRewriter::rewrite_expr(
+                        &mut self.bind_context.aggregate_info,
+                        self.metadata.clone(),
+                        &mut arg,
+                    )?;
                     replaced_args.push(arg);
                 }
 
@@ -175,12 +174,7 @@ impl<'a> SetReturningRewriter<'a> {
 
 impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if self
-            .bind_context
-            .aggregate_info
-            .group_items_map
-            .contains_key(expr)
-        {
+        if self.bind_context.aggregate_info.contains_group_item(expr) {
             self.is_lazy_srf = true;
         }
 
@@ -189,7 +183,7 @@ impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
             if let Some(agg_item) = self
                 .bind_context
                 .aggregate_info
-                .get_aggregate_function(agg_func)
+                .lookup_aggregate_function(agg_func)
             {
                 let column_binding = ColumnBindingBuilder::new(
                     agg_func.display_name.clone(),

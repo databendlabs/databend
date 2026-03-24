@@ -51,8 +51,11 @@ impl Binder {
             aliases,
         );
         let (mut scalar, _) = scalar_binder.bind(having)?;
-        let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        rewriter.visit(&mut scalar)?;
+        AggregateRewriter::rewrite_expr(
+            &mut bind_context.aggregate_info,
+            self.metadata.clone(),
+            &mut scalar,
+        )?;
         Ok(scalar)
     }
 

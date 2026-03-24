@@ -31,6 +31,7 @@ use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::aggregate::AggregateRewriter;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -254,8 +255,7 @@ impl<'a> WindowRewriter<'a> {
                 let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(agg.args.len());
                 for (i, arg) in agg.args.iter().enumerate() {
                     let mut arg = arg.clone();
-                    let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                    aggregate_rewriter.visit(&mut arg)?;
+                    self.rewrite_aggregate_expr(&mut arg)?;
                     let name = format!("{window_func_name}_arg_{i}");
                     let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
                     window_args.push(ScalarItem {
@@ -269,8 +269,7 @@ impl<'a> WindowRewriter<'a> {
                     Vec::with_capacity(agg.sort_descs.len());
                 for (i, desc) in agg.sort_descs.iter().enumerate() {
                     let mut expr = desc.expr.clone();
-                    let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                    aggregate_rewriter.visit(&mut expr)?;
+                    self.rewrite_aggregate_expr(&mut expr)?;
 
                     let name = format!("{window_func_name}_sort_desc_{i}");
                     let (replaced_expr, scalar) = self.replace_expr(&name, &expr)?;
@@ -310,8 +309,7 @@ impl<'a> WindowRewriter<'a> {
             }
             WindowFuncType::NthValue(func) => {
                 let mut arg = (*func.arg).clone();
-                let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                aggregate_rewriter.visit(&mut arg)?;
+                self.rewrite_aggregate_expr(&mut arg)?;
                 let name = format!("{window_func_name}_arg");
                 let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
                 window_args.push(ScalarItem {
@@ -332,8 +330,7 @@ impl<'a> WindowRewriter<'a> {
         let mut partition_by_items = vec![];
         for (i, part) in window.partition_by.iter().enumerate() {
             let mut part = part.clone();
-            let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-            aggregate_rewriter.visit(&mut part)?;
+            self.rewrite_aggregate_expr(&mut part)?;
             let name = format!("{window_func_name}_part_{i}");
             let (replaced_part, scalar) = self.replace_expr(&name, &part)?;
             partition_by_items.push(ScalarItem {
@@ -348,8 +345,7 @@ impl<'a> WindowRewriter<'a> {
 
         for (i, order) in window.order_by.iter().enumerate() {
             let mut order_expr = order.expr.clone();
-            let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-            aggregate_rewriter.visit(&mut order_expr)?;
+            self.rewrite_aggregate_expr(&mut order_expr)?;
             let name = format!("{window_func_name}_order_{i}");
             let (replaced_order, scalar) = self.replace_expr(&name, &order_expr)?;
             order_by_items.push(WindowOrderByInfo {
@@ -414,8 +410,7 @@ impl<'a> WindowRewriter<'a> {
         f: &LagLeadFunction,
     ) -> Result<(ScalarExpr, Option<Box<ScalarExpr>>)> {
         let mut arg = (*f.arg).clone();
-        let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-        aggregate_rewriter.visit(&mut arg)?;
+        self.rewrite_aggregate_expr(&mut arg)?;
         let name = format!("{window_func_name}_arg");
         let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
         window_args.push(ScalarItem {
@@ -426,8 +421,7 @@ impl<'a> WindowRewriter<'a> {
             None => None,
             Some(d) => {
                 let mut d = (**d).clone();
-                let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
-                aggregate_rewriter.visit(&mut d)?;
+                self.rewrite_aggregate_expr(&mut d)?;
                 let name = format!("{window_func_name}_default_value");
                 let (replaced_default, scalar) = self.replace_expr(&name, &d)?;
                 window_args.push(ScalarItem {
@@ -448,7 +442,7 @@ impl<'a> WindowRewriter<'a> {
             // For window expr works with group by expr alias, we need to replace the expr with the alias index
             // eg: select number %3 a, number %4 b ,  row_number() over(partition by b % 2) from range(1, 10) t(number)  group by a,b;
             let mut arg = arg.clone();
-            for group_expr in self.bind_context.aggregate_info.group_items.iter() {
+            for group_expr in self.bind_context.aggregate_info.group_items() {
                 if !group_expr.scalar.is_column_ref() {
                     let column = ColumnBindingBuilder::new(
                         "group_item".to_string(),
@@ -490,10 +484,16 @@ impl<'a> WindowRewriter<'a> {
         }
     }
 
-    pub fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter<'_> {
-        WindowAggregateRewriter {
-            bind_context: self.bind_context,
-        }
+    fn rewrite_aggregate_expr(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        AggregateRewriter::rewrite_expr(
+            &mut self.bind_context.aggregate_info,
+            self.metadata.clone(),
+            expr,
+        )?;
+        AggregateRewriter::check_no_aggregate_calls(
+            expr,
+            "window aggregate rewrite must replace aggregate calls with BoundColumnRef",
+        )
     }
 }
 
@@ -523,48 +523,6 @@ impl<'a> VisitorMut<'a> for WindowRewriter<'a> {
     fn visit_subquery_expr(&mut self, _: &'a mut SubqueryExpr) -> Result<()> {
         // TODO(leiysky): should we recursively process subquery here?
         Ok(())
-    }
-}
-
-pub struct WindowAggregateRewriter<'a> {
-    pub bind_context: &'a BindContext,
-}
-
-impl<'a> VisitorMut<'a> for WindowAggregateRewriter<'a> {
-    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if matches!(expr, ScalarExpr::WindowFunction(_)) {
-            return Err(ErrorCode::SemanticError(
-                "Window function cannot contain another window function".to_string(),
-            ));
-        }
-
-        if let ScalarExpr::AggregateFunction(agg_func) = expr {
-            let Some(agg) = self
-                .bind_context
-                .aggregate_info
-                .get_aggregate_function(agg_func)
-            else {
-                return Err(ErrorCode::BadArguments("Invalid window function argument"));
-            };
-
-            let column_binding = ColumnBindingBuilder::new(
-                agg_func.display_name.clone(),
-                agg.index,
-                agg_func.return_type.clone(),
-                Visibility::Visible,
-            )
-            .build();
-
-            *expr = BoundColumnRef {
-                span: None,
-                column: column_binding,
-            }
-            .into();
-
-            return Ok(());
-        }
-
-        walk_expr_mut(self, expr)
     }
 }
 

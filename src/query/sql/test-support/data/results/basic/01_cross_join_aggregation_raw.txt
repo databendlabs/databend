@@ -4,7 +4,7 @@ EvalScalar
     ├── group items: []
     ├── aggregate functions: [sum(integers.i (#0)) AS (#2), min(integers.i (#0)) AS (#3), max(integers.i (#1)) AS (#4)]
     └── EvalScalar
-        ├── scalars: [integers.i (#0) AS (#0), integers.i (#0) AS (#0), integers.i (#1) AS (#1)]
+        ├── scalars: [integers.i (#0) AS (#0), integers.i (#1) AS (#1)]
         └── Join(Cross)
             ├── build keys: []
             ├── probe keys: []

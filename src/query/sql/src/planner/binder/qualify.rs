@@ -145,7 +145,10 @@ impl VisitorMut<'_> for QualifyChecker<'_> {
         }
 
         if let ScalarExpr::AggregateFunction(agg) = expr {
-            let Some(agg_func) = self.bind_context.aggregate_info.get_aggregate_function(agg)
+            let Some(agg_func) = self
+                .bind_context
+                .aggregate_info
+                .lookup_aggregate_function(agg)
             else {
                 return Err(ErrorCode::Internal("Invalid aggregate function"));
             };

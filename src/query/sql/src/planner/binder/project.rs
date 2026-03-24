@@ -94,8 +94,7 @@ impl Binder {
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
             // This item is a grouping sets item, its data type should be nullable.
-            let is_grouping_sets_item = agg_info.grouping_sets.is_some()
-                && agg_info.group_items_map.contains_key(&item.scalar);
+            let is_grouping_sets_item = agg_info.is_grouping_sets_item(&item.scalar);
 
             let mut column_binding = match &item.scalar {
                 ScalarExpr::BoundColumnRef(column_ref) => {
@@ -108,16 +107,12 @@ impl Binder {
                     // Replace to bound column to reduce duplicate derived column bindings.
                     debug_assert!(!is_grouping_sets_item);
                     agg_info
-                        .find_replaced_aggregate_function(agg, &item.alias)
+                        .lookup_aggregate_function_column(agg, &item.alias)
                         .unwrap()
                 }
                 ScalarExpr::UDAFCall(udaf) => {
                     debug_assert!(!is_grouping_sets_item);
-                    agg_info.find_replaced_udaf_call(udaf, &item.alias).unwrap()
-                }
-                ScalarExpr::UDAFCall(udaf) => {
-                    debug_assert!(!is_grouping_sets_item);
-                    find_replaced_udaf_call(agg_info, udaf, &item.alias).unwrap()
+                    agg_info.lookup_udaf_call_column(udaf, &item.alias).unwrap()
                 }
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()
