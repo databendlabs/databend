@@ -55,6 +55,7 @@ use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
 use crate::ColumnEntry;
+use crate::Metadata;
 use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
@@ -170,7 +171,6 @@ impl Binder {
     ) -> Result<()> {
         let catalog = self.ctx.get_current_catalog();
         let tables = metadata.read().tables().to_vec();
-        let index_metadata = Arc::new(RwLock::new(metadata.read().clone()));
 
         for table_entry in tables {
             let table = table_entry.table();
@@ -195,7 +195,7 @@ impl Binder {
                         &index_meta,
                         &table_entry,
                         index_id,
-                        index_metadata.clone(),
+                        metadata,
                     )? {
                         s_exprs.push(agg_index_plan);
                     }
@@ -218,7 +218,7 @@ impl Binder {
         index_meta: &IndexMeta,
         table_entry: &TableEntry,
         index_id: u64,
-        index_metadata: MetadataRef,
+        metadata: &MetadataRef,
     ) -> Result<Option<crate::AggIndexPlan>> {
         let tokens = tokenize_sql(&index_meta.query)?;
         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
@@ -226,6 +226,7 @@ impl Binder {
             return Ok(None);
         };
 
+        let index_metadata = Arc::new(RwLock::new(metadata.read().clone()));
         let initial_table_count = index_metadata.read().tables().len();
         index_metadata
             .write()
@@ -439,18 +440,29 @@ impl Binder {
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
-            let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+            let refresh_metadata = Arc::new(RwLock::new(Metadata::default()));
+            let mut refresh_binder = Binder::new(
+                self.ctx.clone(),
+                self.catalogs.clone(),
+                self.name_resolution_ctx.clone(),
+                refresh_metadata,
+            )
+            .with_subquery_executor(self.subquery_executor.clone());
+            let select_plan = refresh_binder.bind_statement(bind_context, &stmt).await?;
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), refresh_binder.metadata.clone())
                 .set_planning_agg_index(true)
                 .clone();
-            Ok(optimize(opt_ctx, select_plan).await?)
+            Ok((
+                optimize(opt_ctx, select_plan).await?,
+                refresh_binder.metadata.clone(),
+            ))
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };
-        let plan = plan?;
+        let (plan, refresh_metadata) = plan?;
         bind_context.planning_agg_index = false;
 
-        let tables = self.metadata.read().tables().to_vec();
+        let tables = refresh_metadata.read().tables().to_vec();
 
         if tables.len() != 1 {
             return Err(ErrorCode::UnsupportedIndex(

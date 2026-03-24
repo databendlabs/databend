@@ -103,7 +103,15 @@ impl Dataframe {
                 None,
             );
 
-            binder.bind_base_table(&bind_context, database, table_index, None, &None, true)
+            binder.bind_base_table(
+                &bind_context,
+                database,
+                table_index,
+                None,
+                &None,
+                true,
+                false,
+            )
         } else {
             binder.bind_table_reference(&mut bind_context, &table)
         }?;

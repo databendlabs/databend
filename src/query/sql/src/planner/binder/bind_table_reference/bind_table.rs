@@ -158,6 +158,7 @@ impl Binder {
                     None,
                     sample,
                     true,
+                    true,
                 )?;
 
                 if let Some(alias) = alias {
@@ -237,6 +238,7 @@ impl Binder {
                     change_type,
                     sample,
                     true,
+                    false,
                 )?;
 
                 if let Some(alias) = alias {
@@ -358,6 +360,7 @@ impl Binder {
                     None,
                     sample,
                     true,
+                    false,
                 )?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;

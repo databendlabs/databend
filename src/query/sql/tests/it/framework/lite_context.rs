@@ -15,10 +15,10 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Once;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -35,6 +35,8 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
+use databend_common_catalog::BasicColumnStatistics;
+use databend_common_catalog::TableStatistics;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::CatalogManager;
@@ -60,13 +62,10 @@ use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::BasicColumnStatistics;
-use databend_common_catalog::TableStatistics;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
@@ -75,6 +74,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::NumberDataType;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_license::license_manager::LicenseManager;
@@ -87,14 +87,14 @@ use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
+use databend_common_sql::Metadata;
+use databend_common_sql::NameResolutionContext;
+use databend_common_sql::Planner;
 use databend_common_sql::normalize_identifier;
 use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name;
-use databend_common_sql::Metadata;
-use databend_common_sql::NameResolutionContext;
-use databend_common_sql::Planner;
 use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_statistics::Datum;
 use databend_common_storage::CopyStatus;
@@ -105,10 +105,10 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
-use databend_meta_client::RpcClientConf;
 use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
@@ -127,6 +127,7 @@ static TEST_BUILD_INFO: BuildInfo = BuildInfo {
 };
 
 static INIT_GLOBALS: Once = Once::new();
+static INSTALL_GLOBAL_CATALOG_MANAGER: Once = Once::new();
 
 fn init_globals() {
     INIT_GLOBALS.call_once(|| {
@@ -800,6 +801,12 @@ impl LiteTableContext {
 
     pub async fn create_isolated() -> Result<Arc<Self>> {
         Self::create_with_catalog_manager().await
+    }
+
+    pub fn install_global_catalog_manager(&self) {
+        INSTALL_GLOBAL_CATALOG_MANAGER.call_once(|| {
+            GlobalInstance::set(self.catalog_manager.clone());
+        });
     }
 
     pub fn set_table_warehouse_distribution(&self, enabled: bool) {
@@ -1544,11 +1551,12 @@ mod tests {
             .await?;
 
         let ctx2 = LiteTableContext::create().await?;
-        assert!(ctx2
-            .default_catalog
-            .get_table(&ctx2.tenant, "default", "t1")
-            .await
-            .is_err());
+        assert!(
+            ctx2.default_catalog
+                .get_table(&ctx2.tenant, "default", "t1")
+                .await
+                .is_err()
+        );
         ctx1.default_catalog
             .get_table(&ctx1.tenant, "default", "t1")
             .await?;

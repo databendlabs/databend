@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::Matcher;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
@@ -26,12 +27,11 @@ use databend_common_sql::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use databend_common_sql::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
-use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
-use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use goldenfile::Mint;
 

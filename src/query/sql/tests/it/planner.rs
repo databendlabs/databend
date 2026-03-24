@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_sql_test_support::run_test_case_core;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
+use databend_common_sql_test_support::run_test_case_core;
 
 use crate::framework::LiteTableContext;
 
@@ -129,6 +129,8 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
         std::env::var("TEST_SUBDIR").ok(),
     );
     let mut mints = suite.create_mints();
+    let ctx = LiteTableContext::create_isolated().await?;
+    ctx.install_global_catalog_manager();
 
     for (case, spec) in suite.load_cases()?.into_iter().filter_map(|case| {
         LITE_REPLAY_CASE_SPECS
@@ -136,7 +138,6 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
             .find(|spec| spec.matches(&case))
             .map(|spec| (case, spec))
     }) {
-        let ctx = LiteTableContext::create_isolated().await?;
         run_test_case(&ctx, &case, spec, &mut mints).await?;
     }
     Ok(())
