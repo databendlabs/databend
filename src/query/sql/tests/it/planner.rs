@@ -150,6 +150,8 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
     for sql in [
         "SELECT 'a' LIKE 'a' ESCAPE ''",
         "SELECT 'a' LIKE concat('a') ESCAPE ''",
+        "SELECT '%' LIKE '\\\\%' ESCAPE ''",
+        "SELECT like_any('%', '\\\\%', '')",
         "SELECT 'a' LIKE ANY ('a', 'b') ESCAPE ''",
         "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE ''",
     ] {
