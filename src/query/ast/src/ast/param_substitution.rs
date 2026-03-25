@@ -16,6 +16,8 @@ use std::cell::Cell;
 use std::cell::RefCell;
 
 use crate::ast::Expr;
+use crate::ast::FunctionCall;
+use crate::ast::Identifier;
 use crate::ast::Literal;
 use crate::ast::Statement;
 use crate::ast::UnaryOperator;
@@ -62,9 +64,16 @@ fn json_to_expr(value: &serde_json::Value) -> Expr {
             span: None,
             value: Literal::String(s.clone()),
         },
-        serde_json::Value::Array(_) | serde_json::Value::Object(_) => Expr::Literal {
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => Expr::FunctionCall {
             span: None,
-            value: Literal::String(serde_json::to_string(value).unwrap_or_default()),
+            func: FunctionCall {
+                name: Identifier::from_name(None, "parse_json"),
+                args: vec![Expr::Literal {
+                    span: None,
+                    value: Literal::String(serde_json::to_string(value).unwrap_or_default()),
+                }],
+                ..Default::default()
+            },
         },
     }
 }
@@ -300,6 +309,10 @@ mod tests {
         substitute_params(&mut stmt, &params).unwrap();
         let result = stmt.to_string();
         assert!(
+            result.contains("parse_json"),
+            "expected parse_json wrapper in: {result}"
+        );
+        assert!(
             result.contains(r#"["a","b","c"]"#),
             "expected JSON array string in: {result}"
         );
@@ -311,6 +324,10 @@ mod tests {
         let params = serde_json::json!([{"key": "value"}]);
         substitute_params(&mut stmt, &params).unwrap();
         let result = stmt.to_string();
+        assert!(
+            result.contains("parse_json"),
+            "expected parse_json wrapper in: {result}"
+        );
         assert!(
             result.contains("key") && result.contains("value"),
             "expected JSON object string in: {result}"

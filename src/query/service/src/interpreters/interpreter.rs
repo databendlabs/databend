@@ -249,8 +249,11 @@ async fn plan_sql(
         ))),
     );
 
-    // Parse the SQL query, get extract additional information.
-    let mut extras = planner.parse_sql(sql)?;
+    let mut extras = if params.is_some() {
+        planner.parse_sql_with_params(sql)?
+    } else {
+        planner.parse_sql(sql)?
+    };
 
     if let Some(params) = params {
         databend_common_ast::ast::substitute_params(&mut extras.statement, params)
