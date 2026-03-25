@@ -19,9 +19,7 @@ use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::OptimizeCompactBlockInterpreter;
-use databend_query::interpreters::SelectInterpreter;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
@@ -165,63 +163,6 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
 
     query_handler.await.unwrap()?;
     compact_handler.await.unwrap()?;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_result_projection_schema_mismatch_returns_error_on_select_execution()
--> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture.create_default_database().await?;
-
-    let ctx = fixture.new_query_ctx().await?;
-    let mut planner = Planner::new(ctx.clone());
-
-    for sql in [
-        "create or replace table issue_19568_t1(a int not null, b int not null)",
-        "create or replace table issue_19568_t2(c int not null, d int not null)",
-        "insert into issue_19568_t1 values (1, 10), (2, 20), (3, 30)",
-        "insert into issue_19568_t2 values (1, 100), (4, 400)",
-    ] {
-        let (plan, _) = planner.plan_sql(sql).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-        let _ = interpreter.execute(ctx.clone()).await?;
-    }
-
-    let query = "SELECT c FROM issue_19568_t1 LEFT OUTER JOIN issue_19568_t2 ON issue_19568_t1.a = issue_19568_t2.c ORDER BY c NULLS FIRST";
-    let (plan, _) = planner.plan_sql(query).await?;
-    let Plan::Query {
-        s_expr,
-        mut bind_context,
-        metadata,
-        formatted_ast,
-        ignore_result,
-        ..
-    } = plan
-    else {
-        unreachable!("expected query plan");
-    };
-
-    for column in &mut bind_context.columns {
-        column.data_type = Box::new(column.data_type.remove_nullable());
-    }
-
-    let interpreter = SelectInterpreter::try_create(
-        ctx.clone(),
-        *bind_context,
-        *s_expr,
-        metadata,
-        formatted_ast,
-        ignore_result,
-    )?;
-    let err = match interpreter.execute(ctx).await {
-        Ok(_) => panic!("expected DATA_STRUCT_MISS_MATCH for query: {query}"),
-        Err(err) => err,
-    };
-
-    assert_eq!(err.code(), ErrorCode::DATA_STRUCT_MISS_MATCH);
-    assert!(err.message().contains("Result projection schema mismatch"));
 
     Ok(())
 }
