@@ -92,10 +92,10 @@ impl AggregationStatistics {
         match task {
             Some((task_id, processor_id, spill_depth, spilled)) => {
                 log::info!(
-                    "[{}] Task completed: task_id={}, processor={}, spill_depth={}, spilled={}, {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
+                    "{}[{}] Task completed: task_id={}, spill_depth={}, spilled={}, {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
                     self.stage,
-                    task_id,
                     processor_id,
+                    task_id,
                     spill_depth,
                     spilled,
                     self.processed_rows,
