@@ -75,6 +75,7 @@ use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
+use crate::pipelines::processors::transforms::TransformPartitionedHashJoin;
 use crate::sessions::QueryContext;
 
 // Type aliases to simplify complex return types
@@ -200,20 +201,17 @@ impl IPhysicalPlan for HashJoin {
         let build_dist = self.build.output_data_distribution();
         let probe_dist = self.probe.output_data_distribution();
 
-        let can_preserve_global_hash = self.join_type == JoinType::Inner
-            && matches!(
-                &build_dist,
-                DataDistribution::GlobalHash(keys) if keys == &self.build_keys
-            )
-            && matches!(
-                &probe_dist,
-                DataDistribution::GlobalHash(keys) if keys == &self.probe_keys
-            );
+        let can_preserve_global_hash = matches!(
+            &build_dist,
+            DataDistribution::GlobalHash(keys) if keys == &self.build_keys
+        ) && matches!(
+            &probe_dist,
+            DataDistribution::GlobalHash(keys) if keys == &self.probe_keys
+        );
 
-        if can_preserve_global_hash {
-            probe_dist
-        } else {
-            DataDistribution::Random
+        match can_preserve_global_hash {
+            true => probe_dist,
+            false => DataDistribution::Random,
         }
     }
 
@@ -334,7 +332,7 @@ impl IPhysicalPlan for HashJoin {
             && !enable_optimization
             && !self.need_hold_hash_table
         {
-            return self.build_new_join_pipeline(builder, desc);
+            return self.build_join(builder, desc);
         }
 
         // Create the join state with optimization flags
@@ -458,18 +456,98 @@ impl HashJoin {
         Ok(())
     }
 
-    fn build_new_join_pipeline(
-        &self,
-        builder: &mut PipelineBuilder,
-        desc: Arc<HashJoinDesc>,
-    ) -> Result<()> {
-        let factory = self.join_factory(builder, desc)?;
+    fn build_join(&self, pb: &mut PipelineBuilder, desc: Arc<HashJoinDesc>) -> Result<()> {
+        let build_distribution = self.build.output_data_distribution();
+        let global_hash_build = matches!(build_distribution, DataDistribution::GlobalHash(_));
 
-        // We must build the runtime filter before constructing the child nodes,
-        // as we will inject some runtime filter information into the context for the child nodes to use.
+        let probe_distribution = self.probe.output_data_distribution();
+        let global_hash_probe = matches!(probe_distribution, DataDistribution::GlobalHash(_));
+
+        match (global_hash_build && global_hash_probe) || self.build_side_cache_info.is_some() {
+            true => self.shuffle_join(pb, desc),
+            false => self.broadcast_join(pb, desc),
+        }
+    }
+
+    fn shuffle_join(&self, builder: &mut PipelineBuilder, desc: Arc<HashJoinDesc>) -> Result<()> {
         let rf_desc = RuntimeFiltersDesc::create(&builder.ctx, self)?;
 
-        // After common subexpression elimination is completed, we can delete this type of code.
+        let hash_key_types = self
+            .build_keys
+            .iter()
+            .zip(&desc.is_null_equal)
+            .map(|(expr, is_null_equal)| {
+                let expr = expr.as_expr(&BUILTIN_FUNCTIONS);
+                if *is_null_equal {
+                    expr.data_type().clone()
+                } else {
+                    expr.data_type().remove_nullable()
+                }
+            })
+            .collect::<Vec<_>>();
+        let hash_method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+        let max_block_size = builder.settings.get_max_block_size()? as usize;
+
+        let mut sub_query_ctx = QueryContext::create_from(&builder.ctx);
+        std::mem::swap(&mut builder.ctx, &mut sub_query_ctx);
+        self.build.build_pipeline(builder)?;
+        std::mem::swap(&mut builder.ctx, &mut sub_query_ctx);
+        let build_sinks = builder.main_pipeline.take_sinks();
+
+        self.probe.build_pipeline(builder)?;
+        let probe_sinks = builder.main_pipeline.take_sinks();
+
+        assert_eq!(build_sinks.len(), probe_sinks.len());
+        let output_len = build_sinks.len();
+
+        let barrier = databend_common_base::base::Barrier::new(output_len);
+        let stage_sync_barrier = Arc::new(barrier);
+        let mut join_sinks = Vec::with_capacity(output_len * 2);
+        let mut join_pipe_items = Vec::with_capacity(output_len);
+        for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
+            join_sinks.push(build_sink);
+            join_sinks.push(probe_sink);
+
+            let build_input = InputPort::create();
+            let probe_input = InputPort::create();
+            let joined_output = OutputPort::create();
+
+            let join = TransformPartitionedHashJoin::create_join(
+                self.join_type,
+                hash_method.clone(),
+                desc.clone(),
+                builder.func_ctx.clone(),
+                max_block_size,
+            );
+
+            let hash_join = TransformPartitionedHashJoin::create(
+                build_input.clone(),
+                probe_input.clone(),
+                joined_output.clone(),
+                join,
+                stage_sync_barrier.clone(),
+                self.projections.clone(),
+                rf_desc.clone(),
+            )?;
+
+            join_pipe_items.push(PipeItem::create(
+                hash_join,
+                vec![build_input, probe_input],
+                vec![joined_output],
+            ))
+        }
+
+        builder.main_pipeline.extend_sinks(join_sinks);
+        let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
+        builder.main_pipeline.add_pipe(join_pipe);
+
+        Ok(())
+    }
+
+    fn broadcast_join(&self, builder: &mut PipelineBuilder, desc: Arc<HashJoinDesc>) -> Result<()> {
+        let factory = self.join_factory(builder, desc)?;
+        let rf_desc = RuntimeFiltersDesc::create(&builder.ctx, self)?;
+
         {
             let state = factory.create_basic_state(0)?;
 
@@ -489,7 +567,6 @@ impl HashJoin {
 
         self.probe.build_pipeline(builder)?;
 
-        // Aligning hash join build and probe parallelism
         let output_len = std::cmp::max(build_sinks.len(), builder.main_pipeline.output_len());
         builder.main_pipeline.resize(output_len, false)?;
 
@@ -502,14 +579,6 @@ impl HashJoin {
         }
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
-
-        let use_partitioned_join = matches!(
-            self.build.output_data_distribution(),
-            DataDistribution::GlobalHash(_)
-        ) && matches!(
-            self.probe.output_data_distribution(),
-            DataDistribution::GlobalHash(_)
-        );
 
         let barrier = databend_common_base::base::Barrier::new(output_len);
         let stage_sync_barrier = Arc::new(barrier);
@@ -527,11 +596,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                if use_partitioned_join {
-                    factory.create_partitioned_join(self.join_type)?
-                } else {
-                    factory.create_hash_join(self.join_type, 0)?
-                },
+                factory.create_hash_join(self.join_type, 0)?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -549,9 +614,7 @@ impl HashJoin {
         builder.main_pipeline.add_pipe(join_pipe);
 
         let item_size = builder.main_pipeline.output_len();
-        builder.main_pipeline.resize(item_size, true)?;
-
-        Ok(())
+        builder.main_pipeline.resize(item_size, true)
     }
 
     fn join_factory(
