@@ -123,13 +123,6 @@ async fn test_invalid_grouping_returns_semantic_error() -> anyhow::Result<()> {
             "SELECT 1 FROM students GROUP BY GROUPING SETS ((GROUPING()))",
             "grouping requires at least one argument",
         ),
-        (
-            "SELECT GROUPING(course) AS g, count() OVER () \
-             FROM students \
-             GROUP BY GROUPING SETS ((course), ()) \
-             QUALIFY g = 0",
-            "Qualify clause can't contain grouping functions",
-        ),
     ] {
         let err = planner
             .plan_sql(sql)
@@ -139,6 +132,34 @@ async fn test_invalid_grouping_returns_semantic_error() -> anyhow::Result<()> {
             err.message().contains(expected),
             "unexpected error for `{sql}`: {err}",
         );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_grouping_qualify_rewrites_before_semantic_checks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let mut planner = Planner::new(ctx.clone());
+    fixture
+        .execute_command("CREATE TABLE students(course STRING, type STRING)")
+        .await?;
+
+    for sql in [
+        "SELECT count() OVER () \
+         FROM students \
+         GROUP BY GROUPING SETS ((course), ()) \
+         QUALIFY GROUPING(course) = 0",
+        "SELECT GROUPING(course) AS g, count() OVER () \
+         FROM students \
+         GROUP BY GROUPING SETS ((course), ()) \
+         QUALIFY g = 0",
+    ] {
+        planner
+            .plan_sql(sql)
+            .await
+            .unwrap_or_else(|err| panic!("expected valid grouping QUALIFY for `{sql}`: {err}"));
     }
 
     Ok(())

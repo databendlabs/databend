@@ -428,6 +428,12 @@ impl<'a> AggregateRewriter<'a> {
     }
 
     fn replace_grouping(&mut self, function: &FunctionCall) -> Result<FunctionCall> {
+        // `grouping<...>(_grouping_id)` is the internal rewritten form. Alias-expanded
+        // QUALIFY expressions can bind to it directly and must not be rewritten again.
+        if !function.params.is_empty() {
+            return Ok(function.clone());
+        }
+
         if function.arguments.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "grouping requires at least one argument",

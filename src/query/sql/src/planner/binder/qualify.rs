@@ -19,13 +19,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::Finder;
-use super::reject_grouping_functions;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::binder::Visibility;
+use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::split_conjunctions;
 use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::SExpr;
@@ -56,6 +56,8 @@ impl Binder {
             aliases,
         );
         let (mut scalar, _) = scalar_binder.bind(qualify)?;
+        let mut aggregate_rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
+        aggregate_rewriter.visit(&mut scalar)?;
         let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
         rewriter.visit(&mut scalar)?;
         Ok(scalar)
@@ -78,8 +80,6 @@ impl Binder {
             )
             .set_span(qualify.span()));
         }
-
-        reject_grouping_functions(std::iter::once(&qualify), "Qualify clause")?;
 
         let scalar = {
             let mut qualify = qualify;
