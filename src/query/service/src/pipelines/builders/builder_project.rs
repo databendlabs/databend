@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
@@ -45,11 +46,15 @@ impl PipelineBuilder {
             #[cfg(debug_assertions)]
             {
                 let f = input_schema.field_with_name(index.to_string().as_str())?;
-                assert_eq!(
-                    f.data_type(),
-                    column_binding.data_type.as_ref(),
-                    "Result projection schema mismatch"
-                );
+                if f.data_type() != column_binding.data_type.as_ref() {
+                    return Err(ErrorCode::Internal(format!(
+                        "Result projection schema mismatch for column {} (index {}): actual {:?}, expected {:?}",
+                        column_binding.column_name,
+                        column_binding.index,
+                        f.data_type(),
+                        column_binding.data_type.as_ref()
+                    )));
+                }
             }
         }
         let num_input_columns = input_schema.num_fields();

@@ -940,19 +940,34 @@ impl<'a> JoinConditionResolver<'a> {
                 ))
                 .set_span(*span));
             };
-            let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
-            if let Some(col_binding) = self
+            let using_column_indexes = self
                 .join_context
                 .columns
-                .iter_mut()
-                .filter(|col_binding| {
-                    col_binding.column_name == join_key_name
-                        && col_binding.visibility != Visibility::UnqualifiedWildcardInVisible
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, col_binding)| {
+                    (col_binding.column_name == join_key_name
+                        && col_binding.visibility != Visibility::UnqualifiedWildcardInVisible)
+                        .then_some(idx)
                 })
-                .nth(idx)
+                .collect::<Vec<_>>();
+
+            if matches!(join_op, JoinOperator::FullOuter)
+                && let Some(visible_index) = using_column_indexes.first()
             {
-                // Always make the second using column in the join_context invisible in unqualified wildcard.
-                col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
+                let visible_column = &mut self.join_context.columns[*visible_index];
+                if !visible_column.data_type.is_nullable_or_null() {
+                    visible_column.data_type = Box::new(visible_column.data_type.wrap_nullable());
+                }
+            }
+
+            let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
+            if let Some(hidden_index) = using_column_indexes.get(idx) {
+                // Always make the second USING column in the join context invisible in
+                // unqualified wildcard expansion, except for RIGHT OUTER JOIN where the
+                // left-side column is hidden and the right-side column remains visible.
+                self.join_context.columns[*hidden_index].visibility =
+                    Visibility::UnqualifiedWildcardInVisible;
             }
 
             self.add_equi_conditions(

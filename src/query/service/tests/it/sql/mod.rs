@@ -16,3 +16,4 @@ mod exec;
 mod expr;
 mod planner;
 mod recursive_cte;
+mod schema;
