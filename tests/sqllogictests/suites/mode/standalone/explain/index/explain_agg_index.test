@@ -248,7 +248,7 @@ EvalScalar
             ├── partitions scanned: 0
             ├── push downs: [filters: [], limit: NONE]
             ├── aggregating index: [SELECT COUNT(), COUNT(a), SUM(a), SUM(b) FROM test_index_db.t1]
-            ├── rewritten query: [selection: [index_col_2 (#2), index_col_1 (#1)]]
+            ├── rewritten query: [selection: [index_col_2 (#2), index_col_0 (#0)]]
             └── estimated rows: 0.00
 
 statement ok

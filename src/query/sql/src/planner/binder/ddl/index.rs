@@ -189,13 +189,17 @@ impl Binder {
                     .resolve_table_indexes(&self.ctx.get_tenant(), catalog.as_str(), table.get_id())
                     .await?;
 
+                let child_metadata = Arc::new(RwLock::new(metadata.read().clone()));
+                child_metadata
+                    .write()
+                    .set_table_source_of_index(table_entry.index(), true);
                 let mut s_exprs = Vec::with_capacity(indexes.len());
                 for (index_id, _, index_meta) in indexes {
                     if let Some(agg_index_plan) = self.bind_agg_index_query_locally(
                         &index_meta,
                         &table_entry,
                         index_id,
-                        metadata,
+                        &child_metadata,
                     )? {
                         s_exprs.push(agg_index_plan);
                     }
@@ -218,7 +222,7 @@ impl Binder {
         index_meta: &IndexMeta,
         table_entry: &TableEntry,
         index_id: u64,
-        metadata: &MetadataRef,
+        child_metadata: &MetadataRef,
     ) -> Result<Option<crate::AggIndexPlan>> {
         let tokens = tokenize_sql(&index_meta.query)?;
         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
@@ -226,11 +230,8 @@ impl Binder {
             return Ok(None);
         };
 
-        let index_metadata = Arc::new(RwLock::new(metadata.read().clone()));
+        let index_metadata = Arc::new(RwLock::new(child_metadata.read().clone()));
         let initial_table_count = index_metadata.read().tables().len();
-        index_metadata
-            .write()
-            .set_table_source_of_index(table_entry.index(), true);
 
         let mut index_binder = Binder::new(
             self.ctx.clone(),
@@ -256,7 +257,7 @@ impl Binder {
             &s_expr,
         )?;
 
-        Ok(Some(build_agg_index_plan_for_table(
+        let mut agg_index_plan = build_agg_index_plan_for_table(
             self.ctx.clone(),
             self.subquery_executor.clone(),
             index_binder.metadata.clone(),
@@ -264,7 +265,11 @@ impl Binder {
             index_id,
             index_meta.query.clone(),
             s_expr,
-        )?))
+        )?;
+        // Keep per-index binding isolated, but expose one canonical child metadata per table.
+        agg_index_plan.metadata = child_metadata.clone();
+
+        Ok(Some(agg_index_plan))
     }
 
     #[async_backtrace::framed]
