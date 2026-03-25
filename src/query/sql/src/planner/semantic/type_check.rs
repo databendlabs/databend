@@ -1607,15 +1607,6 @@ impl<'a> TypeChecker<'a> {
         modifier: &SubqueryModifier,
         op: &BinaryOperator,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        match op {
-            BinaryOperator::Like(escape)
-            | BinaryOperator::LikeAny(escape)
-            | BinaryOperator::NotLike(escape) => {
-                Self::validate_like_escape(*span, escape)?;
-            }
-            _ => {}
-        }
-
         Ok(match modifier {
             SubqueryModifier::Any | SubqueryModifier::Some => {
                 let comparison_op = SubqueryComparisonOp::try_from(op)?;
@@ -5629,11 +5620,22 @@ impl<'a> TypeChecker<'a> {
         like_str: &str,
         escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let escape_char = Self::validate_like_escape(span, escape)?;
-        let new_like_str = if let Some(escape_char) = escape_char {
-            Cow::Owned(convert_escape_pattern(like_str, escape_char))
-        } else {
-            Cow::Borrowed(like_str)
+        let new_like_str = match escape.as_ref() {
+            Some(escape_literal) => {
+                let mut chars = escape_literal.chars();
+                let Some(escape_char) = chars.next() else {
+                    // Empty escape literals must stay on the builtin path to match runtime behavior.
+                    return self.resolve_like_escape(op, span, left, right, escape);
+                };
+
+                if chars.next().is_some() {
+                    // Preserve existing builtin behavior for non-single-character escape literals.
+                    return self.resolve_like_escape(op, span, left, right, escape);
+                }
+
+                Cow::Owned(convert_escape_pattern(like_str, escape_char))
+            }
+            None => Cow::Borrowed(like_str),
         };
         if check_percent(&new_like_str) {
             // Convert to `a is not null`
@@ -5677,7 +5679,6 @@ impl<'a> TypeChecker<'a> {
         right: &Expr,
         escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        Self::validate_like_escape(span, escape)?;
         let name = op.to_func_name();
         let escape_expr = escape.as_ref().map(|escape| Expr::Literal {
             span,
@@ -5688,29 +5689,6 @@ impl<'a> TypeChecker<'a> {
             arguments.push(expr)
         }
         self.resolve_function(span, name.as_str(), vec![], &arguments)
-    }
-
-    fn validate_like_escape(span: Span, escape: &Option<String>) -> Result<Option<char>> {
-        let Some(escape) = escape else {
-            return Ok(None);
-        };
-
-        let mut chars = escape.chars();
-        let Some(first) = chars.next() else {
-            return Err(ErrorCode::SemanticError(
-                "LIKE ESCAPE expression must be a single character".to_string(),
-            )
-            .set_span(span));
-        };
-
-        if chars.next().is_some() {
-            return Err(ErrorCode::SemanticError(
-                "LIKE ESCAPE expression must be a single character".to_string(),
-            )
-            .set_span(span));
-        }
-
-        Ok(Some(first))
     }
 
     fn resolve_udf(

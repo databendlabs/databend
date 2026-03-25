@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
@@ -145,24 +144,16 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_like_escape_rejects_non_single_character_literal() -> Result<()> {
+async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
 
     for sql in [
         "SELECT 'a' LIKE 'a' ESCAPE ''",
-        "SELECT 'a' LIKE 'a' ESCAPE 'ab'",
+        "SELECT 'a' LIKE concat('a') ESCAPE ''",
         "SELECT 'a' LIKE ANY ('a', 'b') ESCAPE ''",
         "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE ''",
-        "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE 'ab'",
     ] {
-        let err = ctx.bind_sql(sql).await.unwrap_err();
-        assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
-        assert!(
-            err.message()
-                .contains("LIKE ESCAPE expression must be a single character"),
-            "unexpected error for `{sql}`: {}",
-            err.message()
-        );
+        ctx.bind_sql(sql).await?;
     }
 
     Ok(())
