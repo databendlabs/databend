@@ -1005,11 +1005,14 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomain<BooleanType>> {
+    let is_all_percent_pattern = !pattern.is_empty() && pattern.bytes().all(|c| c == b'%');
     match generate_like_pattern(pattern.as_bytes(), 1) {
         LikePattern::StartOfPercent(v) if v.is_empty() => {
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
-        LikePattern::Constant(true) => Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN)),
+        LikePattern::Constant(true) if is_all_percent_pattern => {
+            Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
+        }
         LikePattern::OrdinalStr(_) => Some(lhs.domain_eq(&StringDomain {
             min: pattern.clone(),
             max: Some(pattern),
@@ -1404,6 +1407,20 @@ mod tests {
             calc_like_domain(&domain, "%".to_string()),
             calc_like_domain(&domain, "%%%%%".to_string()),
             "repeated all-% patterns should fold like a single %"
+        );
+    }
+
+    #[test]
+    fn test_calc_like_domain_empty_pattern_does_not_fold_to_all_true() {
+        let domain = StringDomain {
+            min: "".to_string(),
+            max: Some("zzz".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&domain, "".to_string()),
+            None,
+            "empty patterns should not reuse repeated all-% folding"
         );
     }
 
