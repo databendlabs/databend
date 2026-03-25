@@ -63,7 +63,7 @@ impl PartitionedRightJoin {
             )
         });
         PartitionedRightJoin {
-            build: PartitionedBuild::create(method, desc, function_ctx),
+            build: PartitionedBuild::create_keep_null_keys(method, desc, function_ctx),
             filter_executor,
             max_block_size,
             finished: false,

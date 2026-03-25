@@ -15,15 +15,21 @@
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::KeysState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::with_hash_method;
 
@@ -65,6 +71,14 @@ pub struct PartitionedBuild {
     pub desc: Arc<HashJoinDesc>,
     pub function_ctx: FunctionContext,
 
+    /// When true, NULL build keys are kept in the data (not filtered out).
+    /// Required for RIGHT and RIGHT ANTI joins where unmatched build rows
+    /// (including those with NULL keys) must be output in final_probe.
+    keep_null_keys: bool,
+    /// Per-chunk validity bitmaps for build keys (only used when keep_null_keys is true).
+    /// Rows with invalid (NULL) keys are skipped during hash table insertion.
+    chunk_validities: Vec<Option<Bitmap>>,
+
     accumulator: FixedSizeChunkAccumulator,
 }
 
@@ -73,6 +87,23 @@ impl PartitionedBuild {
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
         function_ctx: FunctionContext,
+    ) -> Self {
+        Self::create_with_options(method, desc, function_ctx, false)
+    }
+
+    pub fn create_keep_null_keys(
+        method: HashMethodKind,
+        desc: Arc<HashJoinDesc>,
+        function_ctx: FunctionContext,
+    ) -> Self {
+        Self::create_with_options(method, desc, function_ctx, true)
+    }
+
+    fn create_with_options(
+        method: HashMethodKind,
+        desc: Arc<HashJoinDesc>,
+        function_ctx: FunctionContext,
+        keep_null_keys: bool,
     ) -> Self {
         PartitionedBuild {
             chunks: Vec::new(),
@@ -85,6 +116,8 @@ impl PartitionedBuild {
             desc,
             function_ctx,
             visited: Vec::new(),
+            keep_null_keys,
+            chunk_validities: Vec::new(),
             accumulator: FixedSizeChunkAccumulator::new(CHUNK_SIZE),
             build_block_idx: 0,
         }
@@ -110,6 +143,16 @@ impl PartitionedBuild {
     fn ingest_chunk(&mut self, chunk: DataBlock) -> Result<()> {
         let num_rows = chunk.num_rows();
         let mut columns = chunk.take_columns();
+
+        // Extract the trailing validity column if keep_null_keys is enabled.
+        let chunk_validity = if self.keep_null_keys {
+            let valid_entry = columns.pop().unwrap();
+            let col = valid_entry.to_column();
+            Some(BooleanType::try_downcast_column(&col).unwrap())
+        } else {
+            None
+        };
+
         let data_columns = columns.split_off(self.desc.build_keys.len());
         let keys = ProjectedBlock::from(&columns);
 
@@ -120,6 +163,7 @@ impl PartitionedBuild {
         self.num_rows += num_rows;
         self.build_keys_states.push(keys_state);
         self.chunks.push(DataBlock::new(data_columns, num_rows));
+        self.chunk_validities.push(chunk_validity);
         Ok(())
     }
 
@@ -130,15 +174,36 @@ impl PartitionedBuild {
         let mut keys_block = DataBlock::new(keys_entries, num_rows);
 
         chunk = chunk.project(&self.desc.build_projection);
-        if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
-            if bitmap.true_count() != bitmap.len() {
-                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
-                chunk = chunk.filter_with_bitmap(&bitmap)?;
+
+        let validity = self.desc.build_valids_by_keys(&keys_block)?;
+        if !self.keep_null_keys {
+            if let Some(ref bitmap) = validity {
+                if bitmap.true_count() != bitmap.len() {
+                    keys_block = keys_block.filter_with_bitmap(bitmap)?;
+                    chunk = chunk.filter_with_bitmap(bitmap)?;
+                }
             }
         }
 
         self.desc.remove_keys_nullable(&mut keys_block);
         keys_block.merge_block(chunk);
+
+        // When keeping NULL keys, append a boolean validity column so it flows
+        // through the accumulator and can be extracted in ingest_chunk.
+        if self.keep_null_keys {
+            let valid_col = match validity {
+                Some(bitmap) => {
+                    BlockEntry::from(BooleanType::from_data(bitmap.iter().collect::<Vec<bool>>()))
+                }
+                None => BlockEntry::new_const_column(
+                    DataType::Boolean,
+                    Scalar::Boolean(true),
+                    keys_block.num_rows(),
+                ),
+            };
+            keys_block.add_entry(valid_col);
+        }
+
         Ok(keys_block)
     }
 
@@ -177,7 +242,15 @@ impl PartitionedBuild {
             HashMethodKind::T(method) => {
                 let mut hashes = Vec::new();
                 method.build_keys_hashes(keys_state, &mut hashes);
-                self.hash_table.insert_chunk(&hashes, row_offset);
+                match &self.chunk_validities[self.build_block_idx] {
+                    Some(validity) => {
+                        self.hash_table
+                            .insert_chunk_with_validity(&hashes, row_offset, validity);
+                    }
+                    None => {
+                        self.hash_table.insert_chunk(&hashes, row_offset);
+                    }
+                }
                 self.build_block_idx += 1;
             }
         });
@@ -197,6 +270,7 @@ impl PartitionedBuild {
         self.num_rows = 0;
         self.build_block_idx = 0;
         self.visited.clear();
+        self.chunk_validities.clear();
         self.accumulator.reset();
     }
 

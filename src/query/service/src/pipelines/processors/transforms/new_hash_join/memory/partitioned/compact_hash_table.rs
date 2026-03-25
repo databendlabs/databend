@@ -101,6 +101,24 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         }
     }
 
+    pub fn insert_chunk_with_validity(
+        &mut self,
+        hashes: &[u64],
+        row_offset: usize,
+        validity: &databend_common_column::bitmap::Bitmap,
+    ) {
+        let mask = self.bucket_mask;
+        for (i, h) in hashes.iter().enumerate() {
+            if !validity.get_bit(i) {
+                continue;
+            }
+            let row_index = row_offset + i;
+            let bucket = (*h as usize) & mask;
+            self.next[row_index] = self.first[bucket];
+            self.first[bucket] = I::from_usize(row_index);
+        }
+    }
+
     /// Get the first row index in the given bucket.
     #[inline(always)]
     pub fn first_index(&self, bucket: usize) -> I {
