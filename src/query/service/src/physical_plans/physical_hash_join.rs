@@ -548,10 +548,8 @@ impl HashJoin {
         let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
         builder.main_pipeline.add_pipe(join_pipe);
 
-        if !use_partitioned_join {
-            let item_size = builder.main_pipeline.output_len();
-            builder.main_pipeline.resize(item_size, true)?;
-        }
+        let item_size = builder.main_pipeline.output_len();
+        builder.main_pipeline.resize(item_size, true)?;
 
         Ok(())
     }
