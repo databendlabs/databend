@@ -551,9 +551,25 @@ fn copy_array<I: Index>(
     from: &ArrayColumn<AnyType>,
     indices: &[I],
 ) {
-    // TODO:
-    for index in indices {
-        unsafe { to.push(from.index_unchecked(index.to_usize())) }
+    let mut i = 0;
+    while i < indices.len() {
+        let start = indices[i].to_usize();
+        let mut run_len = 1;
+
+        while i + run_len < indices.len()
+            && indices[i + run_len].to_usize() == start + run_len
+        {
+            run_len += 1;
+        }
+
+        if run_len >= 2 {
+            let sliced = from.slice(start..start + run_len);
+            to.append_column(&sliced);
+        } else {
+            unsafe { to.push(from.index_unchecked(start)) }
+        }
+
+        i += run_len;
     }
 }
 
@@ -561,10 +577,46 @@ fn copy_array<I: Index>(
 mod tests {
     use super::*;
     use crate::FromData;
+    use crate::types::ArgType;
+    use crate::types::ArrayColumn;
+    use crate::types::ArrayType;
     use crate::types::Int32Type;
+    use crate::types::Int64Type;
+
+    use databend_common_column::buffer::Buffer;
 
     fn make_block(values: Vec<i32>) -> DataBlock {
         DataBlock::new_from_columns(vec![Int32Type::from_data(values)])
+    }
+
+    fn build_array_column(rows: Vec<Vec<i64>>) -> Column {
+        let mut values = Vec::new();
+        let mut offsets = Vec::with_capacity(rows.len() + 1);
+        offsets.push(0_u64);
+        for row in rows {
+            values.extend(row.into_iter());
+            offsets.push(values.len() as u64);
+        }
+        let col = ArrayColumn::<Int64Type>::new(Buffer::from(values), Buffer::from(offsets));
+        ArrayType::<Int64Type>::upcast_column(col)
+    }
+
+    fn extract_array_rows(block: &DataBlock, col_idx: usize) -> Vec<Vec<i64>> {
+        let col = block.columns()[col_idx].to_column();
+        match &col {
+            Column::Array(arr) => {
+                let mut result = Vec::new();
+                for i in 0..arr.len() {
+                    let inner = unsafe { arr.index_unchecked(i) };
+                    match inner.as_number().unwrap() {
+                        NumberColumn::Int64(buf) => result.push(buf.to_vec()),
+                        _ => panic!("expected Int64"),
+                    }
+                }
+                result
+            }
+            _ => panic!("expected Array column"),
+        }
     }
 
     use crate::types::NumberColumn;
@@ -706,5 +758,143 @@ mod tests {
         let result = stream.partition(indices, block, true);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].1.num_rows(), 100);
+    }
+
+    #[test]
+    fn test_copy_array_single_partition() {
+        // All rows go to partition 0, indices are consecutive
+        let array_col = build_array_column(vec![
+            vec![1, 2],
+            vec![3],
+            vec![4, 5, 6],
+            vec![7, 8],
+        ]);
+        let block = DataBlock::new_from_columns(vec![array_col]);
+
+        let mut stream = BlockPartitionStream::create(0, 1, 1);
+        let indices = vec![0u64; 4];
+        let result = stream.partition(indices, block, true);
+
+        assert_eq!(result.len(), 1);
+        let rows = extract_array_rows(&result[0].1, 0);
+        assert_eq!(rows, vec![vec![1, 2], vec![3], vec![4, 5, 6], vec![7, 8]]);
+    }
+
+    #[test]
+    fn test_copy_array_multi_partition() {
+        // Scatter rows across 2 partitions
+        let array_col = build_array_column(vec![
+            vec![10, 20],   // row 0 -> partition 0
+            vec![30],       // row 1 -> partition 1
+            vec![40, 50],   // row 2 -> partition 0
+            vec![60, 70, 80], // row 3 -> partition 1
+        ]);
+        let block = DataBlock::new_from_columns(vec![array_col]);
+
+        let mut stream = BlockPartitionStream::create(0, 1, 2);
+        let indices = vec![0u64, 1, 0, 1];
+        let result = stream.partition(indices, block, true);
+
+        let p0: Vec<_> = result.iter().filter(|(id, _)| *id == 0).collect();
+        let p1: Vec<_> = result.iter().filter(|(id, _)| *id == 1).collect();
+
+        assert_eq!(p0.len(), 1);
+        let p0_rows = extract_array_rows(&p0[0].1, 0);
+        assert_eq!(p0_rows, vec![vec![10, 20], vec![40, 50]]);
+
+        assert_eq!(p1.len(), 1);
+        let p1_rows = extract_array_rows(&p1[0].1, 0);
+        assert_eq!(p1_rows, vec![vec![30], vec![60, 70, 80]]);
+    }
+
+    #[test]
+    fn test_copy_array_consecutive_indices() {
+        // Indices [0,1,2,3] are fully consecutive — exercises the batch path
+        let array_col = build_array_column(vec![
+            vec![1],
+            vec![2, 3],
+            vec![4, 5, 6],
+            vec![7],
+        ]);
+        let block = DataBlock::new_from_columns(vec![array_col]);
+
+        let mut stream = BlockPartitionStream::create(0, 1, 1);
+        let indices = vec![0u64; 4];
+        let result = stream.partition(indices, block, true);
+
+        assert_eq!(result.len(), 1);
+        let rows = extract_array_rows(&result[0].1, 0);
+        assert_eq!(rows, vec![vec![1], vec![2, 3], vec![4, 5, 6], vec![7]]);
+    }
+
+    #[test]
+    fn test_copy_array_non_consecutive_indices() {
+        // Indices [0, 2] are non-consecutive — exercises the single-element fallback
+        let array_col = build_array_column(vec![
+            vec![10],
+            vec![20, 30],
+            vec![40, 50],
+        ]);
+        let block = DataBlock::new_from_columns(vec![array_col]);
+
+        let mut stream = BlockPartitionStream::create(0, 1, 2);
+        // row 0 -> p0, row 1 -> p1, row 2 -> p0
+        let indices = vec![0u64, 1, 0];
+        let result = stream.partition(indices, block, true);
+
+        let p0: Vec<_> = result.iter().filter(|(id, _)| *id == 0).collect();
+        assert_eq!(p0.len(), 1);
+        let p0_rows = extract_array_rows(&p0[0].1, 0);
+        // p0 gets row 0 and row 2 (non-consecutive from source)
+        assert_eq!(p0_rows, vec![vec![10], vec![40, 50]]);
+    }
+
+    #[test]
+    fn test_copy_array_mixed_consecutive_and_single() {
+        // 6 rows, partition them so one partition gets [0,1,2] consecutive + [4] single
+        let array_col = build_array_column(vec![
+            vec![1],       // row 0 -> p0
+            vec![2, 3],    // row 1 -> p0
+            vec![4],       // row 2 -> p0
+            vec![5, 6],    // row 3 -> p1
+            vec![7, 8, 9], // row 4 -> p0
+            vec![10],      // row 5 -> p1
+        ]);
+        let block = DataBlock::new_from_columns(vec![array_col]);
+
+        let mut stream = BlockPartitionStream::create(0, 1, 2);
+        let indices = vec![0u64, 0, 0, 1, 0, 1];
+        let result = stream.partition(indices, block, true);
+
+        let p0: Vec<_> = result.iter().filter(|(id, _)| *id == 0).collect();
+        let p1: Vec<_> = result.iter().filter(|(id, _)| *id == 1).collect();
+
+        assert_eq!(p0.len(), 1);
+        let p0_rows = extract_array_rows(&p0[0].1, 0);
+        assert_eq!(p0_rows, vec![vec![1], vec![2, 3], vec![4], vec![7, 8, 9]]);
+
+        assert_eq!(p1.len(), 1);
+        let p1_rows = extract_array_rows(&p1[0].1, 0);
+        assert_eq!(p1_rows, vec![vec![5, 6], vec![10]]);
+    }
+
+    #[test]
+    fn test_copy_array_empty_inner_arrays() {
+        // Some inner arrays are empty
+        let array_col = build_array_column(vec![
+            vec![],
+            vec![1, 2],
+            vec![],
+            vec![3],
+        ]);
+        let block = DataBlock::new_from_columns(vec![array_col]);
+
+        let mut stream = BlockPartitionStream::create(0, 1, 1);
+        let indices = vec![0u64; 4];
+        let result = stream.partition(indices, block, true);
+
+        assert_eq!(result.len(), 1);
+        let rows = extract_array_rows(&result[0].1, 0);
+        assert_eq!(rows, vec![vec![], vec![1, 2], vec![], vec![3]]);
     }
 }
