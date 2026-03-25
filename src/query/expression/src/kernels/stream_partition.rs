@@ -164,7 +164,10 @@ impl BlockPartitionStream {
                 }
 
                 partition.num_rows = 0;
-                ready_blocks.push((id, DataBlock::new(columns, rows)));
+                let block = DataBlock::new(columns, rows);
+                for sub_block in split_block_if_needed(block, self.rows_threshold) {
+                    ready_blocks.push((id, sub_block));
+                }
             }
         }
 
@@ -214,15 +217,18 @@ impl BlockPartitionStream {
 
             let num_rows = partition.num_rows;
             partition.num_rows = 0;
-            take_blocks.push((id, DataBlock::new(columns, num_rows)));
+            let block = DataBlock::new(columns, num_rows);
+            for sub_block in split_block_if_needed(block, self.rows_threshold) {
+                take_blocks.push((id, sub_block));
+            }
         }
 
         take_blocks
     }
 
-    pub fn finalize_partition(&mut self, partition_id: usize) -> Option<DataBlock> {
+    pub fn finalize_partition(&mut self, partition_id: usize) -> Vec<DataBlock> {
         if !self.initialize {
-            return None;
+            return vec![];
         }
 
         let partition = &mut self.partitions[partition_id];
@@ -230,7 +236,7 @@ impl BlockPartitionStream {
         let num_rows = partition.num_rows;
 
         if num_rows == 0 {
-            return None;
+            return vec![];
         }
 
         let mut columns = Vec::with_capacity(partition.columns_builder.len());
@@ -245,7 +251,20 @@ impl BlockPartitionStream {
         }
 
         partition.num_rows = 0;
-        Some(DataBlock::new(columns, num_rows))
+        let block = DataBlock::new(columns, num_rows);
+        self.split_block_if_needed(block)
+    }
+
+    fn split_block_if_needed(&self, block: DataBlock) -> Vec<DataBlock> {
+        split_block_if_needed(block, self.rows_threshold)
+    }
+}
+
+fn split_block_if_needed(block: DataBlock, rows_threshold: usize) -> Vec<DataBlock> {
+    if rows_threshold < usize::MAX && block.num_rows() > rows_threshold {
+        block.split_by_rows_no_tail(rows_threshold)
+    } else {
+        vec![block]
     }
 }
 
@@ -532,8 +551,163 @@ fn copy_array<I: Index>(
     from: &ArrayColumn<AnyType>,
     indices: &[I],
 ) {
-    // TODO:
     for index in indices {
         unsafe { to.push(from.index_unchecked(index.to_usize())) }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::FromData;
+    use crate::types::Int32Type;
+
+    fn make_block(values: Vec<i32>) -> DataBlock {
+        DataBlock::new_from_columns(vec![Int32Type::from_data(values)])
+    }
+
+    use crate::types::NumberColumn;
+
+    fn collect_column_values(block: &DataBlock) -> Vec<i32> {
+        let col = block.columns()[0].to_column();
+        match col.as_number().unwrap() {
+            NumberColumn::Int32(buf) => buf.to_vec(),
+            _ => panic!("expected Int32 column"),
+        }
+    }
+
+    #[test]
+    fn test_partition_no_split_under_threshold() {
+        let mut stream = BlockPartitionStream::create(100, 0, 2);
+        // All indices go to partition 0
+        let indices = vec![0u64; 50];
+        let block = make_block((0..50).collect());
+        let result = stream.partition(indices, block, true);
+        // 50 rows < 100 threshold, nothing emitted
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_partition_emit_at_threshold() {
+        let mut stream = BlockPartitionStream::create(10, 0, 1);
+        let indices = vec![0u64; 10];
+        let block = make_block((0..10).collect());
+        let result = stream.partition(indices, block, true);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, 0);
+        assert_eq!(result[0].1.num_rows(), 10);
+    }
+
+    #[test]
+    fn test_partition_splits_large_block() {
+        let mut stream = BlockPartitionStream::create(10, 0, 1);
+        // Push 25 rows into partition 0
+        let indices = vec![0u64; 25];
+        let block = make_block((0..25).collect());
+        let result = stream.partition(indices, block, true);
+        // Should be split into blocks of 10, 10, 5
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].1.num_rows(), 10);
+        assert_eq!(result[1].1.num_rows(), 10);
+        assert_eq!(result[2].1.num_rows(), 5);
+        // All should have partition_id 0
+        assert!(result.iter().all(|(id, _)| *id == 0));
+        // Verify data integrity
+        let all_values: Vec<i32> = result
+            .iter()
+            .flat_map(|(_, b)| collect_column_values(b))
+            .collect();
+        assert_eq!(all_values, (0..25).collect::<Vec<i32>>());
+    }
+
+    #[test]
+    fn test_partition_multiple_partitions_split() {
+        let mut stream = BlockPartitionStream::create(5, 0, 2);
+        // 8 rows to partition 0, 7 rows to partition 1
+        let mut indices = vec![0u64; 8];
+        indices.extend(vec![1u64; 7]);
+        let block = make_block((0..15).collect());
+        let result = stream.partition(indices, block, true);
+        let p0: Vec<_> = result.iter().filter(|(id, _)| *id == 0).collect();
+        let p1: Vec<_> = result.iter().filter(|(id, _)| *id == 1).collect();
+        // partition 0: 8 rows -> split into 5 + 3
+        assert_eq!(p0.len(), 2);
+        assert_eq!(p0[0].1.num_rows(), 5);
+        assert_eq!(p0[1].1.num_rows(), 3);
+        // partition 1: 7 rows -> split into 5 + 2
+        assert_eq!(p1.len(), 2);
+        assert_eq!(p1[0].1.num_rows(), 5);
+        assert_eq!(p1[1].1.num_rows(), 2);
+    }
+
+    #[test]
+    fn test_finalize_partition_splits() {
+        let mut stream = BlockPartitionStream::create(10, 0, 1);
+        // Push 25 rows but don't emit (out_ready=false)
+        let indices = vec![0u64; 25];
+        let block = make_block((0..25).collect());
+        let result = stream.partition(indices, block, false);
+        assert!(result.is_empty());
+        // Finalize should split
+        let blocks = stream.finalize_partition(0);
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks[0].num_rows(), 10);
+        assert_eq!(blocks[1].num_rows(), 10);
+        assert_eq!(blocks[2].num_rows(), 5);
+    }
+
+    #[test]
+    fn test_finalize_empty_partition() {
+        let mut stream = BlockPartitionStream::create(10, 0, 2);
+        // Initialize by pushing some data to partition 0
+        let indices = vec![0u64; 5];
+        let block = make_block(vec![1, 2, 3, 4, 5]);
+        stream.partition(indices, block, false);
+        // Partition 1 has no data
+        let blocks = stream.finalize_partition(1);
+        assert!(blocks.is_empty());
+    }
+
+    #[test]
+    fn test_take_partitions_splits() {
+        let mut stream = BlockPartitionStream::create(5, 0, 3);
+        // Push 12 rows to partition 0, 8 to partition 1, 3 to partition 2
+        let mut indices = vec![0u64; 12];
+        indices.extend(vec![1u64; 8]);
+        indices.extend(vec![2u64; 3]);
+        let block = make_block((0..23).collect());
+        stream.partition(indices, block, false);
+
+        // Take all except partition 2
+        let excluded: HashSet<usize> = [2].into_iter().collect();
+        let result = stream.take_partitions(&excluded);
+
+        let p0: Vec<_> = result.iter().filter(|(id, _)| *id == 0).collect();
+        let p1: Vec<_> = result.iter().filter(|(id, _)| *id == 1).collect();
+        let p2: Vec<_> = result.iter().filter(|(id, _)| *id == 2).collect();
+        // partition 0: 12 rows -> 5 + 5 + 2
+        assert_eq!(p0.len(), 3);
+        assert_eq!(p0[0].1.num_rows(), 5);
+        assert_eq!(p0[1].1.num_rows(), 5);
+        assert_eq!(p0[2].1.num_rows(), 2);
+        // partition 1: 8 rows -> 5 + 3
+        assert_eq!(p1.len(), 2);
+        assert_eq!(p1[0].1.num_rows(), 5);
+        assert_eq!(p1[1].1.num_rows(), 3);
+        // partition 2 excluded
+        assert!(p2.is_empty());
+    }
+
+    #[test]
+    fn test_no_split_when_no_row_threshold() {
+        // rows_threshold=0 means usize::MAX, no splitting
+        let mut stream = BlockPartitionStream::create(0, 1, 1);
+        let indices = vec![0u64; 100];
+        let block = make_block((0..100).collect());
+        // bytes_threshold=1 triggers emit, but no row splitting
+        let result = stream.partition(indices, block, true);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].1.num_rows(), 100);
+    }
+
 }

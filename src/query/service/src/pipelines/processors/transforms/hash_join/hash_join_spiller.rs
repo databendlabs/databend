@@ -291,8 +291,8 @@ impl HashJoinSpiller {
                 if let Some(buffer_blocks) = self.restore_cross_buffer(partition_id)? {
                     data_blocks.extend(buffer_blocks);
                 }
-            } else if let Some(buffer_block) = self.restore_buffer(partition_id) {
-                data_blocks.push(buffer_block);
+            } else {
+                data_blocks.extend(self.restore_buffer(partition_id));
             }
         }
 
@@ -324,7 +324,7 @@ impl HashJoinSpiller {
         Ok(data_blocks)
     }
 
-    fn restore_buffer(&mut self, partition_id: usize) -> Option<DataBlock> {
+    fn restore_buffer(&mut self, partition_id: usize) -> Vec<DataBlock> {
         self.block_partition_stream.finalize_partition(partition_id)
     }
 
