@@ -162,7 +162,7 @@ impl Processor for HashSendTransform {
             let mut futures = Vec::new();
 
             for partition_id in 0..self.channels.len() {
-                if let Some(block) = self.partition_stream.finalize_partition(partition_id) {
+                for block in self.partition_stream.finalize_partition(partition_id) {
                     if block.is_empty() {
                         continue;
                     }

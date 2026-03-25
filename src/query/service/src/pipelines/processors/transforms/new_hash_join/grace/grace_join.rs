@@ -334,7 +334,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let ready_partitions_id = self.build_partition_stream.partition_ids();
         let mut ready_partitions = Vec::with_capacity(ready_partitions_id.len());
         for id in ready_partitions_id {
-            if let Some(data) = self.build_partition_stream.finalize_partition(id) {
+            for data in self.build_partition_stream.finalize_partition(id) {
                 ready_partitions.push((id, data));
             }
         }
@@ -345,7 +345,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let ready_partitions_id = self.probe_partition_stream.partition_ids();
 
         for id in ready_partitions_id {
-            if let Some(data_block) = self.probe_partition_stream.finalize_partition(id) {
+            for data_block in self.probe_partition_stream.finalize_partition(id) {
                 self.partitions[id].writer.write(data_block)?;
                 self.partitions[id].writer.flush()?;
             }

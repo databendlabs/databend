@@ -239,7 +239,7 @@ impl PartitionStream for LocalPartitionStream {
         let ids = self.partition_stream.partition_ids();
         let mut pending_blocks = Vec::with_capacity(ids.len());
         for id in ids {
-            if let Some(block) = self.partition_stream.finalize_partition(id) {
+            for block in self.partition_stream.finalize_partition(id) {
                 pending_blocks.push((id, block));
             }
         }
@@ -291,7 +291,7 @@ impl SharedPartitionStream {
             let mut pending_blocks = Vec::with_capacity(ids.len());
 
             for id in ids {
-                if let Some(block) = inner.partition_stream.finalize_partition(id) {
+                for block in inner.partition_stream.finalize_partition(id) {
                     pending_blocks.push((id, block));
                 }
             }
