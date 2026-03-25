@@ -347,10 +347,10 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:numbers.number (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 0.50
+├── estimated rows: 0.25
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
-│   ├── filters: [numbers.number (#1) = 0]
+│   ├── filters: [numbers.number (#1) < 10, numbers.number (#1) = 0]
 │   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.system.numbers
@@ -360,19 +360,23 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── push downs: [filters: [numbers.number (#1) = 0], limit: NONE]
+│       ├── push downs: [filters: [numbers.number (#1) = 0 and numbers.number (#1) < 10], limit: NONE]
 │       └── estimated rows: 1.00
-└── TableScan(Probe)
-    ├── table: default.system.numbers
-    ├── scan id: 0
-    ├── output columns: [number (#0)]
-    ├── read rows: 1
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── push downs: [filters: [t.number (#0) < 10], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 1.00
+└── Filter(Probe)
+    ├── output columns: [t.number (#0)]
+    ├── filters: [t.number (#0) < 10]
+    ├── estimated rows: 0.50
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── scan id: 0
+        ├── output columns: [number (#0)]
+        ├── read rows: 1
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [numbers.number (#0) < 10], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 1.00
 
 query T
 explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
