@@ -75,7 +75,24 @@ fn has_exact_f64_int_span(min: i64, max: i64) -> bool {
     max >= min && (max as i128 - min as i128 + 1) <= MAX_EXACT_F64_INTEGER as i128
 }
 
-pub(crate) fn has_exact_f64_integer_range(min: &Datum, max: &Datum) -> bool {
+pub(crate) fn has_exact_f64_integer_comparison_range(min: &Datum, max: &Datum) -> bool {
+    match (min, max) {
+        (Datum::UInt(min), Datum::UInt(max)) => {
+            *min <= MAX_EXACT_F64_INTEGER
+                && *max <= MAX_EXACT_F64_INTEGER
+                && has_exact_f64_uint_span(*min, *max)
+        }
+        (Datum::Int(min), Datum::Int(max)) => {
+            let limit = MAX_EXACT_F64_INTEGER as i64;
+            (-limit..=limit).contains(min)
+                && (-limit..=limit).contains(max)
+                && has_exact_f64_int_span(*min, *max)
+        }
+        _ => true,
+    }
+}
+
+pub(crate) fn has_exact_f64_integer_histogram_range(min: &Datum, max: &Datum) -> bool {
     match (min, max) {
         (Datum::UInt(min), Datum::UInt(max)) => {
             *min < MAX_EXACT_F64_INTEGER
@@ -459,7 +476,7 @@ impl SelectivityVisitor<'_> {
                 return Ok(selectivity);
             }
             (ComparisonOp::LT | ComparisonOp::LTE, _, _) => {
-                if !has_exact_f64_integer_range(&column_stat.min, &column_stat.max)
+                if !has_exact_f64_integer_comparison_range(&column_stat.min, &column_stat.max)
                     || !has_exact_f64_integer_value(const_datum)
                 {
                     return Ok(Selectivity::Unknown);
@@ -494,7 +511,7 @@ impl SelectivityVisitor<'_> {
                 return Ok(Selectivity::equal_selectivity(ndv, false));
             }
             (ComparisonOp::GT | ComparisonOp::GTE, _, _) => {
-                if !has_exact_f64_integer_range(&column_stat.min, &column_stat.max)
+                if !has_exact_f64_integer_comparison_range(&column_stat.min, &column_stat.max)
                     || !has_exact_f64_integer_value(const_datum)
                 {
                     return Ok(Selectivity::Unknown);
@@ -1168,6 +1185,28 @@ mod tests {
                 "{expr_text} should stay exact"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_comparison_with_uint64_range_ending_at_f64_boundary_keeps_selectivity() -> Result<()> {
+        let max = 1_u64 << 53;
+        let min = max - 2;
+        let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+            min: Datum::UInt(min),
+            max: Datum::UInt(max),
+            ndv: Ndv::Stat(3.0),
+            null_count: 0,
+            histogram: None,
+        })]);
+        let columns = &[("a", UInt64Type::data_type())];
+        let raw_expr = parse_raw_expr("a <= 9007199254740991", columns, &BUILTIN_FUNCTIONS);
+        let expr = raw_expr_to_scalar(&raw_expr, columns);
+        let mut estimator = SelectivityEstimator::new(column_stats, 90.0);
+        let estimated_rows = estimator.apply(&[expr])?;
+
+        assert_eq!(estimated_rows, 60.0);
 
         Ok(())
     }

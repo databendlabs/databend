@@ -45,7 +45,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
-use crate::optimizer::ir::has_exact_f64_integer_range;
+use crate::optimizer::ir::has_exact_f64_integer_histogram_range;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -307,7 +307,7 @@ impl Operator for Scan {
                     histogram.clone()
                 } else {
                     num_rows.and_then(|num_rows| {
-                        if !has_exact_f64_integer_range(&min, &max) {
+                        if !has_exact_f64_integer_histogram_range(&min, &max) {
                             return None;
                         }
                         let num_rows = num_rows.saturating_sub(col_stat.null_count);

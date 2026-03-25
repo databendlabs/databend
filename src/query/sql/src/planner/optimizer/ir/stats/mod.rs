@@ -21,4 +21,4 @@ pub use histogram::HistogramBuilder;
 pub use histogram::UniformSampleSet;
 pub use selectivity::MAX_SELECTIVITY;
 pub use selectivity::SelectivityEstimator;
-pub(crate) use selectivity::has_exact_f64_integer_range;
+pub(crate) use selectivity::has_exact_f64_integer_histogram_range;
