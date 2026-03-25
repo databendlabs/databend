@@ -344,7 +344,7 @@ HashJoin
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
-├── filters: [t.number (#0) < 10]
+├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:numbers.number (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.50
@@ -370,7 +370,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [], limit: NONE]
+    ├── push downs: [filters: [t.number (#0) < 10], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 1.00
 

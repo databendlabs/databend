@@ -141,16 +141,23 @@ impl SubqueryDecorrelatorOptimizer {
         let mut left_conditions = vec![];
         let mut right_conditions = vec![];
         let mut non_equi_conditions = vec![];
+        let mut left_filters = vec![];
         let mut right_filters = vec![];
         for pred in filter.predicates.iter() {
             let join_condition = JoinPredicate::new(pred, &outer_prop, &filter_prop);
             match join_condition {
                 JoinPredicate::Left(_) | JoinPredicate::ALL(_) => {
-                    // For correlated EXISTS / NOT EXISTS, predicates that reference only the
-                    // outer side must stay attached to the join condition. Pushing them down to
-                    // the outer input changes the subquery emptiness semantics and can filter out
-                    // rows that should survive a correlated NOT EXISTS.
-                    non_equi_conditions.push(pred.clone());
+                    if matches!(subquery.typ, SubqueryType::Exists) {
+                        // For correlated EXISTS, predicates that only reference the outer side
+                        // are semantically equivalent when pushed to the outer input, and keeping
+                        // them there preserves probe-side filter pushdown.
+                        left_filters.push(pred.clone());
+                    } else {
+                        // For correlated NOT EXISTS, outer-only predicates must stay attached to
+                        // the join condition. Pushing them below the anti join changes subquery
+                        // emptiness semantics and can filter out rows that should survive.
+                        non_equi_conditions.push(pred.clone());
+                    }
                 }
                 JoinPredicate::Right(filter) => {
                     right_filters.push(filter.clone());
@@ -199,7 +206,18 @@ impl SubqueryDecorrelatorOptimizer {
         };
 
         // Rewrite plan to semi-join.
-        let left_child = outer.clone();
+        let mut left_child = outer.clone();
+        if !left_filters.is_empty() {
+            left_child = SExpr::create_unary(
+                Arc::new(
+                    Filter {
+                        predicates: left_filters,
+                    }
+                    .into(),
+                ),
+                Arc::new(left_child),
+            );
+        }
 
         // Remove `Filter` from subquery.
         let mut right_child = subquery
