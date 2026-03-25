@@ -39,6 +39,10 @@ use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 
+pub(super) fn out_of_limit_error(error: impl Debug) -> ErrorCode {
+    ErrorCode::AbortedQuery(format!("{error:?}"))
+}
+
 pub enum ExecutorTask {
     None,
     Sync(ProcessorWrapper),
@@ -204,7 +208,7 @@ impl ExecutorWorkerContext {
                 .record_process(begin, nanos as usize / 1_000, process_rows);
 
             if let Err(out_of_limit) = guard.flush() {
-                return Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)));
+                return Err(out_of_limit_error(out_of_limit));
             }
 
             Ok(Some((proc.processor.id(), proc.graph)))
@@ -270,5 +274,23 @@ impl Debug for ExecutorTask {
                 ExecutorTask::AsyncCompleted(_) => write!(f, "ExecutorTask::CompletedAsync"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_base::runtime::OutOfLimit;
+    use databend_common_exception::ErrorCode;
+
+    use super::out_of_limit_error;
+
+    #[test]
+    fn test_out_of_limit_error_uses_aborted_query() {
+        let err = out_of_limit_error(OutOfLimit::new(100, 50));
+
+        assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
+        assert_eq!(err.name(), "AbortedQuery");
+        assert!(err.message().contains("memory usage"));
+        assert!(err.message().contains("exceeds limit"));
     }
 }

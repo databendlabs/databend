@@ -149,8 +149,8 @@ build_exceptions! {
     InitPrometheusFailure(1047),
     /// Numeric overflow
     Overflow(1049),
-    /// Panic occurred
-    PanicError(1104),
+    /// Panic was caught during unwind
+    UnwindError(1104),
     /// Operation timed out
     Timeout(1122),
     /// Data is outdated
@@ -730,6 +730,8 @@ build_exceptions! {
 mod tests {
     use std::collections::HashMap;
 
+    use crate::ErrorCode;
+
     #[test]
     fn test_error_codes_unique() {
         let text = include_str!("exception_code.rs");
@@ -760,5 +762,13 @@ mod tests {
             }
             panic!("Found duplicate error codes!");
         }
+    }
+
+    #[test]
+    fn test_unwind_error_keeps_code_1104() {
+        let err = ErrorCode::UnwindError("captured from unwind");
+
+        assert_eq!(err.code(), 1104);
+        assert_eq!(err.name(), "UnwindError");
     }
 }
