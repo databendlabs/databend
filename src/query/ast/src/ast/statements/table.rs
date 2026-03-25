@@ -443,6 +443,7 @@ pub enum AlterTableAction {
         target_table: Identifier,
     },
     AddColumn {
+        if_not_exists: bool,
         column: ColumnDefinition,
         option: AddColumnOption,
     },
@@ -540,8 +541,16 @@ impl Display for AlterTableAction {
             } => {
                 write!(f, "RENAME COLUMN {old_column} TO {new_column}")?;
             }
-            AlterTableAction::AddColumn { column, option } => {
-                write!(f, "ADD COLUMN {column}{option}")?;
+            AlterTableAction::AddColumn {
+                if_not_exists,
+                column,
+                option,
+            } => {
+                write!(f, "ADD COLUMN ")?;
+                if *if_not_exists {
+                    write!(f, "IF NOT EXISTS ")?;
+                }
+                write!(f, "{column}{option}")?;
             }
             AlterTableAction::AddConstraint { constraint } => {
                 write!(f, "ADD {}", constraint)?;

@@ -103,6 +103,15 @@ impl Interpreter for AddTableColumnInterpreter {
                 &self.plan.database, &self.plan.table
             )));
         }
+        if self.plan.if_not_exists
+            && table_info
+                .meta
+                .schema
+                .index_of(self.plan.field.name())
+                .is_ok()
+        {
+            return Ok(PipelineBuildResult::create());
+        }
 
         let field = self.plan.field.clone();
         if field.computed_expr().is_some() {

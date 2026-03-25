@@ -182,6 +182,7 @@ async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         branch: None,
+        if_not_exists: false,
         field,
         comment: "".to_string(),
         option: AddColumnOption::End,
@@ -299,6 +300,53 @@ async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
         ]),
     )
     .await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_table_add_column_if_not_exists() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
+    let catalog_name = fixture.default_catalog_name();
+    let db_name = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture
+        .execute_command(&format!("CREATE TABLE {}.{} (a INT)", db_name, table_name))
+        .await?;
+
+    let add_column_sql = format!(
+        "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS b STRING NOT NULL DEFAULT 'x'",
+        db_name, table_name
+    );
+    fixture.execute_command(&add_column_sql).await?;
+    fixture.execute_command(&add_column_sql).await?;
+
+    let table = fixture
+        .new_query_ctx()
+        .await?
+        .get_catalog(&catalog_name)
+        .await?
+        .get_table(
+            &fixture.default_tenant(),
+            db_name.as_str(),
+            table_name.as_str(),
+        )
+        .await?;
+    let schema = table.schema();
+    assert_eq!(schema.num_fields(), 2);
+    assert!(schema.index_of("b").is_ok());
+
+    let err = fixture
+        .execute_command(&format!(
+            "ALTER TABLE {}.{} ADD COLUMN b STRING NOT NULL DEFAULT 'x'",
+            db_name, table_name
+        ))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), 1108);
 
     Ok(())
 }

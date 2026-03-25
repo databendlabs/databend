@@ -15155,6 +15155,7 @@ AlterTable(
             sample: None,
         },
         action: AddColumn {
+            if_not_exists: false,
             column: ColumnDefinition {
                 name: Identifier {
                     span: Some(
@@ -15210,10 +15211,67 @@ AlterTable(
             sample: None,
         },
         action: AddColumn {
+            if_not_exists: false,
             column: ColumnDefinition {
                 name: Identifier {
                     span: Some(
                         25..26,
+                    ),
+                    name: "c",
+                    quote: None,
+                    ident_type: None,
+                },
+                data_type: Nullable(
+                    Int32,
+                ),
+                expr: None,
+                check: None,
+                comment: None,
+            },
+            option: End,
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD COLUMN IF NOT EXISTS c int null;
+---------- Output ---------
+ALTER TABLE t ADD COLUMN IF NOT EXISTS c Int32 NULL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: AddColumn {
+            if_not_exists: true,
+            column: ColumnDefinition {
+                name: Identifier {
+                    span: Some(
+                        39..40,
                     ),
                     name: "c",
                     quote: None,
@@ -15265,6 +15323,7 @@ AlterTable(
             sample: None,
         },
         action: AddColumn {
+            if_not_exists: false,
             column: ColumnDefinition {
                 name: Identifier {
                     span: Some(
@@ -15333,6 +15392,7 @@ AlterTable(
             sample: None,
         },
         action: AddColumn {
+            if_not_exists: false,
             column: ColumnDefinition {
                 name: Identifier {
                     span: Some(
