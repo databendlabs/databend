@@ -80,7 +80,7 @@ impl Binder {
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
             let mut having = having;
-            let mut grouping_checker = GroupingChecker::new(bind_context, false);
+            let mut grouping_checker = GroupingChecker::new(bind_context, None);
             grouping_checker.visit(&mut having)?;
             having
         } else {

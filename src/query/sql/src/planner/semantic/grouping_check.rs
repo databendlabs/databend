@@ -30,11 +30,11 @@ use crate::plans::walk_expr_mut;
 /// Also replaced the matched window function with a BoundColumnRef.
 pub struct GroupingChecker<'a> {
     bind_context: &'a BindContext,
-    forbid_aggregate: bool,
+    forbid_aggregate: Option<&'static str>,
 }
 
 impl<'a> GroupingChecker<'a> {
-    pub fn new(bind_context: &'a BindContext, forbid_aggregate: bool) -> Self {
+    pub fn new(bind_context: &'a BindContext, forbid_aggregate: Option<&'static str>) -> Self {
         Self {
             bind_context,
             forbid_aggregate,
@@ -103,11 +103,8 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 return Err(ErrorCode::Internal("Group Check: Invalid window function"));
             }
             ScalarExpr::AggregateFunction(agg) => {
-                if self.forbid_aggregate {
-                    return Err(ErrorCode::SemanticError(
-                        "Qualify clause must not contain aggregate functions".to_string(),
-                    )
-                    .set_span(agg.span));
+                if let Some(msg) = self.forbid_aggregate {
+                    return Err(ErrorCode::SemanticError(msg.to_string()).set_span(agg.span));
                 }
 
                 let Some(agg_func) = self
@@ -133,13 +130,9 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 return Ok(());
             }
             ScalarExpr::UDAFCall(udaf) => {
-                if self.forbid_aggregate {
-                    return Err(ErrorCode::SemanticError(
-                        "Qualify clause must not contain aggregate functions".to_string(),
-                    )
-                    .set_span(udaf.span));
+                if let Some(msg) = self.forbid_aggregate {
+                    return Err(ErrorCode::SemanticError(msg.to_string()).set_span(udaf.span));
                 }
-
                 let Some(agg_func) = self.bind_context.aggregate_info.lookup_udaf_call(udaf) else {
                     return Err(ErrorCode::Internal("Invalid udaf function"));
                 };
@@ -212,11 +205,8 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
             .aggregate_info
             .has_aggregate_call_index(column.column.index)
         {
-            if self.forbid_aggregate {
-                return Err(ErrorCode::SemanticError(
-                    "Qualify clause must not contain aggregate functions".to_string(),
-                )
-                .set_span(column.span));
+            if let Some(msg) = self.forbid_aggregate {
+                return Err(ErrorCode::SemanticError(msg.to_string()).set_span(column.span));
             }
 
             // Be replaced by `AggregateRewriter`.

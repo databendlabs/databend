@@ -69,7 +69,10 @@ impl Binder {
             let mut qualify = qualify;
             if bind_context.in_grouping {
                 // If we are in grouping context, we will perform the grouping check
-                let mut grouping_checker = GroupingChecker::new(bind_context, true);
+                let mut grouping_checker = GroupingChecker::new(
+                    bind_context,
+                    Some("Qualify clause must not contain aggregate functions"),
+                );
                 grouping_checker.visit(&mut qualify)?;
             } else {
                 let mut qualify_checker = QualifyChecker::new(bind_context);
