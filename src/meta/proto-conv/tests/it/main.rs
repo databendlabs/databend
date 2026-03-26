@@ -161,3 +161,4 @@ mod v166_user_option_default_warehouse;
 mod v167_lance_file_format_params;
 mod v168_remove_share_by_and_refs;
 mod v169_text_format_params;
+mod v170_table_tag;
