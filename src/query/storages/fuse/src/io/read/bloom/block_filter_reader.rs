@@ -330,6 +330,7 @@ mod tests {
     use databend_storages_common_cache::CachedObject;
     use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::BloomIndexBuilder;
+    use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;

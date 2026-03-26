@@ -234,6 +234,7 @@ mod tests {
     use databend_storages_common_blocks::blocks_to_parquet;
     use databend_storages_common_cache::CacheManager;
     use databend_storages_common_index::BloomIndexBuilder;
+    use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
     use databend_storages_common_io::ReadSettings;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
