@@ -339,7 +339,16 @@ impl StringColumnBuilder {
     }
 
     pub fn append_column(&mut self, other: &StringColumn) {
-        self.data.extend_values(other.iter());
+        debug_assert!(
+            self.row_buffer.is_empty(),
+            "append_column expects no pending row data"
+        );
+        unsafe {
+            self.data.append_views_unchecked(
+                other.views().as_slice().iter(),
+                other.data_buffers().as_ref(),
+            );
+        }
     }
 
     pub fn build(self) -> StringColumn {
