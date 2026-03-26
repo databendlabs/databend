@@ -556,9 +556,7 @@ fn copy_array<I: Index>(
         let start = indices[i].to_usize();
         let mut run_len = 1;
 
-        while i + run_len < indices.len()
-            && indices[i + run_len].to_usize() == start + run_len
-        {
+        while i + run_len < indices.len() && indices[i + run_len].to_usize() == start + run_len {
             run_len += 1;
         }
 
@@ -575,6 +573,8 @@ fn copy_array<I: Index>(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_column::buffer::Buffer;
+
     use super::*;
     use crate::FromData;
     use crate::types::ArgType;
@@ -582,8 +582,6 @@ mod tests {
     use crate::types::ArrayType;
     use crate::types::Int32Type;
     use crate::types::Int64Type;
-
-    use databend_common_column::buffer::Buffer;
 
     fn make_block(values: Vec<i32>) -> DataBlock {
         DataBlock::new_from_columns(vec![Int32Type::from_data(values)])
@@ -666,7 +664,10 @@ mod tests {
         // All should have partition_id 0
         assert!(result.iter().all(|(id, _)| *id == 0));
         // Verify data integrity
-        let all_values: Vec<i32> = result.iter().flat_map(|(_, b)| collect_column_values(b)).collect();
+        let all_values: Vec<i32> = result
+            .iter()
+            .flat_map(|(_, b)| collect_column_values(b))
+            .collect();
         assert_eq!(all_values, (0..25).collect::<Vec<i32>>());
     }
 
@@ -763,12 +764,7 @@ mod tests {
     #[test]
     fn test_copy_array_single_partition() {
         // All rows go to partition 0, indices are consecutive
-        let array_col = build_array_column(vec![
-            vec![1, 2],
-            vec![3],
-            vec![4, 5, 6],
-            vec![7, 8],
-        ]);
+        let array_col = build_array_column(vec![vec![1, 2], vec![3], vec![4, 5, 6], vec![7, 8]]);
         let block = DataBlock::new_from_columns(vec![array_col]);
 
         let mut stream = BlockPartitionStream::create(0, 1, 1);
@@ -784,9 +780,9 @@ mod tests {
     fn test_copy_array_multi_partition() {
         // Scatter rows across 2 partitions
         let array_col = build_array_column(vec![
-            vec![10, 20],   // row 0 -> partition 0
-            vec![30],       // row 1 -> partition 1
-            vec![40, 50],   // row 2 -> partition 0
+            vec![10, 20],     // row 0 -> partition 0
+            vec![30],         // row 1 -> partition 1
+            vec![40, 50],     // row 2 -> partition 0
             vec![60, 70, 80], // row 3 -> partition 1
         ]);
         let block = DataBlock::new_from_columns(vec![array_col]);
@@ -810,12 +806,7 @@ mod tests {
     #[test]
     fn test_copy_array_consecutive_indices() {
         // Indices [0,1,2,3] are fully consecutive — exercises the batch path
-        let array_col = build_array_column(vec![
-            vec![1],
-            vec![2, 3],
-            vec![4, 5, 6],
-            vec![7],
-        ]);
+        let array_col = build_array_column(vec![vec![1], vec![2, 3], vec![4, 5, 6], vec![7]]);
         let block = DataBlock::new_from_columns(vec![array_col]);
 
         let mut stream = BlockPartitionStream::create(0, 1, 1);
@@ -830,11 +821,7 @@ mod tests {
     #[test]
     fn test_copy_array_non_consecutive_indices() {
         // Indices [0, 2] are non-consecutive — exercises the single-element fallback
-        let array_col = build_array_column(vec![
-            vec![10],
-            vec![20, 30],
-            vec![40, 50],
-        ]);
+        let array_col = build_array_column(vec![vec![10], vec![20, 30], vec![40, 50]]);
         let block = DataBlock::new_from_columns(vec![array_col]);
 
         let mut stream = BlockPartitionStream::create(0, 1, 2);
@@ -881,12 +868,7 @@ mod tests {
     #[test]
     fn test_copy_array_empty_inner_arrays() {
         // Some inner arrays are empty
-        let array_col = build_array_column(vec![
-            vec![],
-            vec![1, 2],
-            vec![],
-            vec![3],
-        ]);
+        let array_col = build_array_column(vec![vec![], vec![1, 2], vec![], vec![3]]);
         let block = DataBlock::new_from_columns(vec![array_col]);
 
         let mut stream = BlockPartitionStream::create(0, 1, 1);

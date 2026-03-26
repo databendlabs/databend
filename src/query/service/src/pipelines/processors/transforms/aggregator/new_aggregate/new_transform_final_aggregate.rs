@@ -233,18 +233,6 @@ impl NewTransformFinalAggregate {
         Ok(())
     }
 
-    fn handle_new_spilled(&mut self, payloads: Vec<NewSpilledPayload>) -> Result<()> {
-        for payload in payloads {
-            let restored = self.spiller.restore(payload)?;
-            let AggregateMeta::Serialized(restored) = restored else {
-                unreachable!("unexpected aggregate meta, found type: {:?}", restored)
-            };
-            self.handle_serialized(restored)?;
-        }
-
-        Ok(())
-    }
-
     fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
         match meta {
             AggregateMeta::Serialized(payload) => {
@@ -254,15 +242,22 @@ impl NewTransformFinalAggregate {
                 self.handle_aggregate_payload(payload)?;
             }
             AggregateMeta::NewSpilled(payloads) => {
-                self.handle_new_spilled(payloads)?;
+                for payload in payloads {
+                    let restored = self.spiller.restore(payload)?;
+                    self.handle_meta(restored, need_check_spill)?;
+                }
+                return Ok(());
             }
             AggregateMeta::NewBucketSpilled(payload) => {
-                self.handle_new_spilled(vec![payload])?;
+                let restored = self.spiller.restore(payload)?;
+                self.handle_meta(restored, need_check_spill)?;
+                return Ok(());
             }
             AggregateMeta::Partitioned { bucket: _, data } => {
                 for meta in data {
                     self.handle_meta(meta, need_check_spill)?;
                 }
+                return Ok(());
             }
             _ => {
                 unreachable!("unexpected aggregate meta, found type: {:?}", meta);
