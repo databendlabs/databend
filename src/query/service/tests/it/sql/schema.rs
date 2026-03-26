@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use databend_common_expression::DataBlock;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::number::NumberDataType;
+use databend_common_expression::types::number::NumberScalar;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
@@ -36,6 +38,17 @@ async fn test_full_outer_join_using_reports_nullable_result_schema() -> anyhow::
     let blocks: Vec<DataBlock> = executor.execute(ctx).await?.try_collect().await?;
     let block = DataBlock::concat(&blocks)?;
     assert_eq!(block.infer_schema().field(0).data_type(), &expected);
+    assert_eq!(block.num_rows(), 2, "unexpected rows: {}", block.num_rows());
+
+    let values = (0..block.num_rows())
+        .map(
+            |row| match block.get_by_offset(0).index(row).expect("scalar at row") {
+                ScalarRef::Number(NumberScalar::Int64(value)) => value,
+                other => panic!("unexpected scalar type at row {row}: {other:?}"),
+            },
+        )
+        .collect::<Vec<_>>();
+    assert_eq!(values, vec![1, 2]);
 
     Ok(())
 }

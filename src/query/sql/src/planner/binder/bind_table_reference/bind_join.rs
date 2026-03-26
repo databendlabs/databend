@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::binder::Finder;
@@ -45,6 +46,7 @@ use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
@@ -151,7 +153,7 @@ impl Binder {
         let build_side_cache_info = self.expression_scan_context.generate_cache_info(cache_idx);
 
         let join_type = join_type(&join.op);
-        let s_expr = self.bind_join_with_type(
+        let mut s_expr = self.bind_join_with_type(
             join_type,
             join_conditions,
             (left_child, &mut left_context),
@@ -166,6 +168,21 @@ impl Binder {
             left_context.clone(),
             right_context.clone(),
         );
+
+        if matches!(join.op, JoinOperator::FullOuter) {
+            let using_scalars = self.build_full_outer_using_scalars(
+                &mut bind_context,
+                &join.condition,
+                &left_context.columns,
+                &right_context.columns,
+            )?;
+            if !using_scalars.is_empty() {
+                let eval_scalar = EvalScalar {
+                    items: using_scalars,
+                };
+                s_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(s_expr));
+            }
+        }
 
         bind_context
             .cte_context
@@ -276,6 +293,99 @@ impl Binder {
             column.index = new_index;
             column.data_type = Box::new(target_type);
         }
+    }
+
+    fn build_full_outer_using_scalars(
+        &mut self,
+        bind_context: &mut BindContext,
+        join_condition: &JoinCondition,
+        left_column_bindings: &[ColumnBinding],
+        right_column_bindings: &[ColumnBinding],
+    ) -> Result<Vec<ScalarItem>> {
+        let mut using_columns = Vec::new();
+        match join_condition {
+            JoinCondition::Using(identifiers) => {
+                using_columns.extend(identifiers.iter().map(|identifier| {
+                    (
+                        identifier.span,
+                        normalize_identifier(identifier, &self.name_resolution_ctx).name,
+                    )
+                }));
+            }
+            JoinCondition::Natural => {
+                for left_column in left_column_bindings {
+                    if right_column_bindings
+                        .iter()
+                        .any(|right_column| right_column.column_name == left_column.column_name)
+                    {
+                        using_columns.push((None, left_column.column_name.clone()));
+                    }
+                }
+            }
+            _ => return Ok(vec![]),
+        }
+
+        let mut derived_scalars = Vec::with_capacity(using_columns.len());
+        for (_, join_key_name) in using_columns {
+            let Some(left_column) = left_column_bindings
+                .iter()
+                .find(|column| column.column_name == join_key_name)
+            else {
+                continue;
+            };
+            let Some(right_column) = right_column_bindings
+                .iter()
+                .find(|column| column.column_name == join_key_name)
+            else {
+                continue;
+            };
+
+            let Some(left_pos) = bind_context
+                .columns
+                .iter()
+                .position(|column| column.index == left_column.index)
+            else {
+                continue;
+            };
+
+            let coalesced_index = self
+                .metadata
+                .write()
+                .add_derived_column(join_key_name.clone(), (*left_column.data_type).clone());
+            let coalesced_scalar = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "coalesce".to_string(),
+                params: vec![],
+                arguments: vec![
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: left_column.clone(),
+                    }),
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: right_column.clone(),
+                    }),
+                ],
+            });
+            derived_scalars.push(ScalarItem {
+                scalar: coalesced_scalar,
+                index: coalesced_index,
+            });
+
+            let coalesced_binding = ColumnBindingBuilder::new(
+                join_key_name.clone(),
+                coalesced_index,
+                left_column.data_type.clone(),
+                Visibility::Visible,
+            )
+            .case_sensitive(self.name_resolution_ctx.unquoted_ident_case_sensitive)
+            .build();
+
+            bind_context.columns[left_pos].visibility = Visibility::UnqualifiedWildcardInVisible;
+            bind_context.columns.insert(left_pos, coalesced_binding);
+        }
+
+        Ok(derived_scalars)
     }
 
     // Wrap nullable types for not nullable columns.
