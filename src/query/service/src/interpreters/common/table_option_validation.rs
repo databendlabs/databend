@@ -41,6 +41,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
@@ -76,6 +77,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
+    r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
     r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
     r.insert(OPT_KEY_STORAGE_FORMAT);
@@ -223,6 +225,15 @@ pub fn is_valid_bloom_index_columns(
         BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
     }
     Ok(())
+}
+
+pub fn is_valid_bloom_index_type(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    is_valid_option_of_type::<databend_storages_common_index::BloomIndexType>(
+        options,
+        OPT_KEY_BLOOM_INDEX_TYPE,
+    )
 }
 
 pub fn is_valid_approx_distinct_columns(

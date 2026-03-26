@@ -431,8 +431,12 @@ mod tests {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
         let (_, field) = schema.column_with_name("y").unwrap();
         let bloom_columns_map = BTreeMap::from([(0usize, field.clone())]);
-        let mut builder =
-            BloomIndexBuilder::create(FunctionContext::default(), bloom_columns_map, &[])?;
+        let mut builder = BloomIndexBuilder::create(
+            FunctionContext::default(),
+            BloomIndexType::default(),
+            bloom_columns_map,
+            &[],
+        )?;
         builder.add_block(block)?;
         let bloom_index = builder.finalize()?.unwrap();
 

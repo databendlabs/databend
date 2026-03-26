@@ -684,6 +684,7 @@ impl FuseTable {
                 table_schema: table_schema.clone(),
                 table_dal: dal.clone(),
                 storage_format,
+                bloom_index_type: self.bloom_index_type(),
                 bloom_columns_map,
                 ngram_args: ngram_args.clone(),
             })

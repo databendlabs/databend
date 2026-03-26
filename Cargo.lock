@@ -6200,6 +6200,7 @@ dependencies = [
  "tantivy-fst",
  "thiserror 1.0.69",
  "unicase",
+ "xorf",
  "xorfilter-rs",
  "zerocopy",
 ]
@@ -19154,6 +19155,16 @@ name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
+
+[[package]]
+name = "xorf"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45e820b97864028eb5069aabf2d90ad7bc279a0ed0292f1306451ce4b91adc13"
+dependencies = [
+ "libm",
+ "rand 0.8.5",
+]
 
 [[package]]
 name = "xorfilter-rs"
