@@ -108,8 +108,7 @@ impl FilterBuilder for BinaryFuse32Builder {
     fn build(&mut self) -> Result<Self::Filter, Self::Error> {
         let digests = std::mem::take(&mut self.digests);
         let len = digests.len();
-        let mut digests = digests.into_iter().collect::<Vec<_>>();
-        digests.sort_unstable();
+        let digests = digests.into_iter().collect::<Vec<_>>();
         let filter =
             BinaryFuse32::try_from(digests.as_slice()).map_err(BinaryFuse32BuildingError::new)?;
 
