@@ -40,7 +40,7 @@ use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 
 pub(super) fn out_of_limit_error(error: impl Debug) -> ErrorCode {
-    ErrorCode::AbortedQuery(format!("{error:?}"))
+    ErrorCode::MemoryExceedsLimit(format!("{error:?}"))
 }
 
 pub enum ExecutorTask {
@@ -285,11 +285,11 @@ mod tests {
     use super::out_of_limit_error;
 
     #[test]
-    fn test_out_of_limit_error_uses_aborted_query() {
+    fn test_out_of_limit_error_uses_memory_exceeds_limit() {
         let err = out_of_limit_error(OutOfLimit::new(100, 50));
 
-        assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
-        assert_eq!(err.name(), "AbortedQuery");
+        assert_eq!(err.code(), ErrorCode::MEMORY_EXCEEDS_LIMIT);
+        assert_eq!(err.name(), "MemoryExceedsLimit");
         assert!(err.message().contains("memory usage"));
         assert!(err.message().contains("exceeds limit"));
     }

@@ -219,7 +219,7 @@ build_exceptions! {
     JiffError(2513),
 }
 
-// Cluster and Resource Management Errors [1035, 1045, 1082, 1101, 2401-2410]
+// Cluster and Resource Management Errors [1035, 1045, 1082, 1101, 2401-2411]
 build_exceptions! {
     /// Cluster node not found
     NotFoundClusterNode(1035),
@@ -249,6 +249,8 @@ build_exceptions! {
     WarehouseClusterAlreadyExists(2409),
     /// Warehouse cluster not exists
     WarehouseClusterNotExists(2410),
+    /// Memory usage exceeds configured limit
+    MemoryExceedsLimit(2411),
 }
 
 // Table Structure and Operation Errors [1102-1103, 1106-1111, 1113-1118, 1121-1122, 1130-1133]
@@ -770,5 +772,13 @@ mod tests {
 
         assert_eq!(err.code(), 1104);
         assert_eq!(err.name(), "UnwindError");
+    }
+
+    #[test]
+    fn test_memory_exceeds_limit_keeps_code_2411() {
+        let err = ErrorCode::MemoryExceedsLimit("memory usage exceeds limit");
+
+        assert_eq!(err.code(), 2411);
+        assert_eq!(err.name(), "MemoryExceedsLimit");
     }
 }
