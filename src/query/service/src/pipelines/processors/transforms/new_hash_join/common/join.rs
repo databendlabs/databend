@@ -16,6 +16,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterExecutor;
 
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 
@@ -87,5 +88,44 @@ impl Join for FinishedJoin {
 
     fn probe_block(&mut self, _: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
         Err(ErrorCode::Internal("Join is finished"))
+    }
+}
+
+pub struct InnerHashJoinFilterStream<'a> {
+    inner: Box<dyn JoinStream + 'a>,
+    filter_executor: &'a mut FilterExecutor,
+}
+
+impl<'a> InnerHashJoinFilterStream<'a> {
+    pub fn create(
+        inner: Box<dyn JoinStream + 'a>,
+        filter_executor: &'a mut FilterExecutor,
+    ) -> Box<dyn JoinStream + 'a> {
+        Box::new(InnerHashJoinFilterStream {
+            inner,
+            filter_executor,
+        })
+    }
+}
+
+impl<'a> JoinStream for InnerHashJoinFilterStream<'a> {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        loop {
+            let Some(data_block) = self.inner.next()? else {
+                return Ok(None);
+            };
+
+            if data_block.is_empty() {
+                continue;
+            }
+
+            let data_block = self.filter_executor.filter(data_block)?;
+
+            if data_block.is_empty() {
+                continue;
+            }
+
+            return Ok(Some(data_block));
+        }
     }
 }

@@ -14,7 +14,6 @@
 
 mod chunk_accumulator;
 mod compact_hash_table;
-mod compact_probe_stream;
 mod inner_join;
 mod left_join;
 mod left_join_anti;
@@ -23,7 +22,6 @@ mod partitioned_build;
 mod right_join;
 mod right_join_anti;
 mod right_join_semi;
-#[allow(dead_code)]
 mod transform_hash_join;
 
 pub use compact_hash_table::CompactJoinHashTable;
@@ -32,7 +30,7 @@ pub use inner_join::PartitionedInnerJoin;
 pub use left_join::PartitionedLeftJoin;
 pub use left_join_anti::PartitionedLeftAntiJoin;
 pub use left_join_semi::PartitionedLeftSemiJoin;
-pub use partitioned_build::PartitionedBuild;
+pub use partitioned_build::PartitionedHashJoinState;
 pub use right_join::PartitionedRightJoin;
 pub use right_join_anti::PartitionedRightAntiJoin;
 pub use right_join_semi::PartitionedRightSemiJoin;

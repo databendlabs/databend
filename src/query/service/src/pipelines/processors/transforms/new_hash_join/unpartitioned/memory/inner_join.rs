@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::types::NullableColumn;
@@ -37,6 +36,7 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::EmptyJoinStream;
+use crate::pipelines::processors::transforms::new_hash_join::common::join::InnerHashJoinFilterStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::probe_stream::ProbeStream;
@@ -272,45 +272,6 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
             }
 
             return Ok(Some(result_block));
-        }
-    }
-}
-
-pub(super) struct InnerHashJoinFilterStream<'a> {
-    inner: Box<dyn JoinStream + 'a>,
-    filter_executor: &'a mut FilterExecutor,
-}
-
-impl<'a> InnerHashJoinFilterStream<'a> {
-    pub fn create(
-        inner: Box<dyn JoinStream + 'a>,
-        filter_executor: &'a mut FilterExecutor,
-    ) -> Box<dyn JoinStream + 'a> {
-        Box::new(InnerHashJoinFilterStream {
-            inner,
-            filter_executor,
-        })
-    }
-}
-
-impl<'a> JoinStream for InnerHashJoinFilterStream<'a> {
-    fn next(&mut self) -> Result<Option<DataBlock>> {
-        loop {
-            let Some(data_block) = self.inner.next()? else {
-                return Ok(None);
-            };
-
-            if data_block.is_empty() {
-                continue;
-            }
-
-            let data_block = self.filter_executor.filter(data_block)?;
-
-            if data_block.is_empty() {
-                continue;
-            }
-
-            return Ok(Some(data_block));
         }
     }
 }

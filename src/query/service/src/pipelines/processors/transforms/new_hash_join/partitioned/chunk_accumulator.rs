@@ -48,11 +48,6 @@ impl FixedSizeChunkAccumulator {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.builder_rows = 0;
-        self.builders = vec![];
-    }
-
     fn ensure_builders(&mut self, block: &DataBlock) {
         if self.builders.is_empty() {
             self.builders = block
@@ -180,14 +175,6 @@ mod tests {
     #[test]
     fn test_flush_empty() {
         let mut acc = FixedSizeChunkAccumulator::new(4);
-        assert!(acc.finalize().is_none());
-    }
-
-    #[test]
-    fn test_reset() {
-        let mut acc = FixedSizeChunkAccumulator::new(4);
-        acc.accumulate(make_int_block(vec![1, 2, 3]));
-        acc.reset();
         assert!(acc.finalize().is_none());
     }
 

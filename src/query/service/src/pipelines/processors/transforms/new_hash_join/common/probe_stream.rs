@@ -61,6 +61,6 @@ impl ProbedRows {
     }
 }
 
-pub trait ProbeStream {
+pub trait ProbeStream: Send + Sync {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()>;
 }

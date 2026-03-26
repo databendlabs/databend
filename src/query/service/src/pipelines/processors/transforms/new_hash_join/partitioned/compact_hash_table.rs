@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::bitmap::Bitmap;
+
 /// Index 0 is a sentinel (empty/chain-end). Actual rows are indexed from 1.
 /// Memory per row: 4 bytes (next chain) vs current ~32 bytes (pointer-based entry).
 ///
@@ -57,7 +59,7 @@ pub struct CompactJoinHashTable<I: RowIndex = u32> {
     /// Bucket array: first[hash & mask] = first row index (1-based)
     first: Vec<I>,
     /// Chain array: next[row_index] = next row in same bucket (0 = end)
-    next: Vec<I>,
+    pub next: Vec<I>,
     /// Bucket count minus one, for masking
     bucket_mask: usize,
 }
@@ -138,5 +140,55 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
 
         let target = num_rows + (num_rows.saturating_sub(1)) / 7;
         target.next_power_of_two()
+    }
+
+    pub fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
+        let mut valids = None;
+
+        if let Some(bitmap) = bitmap {
+            if bitmap.null_count() == bitmap.len() {
+                hashes.iter_mut().for_each(|hash| {
+                    *hash = 0;
+                });
+                return 0;
+            } else if bitmap.null_count() > 0 {
+                valids = Some(bitmap);
+            }
+        }
+
+        let mut count = 0;
+
+        match valids {
+            Some(valids) => {
+                valids
+                    .iter()
+                    .zip(hashes.iter_mut())
+                    .for_each(|(valid, hash)| {
+                        if valid {
+                            let bucket = (*hash as usize) & self.bucket_mask;
+                            if self.first[bucket] != I::default() {
+                                *hash = self.first[bucket].to_usize() as u64;
+                                count += 1;
+                            } else {
+                                *hash = 0;
+                            }
+                        } else {
+                            *hash = 0;
+                        }
+                    });
+            }
+            None => {
+                hashes.iter_mut().for_each(|hash| {
+                    let bucket = (*hash as usize) & self.bucket_mask;
+                    if self.first[bucket] != I::default() {
+                        *hash = self.first[bucket].to_usize() as u64;
+                        count += 1;
+                    } else {
+                        *hash = 0;
+                    }
+                });
+            }
+        }
+        count
     }
 }

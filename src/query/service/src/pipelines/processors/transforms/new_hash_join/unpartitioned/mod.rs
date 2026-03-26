@@ -22,4 +22,5 @@ mod transform_hash_join;
 
 pub use hash_join_factory::HashJoinFactory;
 pub use memory::*;
+pub use performance::PerformanceContext;
 pub use transform_hash_join::TransformHashJoin;

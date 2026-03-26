@@ -21,10 +21,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use super::inner_join::result_block;
-use super::partitioned_build::PartitionedBuild;
+use super::partitioned_build::PartitionedHashJoinState;
+use super::partitioned_build::ProbeData;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::Join;
@@ -32,11 +31,14 @@ use crate::pipelines::processors::transforms::new_hash_join::common::join::JoinS
 use crate::pipelines::processors::transforms::new_hash_join::common::join::OneBlockJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::probe_stream::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::probe_stream::ProbedRows;
+use crate::pipelines::processors::transforms::new_hash_join::unpartitioned::memory::left_join::final_result_block;
+use crate::pipelines::processors::transforms::unpartitioned::PerformanceContext;
 
 pub struct PartitionedLeftAntiJoin {
-    build: PartitionedBuild,
-    filter_executor: Option<FilterExecutor>,
-    max_block_size: usize,
+    build: PartitionedHashJoinState,
+    desc: Arc<HashJoinDesc>,
+    function_ctx: Arc<FunctionContext>,
+    context: PerformanceContext,
 }
 
 impl PartitionedLeftAntiJoin {
@@ -46,88 +48,16 @@ impl PartitionedLeftAntiJoin {
         function_ctx: FunctionContext,
         max_block_size: usize,
     ) -> Self {
-        let filter_executor = desc.other_predicate.as_ref().map(|predicate| {
-            FilterExecutor::new(
-                predicate.clone(),
-                function_ctx.clone(),
-                max_block_size,
-                None,
-                &BUILTIN_FUNCTIONS,
-                false,
-            )
-        });
+        let context =
+            PerformanceContext::create(max_block_size, desc.clone(), function_ctx.clone());
+
+        let function_ctx = Arc::new(function_ctx);
+
         PartitionedLeftAntiJoin {
-            build: PartitionedBuild::create(method, desc, function_ctx),
-            filter_executor,
-            max_block_size,
-        }
-    }
-}
-struct PartitionedLeftAntiJoinStream<'a> {
-    probe_data_block: DataBlock,
-    build: &'a PartitionedBuild,
-    desc: Arc<HashJoinDesc>,
-    probe_stream: Box<dyn ProbeStream + Send + Sync + 'a>,
-    probed_rows: ProbedRows,
-    filter_executor: Option<&'a mut FilterExecutor>,
-    max_block_size: usize,
-    excluded: Vec<bool>,
-    probe_done: bool,
-}
-
-impl<'a> JoinStream for PartitionedLeftAntiJoinStream<'a> {
-    fn next(&mut self) -> Result<Option<DataBlock>> {
-        if self.probe_done {
-            return Ok(None);
-        }
-
-        loop {
-            self.probed_rows.clear();
-            self.probe_stream
-                .advance(&mut self.probed_rows, self.max_block_size)?;
-
-            if self.probed_rows.is_empty() {
-                self.probe_done = true;
-                let bitmap = Bitmap::from_trusted_len_iter(self.excluded.iter().map(|e| !e));
-                return match bitmap.true_count() {
-                    0 => Ok(None),
-                    _ => Ok(Some(
-                        self.probe_data_block.clone().filter_with_bitmap(&bitmap)?,
-                    )),
-                };
-            }
-
-            if self.probed_rows.matched_probe.is_empty() {
-                continue;
-            }
-
-            if let Some(filter) = self.filter_executor.as_mut() {
-                let num_matched = self.probed_rows.matched_probe.len();
-                let probe_block = match self.probe_data_block.num_columns() {
-                    0 => None,
-                    _ => Some(DataBlock::take(
-                        &self.probe_data_block,
-                        self.probed_rows.matched_probe.as_slice(),
-                    )?),
-                };
-                let build_block = self
-                    .build
-                    .gather_build_block(&self.probed_rows.matched_build);
-                let block = result_block(&self.desc, probe_block, build_block, num_matched);
-
-                let count = filter.select(&block)?;
-                if count > 0 {
-                    let true_sel = filter.true_selection();
-                    for &sel_idx in true_sel.iter().take(count) {
-                        let probe_idx = self.probed_rows.matched_probe[sel_idx as usize] as usize;
-                        self.excluded[probe_idx] = true;
-                    }
-                }
-            } else {
-                for &idx in &self.probed_rows.matched_probe {
-                    self.excluded[idx as usize] = true;
-                }
-            }
+            function_ctx: function_ctx.clone(),
+            build: PartitionedHashJoinState::create(method, desc.clone(), function_ctx),
+            desc,
+            context,
         }
     }
 }
@@ -147,28 +77,187 @@ impl Join for PartitionedLeftAntiJoin {
         }
 
         if self.build.num_rows == 0 {
-            let probe_projected = data.project(&self.build.desc.probe_projection);
+            let probe_projected = data.project(&self.desc.probe_projection);
             return Ok(Box::new(OneBlockJoinStream(Some(probe_projected))));
         }
 
         let num_probe_rows = data.num_rows();
-        let probe_stream = self.build.create_probe_matched(&data)?;
-        let probe_data_block = data.project(&self.build.desc.probe_projection);
+        let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
-        Ok(Box::new(PartitionedLeftAntiJoinStream {
-            probe_data_block,
-            build: &self.build,
-            desc: self.build.desc.clone(),
-            probe_stream,
-            probed_rows: ProbedRows::new(
-                Vec::with_capacity(self.max_block_size),
-                Vec::with_capacity(self.max_block_size),
-                Vec::with_capacity(self.max_block_size),
-            ),
-            filter_executor: self.filter_executor.as_mut(),
-            max_block_size: self.max_block_size,
-            excluded: vec![false; num_probe_rows],
-            probe_done: false,
-        }))
+        let mut keys = DataBlock::new(probe_keys, data.num_rows());
+        let valids = match self.desc.from_correlated_subquery {
+            true => None,
+            false => self.desc.build_valids_by_keys(&keys)?,
+        };
+
+        self.desc.remove_keys_nullable(&mut keys);
+        let probe_block = data.project(&self.desc.probe_projection);
+
+        let probe_data = ProbeData::new(keys, valids);
+        let probe_keys_stream = self.build.probe::<false>(probe_data)?;
+
+        match &mut self.context.filter_executor {
+            None => Ok(LeftAntiHashJoinStream::create(
+                probe_block,
+                probe_keys_stream,
+                &mut self.context.probe_result,
+            )),
+            Some(filter_executor) => Ok(LeftAntiFilterHashJoinStream::create(
+                probe_block,
+                &self.build,
+                probe_keys_stream,
+                self.desc.clone(),
+                &mut self.context.probe_result,
+                filter_executor,
+                num_probe_rows,
+            )),
+        }
+    }
+}
+
+struct LeftAntiHashJoinStream<'a> {
+    probe_data_block: Option<DataBlock>,
+    probe_keys_stream: Box<dyn ProbeStream + 'a>,
+    probed_rows: &'a mut ProbedRows,
+}
+
+impl<'a> LeftAntiHashJoinStream<'a> {
+    pub fn create(
+        probe_data_block: DataBlock,
+        probe_keys_stream: Box<dyn ProbeStream + 'a>,
+        probed_rows: &'a mut ProbedRows,
+    ) -> Box<dyn JoinStream + 'a> {
+        Box::new(LeftAntiHashJoinStream {
+            probed_rows,
+            probe_data_block: Some(probe_data_block),
+            probe_keys_stream,
+        })
+    }
+}
+
+impl<'a> JoinStream for LeftAntiHashJoinStream<'a> {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        let Some(probe_data_block) = self.probe_data_block.take() else {
+            return Ok(None);
+        };
+
+        let num_rows = probe_data_block.num_rows();
+        let mut selected = vec![false; num_rows];
+
+        loop {
+            self.probed_rows.clear();
+            let max_rows = self.probed_rows.matched_probe.capacity();
+            self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
+
+            if self.probed_rows.is_empty() {
+                let bitmap = Bitmap::from_trusted_len_iter(selected.into_iter());
+                return Ok(Some(probe_data_block.filter_with_bitmap(&bitmap)?));
+            }
+
+            for idx in &self.probed_rows.unmatched {
+                selected[*idx as usize] = true;
+            }
+        }
+    }
+}
+
+struct LeftAntiFilterHashJoinStream<'a> {
+    desc: Arc<HashJoinDesc>,
+    probe_data_block: Option<DataBlock>,
+    build: &'a PartitionedHashJoinState,
+    probe_keys_stream: Box<dyn ProbeStream + 'a>,
+    probed_rows: &'a mut ProbedRows,
+    filter_executor: &'a mut FilterExecutor,
+    selected: Vec<bool>,
+}
+
+impl<'a> LeftAntiFilterHashJoinStream<'a> {
+    pub fn create(
+        probe_data_block: DataBlock,
+        build: &'a PartitionedHashJoinState,
+        probe_keys_stream: Box<dyn ProbeStream + 'a>,
+        desc: Arc<HashJoinDesc>,
+        probed_rows: &'a mut ProbedRows,
+        filter_executor: &'a mut FilterExecutor,
+        num_probe_rows: usize,
+    ) -> Box<dyn JoinStream + 'a> {
+        Box::new(LeftAntiFilterHashJoinStream {
+            desc,
+            build,
+            probed_rows,
+            filter_executor,
+            probe_keys_stream,
+            probe_data_block: Some(probe_data_block),
+            selected: vec![true; num_probe_rows],
+        })
+    }
+}
+
+impl<'a> JoinStream for LeftAntiFilterHashJoinStream<'a> {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        let Some(probe_data_block) = self.probe_data_block.take() else {
+            return Ok(None);
+        };
+
+        loop {
+            self.probed_rows.clear();
+            let max_rows = self.probed_rows.matched_probe.capacity();
+            self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
+
+            if self.probed_rows.is_empty() {
+                break;
+            }
+
+            if self.probed_rows.is_all_unmatched() {
+                continue;
+            }
+
+            let probe_block = match probe_data_block.num_columns() {
+                0 => None,
+                _ => Some(DataBlock::take(
+                    &probe_data_block,
+                    self.probed_rows.matched_probe.as_slice(),
+                )?),
+            };
+
+            let build_block = match self.build.columns.is_empty() {
+                true => None,
+                false => {
+                    let row_ptrs = self.probed_rows.matched_build.as_slice();
+                    Some(DataBlock::take_column_vec(
+                        self.build.columns.as_slice(),
+                        self.build.column_types.as_slice(),
+                        row_ptrs,
+                    ))
+                }
+            };
+
+            let result_block = final_result_block(
+                &self.desc,
+                probe_block,
+                build_block,
+                self.probed_rows.matched_build.len(),
+            );
+
+            let selected_rows = self.filter_executor.select(&result_block)?;
+
+            if selected_rows == result_block.num_rows() {
+                for probe_idx in &self.probed_rows.matched_probe {
+                    self.selected[*probe_idx as usize] = false;
+                }
+            } else if selected_rows != 0 {
+                let selection = self.filter_executor.true_selection();
+                for idx in selection[..selected_rows].iter() {
+                    let idx = self.probed_rows.matched_probe[*idx as usize];
+                    self.selected[idx as usize] = false;
+                }
+            }
+        }
+
+        let bitmap = Bitmap::from_trusted_len_iter(self.selected.iter().copied());
+        match bitmap.true_count() {
+            0 => Ok(None),
+            _ => Ok(Some(probe_data_block.filter_with_bitmap(&bitmap)?)),
+        }
     }
 }

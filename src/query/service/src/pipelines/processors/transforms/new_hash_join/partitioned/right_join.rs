@@ -22,28 +22,30 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use super::compact_probe_stream::create_compact_probe_matched;
-use super::inner_join::result_block;
-use super::left_join::null_block;
-use super::partitioned_build::PartitionedBuild;
+use super::partitioned_build::PartitionedHashJoinState;
+use super::partitioned_build::ProbeData;
 use super::partitioned_build::flat_to_row_ptr;
 use crate::pipelines::processors::HashJoinDesc;
-use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::probe_stream::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::probe_stream::ProbedRows;
+use crate::pipelines::processors::transforms::new_hash_join::unpartitioned::memory::left_join::final_result_block;
+use crate::pipelines::processors::transforms::new_hash_join::unpartitioned::memory::left_join::null_block;
+use crate::pipelines::processors::transforms::unpartitioned::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_nullable_block;
 
 pub struct PartitionedRightJoin {
-    build: PartitionedBuild,
-    filter_executor: Option<FilterExecutor>,
+    build: PartitionedHashJoinState,
     max_block_size: usize,
+    desc: Arc<HashJoinDesc>,
+    function_ctx: Arc<FunctionContext>,
+    context: PerformanceContext,
     finished: bool,
 }
+
 impl PartitionedRightJoin {
     pub fn create(
         method: HashMethodKind,
@@ -51,62 +53,144 @@ impl PartitionedRightJoin {
         function_ctx: FunctionContext,
         max_block_size: usize,
     ) -> Self {
-        let filter_executor = desc.other_predicate.as_ref().map(|predicate| {
-            FilterExecutor::new(
-                predicate.clone(),
-                function_ctx.clone(),
-                max_block_size,
-                None,
-                &BUILTIN_FUNCTIONS,
-                false,
-            )
-        });
+        let context =
+            PerformanceContext::create(max_block_size, desc.clone(), function_ctx.clone());
+
+        let function_ctx = Arc::new(function_ctx);
+
         PartitionedRightJoin {
-            build: PartitionedBuild::create_keep_null_keys(method, desc, function_ctx),
-            filter_executor,
+            function_ctx: function_ctx.clone(),
+            build: PartitionedHashJoinState::create(method, desc.clone(), function_ctx),
             max_block_size,
+            desc,
+            context,
             finished: false,
         }
     }
 }
 
-struct PartitionedRightJoinStream<'a> {
-    desc: Arc<HashJoinDesc>,
-    probe_data_block: DataBlock,
-    columns: &'a Vec<ColumnVec>,
-    column_types: &'a Vec<DataType>,
-    visited: &'a mut Vec<u8>,
-    probe_stream: Box<dyn ProbeStream + Send + Sync + 'a>,
-    probed_rows: ProbedRows,
-    filter_executor: Option<&'a mut FilterExecutor>,
-    max_block_size: usize,
-}
+impl Join for PartitionedRightJoin {
+    fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
+        self.build.add_block(data)
+    }
 
-impl<'a> PartitionedRightJoinStream<'a> {
-    fn gather_build_block(&self, row_ptrs: &[RowPtr]) -> Option<DataBlock> {
-        if self.columns.is_empty() {
-            return None;
+    fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+        let progress = self.build.final_build()?;
+        if progress.is_none() {
+            self.build.init_visited();
         }
-        Some(DataBlock::take_column_vec(
-            self.columns,
-            self.column_types,
-            row_ptrs,
-        ))
+        Ok(progress)
+    }
+
+    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
+        if data.is_empty() || self.build.num_rows == 0 {
+            return Ok(Box::new(EmptyJoinStream));
+        }
+
+        let mut probe_keys = {
+            let nullable_block = wrap_nullable_block(&data);
+            let probe_keys = self.desc.probe_key(&nullable_block, &self.function_ctx)?;
+            DataBlock::new(probe_keys, data.num_rows())
+        };
+
+        let valids = self.desc.build_valids_by_keys(&probe_keys)?;
+
+        self.desc.remove_keys_nullable(&mut probe_keys);
+        let probe_block = data.project(&self.desc.probe_projection);
+
+        let probe_data = ProbeData::new(probe_keys, valids);
+        let probe_keys_stream = self.build.probe::<true>(probe_data)?;
+
+        match self.context.filter_executor.as_mut() {
+            None => Ok(OuterRightHashJoinStream::<false>::create(
+                probe_block,
+                &self.build,
+                probe_keys_stream,
+                self.desc.clone(),
+                &mut self.context.probe_result,
+                None,
+            )),
+            Some(filter_executor) => Ok(OuterRightHashJoinStream::<true>::create(
+                probe_block,
+                &self.build,
+                probe_keys_stream,
+                self.desc.clone(),
+                &mut self.context.probe_result,
+                Some(filter_executor),
+            )),
+        }
+    }
+
+    fn final_probe(&mut self) -> Result<Option<Box<dyn JoinStream + '_>>> {
+        if self.finished || self.build.num_rows == 0 {
+            return Ok(None);
+        }
+        self.finished = true;
+
+        let mut probe_types = Vec::new();
+        for (i, field) in self.desc.probe_schema.fields().iter().enumerate() {
+            if self.desc.probe_projection.contains(&i) {
+                probe_types.push(field.data_type().clone());
+            }
+        }
+
+        Ok(Some(Box::new(PartitionedRightFinalStream {
+            columns: &self.build.columns,
+            column_types: &self.build.column_types,
+            visited: &self.build.visited,
+            num_rows: self.build.num_rows,
+            scan_idx: 1,
+            max_block_size: self.max_block_size,
+            desc: self.desc.clone(),
+            probe_types,
+        })))
     }
 }
 
-impl<'a> JoinStream for PartitionedRightJoinStream<'a> {
+struct OuterRightHashJoinStream<'a, const CONJUNCT: bool> {
+    desc: Arc<HashJoinDesc>,
+    probe_data_block: DataBlock,
+    build: &'a PartitionedHashJoinState,
+    probe_keys_stream: Box<dyn ProbeStream + 'a>,
+    probed_rows: &'a mut ProbedRows,
+    filter_executor: Option<&'a mut FilterExecutor>,
+}
+
+impl<'a, const CONJUNCT: bool> OuterRightHashJoinStream<'a, CONJUNCT> {
+    pub fn create(
+        probe_data_block: DataBlock,
+        build: &'a PartitionedHashJoinState,
+        probe_keys_stream: Box<dyn ProbeStream + 'a>,
+        desc: Arc<HashJoinDesc>,
+        probed_rows: &'a mut ProbedRows,
+        filter_executor: Option<&'a mut FilterExecutor>,
+    ) -> Box<dyn JoinStream + 'a> {
+        Box::new(OuterRightHashJoinStream::<'a, CONJUNCT> {
+            desc,
+            build,
+            probed_rows,
+            probe_data_block,
+            probe_keys_stream,
+            filter_executor,
+        })
+    }
+}
+
+impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJUNCT> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         loop {
             self.probed_rows.clear();
-            self.probe_stream
-                .advance(&mut self.probed_rows, self.max_block_size)?;
+            let max_rows = self.probed_rows.matched_probe.capacity();
+            self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
 
             if self.probed_rows.is_empty() {
                 return Ok(None);
             }
 
-            let num_matched = self.probed_rows.matched_probe.len();
+            if self.probed_rows.matched_probe.is_empty() {
+                continue;
+            }
+
             let probe_block = match self.probe_data_block.num_columns() {
                 0 => None,
                 _ => Some(wrap_nullable_block(&DataBlock::take(
@@ -114,40 +198,77 @@ impl<'a> JoinStream for PartitionedRightJoinStream<'a> {
                     self.probed_rows.matched_probe.as_slice(),
                 )?)),
             };
-            let build_block = self.gather_build_block(&self.probed_rows.matched_build);
 
-            let mut block = result_block(&self.desc, probe_block, build_block, num_matched);
+            let build_block = match self.build.columns.is_empty() {
+                true => None,
+                false => {
+                    let row_ptrs = self.probed_rows.matched_build.as_slice();
+                    Some(DataBlock::take_column_vec(
+                        self.build.columns.as_slice(),
+                        self.build.column_types.as_slice(),
+                        row_ptrs,
+                    ))
+                }
+            };
 
-            if let Some(filter) = self.filter_executor.as_mut() {
-                let count = filter.select(&block)?;
-                if count == 0 {
-                    continue;
-                }
-                // Mark visited only for rows that pass filter
-                let true_sel = filter.true_selection();
-                for &sel_idx in true_sel.iter().take(count) {
-                    let row_ptr = &self.probed_rows.matched_build[sel_idx as usize];
-                    let flat_idx = (row_ptr.chunk_index as usize)
-                        * super::partitioned_build::CHUNK_SIZE
-                        + row_ptr.row_index as usize
-                        + 1;
-                    self.visited[flat_idx] = 1;
-                }
-                let origin_rows = block.num_rows();
-                block = filter.take(block, origin_rows, count)?;
-            } else {
-                // Mark all matched as visited
+            let data_block = final_result_block(
+                &self.desc,
+                probe_block,
+                build_block,
+                self.probed_rows.matched_build.len(),
+            );
+
+            if !CONJUNCT {
                 for row_ptr in &self.probed_rows.matched_build {
                     let flat_idx = (row_ptr.chunk_index as usize)
                         * super::partitioned_build::CHUNK_SIZE
                         + row_ptr.row_index as usize
                         + 1;
-                    self.visited[flat_idx] = 1;
+                    self.build.visited.as_ptr();
+                    unsafe {
+                        *self.build.visited.as_ptr().add(flat_idx).cast_mut() = 1;
+                    }
                 }
+
+                return Ok(Some(data_block));
             }
 
-            if !block.is_empty() {
-                return Ok(Some(block));
+            let Some(filter_executor) = self.filter_executor.as_mut() else {
+                for row_ptr in &self.probed_rows.matched_build {
+                    let flat_idx = (row_ptr.chunk_index as usize)
+                        * super::partitioned_build::CHUNK_SIZE
+                        + row_ptr.row_index as usize
+                        + 1;
+                    unsafe {
+                        *self.build.visited.as_ptr().add(flat_idx).cast_mut() = 1;
+                    }
+                }
+
+                return Ok(Some(data_block));
+            };
+
+            if !data_block.is_empty() {
+                let res_rows = filter_executor.select(&data_block)?;
+
+                if res_rows == 0 {
+                    continue;
+                }
+
+                let true_sel = filter_executor.true_selection();
+
+                for idx in true_sel.iter().take(res_rows) {
+                    let row_ptr = self.probed_rows.matched_build[*idx as usize];
+                    let flat_idx = (row_ptr.chunk_index as usize)
+                        * super::partitioned_build::CHUNK_SIZE
+                        + row_ptr.row_index as usize
+                        + 1;
+                    unsafe {
+                        *self.build.visited.as_ptr().add(flat_idx).cast_mut() = 1;
+                    }
+                }
+
+                let num_rows = data_block.num_rows();
+                return Ok(Some(filter_executor.take(data_block, num_rows, res_rows)?));
             }
         }
     }
@@ -189,83 +310,11 @@ impl<'a> JoinStream for PartitionedRightFinalStream<'a> {
             ))
         };
 
-        Ok(Some(result_block(
+        Ok(Some(final_result_block(
             &self.desc,
             probe_block,
             build_block,
             row_ptrs.len(),
         )))
-    }
-}
-
-impl Join for PartitionedRightJoin {
-    fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        self.build.add_block(data)
-    }
-
-    fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        let progress = self.build.final_build()?;
-        if progress.is_none() {
-            self.build.init_visited();
-        }
-        Ok(progress)
-    }
-
-    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
-        if data.is_empty() || self.build.num_rows == 0 {
-            return Ok(Box::new(EmptyJoinStream));
-        }
-
-        let probe_stream = create_compact_probe_matched(
-            &self.build.hash_table,
-            &self.build.build_keys_states,
-            &self.build.method,
-            &self.build.desc,
-            &self.build.function_ctx,
-            &data,
-        )?;
-        let probe_data_block = data.project(&self.build.desc.probe_projection);
-
-        Ok(Box::new(PartitionedRightJoinStream {
-            desc: self.build.desc.clone(),
-            probe_data_block,
-            columns: &self.build.columns,
-            column_types: &self.build.column_types,
-            visited: &mut self.build.visited,
-            probe_stream,
-            probed_rows: ProbedRows::new(
-                Vec::with_capacity(self.max_block_size),
-                Vec::with_capacity(self.max_block_size),
-                Vec::with_capacity(self.max_block_size),
-            ),
-            filter_executor: self.filter_executor.as_mut(),
-            max_block_size: self.max_block_size,
-        }))
-    }
-
-    fn final_probe(&mut self) -> Result<Option<Box<dyn JoinStream + '_>>> {
-        if self.finished || self.build.num_rows == 0 {
-            return Ok(None);
-        }
-        self.finished = true;
-
-        let desc = self.build.desc.clone();
-        let mut probe_types = Vec::new();
-        for (i, field) in desc.probe_schema.fields().iter().enumerate() {
-            if desc.probe_projection.contains(&i) {
-                probe_types.push(field.data_type().clone());
-            }
-        }
-
-        Ok(Some(Box::new(PartitionedRightFinalStream {
-            columns: &self.build.columns,
-            column_types: &self.build.column_types,
-            visited: &self.build.visited,
-            num_rows: self.build.num_rows,
-            scan_idx: 1,
-            max_block_size: self.max_block_size,
-            desc,
-            probe_types,
-        })))
     }
 }
