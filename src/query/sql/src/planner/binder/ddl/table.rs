@@ -1163,20 +1163,8 @@ impl Binder {
                     .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
-                let column_name =
-                    normalize_identifier(&column.name, &self.name_resolution_ctx).name;
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
-                    if *if_not_exists && schema.index_of(&column_name).is_ok() {
-                        (
-                            schema.field_with_name(&column_name)?.clone(),
-                            String::new(),
-                            true,
-                            false,
-                            false,
-                        )
-                    } else {
-                        self.analyze_add_column(column, schema.clone()).await?
-                    };
+                    self.analyze_add_column(column, schema.clone()).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(

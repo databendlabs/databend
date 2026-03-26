@@ -350,3 +350,31 @@ async fn test_fuse_table_add_column_if_not_exists() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_table_add_column_if_not_exists_validates_after_column() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
+    let db_name = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {}.{} (a INT, b STRING)",
+            db_name, table_name
+        ))
+        .await?;
+
+    let err = fixture
+        .execute_command(&format!(
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS b STRING AFTER missing_col",
+            db_name, table_name
+        ))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), 1006);
+    assert!(err.message().contains("missing_col"));
+
+    Ok(())
+}

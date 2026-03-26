@@ -103,16 +103,6 @@ impl Interpreter for AddTableColumnInterpreter {
                 &self.plan.database, &self.plan.table
             )));
         }
-        if self.plan.if_not_exists
-            && table_info
-                .meta
-                .schema
-                .index_of(self.plan.field.name())
-                .is_ok()
-        {
-            return Ok(PipelineBuildResult::create());
-        }
-
         let field = self.plan.field.clone();
         if field.computed_expr().is_some() {
             LicenseManagerSwitch::instance()
@@ -141,6 +131,15 @@ impl Interpreter for AddTableColumnInterpreter {
             AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
             AddColumnOption::End => table_info.meta.schema.num_fields(),
         };
+        if self.plan.if_not_exists
+            && table_info
+                .meta
+                .schema
+                .index_of(self.plan.field.name())
+                .is_ok()
+        {
+            return Ok(PipelineBuildResult::create());
+        }
         table_info
             .meta
             .add_column(&field, &self.plan.comment, index)?;
