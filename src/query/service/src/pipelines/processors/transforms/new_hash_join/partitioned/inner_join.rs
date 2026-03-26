@@ -56,7 +56,6 @@ impl PartitionedInnerJoin {
         PartitionedInnerJoin {
             function_ctx: function_ctx.clone(),
             build: PartitionedHashJoinState::create(method, desc.clone(), function_ctx),
-            max_block_size,
             desc,
             context,
         }
@@ -65,7 +64,7 @@ impl PartitionedInnerJoin {
 
 impl Join for PartitionedInnerJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        self.build.add_block(data)
+        self.build.add_block::<false>(data)
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {

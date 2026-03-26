@@ -25,8 +25,8 @@ use databend_common_expression::types::DataType;
 
 use super::partitioned_build::PartitionedHashJoinState;
 use super::partitioned_build::ProbeData;
-use super::partitioned_build::flat_to_row_ptr;
 use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::JoinStream;
@@ -69,15 +69,11 @@ impl PartitionedRightSemiJoin {
 
 impl Join for PartitionedRightSemiJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        self.build.add_block(data)
+        self.build.add_block::<true>(data)
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        let progress = self.build.final_build()?;
-        if progress.is_none() {
-            self.build.init_visited();
-        }
-        Ok(progress)
+        self.build.final_build()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
@@ -125,8 +121,8 @@ impl Join for PartitionedRightSemiJoin {
             columns: &self.build.columns,
             column_types: &self.build.column_types,
             visited: &self.build.visited,
-            num_rows: self.build.num_rows,
-            scan_idx: 1,
+            chunk_idx: 0,
+            row_idx: 0,
             max_block_size: self.max_block_size,
         })))
     }
@@ -178,12 +174,11 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
 
             if !CONJUNCT {
                 for row_ptr in &self.probed_rows.matched_build {
-                    let flat_idx = (row_ptr.chunk_index as usize)
-                        * super::partitioned_build::CHUNK_SIZE
-                        + row_ptr.row_index as usize
-                        + 1;
                     unsafe {
-                        *self.build.visited.as_ptr().add(flat_idx).cast_mut() = 1;
+                        *self.build.visited[row_ptr.chunk_index as usize]
+                            .as_ptr()
+                            .add(row_ptr.row_index as usize)
+                            .cast_mut() = 1;
                     }
                 }
                 continue;
@@ -191,12 +186,11 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
 
             let Some(filter_executor) = self.filter_executor.as_mut() else {
                 for row_ptr in &self.probed_rows.matched_build {
-                    let flat_idx = (row_ptr.chunk_index as usize)
-                        * super::partitioned_build::CHUNK_SIZE
-                        + row_ptr.row_index as usize
-                        + 1;
                     unsafe {
-                        *self.build.visited.as_ptr().add(flat_idx).cast_mut() = 1;
+                        *self.build.visited[row_ptr.chunk_index as usize]
+                            .as_ptr()
+                            .add(row_ptr.row_index as usize)
+                            .cast_mut() = 1;
                     }
                 }
                 continue;
@@ -240,12 +234,11 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
 
                 for idx in true_sel.iter().take(result_count) {
                     let row_ptr = self.probed_rows.matched_build[*idx as usize];
-                    let flat_idx = (row_ptr.chunk_index as usize)
-                        * super::partitioned_build::CHUNK_SIZE
-                        + row_ptr.row_index as usize
-                        + 1;
                     unsafe {
-                        *self.build.visited.as_ptr().add(flat_idx).cast_mut() = 1;
+                        *self.build.visited[row_ptr.chunk_index as usize]
+                            .as_ptr()
+                            .add(row_ptr.row_index as usize)
+                            .cast_mut() = 1;
                     }
                 }
             }
@@ -256,20 +249,30 @@ impl<'a, const CONJUNCT: bool> JoinStream for SemiRightHashJoinStream<'a, CONJUN
 struct PartitionedRightSemiFinalStream<'a> {
     columns: &'a Vec<ColumnVec>,
     column_types: &'a Vec<DataType>,
-    visited: &'a [u8],
-    num_rows: usize,
-    scan_idx: usize,
+    visited: &'a Vec<Vec<u8>>,
+    chunk_idx: usize,
+    row_idx: usize,
     max_block_size: usize,
 }
 
 impl<'a> JoinStream for PartitionedRightSemiFinalStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         let mut row_ptrs = Vec::with_capacity(self.max_block_size);
-        while self.scan_idx <= self.num_rows && row_ptrs.len() < self.max_block_size {
-            if self.visited[self.scan_idx] != 0 {
-                row_ptrs.push(flat_to_row_ptr(self.scan_idx));
+        while self.chunk_idx < self.visited.len() && row_ptrs.len() < self.max_block_size {
+            let chunk = &self.visited[self.chunk_idx];
+            while self.row_idx < chunk.len() && row_ptrs.len() < self.max_block_size {
+                if chunk[self.row_idx] != 0 {
+                    row_ptrs.push(RowPtr {
+                        chunk_index: self.chunk_idx as u32,
+                        row_index: self.row_idx as u32,
+                    });
+                }
+                self.row_idx += 1;
             }
-            self.scan_idx += 1;
+            if self.row_idx >= chunk.len() {
+                self.chunk_idx += 1;
+                self.row_idx = 0;
+            }
         }
 
         if row_ptrs.is_empty() {

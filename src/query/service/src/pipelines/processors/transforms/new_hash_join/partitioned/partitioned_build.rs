@@ -25,13 +25,11 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FixedKey;
-use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::KeysState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -102,6 +100,20 @@ pub enum BuildKeysStates {
 }
 
 impl BuildKeysStates {
+    pub fn get(&self, idx: usize) -> KeysState {
+        match self {
+            BuildKeysStates::UInt8(v) => u8::upcast(v[idx].clone()),
+            BuildKeysStates::UInt16(v) => u16::upcast(v[idx].clone()),
+            BuildKeysStates::UInt32(v) => u32::upcast(v[idx].clone()),
+            BuildKeysStates::UInt64(v) => u64::upcast(v[idx].clone()),
+            BuildKeysStates::UInt128(v) => u128::upcast(v[idx].clone()),
+            BuildKeysStates::UInt256(v) => u256::upcast(v[idx].clone()),
+            BuildKeysStates::Binary(v) => KeysState::Column(Column::Binary(v[idx].clone())),
+        }
+    }
+}
+
+impl BuildKeysStates {
     pub fn new(method: &HashMethodKind) -> Self {
         match method {
             HashMethodKind::Serializer(_) => BuildKeysStates::Binary(vec![]),
@@ -121,7 +133,6 @@ pub struct PartitionedHashJoinState {
     pub chunks: Vec<DataBlock>,
     pub method: HashMethodKind,
     pub build_keys_states: BuildKeysStates,
-    pub chunk_keys_states: Vec<KeysState>,
     pub hash_table: CompactJoinHashTable<u32>,
 
     pub columns: Vec<ColumnVec>,
@@ -130,19 +141,11 @@ pub struct PartitionedHashJoinState {
     pub num_rows: usize,
     pub build_block_idx: usize,
 
-    pub visited: Vec<u8>,
+    pub visited: Vec<Vec<u8>>,
     pub desc: Arc<HashJoinDesc>,
     pub function_ctx: Arc<FunctionContext>,
 
-    /// When true, NULL build keys are kept in the data (not filtered out).
-    /// Required for RIGHT and RIGHT ANTI joins where unmatched build rows
-    /// (including those with NULL keys) must be output in final_probe.
-    keep_null_keys: bool,
-    /// Per-chunk validity bitmaps for build keys (only used when keep_null_keys is true).
-    /// Rows with invalid (NULL) keys are skipped during hash table insertion.
-    chunk_validities: Vec<Option<Bitmap>>,
-
-    accumulator: FixedSizeChunkAccumulator,
+    pub accumulator: FixedSizeChunkAccumulator,
 }
 
 impl PartitionedHashJoinState {
@@ -154,7 +157,6 @@ impl PartitionedHashJoinState {
         PartitionedHashJoinState {
             chunks: Vec::new(),
             build_keys_states: BuildKeysStates::new(&method),
-            chunk_keys_states: Vec::new(),
             hash_table: CompactJoinHashTable::new(0),
             columns: Vec::new(),
             column_types: Vec::new(),
@@ -162,59 +164,59 @@ impl PartitionedHashJoinState {
             method,
             desc,
             function_ctx,
-            visited: Vec::new(),
-            keep_null_keys: false,
-            chunk_validities: Vec::new(),
-            accumulator: FixedSizeChunkAccumulator::new(CHUNK_SIZE),
             build_block_idx: 0,
+            visited: vec![],
+            accumulator: FixedSizeChunkAccumulator::new(CHUNK_SIZE),
         }
     }
 
-    pub fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
+    pub fn add_block<const VISITED: bool>(&mut self, data: Option<DataBlock>) -> Result<()> {
         let Some(data_block) = data else {
             if let Some(chunk) = self.accumulator.finalize() {
-                self.ingest_chunk(chunk)?;
+                self.ingest_chunk::<VISITED>(chunk)?;
             }
 
             return Ok(());
         };
 
-        let data_block = self.prepare_data(data_block)?;
+        let data_block = self.prepare_data::<VISITED>(data_block)?;
         for ready_block in self.accumulator.accumulate(data_block) {
-            self.ingest_chunk(ready_block)?;
+            self.ingest_chunk::<VISITED>(ready_block)?;
         }
 
         Ok(())
     }
 
-    fn ingest_chunk(&mut self, chunk: DataBlock) -> Result<()> {
+    fn ingest_chunk<const VISITED: bool>(&mut self, chunk: DataBlock) -> Result<()> {
         let num_rows = chunk.num_rows();
         let mut columns = chunk.take_columns();
+        let mut data_columns = columns.split_off(self.desc.build_keys.len());
 
-        // Extract the trailing validity column if keep_null_keys is enabled.
-        let chunk_validity = if self.keep_null_keys {
-            let valid_entry = columns.pop().unwrap();
-            let col = valid_entry.to_column();
-            Some(BooleanType::try_downcast_column(&col).unwrap())
-        } else {
-            None
-        };
+        if VISITED && data_columns.len() != self.desc.probe_keys.len() {
+            let valid_entry = data_columns.pop().unwrap();
+            let valid_column = valid_entry.to_column();
+            let valid_bitmap = BooleanType::try_downcast_column(&valid_column).unwrap();
+            let keys_block = DataBlock::new(columns, num_rows);
+            columns = keys_block.filter_with_bitmap(&valid_bitmap)?.take_columns();
+        }
 
-        let data_columns = columns.split_off(self.desc.build_keys.len());
         let keys = ProjectedBlock::from(&columns);
 
         let keys_state = with_hash_method!(|T| match &self.method {
             HashMethodKind::T(method) => method.build_keys_state(keys, num_rows)?,
         });
 
+        if VISITED {
+            self.visited.push(vec![0u8; num_rows]);
+        }
+
         self.num_rows += num_rows;
-        self.chunk_keys_states.push(keys_state);
+        self.add_build_state(keys_state);
         self.chunks.push(DataBlock::new(data_columns, num_rows));
-        self.chunk_validities.push(chunk_validity);
         Ok(())
     }
 
-    fn prepare_data(&self, mut chunk: DataBlock) -> Result<DataBlock> {
+    fn prepare_data<const VISITED: bool>(&self, mut chunk: DataBlock) -> Result<DataBlock> {
         let num_rows = chunk.num_rows();
 
         let keys_entries = self.desc.build_key(&chunk, &self.function_ctx)?;
@@ -222,35 +224,26 @@ impl PartitionedHashJoinState {
 
         chunk = chunk.project(&self.desc.build_projection);
 
-        let validity = self.desc.build_valids_by_keys(&keys_block)?;
-        if !self.keep_null_keys {
-            if let Some(ref bitmap) = validity {
-                if bitmap.true_count() != bitmap.len() {
-                    keys_block = keys_block.filter_with_bitmap(bitmap)?;
-                    chunk = chunk.filter_with_bitmap(bitmap)?;
-                }
+        if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+            if bitmap.true_count() != bitmap.len() {
+                chunk = match VISITED {
+                    true => {
+                        let null_keys = chunk.clone().filter_with_bitmap(&(!(&bitmap)))?;
+                        let nonnull_keys = chunk.filter_with_bitmap(&bitmap)?;
+                        let mut chunk = DataBlock::concat(&[nonnull_keys, null_keys])?;
+                        chunk.add_column(Column::Boolean(bitmap));
+                        chunk
+                    }
+                    false => {
+                        keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+                        chunk.filter_with_bitmap(&bitmap)?
+                    }
+                };
             }
         }
 
         self.desc.remove_keys_nullable(&mut keys_block);
         keys_block.merge_block(chunk);
-
-        // When keeping NULL keys, append a boolean validity column so it flows
-        // through the accumulator and can be extracted in ingest_chunk.
-        if self.keep_null_keys {
-            let valid_col = match validity {
-                Some(bitmap) => {
-                    BlockEntry::from(BooleanType::from_data(bitmap.iter().collect::<Vec<bool>>()))
-                }
-                None => BlockEntry::new_const_column(
-                    DataType::Boolean,
-                    Scalar::Boolean(true),
-                    keys_block.num_rows(),
-                ),
-            };
-            keys_block.add_entry(valid_col);
-        }
-
         Ok(keys_block)
     }
 
@@ -283,21 +276,13 @@ impl PartitionedHashJoinState {
         }
 
         let row_offset = CHUNK_SIZE * self.build_block_idx + 1;
-        let keys_state = &self.chunk_keys_states[self.build_block_idx];
+        let keys_state = self.build_keys_states.get(self.build_block_idx);
 
         with_hash_method!(|T| match &self.method {
             HashMethodKind::T(method) => {
-                let mut hashes = Vec::new();
-                method.build_keys_hashes(keys_state, &mut hashes);
-                match &self.chunk_validities[self.build_block_idx] {
-                    Some(validity) => {
-                        self.hash_table
-                            .insert_chunk_with_validity(&hashes, row_offset, validity);
-                    }
-                    None => {
-                        self.hash_table.insert_chunk(&hashes, row_offset);
-                    }
-                }
+                let mut hashes = Vec::with_capacity(CHUNK_SIZE);
+                method.build_keys_hashes(&keys_state, &mut hashes);
+                self.hash_table.insert_chunk(&hashes, row_offset);
                 self.build_block_idx += 1;
             }
         });
@@ -306,37 +291,6 @@ impl PartitionedHashJoinState {
             true => Ok(None),
             false => Ok(Some(ProgressValues { rows: 0, bytes: 0 })),
         }
-    }
-
-    /// Initialize visited tracking for right-side join types.
-    pub fn init_visited(&mut self) {
-        self.visited = vec![0u8; self.num_rows + 1];
-    }
-
-    /// Mark a build row as visited (1-based index).
-    #[inline(always)]
-    pub fn set_visited(&mut self, row_index: usize) {
-        unsafe {
-            *self.visited.get_unchecked_mut(row_index) = 1;
-        }
-    }
-
-    /// Check if a build row has been visited (1-based index).
-    #[inline(always)]
-    pub fn is_visited(&self, row_index: usize) -> bool {
-        unsafe { *self.visited.get_unchecked(row_index) != 0 }
-    }
-
-    /// Gather build columns for the given row pointers.
-    pub fn gather_build_block(&self, row_ptrs: &[RowPtr]) -> Option<DataBlock> {
-        if self.columns.is_empty() {
-            return None;
-        }
-        Some(DataBlock::take_column_vec(
-            &self.columns,
-            &self.column_types,
-            row_ptrs,
-        ))
     }
 
     pub fn probe<'a, const MATCHED: bool>(
@@ -436,6 +390,37 @@ impl PartitionedHashJoinState {
             },
             _ => unreachable!(),
         })
+    }
+
+    fn add_build_state(&mut self, state: KeysState) {
+        match &mut self.build_keys_states {
+            BuildKeysStates::UInt8(states) => {
+                states.push(u8::downcast_owned(state).unwrap());
+            }
+            BuildKeysStates::UInt16(states) => {
+                states.push(u16::downcast_owned(state).unwrap());
+            }
+            BuildKeysStates::UInt32(states) => {
+                states.push(u32::downcast_owned(state).unwrap());
+            }
+            BuildKeysStates::UInt64(states) => {
+                states.push(u64::downcast_owned(state).unwrap());
+            }
+            BuildKeysStates::UInt128(states) => {
+                states.push(u128::downcast_owned(state).unwrap());
+            }
+            BuildKeysStates::UInt256(states) => {
+                states.push(u256::downcast_owned(state).unwrap());
+            }
+            BuildKeysStates::Binary(states) => match state {
+                KeysState::Column(Column::Binary(build_keys))
+                | KeysState::Column(Column::Variant(build_keys))
+                | KeysState::Column(Column::Bitmap(build_keys)) => {
+                    states.push(build_keys);
+                }
+                _ => unreachable!(),
+            },
+        };
     }
 }
 

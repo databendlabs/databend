@@ -63,7 +63,7 @@ impl PartitionedLeftSemiJoin {
 
 impl Join for PartitionedLeftSemiJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        self.build.add_block(data)
+        self.build.add_block::<false>(data)
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
