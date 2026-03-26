@@ -618,7 +618,7 @@ databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "
 databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.4.0" }
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260312.2.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "fc84214" }
+jsonb = { git = "https://github.com/b41sh/jsonb", rev = "2aed05f38a61f28164697a023f7be1fa23c5f44a" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.17" }
 openraft-rt = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.17" }
