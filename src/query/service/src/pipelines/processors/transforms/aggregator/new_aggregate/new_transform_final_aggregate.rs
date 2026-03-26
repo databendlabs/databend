@@ -268,13 +268,16 @@ impl NewTransformFinalAggregate {
 
     fn spill_out(&mut self) -> Result<()> {
         self.spilled_occurred = true;
-        if let HashTable::AggregateHashTable(v) = mem::take(&mut self.hashtable) {
+        if let HashTable::AggregateHashTable(mut v) = mem::take(&mut self.hashtable) {
             for (bucket, payload) in v.payload.payloads.into_iter().enumerate() {
                 if payload.len() == 0 {
                     continue;
                 }
 
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
+
+                // Drop payload before spilling to reduce peak memory.
+                drop(payload);
                 self.spiller.spill(bucket, data_block)?;
             }
         } else {
