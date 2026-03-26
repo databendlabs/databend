@@ -195,8 +195,10 @@ impl Filter for BinaryFuse32Filter {
         if offset + byte_len > buf.len() {
             return Err(eof());
         }
-        let fingerprints =
-            bytemuck::cast_slice::<u8, u32>(&buf[offset..offset + byte_len]).to_vec();
+        let fingerprints = buf[offset..offset + byte_len]
+            .chunks_exact(std::mem::size_of::<u32>())
+            .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+            .collect();
         offset += byte_len;
 
         Ok((

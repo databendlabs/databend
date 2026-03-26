@@ -95,13 +95,14 @@ impl BloomIndexState {
         ctx: Arc<dyn TableContext>,
         block: &DataBlock,
         location: Location,
+        bloom_index_type: BloomIndexType,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ngram_args: &[NgramArgs],
     ) -> Result<Option<Self>> {
         // write index
         let mut builder = BloomIndexBuilder::create(
             ctx.get_function_context()?,
-            BloomIndexType::default(),
+            bloom_index_type,
             bloom_columns_map,
             ngram_args,
         )?;

@@ -301,3 +301,21 @@ fn test_filter_impl_dispatch_binary_fuse32() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_binary_fuse32_decode_unaligned_bytes() -> anyhow::Result<()> {
+    let digests = vec![11_u64, 23, 47];
+    let mut builder = BinaryFuse32Builder::create();
+    builder.add_digests(&digests);
+    let filter = builder.build()?;
+
+    let mut bytes = vec![0_u8];
+    bytes.extend(filter.to_bytes()?);
+
+    let (decoded, n) = BinaryFuse32Filter::from_bytes(&bytes[1..])?;
+    assert_eq!(n, bytes.len() - 1);
+    assert_eq!(decoded.len(), Some(3));
+    assert!(decoded.contains_digest(23));
+
+    Ok(())
+}
