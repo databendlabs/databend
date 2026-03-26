@@ -230,10 +230,10 @@ pub fn is_valid_bloom_index_columns(
 pub fn is_valid_bloom_index_type(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
-    is_valid_option_of_type::<databend_storages_common_index::BloomIndexType>(
-        options,
-        OPT_KEY_BLOOM_INDEX_TYPE,
-    )
+    if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_TYPE) {
+        value.parse::<databend_storages_common_index::BloomIndexType>()?;
+    }
+    Ok(())
 }
 
 pub fn is_valid_approx_distinct_columns(
