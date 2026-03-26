@@ -35,6 +35,7 @@ use crate::AggregateFunctionRef;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
+use crate::block::DataBlock;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
@@ -334,6 +335,39 @@ impl AggregateHashTable {
             }
         }
 
+        Ok(())
+    }
+
+    /// Directly merge a serialized DataBlock into this hash table without
+    /// creating an intermediate PartitionedPayload.  This avoids the 2×
+    /// memory peak that occurs when `convert_to_partitioned_payload` +
+    /// `combine_payloads` are used, because aggregate states are only ever
+    /// allocated in the main arena.
+    pub fn combine_serialized_block(
+        &mut self,
+        data_block: &DataBlock,
+        num_states: usize,
+        group_len: usize,
+    ) -> Result<()> {
+        let row_count = data_block.num_rows();
+        if row_count == 0 {
+            return Ok(());
+        }
+
+        let states_index: Vec<usize> = (0..num_states).collect();
+        let agg_states = ProjectedBlock::project(&states_index, data_block);
+
+        let group_index: Vec<usize> = (num_states..(num_states + group_len)).collect();
+        let group_columns = ProjectedBlock::project(&group_index, data_block);
+
+        let mut state = ProbeState::default();
+        self.add_groups(
+            &mut state,
+            group_columns,
+            &[(&[]).into()],
+            agg_states,
+            row_count,
+        )?;
         Ok(())
     }
 

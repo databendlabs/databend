@@ -205,17 +205,12 @@ impl NewTransformFinalAggregate {
         let bytes = payload.data_block.memory_size();
         self.statistics.record_block(rows, bytes);
 
-        let partitioned_payload = payload.convert_to_partitioned_payload(
-            self.params.group_data_types.clone(),
-            self.params.aggregate_functions.clone(),
-            self.params.num_states(),
-            0,
-            self.params.enable_experiment_hash_index,
-            Arc::new(Bump::new()),
-        )?;
-
         if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
-            ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
+            ht.combine_serialized_block(
+                &payload.data_block,
+                self.params.num_states(),
+                self.params.group_data_types.len(),
+            )?;
         }
 
         Ok(())
