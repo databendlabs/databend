@@ -294,8 +294,14 @@ ALTER TABLE `05_0028_add_col_if_not_exists` ADD COLUMN IF NOT EXISTS b string no
 statement ok
 ALTER TABLE `05_0028_add_col_if_not_exists` ADD COLUMN IF NOT EXISTS b string not null default 'b'
 
+statement error 1006
+ALTER TABLE `05_0028_add_col_if_not_exists` ADD COLUMN IF NOT EXISTS b string AFTER missing_col
+
 statement ok
 INSERT INTO `05_0028_add_col_if_not_exists`(a) VALUES(1)
+
+statement ok
+ALTER TABLE `05_0028_add_col_if_not_exists` ADD COLUMN IF NOT EXISTS a int AUTOINCREMENT ORDER
 
 query TT
 SELECT * FROM `05_0028_add_col_if_not_exists`

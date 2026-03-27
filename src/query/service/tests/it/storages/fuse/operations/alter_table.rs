@@ -378,3 +378,51 @@ async fn test_fuse_table_add_column_if_not_exists_validates_after_column() -> an
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_table_add_column_if_not_exists_skips_autoincrement_checks_for_duplicates()
+-> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+
+    let db_name = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {}.{} (a INT, b INT)",
+            db_name, table_name
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {}.{} VALUES (1, 10)",
+            db_name, table_name
+        ))
+        .await?;
+
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS b INT AUTOINCREMENT ORDER",
+            db_name, table_name
+        ))
+        .await?;
+
+    let rows = fixture
+        .execute_query(&format!(
+            "SELECT * FROM {}.{} ORDER BY a",
+            db_name, table_name
+        ))
+        .await?;
+    let blocks = rows.try_collect::<Vec<_>>().await?;
+    let expected = vec![
+        "+---+----+",
+        "| a | b  |",
+        "+---+----+",
+        "| 1 | 10 |",
+        "+---+----+",
+    ];
+    common_assert::assert_blocks_eq(expected, &blocks);
+
+    Ok(())
+}
