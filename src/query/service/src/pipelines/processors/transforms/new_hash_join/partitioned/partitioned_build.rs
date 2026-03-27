@@ -288,7 +288,7 @@ impl PartitionedHashJoinState {
         }
     }
 
-    pub fn probe<'a, const MATCHED: bool>(
+    pub fn probe<'a, const MATCHED: bool, const MATCH_FIRST: bool>(
         &'a self,
         data: ProbeData,
     ) -> Result<Box<dyn ProbeStream + 'a>> {
@@ -315,7 +315,7 @@ impl PartitionedHashJoinState {
         Ok(match (&self.method, &self.build_keys_states) {
             (HashMethodKind::KeysU8(_), BuildKeysStates::UInt8(states)) => {
                 let probe_keys = u8::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u8, MATCHED, u32>::new(
+                PrimitiveProbeStream::<'a, u8, MATCHED, MATCH_FIRST, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -324,7 +324,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU16(_), BuildKeysStates::UInt16(states)) => {
                 let probe_keys = u16::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u16, MATCHED, u32>::new(
+                PrimitiveProbeStream::<'a, u16, MATCHED, MATCH_FIRST, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -333,7 +333,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU32(_), BuildKeysStates::UInt32(states)) => {
                 let probe_keys = u32::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u32, MATCHED, u32>::new(
+                PrimitiveProbeStream::<'a, u32, MATCHED, MATCH_FIRST, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -342,7 +342,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU64(_), BuildKeysStates::UInt64(states)) => {
                 let probe_keys = u64::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u64, MATCHED, u32>::new(
+                PrimitiveProbeStream::<'a, u64, MATCHED, MATCH_FIRST, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -351,7 +351,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU128(_), BuildKeysStates::UInt128(states)) => {
                 let probe_keys = u128::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u128, MATCHED, u32>::new(
+                PrimitiveProbeStream::<'a, u128, MATCHED, MATCH_FIRST, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -360,7 +360,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU256(_), BuildKeysStates::UInt256(states)) => {
                 let probe_keys = u256::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u256, MATCHED, u32>::new(
+                PrimitiveProbeStream::<'a, u256, MATCHED, MATCH_FIRST, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -374,7 +374,7 @@ impl PartitionedHashJoinState {
                 KeysState::Column(Column::Binary(probe_keys))
                 | KeysState::Column(Column::Variant(probe_keys))
                 | KeysState::Column(Column::Bitmap(probe_keys)) => {
-                    BinaryProbeStream::<'a, MATCHED, u32>::create(
+                    BinaryProbeStream::<'a, MATCHED, MATCH_FIRST, u32>::create(
                         hashes,
                         states,
                         probe_keys,
@@ -419,8 +419,13 @@ impl PartitionedHashJoinState {
     }
 }
 
-struct PrimitiveProbeStream<'a, T: Send + Sync + PartialEq, const MATCHED: bool, I: RowIndex = u32>
-{
+struct PrimitiveProbeStream<
+    'a,
+    T: Send + Sync + PartialEq,
+    const MATCHED: bool,
+    const MATCH_FIRST: bool,
+    I: RowIndex = u32,
+> {
     key_idx: usize,
     pointers: Vec<u64>,
     build_idx: usize,
@@ -430,8 +435,8 @@ struct PrimitiveProbeStream<'a, T: Send + Sync + PartialEq, const MATCHED: bool,
     matched_num_rows: usize,
 }
 
-impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, I: RowIndex>
-    PrimitiveProbeStream<'a, T, MATCHED, I>
+impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex>
+    PrimitiveProbeStream<'a, T, MATCHED, MATCH_FIRST, I>
 {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
@@ -452,8 +457,8 @@ impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, I: RowIndex>
     }
 }
 
-impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, I: RowIndex> ProbeStream
-    for PrimitiveProbeStream<'a, T, MATCHED, I>
+impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex>
+    ProbeStream for PrimitiveProbeStream<'a, T, MATCHED, MATCH_FIRST, I>
 {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.probe_keys.len() {
@@ -491,7 +496,10 @@ impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, I: RowIndex> ProbeStre
                     self.matched_num_rows += 1;
 
                     if res.matched_probe.len() == max_rows {
-                        self.build_idx = self.next[self.build_idx].to_usize();
+                        self.build_idx = match MATCH_FIRST {
+                            true => 0,
+                            false => self.next[self.build_idx].to_usize(),
+                        };
 
                         if self.build_idx == 0 {
                             self.key_idx += 1;
@@ -499,6 +507,11 @@ impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, I: RowIndex> ProbeStre
                         }
 
                         return Ok(());
+                    }
+
+                    if MATCH_FIRST {
+                        self.build_idx = 0;
+                        break;
                     }
                 }
 
@@ -517,7 +530,7 @@ impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, I: RowIndex> ProbeStre
     }
 }
 
-struct BinaryProbeStream<'a, const MATCHED: bool, I: RowIndex = u32> {
+struct BinaryProbeStream<'a, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex = u32> {
     key_idx: usize,
     pointers: Vec<u64>,
     build_idx: usize,
@@ -527,7 +540,9 @@ struct BinaryProbeStream<'a, const MATCHED: bool, I: RowIndex = u32> {
     matched_num_rows: usize,
 }
 
-impl<'a, const MATCHED: bool, I: RowIndex> BinaryProbeStream<'a, MATCHED, I> {
+impl<'a, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex>
+    BinaryProbeStream<'a, MATCHED, MATCH_FIRST, I>
+{
     pub fn create(
         pointers: Vec<u64>,
         build_keys: &'a [BinaryColumn],
@@ -546,7 +561,9 @@ impl<'a, const MATCHED: bool, I: RowIndex> BinaryProbeStream<'a, MATCHED, I> {
     }
 }
 
-impl<'a, const MATCHED: bool, I: RowIndex> ProbeStream for BinaryProbeStream<'a, MATCHED, I> {
+impl<'a, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex> ProbeStream
+    for BinaryProbeStream<'a, MATCHED, MATCH_FIRST, I>
+{
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.probe_keys.len() {
             assume(res.matched_probe.len() == res.matched_build.len());
@@ -583,7 +600,10 @@ impl<'a, const MATCHED: bool, I: RowIndex> ProbeStream for BinaryProbeStream<'a,
                     self.matched_num_rows += 1;
 
                     if res.matched_probe.len() == max_rows {
-                        self.build_idx = self.next[self.build_idx].to_usize();
+                        self.build_idx = match MATCH_FIRST {
+                            true => 0,
+                            false => self.next[self.build_idx].to_usize(),
+                        };
 
                         if self.build_idx == 0 {
                             self.key_idx += 1;
@@ -591,6 +611,11 @@ impl<'a, const MATCHED: bool, I: RowIndex> ProbeStream for BinaryProbeStream<'a,
                         }
 
                         return Ok(());
+                    }
+
+                    if MATCH_FIRST {
+                        self.build_idx = 0;
+                        break;
                     }
                 }
 

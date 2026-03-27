@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_base::hints::assume;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -75,7 +76,6 @@ impl Join for PartitionedLeftSemiJoin {
             return Ok(Box::new(EmptyJoinStream));
         }
 
-        let num_probe_rows = data.num_rows();
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
@@ -88,23 +88,27 @@ impl Join for PartitionedLeftSemiJoin {
         let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_data = ProbeData::new(keys, valids);
-        let probe_keys_stream = self.build.probe::<true>(probe_data)?;
 
         match &mut self.context.filter_executor {
-            None => Ok(LeftSemiHashJoinStream::create(
-                probe_block,
-                probe_keys_stream,
-                &mut self.context.probe_result,
-            )),
-            Some(filter_executor) => Ok(LeftSemiFilterHashJoinStream::create(
-                probe_block,
-                &self.build,
-                probe_keys_stream,
-                self.desc.clone(),
-                &mut self.context.probe_result,
-                filter_executor,
-                num_probe_rows,
-            )),
+            None => {
+                let probe_keys_stream = self.build.probe::<true, true>(probe_data)?;
+                Ok(LeftSemiHashJoinStream::create(
+                    probe_block,
+                    probe_keys_stream,
+                    &mut self.context.probe_result,
+                ))
+            }
+            Some(filter_executor) => {
+                let probe_keys_stream = self.build.probe::<true, false>(probe_data)?;
+                Ok(LeftSemiFilterHashJoinStream::create(
+                    probe_block,
+                    &self.build,
+                    probe_keys_stream,
+                    self.desc.clone(),
+                    &mut self.context.probe_result,
+                    filter_executor,
+                ))
+            }
         }
     }
 }
@@ -159,7 +163,6 @@ struct LeftSemiFilterHashJoinStream<'a> {
     probe_keys_stream: Box<dyn ProbeStream + 'a>,
     probed_rows: &'a mut ProbedRows,
     filter_executor: &'a mut FilterExecutor,
-    selected: Vec<bool>,
 }
 
 impl<'a> LeftSemiFilterHashJoinStream<'a> {
@@ -170,7 +173,6 @@ impl<'a> LeftSemiFilterHashJoinStream<'a> {
         desc: Arc<HashJoinDesc>,
         probed_rows: &'a mut ProbedRows,
         filter_executor: &'a mut FilterExecutor,
-        num_probe_rows: usize,
     ) -> Box<dyn JoinStream + 'a> {
         Box::new(LeftSemiFilterHashJoinStream {
             desc,
@@ -179,7 +181,6 @@ impl<'a> LeftSemiFilterHashJoinStream<'a> {
             filter_executor,
             probe_keys_stream,
             probe_data_block: Some(probe_data_block),
-            selected: vec![false; num_probe_rows],
         })
     }
 }
@@ -189,6 +190,9 @@ impl<'a> JoinStream for LeftSemiFilterHashJoinStream<'a> {
         let Some(probe_data_block) = self.probe_data_block.take() else {
             return Ok(None);
         };
+
+        let num_rows = probe_data_block.num_rows();
+        let mut selected = vec![false; num_rows];
 
         loop {
             self.probed_rows.clear();
@@ -230,18 +234,21 @@ impl<'a> JoinStream for LeftSemiFilterHashJoinStream<'a> {
 
             if selected_rows == result.num_rows() {
                 for probe_idx in &self.probed_rows.matched_probe {
-                    self.selected[*probe_idx as usize] = true;
+                    assume((*probe_idx as usize) < selected.len());
+                    selected[*probe_idx as usize] = true;
                 }
             } else if selected_rows != 0 {
                 let selection = self.filter_executor.true_selection();
                 for idx in selection[..selected_rows].iter() {
+                    assume((*idx as usize) < self.probed_rows.matched_probe.len());
                     let idx = self.probed_rows.matched_probe[*idx as usize];
-                    self.selected[idx as usize] = true;
+                    assume((idx as usize) < selected.len());
+                    selected[idx as usize] = true;
                 }
             }
         }
 
-        let bitmap = Bitmap::from_trusted_len_iter(self.selected.iter().copied());
+        let bitmap = Bitmap::from_trusted_len_iter(selected.iter().copied());
 
         match bitmap.true_count() {
             0 => Ok(None),

@@ -115,7 +115,7 @@ impl Join for PartitionedLeftJoin {
         let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_data = ProbeData::new(keys, valids);
-        let probe_stream = self.build.probe::<false>(probe_data)?;
+        let probe_stream = self.build.probe::<false, false>(probe_data)?;
 
         match self.performance_context.filter_executor.as_mut() {
             None => Ok(OuterLeftHashJoinStream::<false>::create(

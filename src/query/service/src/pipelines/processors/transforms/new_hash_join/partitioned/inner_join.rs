@@ -88,7 +88,7 @@ impl Join for PartitionedInnerJoin {
         let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_data = ProbeData::new(keys, valids);
-        let probe_keys_stream = self.build.probe::<true>(probe_data)?;
+        let probe_keys_stream = self.build.probe::<true, false>(probe_data)?;
         let joined_stream = PartitionedInnerJoinStream::create(
             probe_block,
             &self.build,
