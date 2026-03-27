@@ -38,7 +38,7 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
     where Self: Sized {
         match p {
             pb::StageFileFormatType::Csv => Ok(mt::principal::StageFileFormatType::Csv),
-            pb::StageFileFormatType::Tsv => Ok(mt::principal::StageFileFormatType::Tsv),
+            pb::StageFileFormatType::Text => Ok(mt::principal::StageFileFormatType::Text),
             pb::StageFileFormatType::Json => Ok(mt::principal::StageFileFormatType::Json),
             pb::StageFileFormatType::NdJson => Ok(mt::principal::StageFileFormatType::NdJson),
             pb::StageFileFormatType::Avro => Ok(mt::principal::StageFileFormatType::Avro),
@@ -52,7 +52,7 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
     fn to_pb_enum(&self) -> Result<pb::StageFileFormatType, Incompatible> {
         match *self {
             mt::principal::StageFileFormatType::Csv => Ok(pb::StageFileFormatType::Csv),
-            mt::principal::StageFileFormatType::Tsv => Ok(pb::StageFileFormatType::Tsv),
+            mt::principal::StageFileFormatType::Text => Ok(pb::StageFileFormatType::Text),
             mt::principal::StageFileFormatType::Json => Ok(pb::StageFileFormatType::Json),
             mt::principal::StageFileFormatType::NdJson => Ok(pb::StageFileFormatType::NdJson),
             mt::principal::StageFileFormatType::Avro => Ok(pb::StageFileFormatType::Avro),
@@ -242,9 +242,9 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::JsonFileFormatParams::from_pb(p)?,
                 ))
             }
-            Some(pb::file_format_params::Format::Tsv(p)) => {
-                Ok(mt::principal::FileFormatParams::Tsv(
-                    mt::principal::TsvFileFormatParams::from_pb(p)?,
+            Some(pb::file_format_params::Format::Text(p)) => {
+                Ok(mt::principal::FileFormatParams::Text(
+                    mt::principal::TextFileFormatParams::from_pb(p)?,
                 ))
             }
             Some(pb::file_format_params::Format::Xml(p)) => {
@@ -295,9 +295,9 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::AvroFileFormatParams::to_pb(p)?,
                 )),
             }),
-            Self::Tsv(p) => Ok(Self::PB {
-                format: Some(pb::file_format_params::Format::Tsv(
-                    mt::principal::TsvFileFormatParams::to_pb(p)?,
+            Self::Text(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Text(
+                    mt::principal::TextFileFormatParams::to_pb(p)?,
                 )),
             }),
             Self::Xml(p) => Ok(Self::PB {
@@ -519,7 +519,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             .empty_field_as
             .map(|s| EmptyFieldAs::from_str(&s).map_err(|e| Incompatible::new(format!("{:?}", e))))
             .transpose()?
-            .unwrap_or_default();
+            .unwrap_or(EmptyFieldAs::Null);
 
         let binary_format = p
             .binary_format
@@ -584,8 +584,8 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
     }
 }
 
-impl FromToProto for mt::principal::TsvFileFormatParams {
-    type PB = pb::TsvFileFormatParams;
+impl FromToProto for mt::principal::TextFileFormatParams {
+    type PB = pb::TextFileFormatParams;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
@@ -598,6 +598,12 @@ impl FromToProto for mt::principal::TsvFileFormatParams {
                 Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
+        let null_display = p.null_display.unwrap_or_else(|| "\\N".to_string());
+        let empty_field_as = p
+            .empty_field_as
+            .map(|s| EmptyFieldAs::from_str(&s).map_err(|e| Incompatible::new(format!("{:?}", e))))
+            .transpose()?
+            .unwrap_or(EmptyFieldAs::FieldDefault);
         Ok(Self {
             compression,
             headers: p.headers,
@@ -606,6 +612,10 @@ impl FromToProto for mt::principal::TsvFileFormatParams {
             escape: p.escape,
             nan_display: p.nan_display,
             quote: p.quote,
+            null_display,
+            error_on_column_count_mismatch: !p.allow_column_count_mismatch,
+            empty_field_as,
+            output_header: p.output_header,
         })
     }
 
@@ -622,6 +632,10 @@ impl FromToProto for mt::principal::TsvFileFormatParams {
             escape: self.escape.clone(),
             quote: self.quote.clone(),
             nan_display: self.nan_display.clone(),
+            null_display: Some(self.null_display.clone()),
+            allow_column_count_mismatch: !self.error_on_column_count_mismatch,
+            empty_field_as: Some(self.empty_field_as.to_string()),
+            output_header: self.output_header,
         })
     }
 }

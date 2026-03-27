@@ -1,0 +1,23 @@
+=== quoted_cte_round_trip_preserves_quotes ===
+description: AST round-tripping should keep quoted identifiers in the rendered SQL.
+input_sql: WITH "QuotedCTE" AS (SELECT id, "Value" FROM "QuotedTable" WHERE id = 1) SELECT * FROM "QuotedCTE"
+round_trip_sql: WITH "QuotedCTE" AS (SELECT id, "Value" FROM "QuotedTable" WHERE id = 1) SELECT * FROM "QuotedCTE"
+
+=== normalization_keeps_quote_information ===
+description: Identifier normalization may fold case, but it must preserve whether the identifier was quoted.
+context: unquoted_case_sensitive=false quoted_case_sensitive=false deny_column_reference=false
+quoted: name=mixedcase quote="
+unquoted: name=mixedcase quote=-
+
+=== repeated_normalization_preserves_quotedness ===
+description: Running normalization across multiple phases should not strip quote information from quoted identifiers.
+phase1: name=mixedcaseidentifier quote="
+phase2: name=mixedcaseidentifier quote="
+phase3: name=mixedcaseidentifier quote="
+
+=== display_ident_quotes_unicode_uppercase_when_needed ===
+description: Rendering must keep quotes when dropping them would make reparsing change identifier case.
+context: unquoted_case_sensitive=false quoted_case_sensitive=true deny_column_reference=false
+rendered: "Ж"
+reparsed_unquoted: name=ж quote=-
+

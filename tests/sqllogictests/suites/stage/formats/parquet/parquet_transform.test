@@ -30,7 +30,7 @@ drop stage if exists parquet_transform
 
 # make sure the name is uniq in the test suit
 statement ok
-create stage parquet_transform FILE_FORMAT = (type = TSV)
+create stage parquet_transform FILE_FORMAT = (type = TEXT)
 
 statement ok
 remove @parquet_transform

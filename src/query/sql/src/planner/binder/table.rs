@@ -83,7 +83,6 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::binder::split_conjunctions;
-use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::TypeChecker;
 use crate::planner::semantic::normalize_identifier;
@@ -202,6 +201,7 @@ impl Binder {
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
+            udf_cache: bind_context.udf_cache.clone(),
             inverted_index_map: Box::default(),
             vector_index_map: Box::default(),
             allow_virtual_column: false,
@@ -752,10 +752,9 @@ impl Binder {
                 database,
                 name,
             } => self.resolve_stream_data_travel_point(catalog, database, name),
-            TimeTravelPoint::TableTag(name) => Err(legacy_table_ref_removed_error(format!(
-                "table tag navigation `AT (TAG => {})`",
-                self.normalize_identifier(name).name
-            ))),
+            TimeTravelPoint::TableTag(name) => Ok(NavigationPoint::TableTag(
+                self.normalize_identifier(name).name,
+            )),
         }
     }
 

@@ -42,8 +42,8 @@ pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
-    pub(crate) project_column_nodes: Vec<ColumnNode>,
+    pub(crate) project_indices: Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
+    pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
     pub(crate) default_vals: Vec<Scalar>,
     pub(crate) all_field_default_vals: Vec<Scalar>,
     pub query_internal_columns: bool,
@@ -53,6 +53,20 @@ pub struct BlockReader {
 
     pub original_schema: TableSchemaRef,
     pub native_columns_reader: NativeColumnsReader,
+}
+
+#[derive(Clone)]
+pub struct BlockReadProjection {
+    pub(crate) project_indices: Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
+    pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
+}
+
+#[derive(Clone)]
+pub struct BlockReadContext {
+    ctx: Arc<dyn TableContext>,
+    operator: Operator,
+    projection: BlockReadProjection,
+    put_cache: bool,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -134,7 +148,8 @@ impl BlockReader {
             .iter()
             .map(|c| (*c).clone())
             .collect();
-        let project_indices = Self::build_projection_indices(&project_column_nodes);
+        let project_indices = Arc::new(Self::build_projection_indices(&project_column_nodes));
+        let project_column_nodes = Arc::new(project_column_nodes);
 
         Ok(Arc::new(BlockReader {
             ctx,
@@ -238,7 +253,37 @@ impl BlockReader {
         self.operator.clone()
     }
 
-    pub fn report_cache_metrics<'a>(
+    pub fn read_context(&self) -> BlockReadContext {
+        BlockReadContext {
+            ctx: self.ctx.clone(),
+            operator: self.operator.clone(),
+            projection: BlockReadProjection {
+                project_indices: self.project_indices.clone(),
+                project_column_nodes: self.project_column_nodes.clone(),
+            },
+            put_cache: self.put_cache,
+        }
+    }
+}
+
+impl BlockReadContext {
+    pub fn operator(&self) -> &Operator {
+        &self.operator
+    }
+
+    pub(crate) fn project_indices(&self) -> &BTreeMap<FieldIndex, (ColumnId, Field, DataType)> {
+        self.projection.project_indices.as_ref()
+    }
+
+    pub(crate) fn project_column_nodes(&self) -> &[ColumnNode] {
+        self.projection.project_column_nodes.as_ref()
+    }
+
+    pub(crate) fn put_cache(&self) -> bool {
+        self.put_cache
+    }
+
+    pub(crate) fn report_cache_metrics<'a>(
         &self,
         block_read_res: &BlockReadResult,
         ranges: impl Iterator<Item = &'a std::ops::Range<u64>>,

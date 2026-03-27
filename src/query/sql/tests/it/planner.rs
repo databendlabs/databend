@@ -129,8 +129,6 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
         std::env::var("TEST_SUBDIR").ok(),
     );
     let mut mints = suite.create_mints();
-    let ctx = LiteTableContext::create_isolated().await?;
-    ctx.install_global_catalog_manager();
 
     for (case, spec) in suite.load_cases()?.into_iter().filter_map(|case| {
         LITE_REPLAY_CASE_SPECS
@@ -138,6 +136,7 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
             .find(|spec| spec.matches(&case))
             .map(|spec| (case, spec))
     }) {
+        let ctx = LiteTableContext::create().await?;
         run_test_case(&ctx, &case, spec, &mut mints).await?;
     }
     Ok(())
@@ -146,7 +145,7 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {
     for sql in case.tables.values() {
         for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
-            ctx.register_table_sql(statement).await?;
+            ctx.register_setup_sql(statement).await?;
         }
     }
     Ok(())

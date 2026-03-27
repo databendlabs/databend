@@ -94,7 +94,15 @@ impl Planner {
     }
 
     #[fastrace::trace]
+    pub fn parse_sql_with_params(&self, sql: &str) -> Result<PlanExtras> {
+        self.parse_sql_inner(sql, true)
+    }
+
     pub fn parse_sql(&self, sql: &str) -> Result<PlanExtras> {
+        self.parse_sql_inner(sql, false)
+    }
+
+    fn parse_sql_inner(&self, sql: &str, has_params: bool) -> Result<PlanExtras> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
@@ -123,7 +131,7 @@ impl Planner {
         let first_token = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind));
-        let is_insert_stmt = matches!(first_token, Some(TokenKind::INSERT)) && {
+        let is_insert_stmt = !has_params && matches!(first_token, Some(TokenKind::INSERT)) && {
             let mut tokenizer = Tokenizer::new(&final_sql);
             tokenizer.next_chunk::<3>().is_ok_and(|first_three_tokens| {
                 matches!(first_token, Some(TokenKind::INSERT))
@@ -135,7 +143,7 @@ impl Planner {
                     })
             })
         };
-        let is_replace_stmt = matches!(first_token, Some(TokenKind::REPLACE));
+        let is_replace_stmt = !has_params && matches!(first_token, Some(TokenKind::REPLACE));
         let is_insert_or_replace_stmt = is_insert_stmt || is_replace_stmt;
         let mut tokens: Vec<Token> = if is_insert_or_replace_stmt {
             (&mut tokenizer)

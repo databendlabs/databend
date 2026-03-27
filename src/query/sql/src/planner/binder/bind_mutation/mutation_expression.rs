@@ -566,10 +566,9 @@ impl Binder {
             matches!(
                 scalar,
                 ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::AsyncFunctionCall(_)
                     | ScalarExpr::UDFCall(_)
-            )
+            ) || scalar.is_aggregate()
         };
 
         let mut finder = Finder::new(&f);

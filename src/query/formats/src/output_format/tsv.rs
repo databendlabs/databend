@@ -16,13 +16,13 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_common_meta_app::principal::TextFileFormatParams;
 
 use crate::field_encoder::FieldEncoderCSV;
 use crate::field_encoder::helpers::write_tsv_escaped_string;
 use crate::output_format::OutputFormat;
 
-pub struct TSVOutputFormat {
+pub struct TEXTOutputFormat {
     schema: TableSchemaRef,
     field_encoder: FieldEncoderCSV,
     field_delimiter: u8,
@@ -31,10 +31,10 @@ pub struct TSVOutputFormat {
     headers: u8,
 }
 
-impl TSVOutputFormat {
+impl TEXTOutputFormat {
     pub fn create(
         schema: TableSchemaRef,
-        params: &TsvFileFormatParams,
+        params: &TextFileFormatParams,
         field_encoder: FieldEncoderCSV,
         headers: u8,
     ) -> Self {
@@ -63,7 +63,7 @@ impl TSVOutputFormat {
     }
 }
 
-impl OutputFormat for TSVOutputFormat {
+impl OutputFormat for TEXTOutputFormat {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.num_rows();
         let mut buf = Vec::with_capacity(block.memory_size());
@@ -153,13 +153,13 @@ mod test {
                             3\tc\'\t0\tNaN\t1970-01-04\n";
             assert_eq!(&tsv_block, expect);
 
-            let formatter = get_output_format_clickhouse("TsvWithNames", schema.clone())?;
+            let formatter = get_output_format_clickhouse("TextWithNames", schema.clone())?;
             let buffer = formatter.serialize_prefix()?;
             let tsv_block = String::from_utf8(buffer)?;
             let names = "c1\tc2\tc3\tc4\tc5\n".to_string();
             assert_eq!(tsv_block, names);
 
-            let formatter = get_output_format_clickhouse("TsvWithNamesAndTypes", schema.clone())?;
+            let formatter = get_output_format_clickhouse("TextWithNamesAndTypes", schema.clone())?;
             let buffer = formatter.serialize_prefix()?;
             let tsv_block = String::from_utf8(buffer)?;
 
@@ -220,6 +220,35 @@ mod test {
             let expect = "1\t\\N\n\\N\t2\n3\t\\N\n";
             assert_eq!(&tsv_block, expect);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_text_output_header_and_null_display() -> Result<()> {
+        let (schema, block) = gen_schema_and_block(
+            vec![TableField::new(
+                "c1",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            )],
+            vec![Int32Type::from_opt_data(vec![Some(1i32), None])],
+        );
+
+        let settings = Settings::create(Tenant::new_literal("default"));
+        let options = BTreeMap::from([
+            ("type".to_string(), "text".to_string()),
+            ("output_header".to_string(), "true".to_string()),
+            ("null_display".to_string(), "NULL".to_string()),
+        ]);
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)?;
+        let mut output_format =
+            get_output_format(schema, params, settings.get_output_format_settings()?, None)?;
+
+        let prefix = String::from_utf8(output_format.serialize_prefix()?)?;
+        let body = String::from_utf8(output_format.serialize_block(&block)?)?;
+
+        assert_eq!(prefix, "c1\n");
+        assert_eq!(body, "1\nNULL\n");
         Ok(())
     }
 

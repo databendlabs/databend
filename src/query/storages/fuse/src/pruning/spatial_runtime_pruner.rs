@@ -35,6 +35,7 @@ use geo_index::rtree::RTreeIndex;
 use geo_index::rtree::RTreeRef;
 use opendal::Operator;
 
+use super::profile_guard::ProfileGuard;
 use crate::FuseBlockPartInfo;
 use crate::index::rects_intersect;
 use crate::io::read::SpatialIndexReader;
@@ -97,6 +98,7 @@ impl SpatialRuntimePruner {
     }
 
     pub async fn prune(&self, part: &PartInfoPtr) -> Result<bool> {
+        let _profile_guard = ProfileGuard::new(ProfileStatisticsName::RuntimeFilterSpatialTime);
         let part = FuseBlockPartInfo::from_part(part)?;
         let Some(spatial_stats) = part.spatial_stats.as_ref() else {
             return Ok(false);

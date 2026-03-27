@@ -27,6 +27,7 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::util::check_view_circular_dependency;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -63,6 +64,14 @@ impl Interpreter for CreateViewInterpreter {
         match plan.clone() {
             Plan::Query { metadata, .. } => {
                 let metadata = metadata.read().clone();
+                if self.plan.create_option.is_overriding() {
+                    check_view_circular_dependency(
+                        &metadata,
+                        &self.plan.catalog,
+                        &self.plan.database,
+                        &self.plan.view_name,
+                    )?;
+                }
                 for table in metadata.tables() {
                     let database_name = table.database();
                     let table_name = table.name();

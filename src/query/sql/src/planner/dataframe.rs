@@ -253,12 +253,8 @@ impl Dataframe {
         self.binder
             .analyze_group_items(&mut self.bind_context, &select_list, &groupby)?;
 
-        if !self
-            .bind_context
-            .aggregate_info
-            .aggregate_functions
-            .is_empty()
-            || !self.bind_context.aggregate_info.group_items.is_empty()
+        if self.bind_context.aggregate_info.has_aggregate_calls()
+            || self.bind_context.aggregate_info.has_group_items()
         {
             self.s_expr = self
                 .binder

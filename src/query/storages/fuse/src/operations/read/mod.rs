@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_format;
 mod fuse_rows_fetcher;
 pub mod fuse_source;
 mod native_data_source;
 mod native_data_source_deserializer;
-mod native_data_transform_reader;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
-mod parquet_data_transform_reader;
 mod parquet_rows_fetcher;
+mod raw_data_source;
+mod read_block_context;
+mod read_data_source;
+mod read_data_transform;
 mod read_state;
 mod runtime_filter_wait;
 
@@ -31,7 +34,7 @@ mod data_source_with_meta;
 mod util;
 
 pub use fuse_rows_fetcher::row_fetch_processor;
-pub use fuse_source::build_fuse_parquet_source_pipeline;
+pub use fuse_source::build_fuse_source_pipeline;
 pub use native_data_source_deserializer::NativeDeserializeDataTransform;
 pub use parquet_data_source_deserializer::DeserializeDataTransform;
 pub use read_state::ReadState;

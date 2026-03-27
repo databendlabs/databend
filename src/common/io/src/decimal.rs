@@ -96,7 +96,7 @@ pub fn display_decimal_256(num: i256, scale: u8) -> impl Display + Debug {
     Decimal256 { num, scale }
 }
 
-/// Format a decimal with trailing zeros trimmed (for CSV/TSV export).
+/// Format a decimal with trailing zeros trimmed (for CSV/TEXT export).
 /// For example: 1.230 -> "1.23", 1.000 -> "1", 1.200 -> "1.2"
 pub fn display_decimal_128_trimmed(num: i128, scale: u8) -> impl Display + Debug {
     struct DecimalTrimmed {
@@ -136,7 +136,7 @@ pub fn display_decimal_128_trimmed(num: i128, scale: u8) -> impl Display + Debug
     DecimalTrimmed { num, scale }
 }
 
-/// Format a decimal256 with trailing zeros trimmed (for CSV/TSV export).
+/// Format a decimal256 with trailing zeros trimmed (for CSV/TEXT export).
 /// For example: 1.230 -> "1.23", 1.000 -> "1", 1.200 -> "1.2"
 pub fn display_decimal_256_trimmed(num: i256, scale: u8) -> impl Display + Debug {
     struct Decimal256Trimmed {

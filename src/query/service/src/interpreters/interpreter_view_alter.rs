@@ -20,9 +20,11 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::AlterViewPlan;
+use databend_common_sql::plans::Plan;
 use databend_meta_client::types::MatchSeq;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::util::check_view_circular_dependency;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -55,12 +57,30 @@ impl Interpreter for AlterViewInterpreter {
             .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
             .await
         {
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+
+            // Detect circular dependency: ALTER VIEW can introduce cycles
+            // the same way CREATE OR REPLACE VIEW can.
+            match &plan {
+                Plan::Query { metadata, .. } => {
+                    let metadata = metadata.read();
+                    check_view_circular_dependency(
+                        &metadata,
+                        &self.plan.catalog,
+                        &self.plan.database,
+                        &self.plan.view_name,
+                    )?;
+                }
+                _ => {
+                    return Err(ErrorCode::Unimplemented("alter view only support Query"));
+                }
+            }
+
             let mut options = HashMap::new();
             let subquery = if self.plan.column_names.is_empty() {
                 self.plan.subquery.clone()
             } else {
-                let mut planner = Planner::new(self.ctx.clone());
-                let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
                 if plan.schema().fields().len() != self.plan.column_names.len() {
                     return Err(ErrorCode::BadDataArrayLength(format!(
                         "column name length mismatch, expect {}, got {}",

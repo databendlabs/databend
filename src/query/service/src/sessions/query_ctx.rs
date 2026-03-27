@@ -2221,11 +2221,11 @@ impl TableContext for QueryContext {
                 };
                 StageTable::try_create(info)
             }
-            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
+            FileFormatParams::Csv(..) | FileFormatParams::Text(..) => {
                 if max_column_position == 0 {
                     let file_type = match stage_info.file_format_params {
                         FileFormatParams::Csv(..) => "CSV",
-                        FileFormatParams::Tsv(..) => "TSV",
+                        FileFormatParams::Text(..) => "TEXT",
                         _ => unreachable!(), // This branch should never be reached
                     };
 
@@ -2234,10 +2234,10 @@ impl TableContext for QueryContext {
                         file_type
                     )));
                 }
-                if let FileFormatParams::Tsv(fmt) = &stage_info.file_format_params {
+                if let FileFormatParams::Text(fmt) = &stage_info.file_format_params {
                     if fmt.field_delimiter.is_empty() && max_column_position > 1 {
                         return Err(ErrorCode::SemanticError(
-                            "Query from TSV line mode only supports $1 as column position",
+                            "Query from TEXT line mode only supports $1 as column position",
                         ));
                     }
                 }
@@ -2265,7 +2265,7 @@ impl TableContext for QueryContext {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TSV. Provided: '{}'",
+                    "Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TEXT. Provided: '{}'",
                     stage_info.file_format_params
                 )));
             }

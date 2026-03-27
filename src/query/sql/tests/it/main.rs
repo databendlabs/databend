@@ -15,3 +15,4 @@
 mod framework;
 mod optimizer;
 mod planner;
+mod semantic;
