@@ -190,17 +190,21 @@ impl PartitionedHashJoinState {
     fn ingest_chunk<const VISITED: bool>(&mut self, chunk: DataBlock) -> Result<()> {
         let num_rows = chunk.num_rows();
         let mut columns = chunk.take_columns();
-        let mut data_columns = columns.split_off(self.desc.build_keys.len());
+        let data_columns = columns.split_off(self.desc.build_keys.len());
 
-        if VISITED && data_columns.len() != self.desc.probe_keys.len() {
-            let valid_entry = data_columns.pop().unwrap();
-            let valid_column = valid_entry.to_column();
-            let valid_bitmap = BooleanType::try_downcast_column(&valid_column).unwrap();
-            let keys_block = DataBlock::new(columns, num_rows);
-            columns = keys_block.filter_with_bitmap(&valid_bitmap)?.take_columns();
+        let mut keys_block = DataBlock::new(columns, num_rows);
+        let mut chunk = DataBlock::new(data_columns, num_rows);
+        if VISITED && let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+            if bitmap.true_count() != bitmap.len() {
+                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+                let null_keys = chunk.clone().filter_with_bitmap(&(!(&bitmap)))?;
+                let nonnull_keys = chunk.filter_with_bitmap(&bitmap)?;
+                chunk = DataBlock::concat(&[nonnull_keys, null_keys])?;
+                self.desc.remove_keys_nullable(&mut keys_block);
+            }
         }
 
-        let keys = ProjectedBlock::from(&columns);
+        let keys = ProjectedBlock::from(keys_block.columns());
 
         let keys_state = with_hash_method!(|T| match &self.method {
             HashMethodKind::T(method) => method.build_keys_state(keys, num_rows)?,
@@ -211,8 +215,8 @@ impl PartitionedHashJoinState {
         }
 
         self.num_rows += num_rows;
+        self.chunks.push(chunk);
         self.add_build_state(keys_state);
-        self.chunks.push(DataBlock::new(data_columns, num_rows));
         Ok(())
     }
 
@@ -224,25 +228,14 @@ impl PartitionedHashJoinState {
 
         chunk = chunk.project(&self.desc.build_projection);
 
-        if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+        if !VISITED && let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
             if bitmap.true_count() != bitmap.len() {
-                chunk = match VISITED {
-                    true => {
-                        let null_keys = chunk.clone().filter_with_bitmap(&(!(&bitmap)))?;
-                        let nonnull_keys = chunk.filter_with_bitmap(&bitmap)?;
-                        let mut chunk = DataBlock::concat(&[nonnull_keys, null_keys])?;
-                        chunk.add_column(Column::Boolean(bitmap));
-                        chunk
-                    }
-                    false => {
-                        keys_block = keys_block.filter_with_bitmap(&bitmap)?;
-                        chunk.filter_with_bitmap(&bitmap)?
-                    }
-                };
+                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+                chunk = chunk.filter_with_bitmap(&bitmap)?;
+                self.desc.remove_keys_nullable(&mut keys_block);
             }
         }
 
-        self.desc.remove_keys_nullable(&mut keys_block);
         keys_block.merge_block(chunk);
         Ok(keys_block)
     }
