@@ -150,6 +150,7 @@ pub struct ResultFormatSettings {
     pub timezone: String,
     pub geometry_output_format: String,
     pub binary_output_format: String,
+    pub http_json_result_mode: String,
 }
 
 #[derive(Serialize, Debug, Clone)]

@@ -21,6 +21,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
+use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_query::servers::http::v1::BlocksCollector;
 use pretty_assertions::assert_eq;
@@ -79,5 +80,29 @@ fn test_empty_block() -> anyhow::Result<()> {
     let collector = BlocksCollector::new();
     let serializer = collector.into_serializer(format);
     assert!(serializer.is_empty());
+    Ok(())
+}
+
+#[test]
+fn test_driver_mode_data_block() -> anyhow::Result<()> {
+    let mut format = OutputFormatSettings::default();
+    format.http_json_result_mode = HttpHandlerDataFormat::Driver;
+
+    let columns = vec![
+        Int32Type::from_data(vec![1]),
+        StringType::from_data(vec!["a"]),
+        BooleanType::from_data(vec![true]),
+        Float64Type::from_data(vec![1.1]),
+        DateType::from_data(vec![1_i32]),
+    ];
+
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(columns, 1);
+    let serializer = collector.into_serializer(format);
+
+    assert_eq!(
+        serde_json::to_value(&serializer)?,
+        serde_json::json!([[1, "a", true, 1.1, "1970-01-02"]])
+    );
     Ok(())
 }
