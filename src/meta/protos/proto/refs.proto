@@ -11,4 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod identifier_quote_test;
+
+syntax = "proto3";
+
+package databend_proto;
+
+message TableTag {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // Option<DateTime<Utc>>.
+  optional string expire_at = 1;
+  string snapshot_loc = 2;
+}

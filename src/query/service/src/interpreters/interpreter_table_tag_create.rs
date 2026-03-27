@@ -14,12 +14,8 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::CreateTableTagPlan;
-use databend_common_storages_fuse::TableContext;
 use databend_enterprise_table_ref_handler::get_table_ref_handler;
 
 use crate::interpreters::Interpreter;
@@ -49,20 +45,6 @@ impl Interpreter for CreateTableTagInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::TableRef)?;
-
-        if !self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_table_ref()
-            .unwrap_or_default()
-        {
-            return Err(ErrorCode::Unimplemented(
-                "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
-            ));
-        }
-
         let handler = get_table_ref_handler();
         handler
             .do_create_table_tag(self.ctx.clone(), &self.plan)

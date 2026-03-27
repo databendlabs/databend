@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use uuid;
 use uuid::NoContext;
 use uuid::Uuid;
+use uuid::Version;
 
 use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
@@ -180,6 +181,12 @@ pub fn trim_object_prefix(key: &str) -> &str {
     } else {
         key
     }
+}
+
+#[inline]
+pub fn is_uuid_v7(uuid: &Uuid) -> bool {
+    let version = uuid.get_version();
+    version.is_some_and(|v| matches!(v, Version::SortRand))
 }
 
 #[cfg(test)]
