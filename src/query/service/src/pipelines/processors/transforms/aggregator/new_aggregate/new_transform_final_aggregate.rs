@@ -264,7 +264,8 @@ impl NewTransformFinalAggregate {
             }
         }
 
-        if need_check_spill && self.settings.check_spill() {
+        // If already trigger spilled for this task, we continue to spill the remaining part
+        if self.spilled_occurred || (need_check_spill && self.settings.check_spill()) {
             self.spill_out()?;
         }
 
