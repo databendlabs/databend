@@ -155,7 +155,7 @@ impl serde::Serialize for BlocksSerializer {
             let duration = Instant::now().duration_since(start);
             if duration >= Duration::from_secs(3) {
                 info!(
-                    "serialize {} rows using {} secs",
+                    "[SLOW] http handler serialize {} rows using {} secs",
                     buf.borrow().len(),
                     duration.as_secs_f64()
                 );
