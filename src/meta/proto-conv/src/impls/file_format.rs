@@ -519,7 +519,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             .empty_field_as
             .map(|s| EmptyFieldAs::from_str(&s).map_err(|e| Incompatible::new(format!("{:?}", e))))
             .transpose()?
-            .unwrap_or_default();
+            .unwrap_or(EmptyFieldAs::Null);
 
         let binary_format = p
             .binary_format
@@ -598,6 +598,12 @@ impl FromToProto for mt::principal::TextFileFormatParams {
                 Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
+        let null_display = p.null_display.unwrap_or_else(|| "\\N".to_string());
+        let empty_field_as = p
+            .empty_field_as
+            .map(|s| EmptyFieldAs::from_str(&s).map_err(|e| Incompatible::new(format!("{:?}", e))))
+            .transpose()?
+            .unwrap_or(EmptyFieldAs::FieldDefault);
         Ok(Self {
             compression,
             headers: p.headers,
@@ -606,6 +612,10 @@ impl FromToProto for mt::principal::TextFileFormatParams {
             escape: p.escape,
             nan_display: p.nan_display,
             quote: p.quote,
+            null_display,
+            error_on_column_count_mismatch: !p.allow_column_count_mismatch,
+            empty_field_as,
+            output_header: p.output_header,
         })
     }
 
@@ -622,6 +632,10 @@ impl FromToProto for mt::principal::TextFileFormatParams {
             escape: self.escape.clone(),
             quote: self.quote.clone(),
             nan_display: self.nan_display.clone(),
+            null_display: Some(self.null_display.clone()),
+            allow_column_count_mismatch: !self.error_on_column_count_mismatch,
+            empty_field_as: Some(self.empty_field_as.to_string()),
+            output_header: self.output_header,
         })
     }
 }

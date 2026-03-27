@@ -646,7 +646,7 @@ impl Display for Expr {
                     write_expr(expr, Some(affix), true, f)?;
                     write!(f, " LIKE {modifier} ({subquery})")?;
                     if let Some(escape) = escape {
-                        write!(f, " ESCAPE '{escape}'")?;
+                        write!(f, " ESCAPE {}", QuotedString(escape, '\''))?;
                     }
                 }
                 Expr::LikeAnyWithEscape {
@@ -656,7 +656,7 @@ impl Display for Expr {
                     ..
                 } => {
                     write_expr(left, Some(affix), true, f)?;
-                    write!(f, " LIKE ANY {right} ESCAPE '{escape}'")?;
+                    write!(f, " LIKE ANY {right} ESCAPE {}", QuotedString(escape, '\''))?;
                 }
                 Expr::LikeWithEscape {
                     left,
@@ -669,7 +669,7 @@ impl Display for Expr {
                     if *is_not {
                         write!(f, " NOT")?;
                     }
-                    write!(f, " LIKE {right} ESCAPE '{escape}'")?;
+                    write!(f, " LIKE {right} ESCAPE {}", QuotedString(escape, '\''))?;
                 }
                 Expr::Between {
                     expr,

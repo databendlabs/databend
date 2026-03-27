@@ -63,7 +63,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
         .get_current_session()
         .set_authed_user(user, None)
         .await?;
-    let (plan, _, _) = interpreter_plan_sql(query_ctx.clone(), sql, false).await?;
+    let (plan, _, _) = interpreter_plan_sql(query_ctx.clone(), sql, false, None).await?;
 
     InterpreterFactory::get(query_ctx.clone(), &plan).await
 }

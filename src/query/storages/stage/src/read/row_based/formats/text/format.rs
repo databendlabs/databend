@@ -21,8 +21,8 @@ use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::format::SeparatorState;
-use crate::read::row_based::formats::tsv::block_builder::TextDecoder;
-use crate::read::row_based::formats::tsv::separator::TextRowSeparator;
+use crate::read::row_based::formats::text::block_builder::TextDecoder;
+use crate::read::row_based::formats::text::separator::TextRowSeparator;
 
 #[derive(Clone)]
 pub struct TextInputFormat {
