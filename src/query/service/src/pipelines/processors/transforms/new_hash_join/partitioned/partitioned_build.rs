@@ -30,8 +30,6 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::KeysState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::with_hash_method;
 use ethnum::u256;
