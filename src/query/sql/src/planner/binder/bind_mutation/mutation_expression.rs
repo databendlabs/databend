@@ -154,8 +154,10 @@ impl MutationExpression {
                     update_stream_columns = false;
                 }
                 let is_lazy_table = {
+                    let settings = binder.ctx.get_settings();
                     let metadata = binder.metadata.read();
                     *mutation_strategy != MutationStrategy::NotMatchedOnly
+                        && settings.get_enable_merge_into_row_fetch()?
                         && metadata
                             .table(target_table_index)
                             .table()
