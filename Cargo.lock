@@ -10416,8 +10416,9 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.5.5"
-source = "git+https://github.com/b41sh/jsonb?rev=2aed05f38a61f28164697a023f7be1fa23c5f44a#2aed05f38a61f28164697a023f7be1fa23c5f44a"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb98fb29636087c40ad0d1274d9a30c0c1e83e03ae93f6e7e89247b37fcc6953"
 dependencies = [
  "byteorder",
  "ethnum",
