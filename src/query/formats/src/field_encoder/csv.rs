@@ -28,7 +28,7 @@ use geozero::ToWkt;
 use geozero::wkb::Ewkb;
 
 use crate::field_encoder::FieldEncoderJSON;
-use crate::field_encoder::FieldEncoderValues;
+use crate::field_encoder::FieldEncoderBytes;
 use crate::field_encoder::write_tsv_escaped_string;
 
 pub enum StringFormatter {
@@ -70,7 +70,7 @@ pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
 }
 
 pub struct FieldEncoderCSV {
-    pub simple: FieldEncoderValues,
+    pub simple: FieldEncoderBytes,
     pub nested: FieldEncoderJSON,
     pub string_formatter: StringFormatter,
 }
@@ -79,7 +79,7 @@ impl FieldEncoderCSV {
     pub fn create_csv(params: &CsvFileFormatParams, mut settings: OutputFormatSettings) -> Self {
         settings.binary_format = params.binary_format.to_display_format();
         Self {
-            simple: FieldEncoderValues::create_for_csv(params, settings.clone()),
+            simple: FieldEncoderBytes::create_for_csv(params, settings.clone()),
             nested: FieldEncoderJSON::create(settings),
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
@@ -89,7 +89,7 @@ impl FieldEncoderCSV {
 
     pub fn create_tsv(params: &TextFileFormatParams, settings: OutputFormatSettings) -> Self {
         Self {
-            simple: FieldEncoderValues::create_for_tsv(params, settings.clone()),
+            simple: FieldEncoderBytes::create_for_tsv(params, settings.clone()),
             nested: FieldEncoderJSON::create(settings),
             string_formatter: StringFormatter::Text {
                 record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],

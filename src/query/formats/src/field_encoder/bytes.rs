@@ -64,21 +64,21 @@ use crate::OutputCommonSettings;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::field_encoder::helpers::write_quoted_string;
 
-pub struct FieldEncoderValues {
+pub struct FieldEncoderBytes {
     pub common_settings: OutputCommonSettings,
 
     pub escape_char: u8,
     pub quote_char: u8,
 }
 
-impl FieldEncoderValues {
+impl FieldEncoderBytes {
     pub fn create_for_csv(
         params: &CsvFileFormatParams,
         mut settings: OutputFormatSettings,
     ) -> Self {
         settings.binary_format = params.binary_format.to_display_format();
         settings.geometry_format = params.geometry_format;
-        FieldEncoderValues {
+        FieldEncoderBytes {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
@@ -93,7 +93,7 @@ impl FieldEncoderValues {
     }
 
     pub fn create_for_tsv(params: &TextFileFormatParams, settings: OutputFormatSettings) -> Self {
-        FieldEncoderValues {
+        FieldEncoderBytes {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
@@ -108,7 +108,7 @@ impl FieldEncoderValues {
     }
 
     pub fn create_for_http_handler(settings: &OutputFormatSettings) -> Self {
-        FieldEncoderValues {
+        FieldEncoderBytes {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
@@ -127,7 +127,7 @@ impl FieldEncoderValues {
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
     pub fn create_for_mysql_handler(settings: &OutputFormatSettings) -> Self {
-        FieldEncoderValues {
+        FieldEncoderBytes {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
