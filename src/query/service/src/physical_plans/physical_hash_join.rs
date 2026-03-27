@@ -463,7 +463,7 @@ impl HashJoin {
         let probe_distribution = self.probe.output_data_distribution();
         let global_hash_probe = matches!(probe_distribution, DataDistribution::GlobalHash(_));
 
-        match (global_hash_build && global_hash_probe) || self.build_side_cache_info.is_some() {
+        match global_hash_build && global_hash_probe && self.build_side_cache_info.is_none() {
             true => self.shuffle_join(pb, desc),
             false => self.broadcast_join(pb, desc),
         }
