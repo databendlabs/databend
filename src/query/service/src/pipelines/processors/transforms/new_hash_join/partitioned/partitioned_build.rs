@@ -205,7 +205,7 @@ impl PartitionedHashJoinState {
         let keys = ProjectedBlock::from(keys_block.columns());
 
         let keys_state = with_hash_method!(|T| match &self.method {
-            HashMethodKind::T(method) => method.build_keys_state(keys, num_rows)?,
+            HashMethodKind::T(method) => method.build_keys_state(keys, keys_block.num_rows())?,
         });
 
         if VISITED {
