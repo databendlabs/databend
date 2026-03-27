@@ -147,6 +147,15 @@ impl NewTransformFinalAggregate {
 }
 
 impl NewTransformFinalAggregate {
+    #[inline]
+    fn should_check_spill(need_check_spill: bool, spilled_occurred: bool) -> bool {
+        // Once a task has spilled in the current round, `finish()` will always
+        // flush the remaining hash table into spilled tasks. Re-checking spill
+        // on the rest of the input in the same round only creates redundant
+        // intermediate spill transitions.
+        need_check_spill && !spilled_occurred
+    }
+
     fn next_task_id(&self) -> u64 {
         self.next_task_id.fetch_add(1, Ordering::Relaxed)
     }
@@ -234,6 +243,8 @@ impl NewTransformFinalAggregate {
     }
 
     fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
+        let need_check_spill = Self::should_check_spill(need_check_spill, self.spilled_occurred);
+
         match meta {
             AggregateMeta::Serialized(payload) => {
                 self.handle_serialized(payload)?;
