@@ -125,6 +125,9 @@ static TEST_BUILD_INFO: BuildInfo = BuildInfo {
     commit_detail: String::new(),
     embedded_license: String::new(),
 };
+static NEXT_LITE_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_FAKE_TABLE_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_FAKE_INDEX_ID: AtomicU64 = AtomicU64::new(1);
 
 thread_local! {
     static INIT_TESTING_GLOBALS: std::sync::Once = const { std::sync::Once::new() };
@@ -166,7 +169,7 @@ fn unsupported<T>(name: &str) -> Result<T> {
     )))
 }
 
-type TableKey = (String, String);
+type TableKey = (String, String, String);
 type TableMap = HashMap<TableKey, Arc<dyn Table>>;
 type ColumnStatsMap = HashMap<String, BasicColumnStatistics>;
 type IndexMap = HashMap<MetaId, Vec<(u64, String, IndexMeta)>>;
@@ -203,15 +206,38 @@ impl Default for DummyCatalog {
 }
 
 impl DummyCatalog {
-    fn insert_table(&self, database: &str, table: Arc<dyn Table>) {
-        self.tables
-            .write()
-            .insert((database.to_string(), table.name().to_string()), table);
+    fn insert_table(&self, tenant: &Tenant, database: &str, table: Arc<dyn Table>) {
+        self.tables.write().insert(
+            (
+                tenant.tenant_name().to_string(),
+                database.to_string(),
+                table.name().to_string(),
+            ),
+            table,
+        );
     }
 
-    fn clear_tables(&self) {
-        self.tables.write().clear();
-        self.indexes.write().clear();
+    fn clear_tenant(&self, tenant: &Tenant) {
+        self.tables
+            .write()
+            .retain(|(table_tenant, _, _), _| table_tenant != tenant.tenant_name());
+    }
+
+    fn get_registered_table(
+        &self,
+        tenant: &Tenant,
+        database: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.tables
+            .read()
+            .get(&(
+                tenant.tenant_name().to_string(),
+                database.to_string(),
+                table_name.to_string(),
+            ))
+            .cloned()
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("{}.{}", database, table_name)))
     }
 
     fn insert_index(&self, table_id: MetaId, index_id: u64, name: &str, query: &str) {
@@ -451,15 +477,11 @@ impl Catalog for DummyCatalog {
 
     async fn get_table(
         &self,
-        _tenant: &Tenant,
+        tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        self.tables
-            .read()
-            .get(&(db_name.to_string(), table_name.to_string()))
-            .cloned()
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("{}.{}", db_name, table_name)))
+        self.get_registered_table(tenant, db_name, table_name)
     }
 
     async fn mget_tables(
@@ -705,8 +727,6 @@ pub struct LiteTableContext {
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
     can_scan_from_agg_index: RwLock<bool>,
     queued_duration: RwLock<Duration>,
-    next_table_id: AtomicU64,
-    next_index_id: AtomicU64,
 }
 
 impl LiteTableContext {
@@ -764,7 +784,7 @@ impl LiteTableContext {
             .collect::<Result<HashMap<_, _>>>()?;
 
         let warehouse_distribution = *self.warehouse_distribution.read();
-        let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
+        let table_id = NEXT_FAKE_TABLE_ID.fetch_add(1, Ordering::Relaxed);
 
         Ok(Arc::new(FakeTable {
             table_info: TableInfo {
@@ -787,7 +807,10 @@ impl LiteTableContext {
     pub async fn create() -> Result<Arc<Self>> {
         init_testing_globals();
 
-        let tenant = Tenant::new_literal("default");
+        let tenant = Tenant::new_literal(&format!(
+            "default_{}",
+            NEXT_LITE_CONTEXT_ID.fetch_add(1, Ordering::Relaxed)
+        ));
         let settings = Settings::create(tenant.clone());
         let shared_settings = Settings::create(tenant.clone());
         Self::init_user_api_provider(&tenant).await?;
@@ -827,7 +850,7 @@ impl LiteTableContext {
             .ok_or_else(|| ErrorCode::Internal("unexpected default catalog type"))?
             .clone()
             .into();
-        default_catalog.clear_tables();
+        default_catalog.clear_tenant(&tenant);
 
         let ctx = Arc::new(Self {
             catalog_manager,
@@ -863,8 +886,6 @@ impl LiteTableContext {
             runtime_filter_ready: RwLock::new(HashMap::new()),
             can_scan_from_agg_index: RwLock::new(false),
             queued_duration: RwLock::new(Duration::default()),
-            next_table_id: AtomicU64::new(1),
-            next_index_id: AtomicU64::new(1),
         });
         ctx.reset_user_api_state().await?;
         Ok(ctx)
@@ -923,7 +944,8 @@ impl LiteTableContext {
     ) -> Result<()> {
         let table =
             self.build_fake_table(database, table_name, fields, table_stats, column_stats)?;
-        self.default_catalog.insert_table(database, table);
+        self.default_catalog
+            .insert_table(&self.tenant, database, table);
         Ok(())
     }
 
@@ -1086,14 +1108,10 @@ impl LiteTableContext {
         name: &str,
         sql: &str,
     ) -> Result<u64> {
-        let table = self
-            .default_catalog
-            .tables
-            .read()
-            .get(&(database.to_string(), table_name.to_string()))
-            .cloned()
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("{}.{}", database, table_name)))?;
-        let index_id = self.next_index_id.fetch_add(1, Ordering::Relaxed);
+        let table =
+            self.default_catalog
+                .get_registered_table(&self.tenant, database, table_name)?;
+        let index_id = NEXT_FAKE_INDEX_ID.fetch_add(1, Ordering::Relaxed);
         self.default_catalog
             .insert_index(table.get_id(), index_id, name, sql);
         Ok(index_id)
