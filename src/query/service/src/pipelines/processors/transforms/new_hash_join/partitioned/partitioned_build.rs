@@ -192,14 +192,16 @@ impl PartitionedHashJoinState {
 
         let mut keys_block = DataBlock::new(columns, num_rows);
         let mut chunk = DataBlock::new(data_columns, num_rows);
-        if VISITED && let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
-            if bitmap.true_count() != bitmap.len() {
-                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
-                let null_keys = chunk.clone().filter_with_bitmap(&(!(&bitmap)))?;
-                let nonnull_keys = chunk.filter_with_bitmap(&bitmap)?;
-                chunk = DataBlock::concat(&[nonnull_keys, null_keys])?;
-                self.desc.remove_keys_nullable(&mut keys_block);
+        if VISITED {
+            if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+                if bitmap.true_count() != bitmap.len() {
+                    keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+                    let null_keys = chunk.clone().filter_with_bitmap(&(!(&bitmap)))?;
+                    let nonnull_keys = chunk.filter_with_bitmap(&bitmap)?;
+                    chunk = DataBlock::concat(&[nonnull_keys, null_keys])?;
+                }
             }
+            self.desc.remove_keys_nullable(&mut keys_block);
         }
 
         let keys = ProjectedBlock::from(keys_block.columns());
@@ -226,12 +228,14 @@ impl PartitionedHashJoinState {
 
         chunk = chunk.project(&self.desc.build_projection);
 
-        if !VISITED && let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
-            if bitmap.true_count() != bitmap.len() {
-                keys_block = keys_block.filter_with_bitmap(&bitmap)?;
-                chunk = chunk.filter_with_bitmap(&bitmap)?;
-                self.desc.remove_keys_nullable(&mut keys_block);
+        if !VISITED {
+            if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+                if bitmap.true_count() != bitmap.len() {
+                    keys_block = keys_block.filter_with_bitmap(&bitmap)?;
+                    chunk = chunk.filter_with_bitmap(&bitmap)?;
+                }
             }
+            self.desc.remove_keys_nullable(&mut keys_block);
         }
 
         keys_block.merge_block(chunk);
