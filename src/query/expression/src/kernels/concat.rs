@@ -279,7 +279,7 @@ impl Column {
     ) -> StringColumn {
         let mut builder = StringColumnBuilder::with_capacity(num_rows);
         for col in cols {
-            builder.append_column(&col);
+            builder.append_column_for_concat(&col);
         }
         builder.build()
     }
@@ -350,5 +350,26 @@ mod tests {
             "append short",
             "append another extremely long string to force buffer usage!!!",
         ]);
+    }
+
+    #[test]
+    fn test_concat_string_columns_compacts_sparse_buffers() {
+        let long = "x".repeat(20_000);
+        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
+        let source_total_buffer_len = source.total_buffer_len();
+        let sparse_left = Column::String(source.clone().sliced(0, 1));
+        let sparse_right = Column::String(source.clone().sliced(7, 1));
+
+        let result = Column::concat_columns(vec![sparse_left, sparse_right].into_iter()).unwrap();
+        let result = result.into_string().unwrap();
+
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![
+            format!("0-{long}"),
+            format!("7-{long}"),
+        ]);
+        assert!(
+            result.total_buffer_len() < source_total_buffer_len,
+            "concat should compact sparse string buffers instead of retaining them"
+        );
     }
 }

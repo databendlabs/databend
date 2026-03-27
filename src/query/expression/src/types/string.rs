@@ -339,14 +339,20 @@ impl StringColumnBuilder {
     }
 
     pub fn append_column(&mut self, other: &StringColumn) {
+        self.data.extend_values(other.iter());
+    }
+
+    pub fn append_column_for_concat(&mut self, other: &StringColumn) {
         debug_assert!(
             self.row_buffer.is_empty(),
-            "append_column expects no pending row data"
+            "append_column_for_concat expects no pending row data"
         );
+
+        let source = other.clone().maybe_gc();
         unsafe {
             self.data.append_views_unchecked(
-                other.views().as_slice().iter(),
-                other.data_buffers().as_ref(),
+                source.views().as_slice().iter(),
+                source.data_buffers().as_ref(),
             );
         }
     }
@@ -403,6 +409,29 @@ impl StringColumnBuilder {
         }
         let column = StringType::build_column(builder);
         StringType::upcast_column(column).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StringColumn;
+    use super::StringColumnBuilder;
+
+    #[test]
+    fn test_append_column_copies_sparse_string_buffers() {
+        let long = "x".repeat(20_000);
+        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
+        let sparse = source.sliced(7, 1);
+
+        let mut builder = StringColumnBuilder::with_capacity(1);
+        builder.append_column(&sparse);
+        let result = builder.build();
+
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![format!("7-{long}")]);
+        assert!(
+            result.total_buffer_len() < sparse.total_buffer_len(),
+            "append_column should not retain the full source buffers"
+        );
     }
 }
 
