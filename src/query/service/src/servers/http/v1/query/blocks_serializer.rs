@@ -29,7 +29,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
-use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_formats::field_encoder::FieldEncoderBytes;
 use databend_common_io::GeometryDataType;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
@@ -140,7 +140,7 @@ impl serde::Serialize for BlocksSerializer {
         if let Some(format) = &self.format {
             let start = Instant::now();
             let mut buf = RefCell::new(Vec::new());
-            let encoder = FieldEncoderValues::create_for_http_handler(format);
+            let encoder = FieldEncoderBytes::create_for_http_handler(format);
             for (columns, num_rows) in self.columns.iter() {
                 for i in 0..*num_rows {
                     serialize_seq.serialize_element(&RowSerializer {
@@ -168,7 +168,7 @@ impl serde::Serialize for BlocksSerializer {
 struct RowSerializer<'a> {
     format: &'a OutputFormatSettings,
     data_block: &'a [Column],
-    encoder: &'a FieldEncoderValues,
+    encoder: &'a FieldEncoderBytes,
     buf: &'a RefCell<Vec<u8>>,
     row_index: usize,
 }
