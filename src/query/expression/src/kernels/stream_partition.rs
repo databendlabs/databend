@@ -709,5 +709,4 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].1.num_rows(), 100);
     }
-
 }
