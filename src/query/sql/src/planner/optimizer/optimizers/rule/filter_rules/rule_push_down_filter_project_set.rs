@@ -82,7 +82,9 @@ impl Rule for RulePushDownFilterProjectSet {
         let mut remaining_predicates = vec![];
         for pred in filter.predicates.into_iter() {
             let pred_used_columns = pred.used_columns();
-            if pred_used_columns.is_subset(&project_set_child_prop.output_columns) {
+            if pred_used_columns.is_subset(&project_set_child_prop.output_columns)
+                && !pred.has_set_returning_function()
+            {
                 pushed_down_predicates.push(pred);
             } else {
                 remaining_predicates.push(pred)

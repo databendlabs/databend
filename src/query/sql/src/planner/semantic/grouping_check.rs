@@ -30,11 +30,15 @@ use crate::plans::walk_expr_mut;
 /// Also replaced the matched window function with a BoundColumnRef.
 pub struct GroupingChecker<'a> {
     bind_context: &'a BindContext,
+    forbid_aggregate: Option<&'static str>,
 }
 
 impl<'a> GroupingChecker<'a> {
-    pub fn new(bind_context: &'a BindContext) -> Self {
-        Self { bind_context }
+    pub fn new(bind_context: &'a BindContext, forbid_aggregate: Option<&'static str>) -> Self {
+        Self {
+            bind_context,
+            forbid_aggregate,
+        }
     }
 }
 
@@ -43,27 +47,11 @@ const GROUPING_FUNC_NAME: &str = "grouping";
 
 impl VisitorMut<'_> for GroupingChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(expr) {
-            let column = &self.bind_context.aggregate_info.group_items[*index];
-            let mut column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &column.scalar
-            {
-                column_ref.column.clone()
-            } else {
-                ColumnBindingBuilder::new(
-                    GROUP_ITEM_NAME.to_string(),
-                    column.index,
-                    Box::new(column.scalar.data_type()?),
-                    Visibility::Visible,
-                )
-                .build()
-            };
-
-            if let Some(grouping_sets) = &self.bind_context.aggregate_info.grouping_sets {
-                if grouping_sets.grouping_id_column.index != column_binding.index {
-                    column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
-                }
-            }
-
+        if let Some(column_binding) = self.bind_context.aggregate_info.lookup_group_item_column(
+            expr,
+            GROUP_ITEM_NAME,
+            Visibility::Visible,
+        )? {
             *expr = BoundColumnRef {
                 span: expr.span(),
                 column: column_binding,
@@ -115,10 +103,14 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 return Err(ErrorCode::Internal("Group Check: Invalid window function"));
             }
             ScalarExpr::AggregateFunction(agg) => {
+                if let Some(msg) = self.forbid_aggregate {
+                    return Err(ErrorCode::SemanticError(msg.to_string()).set_span(agg.span));
+                }
+
                 let Some(agg_func) = self
                     .bind_context
                     .aggregate_info
-                    .get_aggregate_function(&agg.display_name)
+                    .lookup_aggregate_function(agg)
                 else {
                     return Err(ErrorCode::Internal("Invalid aggregate function"));
                 };
@@ -138,11 +130,10 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 return Ok(());
             }
             ScalarExpr::UDAFCall(udaf) => {
-                let Some(agg_func) = self
-                    .bind_context
-                    .aggregate_info
-                    .get_aggregate_function(&udaf.display_name)
-                else {
+                if let Some(msg) = self.forbid_aggregate {
+                    return Err(ErrorCode::SemanticError(msg.to_string()).set_span(udaf.span));
+                }
+                let Some(agg_func) = self.bind_context.aggregate_info.lookup_udaf_call(udaf) else {
                     return Err(ErrorCode::Internal("Invalid udaf function"));
                 };
 
@@ -204,9 +195,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         if self
             .bind_context
             .aggregate_info
-            .group_items
-            .iter()
-            .any(|item| item.index == column.column.index)
+            .has_group_item_index(column.column.index)
         {
             return Ok(());
         }
@@ -214,9 +203,12 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         if self
             .bind_context
             .aggregate_info
-            .get_aggregate_function(&column.column.column_name)
-            .is_some()
+            .has_aggregate_call_index(column.column.index)
         {
+            if let Some(msg) = self.forbid_aggregate {
+                return Err(ErrorCode::SemanticError(msg.to_string()).set_span(column.span));
+            }
+
             // Be replaced by `AggregateRewriter`.
             return Ok(());
         }

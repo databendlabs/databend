@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::mem;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::types::DataType;
@@ -59,6 +60,11 @@ pub(crate) struct SetReturningAnalyzer<'a> {
     metadata: MetadataRef,
 }
 
+struct DeferredAggregateRewriter<'a> {
+    bind_context: &'a mut BindContext,
+    metadata: MetadataRef,
+}
+
 // Keep SRF output type as tuple in metadata even if a single field was extracted.
 fn normalize_srf_return_type(data_type: DataType) -> DataType {
     if data_type.as_tuple().is_some() {
@@ -76,8 +82,51 @@ impl<'a> SetReturningAnalyzer<'a> {
         }
     }
 
-    fn as_aggregate_rewriter(&mut self) -> AggregateRewriter<'_> {
-        AggregateRewriter::new(self.bind_context, self.metadata.clone())
+    fn rewrite_aggregate_expr(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        let mut rewriter = DeferredAggregateRewriter {
+            bind_context: self.bind_context,
+            metadata: self.metadata.clone(),
+        };
+        rewriter.visit(expr)
+    }
+}
+
+impl DeferredAggregateRewriter<'_> {
+    fn find_registered_aggregate_scalar(&self, index: crate::Symbol) -> Option<ScalarExpr> {
+        self.bind_context
+            .aggregate_info
+            .aggregate_calls_for_plan()
+            .into_iter()
+            .find(|item| item.index == index)
+            .map(|item| item.scalar)
+    }
+}
+
+impl<'a> VisitorMut<'a> for DeferredAggregateRewriter<'a> {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        match expr {
+            ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_) => {
+                let mut rewritten = expr.clone();
+                AggregateRewriter::rewrite_expr(
+                    &mut self.bind_context.aggregate_info,
+                    self.metadata.clone(),
+                    &mut rewritten,
+                )?;
+
+                if let ScalarExpr::BoundColumnRef(column_ref) = &rewritten {
+                    if let Some(scalar) =
+                        self.find_registered_aggregate_scalar(column_ref.column.index)
+                    {
+                        *expr = scalar;
+                        return Ok(());
+                    }
+                }
+
+                *expr = rewritten;
+                Ok(())
+            }
+            _ => walk_expr_mut(self, expr),
+        }
     }
 }
 
@@ -92,8 +141,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 let mut replaced_args = Vec::with_capacity(func.arguments.len());
                 for arg in func.arguments.iter() {
                     let mut arg = arg.clone();
-                    let mut aggregate_rewriter = self.as_aggregate_rewriter();
-                    aggregate_rewriter.visit(&mut arg)?;
+                    self.rewrite_aggregate_expr(&mut arg)?;
                     replaced_args.push(arg);
                 }
 
@@ -175,36 +223,23 @@ impl<'a> SetReturningRewriter<'a> {
 
 impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if self
-            .bind_context
-            .aggregate_info
-            .group_items_map
-            .contains_key(expr)
-        {
+        if self.bind_context.aggregate_info.contains_group_item(expr) {
             self.is_lazy_srf = true;
         }
 
-        if let ScalarExpr::AggregateFunction(agg_func) = expr {
+        if expr.is_aggregate() {
             self.is_lazy_srf = true;
-            if let Some(agg_item) = self
-                .bind_context
-                .aggregate_info
-                .get_aggregate_function(&agg_func.display_name)
-            {
-                let column_binding = ColumnBindingBuilder::new(
-                    agg_func.display_name.clone(),
-                    agg_item.index,
-                    Box::new(agg_item.scalar.data_type()?),
-                    Visibility::InVisible,
-                )
-                .build();
+            let span = expr.span();
+            AggregateRewriter::rewrite_existing_expr(
+                &self.bind_context.aggregate_info,
+                expr,
+                "ProjectSet rewrite expected aggregate functions to be pre-registered",
+            )
+            .map_err(|err| ErrorCode::Internal(err.message()))?;
 
-                let column_ref: ScalarExpr = BoundColumnRef {
-                    span: expr.span(),
-                    column: column_binding.clone(),
-                }
-                .into();
-                *expr = column_ref;
+            if let ScalarExpr::BoundColumnRef(column_ref) = expr {
+                column_ref.span = span;
+                column_ref.column.visibility = Visibility::InVisible;
             }
             return Ok(());
         }
