@@ -43,10 +43,10 @@ use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::planner::binder::Binder;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::semantic::NameResolutionContext;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
-use crate::plans::FunctionCall;
 use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
@@ -326,7 +326,7 @@ impl Binder {
         }
 
         let mut derived_scalars = Vec::with_capacity(using_columns.len());
-        for (_, join_key_name) in using_columns {
+        for (span, join_key_name) in using_columns {
             let Some(left_column) = left_column_bindings
                 .iter()
                 .find(|column| column.column_name == join_key_name)
@@ -348,25 +348,29 @@ impl Binder {
                 continue;
             };
 
-            let coalesced_index = self
-                .metadata
-                .write()
-                .add_derived_column(join_key_name.clone(), (*left_column.data_type).clone());
-            let coalesced_scalar = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "coalesce".to_string(),
-                params: vec![],
-                arguments: vec![
+            let mut type_checker = TypeChecker::try_create(
+                bind_context,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                self.metadata.clone(),
+                &[],
+                false,
+            )?;
+            let (coalesced_scalar, coalesced_data_type) = *type_checker
+                .resolve_scalar_function_call(span, "coalesce", vec![], vec![
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
+                        span,
                         column: left_column.clone(),
                     }),
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
+                        span,
                         column: right_column.clone(),
                     }),
-                ],
-            });
+                ])?;
+            let coalesced_index = self
+                .metadata
+                .write()
+                .add_derived_column(join_key_name.clone(), coalesced_data_type.clone());
             derived_scalars.push(ScalarItem {
                 scalar: coalesced_scalar,
                 index: coalesced_index,
@@ -375,7 +379,7 @@ impl Binder {
             let coalesced_binding = ColumnBindingBuilder::new(
                 join_key_name.clone(),
                 coalesced_index,
-                left_column.data_type.clone(),
+                Box::new(coalesced_data_type),
                 Visibility::Visible,
             )
             .case_sensitive(self.name_resolution_ctx.unquoted_ident_case_sensitive)
