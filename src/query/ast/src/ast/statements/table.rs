@@ -498,16 +498,10 @@ pub enum AlterTableAction {
         new_connection: BTreeMap<String, String>,
     },
     CreateTableBranch {
-        branch_name: Identifier,
-        travel_point: Option<TimeTravelPoint>,
-        #[drive(skip)]
-        retain: Option<Duration>,
+        spec: CreateTableRefSpec,
     },
     CreateTableTag {
-        tag_name: Identifier,
-        travel_point: Option<TimeTravelPoint>,
-        #[drive(skip)]
-        retain: Option<Duration>,
+        spec: CreateTableRefSpec,
     },
     DropTableBranch {
         branch_name: Identifier,
@@ -611,45 +605,11 @@ impl Display for AlterTableAction {
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
-            AlterTableAction::CreateTableBranch {
-                branch_name,
-                travel_point,
-                retain,
-            } => {
-                write!(f, "CREATE BRANCH {branch_name}")?;
-                if let Some(travel_point) = travel_point {
-                    write!(f, " AT {travel_point}")?;
-                }
-                if let Some(retain) = retain {
-                    let days = Duration::from_secs(60 * 60 * 24);
-                    if retain >= &days {
-                        let days = retain.as_secs() / (60 * 60 * 24);
-                        write!(f, " RETAIN {days} DAYS ")?;
-                    } else {
-                        let seconds = retain.as_secs();
-                        write!(f, " RETAIN {seconds} SECONDS ")?;
-                    }
-                }
+            AlterTableAction::CreateTableBranch { spec } => {
+                write!(f, "CREATE BRANCH {spec}")?;
             }
-            AlterTableAction::CreateTableTag {
-                tag_name,
-                travel_point,
-                retain,
-            } => {
-                write!(f, "CREATE TAG {tag_name}")?;
-                if let Some(travel_point) = travel_point {
-                    write!(f, " AT {travel_point}")?;
-                }
-                if let Some(retain) = retain {
-                    let days = Duration::from_secs(60 * 60 * 24);
-                    if retain >= &days {
-                        let days = retain.as_secs() / (60 * 60 * 24);
-                        write!(f, " RETAIN {days} DAYS ")?;
-                    } else {
-                        let seconds = retain.as_secs();
-                        write!(f, " RETAIN {seconds} SECONDS ")?;
-                    }
-                }
+            AlterTableAction::CreateTableTag { spec } => {
+                write!(f, "CREATE TAG {spec}")?;
             }
             AlterTableAction::DropTableBranch { branch_name } => {
                 write!(f, "DROP BRANCH {branch_name}")?;
@@ -658,6 +618,34 @@ impl Display for AlterTableAction {
                 write!(f, "DROP TAG {tag_name}")?;
             }
         };
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct CreateTableRefSpec {
+    pub name: Identifier,
+    pub travel_point: Option<TimeTravelPoint>,
+    #[drive(skip)]
+    pub retain: Option<Duration>,
+}
+
+impl Display for CreateTableRefSpec {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(travel_point) = &self.travel_point {
+            write!(f, " AT {travel_point}")?;
+        }
+        if let Some(retain) = self.retain {
+            let days = Duration::from_secs(60 * 60 * 24);
+            if retain >= days {
+                let days = retain.as_secs() / (60 * 60 * 24);
+                write!(f, " RETAIN {days} DAYS")?;
+            } else {
+                let seconds = retain.as_secs();
+                write!(f, " RETAIN {seconds} SECONDS")?;
+            }
+        }
         Ok(())
     }
 }

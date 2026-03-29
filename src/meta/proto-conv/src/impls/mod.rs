@@ -29,6 +29,7 @@ mod mask_policy_table_id;
 mod owner;
 mod ownership;
 mod procedure;
+mod refs;
 mod role;
 mod row_access_policy;
 mod row_access_policy_table_id;

@@ -1,0 +1,172 @@
+=== count_star_can_preaggregate_build_side ===
+description: COUNT(*) grouped by the join key should allow eager aggregation on one side.
+sql: SELECT o_orderkey, count(*)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), COUNT(*) (#25) AS (#25)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [count() AS (#25)]
+    └── EvalScalar
+        ├── scalars: [orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [orders.o_orderkey (#16) AS (#16)]
+├── aggregate functions: [count() AS (#25)]
+└── Aggregate(Partial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [count() AS (#25)]
+    └── EvalScalar
+        ├── scalars: [orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#26)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.lineitem (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== sum_plus_constant_preserves_eager_aggregation ===
+description: A SUM output used inside a scalar expression should still optimize through eager aggregation.
+sql: SELECT o_orderkey, sum(l_extendedprice) + 1
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), plus(sum(l_extendedprice) (#25), 1) AS (#26)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), plus(sum(l_extendedprice) (#25), 1) AS (#26)]
+└── Aggregate(Final)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
+    └── Aggregate(Partial)
+        ├── group items: [orders.o_orderkey (#16) AS (#16)]
+        ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
+        └── EvalScalar
+            ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#27)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== count_plus_constant_preserves_eager_aggregation ===
+description: A COUNT output used inside a scalar expression should still optimize through eager aggregation.
+sql: SELECT o_orderkey, count(*) + 1
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey
+raw_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), plus(COUNT(*) (#25), 1) AS (#26)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [count() AS (#25)]
+    └── EvalScalar
+        ├── scalars: [orders.o_orderkey (#16) AS (#16)]
+        └── Filter
+            ├── filters: [eq(orders.o_orderkey (#16), lineitem.l_orderkey (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [orders.o_orderkey (#16) AS (#16), plus(COUNT(*) (#25), 1) AS (#26)]
+└── Aggregate(Final)
+    ├── group items: [orders.o_orderkey (#16) AS (#16)]
+    ├── aggregate functions: [count() AS (#25)]
+    └── Aggregate(Partial)
+        ├── group items: [orders.o_orderkey (#16) AS (#16)]
+        ├── aggregate functions: [count() AS (#25)]
+        └── EvalScalar
+            ├── scalars: [orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#27)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
