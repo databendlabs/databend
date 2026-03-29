@@ -109,14 +109,21 @@ impl Interpreter for AddTableColumnInterpreter {
             AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
             AddColumnOption::End => table_info.meta.schema.num_fields(),
         };
-        if self.plan.if_not_exists
-            && table_info
+        if self.plan.if_not_exists {
+            if table_info
                 .meta
                 .schema
                 .index_of(self.plan.field.name())
                 .is_ok()
-        {
-            return Ok(PipelineBuildResult::create());
+            {
+                return Ok(PipelineBuildResult::create());
+            }
+            if self.plan.column_existed {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Column '{}' no longer exists; please retry ALTER TABLE ... ADD COLUMN IF NOT EXISTS",
+                    self.plan.field.name()
+                )));
+            }
         }
         if field.computed_expr().is_some() {
             LicenseManagerSwitch::instance()
