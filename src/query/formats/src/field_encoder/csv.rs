@@ -27,8 +27,8 @@ use databend_common_meta_app::principal::TextFileFormatParams;
 use geozero::ToWkt;
 use geozero::wkb::Ewkb;
 
-use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::FieldEncoderBytes;
+use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::write_tsv_escaped_string;
 
 pub enum StringFormatter {
