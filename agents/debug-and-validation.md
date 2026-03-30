@@ -2,6 +2,7 @@
 
 - For Rust changes that will remain in the branch, use `cargo clippy` to confirm there are no compilation or lint errors.
 - Start with partial verification when a full workspace pass is too expensive, but move toward stronger coverage before handoff when the resulting changes will remain in the branch.
+- Use the trace-debug utilities under [`src/query/service/tests/it/trace_debug/README.md`](../src/query/service/tests/it/trace_debug/README.md) when the question is about query lifecycle or stage transitions, such as parser/planner/interpreter/pipeline flow, HTTP query state and pagination behavior, or which execution spans and attached events appear for a specific SQL path.
 - For temporary investigation outputs that will not be submitted, keep validation minimal and purpose-driven. Run only the checks needed to establish the conclusion or unblock the investigation.
 - If investigation work begins producing code, tests, or docs that should remain in the branch, raise the validation bar before handoff.
 

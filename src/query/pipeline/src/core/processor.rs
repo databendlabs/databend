@@ -125,6 +125,13 @@ unsafe impl Send for ProcessorPtr {}
 unsafe impl Sync for ProcessorPtr {}
 
 impl ProcessorPtr {
+    fn current_thread_name() -> String {
+        std::thread::current()
+            .name()
+            .unwrap_or("unnamed")
+            .to_string()
+    }
+
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn create(inner: Box<dyn Processor>) -> ProcessorPtr {
         ProcessorPtr {
@@ -174,8 +181,10 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn process(&self) -> Result<()> {
         unsafe {
+            let thread_name = Self::current_thread_name();
             let span = LocalSpan::enter_with_local_parent(format!("{}::process", self.name()))
-                .with_property(|| ("graph-node-id", self.id().index().to_string()));
+                .with_property(|| ("graph-node-id", self.id().index().to_string()))
+                .with_property(|| ("thread_name", thread_name.clone()));
 
             match (*self.inner.get()).process() {
                 Ok(_) => Ok(()),
@@ -201,6 +210,7 @@ impl ProcessorPtr {
             let id = self.id();
             let mut name = self.name();
             name.push_str("::async_process");
+            let thread_name = Self::current_thread_name();
 
             let task = (*self.inner.get()).async_process();
 
@@ -216,7 +226,8 @@ impl ProcessorPtr {
             let inner = self.inner.clone();
             async move {
                 let span = Span::enter_with_local_parent(name)
-                    .with_property(|| ("graph-node-id", id.index().to_string()));
+                    .with_property(|| ("graph-node-id", id.index().to_string()))
+                    .with_property(|| ("thread_name", thread_name.clone()));
 
                 match task.await {
                     Ok(_) => {

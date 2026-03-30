@@ -46,6 +46,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
+use fastrace::collector::SpanContext;
 use futures_util::TryStreamExt;
 use md5::Digest;
 use md5::Md5;
@@ -207,7 +208,11 @@ impl TransformRecursiveCteSource {
             QueryFinishHooks::nested().into_callback(ctx.clone()),
         ));
         let settings = ExecutorSettings::try_create(ctx.clone())?;
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        let thread_span_parent = ctx
+            .get_executor_tracing_context()
+            .or_else(SpanContext::current_local_parent);
+        let pulling_executor =
+            PipelinePullingExecutor::from_pipelines(build_res, settings, thread_span_parent)?;
         ctx.set_executor(pulling_executor.get_inner())?;
         let isolate_runtime = Runtime::with_worker_threads(2, Some("r-cte-source".to_string()))?;
         let join_handle = isolate_runtime.spawn(async move {

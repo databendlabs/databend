@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_sql::Planner;
 use databend_common_sql::planner::QueryExecutor;
+use fastrace::collector::SpanContext;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
@@ -146,7 +147,12 @@ impl ServiceQueryExecutor {
         let result = async {
             let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
             let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-            let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            let thread_span_parent = self
+                .ctx
+                .get_executor_tracing_context()
+                .or_else(SpanContext::current_local_parent);
+            let pulling_executor =
+                PipelinePullingExecutor::from_pipelines(build_res, settings, thread_span_parent)?;
             self.ctx.set_executor(pulling_executor.get_inner())?;
 
             PullingExecutorStream::create(pulling_executor)?

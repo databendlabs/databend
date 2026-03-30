@@ -521,12 +521,12 @@ vergen-gix = { version = "1", features = ["build", "cargo", "rustc"] }
 
 # Observability
 env_logger = "0.11"
-fastrace = { version = "0.7.14", features = ["enable"] }
-fastrace-opentelemetry = "0.10"
+fastrace = { version = "0.7.17", features = ["enable"] }
+fastrace-opentelemetry = "0.16"
 log = { version = "0.4.27", features = ["serde", "kv_serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.29", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.29", default-features = false, features = [
+opentelemetry = { version = "0.31", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = [
     "trace",
     "logs",
     "metrics",
@@ -536,7 +536,8 @@ opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry-proto = { version = "0.31", features = ["gen-tonic-messages", "trace", "with-serde"] }
+opentelemetry_sdk = { version = "0.31", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
 tracing = "0.1.40"
@@ -548,6 +549,9 @@ sqllogictest = "0.28.4"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
+# Temporary workaround for false positives from async_backtrace::framed and
+# fastrace::trace macro expansion under `cargo clippy --workspace --all-targets -- -D warnings`.
+unused_braces = "allow"
 
 [workspace.lints.clippy]
 useless_format = "allow"

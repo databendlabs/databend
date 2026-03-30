@@ -43,6 +43,7 @@ use databend_common_storages_basic::gen_result_cache_key;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_users::UserApiProvider;
+use fastrace::collector::SpanContext;
 use serde::Serialize;
 use serde_json;
 
@@ -552,7 +553,15 @@ impl ExplainInterpreter {
                 executor.execute()?;
             }
             false => {
-                let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+                let thread_span_parent = self
+                    .ctx
+                    .get_executor_tracing_context()
+                    .or_else(SpanContext::current_local_parent);
+                let mut executor = PipelinePullingExecutor::from_pipelines(
+                    build_res,
+                    settings,
+                    thread_span_parent,
+                )?;
                 executor.start();
                 while (executor.pull_data()?).is_some() {}
             }

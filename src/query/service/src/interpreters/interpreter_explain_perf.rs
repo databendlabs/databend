@@ -34,6 +34,7 @@ use databend_common_pipeline::core::always_callback;
 use databend_common_sql::Planner;
 use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_runtime::DatabendRuntime;
+use fastrace::collector::SpanContext;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -174,7 +175,11 @@ impl ExplainPerfInterpreter {
             ctx.set_executor(executor.get_inner())?;
             executor.execute()?;
         } else {
-            let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            let thread_span_parent = ctx
+                .get_executor_tracing_context()
+                .or_else(SpanContext::current_local_parent);
+            let mut executor =
+                PipelinePullingExecutor::from_pipelines(build_res, settings, thread_span_parent)?;
             ctx.set_executor(executor.get_inner())?;
             executor.start();
             while (executor.pull_data()?).is_some() {}

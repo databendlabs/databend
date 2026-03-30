@@ -21,7 +21,6 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
-use fastrace::func_path;
 use fastrace::prelude::*;
 
 use crate::pipelines::executor::ExecutorSettings;
@@ -101,11 +100,21 @@ impl PipelineCompleteExecutor {
         .flatten()
     }
 
-    fn thread_function(&self) -> impl Fn() -> Result<()> + use<> {
-        let span = Span::enter_with_local_parent(func_path!());
+    fn thread_function(&self) -> impl FnOnce() -> Result<()> + use<> {
+        let parent = SpanContext::current_local_parent();
         let executor = self.executor.clone();
 
         move || {
+            let span = if let Some(parent) = parent {
+                let thread_name = std::thread::current()
+                    .name()
+                    .unwrap_or("unnamed")
+                    .to_string();
+                Span::root("PipelineCompleteExecutor::thread_function", parent)
+                    .with_property(|| ("thread_name", thread_name))
+            } else {
+                Span::noop()
+            };
             let _g = span.set_local_parent();
             executor.execute()
         }
