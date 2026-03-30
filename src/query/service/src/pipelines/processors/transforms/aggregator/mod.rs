@@ -24,7 +24,10 @@ mod transform_aggregate_final;
 mod transform_aggregate_partial;
 mod transform_partition_bucket;
 mod transform_single_key;
+#[cfg(feature = "script-udf")]
 mod udaf_script;
+#[cfg(not(feature = "script-udf"))]
+mod udaf_script_stub;
 
 pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
@@ -36,7 +39,11 @@ pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
+#[cfg(feature = "script-udf")]
 pub use udaf_script::*;
+#[cfg(not(feature = "script-udf"))]
+pub use udaf_script_stub::*;
 
 pub use self::serde::*;
+#[cfg(feature = "script-udf")]
 use super::runtime_pool;

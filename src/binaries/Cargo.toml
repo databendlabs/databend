@@ -8,13 +8,14 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "jemalloc"]
+default = ["simd", "jemalloc", "script-udf"]
 memory-profiling = [
     "databend-query/memory-profiling",
     "databend-common-base/memory-profiling",
 ]
+script-udf = ["databend-enterprise-query/script-udf", "databend-query/script-udf"]
 python-udf = ["databend-query/python-udf"]
-simd = ["databend-query/simd"]
+simd = ["databend-enterprise-query/simd", "databend-query/simd"]
 jemalloc = ["databend-common-base/jemalloc", "databend-query/jemalloc"]
 
 [dependencies]
@@ -27,9 +28,9 @@ databend-common-metrics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
-databend-enterprise-query = { workspace = true }
+databend-enterprise-query = { path = "../query/ee", default-features = false }
 databend-meta-ver = { workspace = true }
-databend-query = { workspace = true }
+databend-query = { path = "../query/service", default-features = false }
 databend-storages-common-table-meta = { workspace = true }
 limits-rs = { workspace = true }
 log = { workspace = true }

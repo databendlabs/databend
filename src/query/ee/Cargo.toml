@@ -7,6 +7,11 @@ name = "databend-enterprise-query"
 publish = { workspace = true }
 version = { workspace = true }
 
+[features]
+default = ["simd", "script-udf"]
+simd = ["databend-query/simd"]
+script-udf = ["databend-query/script-udf"]
+
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
@@ -46,7 +51,7 @@ databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
-databend-query = { workspace = true }
+databend-query = { path = "../service", default-features = false }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
