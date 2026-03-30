@@ -5471,6 +5471,7 @@ impl<'a> TypeChecker<'a> {
                 DecimalSize::new_unchecked(*precision, *scale),
             )),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
+            Literal::Binary(bytes) => Scalar::Binary(bytes.clone()),
             Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
@@ -5506,7 +5507,7 @@ impl<'a> TypeChecker<'a> {
             )),
             Literal::Float64(v) => Scalar::Number(NumberScalar::Float64((-*v).into())),
             Literal::Null => Scalar::Null,
-            Literal::String(_) | Literal::Boolean(_) => {
+            Literal::Binary(_) | Literal::String(_) | Literal::Boolean(_) => {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "Invalid minus operator for {}",
                     literal

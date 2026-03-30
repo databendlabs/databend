@@ -2,6 +2,17 @@ statement ok
 drop table if exists fmt_bin
 
 statement ok
+set binary_output_format = 'hex'
+
+query TT
+select typeof(X'ABCD'), X'ABCD'
+----
+Binary ABCD
+
+statement error
+select X'0A' + 1
+
+statement ok
 create table fmt_bin(id int, v binary)
 
 statement ok

@@ -134,3 +134,16 @@ error:
   | while parsing expression
 
 
+---------- Input ----------
+x'ABC'
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | x'ABC'
+  | ^^^^^^
+  | |
+  | expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...
+  | while parsing expression
+
+
