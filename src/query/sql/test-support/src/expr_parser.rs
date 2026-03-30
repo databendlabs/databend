@@ -733,6 +733,7 @@ fn transform_literal(lit: ASTLiteral) -> Scalar {
             DecimalSize::new_unchecked(precision, scale),
         )),
         ASTLiteral::String(s) => Scalar::String(s),
+        ASTLiteral::Binary(b) => Scalar::Binary(b),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,
         ASTLiteral::Float64(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),

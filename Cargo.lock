@@ -3382,6 +3382,7 @@ dependencies = [
  "fast-float2",
  "fastrace",
  "goldenfile",
+ "hex",
  "indent",
  "itertools 0.13.0",
  "logos",

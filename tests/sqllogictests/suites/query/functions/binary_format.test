@@ -66,6 +66,11 @@ select id, to_hex(v) from fmt_bin where id in (4,5) order by id
 4 616263
 5 61626364
 
+query TT
+select to_hex(X'ABCD'), X'ABCD' = from_hex('ABCD')
+----
+ABCD true
+
 statement ok
 set binary_output_format = 'hex'
 
