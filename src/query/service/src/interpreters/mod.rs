@@ -31,7 +31,9 @@ mod interpreter_connection_create;
 mod interpreter_connection_desc;
 mod interpreter_connection_drop;
 mod interpreter_connection_show;
+#[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_location;
+#[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_table;
 mod interpreter_create_warehouses;
 mod interpreter_create_workload_group;

@@ -17,6 +17,7 @@ mod async_crash_me;
 mod cloud;
 mod copy_history;
 mod fuse_vacuum2;
+#[cfg(feature = "storage-stage")]
 mod infer_schema;
 mod inspect_parquet;
 mod list_stage;

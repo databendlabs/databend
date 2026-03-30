@@ -59,6 +59,7 @@ use crate::table_functions::cloud::TaskDependentsTable;
 use crate::table_functions::cloud::TaskHistoryTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
 use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
+#[cfg(feature = "storage-stage")]
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
@@ -268,6 +269,7 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(AsyncCrashMeTable::create)),
         );
 
+        #[cfg(feature = "storage-stage")]
         creators.insert(
             "infer_schema".to_string(),
             (next_id(), Arc::new(InferSchemaTable::create)),

@@ -28,6 +28,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+#[cfg(feature = "storage-stage")]
 use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::binder::ConstraintExprBinder;
@@ -37,6 +38,7 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::operations::TransformConstraintVerify;
+#[cfg(feature = "storage-stage")]
 use databend_common_storages_stage::build_streaming_load_pipeline;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use log::info;
@@ -283,6 +285,7 @@ impl Interpreter for InsertInterpreter {
 
                 return Ok(build_res);
             }
+            #[cfg(feature = "storage-stage")]
             InsertInputSource::StreamingLoad(plan) => {
                 build_streaming_load_pipeline(
                     self.ctx.clone(),
@@ -305,6 +308,12 @@ impl Interpreter for InsertInterpreter {
                         )
                     })?;
                 }
+            }
+            #[cfg(not(feature = "storage-stage"))]
+            InsertInputSource::StreamingLoad(_) => {
+                return Err(ErrorCode::Unimplemented(
+                    "Streaming load support is disabled, rebuild with cargo feature 'storage-stage'",
+                ));
             }
         };
         if !table_constraints.is_empty() {

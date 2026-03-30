@@ -59,7 +59,9 @@ use crate::interpreters::interpreter_connection_create::CreateConnectionInterpre
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
 use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
 use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
+#[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
+#[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_create_warehouses::CreateWarehouseInterpreter;
 use crate::interpreters::interpreter_create_workload_group::CreateWorkloadGroupInterpreter;
@@ -141,6 +143,12 @@ pub struct InterpreterFactory;
 fn cloud_control_disabled(op: &str) -> ErrorCode {
     ErrorCode::Unimplemented(format!(
         "{op} requires cargo feature 'cloud-control', rebuild with it enabled"
+    ))
+}
+
+fn stage_disabled(op: &str) -> ErrorCode {
+    ErrorCode::Unimplemented(format!(
+        "{op} requires cargo feature 'storage-stage', rebuild with it enabled"
     ))
 }
 
@@ -343,13 +351,19 @@ impl InterpreterFactory {
                 ctx,
                 sql.clone(),
             )?)),
+            #[cfg(feature = "storage-stage")]
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
                 ctx,
                 *copy_plan.clone(),
             )?)),
+            #[cfg(not(feature = "storage-stage"))]
+            Plan::CopyIntoTable(_) => Err(stage_disabled("COPY INTO TABLE")),
+            #[cfg(feature = "storage-stage")]
             Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(
                 CopyIntoLocationInterpreter::try_create(ctx, *copy_plan.clone())?,
             )),
+            #[cfg(not(feature = "storage-stage"))]
+            Plan::CopyIntoLocation(_) => Err(stage_disabled("COPY INTO LOCATION")),
             // catalogs
             Plan::ShowCreateCatalog(plan) => Ok(Arc::new(
                 ShowCreateCatalogInterpreter::try_create(ctx, *plan.clone())?,

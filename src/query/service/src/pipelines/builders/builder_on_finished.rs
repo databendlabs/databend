@@ -23,7 +23,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_storages_common_io::Files;
 use log::error;
 use log::info;
@@ -111,7 +111,7 @@ impl PipelineBuilder {
     pub async fn try_purge_files(ctx: Arc<QueryContext>, stage_info: &StageInfo, files: &[String]) {
         let start = Instant::now();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let op = StageTable::get_op(stage_info);
+        let op = init_stage_operator(stage_info);
 
         match op {
             Ok(op) => {

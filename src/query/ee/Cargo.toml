@@ -8,7 +8,14 @@ publish = { workspace = true }
 version = { workspace = true }
 
 [features]
-default = ["simd", "sql-script", "script-udf", "cloud-control", "virtual-column"]
+default = [
+    "simd",
+    "sql-script",
+    "script-udf",
+    "cloud-control",
+    "virtual-column",
+    "storage-stage",
+]
 simd = ["databend-query/simd"]
 sql-script = ["databend-query/sql-script"]
 script-udf = ["databend-query/script-udf"]
@@ -17,6 +24,7 @@ virtual-column = [
     "databend-query/virtual-column",
     "dep:databend-enterprise-virtual-column",
 ]
+storage-stage = ["databend-query/storage-stage"]
 
 [dependencies]
 async-backtrace = { workspace = true }
