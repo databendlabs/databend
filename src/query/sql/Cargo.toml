@@ -7,14 +7,15 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = []
+default = ["cloud-control"]
+cloud-control = ["dep:databend-common-cloud-control"]
 storage-hdfs = ["databend-common-config/storage-hdfs"]
 
 [dependencies]
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
-databend-common-cloud-control = { workspace = true }
+databend-common-cloud-control = { workspace = true, optional = true }
 databend-common-compress = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }

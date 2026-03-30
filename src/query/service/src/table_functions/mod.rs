@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod async_crash_me;
+#[cfg(feature = "cloud-control")]
 mod cloud;
 mod copy_history;
 mod fuse_vacuum2;

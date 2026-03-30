@@ -17,7 +17,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_ast::ast::TaskSql;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_cloud_control::task_utils;
 use databend_common_exception::Result;
 use databend_common_management::task::TaskMgr;
 use databend_common_meta_app::principal::Status;
@@ -29,6 +28,7 @@ use databend_common_sql::plans::DropTaskPlan;
 use databend_common_sql::plans::ExecuteTaskPlan;
 use databend_common_sql::plans::ShowTasksPlan;
 use databend_common_storages_system::PrivateTasksTable;
+use databend_common_storages_system::TaskRecord;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::task::TaskInterpreter;
@@ -100,7 +100,7 @@ impl TaskInterpreter for PrivateTaskInterpreter {
         &self,
         _ctx: &Arc<QueryContext>,
         plan: &DescribeTaskPlan,
-    ) -> Result<Option<task_utils::Task>> {
+    ) -> Result<Option<TaskRecord>> {
         let task = UserApiProvider::instance()
             .task_api(&plan.tenant)
             .describe_task(&plan.task_name)
@@ -122,7 +122,7 @@ impl TaskInterpreter for PrivateTaskInterpreter {
         &self,
         _ctx: &Arc<QueryContext>,
         plan: &ShowTasksPlan,
-    ) -> Result<Vec<task_utils::Task>> {
+    ) -> Result<Vec<TaskRecord>> {
         let tasks = UserApiProvider::instance()
             .task_api(&plan.tenant)
             .list_task()

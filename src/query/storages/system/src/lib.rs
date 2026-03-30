@@ -43,7 +43,9 @@ mod malloc_stats_table;
 #[cfg(feature = "jemalloc")]
 mod malloc_stats_totals_table;
 mod metrics_table;
+#[cfg(feature = "cloud-control")]
 mod notification_history_table;
+#[cfg(feature = "cloud-control")]
 mod notifications_table;
 mod one_table;
 mod password_policies_table;
@@ -63,7 +65,9 @@ mod table;
 mod table_functions_table;
 mod tables_table;
 mod tags_table;
+#[cfg(feature = "cloud-control")]
 mod task_history_table;
+mod task_types;
 mod tasks_table;
 mod temp_files_table;
 mod user_functions_table;
@@ -102,8 +106,11 @@ pub use malloc_stats_table::MallocStatsTable;
 #[cfg(feature = "jemalloc")]
 pub use malloc_stats_totals_table::MallocStatsTotalsTable;
 pub use metrics_table::MetricsTable;
+#[cfg(feature = "cloud-control")]
 pub use notification_history_table::NotificationHistoryTable;
+#[cfg(feature = "cloud-control")]
 pub use notifications_table::NotificationsTable;
+#[cfg(feature = "cloud-control")]
 pub use notifications_table::parse_notifications_to_datablock;
 pub use one_table::OneTable;
 pub use password_policies_table::PasswordPoliciesTable;
@@ -132,8 +139,16 @@ pub use tables_table::TablesTableWithoutHistory;
 pub use tables_table::ViewsTableWithHistory;
 pub use tables_table::ViewsTableWithoutHistory;
 pub use tags_table::TagsTable;
+#[cfg(feature = "cloud-control")]
 pub use task_history_table::TaskHistoryTable;
+#[cfg(feature = "cloud-control")]
 pub use task_history_table::parse_task_runs_to_datablock;
+pub use task_types::TaskRecord;
+pub use task_types::TaskRunRecord;
+pub use task_types::TaskRunState;
+pub use task_types::TaskStatus;
+pub use task_types::format_task_schedule_options;
+#[cfg(feature = "cloud-control")]
 pub use tasks_table::TasksTable;
 pub use tasks_table::parse_tasks_to_datablock;
 pub use temp_files_table::TempFilesTable;

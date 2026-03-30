@@ -28,7 +28,6 @@ use databend_common_cloud_control::pb::ExecuteTaskRequest;
 use databend_common_cloud_control::pb::ShowTasksRequest;
 use databend_common_cloud_control::pb::WarehouseOptions;
 use databend_common_cloud_control::pb::alter_task_request::AlterTaskType;
-use databend_common_cloud_control::task_utils;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,6 +39,7 @@ use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_sql::plans::DropTaskPlan;
 use databend_common_sql::plans::ExecuteTaskPlan;
 use databend_common_sql::plans::ShowTasksPlan;
+use databend_common_storages_system::TaskRecord;
 
 use crate::interpreters::common::get_task_client_config;
 use crate::interpreters::common::make_schedule_options;
@@ -307,7 +307,7 @@ impl TaskInterpreter for CloudTaskInterpreter {
         &self,
         ctx: &Arc<QueryContext>,
         plan: &DescribeTaskPlan,
-    ) -> Result<Option<task_utils::Task>> {
+    ) -> Result<Option<TaskRecord>> {
         let config = GlobalConfig::instance();
         if config
             .query
@@ -331,7 +331,7 @@ impl TaskInterpreter for CloudTaskInterpreter {
         let req = make_request(req, config);
         let resp = task_client.describe_task(req).await?;
 
-        resp.task.map(task_utils::Task::try_from).transpose()
+        resp.task.map(TaskRecord::try_from).transpose()
     }
 
     async fn drop_task(&self, ctx: &Arc<QueryContext>, plan: &DropTaskPlan) -> Result<()> {
@@ -364,7 +364,7 @@ impl TaskInterpreter for CloudTaskInterpreter {
         &self,
         ctx: &Arc<QueryContext>,
         plan: &ShowTasksPlan,
-    ) -> Result<Vec<task_utils::Task>> {
+    ) -> Result<Vec<TaskRecord>> {
         let config = GlobalConfig::instance();
         if config
             .query

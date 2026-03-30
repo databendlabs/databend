@@ -16,12 +16,15 @@ mod column;
 mod finish_hook;
 mod grant;
 mod metrics;
+#[cfg(feature = "cloud-control")]
 mod notification;
 mod query_log;
 mod stream;
 mod table;
+#[cfg(feature = "cloud-control")]
 mod task;
 mod util;
+#[cfg(feature = "cloud-control")]
 mod worker;
 
 mod log;
@@ -31,15 +34,20 @@ pub use column::*;
 pub use finish_hook::QueryFinishHooks;
 pub use grant::validate_grant_object_exists;
 pub use log::*;
+#[cfg(feature = "cloud-control")]
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
 pub use stream::dml_build_update_stream_req;
 pub use stream::query_build_update_stream_req;
 pub use table::check_referenced_computed_columns;
+#[cfg(feature = "cloud-control")]
 pub use task::get_task_client_config;
+#[cfg(feature = "cloud-control")]
 pub use task::make_schedule_options;
+#[cfg(feature = "cloud-control")]
 pub use task::make_warehouse_options;
 pub use util::check_deduplicate_label;
+#[cfg(feature = "cloud-control")]
 pub use worker::get_worker_client_config;
 
 pub use self::metrics::*;

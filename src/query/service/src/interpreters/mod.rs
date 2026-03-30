@@ -72,9 +72,13 @@ mod interpreter_network_policy_alter;
 mod interpreter_network_policy_create;
 mod interpreter_network_policy_desc;
 mod interpreter_network_policy_drop;
+#[cfg(feature = "cloud-control")]
 mod interpreter_notification_alter;
+#[cfg(feature = "cloud-control")]
 mod interpreter_notification_create;
+#[cfg(feature = "cloud-control")]
 mod interpreter_notification_desc;
+#[cfg(feature = "cloud-control")]
 mod interpreter_notification_drop;
 mod interpreter_optimize_compact_block;
 mod interpreter_optimize_compact_segment;
@@ -122,9 +126,13 @@ mod interpreter_show_workload_groups;
 mod interpreter_stream_create;
 mod interpreter_table_branch_create;
 mod interpreter_table_branch_drop;
+#[cfg(feature = "cloud-control")]
 mod interpreter_worker_alter;
+#[cfg(feature = "cloud-control")]
 mod interpreter_worker_create;
+#[cfg(feature = "cloud-control")]
 mod interpreter_worker_drop;
+#[cfg(feature = "cloud-control")]
 mod interpreter_worker_show;
 pub use hook::vacuum_hook::hook_clear_m_cte_temp_table;
 mod interpreter_object_tag;

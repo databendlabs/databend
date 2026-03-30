@@ -8,13 +8,21 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "jemalloc", "sql-script", "script-udf", "virtual-column"]
+default = [
+    "simd",
+    "jemalloc",
+    "sql-script",
+    "script-udf",
+    "cloud-control",
+    "virtual-column",
+]
 memory-profiling = [
     "databend-query/memory-profiling",
     "databend-common-base/memory-profiling",
 ]
 sql-script = ["databend-enterprise-query/sql-script", "databend-query/sql-script"]
 script-udf = ["databend-enterprise-query/script-udf", "databend-query/script-udf"]
+cloud-control = ["databend-enterprise-query/cloud-control", "databend-query/cloud-control"]
 virtual-column = [
     "databend-enterprise-query/virtual-column",
     "databend-query/virtual-column",

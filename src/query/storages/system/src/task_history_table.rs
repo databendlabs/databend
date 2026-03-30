@@ -42,6 +42,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
 use jiff::tz::TimeZone;
 
+use crate::TaskRunRecord;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
@@ -69,13 +70,13 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
 
     for task_run in task_runs {
-        let tr: databend_common_cloud_control::task_utils::TaskRun = task_run.try_into()?;
+        let tr: TaskRunRecord = task_run.try_into()?;
         name.push(tr.task_name);
         id.push(tr.task_id);
         owner.push(tr.owner);
         comment.push(tr.comment);
         schedule.push(tr.schedule_options);
-        warehouse.push(tr.warehouse_options.and_then(|s| s.warehouse));
+        warehouse.push(tr.warehouse);
         state.push(tr.state.to_string());
         exception_code.push(tr.error_code);
         exception_text.push(tr.error_message);

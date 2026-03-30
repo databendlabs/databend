@@ -29,7 +29,6 @@ use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::GetTaskDependentsRequest;
 use databend_common_cloud_control::pb::Task;
-use databend_common_cloud_control::task_utils;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
@@ -52,6 +51,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_storages_system::TaskRecord;
 
 pub struct TaskDependentsTable {
     table_info: TableInfo,
@@ -200,12 +200,12 @@ impl TaskDependentsSource {
 
         for task in tasks {
             let task = task.clone();
-            let tsk: task_utils::Task = task.try_into()?;
+            let tsk: TaskRecord = task.try_into()?;
             created_on.push(tsk.created_at.timestamp_micros());
             name.push(tsk.task_name.clone());
             owner.push(tsk.owner.clone());
             comment.push(tsk.comment.clone());
-            warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse.clone()));
+            warehouse.push(tsk.warehouse.clone());
             schedule.push(tsk.schedule_options.clone());
             predecessors.push(tsk.after.clone());
             state.push(tsk.status.to_string());

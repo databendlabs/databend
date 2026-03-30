@@ -22,6 +22,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::CatalogManager;
+#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -178,6 +179,7 @@ impl GlobalServices {
         )?;
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
+        #[cfg(feature = "cloud-control")]
         if let Some(addr) = config
             .query
             .common
@@ -186,6 +188,17 @@ impl GlobalServices {
         {
             CloudControlApiProvider::init(addr, config.query.common.cloud_control_grpc_timeout)
                 .await?;
+        }
+        #[cfg(not(feature = "cloud-control"))]
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_some()
+        {
+            return Err(ErrorCode::Unimplemented(
+                "cloud control support is disabled, rebuild with cargo feature 'cloud-control'",
+            ));
         }
 
         if !ee_mode {

@@ -45,7 +45,9 @@ use databend_common_storages_system::MallocStatsTable;
 #[cfg(feature = "jemalloc")]
 use databend_common_storages_system::MallocStatsTotalsTable;
 use databend_common_storages_system::MetricsTable;
+#[cfg(feature = "cloud-control")]
 use databend_common_storages_system::NotificationHistoryTable;
+#[cfg(feature = "cloud-control")]
 use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
@@ -63,7 +65,9 @@ use databend_common_storages_system::TableFunctionsTable;
 use databend_common_storages_system::TablesTableWithHistory;
 use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TagsTable;
+#[cfg(feature = "cloud-control")]
 use databend_common_storages_system::TaskHistoryTable;
+#[cfg(feature = "cloud-control")]
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TerseStreamsTable;
@@ -172,8 +176,6 @@ impl SystemDatabase {
                 BacktraceTable::create(sys_db_meta.next_table_id()),
                 TempFilesTable::create(sys_db_meta.next_table_id()),
                 LocksTable::create(sys_db_meta.next_table_id(), ctl_name),
-                NotificationsTable::create(sys_db_meta.next_table_id()),
-                NotificationHistoryTable::create(sys_db_meta.next_table_id()),
                 ViewsTableWithHistory::create(sys_db_meta.next_table_id(), ctl_name),
                 TemporaryTablesTable::create(sys_db_meta.next_table_id()),
                 DictionariesTable::create(sys_db_meta.next_table_id()),
@@ -187,11 +189,19 @@ impl SystemDatabase {
                 ),
                 ConstraintsTable::create(sys_db_meta.next_table_id()),
             ]);
+            #[cfg(feature = "cloud-control")]
+            table_list.push(NotificationsTable::create(sys_db_meta.next_table_id()));
+            #[cfg(feature = "cloud-control")]
+            table_list.push(NotificationHistoryTable::create(
+                sys_db_meta.next_table_id(),
+            ));
             if config.task.on {
                 table_list.push(PrivateTasksTable::create(sys_db_meta.next_table_id()));
                 table_list.push(PrivateTaskHistoryTable::create(sys_db_meta.next_table_id()));
             } else {
+                #[cfg(feature = "cloud-control")]
                 table_list.push(TasksTable::create(sys_db_meta.next_table_id()));
+                #[cfg(feature = "cloud-control")]
                 table_list.push(TaskHistoryTable::create(sys_db_meta.next_table_id()));
             }
             disable_system_table_load = config.query.common.disable_system_table_load;

@@ -60,9 +60,13 @@ use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::table_context::TableContext;
+#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::client_config::build_client_config;
+#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::client_config::make_request;
+#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::pb::CreateWorkerRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -5933,57 +5937,68 @@ impl<'a> TypeChecker<'a> {
         resource_type: &str,
         script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
-        let Some(_) = &GlobalConfig::instance()
-            .query
-            .common
-            .cloud_control_grpc_server_address
-        else {
+        #[cfg(not(feature = "cloud-control"))]
+        {
+            let _ = (resource_name, resource_type, script);
             return Err(ErrorCode::Unimplemented(
-                "SandboxUDF requires cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        };
-
-        let provider = CloudControlApiProvider::instance();
-        let tenant = self.ctx.get_tenant();
-        let user = self
-            .ctx
-            .get_current_user()?
-            .identity()
-            .display()
-            .to_string();
-        let query_id = self.ctx.get_id();
-        let mut cfg = build_client_config(
-            tenant.tenant_name().to_string(),
-            user,
-            query_id,
-            provider.get_timeout(),
-        );
-        cfg.add_worker_version_info();
-
-        let req = CreateWorkerRequest {
-            tenant_id: tenant.tenant_name().to_string(),
-            name: resource_name.to_string(),
-            if_not_exists: true,
-            tags: Default::default(),
-            options: Default::default(),
-            r#type: resource_type.to_string(),
-            script,
-        };
-
-        let resp = databend_common_base::runtime::block_on(
-            provider
-                .get_worker_client()
-                .create_worker(make_request(req, cfg)),
-        )?;
-
-        let endpoint = resp.endpoint;
-        if endpoint.is_empty() {
-            return Err(ErrorCode::CloudControlConnectError(
-                "UDF cloud resource endpoint is empty".to_string(),
+                "SandboxUDF requires cargo feature 'cloud-control', rebuild with it enabled",
             ));
         }
 
-        Ok((endpoint, resp.headers))
+        #[cfg(feature = "cloud-control")]
+        {
+            let Some(_) = &GlobalConfig::instance()
+                .query
+                .common
+                .cloud_control_grpc_server_address
+            else {
+                return Err(ErrorCode::Unimplemented(
+                    "SandboxUDF requires cloud control enabled, please set cloud_control_grpc_server_address in config",
+                ));
+            };
+
+            let provider = CloudControlApiProvider::instance();
+            let tenant = self.ctx.get_tenant();
+            let user = self
+                .ctx
+                .get_current_user()?
+                .identity()
+                .display()
+                .to_string();
+            let query_id = self.ctx.get_id();
+            let mut cfg = build_client_config(
+                tenant.tenant_name().to_string(),
+                user,
+                query_id,
+                provider.get_timeout(),
+            );
+            cfg.add_worker_version_info();
+
+            let req = CreateWorkerRequest {
+                tenant_id: tenant.tenant_name().to_string(),
+                name: resource_name.to_string(),
+                if_not_exists: true,
+                tags: Default::default(),
+                options: Default::default(),
+                r#type: resource_type.to_string(),
+                script,
+            };
+
+            let resp = databend_common_base::runtime::block_on(
+                provider
+                    .get_worker_client()
+                    .create_worker(make_request(req, cfg)),
+            )?;
+
+            let endpoint = resp.endpoint;
+            if endpoint.is_empty() {
+                return Err(ErrorCode::CloudControlConnectError(
+                    "UDF cloud resource endpoint is empty".to_string(),
+                ));
+            }
+
+            Ok((endpoint, resp.headers))
+        }
     }
 
     fn build_udf_cloud_imports(

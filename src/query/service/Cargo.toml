@@ -8,11 +8,16 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "sql-script", "script-udf", "virtual-column"]
+default = ["simd", "sql-script", "script-udf", "cloud-control", "virtual-column"]
 simd = ["databend-common-column/simd"]
 sql-script = ["dep:databend-common-script"]
 script-udf = ["dep:arrow-udf-runtime"]
 python-udf = ["script-udf", "arrow-udf-runtime/python"]
+cloud-control = [
+    "dep:databend-common-cloud-control",
+    "databend-common-sql/cloud-control",
+    "databend-common-storages-system/cloud-control",
+]
 virtual-column = [
     "dep:databend-enterprise-virtual-column",
     "databend-common-storages-system/virtual-column",
@@ -59,7 +64,7 @@ databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
-databend-common-cloud-control = { workspace = true }
+databend-common-cloud-control = { workspace = true, optional = true }
 databend-common-column = { workspace = true }
 databend-common-compress = { workspace = true }
 databend-common-config = { workspace = true }
@@ -81,7 +86,7 @@ databend-common-pipeline = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-script = { workspace = true, optional = true }
 databend-common-settings = { workspace = true }
-databend-common-sql = { workspace = true }
+databend-common-sql = { path = "../sql", default-features = false }
 databend-common-statistics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-basic = { workspace = true }
