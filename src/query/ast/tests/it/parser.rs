@@ -1560,6 +1560,7 @@ fn test_expr_error() {
         "#,
         r#"CAST(1 AS STRING) ESCAPE '$'"#,
         r#"1 + 1 ESCAPE '$'"#,
+        r#"x'ABC'"#,
     ];
 
     for case in cases {

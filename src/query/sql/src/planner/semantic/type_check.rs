@@ -5471,8 +5471,8 @@ impl<'a> TypeChecker<'a> {
                 DecimalSize::new_unchecked(*precision, *scale),
             )),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
-            Literal::String(string) => Scalar::String(string.clone()),
             Literal::Binary(bytes) => Scalar::Binary(bytes.clone()),
+            Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
         };

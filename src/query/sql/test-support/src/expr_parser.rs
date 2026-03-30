@@ -732,6 +732,7 @@ fn transform_literal(lit: ASTLiteral) -> Scalar {
             i256(value),
             DecimalSize::new_unchecked(precision, scale),
         )),
+        ASTLiteral::Binary(b) => Scalar::Binary(b),
         ASTLiteral::String(s) => Scalar::String(s),
         ASTLiteral::Binary(b) => Scalar::Binary(b),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),

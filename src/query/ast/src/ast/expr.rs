@@ -1027,6 +1027,7 @@ pub enum Literal {
         precision: u8,
         scale: u8,
     },
+    Binary(Vec<u8>),
     // Quoted string literal value
     String(String),
     Binary(Vec<u8>),
@@ -1074,6 +1075,9 @@ impl Display for Literal {
                     let s = buffer.format_finite(*val);
                     write!(f, "{s}")
                 }
+            }
+            Literal::Binary(val) => {
+                write!(f, "X'{}'", hex::encode_upper(val))
             }
             Literal::String(val) => {
                 write!(f, "{}", QuotedString(val, '\''))

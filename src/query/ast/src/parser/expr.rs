@@ -1604,7 +1604,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             })
         },
     );
-    let hex_uint = map_res(mysql_literal_hex_str, |str| {
+    let mysql_hex_uint = map_res(mysql_literal_hex_str, |str| {
         Ok(ExprElement::Literal {
             value: parse_uint(str, 16).map_err(nom::Err::Failure)?,
         })
@@ -1767,7 +1767,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         LiteralCodeString => with_span!(code_string).parse(i),
         LiteralInteger => with_span!(decimal_uint).parse(i),
         LiteralFloat => with_span!(rule!{ #decimal_float | #dot_number_map_access }).parse(i),
-        MySQLLiteralHex => with_span!(hex_uint).parse(i),
+        MySQLLiteralHex => with_span!(mysql_hex_uint).parse(i),
         PGLiteralHex => with_span!(binary).parse(i),
         TRUE | FALSE => with_span!(boolean).parse(i),
         NULL => with_span!(null).parse(i),
@@ -1938,7 +1938,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         },
         |token| parse_binary(token.text()).map_err(nom::Err::Failure),
     );
-    let mut hex_uint = map_res(mysql_literal_hex_str, |str| {
+    let mut mysql_hex_uint = map_res(mysql_literal_hex_str, |str| {
         parse_uint(str, 16).map_err(nom::Err::Failure)
     });
     let mut decimal_float = map_res(
@@ -1953,7 +1953,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         LiteralCodeString => code_string.parse(i),
         LiteralInteger => decimal_uint.parse(i),
         LiteralFloat => decimal_float.parse(i),
-        MySQLLiteralHex => hex_uint(i),
+        MySQLLiteralHex => mysql_hex_uint.parse(i),
         PGLiteralHex => binary.parse(i),
         TRUE | FALSE => boolean.parse(i),
         NULL => null.parse(i),
