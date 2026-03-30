@@ -20,6 +20,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::binder::validate_table_indexes_compatible_with_schema;
 use databend_meta_client::types::MatchSeq;
 
 use crate::FuseTable;
@@ -44,13 +46,37 @@ impl FuseTable {
             return Ok(());
         }
 
+        // Reverting to an older snapshot can drop columns from the visible schema. Validate
+        // schema-bound metadata against the target schema before committing the reverted meta.
+        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
+        let target_schema = table_reverting_to.schema();
+        if self.schema() != target_schema {
+            let tenant = ctx.get_tenant();
+
+            validate_table_indexes_compatible_with_schema(
+                ctx.clone(),
+                catalog.as_ref(),
+                &tenant,
+                self.get_id(),
+                target_schema.as_ref(),
+            )
+            .await?;
+
+            // Constraints are stored in TableMeta, so bind them directly against the target
+            // schema and fail the revert if they still reference columns that no longer exist.
+            validate_constraints_by_schema(
+                ctx.clone(),
+                &self.table_info.meta.constraints,
+                target_schema.as_ref(),
+            )?;
+        }
+
         // 2. prepare table meta which being reverted to
         let table_meta_to_be_committed = table_reverting_to.table_info.meta.clone();
 
         // 3. prepare the request
         //  using the CURRENT version as the base table version
         let base_version = self.table_info.ident.seq;
-        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
         let req = UpdateTableMetaReq {
             table_id,

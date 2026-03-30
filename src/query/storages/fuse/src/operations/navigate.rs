@@ -17,15 +17,24 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_sql::ApproxDistinctColumns;
+use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -42,6 +51,181 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::check_table_ref_access;
 
 impl FuseTable {
+    pub fn apply_snapshot_metadata_to_meta(
+        &self,
+        table_meta: &mut TableMeta,
+        snapshot: &TableSnapshot,
+    ) -> Result<()> {
+        let snapshot_cluster_key_meta = snapshot.cluster_key_meta.clone();
+        let cluster_type = if let Some(cluster_type) = snapshot.cluster_type {
+            Some(cluster_type)
+        } else if snapshot_cluster_key_meta == self.table_info.meta.cluster_key_v2 {
+            // Historical snapshots written before cluster_type was persisted may still share the
+            // same cluster-key version as the current table. Reuse the current cluster_type only
+            // in that compatibility case.
+            self.cluster_type()
+        } else {
+            // Intentionally do not expose partial cluster metadata here. Historical snapshots
+            // written before cluster_type persistence may only carry cluster_key_meta, which is
+            // not enough to safely reconstruct the exact historical clustering mode once the
+            // table has moved to a different cluster-key generation or non-linear clustering
+            // implementation. Clearing both cluster key and cluster type in that case is a
+            // deliberate fallback to avoid fabricating misleading metadata during navigation.
+            None
+        };
+
+        if let Some(cluster_type) = cluster_type {
+            table_meta.cluster_key_v2 = snapshot_cluster_key_meta;
+            table_meta.options.insert(
+                OPT_KEY_CLUSTER_TYPE.to_owned(),
+                cluster_type.to_string().to_lowercase(),
+            );
+        } else {
+            table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+            table_meta.cluster_key_v2 = None;
+        }
+
+        // Intentionally preserve current table-level governance metadata when the historical
+        // snapshot keeps the same schema. Branch/time-travel snapshot navigation is designed to
+        // restore snapshot-carried metadata (schema, clustering, statistics), but not to rewind
+        // later governance-only table_meta changes such as constraints, policies, or index
+        // options when the column layout itself is unchanged.
+        if table_meta.schema.as_ref() == &snapshot.schema {
+            return Ok(());
+        }
+
+        let snapshot_leaf_column_ids = snapshot.schema.to_leaf_column_id_set();
+        let mut historical_schema = snapshot.schema.clone();
+        historical_schema.next_column_id = self
+            .table_info
+            .meta
+            .schema
+            .next_column_id()
+            .max(historical_schema.next_column_id());
+
+        table_meta.fill_field_comments();
+        let comment_by_column_id = table_meta
+            .schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                (
+                    field.column_id(),
+                    table_meta
+                        .field_comments
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default(),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+
+        table_meta.schema = Arc::new(historical_schema);
+        table_meta.field_comments = snapshot
+            .schema
+            .fields()
+            .iter()
+            .map(|field| {
+                comment_by_column_id
+                    .get(&field.column_id())
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .collect();
+        table_meta.virtual_schema = None;
+        table_meta.column_mask_policy = None;
+        table_meta.row_access_policy = None;
+
+        if let Some(value) = table_meta.options.get(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+            if let ApproxDistinctColumns::Specify(cols) = value.parse::<ApproxDistinctColumns>()? {
+                let compatible = cols.iter().all(|col| {
+                    table_meta
+                        .schema
+                        .field_with_name(col)
+                        .map(|field| RangeIndex::supported_table_type(field.data_type()))
+                        .unwrap_or(false)
+                });
+
+                if !compatible {
+                    table_meta.options.remove(OPT_KEY_APPROX_DISTINCT_COLUMNS);
+                }
+            }
+        }
+
+        if let Some(value) = table_meta.options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            if let BloomIndexColumns::Specify(cols) = value.parse::<BloomIndexColumns>()? {
+                let compatible = cols.iter().all(|col| {
+                    table_meta
+                        .schema
+                        .field_with_name(col)
+                        .map(|field| BloomIndex::supported_type(field.data_type()))
+                        .unwrap_or(false)
+                });
+
+                if !compatible {
+                    table_meta.options.remove(OPT_KEY_BLOOM_INDEX_COLUMNS);
+                }
+            }
+        }
+
+        table_meta.indexes.retain(|_, index| {
+            index
+                .column_ids
+                .iter()
+                .all(|column_id| snapshot_leaf_column_ids.contains(column_id))
+        });
+        // Column mask policy: if the key (target column_id) is absent from the target schema,
+        // remove the entry — the policy lost its target. If the key exists but some value
+        // column_ids are missing, the policy definition is broken — report an error.
+        let mut broken_mask_column_ids = Vec::new();
+        table_meta
+            .column_mask_policy_columns_ids
+            .retain(|column_id, policy_map| {
+                if !snapshot_leaf_column_ids.contains(column_id) {
+                    return false;
+                }
+                if !policy_map
+                    .columns_ids
+                    .iter()
+                    .all(|id| snapshot_leaf_column_ids.contains(id))
+                {
+                    broken_mask_column_ids.push(*column_id);
+                }
+                true
+            });
+        if !broken_mask_column_ids.is_empty() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "Cannot navigate to target snapshot: masking policy on column ID(s) {:?} \
+                 references columns that do not exist in the target schema. \
+                 Please unset the masking policy before proceeding.",
+                broken_mask_column_ids
+            )));
+        }
+
+        // Row access policy: if all referenced column_ids are absent, clear the policy.
+        // If only some are missing, the policy is partially broken — report an error.
+        if let Some(policy_map) = &table_meta.row_access_policy_columns_ids {
+            let present_count = policy_map
+                .columns_ids
+                .iter()
+                .filter(|id| snapshot_leaf_column_ids.contains(id))
+                .count();
+            if present_count == 0 {
+                table_meta.row_access_policy_columns_ids = None;
+            } else if present_count < policy_map.columns_ids.len() {
+                return Err(ErrorCode::IllegalReference(
+                    "Cannot navigate to target snapshot: row access policy references \
+                     columns that partially do not exist in the target schema. \
+                     Please drop the row access policy before proceeding."
+                        .to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn navigate_to_point(
@@ -212,12 +396,7 @@ impl FuseTable {
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
-        // Cluster key will be restored from the snapshot.
-        // If the snapshot has no cluster key, means the table is currently unclustered.
-        // We do NOT fall back to table-level cluster key metadata here, even if
-        // the base table defines one. This is expected and by design.
-        table_info.meta.schema = Arc::new(snapshot.schema.clone());
-        table_info.meta.cluster_key_v2 = snapshot.cluster_key_meta.clone();
+        self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot)?;
         table_info
             .meta
             .options

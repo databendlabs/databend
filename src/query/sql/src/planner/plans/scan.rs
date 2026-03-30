@@ -159,7 +159,7 @@ impl Scan {
         self.update_stream_columns = update_stream_columns;
     }
 
-    fn used_columns(&self) -> ColumnSet {
+    pub(crate) fn used_columns(&self) -> ColumnSet {
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
             for pred in preds.iter() {

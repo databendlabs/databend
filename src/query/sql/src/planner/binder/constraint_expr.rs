@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
@@ -19,9 +20,11 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::Constraint;
 use parking_lot::RwLock;
 
@@ -49,7 +52,6 @@ pub struct ConstraintExprBinder {
 impl ConstraintExprBinder {
     pub fn try_new(ctx: Arc<dyn TableContext>, schema: DataSchemaRef) -> Result<Self> {
         let settings = ctx.get_settings();
-        let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
         let mut bind_context = BindContext::new();
         let mut metadata = Metadata::default();
         for field in schema.fields().iter() {
@@ -71,7 +73,7 @@ impl ConstraintExprBinder {
         Ok(ConstraintExprBinder {
             bind_context,
             ctx,
-            dialect,
+            dialect: Dialect::PostgreSQL,
             name_resolution_ctx,
             metadata,
             schema,
@@ -135,4 +137,27 @@ impl ConstraintExprBinder {
             .as_expr()?
             .project_column_ref(|col| self.schema.index_of(&col.column_name))
     }
+}
+
+pub fn validate_constraints_by_schema(
+    ctx: Arc<dyn TableContext>,
+    constraints: &BTreeMap<String, Constraint>,
+    schema: &TableSchema,
+) -> Result<()> {
+    if constraints.is_empty() {
+        return Ok(());
+    }
+
+    let mut binder = ConstraintExprBinder::try_new(ctx, Arc::new(schema.into()))?;
+    for (name, constraint) in constraints {
+        if binder.parse_and_bind(name, &constraint.expr()).is_err() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "Constraint '{}' is incompatible with the target schema. \
+                 Please DROP the constraint before proceeding.",
+                name
+            )));
+        }
+    }
+
+    Ok(())
 }
