@@ -195,7 +195,9 @@ mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_describe;
 mod interpreter_view_drop;
+#[cfg(feature = "virtual-column")]
 mod interpreter_virtual_column_refresh;
+#[cfg(feature = "virtual-column")]
 mod interpreter_virtual_column_vacuum;
 mod task;
 mod util;
@@ -313,5 +315,7 @@ pub use interpreter_vacuum_temporary_files::VacuumTemporaryFilesInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
+#[cfg(feature = "virtual-column")]
 pub use interpreter_virtual_column_refresh::RefreshVirtualColumnInterpreter;
+#[cfg(feature = "virtual-column")]
 pub use interpreter_virtual_column_vacuum::VacuumVirtualColumnInterpreter;

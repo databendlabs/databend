@@ -31,6 +31,7 @@ pub mod storages;
 pub mod stream;
 pub mod table_ref;
 pub mod test_kits;
+#[cfg(feature = "virtual-column")]
 pub mod virtual_column;
 
 /// Convert a meta service error to an ErrorCode.

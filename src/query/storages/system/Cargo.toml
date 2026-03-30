@@ -7,6 +7,8 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
+default = ["virtual-column"]
+virtual-column = []
 jemalloc = ["databend-common-base/jemalloc", "tikv-jemalloc-ctl"]
 
 [dependencies]

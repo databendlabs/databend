@@ -8,10 +8,14 @@ publish = { workspace = true }
 version = { workspace = true }
 
 [features]
-default = ["simd", "sql-script", "script-udf"]
+default = ["simd", "sql-script", "script-udf", "virtual-column"]
 simd = ["databend-query/simd"]
 sql-script = ["databend-query/sql-script"]
 script-udf = ["databend-query/script-udf"]
+virtual-column = [
+    "databend-query/virtual-column",
+    "dep:databend-enterprise-virtual-column",
+]
 
 [dependencies]
 async-backtrace = { workspace = true }
@@ -49,7 +53,7 @@ databend-enterprise-storage-encryption = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
-databend-enterprise-virtual-column = { workspace = true }
+databend-enterprise-virtual-column = { workspace = true, optional = true }
 databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-query = { path = "../service", default-features = false }

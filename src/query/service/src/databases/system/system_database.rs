@@ -71,6 +71,7 @@ use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::ViewsTableWithHistory;
 use databend_common_storages_system::ViewsTableWithoutHistory;
+#[cfg(feature = "virtual-column")]
 use databend_common_storages_system::VirtualColumnsTable;
 use databend_common_storages_system::ZeroTable;
 use databend_common_version::DATABEND_BUILD_PROFILE;
@@ -142,6 +143,7 @@ impl SystemDatabase {
             StagesTable::create(sys_db_meta.next_table_id()),
             TagsTable::create(sys_db_meta.next_table_id()),
             CatalogsTable::create(sys_db_meta.next_table_id()),
+            #[cfg(feature = "virtual-column")]
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
             PasswordPoliciesTable::create(sys_db_meta.next_table_id()),
             UserFunctionsTable::create(sys_db_meta.next_table_id()),

@@ -31,6 +31,7 @@ use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
+#[cfg(feature = "virtual-column")]
 use databend_common_storages_fuse::table_functions::FuseVirtualColumnFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
@@ -205,6 +206,7 @@ impl TableFunctionFactory {
             ),
         );
 
+        #[cfg(feature = "virtual-column")]
         creators.insert(
             "fuse_virtual_column".to_string(),
             (

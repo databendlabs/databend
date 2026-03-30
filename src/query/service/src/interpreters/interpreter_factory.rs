@@ -136,6 +136,12 @@ fn sql_script_disabled(op: &str) -> ErrorCode {
     ))
 }
 
+fn virtual_column_disabled(op: &str) -> ErrorCode {
+    ErrorCode::Unimplemented(format!(
+        "{op} requires cargo feature 'virtual-column', rebuild with it enabled"
+    ))
+}
+
 /// InterpreterFactory provides `get` method which transforms `Plan` into the corresponding interpreter.
 /// Such as: Plan::Query -> InterpreterSelectV2
 impl InterpreterFactory {
@@ -544,12 +550,18 @@ impl InterpreterFactory {
                 RefreshTableIndexInterpreter::try_create(ctx, *index.clone())?,
             )),
             // Virtual columns
+            #[cfg(feature = "virtual-column")]
             Plan::RefreshVirtualColumn(refresh_virtual_column) => Ok(Arc::new(
                 RefreshVirtualColumnInterpreter::try_create(ctx, *refresh_virtual_column.clone())?,
             )),
+            #[cfg(not(feature = "virtual-column"))]
+            Plan::RefreshVirtualColumn(_) => Err(virtual_column_disabled("REFRESH VIRTUAL COLUMN")),
+            #[cfg(feature = "virtual-column")]
             Plan::VacuumVirtualColumn(vacuum_virtual_column) => Ok(Arc::new(
                 VacuumVirtualColumnInterpreter::try_create(ctx, *vacuum_virtual_column.clone())?,
             )),
+            #[cfg(not(feature = "virtual-column"))]
+            Plan::VacuumVirtualColumn(_) => Err(virtual_column_disabled("VACUUM VIRTUAL COLUMN")),
             // Users
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,

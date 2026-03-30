@@ -8,11 +8,15 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "sql-script", "script-udf"]
+default = ["simd", "sql-script", "script-udf", "virtual-column"]
 simd = ["databend-common-column/simd"]
 sql-script = ["dep:databend-common-script"]
 script-udf = ["dep:arrow-udf-runtime"]
 python-udf = ["script-udf", "arrow-udf-runtime/python"]
+virtual-column = [
+    "dep:databend-enterprise-virtual-column",
+    "databend-common-storages-system/virtual-column",
+]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 jemalloc = ["databend-common-storages-system/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
@@ -91,7 +95,7 @@ databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-common-storages-stage = { workspace = true }
 databend-common-storages-stream = { workspace = true }
-databend-common-storages-system = { workspace = true }
+databend-common-storages-system = { path = "../storages/system", default-features = false }
 databend-common-telemetry = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
@@ -104,7 +108,7 @@ databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
-databend-enterprise-virtual-column = { workspace = true }
+databend-enterprise-virtual-column = { workspace = true, optional = true }
 databend-meta-client = { workspace = true }
 databend-meta-plugin-semaphore = { workspace = true }
 databend-meta-runtime = { workspace = true }
