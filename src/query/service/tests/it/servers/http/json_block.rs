@@ -102,8 +102,10 @@ fn test_driver_mode_data_block() -> anyhow::Result<()> {
         BinaryType::from_data(vec![b"x".as_slice()]),
     ];
 
-    let mut display = OutputFormatSettings::default();
-    display.binary_format = BinaryDisplayFormat::Base64;
+    let display = OutputFormatSettings {
+        binary_format: BinaryDisplayFormat::Base64,
+        ..Default::default()
+    };
 
     let mut driver = display.clone();
     driver.http_json_result_mode = HttpHandlerDataFormat::Driver;
