@@ -114,7 +114,7 @@ databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
 databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
-databend-common-storages-stage = { workspace = true, optional = true, default-features = false }
+databend-common-storages-stage = { path = "../storages/stage", optional = true, default-features = false }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { path = "../storages/system", default-features = false }
 databend-common-telemetry = { workspace = true }
