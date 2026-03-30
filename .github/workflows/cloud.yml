@@ -77,7 +77,8 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: meta,query
           category: docker
-          features: python-udf
+          features: simd,jemalloc,sql-script,script-udf,python-udf,cloud-control,virtual-column,storage-stage,storage-stage-lance
+          no_default_features: true
           trim_debug: false
 
   docker:

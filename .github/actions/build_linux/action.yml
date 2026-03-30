@@ -19,6 +19,10 @@ inputs:
     description: "Features to build"
     required: false
     default: "default"
+  no_default_features:
+    description: "Build with --no-default-features"
+    required: false
+    default: "false"
   category:
     description: "Category to upload"
     required: false
@@ -72,22 +76,30 @@ runs:
       if: inputs.artifacts == 'all'
       shell: bash
       run: |
+        extra_flags=""
+        if [[ "${{ inputs.no_default_features }}" == "true" ]]; then
+          extra_flags="--no-default-features"
+        fi
         artifacts="meta,metactl,metabench,query,sqllogictests,bendsave"
         binaries=""
         for artifact in ${artifacts//,/ }; do
           binaries="${binaries} --bin databend-$artifact"
         done
-        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
+        cargo build --target ${{ inputs.target }} ${extra_flags} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Release for specific artifacts
       if: inputs.artifacts != 'all'
       shell: bash
       run: |
+        extra_flags=""
+        if [[ "${{ inputs.no_default_features }}" == "true" ]]; then
+          extra_flags="--no-default-features"
+        fi
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          cargo build --target ${{ inputs.target }} ${extra_flags} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
           ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 

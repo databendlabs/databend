@@ -19,6 +19,7 @@ runs:
   steps:
     - uses: ./.github/actions/setup_test
       with:
+        category: cloud-control
         artifacts: sqllogictests,meta,query
 
     - name: Run sqllogic Tests with Standalone mode

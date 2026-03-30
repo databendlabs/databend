@@ -15,6 +15,7 @@ default = [
     "cloud-control",
     "virtual-column",
     "storage-stage",
+    "storage-stage-lance",
 ]
 simd = ["databend-common-column/simd"]
 sql-script = ["dep:databend-common-script"]
@@ -31,6 +32,10 @@ virtual-column = [
 ]
 storage-stage = [
     "dep:databend-common-storages-stage",
+]
+storage-stage-lance = [
+    "storage-stage",
+    "databend-common-storages-stage/storage-stage-lance",
     "databend-common-sql/storage-stage-lance",
 ]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
@@ -109,7 +114,7 @@ databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
 databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
-databend-common-storages-stage = { workspace = true, optional = true }
+databend-common-storages-stage = { workspace = true, optional = true, default-features = false }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { path = "../storages/system", default-features = false }
 databend-common-telemetry = { workspace = true }

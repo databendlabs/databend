@@ -15,6 +15,7 @@ default = [
     "cloud-control",
     "virtual-column",
     "storage-stage",
+    "storage-stage-lance",
 ]
 simd = ["databend-query/simd"]
 sql-script = ["databend-query/sql-script"]
@@ -25,6 +26,7 @@ virtual-column = [
     "dep:databend-enterprise-virtual-column",
 ]
 storage-stage = ["databend-query/storage-stage"]
+storage-stage-lance = ["databend-query/storage-stage-lance"]
 
 [dependencies]
 async-backtrace = { workspace = true }
