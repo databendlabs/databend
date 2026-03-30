@@ -150,6 +150,7 @@ impl GlobalServices {
         session_manager.register_service(DataExchangeManager::instance());
         session_manager.register_service(LockManager::instance());
         session_manager.register_service(AuthMgr::instance());
+        session_manager.register_service(CatalogManager::instance());
 
         // Init user manager.
         // Builtin users and udfs are created here.
@@ -188,6 +189,7 @@ impl GlobalServices {
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
+        session_manager.register_service(CacheManager::instance());
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config
