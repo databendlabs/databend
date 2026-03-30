@@ -624,6 +624,29 @@ impl QueryVisitor {
                     value: Literal::String(fuzz_str),
                 }
             }
+            Literal::Binary(bytes) => {
+                let fuzz_bytes = match self.rng.gen_range(0..4) {
+                    0 => vec![],
+                    1 => {
+                        let mut owned = bytes.clone();
+                        owned.extend_from_slice(bytes);
+                        owned
+                    }
+                    2 => {
+                        let mut owned = bytes.clone();
+                        let len = owned.len();
+                        if let Some(byte) = owned.get_mut(self.rng.gen_range(0..len.max(1))) {
+                            *byte = byte.wrapping_add(1);
+                        }
+                        owned
+                    }
+                    _ => bytes.clone(),
+                };
+                Expr::Literal {
+                    span: None,
+                    value: Literal::Binary(fuzz_bytes),
+                }
+            }
             Literal::Boolean(val) => Expr::Literal {
                 span: None,
                 value: Literal::Boolean(*val),
