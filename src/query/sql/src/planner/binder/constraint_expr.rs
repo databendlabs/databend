@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
@@ -19,9 +20,11 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::Constraint;
 use parking_lot::RwLock;
 
@@ -135,4 +138,27 @@ impl ConstraintExprBinder {
             .as_expr()?
             .project_column_ref(|col| self.schema.index_of(&col.column_name))
     }
+}
+
+pub fn validate_constraints_by_schema(
+    ctx: Arc<dyn TableContext>,
+    constraints: &BTreeMap<String, Constraint>,
+    schema: &TableSchema,
+) -> Result<()> {
+    if constraints.is_empty() {
+        return Ok(());
+    }
+
+    let mut binder = ConstraintExprBinder::try_new(ctx, Arc::new(schema.into()))?;
+    for (name, constraint) in constraints {
+        if binder.parse_and_bind(name, &constraint.expr()).is_err() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "Constraint '{}' is incompatible with the target schema. \
+                 Please DROP the constraint before proceeding.",
+                name
+            )));
+        }
+    }
+
+    Ok(())
 }
