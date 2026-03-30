@@ -37,6 +37,8 @@ pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;
 pub use http_query_handlers::query_route;
 #[cfg(not(feature = "storage-stage"))]
+use poem::IntoResponse;
+#[cfg(not(feature = "storage-stage"))]
 use poem::Request;
 #[cfg(not(feature = "storage-stage"))]
 use poem::Response;
