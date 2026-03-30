@@ -104,7 +104,7 @@ impl FieldEncoderToString {
             )),
             Column::Geometry(c) => self.encode_geometry(unsafe { c.index_unchecked(row_index) }),
             Column::Geography(c) => {
-                self.encode_geometry(unsafe { &c.index_unchecked(row_index).0 })
+                self.encode_geometry(unsafe { c.index_unchecked(row_index).0 })
             }
             Column::Opaque(c) => Ok(Cow::Owned(self.encode_opaque(c, row_index))),
             Column::Array(box c) => {
