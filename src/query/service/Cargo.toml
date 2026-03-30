@@ -8,8 +8,9 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "script-udf"]
+default = ["simd", "sql-script", "script-udf"]
 simd = ["databend-common-column/simd"]
+sql-script = ["dep:databend-common-script"]
 script-udf = ["dep:arrow-udf-runtime"]
 python-udf = ["script-udf", "arrow-udf-runtime/python"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
@@ -74,7 +75,7 @@ databend-common-meta-store = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
-databend-common-script = { workspace = true }
+databend-common-script = { workspace = true, optional = true }
 databend-common-settings = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-statistics = { workspace = true }

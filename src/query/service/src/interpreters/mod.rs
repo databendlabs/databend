@@ -50,6 +50,7 @@ mod interpreter_dictionary_show_create;
 mod interpreter_drop_warehouse_cluster;
 mod interpreter_drop_warehouses;
 mod interpreter_drop_workload_group;
+#[cfg(feature = "sql-script")]
 mod interpreter_execute_immediate;
 mod interpreter_explain;
 mod interpreter_explain_perf;
@@ -85,6 +86,7 @@ mod interpreter_password_policy_drop;
 mod interpreter_presign;
 mod interpreter_privilege_grant;
 mod interpreter_privilege_revoke;
+#[cfg(feature = "sql-script")]
 mod interpreter_procedure_call;
 mod interpreter_procedure_create;
 mod interpreter_procedure_desc;
@@ -219,6 +221,7 @@ pub use interpreter_database_rename::RenameDatabaseInterpreter;
 pub use interpreter_database_show_create::ShowCreateDatabaseInterpreter;
 pub use interpreter_database_undrop::UndropDatabaseInterpreter;
 pub use interpreter_dictionary_rename::RenameDictionaryInterpreter;
+#[cfg(feature = "sql-script")]
 pub use interpreter_execute_immediate::ExecuteImmediateInterpreter;
 pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_explain_perf::ExplainPerfInterpreter;
@@ -246,6 +249,8 @@ pub use interpreter_password_policy_desc::DescPasswordPolicyInterpreter;
 pub use interpreter_password_policy_drop::DropPasswordPolicyInterpreter;
 pub use interpreter_privilege_grant::GrantPrivilegeInterpreter;
 pub use interpreter_privilege_revoke::RevokePrivilegeInterpreter;
+#[cfg(feature = "sql-script")]
+pub use interpreter_procedure_call::CallProcedureInterpreter;
 pub use interpreter_procedure_desc::DescProcedureInterpreter;
 pub use interpreter_replace::ReplaceInterpreter;
 pub use interpreter_role_alter::AlterRoleInterpreter;

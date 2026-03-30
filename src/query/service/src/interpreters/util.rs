@@ -14,9 +14,13 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "sql-script")]
 use databend_common_ast::ast::Expr;
+#[cfg(feature = "sql-script")]
 use databend_common_ast::parser::Dialect;
+#[cfg(feature = "sql-script")]
 use databend_common_ast::parser::parse_expr;
+#[cfg(feature = "sql-script")]
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
@@ -25,20 +29,31 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+#[cfg(feature = "sql-script")]
 use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::UserInfo;
+#[cfg(feature = "sql-script")]
 use databend_common_script::Client;
+#[cfg(feature = "sql-script")]
 use databend_common_script::ir::ColumnAccess;
 use databend_common_sql::Metadata;
+#[cfg(feature = "sql-script")]
 use databend_common_sql::Planner;
+#[cfg(feature = "sql-script")]
 use databend_common_version::BUILD_INFO;
+#[cfg(feature = "sql-script")]
 use futures_util::TryStreamExt;
+#[cfg(feature = "sql-script")]
 use itertools::Itertools;
 
+#[cfg(feature = "sql-script")]
 use crate::interpreters::InterpreterFactory;
+#[cfg(feature = "sql-script")]
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
+#[cfg(feature = "sql-script")]
 use crate::sessions::QueryContext;
+#[cfg(feature = "sql-script")]
 use crate::sessions::TableContext;
 
 pub fn check_system_history(
@@ -111,16 +126,19 @@ pub fn generate_desc_schema(
     (names, types, nulls, default_exprs, extras)
 }
 
+#[cfg_attr(not(feature = "sql-script"), allow(dead_code))]
 #[derive(Debug, Clone)]
 pub struct QueryResult {
     pub(crate) schema: DataSchemaRef,
     pub(crate) block: DataBlock,
 }
 
+#[cfg(feature = "sql-script")]
 pub struct ScriptClient {
     pub(crate) ctx: Arc<QueryContext>,
 }
 
+#[cfg(feature = "sql-script")]
 impl ScriptClient {
     fn inherit_query_ctx(parent: &Arc<QueryContext>, child: &Arc<QueryContext>) {
         child.set_ua(parent.get_ua());
@@ -139,6 +157,7 @@ impl ScriptClient {
     }
 }
 
+#[cfg(feature = "sql-script")]
 impl Client for ScriptClient {
     type Var = Scalar;
     type Set = QueryResult;

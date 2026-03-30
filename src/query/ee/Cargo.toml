@@ -8,8 +8,9 @@ publish = { workspace = true }
 version = { workspace = true }
 
 [features]
-default = ["simd", "script-udf"]
+default = ["simd", "sql-script", "script-udf"]
 simd = ["databend-query/simd"]
+sql-script = ["databend-query/sql-script"]
 script-udf = ["databend-query/script-udf"]
 
 [dependencies]
