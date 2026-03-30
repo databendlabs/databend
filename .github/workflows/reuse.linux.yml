@@ -95,7 +95,7 @@ jobs:
           features: simd,jemalloc,sql-script,script-udf,virtual-column,storage-stage
           no_default_features: true
           category: full
-          artifacts: all
+          artifacts: sqllogictests,meta,metactl,metabench,query
       - name: upload sccache log
         if: always()
         uses: actions/upload-artifact@v4
