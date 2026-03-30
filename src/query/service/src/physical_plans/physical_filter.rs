@@ -124,7 +124,8 @@ impl IPhysicalPlan for Filter {
         self.input.build_pipeline(builder)?;
 
         builder.main_pipeline.add_transform(
-            builder.filter_transform_builder(&self.predicates, self.projections.clone())?,
+            builder
+                .filter_transform_builder::<false>(&self.predicates, self.projections.clone())?,
         )
     }
 }
