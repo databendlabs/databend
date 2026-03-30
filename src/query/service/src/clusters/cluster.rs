@@ -28,6 +28,7 @@ use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 use databend_common_cache::Cache;
@@ -89,6 +90,8 @@ pub struct ClusterDiscovery {
     flight_address: String,
     lru_cache: parking_lot::Mutex<LruCache<String, CachedNode>>,
 }
+
+impl Service for ClusterDiscovery {}
 
 // avoid leak FlightClient to common-xxx
 #[async_trait::async_trait]

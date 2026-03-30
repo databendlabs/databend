@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::future::Future;
 use std::ops::DerefMut;
@@ -22,13 +24,15 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
+use databend_common_base::base::ServiceProvider;
+use databend_common_base::base::ServiceRegistry;
 use databend_common_base::base::SignalStream;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::ProcessInfoState;
-use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -45,6 +49,7 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::session::Session;
+use crate::sessions::session_ctx::SessionServices;
 use crate::sessions::session_mgr_metrics::SessionManagerMetricsCollector;
 
 pub struct SessionManager {
@@ -52,10 +57,25 @@ pub struct SessionManager {
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Weak<Session>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
     pub metrics_collector: SessionManagerMetricsCollector,
+    pub(in crate::sessions) default_services: Arc<RwLock<SessionServices>>,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
+}
+
+impl ServiceProvider for SessionManager {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.default_services.read().get_service_any(type_id)
+    }
+}
+
+impl ServiceRegistry for SessionManager {
+    fn insert_service_any(&mut self, type_id: TypeId, service: Arc<dyn Any + Send + Sync>) {
+        self.default_services
+            .write()
+            .insert_service_any(type_id, service);
+    }
 }
 
 impl SessionManager {
@@ -77,13 +97,22 @@ impl SessionManager {
             mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             metrics_collector: SessionManagerMetricsCollector::new(),
+            default_services: Arc::new(RwLock::new(SessionServices::default())),
         });
         mgr.metrics_collector.attach_session_manager(mgr.clone());
+        mgr.default_services
+            .write()
+            .insert_service(Arc::new(conf.clone()));
+        mgr.default_services.write().insert_service(mgr.clone());
         mgr
     }
 
     pub fn instance() -> Arc<SessionManager> {
         GlobalInstance::get()
+    }
+
+    pub fn register_service(&self, service: Arc<impl Service>) {
+        self.default_services.write().insert_service(service);
     }
 
     #[async_backtrace::framed]
@@ -111,7 +140,7 @@ impl SessionManager {
             self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
         }
 
-        let tenant = GlobalConfig::instance().query.tenant_id.clone();
+        let tenant = InnerConfig::get_service(&self).query.tenant_id.clone();
         let settings = Settings::create(tenant);
         settings.load_changes().await?;
 
@@ -165,7 +194,8 @@ impl SessionManager {
             _ => None,
         };
 
-        let session_ctx = SessionContext::try_create(settings, typ.clone(), user)?;
+        let services = self.default_services.read().clone();
+        let session_ctx = SessionContext::new(settings, typ.clone(), user, services)?;
         let session = Session::try_create(
             id.clone(),
             typ.clone(),
@@ -516,3 +546,5 @@ impl SessionManager {
         Ok(all_temp_tables)
     }
 }
+
+impl Service for SessionManager {}

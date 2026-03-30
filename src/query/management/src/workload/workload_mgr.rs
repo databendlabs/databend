@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_base::uniq_id::GlobalUniq;
+use databend_common_base::base::Service;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroup;
@@ -38,6 +39,8 @@ pub struct WorkloadMgr {
     workload_key_prefix: String,
     workload_index_prefix: String,
 }
+
+impl Service for WorkloadMgr {}
 
 impl WorkloadMgr {
     pub fn create(metastore: MetaStore, tenant: &str) -> Result<Self> {

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -65,7 +66,7 @@ impl AsyncSystemTable for LocksTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog_mgr = CatalogManager::instance();
+        let catalog_mgr = CatalogManager::get_service(&ctx);
         let ctls = vec![
             catalog_mgr
                 .get_catalog(

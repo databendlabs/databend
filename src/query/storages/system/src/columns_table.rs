@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
@@ -66,7 +67,7 @@ impl AsyncSystemTable for ColumnsTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let catalog_mgr = CatalogManager::instance();
+        let catalog_mgr = CatalogManager::get_service(&ctx);
         let catalog = catalog_mgr
             .get_catalog(
                 ctx.get_tenant().tenant_name(),

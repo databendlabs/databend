@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -22,6 +23,7 @@ use std::time::Duration;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::ServiceProvider;
 use databend_common_base::base::WatchNotify;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
@@ -529,6 +531,12 @@ impl CtxDelegation {
             table_from_cache: AtomicUsize::new(0),
             table_without_cache: AtomicUsize::new(0),
         }
+    }
+}
+
+impl ServiceProvider for CtxDelegation {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.ctx.get_service_any(type_id)
     }
 }
 

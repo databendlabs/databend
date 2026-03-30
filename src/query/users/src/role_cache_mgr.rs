@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -40,6 +41,8 @@ pub struct RoleCacheManager {
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
 }
+
+impl Service for RoleCacheManager {}
 
 impl RoleCacheManager {
     pub fn init() -> Result<()> {

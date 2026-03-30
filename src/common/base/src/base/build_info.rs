@@ -14,6 +14,8 @@
 
 pub use semver::Version;
 
+use super::Service;
+
 pub type BuildInfoRef = &'static BuildInfo;
 
 #[derive(Debug, Clone)]
@@ -32,3 +34,5 @@ impl BuildInfo {
         format!("databend-query/{}", self.semantic)
     }
 }
+
+impl Service for BuildInfoRef {}

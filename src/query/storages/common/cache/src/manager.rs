@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
@@ -135,6 +136,8 @@ pub struct CacheManager {
     /// In non-EE mode, disk caches are always disabled.
     allows_on_disk_cache: AtomicBool,
 }
+
+impl Service for CacheManager {}
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.

@@ -16,6 +16,7 @@
 databend_common_tracing::register_module_tag!("[QUERY-CTX]");
 
 use std::any::Any;
+use std::any::TypeId;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -41,6 +42,7 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::ServiceProvider;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
@@ -937,6 +939,12 @@ impl QueryContext {
         let mut receivers = self.shared.materialized_cte_receivers.lock();
         let receivers = receivers.get_mut(cte_name).unwrap();
         receivers.pop().unwrap()
+    }
+}
+
+impl ServiceProvider for QueryContext {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.shared.session.session_ctx.get_service_any(type_id)
     }
 }
 

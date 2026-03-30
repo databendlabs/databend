@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -39,6 +40,8 @@ use crate::sessions::Session;
 pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
+
+impl Service for AuthMgr {}
 
 #[derive(Debug, Serialize)]
 pub enum CredentialType {

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -31,6 +32,8 @@ pub struct CloudControlApiProvider {
     pub worker_client: Arc<WorkerClient>,
     pub timeout: Duration,
 }
+
+impl Service for CloudControlApiProvider {}
 
 impl CloudControlApiProvider {
     pub async fn new(endpoint: String, timeout: u64) -> Result<Arc<CloudControlApiProvider>> {

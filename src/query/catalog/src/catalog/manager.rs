@@ -18,6 +18,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -58,6 +59,8 @@ pub struct CatalogManager {
     pub catalog_creators: HashMap<CatalogType, Arc<dyn CatalogCreator>>,
     pub catalog_caches: RwLock<HashMap<String, Arc<dyn Catalog>>>,
 }
+
+impl Service for CatalogManager {}
 
 impl CatalogManager {
     /// Fetch catalog manager from global instance.

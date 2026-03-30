@@ -14,10 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::Config;
-use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -46,8 +47,8 @@ impl SyncSystemTable for ConfigsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let config = GlobalConfig::instance()
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let config = InnerConfig::get_service(&ctx)
             .as_ref()
             .clone()
             .into_config()

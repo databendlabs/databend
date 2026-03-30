@@ -25,6 +25,7 @@ use dashmap::DashMap;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::ServiceProvider;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::PerfConfig;
@@ -144,7 +145,7 @@ pub struct FilteredCopyFiles {
 }
 
 #[async_trait::async_trait]
-pub trait TableContext: Send + Sync {
+pub trait TableContext: Send + Sync + ServiceProvider {
     fn as_any(&self) -> &dyn Any;
     /// Build a table instance the plan wants to operate on.
     ///

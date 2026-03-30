@@ -16,6 +16,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use jwt_simple::claims::JWTClaims;
@@ -66,6 +67,8 @@ pub trait LicenseManager: Sync + Send {
 pub struct LicenseManagerSwitch {
     manager: Box<dyn LicenseManager>,
 }
+
+impl Service for LicenseManagerSwitch {}
 
 impl LicenseManagerSwitch {
     pub fn create(manager: Box<dyn LicenseManager>) -> LicenseManagerSwitch {

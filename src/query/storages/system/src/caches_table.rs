@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
@@ -72,7 +73,7 @@ impl SyncSystemTable for CachesTable {
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_node = ctx.get_cluster().local_id.clone();
-        let cache_manager = CacheManager::instance();
+        let cache_manager = CacheManager::get_service(&ctx);
         let table_snapshot_cache = cache_manager.get_table_snapshot_cache();
         let table_snapshot_statistic_cache = cache_manager.get_table_snapshot_statistics_cache();
         let segment_info_cache = cache_manager.get_table_segment_cache();

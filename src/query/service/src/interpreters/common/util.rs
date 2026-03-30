@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_users::UserApiProvider;
@@ -39,7 +40,7 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
                     .lock()
                     .contains_deduplicated_label(&deduplicate_label)
             } else {
-                UserApiProvider::instance()
+                UserApiProvider::get_service(&ctx)
                     .get_meta_store_client()
                     .get_kv(&deduplicate_label)
                     .await

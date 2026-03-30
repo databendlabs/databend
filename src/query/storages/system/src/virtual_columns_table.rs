@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -55,7 +56,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
         let tenant = ctx.get_tenant();
         let session_state = ctx.session_state()?;
 
-        let catalog_mgr = CatalogManager::instance();
+        let catalog_mgr = CatalogManager::get_service(&ctx);
         let catalog = catalog_mgr.get_default_catalog(session_state)?;
 
         let mut database_names = Vec::new();

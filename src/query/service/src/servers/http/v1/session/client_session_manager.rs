@@ -19,6 +19,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
@@ -90,6 +91,8 @@ pub struct ClientSessionManager {
     pub max_idle_time: Duration,
     pub min_refresh_interval: Duration,
 }
+
+impl Service for ClientSessionManager {}
 
 impl ClientSessionManager {
     pub fn instance() -> Arc<ClientSessionManager> {

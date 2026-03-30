@@ -24,6 +24,7 @@ use std::time::SystemTime;
 use chrono::SecondsFormat;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -121,6 +122,8 @@ pub struct HttpQueryManager {
     #[allow(clippy::type_complexity)]
     pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
 }
+
+impl Service for HttpQueryManager {}
 
 impl HttpQueryManager {
     #[async_backtrace::framed]

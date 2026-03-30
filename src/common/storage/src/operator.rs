@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::register_counter_family;
@@ -559,6 +560,8 @@ pub struct DataOperator {
     params: StorageParams,
     spill_params: Option<StorageParams>,
 }
+
+impl Service for DataOperator {}
 
 impl DataOperator {
     /// Get the operator from PersistOperator

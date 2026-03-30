@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -72,6 +73,8 @@ pub struct UserApiProvider {
 
     builtin: BuiltIn,
 }
+
+impl Service for UserApiProvider {}
 
 impl UserApiProvider {
     #[async_backtrace::framed]

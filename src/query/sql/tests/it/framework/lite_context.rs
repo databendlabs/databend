@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -29,6 +30,7 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::ServiceProvider;
 use databend_common_base::base::Version;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
@@ -77,6 +79,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_license::license_manager::LicenseManager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_license::license_manager::OssLicenseManager;
 use databend_common_meta_app::principal::*;
 use databend_common_meta_app::schema::*;
@@ -1045,6 +1048,24 @@ impl LiteTableContext {
             .set_enable_distributed_optimization(true)
             .clone();
         optimize(opt_ctx, plan).await
+    }
+}
+
+impl ServiceProvider for LiteTableContext {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        if type_id == TypeId::of::<CatalogManager>() {
+            return Some(self.catalog_manager.clone());
+        }
+
+        if type_id == TypeId::of::<UserApiProvider>() {
+            return Some(UserApiProvider::instance());
+        }
+
+        if type_id == TypeId::of::<LicenseManagerSwitch>() {
+            return Some(LicenseManagerSwitch::instance());
+        }
+
+        None
     }
 }
 

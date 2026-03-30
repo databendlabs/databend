@@ -26,6 +26,7 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
@@ -145,6 +146,8 @@ async fn create_flight_client(
 pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
+
+impl Service for DataExchangeManager {}
 
 impl DataExchangeManager {
     pub fn init() -> Result<()> {
