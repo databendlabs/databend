@@ -67,9 +67,9 @@ select id, to_hex(v) from fmt_bin where id in (4,5) order by id
 5 61626364
 
 query TT
-select to_hex(X'ABCD'), X'ABCD' = from_hex('ABCD')
+select to_hex(X'ABCD'), length(X'ABCD')
 ----
-ABCD true
+ABCD 2
 
 statement ok
 set binary_output_format = 'hex'
