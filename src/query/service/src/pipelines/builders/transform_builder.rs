@@ -51,7 +51,7 @@ use crate::pipelines::processors::OutputPort;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn filter_transform_builder(
+    pub(crate) fn filter_transform_builder<const GC: bool>(
         &self,
         predicates: &[RemoteExpr],
         projections: ColumnSet,
@@ -73,7 +73,7 @@ impl PipelineBuilder {
         let max_block_size = self.settings.get_max_block_size()? as usize;
         let fun_ctx = self.func_ctx.clone();
         Ok(move |input, output| {
-            Ok(ProcessorPtr::create(TransformFilter::create(
+            Ok(ProcessorPtr::create(TransformFilter::<GC>::create(
                 input,
                 output,
                 predicate.clone(),

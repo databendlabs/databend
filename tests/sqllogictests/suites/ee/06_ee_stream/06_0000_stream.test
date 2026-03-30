@@ -851,3 +851,61 @@ select a, b, change$action, change$is_update from test_stream_1.s2 order by a, b
 
 statement ok
 DROP DATABASE IF EXISTS test_stream_1
+
+
+# multi table insert with stream: cast failure should not consume stream
+statement ok
+drop database if exists mt_bug;
+
+statement ok
+create database mt_bug;
+
+statement ok
+create table mt_bug.base(a string) change_tracking = true;
+
+statement ok
+create stream mt_bug.s on table mt_bug.base;
+
+statement ok
+create table mt_bug.t1(v UInt64);
+
+statement ok
+create table mt_bug.t2(v UInt64);
+
+statement ok
+insert into mt_bug.base values ('a');
+
+# stream should have 1 row before the failed insert
+query I
+select count(*) as stream_rows_before from mt_bug.s;
+----
+1
+
+# multi table insert will fail at runtime: cast 'a' to UInt64 raises invalid digit
+statement error
+INSERT FIRST
+  WHEN a is not null THEN
+    INTO mt_bug.t1(v) VALUES (CAST(a AS UInt64))
+  ELSE
+    INTO mt_bug.t2(v) VALUES (CAST(a AS UInt64))
+SELECT a FROM mt_bug.s;
+
+# verify no rows were inserted into target tables
+query I
+select count(*) as t1_rows from mt_bug.t1;
+----
+0
+
+query I
+select count(*) as t2_rows from mt_bug.t2;
+----
+0
+
+# stream should still have rows after the failed insert
+query I
+select count(*) as stream_rows_after from mt_bug.s;
+----
+1
+
+statement ok
+drop database mt_bug;
