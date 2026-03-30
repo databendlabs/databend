@@ -156,8 +156,6 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,query,meta,metactl,metabench,metaverifier,bendsave
-          features: simd,jemalloc,sql-script,script-udf,cloud-control,virtual-column,storage-stage,storage-stage-lance
-          no_default_features: true
       - name: Basic Sqllogic Test
         shell: bash
         env:
@@ -201,8 +199,7 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query,bendsave
-          features: simd,jemalloc,sql-script,script-udf,python-udf,cloud-control,virtual-column,storage-stage,storage-stage-lance
-          no_default_features: true
+          features: python-udf
           category: docker
 
   publish:

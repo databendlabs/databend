@@ -140,24 +140,28 @@ use crate::sql::plans::Plan;
 /// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactory;
 
+#[cfg(not(feature = "cloud-control"))]
 fn cloud_control_disabled(op: &str) -> ErrorCode {
     ErrorCode::Unimplemented(format!(
         "{op} requires cargo feature 'cloud-control', rebuild with it enabled"
     ))
 }
 
+#[cfg(not(feature = "storage-stage"))]
 fn stage_disabled(op: &str) -> ErrorCode {
     ErrorCode::Unimplemented(format!(
         "{op} requires cargo feature 'storage-stage', rebuild with it enabled"
     ))
 }
 
+#[cfg(not(feature = "sql-script"))]
 fn sql_script_disabled(op: &str) -> ErrorCode {
     ErrorCode::Unimplemented(format!(
         "{op} requires cargo feature 'sql-script', rebuild with it enabled"
     ))
 }
 
+#[cfg(not(feature = "virtual-column"))]
 fn virtual_column_disabled(op: &str) -> ErrorCode {
     ErrorCode::Unimplemented(format!(
         "{op} requires cargo feature 'virtual-column', rebuild with it enabled"

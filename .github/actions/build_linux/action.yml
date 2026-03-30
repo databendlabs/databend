@@ -19,10 +19,6 @@ inputs:
     description: "Features to build"
     required: false
     default: "default"
-  no_default_features:
-    description: "Build with --no-default-features"
-    required: false
-    default: "false"
   category:
     description: "Category to upload"
     required: false
@@ -73,91 +69,43 @@ runs:
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 
     - name: Build Release
+      if: inputs.artifacts == 'all'
+      shell: bash
+      run: |
+        artifacts="meta,metactl,metabench,query,sqllogictests,bendsave"
+        binaries=""
+        for artifact in ${artifacts//,/ }; do
+          binaries="${binaries} --bin databend-$artifact"
+        done
+        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
+
+    - name: Build Release for specific artifacts
+      if: inputs.artifacts != 'all'
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
-        if [[ "${artifacts}" == "all" ]]; then
-          artifacts="meta,metactl,metabench,query,sqllogictests,bendsave"
-        fi
-
-        package_for_artifact() {
-          case "$1" in
-            query) echo "databend-binaries" ;;
-            meta|metactl|metabench|metaverifier) echo "databend-meta-binaries" ;;
-            sqllogictests) echo "databend-sqllogictests" ;;
-            sqlsmith) echo "databend-sqlsmith" ;;
-            bendsave) echo "databend-bendsave" ;;
-            *)
-              echo "Unknown artifact: $1" >&2
-              return 1
-              ;;
-          esac
-        }
-
-        contains_feature() {
-          local haystack=",$1,"
-          local needle="$2"
-          [[ "${haystack}" == *",${needle},"* ]]
-        }
-
         for artifact in ${artifacts//,/ }; do
-          binary="databend-$artifact"
-          package="$(package_for_artifact "$artifact")"
-          cmd=(
-            cargo build
-            --target "${{ inputs.target }}"
-            --profile "${{ env.BUILD_PROFILE }}"
-            -p "$package"
-            --bin "$binary"
-          )
-
-          if [[ "$artifact" == "query" ]]; then
-            if [[ "${{ inputs.no_default_features }}" == "true" ]]; then
-              cmd+=(--no-default-features)
-            fi
-            if [[ -n "${{ inputs.features }}" && "${{ inputs.features }}" != "default" ]]; then
-              cmd+=(--features "${{ inputs.features }}")
-            fi
-          elif [[ "$package" == "databend-meta-binaries" ]]; then
-            meta_features=()
-            if contains_feature "${{ inputs.features }}" "jemalloc"; then
-              meta_features+=("jemalloc")
-            fi
-            if contains_feature "${{ inputs.features }}" "memory-profiling"; then
-              meta_features+=("memory-profiling")
-            fi
-            if (( ${#meta_features[@]} > 0 )); then
-              cmd+=(--features "$(IFS=,; echo "${meta_features[*]}")")
-            fi
-          fi
-
-          echo "==> building ${binary} from ${package} ..."
-          printf '>>>'
-          printf ' %q' "${cmd[@]}"
-          printf '\n'
-          "${cmd[@]}"
-          ls -lh "./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/${binary}"
+          echo "==> building databend-$artifact ..."
+          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
     - name: Check Binary Info
       shell: bash
       run: |
         grep ' Compiled in ' target/sccache.log || true
-        if [[ -f ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ]]; then
-          readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
-          ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
-        fi
+        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
+        ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 
     - name: Spilt Binary Symbols
       if: inputs.trim_debug == 'true'
       shell: bash
       run: |
-        if [[ -f ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ]]; then
-          objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
-          chmod 0644 ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
-          strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
-          pushd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }} && objcopy --add-gnu-debuglink databend-query.debug databend-query && popd
-        fi
+        objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
+        chmod 0644 ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
+        strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        pushd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }} && objcopy --add-gnu-debuglink databend-query.debug databend-query && popd
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'

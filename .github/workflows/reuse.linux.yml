@@ -92,72 +92,15 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ needs.info.outputs.target }}
-          features: simd,jemalloc,sql-script,script-udf,virtual-column,storage-stage
-          no_default_features: true
+          features: python-udf,storage-hdfs
           category: full
-          artifacts: sqllogictests,meta,metactl,metabench,query
+          artifacts: all
       - name: upload sccache log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
-
-  build_udf:
-    needs: info
-    runs-on:
-      - self-hosted
-      - "${{ inputs.runner_arch }}"
-      - Linux
-      - 8c
-      - "${{ inputs.runner_provider }}"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
-        env:
-          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
-          DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
-          DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
-          DATABEND_TELEMETRY_SOURCE: ${{ inputs.telemetry_source }}
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ needs.info.outputs.target }}
-          artifacts: meta,query
-          features: simd,jemalloc,sql-script,script-udf,python-udf,cloud-control,virtual-column,storage-stage
-          no_default_features: true
-          category: udf
-          trim_debug: false
-
-  build_cloud_control:
-    needs: info
-    runs-on:
-      - self-hosted
-      - "${{ inputs.runner_arch }}"
-      - Linux
-      - 8c
-      - "${{ inputs.runner_provider }}"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
-        env:
-          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
-          DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
-          DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
-          DATABEND_TELEMETRY_SOURCE: ${{ inputs.telemetry_source }}
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ needs.info.outputs.target }}
-          artifacts: sqllogictests,meta,query
-          features: simd,jemalloc,sql-script,script-udf,cloud-control,virtual-column,storage-stage
-          no_default_features: true
-          category: cloud-control
-          trim_debug: false
 
   test_unit:
     needs: info
@@ -260,7 +203,7 @@ jobs:
         timeout-minutes: 20
 
   test_private_tasks:
-    needs: [build_cloud_control, check]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -277,7 +220,7 @@ jobs:
         timeout-minutes: 20
 
   test_sandbox_udf:
-    needs: [build_udf, check]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -514,7 +457,7 @@ jobs:
           name: test-ee-management-mode-linux
 
   sqllogic:
-    needs: [build, build_cloud_control, check]
+    needs: [build, check]
     uses: ./.github/workflows/reuse.sqllogic.yml
     secrets: inherit
     with:

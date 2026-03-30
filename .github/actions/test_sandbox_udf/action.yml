@@ -4,8 +4,6 @@ runs:
   using: "composite"
   steps:
     - uses: ./.github/actions/setup_test
-      with:
-        category: udf
 
     - name: Install uv
       shell: bash
