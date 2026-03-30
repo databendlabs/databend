@@ -21,6 +21,8 @@ use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::binder::validate_table_indexes_compatible_with_schema;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -158,6 +160,16 @@ impl Interpreter for DropTableColumnInterpreter {
             }
         }
         let new_schema = new_table_meta.schema.as_ref().clone();
+
+        validate_table_indexes_compatible_with_schema(
+            self.ctx.clone(),
+            catalog.as_ref(),
+            &self.ctx.get_tenant(),
+            table.get_id(),
+            &new_schema,
+        )
+        .await?;
+        validate_constraints_by_schema(self.ctx.clone(), &new_table_meta.constraints, &new_schema)?;
 
         commit_table_meta(
             &self.ctx,
