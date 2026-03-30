@@ -83,6 +83,7 @@ impl BlockingTransform for TransformFilter {
             for block in blocks.into_iter() {
                 let data_block = self.filter.filter(block)?;
                 if data_block.num_rows() > 0 {
+                    let data_block = data_block.maybe_gc();
                     self.output_data_blocks.push_back(data_block);
                 }
             }
