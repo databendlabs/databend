@@ -1828,21 +1828,39 @@ async fn test_null_response() -> anyhow::Result<()> {
 async fn test_driver_json_result_mode() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let json = serde_json::json!({
-        "sql": "select 1, true, 'a', [1, 2]",
+    let display_json = serde_json::json!({
+        "sql": "select to_date(1), unhex('78')",
         "session": {
             "settings": {
+                "binary_output_format": "base64",
+                "http_json_result_mode": "display"
+            }
+        }
+    });
+    let req = TestHttpQueryRequest::new(display_json);
+    let (status, _, body) = req.do_request(Method::POST, "/v1/query").await?;
+    assert_eq!(status, StatusCode::OK);
+
+    let body: serde_json::Value = serde_json::from_str(&body)?;
+    assert_eq!(body["settings"]["http_json_result_mode"], "display");
+    assert_eq!(body["data"][0], serde_json::json!(["1970-01-02", "eA=="]));
+
+    let driver_json = serde_json::json!({
+        "sql": "select to_date(1), unhex('78')",
+        "session": {
+            "settings": {
+                "binary_output_format": "base64",
                 "http_json_result_mode": "driver"
             }
         }
     });
-    let req = TestHttpQueryRequest::new(json);
+    let req = TestHttpQueryRequest::new(driver_json);
     let (status, _, body) = req.do_request(Method::POST, "/v1/query").await?;
     assert_eq!(status, StatusCode::OK);
 
     let body: serde_json::Value = serde_json::from_str(&body)?;
     assert_eq!(body["settings"]["http_json_result_mode"], "driver");
-    assert_eq!(body["data"][0], serde_json::json!([1, true, "a", [1, 2]]));
+    assert_eq!(body["data"][0], serde_json::json!(["1", "78"]));
 
     Ok(())
 }

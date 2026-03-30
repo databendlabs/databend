@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
@@ -20,10 +21,15 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::TimestampTzType;
 use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_query::servers::http::v1::BlocksCollector;
@@ -88,24 +94,45 @@ fn test_empty_block() -> anyhow::Result<()> {
 
 #[test]
 fn test_driver_mode_data_block() -> anyhow::Result<()> {
-    let mut format = OutputFormatSettings::default();
-    format.http_json_result_mode = HttpHandlerDataFormat::Driver;
-
+    let ts_tz = timestamp_tz::new(1_000_000, 8 * 3600);
     let columns = vec![
-        Int32Type::from_data(vec![1]),
-        StringType::from_data(vec!["a"]),
-        BooleanType::from_data(vec![true]),
-        Float64Type::from_data(vec![1.1]),
         DateType::from_data(vec![1_i32]),
+        TimestampType::from_data(vec![1_000_000_i64]),
+        TimestampTzType::from_data(vec![ts_tz]),
+        BinaryType::from_data(vec![b"x".as_slice()]),
     ];
 
-    let mut collector = BlocksCollector::new();
-    collector.append_columns(columns, 1);
-    let serializer = collector.into_serializer(format);
+    let mut display = OutputFormatSettings::default();
+    display.binary_format = BinaryDisplayFormat::Base64;
+
+    let mut driver = display.clone();
+    driver.http_json_result_mode = HttpHandlerDataFormat::Driver;
+
+    let mut display_collector = BlocksCollector::new();
+    display_collector.append_columns(columns.clone(), 1);
+    let display_serializer = display_collector.into_serializer(display.clone());
+
+    let mut driver_collector = BlocksCollector::new();
+    driver_collector.append_columns(columns, 1);
+    let driver_serializer = driver_collector.into_serializer(driver);
 
     assert_eq!(
-        serde_json::to_value(&serializer)?,
-        serde_json::json!([[1, "a", true, 1.1, "1970-01-02"]])
+        serde_json::to_value(&display_serializer)?,
+        serde_json::json!([[
+            date_to_string(1, &display.jiff_timezone).to_string(),
+            timestamp_to_string(1_000_000, &display.jiff_timezone).to_string(),
+            ts_tz.to_string(),
+            "eA=="
+        ]])
+    );
+    assert_eq!(
+        serde_json::to_value(&driver_serializer)?,
+        serde_json::json!([[
+            "1",
+            "1000000",
+            format!("{} {}", ts_tz.timestamp(), ts_tz.hours_offset()),
+            "78"
+        ]])
     );
     Ok(())
 }

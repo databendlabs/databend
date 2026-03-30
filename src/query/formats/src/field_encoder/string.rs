@@ -17,6 +17,7 @@ use std::fmt::Write as _;
 
 use base64::Engine as _;
 use base64::engine::general_purpose;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -44,6 +45,7 @@ use databend_common_io::geo_to_json;
 use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_io::prelude::OutputFormatSettings;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
@@ -81,7 +83,7 @@ impl FieldEncoderToString {
                 self.timestamp_text(unsafe { *c.get_unchecked(row_index) }),
             )),
             Column::TimestampTz(c) => Ok(Cow::Owned(
-                self.timestamp_tz_text(unsafe { c.get_unchecked(row_index) }),
+                self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) }),
             )),
             Column::Date(c) => Ok(Cow::Owned(
                 self.date_text(unsafe { *c.get_unchecked(row_index) }),
@@ -156,7 +158,7 @@ impl FieldEncoderToString {
                 out,
             ),
             Column::TimestampTz(c) => self.write_quoted_string(
-                self.timestamp_tz_text(unsafe { c.get_unchecked(row_index) })
+                self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) })
                     .as_str(),
                 out,
             ),
@@ -211,12 +213,22 @@ impl FieldEncoderToString {
 
     #[inline]
     fn timestamp_text(&self, value: i64) -> String {
-        timestamp_to_string(value, &self.settings.jiff_timezone).to_string()
+        match self.settings.http_json_result_mode {
+            HttpHandlerDataFormat::Display => {
+                timestamp_to_string(value, &self.settings.jiff_timezone).to_string()
+            }
+            HttpHandlerDataFormat::Driver => value.to_string(),
+        }
     }
 
     #[inline]
     fn date_text(&self, value: i32) -> String {
-        date_to_string(value as i64, &self.settings.jiff_timezone).to_string()
+        match self.settings.http_json_result_mode {
+            HttpHandlerDataFormat::Display => {
+                date_to_string(value as i64, &self.settings.jiff_timezone).to_string()
+            }
+            HttpHandlerDataFormat::Driver => value.to_string(),
+        }
     }
 
     #[inline]
@@ -225,8 +237,13 @@ impl FieldEncoderToString {
     }
 
     #[inline]
-    fn timestamp_tz_text<T: std::fmt::Display>(&self, value: T) -> String {
-        value.to_string()
+    fn timestamp_tz_text(&self, value: timestamp_tz) -> String {
+        match self.settings.http_json_result_mode {
+            HttpHandlerDataFormat::Display => value.to_string(),
+            HttpHandlerDataFormat::Driver => {
+                format!("{} {}", value.timestamp(), value.hours_offset())
+            }
+        }
     }
 
     #[inline]
@@ -327,8 +344,12 @@ impl FieldEncoderToString {
         column: &'a BinaryColumn,
         row_index: usize,
     ) -> Result<Cow<'a, str>> {
+        let fmt = match self.settings.http_json_result_mode {
+            HttpHandlerDataFormat::Driver => BinaryDisplayFormat::Hex,
+            HttpHandlerDataFormat::Display => self.settings.binary_format,
+        };
         let value = unsafe { column.index_unchecked(row_index) };
-        match self.settings.binary_format {
+        match fmt {
             BinaryDisplayFormat::Hex => Ok(Cow::Owned(hex::encode_upper(value))),
             BinaryDisplayFormat::Base64 => Ok(Cow::Owned(general_purpose::STANDARD.encode(value))),
             BinaryDisplayFormat::Utf8 => std::str::from_utf8(value).map(Cow::Borrowed).map_err(
