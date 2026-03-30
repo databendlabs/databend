@@ -55,7 +55,7 @@ impl PipelineBuilder {
         &self,
         predicates: &[RemoteExpr],
         projections: ColumnSet,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<GC>> {
         let predicate = predicates
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
