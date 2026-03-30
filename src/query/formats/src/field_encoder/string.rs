@@ -239,7 +239,7 @@ impl FieldEncoderToString {
         match self.settings.http_json_result_mode {
             HttpHandlerDataFormat::Display => value.to_string(),
             HttpHandlerDataFormat::Driver => {
-                format!("{} {}", value.timestamp(), value.hours_offset())
+                format!("{} {}", value.timestamp(), value.seconds_offset())
             }
         }
     }

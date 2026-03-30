@@ -1864,3 +1864,29 @@ async fn test_driver_json_result_mode() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_driver_json_result_mode_timestamp_tz_sub_hour_offset() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let driver_json = serde_json::json!({
+        "sql": "select to_timestamp_tz('2021-12-20 17:01:01.123456 +05:45')",
+        "session": {
+            "settings": {
+                "http_json_result_mode": "driver"
+            }
+        }
+    });
+    let req = TestHttpQueryRequest::new(driver_json);
+    let (status, _, body) = req.do_request(Method::POST, "/v1/query").await?;
+    assert_eq!(status, StatusCode::OK);
+
+    let body: serde_json::Value = serde_json::from_str(&body)?;
+    assert_eq!(body["settings"]["http_json_result_mode"], "driver");
+    assert_eq!(
+        body["data"][0],
+        serde_json::json!(["1639998961123456 20700"])
+    );
+
+    Ok(())
+}

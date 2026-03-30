@@ -94,7 +94,7 @@ fn test_empty_block() -> anyhow::Result<()> {
 
 #[test]
 fn test_driver_mode_data_block() -> anyhow::Result<()> {
-    let ts_tz = timestamp_tz::new(1_000_000, 8 * 3600);
+    let ts_tz = timestamp_tz::new(1_000_000, 5 * 3600 + 45 * 60);
     let columns = vec![
         DateType::from_data(vec![1_i32]),
         TimestampType::from_data(vec![1_000_000_i64]),
@@ -132,7 +132,7 @@ fn test_driver_mode_data_block() -> anyhow::Result<()> {
         serde_json::json!([[
             "1",
             "1000000",
-            format!("{} {}", ts_tz.timestamp(), ts_tz.hours_offset()),
+            format!("{} {}", ts_tz.timestamp(), ts_tz.seconds_offset()),
             "78"
         ]])
     );
