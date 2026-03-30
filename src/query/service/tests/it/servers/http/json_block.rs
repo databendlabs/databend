@@ -14,10 +14,13 @@
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::FromData;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
@@ -103,6 +106,46 @@ fn test_driver_mode_data_block() -> anyhow::Result<()> {
     assert_eq!(
         serde_json::to_value(&serializer)?,
         serde_json::json!([[1, "a", true, 1.1, "1970-01-02"]])
+    );
+    Ok(())
+}
+
+#[test]
+fn test_nested_string_data_block() -> anyhow::Result<()> {
+    let format = OutputFormatSettings::default();
+
+    let array = Column::Array(Box::new(ArrayColumn::new(
+        StringType::from_data(vec!["x", "y\"z"]),
+        vec![0_u64, 2].into(),
+    )));
+    let binary_array = Column::Array(Box::new(ArrayColumn::new(
+        BinaryType::from_data(vec![b"x".as_slice(), b"y\"z".as_slice()]),
+        vec![0_u64, 2].into(),
+    )));
+    let tuple = Column::Tuple(vec![
+        Int32Type::from_data(vec![7]),
+        StringType::from_data(vec!["p\"q"]),
+    ]);
+    let map = Column::Map(Box::new(ArrayColumn::new(
+        Column::Tuple(vec![
+            StringType::from_data(vec!["k\"1"]),
+            StringType::from_data(vec!["v\"2"]),
+        ]),
+        vec![0_u64, 1].into(),
+    )));
+
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(vec![array, binary_array, tuple, map], 1);
+    let serializer = collector.into_serializer(format);
+
+    assert_eq!(
+        serde_json::to_value(&serializer)?,
+        serde_json::json!([[
+            "[\"x\",\"y\\\"z\"]",
+            "[78,79227A]",
+            "(7,\"p\\\"q\")",
+            "{\"k\\\"1\":\"v\\\"2\"}"
+        ]])
     );
     Ok(())
 }

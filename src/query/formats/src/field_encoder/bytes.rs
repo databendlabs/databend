@@ -107,21 +107,6 @@ impl FieldEncoderBytes {
         }
     }
 
-    pub fn create_for_http_handler(settings: &OutputFormatSettings) -> Self {
-        FieldEncoderBytes {
-            common_settings: OutputCommonSettings {
-                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                settings: settings.clone(),
-            },
-            escape_char: b'\\',
-            quote_char: b'"',
-        }
-    }
-
     // JDBC only accept "NaN" and "Infinity".
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
