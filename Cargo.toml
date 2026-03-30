@@ -246,7 +246,7 @@ derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
 display-more = { version = "0.2.1" }
 divan = "0.1.21"
-dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
+dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "7a9e40f" }
 dyn-clone = "1.0.9"
 educe = { version = "1.0.0", features = ["default", "full"], package = "databend_educe" }
 either = "1.9"
