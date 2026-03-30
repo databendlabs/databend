@@ -32,7 +32,7 @@ use crate::BlockingTransform;
 use crate::BlockingTransformer;
 
 /// Filter the input [`DataBlock`] with the predicate `expr`.
-pub struct TransformFilter {
+pub struct TransformFilter<const GC: bool = false> {
     projections: ColumnSet,
     output_data_blocks: VecDeque<DataBlock>,
     max_block_size: usize,
