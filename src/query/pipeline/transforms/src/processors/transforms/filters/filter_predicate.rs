@@ -39,7 +39,7 @@ pub struct TransformFilter {
     filter: FilterExecutor,
 }
 
-impl TransformFilter {
+impl<const GC: bool> TransformFilter<GC> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -56,7 +56,7 @@ impl TransformFilter {
             &BUILTIN_FUNCTIONS,
             false,
         );
-        BlockingTransformer::create(input, output, TransformFilter {
+        BlockingTransformer::create(input, output, TransformFilter::<GC> {
             projections,
             output_data_blocks: VecDeque::new(),
             max_block_size,
@@ -65,7 +65,7 @@ impl TransformFilter {
     }
 }
 
-impl BlockingTransform for TransformFilter {
+impl<const GC: bool> BlockingTransform for TransformFilter<GC> {
     const NAME: &'static str = "TransformFilter";
 
     fn consume(&mut self, input: DataBlock) -> Result<()> {
@@ -81,8 +81,12 @@ impl BlockingTransform for TransformFilter {
         } else {
             let blocks = input.split_by_rows_no_tail(self.max_block_size);
             for block in blocks.into_iter() {
-                let data_block = self.filter.filter(block)?;
+                let mut data_block = self.filter.filter(block)?;
                 if data_block.num_rows() > 0 {
+                    if GC {
+                        data_block = data_block.maybe_gc();
+                    }
+
                     self.output_data_blocks.push_back(data_block);
                 }
             }

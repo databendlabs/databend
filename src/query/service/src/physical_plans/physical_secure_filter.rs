@@ -131,7 +131,8 @@ impl IPhysicalPlan for SecureFilter {
         // SecureFilter uses the same transform as regular Filter for execution
         // The security aspect is handled at plan level (stats suppression) and binding level
         builder.main_pipeline.add_transform(
-            builder.filter_transform_builder(&self.predicates, self.projections.clone())?,
+            builder
+                .filter_transform_builder::<false>(&self.predicates, self.projections.clone())?,
         )
     }
 }
