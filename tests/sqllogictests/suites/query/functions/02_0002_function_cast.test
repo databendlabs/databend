@@ -351,6 +351,11 @@ SELECT to_variant(9223372036854775807)::int64
 ----
 9223372036854775807
 
+query II
+SELECT to_variant(123.0)::int64, to_variant(456.7)::int64
+----
+123 457
+
 query I
 SELECT parse_json('"255"')::uint8
 ----
@@ -411,6 +416,10 @@ SELECT parse_json('"9223372036854775807"')::int64
 ----
 9223372036854775807
 
+query II
+SELECT parse_json('"-123.1"')::int64, parse_json('"123.6"')::int64
+----
+-123 124
 
 statement error 1006
 SELECT parse_json('"test"')::uint64
