@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "storage-stage-lance")]
 mod lance_dataset;
-#[cfg(not(feature = "storage-stage-lance"))]
-mod lance_dataset_stub;
 mod output;
 mod parquet_file;
 mod partition;
@@ -25,9 +22,6 @@ mod stage_sink_table;
 
 mod column_based;
 
-#[cfg(feature = "storage-stage-lance")]
 pub(crate) use lance_dataset::append_data_to_lance_dataset;
-#[cfg(not(feature = "storage-stage-lance"))]
-pub(crate) use lance_dataset_stub::append_data_to_lance_dataset;
 pub use output::UnloadOutput;
 pub use stage_sink_table::StageSinkTable;

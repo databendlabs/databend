@@ -139,18 +139,6 @@ impl Binder {
         self
     }
 
-    #[cfg(feature = "storage-stage-lance")]
-    pub(crate) fn ensure_stage_lance_enabled(&self) -> Result<()> {
-        Ok(())
-    }
-
-    #[cfg(not(feature = "storage-stage-lance"))]
-    pub(crate) fn ensure_stage_lance_enabled(&self) -> Result<()> {
-        Err(ErrorCode::Unimplemented(
-            "LANCE unload support is disabled, rebuild with cargo feature 'storage-stage-lance'",
-        ))
-    }
-
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {

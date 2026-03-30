@@ -115,9 +115,6 @@ impl Binder {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
         let is_lance = matches!(stage_info.file_format_params, FileFormatParams::Lance(_));
-        if is_lance {
-            self.ensure_stage_lance_enabled()?;
-        }
         let options = check_options(&stmt.options, is_lance, stmt.partition_by.is_some())?;
 
         if options.use_raw_path {

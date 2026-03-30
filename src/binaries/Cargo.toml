@@ -16,7 +16,6 @@ default = [
     "cloud-control",
     "virtual-column",
     "storage-stage",
-    "storage-stage-lance",
 ]
 memory-profiling = [
     "databend-query/memory-profiling",
@@ -30,10 +29,6 @@ virtual-column = [
     "databend-query/virtual-column",
 ]
 storage-stage = ["databend-enterprise-query/storage-stage", "databend-query/storage-stage"]
-storage-stage-lance = [
-    "databend-enterprise-query/storage-stage-lance",
-    "databend-query/storage-stage-lance",
-]
 python-udf = ["databend-query/python-udf"]
 simd = ["databend-enterprise-query/simd", "databend-query/simd"]
 jemalloc = ["databend-common-base/jemalloc", "databend-query/jemalloc"]
