@@ -81,12 +81,8 @@ impl<const GC: bool> BlockingTransform for TransformFilter<GC> {
         } else {
             let blocks = input.split_by_rows_no_tail(self.max_block_size);
             for block in blocks.into_iter() {
-                let mut data_block = self.filter.filter(block)?;
+                let data_block = self.filter.filter(block)?;
                 if data_block.num_rows() > 0 {
-                    if GC {
-                        data_block = data_block.maybe_gc();
-                    }
-
                     self.output_data_blocks.push_back(data_block);
                 }
             }
