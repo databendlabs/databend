@@ -51,11 +51,11 @@ use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
-#[cfg(feature = "cloud-control")]
+#[cfg(all(feature = "cloud-control", feature = "task-support"))]
 use crate::table_functions::cloud::TaskDependentsEnableTable;
-#[cfg(feature = "cloud-control")]
+#[cfg(all(feature = "cloud-control", feature = "task-support"))]
 use crate::table_functions::cloud::TaskDependentsTable;
-#[cfg(feature = "cloud-control")]
+#[cfg(all(feature = "cloud-control", feature = "task-support"))]
 use crate::table_functions::cloud::TaskHistoryTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
 use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
@@ -108,7 +108,7 @@ pub struct TableFunctionFactory {
 
 impl TableFunctionFactory {
     pub fn create(config: &InnerConfig) -> Self {
-        #[cfg(not(feature = "cloud-control"))]
+        #[cfg(not(all(feature = "cloud-control", feature = "task-support")))]
         let _ = config;
 
         let mut id = SYS_TBL_FUNC_ID_BEGIN;
@@ -312,7 +312,7 @@ impl TableFunctionFactory {
             ),
         );
 
-        #[cfg(feature = "cloud-control")]
+        #[cfg(all(feature = "cloud-control", feature = "task-support"))]
         if !config.task.on {
             creators.insert(
                 "task_dependents".to_string(),

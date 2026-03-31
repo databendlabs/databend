@@ -13,6 +13,7 @@ default = [
     "sql-script",
     "script-udf",
     "cloud-control",
+    "task-support",
     "virtual-column",
     "storage-stage",
 ]
@@ -25,6 +26,7 @@ cloud-control = [
     "databend-common-sql/cloud-control",
     "databend-common-storages-system/cloud-control",
 ]
+task-support = ["databend-common-storages-system/task-support"]
 virtual-column = [
     "dep:databend-enterprise-virtual-column",
     "databend-common-storages-system/virtual-column",

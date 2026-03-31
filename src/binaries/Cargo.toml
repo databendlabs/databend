@@ -14,6 +14,7 @@ default = [
     "sql-script",
     "script-udf",
     "cloud-control",
+    "task-support",
     "virtual-column",
     "storage-stage",
 ]
@@ -24,6 +25,7 @@ memory-profiling = [
 sql-script = ["databend-enterprise-query/sql-script", "databend-query/sql-script"]
 script-udf = ["databend-enterprise-query/script-udf", "databend-query/script-udf"]
 cloud-control = ["databend-enterprise-query/cloud-control", "databend-query/cloud-control"]
+task-support = ["databend-enterprise-query/task-support", "databend-query/task-support"]
 virtual-column = [
     "databend-enterprise-query/virtual-column",
     "databend-query/virtual-column",

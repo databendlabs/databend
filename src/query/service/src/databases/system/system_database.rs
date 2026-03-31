@@ -51,7 +51,9 @@ use databend_common_storages_system::NotificationHistoryTable;
 use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
+#[cfg(feature = "task-support")]
 use databend_common_storages_system::PrivateTaskHistoryTable;
+#[cfg(feature = "task-support")]
 use databend_common_storages_system::PrivateTasksTable;
 use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
@@ -65,9 +67,9 @@ use databend_common_storages_system::TableFunctionsTable;
 use databend_common_storages_system::TablesTableWithHistory;
 use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TagsTable;
-#[cfg(feature = "cloud-control")]
+#[cfg(all(feature = "cloud-control", feature = "task-support"))]
 use databend_common_storages_system::TaskHistoryTable;
-#[cfg(feature = "cloud-control")]
+#[cfg(all(feature = "cloud-control", feature = "task-support"))]
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TerseStreamsTable;
@@ -195,13 +197,14 @@ impl SystemDatabase {
             table_list.push(NotificationHistoryTable::create(
                 sys_db_meta.next_table_id(),
             ));
+            #[cfg(feature = "task-support")]
             if config.task.on {
                 table_list.push(PrivateTasksTable::create(sys_db_meta.next_table_id()));
                 table_list.push(PrivateTaskHistoryTable::create(sys_db_meta.next_table_id()));
             } else {
-                #[cfg(feature = "cloud-control")]
+                #[cfg(all(feature = "cloud-control", feature = "task-support"))]
                 table_list.push(TasksTable::create(sys_db_meta.next_table_id()));
-                #[cfg(feature = "cloud-control")]
+                #[cfg(all(feature = "cloud-control", feature = "task-support"))]
                 table_list.push(TaskHistoryTable::create(sys_db_meta.next_table_id()));
             }
             disable_system_table_load = config.query.common.disable_system_table_load;

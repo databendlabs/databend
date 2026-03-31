@@ -46,6 +46,7 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::servers::admin::AdminService;
 use databend_query::servers::flight::FlightService;
 use databend_query::servers::metrics::MetricService;
+#[cfg(feature = "task-support")]
 use databend_query::task::TaskService;
 use log::info;
 
@@ -293,6 +294,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         }
         println!("    system history tables: {}", conf.log.history);
     }
+    #[cfg(feature = "task-support")]
     if conf.task.on {
         TaskService::instance().initialized();
     }
