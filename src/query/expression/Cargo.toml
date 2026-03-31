@@ -39,7 +39,6 @@ ethnum = { workspace = true }
 futures = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
-proj4rs = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
 itertools = { workspace = true }
@@ -53,6 +52,7 @@ micromarshal = { workspace = true }
 num-bigint = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
+proj4rs = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
 recursive = { workspace = true }
