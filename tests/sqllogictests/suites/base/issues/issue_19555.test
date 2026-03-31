@@ -17,7 +17,7 @@ from (values
     (18446744073709551615)
 ) as v(d);
 
-query TT
+query T
 select d::String from t order by d;
 ----
 0

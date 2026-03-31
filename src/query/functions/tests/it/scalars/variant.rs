@@ -537,6 +537,7 @@ fn test_as_type(file: &mut impl Write) {
     run_ast(file, "as_boolean(parse_json('123'))", &[]);
     run_ast(file, "as_integer(parse_json('true'))", &[]);
     run_ast(file, "as_integer(parse_json('123'))", &[]);
+    run_ast(file, "as_integer(parse_json('123.0'))", &[]);
     run_ast(file, "as_float(parse_json('\"ab\"'))", &[]);
     run_ast(file, "as_float(parse_json('12.34'))", &[]);
     run_ast(file, "as_decimal(parse_json('12.34'))", &[]);
@@ -592,6 +593,7 @@ fn test_is_type(file: &mut impl Write) {
     run_ast(file, "is_boolean(parse_json('123'))", &[]);
     run_ast(file, "is_integer(parse_json('true'))", &[]);
     run_ast(file, "is_integer(parse_json('123'))", &[]);
+    run_ast(file, "is_integer(parse_json('123.0'))", &[]);
     run_ast(file, "is_float(parse_json('\"ab\"'))", &[]);
     run_ast(file, "is_float(parse_json('12.34'))", &[]);
     run_ast(
@@ -657,9 +659,13 @@ fn test_to_type(file: &mut impl Write) {
     run_ast(file, "to_uint64(parse_json('null'))", &[]);
     run_ast(file, "to_uint64(parse_json('123'))", &[]);
     run_ast(file, "to_uint64(parse_json('-123'))", &[]);
+    run_ast(file, "to_uint64(parse_json('123.0'))", &[]);
+    run_ast(file, "to_uint64(parse_json('\"456.5\"'))", &[]);
     run_ast(file, "to_uint64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "to_int64(parse_json('123'))", &[]);
     run_ast(file, "to_int64(parse_json('-123'))", &[]);
+    run_ast(file, "to_int64(parse_json('123.5'))", &[]);
+    run_ast(file, "to_int64(parse_json('\"-456.2\"'))", &[]);
     run_ast(file, "to_int64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "to_float64(parse_json('12.34'))", &[]);
     run_ast(file, "to_float64(parse_json('\"abc\"'))", &[]);
@@ -787,9 +793,11 @@ fn test_try_to_type(file: &mut impl Write) {
     run_ast(file, "try_to_uint64(parse_json('null'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('123'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('-123'))", &[]);
+    run_ast(file, "try_to_uint64(parse_json('789.0'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "try_to_int64(parse_json('123'))", &[]);
     run_ast(file, "try_to_int64(parse_json('-123'))", &[]);
+    run_ast(file, "try_to_int64(parse_json('\"789.5\"'))", &[]);
     run_ast(file, "try_to_int64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "try_to_float64(parse_json('12.34'))", &[]);
     run_ast(file, "try_to_float64(parse_json('\"abc\"'))", &[]);
