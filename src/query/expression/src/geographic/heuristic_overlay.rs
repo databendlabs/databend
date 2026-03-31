@@ -554,9 +554,9 @@ fn union_lines(lines: Vec<LineString<f64>>) -> Result<Vec<LineString<f64>>> {
     if lines.is_empty() {
         return Ok(Vec::new());
     }
-    let merged = merge_colinear_lines(lines);
+    let merged = merge_collinear_lines(lines);
     let split = split_lines_at_intersections(merged);
-    let merged = merge_colinear_lines(split);
+    let merged = merge_collinear_lines(split);
     Ok(dedup_lines(merged))
 }
 
@@ -863,7 +863,7 @@ fn intersection_points_from_lines(
     points
 }
 
-fn merge_colinear_lines(lines: Vec<LineString<f64>>) -> Vec<LineString<f64>> {
+fn merge_collinear_lines(lines: Vec<LineString<f64>>) -> Vec<LineString<f64>> {
     let mut merged_lines = Vec::new();
     let mut non_linear_lines = Vec::new();
     let mut groups: Vec<LineGroup> = Vec::new();
@@ -877,7 +877,7 @@ fn merge_colinear_lines(lines: Vec<LineString<f64>>) -> Vec<LineString<f64>> {
             }
         };
 
-        if !line_is_colinear(&line, origin, dir) {
+        if !line_is_collinear(&line, origin, dir) {
             non_linear_lines.push(line);
             continue;
         }
@@ -1139,7 +1139,7 @@ fn line_direction(line: &LineString<f64>) -> Option<(Coord<f64>, Coord<f64>)> {
     None
 }
 
-fn line_is_colinear(line: &LineString<f64>, origin: Coord<f64>, dir: Coord<f64>) -> bool {
+fn line_is_collinear(line: &LineString<f64>, origin: Coord<f64>, dir: Coord<f64>) -> bool {
     line.0
         .iter()
         .all(|coord| point_on_line(origin, dir, *coord))
