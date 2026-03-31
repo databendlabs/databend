@@ -67,11 +67,9 @@ mod table;
 mod table_functions_table;
 mod tables_table;
 mod tags_table;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
+#[cfg(feature = "task-support")]
 mod task_history_table;
 #[cfg(feature = "task-support")]
-mod task_types;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
 mod tasks_table;
 mod temp_files_table;
 mod user_functions_table;
@@ -145,23 +143,13 @@ pub use tables_table::TablesTableWithoutHistory;
 pub use tables_table::ViewsTableWithHistory;
 pub use tables_table::ViewsTableWithoutHistory;
 pub use tags_table::TagsTable;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
+#[cfg(feature = "task-support")]
 pub use task_history_table::TaskHistoryTable;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
+#[cfg(feature = "task-support")]
 pub use task_history_table::parse_task_runs_to_datablock;
 #[cfg(feature = "task-support")]
-pub use task_types::TaskRecord;
-#[cfg(feature = "task-support")]
-pub use task_types::TaskRunRecord;
-#[cfg(feature = "task-support")]
-pub use task_types::TaskRunState;
-#[cfg(feature = "task-support")]
-pub use task_types::TaskStatus;
-#[cfg(feature = "task-support")]
-pub use task_types::format_task_schedule_options;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
 pub use tasks_table::TasksTable;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
+#[cfg(feature = "task-support")]
 pub use tasks_table::parse_tasks_to_datablock;
 pub use temp_files_table::TempFilesTable;
 pub use user_functions_table::UserFunctionsTable;

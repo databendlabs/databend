@@ -67,9 +67,9 @@ use databend_common_storages_system::TableFunctionsTable;
 use databend_common_storages_system::TablesTableWithHistory;
 use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TagsTable;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
+#[cfg(feature = "task-support")]
 use databend_common_storages_system::TaskHistoryTable;
-#[cfg(all(feature = "cloud-control", feature = "task-support"))]
+#[cfg(feature = "task-support")]
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TerseStreamsTable;
@@ -202,9 +202,7 @@ impl SystemDatabase {
                 table_list.push(PrivateTasksTable::create(sys_db_meta.next_table_id()));
                 table_list.push(PrivateTaskHistoryTable::create(sys_db_meta.next_table_id()));
             } else {
-                #[cfg(all(feature = "cloud-control", feature = "task-support"))]
                 table_list.push(TasksTable::create(sys_db_meta.next_table_id()));
-                #[cfg(all(feature = "cloud-control", feature = "task-support"))]
                 table_list.push(TaskHistoryTable::create(sys_db_meta.next_table_id()));
             }
             disable_system_table_load = config.query.common.disable_system_table_load;

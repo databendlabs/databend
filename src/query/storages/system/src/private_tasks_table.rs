@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_cloud_control::pb;
+use databend_common_cloud_control::task_utils;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::infer_table_schema;
@@ -29,9 +31,6 @@ use databend_common_sql::plans::task_schema;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
-use crate::TaskRecord;
-use crate::TaskStatus;
-use crate::format_task_schedule_options;
 use crate::meta_service_error;
 use crate::parse_tasks_to_datablock;
 use crate::table::AsyncOneBlockSystemTable;
@@ -97,8 +96,8 @@ impl PrivateTasksTable {
         AsyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    pub fn task_trans(task: Task) -> Result<TaskRecord> {
-        Ok(TaskRecord {
+    pub fn task_trans(task: Task) -> Result<task_utils::Task> {
+        Ok(task_utils::Task {
             task_id: task.task_id,
             task_name: task.task_name,
             query_text: task.query_text,
@@ -109,24 +108,28 @@ impl PrivateTasksTable {
             schedule_options: task
                 .schedule_options
                 .map(|schedule_options| {
-                    format_task_schedule_options(
-                        schedule_options.interval,
-                        schedule_options.milliseconds_interval,
-                        schedule_options.cron,
-                        schedule_options.time_zone,
-                        schedule_options.schedule_type as i32,
-                    )
+                    let options = pb::ScheduleOptions {
+                        interval: schedule_options.interval,
+                        cron: schedule_options.cron,
+                        time_zone: schedule_options.time_zone,
+                        schedule_type: schedule_options.schedule_type as i32,
+                        milliseconds_interval: schedule_options.milliseconds_interval,
+                    };
+                    task_utils::format_schedule_options(&options)
                 })
                 .transpose()?,
-            warehouse: task
-                .warehouse_options
-                .and_then(|warehouse_options| warehouse_options.warehouse),
+            warehouse_options: task.warehouse_options.map(|warehouse_options| {
+                pb::WarehouseOptions {
+                    warehouse: warehouse_options.warehouse,
+                    using_warehouse_size: warehouse_options.using_warehouse_size,
+                }
+            }),
             next_scheduled_at: task.next_scheduled_at,
             suspend_task_after_num_failures: task.suspend_task_after_num_failures.map(|i| i as i32),
             error_integration: task.error_integration,
             status: match task.status {
-                Status::Suspended => TaskStatus::Suspended,
-                Status::Started => TaskStatus::Started,
+                Status::Suspended => task_utils::Status::Suspended,
+                Status::Started => task_utils::Status::Started,
             },
             created_at: task.created_at,
             updated_at: task.updated_at,

@@ -14,50 +14,34 @@
 
 use std::sync::Arc;
 
-#[cfg(feature = "cloud-control")]
 use databend_common_catalog::plan::PushDownInfo;
-#[cfg(feature = "cloud-control")]
 use databend_common_catalog::table::Table;
-#[cfg(feature = "cloud-control")]
 use databend_common_catalog::table_context::TableContext;
-#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::client_config::build_client_config;
-#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::client_config::make_request;
-#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-#[cfg(feature = "cloud-control")]
 use databend_common_cloud_control::pb::ShowTasksRequest;
-#[cfg(feature = "cloud-control")]
+use databend_common_cloud_control::task_utils::Task;
 use databend_common_config::GlobalConfig;
-#[cfg(feature = "cloud-control")]
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-#[cfg(feature = "cloud-control")]
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
-#[cfg(feature = "cloud-control")]
 use databend_common_meta_app::schema::TableIdent;
-#[cfg(feature = "cloud-control")]
 use databend_common_meta_app::schema::TableInfo;
-#[cfg(feature = "cloud-control")]
 use databend_common_meta_app::schema::TableMeta;
-#[cfg(feature = "cloud-control")]
 use databend_common_sql::plans::task_schema;
 use itertools::Itertools;
 
-use crate::TaskRecord;
-#[cfg(feature = "cloud-control")]
 use crate::table::AsyncOneBlockSystemTable;
-#[cfg(feature = "cloud-control")]
 use crate::table::AsyncSystemTable;
 
-pub fn parse_tasks_to_datablock(tasks: Vec<TaskRecord>) -> Result<DataBlock> {
+pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
     let mut name: Vec<String> = Vec::with_capacity(tasks.len());
     let mut id: Vec<u64> = Vec::with_capacity(tasks.len());
@@ -81,7 +65,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<TaskRecord>) -> Result<DataBlock> {
         id.push(task.task_id);
         owner.push(task.owner);
         comment.push(task.comment);
-        warehouse.push(task.warehouse);
+        warehouse.push(task.warehouse_options.and_then(|s| s.warehouse));
         schedule.push(task.schedule_options);
         status.push(task.status.to_string());
         definition.push(task.query_text);
@@ -118,12 +102,10 @@ pub fn parse_tasks_to_datablock(tasks: Vec<TaskRecord>) -> Result<DataBlock> {
     ]))
 }
 
-#[cfg(feature = "cloud-control")]
 pub struct TasksTable {
     table_info: TableInfo,
 }
 
-#[cfg(feature = "cloud-control")]
 #[async_trait::async_trait]
 impl AsyncSystemTable for TasksTable {
     const NAME: &'static str = "system.tasks";
@@ -178,11 +160,10 @@ impl AsyncSystemTable for TasksTable {
         let resp = task_client.show_tasks(req).await?;
         let tasks = resp.tasks;
 
-        parse_tasks_to_datablock(tasks.into_iter().map(TaskRecord::try_from).try_collect()?)
+        parse_tasks_to_datablock(tasks.into_iter().map(Task::try_from).try_collect()?)
     }
 }
 
-#[cfg(feature = "cloud-control")]
 impl TasksTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = infer_table_schema(&task_schema()).expect("failed to parse task table schema");

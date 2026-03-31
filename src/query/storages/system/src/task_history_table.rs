@@ -20,7 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
-use databend_common_cloud_control::pb::TaskRun;
+use databend_common_cloud_control::task_utils::TaskRun;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,7 +42,6 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
 use jiff::tz::TimeZone;
 
-use crate::TaskRunRecord;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::extract_leveled_strings;
@@ -70,25 +69,24 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
 
     for task_run in task_runs {
-        let tr: TaskRunRecord = task_run.try_into()?;
-        name.push(tr.task_name);
-        id.push(tr.task_id);
-        owner.push(tr.owner);
-        comment.push(tr.comment);
-        schedule.push(tr.schedule_options);
-        warehouse.push(tr.warehouse);
-        state.push(tr.state.to_string());
-        exception_code.push(tr.error_code);
-        exception_text.push(tr.error_message);
-        definition.push(tr.query_text);
-        condition_text.push(tr.condition_text);
-        run_id.push(tr.run_id);
-        query_id.push(tr.query_id);
-        attempt_number.push(tr.attempt_number);
-        completed_time.push(tr.completed_at.map(|t| t.timestamp_micros()));
-        scheduled_time.push(tr.scheduled_at.timestamp_micros());
-        root_task_id.push(tr.root_task_id);
-        let serialized_params = serde_json::to_vec(&tr.session_params).unwrap();
+        name.push(task_run.task_name);
+        id.push(task_run.task_id);
+        owner.push(task_run.owner);
+        comment.push(task_run.comment);
+        schedule.push(task_run.schedule_options);
+        warehouse.push(task_run.warehouse_options.and_then(|s| s.warehouse));
+        state.push(task_run.state.to_string());
+        exception_code.push(task_run.error_code);
+        exception_text.push(task_run.error_message);
+        definition.push(task_run.query_text);
+        condition_text.push(task_run.condition_text);
+        run_id.push(task_run.run_id);
+        query_id.push(task_run.query_id);
+        attempt_number.push(task_run.attempt_number);
+        completed_time.push(task_run.completed_at.map(|t| t.timestamp_micros()));
+        scheduled_time.push(task_run.scheduled_at.timestamp_micros());
+        root_task_id.push(task_run.root_task_id);
+        let serialized_params = serde_json::to_vec(&task_run.session_params).unwrap();
         session_params.push(Some(serialized_params));
     }
     Ok(DataBlock::new_from_columns(vec![
@@ -217,7 +215,12 @@ impl AsyncSystemTable for TaskHistoryTable {
             .flat_map(|r| r.task_runs)
             .collect::<Vec<_>>();
 
-        parse_task_runs_to_datablock(trs)
+        let task_runs = trs
+            .into_iter()
+            .map(TaskRun::try_from)
+            .collect::<Result<Vec<_>>>()?;
+
+        parse_task_runs_to_datablock(task_runs)
     }
 }
 

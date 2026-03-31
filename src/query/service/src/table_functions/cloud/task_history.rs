@@ -26,6 +26,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
+use databend_common_cloud_control::task_utils::TaskRun;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -221,7 +222,13 @@ impl AsyncSource for TaskHistorySource {
             .into_iter()
             .flat_map(|r| r.task_runs)
             .collect::<Vec<_>>();
-        parse_task_runs_to_datablock(trs).map(Some)
+
+        let task_runs = trs
+            .into_iter()
+            .map(TaskRun::try_from)
+            .collect::<Result<Vec<_>>>()?;
+
+        parse_task_runs_to_datablock(task_runs).map(Some)
     }
 }
 
